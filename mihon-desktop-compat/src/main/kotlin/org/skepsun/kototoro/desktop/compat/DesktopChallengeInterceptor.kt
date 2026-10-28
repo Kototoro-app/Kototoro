@@ -100,6 +100,9 @@ internal class DesktopChallengeInterceptor(
         if (cancelled()) throw IOException("网页验证请求已取消")
         // Only Cloudflare's explicit challenge marker asks the user; ordinary errors never open a window.
         if (body != null) return guarded(response.newBuilder().body(body).build())
+        // Background work (icons, covers, update checks, prefetches) never opens a window; it fails like Android's
+        // CloudFlareProtectedException and the next user action on that source asks instead.
+        if (!challenges.interactionActive) throw IOException("此来源需要网页验证，请在浏览或阅读该来源时完成验证")
         // Fallback: the user verifies in the visible browser.
         challenges.resolve(request, chain.call())
         if (cancelled()) throw IOException("网页验证请求已取消")

@@ -83,6 +83,32 @@ class DesktopChallengeInterceptorTest {
     }
 
     @Test
+    fun `an unsolved challenge outside a user action fails without opening the verification window`() {
+        challenges().use { owner ->
+            var requests = 0
+            val solves = AtomicInteger()
+            val client = OkHttpClient.Builder()
+                .addInterceptor(DesktopChallengeInterceptor(owner, solver = ClearanceSolver { solves.incrementAndGet(); false }))
+                .addInterceptor { chain ->
+                    requests++
+                    Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1)
+                        .code(403).message("challenge").header("cf-mitigated", "challenge")
+                        .body("challenge".toResponseBody()).build()
+                }.build()
+            // A background load (icon, cover, update check): the hidden solve is tried, then it fails quietly.
+            val failure = runCatching {
+                client.newCall(Request.Builder().url("https://fixture.invalid/icon.png").build()).execute()
+            }.exceptionOrNull()
+            assertTrue(failure is IOException, failure.toString())
+            assertTrue(failure?.message?.contains("网页验证") == true, failure?.message)
+            assertEquals(1, solves.get())
+            assertEquals(1, requests)
+            assertNull(owner.pending.value, "no verification prompt may appear")
+            assertFalse(owner.interactionActive)
+        }
+    }
+
+    @Test
     fun `a challenged POST is not replayed or sent to a browser`() {
         challenges().use { owner ->
             var requests = 0

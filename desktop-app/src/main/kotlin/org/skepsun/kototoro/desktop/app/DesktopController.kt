@@ -3672,7 +3672,7 @@ class DesktopController(
                 continuous.flush()
                 novelOperations.flush()
                 videoOperations.flush()
-                if (challenges == null) block() else challenges.withRequestCancellation(block)
+                if (challenges == null) block() else challenges.withInteraction(block)
             } catch (error: CancellationException) { throw error } catch (error: Exception) {
                 val diagnostic = if (error is SourceRemoteException && error.error.code == SourceErrorCode.RUNTIME_FAILURE) {
                     session.sourceDiagnostics.message(error.requestId)

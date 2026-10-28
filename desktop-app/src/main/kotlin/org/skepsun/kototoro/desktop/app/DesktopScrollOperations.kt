@@ -60,7 +60,7 @@ internal class DesktopScrollOperations(private val state: MutableStateFlow<Deskt
                         }
                     }
                     val challenges = session.browserChallenges
-                    if (challenges == null) block() else challenges.withRequestCancellation(block)
+                    if (challenges == null) block() else challenges.withInteraction(block)
                 }
             } finally {
                 if (generation.get() == epoch) state.update { it.copy(readerLoading = emptySet()) }

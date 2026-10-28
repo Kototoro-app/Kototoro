@@ -68,6 +68,21 @@ class DesktopBrowserChallenges internal constructor(
 
     internal fun isRequestCancelled(): Boolean = requestOwner.get()?.isCancelled == true
 
+    private val interactions = java.util.concurrent.atomic.AtomicInteger()
+
+    /**
+     * A user-initiated operation (browsing, details, reading). Only while one runs may an unsolved challenge open the
+     * verification window: icons, covers, update checks and prefetches would otherwise pop windows for sources the
+     * user is not even looking at. Extensions often issue requests with `enqueue`, whose callbacks run on OkHttp's
+     * threads, so this is a session-wide count rather than a thread-local mark.
+     */
+    suspend fun <T> withInteraction(block: suspend () -> T): T {
+        interactions.incrementAndGet()
+        try { return withRequestCancellation(block) } finally { interactions.decrementAndGet() }
+    }
+
+    internal val interactionActive: Boolean get() = interactions.get() > 0
+
     suspend fun showWindow(id: Long): DesktopBrowserWindow? = withContext(Dispatchers.IO) {
         val engine = synchronized(this@DesktopBrowserChallenges) {
             browser.takeIf { !closed && mutablePending.value?.id == id }
