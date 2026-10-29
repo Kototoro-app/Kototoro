@@ -216,6 +216,23 @@ class LocalBookReader(
 
     private fun readEpub(file: Path, fallbackTitle: String, splitSections: Boolean): LocalBook {
         val zip = fileSystem.openZip(file)
+        try {
+            return readEpub(zip, fallbackTitle, splitSections, withChapters = true)
+        } finally {
+            zip.close()
+        }
+    }
+
+    /** Reads packaging metadata from an already opened archive without opening the TOC or chapter documents. */
+    fun readEpubMetadata(archive: FileSystem, fallbackTitle: String): LocalBook =
+        readEpub(archive, fallbackTitle, splitSections = false, withChapters = false)
+
+    private fun readEpub(
+        zip: FileSystem,
+        fallbackTitle: String,
+        splitSections: Boolean,
+        withChapters: Boolean,
+    ): LocalBook {
         fun read(entry: String): String? = runCatching { zip.read(("/$entry").toPath()) { readUtf8() } }.getOrNull()
         val container = read("META-INF/container.xml") ?: throw IllegalArgumentException("EPUB 缺少 container.xml")
         val opfPath = LocalXml.tags(container, "rootfile").firstNotNullOfOrNull { it["full-path"] }
@@ -226,6 +243,19 @@ class LocalBookReader(
             val href = item["href"] ?: return@mapNotNull null
             id to EpubItem(resolveHref(opfPath, href), item["media-type"].orEmpty(), item["properties"].orEmpty())
         }.toMap()
+        val coverId = LocalXml.tags(opf, "meta").firstOrNull { it["name"] == "cover" }?.get("content")
+        val cover = manifest.values.firstOrNull { "cover-image" in it.properties }?.href
+            ?: coverId?.let { manifest[it]?.href }?.takeIf(LocalFiles::isImage)
+            ?: manifest.values.firstOrNull { LocalFiles.isImage(it.href) && "cover" in it.href.lowercase() }?.href
+        val metadata = LocalBook(
+            title = LocalXml.texts(opf, "title").firstOrNull() ?: fallbackTitle,
+            authors = LocalXml.texts(opf, "creator").distinct(),
+            description = LocalXml.texts(opf, "description").firstOrNull(),
+            tags = LocalXml.texts(opf, "subject").distinct(),
+            cover = cover,
+            chapters = emptyList(),
+        )
+        if (!withChapters) return metadata
         val spine = LocalXml.tags(opf, "itemref").mapNotNull { manifest[it["idref"]] }
             .filter { it.mediaType.contains("html") || it.href.endsWith("html", ignoreCase = true) }
         require(spine.isNotEmpty()) { "EPUB 没有正文" }
@@ -244,18 +274,7 @@ class LocalBookReader(
                     section = anchor, sectionEnd = sections.getOrNull(index + 1)?.second)
             }
         }
-        val coverId = LocalXml.tags(opf, "meta").firstOrNull { it["name"] == "cover" }?.get("content")
-        val cover = manifest.values.firstOrNull { "cover-image" in it.properties }?.href
-            ?: coverId?.let { manifest[it]?.href }?.takeIf(LocalFiles::isImage)
-            ?: manifest.values.firstOrNull { LocalFiles.isImage(it.href) && "cover" in it.href.lowercase() }?.href
-        return LocalBook(
-            title = LocalXml.texts(opf, "title").firstOrNull() ?: fallbackTitle,
-            authors = LocalXml.texts(opf, "creator").distinct(),
-            description = LocalXml.texts(opf, "description").firstOrNull(),
-            tags = LocalXml.texts(opf, "subject").distinct(),
-            cover = cover,
-            chapters = chapters,
-        )
+        return metadata.copy(chapters = chapters)
     }
 
     /** One table-of-contents entry: its title and where it points (a document, optionally an anchor in it). */

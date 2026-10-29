@@ -4,6 +4,7 @@ import org.skepsun.kototoro.parsers.model.ContentRating
 import org.skepsun.kototoro.parsers.model.ContentState
 import org.skepsun.kototoro.parsers.model.ContentTag
 import org.skepsun.kototoro.local.shared.ComicInfo
+import org.skepsun.kototoro.local.shared.LocalBookReader
 import android.net.Uri
 import androidx.core.net.toFile
 import androidx.core.net.toUri
@@ -145,6 +146,15 @@ class LocalContentParser {
 
     suspend fun getContent(withDetails: Boolean, forceRefresh: Boolean = false): LocalContent {
         uniFile?.let { return getUniFileContent(it, withDetails, forceRefresh) }
+        if (rootFile.isFile && displayName.endsWith(".txt", ignoreCase = true)) {
+            return novelFileContent(rootFile.toUri().toString(), rootFile.lastModified(), withDetails)
+        }
+        if (!withDetails && displayName.endsWith(".epub", ignoreCase = true) && (archive != null || rootFile.isFile)) {
+            return runInterruptible(Dispatchers.IO) {
+                archive?.let { epubMetadataContent(it.fileSystem) }
+                    ?: FileSystem.SYSTEM.openZip(rootFile.toOkioPath()).use(::epubMetadataContent)
+            }
+        }
         val hasIndexFile = rootFile.isDirectory && File(rootFile, ENTRY_NAME_INDEX).isFile
         if (rootFile.isFile && rootFile.name.endsWith(".epub", ignoreCase = true)) {
             val parser = org.skepsun.kototoro.local.epub.LocalEpubParser(rootFile)
@@ -176,7 +186,8 @@ class LocalContentParser {
             if (!epubFiles.isNullOrEmpty()) {
                 val epubFile = epubFiles.first()
                 val parser = org.skepsun.kototoro.local.epub.LocalEpubParser(epubFile)
-                val epubContent = parser.parseContent()
+                val epubContent = if (withDetails) parser.parseContent()
+                    else LocalContentParser(epubFile).getContent(withDetails = false).manga
                 if (epubContent != null) {
                     val updatedChapters = epubContent.chapters?.map {
                         val idx = it.url.substringAfterLast("chapter/").toIntOrNull() ?: 0
@@ -406,45 +417,14 @@ class LocalContentParser {
             }
         }
         val hasIndexFile = rootFile.isDirectory && File(rootFile, ENTRY_NAME_INDEX).isFile
-        if (rootFile.isFile && rootFile.name.endsWith(".epub", ignoreCase = true)) {
-            val parser = org.skepsun.kototoro.local.epub.LocalEpubParser(rootFile)
-            val content = parser.parseContent()
-            if (content != null) {
-                    var extractedCoverUrl: String? = null
-                    runCatching {
-                        okio.FileSystem.SYSTEM.openZip(rootFile.absolutePath.toPath()).use { zipFs ->
-                            extractedCoverUrl = zipFs.findFirstImageUrl(okio.Path.Companion.DIRECTORY_SEPARATOR.toPath())
-                        }
-                    }
-                return content.copy(
-                    chapters = null,
-                    coverUrl = extractedCoverUrl ?: ""
-                )
-            }
+        if (rootFile.isFile && rootFile.name.isNovelName()) {
+            return getContent(withDetails = false).manga
         }
 
         if (rootFile.isDirectory && !hasIndexFile) {
             val epubFiles = rootFile.listFiles { f -> f.isFile && f.name.endsWith(".epub", ignoreCase = true) }
             if (!epubFiles.isNullOrEmpty()) {
-                val epubFile = epubFiles.first()
-                val parser = org.skepsun.kototoro.local.epub.LocalEpubParser(epubFile)
-                val content = parser.parseContent()
-                if (content != null) {
-                        var extractedCoverUrl: String? = null
-                        runCatching {
-                            val tempParser = LocalContentParser(epubFile)
-                            okio.FileSystem.SYSTEM.openZip(epubFile.absolutePath.toPath()).use { zipFs ->
-                                extractedCoverUrl = with(tempParser) {
-                                    zipFs.findFirstImageUrl(okio.Path.Companion.DIRECTORY_SEPARATOR.toPath())
-                                }
-                            }
-                        }
-                    return content.copy(
-                        id = rootFile.absolutePath.longHashCode(),
-                        chapters = null,
-                        coverUrl = extractedCoverUrl ?: ""
-                    )
-                }
+                return getContent(withDetails = false).manga
             }
         }
 
@@ -458,6 +438,9 @@ class LocalContentParser {
 
     suspend fun getPages(chapter: ContentChapter): List<ContentPage> {
         uniFile?.let { file ->
+            if (file.isFile && file.name?.endsWith(".txt", ignoreCase = true) == true) {
+                return listOf(ContentPage(chapter.id, file.uri.toString(), null, LocalNovelSource))
+            }
             if (file.isDirectory) {
                 return file.listFiles().orEmpty()
                     .filter { child -> child.isFile && child.name?.isImageName() == true }
@@ -525,11 +508,14 @@ class LocalContentParser {
 
     private suspend fun getUniFileContent(file: UniFile, withDetails: Boolean, forceRefresh: Boolean): LocalContent {
         if (file.isFile) {
+            if (file.name?.endsWith(".txt", ignoreCase = true) == true) {
+                return novelFileContent(file.uri.toString(), file.lastModified(), withDetails, file.uri)
+            }
             val directFile = file.filePath?.let(::File)?.takeIf { file.uri.scheme == "file" }
             if (directFile != null) {
                 return LocalContentParser(directFile).getContent(withDetails, forceRefresh)
             }
-            return withRandomAccess(file, forceRefresh) { localFile, archive ->
+            return withRandomAccess(file, forceRefresh, metadataOnly = !withDetails) { localFile, archive ->
                 val parsed = LocalContentParser(localFile, file.name ?: localFile.name, archive).getContent(withDetails)
                 val stableCoverUrl = parsed.manga.coverUrl
                     ?.toUri()
@@ -558,7 +544,7 @@ class LocalContentParser {
             ?.openInputStream()
             ?.bufferedReader()
             ?.use { ContentIndex(it.readText()) }
-            ?: createUniFileIndex(file)
+            ?: createUniFileIndex(file, withDetails)
         val info = checkNotNull(index.getContentInfo()) { "Invalid $ENTRY_NAME_INDEX in ${file.uri}" }
         val localSource = when (info.source?.contentType) {
             ContentType.NOVEL, ContentType.HENTAI_NOVEL -> LocalNovelSource
@@ -606,7 +592,7 @@ class LocalContentParser {
         return LocalContent(manga, rootFile, file.uri)
     }
 
-    private suspend fun createUniFileIndex(root: UniFile): ContentIndex {
+    private suspend fun createUniFileIndex(root: UniFile, withDetails: Boolean): ContentIndex {
         val entries = root.walkRelative()
         val videoEntries = entries.filter { (_, child) -> child.name?.isVideoName() == true }
         val novelEntries = entries.filter { (_, child) -> child.name?.isNovelName() == true }
@@ -633,13 +619,14 @@ class LocalContentParser {
             novelEntries.forEach { (relativePath, child) ->
                 if (child.name?.endsWith(".epub", ignoreCase = true) == true) {
                     val parsed = runCatchingCancellable {
-                        withMaterialized(child) { LocalEpubParser(it).parseContent() }
+                        LocalContentParser(child, cacheDir).getContent(withDetails).manga
                     }.getOrNull()
                     parsed?.authors?.filterTo(authors) { it.isNotBlank() }
                     if (description == null) description = parsed?.description?.takeIf(String::isNotBlank)
-                    // The parser saw a cache copy of the book: point the cover at the original.
+                    // Keep the original document behind either a file ZIP or SAF ZIP cover URI.
                     if (epubCoverUrl == null) {
-                        epubCoverUrl = parsed?.coverUrl?.toUri()?.takeIf(Uri::isZipUri)?.fragment
+                        epubCoverUrl = parsed?.coverUrl?.toUri()
+                            ?.takeIf { it.isZipUri() || it.isContentZipUri() }?.fragment
                             ?.takeIf(String::isNotBlank)
                             ?.let { entry -> child.uri.toZipUri(entry).toString() }
                     }
@@ -707,7 +694,7 @@ class LocalContentParser {
         chapters.forEachIndexed { chapterIndex, (chapter, relativePath) ->
             index.addChapter(IndexedValue(chapterIndex, chapter), relativePath, null)
         }
-        runCatchingCancellable {
+        if (withDetails) runCatchingCancellable {
             val indexFile = root.findFile(ENTRY_NAME_INDEX) ?: checkNotNull(root.createFile(ENTRY_NAME_INDEX))
             indexFile.openOutputStream().bufferedWriter().use { it.write(index.toString()) }
         }.onFailure { it.printStackTraceDebug() }
@@ -846,10 +833,13 @@ class LocalContentParser {
     private suspend fun <T> withRandomAccess(
         file: UniFile,
         forceRefresh: Boolean = false,
+        metadataOnly: Boolean = false,
         action: suspend (File, ContentZipArchive?) -> T,
     ): T {
-        // EPUB parsing needs a real file; the generic ZIP path only discovers image chapters.
-        if (hasZipExtension(file.name.orEmpty()) && file.name?.endsWith(".epub", ignoreCase = true) != true) {
+        // Chapter parsing still needs a real EPUB file; metadata can use the ZIP descriptor directly.
+        if (hasZipExtension(file.name.orEmpty()) &&
+            (metadataOnly || file.name?.endsWith(".epub", ignoreCase = true) != true)
+        ) {
             val archive = runInterruptible(Dispatchers.IO) {
                 ContentZipArchive.open(App.getInstance().contentResolver, file.uri)
             }
@@ -858,6 +848,42 @@ class LocalContentParser {
             }
         }
         return withMaterialized(file, forceRefresh) { action(it, null) }
+    }
+
+    private fun epubMetadataContent(zip: FileSystem): LocalContent {
+        val metadata = LocalBookReader().readEpubMetadata(zip, displayName.fileNameToTitle())
+        val cover = metadata.cover?.takeIf { zip.exists("/$it".toPath()) }
+            ?: zip.listRecursively("/".toPath()).filter { it.isImage() }.minOrNull()
+                ?.toString()?.removePrefix("/")
+        val base = novelFileContent(rootFile.toUri().toString(), rootFile.lastModified(), withDetails = false)
+        return base.copy(manga = base.manga.copy(
+            title = metadata.title,
+            authors = metadata.authors.toSet(),
+            description = metadata.description ?: "EPUB Ebook: ${metadata.title}",
+            coverUrl = cover?.let { rootFile.toZipUri(it).toString() }.orEmpty(),
+            tags = setOf(ContentTag("EPUB", "epub", LocalNovelSource)),
+        ))
+    }
+
+    /** A text document is one chapter; listing it needs only its name and stable storage identity. */
+    private fun novelFileContent(
+        reference: String,
+        modified: Long,
+        withDetails: Boolean,
+        storageUri: Uri? = null,
+    ): LocalContent {
+        val title = displayName.fileNameToTitle()
+        val chapters = if (withDetails) listOf(ContentChapter(
+            id = "$reference#text".longHashCode(), title = title, number = 1f, volume = 0, url = reference,
+            scanlator = null, uploadDate = modified, branch = null, source = LocalNovelSource,
+        )) else null
+        val content = Content(
+            id = rootFile.absolutePath.longHashCode(), title = title, altTitles = emptySet(),
+            url = reference, publicUrl = reference, rating = -1f, contentRating = null, coverUrl = "",
+            tags = emptySet(), state = ContentState.FINISHED, authors = emptySet(),
+            source = LocalNovelSource, chapters = chapters,
+        )
+        return LocalContent(content, rootFile, storageUri).also { it.createdAt = modified }
     }
 
     private suspend fun <T> withMaterialized(
