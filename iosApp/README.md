@@ -165,7 +165,7 @@ Native 的 `IosProductTest` 覆盖 Retina 密度与相机缩放分离、晚到�
 `LocalImportTests/testPreviousChapterButtonOpensTheChapterStart` 验证上一章按钮打开章首；
 向后翻页跨章进入上一章末页由三章窗口用例验证。两种导航契约与 Android 一致。
 连续模式的自然页面接续仍待实现，本轮分页跨章不依赖额外拉动。
-`testNewSourceBadgesFilterAndRestartPreserveBaseline` 使用两次独立导入验证基线、新标记、列表／网格及筛选重启恢复。
+`testNewSourceFilterAndRestartPreserveBaseline` 使用两次独立导入验证基线、新来源数量提示、列表／网格及筛选重启恢复。
 CMS fixture 的 `usage-sites.json?run=<标识>` 提供两个不同身份的测试站点，用于首次访问保持手动顺序和使用排序验收。
 修改服务脚本后需重启本地 fixture 服务，再运行相应用例。
 UI 测试每次创建唯一分类，测试数据留在测试设备沙盒中。

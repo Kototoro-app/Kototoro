@@ -281,7 +281,9 @@ enum SourceSort: String, CaseIterable, Identifiable {
 }
 
 struct SourcesView: View {
-    @EnvironmentObject private var library: LibraryModel
+    /// Held without observing: the library publishes often (update checks, refreshes) and every publish would rebuild
+    /// and re-diff the whole source list mid-scroll; only actions and the preview sheet read it.
+    let library: LibraryModel
     @ObservedObject var model: SourcesModel
     @State private var query = ""
     @AppStorage("sources.showAdult") private var showAdult = false
@@ -299,10 +301,6 @@ struct SourcesView: View {
     @State private var migration: LibraryMigrationRequest?
     @State private var trackingPreview: TrackingPreviewSelection?
     @Environment(\.openGlobalSearch) private var openGlobalSearch
-
-    init(library: LibraryModel? = nil, model: SourcesModel) {
-        self.model = model
-    }
 
     private struct DisplaySources {
         let sections: [(id: String, title: String, sources: [IosSource])]
@@ -520,7 +518,9 @@ struct SourcesView: View {
                             .padding(.horizontal, 20)
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 92), spacing: 10)], spacing: 10) {
                             ForEach(section.sources, id: \.name) { source in
-                                NavigationLink(value: SourceRoute(source: source)) { SourceTile(source: source) }
+                                NavigationLink(value: SourceRoute(source: source)) {
+                                    SourceTile(runtime: model.runtime, source: source)
+                                }
                                     .buttonStyle(.plain)
                                     .accessibilityIdentifier("source.\(source.name)")
                                     .contextMenu { sourceActions(source) }
@@ -692,23 +692,33 @@ struct SourcesView: View {
 
     private func sourceLink(_ source: IosSource) -> some View {
         NavigationLink(value: SourceRoute(source: source)) {
-            HStack(spacing: 12) {
-                SourceIcon(runtime: model.runtime, source: source)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(source.title)
-                    if model.isNewSource(source) { SourceNewBadge() }
-                    Text(source.kind == "video" ? String(localized: "影视站点")
-                         : source.kind == "local" ? String(localized: "导入的\(Self.kindName(source.mediaKind))文件")
-                         : [SourceLanguage.title(source.locale), Self.kindName(source.mediaKind)].joined(separator: " · "))
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                if model.isPinned(source) {
-                    Spacer()
-                    Image(systemName: "pin.fill").font(.caption).foregroundStyle(.orange).accessibilityLabel("已置顶")
-                }
-            }
+            SourceRow(runtime: model.runtime, source: source, pinned: model.isPinned(source))
         }
         .accessibilityIdentifier("source.\(source.name)")
+    }
+}
+
+/// A browse row built from plain values, so a publish that leaves the source unchanged does not redraw it.
+private struct SourceRow: View {
+    let runtime: IosSources?
+    let source: IosSource
+    let pinned: Bool
+
+    var body: some View {
+        HStack(spacing: 12) {
+            SourceIcon(runtime: runtime, source: source)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(source.title)
+                Text(source.kind == "video" ? String(localized: "影视站点")
+                     : source.kind == "local" ? String(localized: "导入的\(SourcesView.kindName(source.mediaKind))文件")
+                     : [SourceLanguage.title(source.locale), SourcesView.kindName(source.mediaKind)].joined(separator: " · "))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            if pinned {
+                Spacer()
+                Image(systemName: "pin.fill").font(.caption).foregroundStyle(.orange).accessibilityLabel("已置顶")
+            }
+        }
     }
 }
 

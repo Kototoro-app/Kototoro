@@ -414,19 +414,13 @@ struct SourceGroupHeader: View {
 
 /// Compact tile for the browse grid layout.
 struct SourceTile: View {
+    let runtime: IosSources?
     let source: IosSource
-    @EnvironmentObject private var sources: SourcesModel
 
     var body: some View {
         VStack(spacing: 4) {
-            ZStack(alignment: .topTrailing) {
-                SourceIcon(runtime: sources.runtime, source: source, size: 40)
-                if sources.isNewSource(source) {
-                    SourceNewBadge()
-                        .offset(x: 10, y: -4)
-                }
-            }
-            .padding(.top, 2)
+            SourceIcon(runtime: runtime, source: source, size: 40)
+                .padding(.top, 2)
 
             Text(source.title)
                 .font(.caption.weight(.medium))
@@ -446,17 +440,6 @@ struct SourceTile: View {
         .padding(.vertical, 8).padding(.horizontal, 6)
         .background(.background.secondary, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-    }
-}
-
-struct SourceNewBadge: View {
-    var body: some View {
-        Text("新")
-            .font(.system(size: 9, weight: .bold))
-            .foregroundStyle(.white)
-            .padding(.horizontal, 4).padding(.vertical, 1)
-            .background(Color.red, in: Capsule())
-            .accessibilityLabel("本版本新来源")
     }
 }
 

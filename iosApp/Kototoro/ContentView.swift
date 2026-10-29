@@ -30,7 +30,7 @@ struct ContentView: View {
                 LibraryView(library: library, sources: sources)
             }
             Tab("浏览", systemImage: "safari", value: MainTab.browse) {
-                SourcesView(model: sources)
+                SourcesView(library: library, model: sources)
             }
             Tab("记录", systemImage: "clock.arrow.circlepath", value: MainTab.records) {
                 LibraryRecordsView()

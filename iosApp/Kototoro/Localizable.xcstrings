@@ -7674,16 +7674,6 @@
         }
       }
     },
-    "新": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "New"
-          }
-        }
-      }
-    },
     "新增 %d 章节": {
       "localizations": {
         "en": {
@@ -8825,16 +8815,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "%lld new sources in this version · View"
-          }
-        }
-      }
-    },
-    "本版本新来源": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "New sources in this version"
           }
         }
       }

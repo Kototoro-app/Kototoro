@@ -316,7 +316,7 @@ final class VideoSourceTests: XCTestCase {
 
     /// The first catalog is a baseline; later additions get version badges in list and grid layouts.
     @MainActor
-    func testNewSourceBadgesFilterAndRestartPreserveBaseline() throws {
+    func testNewSourceFilterAndRestartPreserveBaseline() throws {
         continueAfterFailure = false
         try requireFixture()
         let app = XCUIApplication()
@@ -337,7 +337,6 @@ final class VideoSourceTests: XCTestCase {
         baselineSearch.tap(); baselineSearch.typeText("\(prefix)\n")
         let old = source(oldTitle)
         XCTAssertTrue(old.waitForExistence(timeout: 30))
-        XCTAssertFalse(old.label.contains("本版本新来源"), "The initial catalog is a baseline")
         app.terminate()
         app.launchArguments = ["-sources.grouping", "none",
                                "-sources.hiddenKinds", "", "-sources.hiddenEcosystems", ""]
@@ -357,21 +356,18 @@ final class VideoSourceTests: XCTestCase {
         searchSources()
         let fresh = source("\(prefix)甲")
         XCTAssertTrue(fresh.waitForExistence(timeout: 30))
-        XCTAssertTrue(fresh.label.contains("本版本新来源"), app.debugDescription)
         XCTAssertTrue(old.exists)
-        XCTAssertFalse(old.label.contains("本版本新来源"))
         let notice = app.buttons["sources.newNotice"]
         XCTAssertTrue(notice.waitForExistence(timeout: 10))
         XCTAssertTrue(notice.label.contains("2 个来源"), app.debugDescription)
         notice.tap()
         XCTAssertTrue(old.waitForNonExistence(timeout: 10))
         XCTAssertTrue(fresh.exists)
-        attach(app, "New source badges and filtered list")
+        attach(app, "New-only filtered list")
         app.terminate(); app.launch()
         app.tabBars.buttons["浏览"].tap()
         searchSources()
         XCTAssertTrue(fresh.waitForExistence(timeout: 30))
-        XCTAssertTrue(fresh.label.contains("本版本新来源"))
         XCTAssertFalse(old.exists, "The new-only filter must persist")
         let close = app.navigationBars.buttons["关闭"].firstMatch
         if close.exists { close.tap() }
@@ -380,9 +376,8 @@ final class VideoSourceTests: XCTestCase {
         dismissMenu(app)
         searchSources()
         XCTAssertTrue(fresh.waitForExistence(timeout: 10))
-        XCTAssertTrue(fresh.label.contains("本版本新来源"), app.debugDescription)
         XCTAssertLessThan(fresh.frame.width, app.frame.width / 2, "The source must be a grid tile")
-        attach(app, "New source badges in grid")
+        attach(app, "New-only filter in grid")
         let field = app.pageSearchField()
         field.tap(); field.buttons.firstMatch.tap(); field.typeText("\(oldTitle)\n")
         let reset = app.buttons["sources.showAll"]
@@ -391,7 +386,6 @@ final class VideoSourceTests: XCTestCase {
         attach(app, "Empty new-only search can show existing sources")
         reset.tap()
         XCTAssertTrue(old.waitForExistence(timeout: 10))
-        XCTAssertFalse(old.label.contains("本版本新来源"))
     }
 
     /// Shared source usage metrics drive recent and popularity ordering while keeping the pinned section first.
