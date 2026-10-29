@@ -612,6 +612,8 @@ class IosSources(
     constructor(transport: IosSourceTransport?, videoSources: IosVideoSources?) : this(transport, videoSources, null, null)
     constructor(transport: IosSourceTransport) : this(transport, null)
 
+    /** The JNI transport itself, for host management that should run on the caller's thread and QoS. */
+    val hostTransport: IosSourceTransport? = transport
     private val transport = transport
     private val extensions = transport?.let { owned ->
         SourceProtocolClient(

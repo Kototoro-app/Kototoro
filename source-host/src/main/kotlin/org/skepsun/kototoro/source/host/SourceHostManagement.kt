@@ -23,6 +23,8 @@ internal data class HostManagementResult(
     val installed: List<HostInstalled> = emptyList(),
     val sourceTitles: Map<String, String> = emptyMap(),
     val icon: String? = null,
+    /** `iconFile`: where the artwork bytes were written, so large icons do not cross the protocol as Base64. */
+    val iconPath: String? = null,
 )
 @Serializable
 internal data class HostInstalled(val packageName: String, val versionCode: Long, val sha256: String, val ecosystem: String,
@@ -59,6 +61,21 @@ internal class SourceHostManagement(
         if (input.operation == "icon") {
             val icon = registry.icon(input.packageName)?.let { java.util.Base64.getEncoder().encodeToString(it) }
             return json.encodeToString(HostManagementResult(icon = icon))
+        }
+        if (input.operation == "iconFile") {
+            require(input.packageName.matches(Regex("[A-Za-z0-9._-]+"))) { "Invalid package name" }
+            val bytes = registry.icon(input.packageName)
+                ?: return json.encodeToString(HostManagementResult())
+            val icons = Files.createDirectories(directory.resolve("icons"))
+            val target = icons.resolve("${input.packageName}.img")
+            val partial = Files.createTempFile(icons, ".icon-", ".part")
+            try {
+                Files.write(partial, bytes)
+                Files.move(partial, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+            } finally {
+                Files.deleteIfExists(partial)
+            }
+            return json.encodeToString(HostManagementResult(iconPath = target.toAbsolutePath().toString()))
         }
         when (input.operation) {
             "list" -> Unit

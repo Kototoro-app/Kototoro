@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import org.skepsun.kototoro.core.source.SourceProtocolJson
 import org.skepsun.kototoro.core.source.LoadedMihonExtension
+import java.nio.file.Files
 import java.nio.file.Path
 
 class MihonJarRegistryTest {
@@ -39,6 +40,15 @@ class MihonJarRegistryTest {
                     """{"managementVersion":1,"operation":"icon","packageName":"fixture.extension"}""",
                 ))
                 assertEquals(java.util.Base64.getEncoder().encodeToString(artwork), reply.icon)
+                val file = SourceProtocolJson.decodeFromString<HostManagementResult>(management.exchange(
+                    """{"managementVersion":1,"operation":"iconFile","packageName":"fixture.extension"}""",
+                ))
+                org.junit.jupiter.api.Assertions.assertArrayEquals(artwork, Files.readAllBytes(Path.of(file.iconPath!!)))
+                assertEquals(null, file.icon)
+                val missing = SourceProtocolJson.decodeFromString<HostManagementResult>(management.exchange(
+                    """{"managementVersion":1,"operation":"iconFile","packageName":"missing.extension"}""",
+                ))
+                assertEquals(null, missing.iconPath)
                 assertEquals(1, Integer.getInteger(counter, 0), "Reading an icon must not initialize the source")
             }
         }

@@ -13,7 +13,7 @@ struct SourceIcon: View {
         self.runtime = runtime
         self.source = source
         self.size = size
-        _image = State(initialValue: SourceIconStore.shared.cached(source.name))
+        _image = State(initialValue: SourceIconStore.shared.cached(source))
     }
 
     var body: some View {
@@ -56,41 +56,86 @@ struct SourceIcon: View {
 final class SourceIconStore {
     static let shared = SourceIconStore()
     private var memory: [String: UIImage] = [:]
-    private var inFlight: [String: Task<UIImage?, Never>] = [:]
+    private var inFlight: [String: Request] = [:]
     private let directory: URL? = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
         .appendingPathComponent("source-icons-v2", isDirectory: true)
     /// Failed website lookups are retried after a week; local artwork can become available after an install.
     private static let retryInterval: TimeInterval = 7 * 24 * 3600
+    /// The JNI call blocks its thread, so it runs here at utility QoS instead of on a cooperative or Kotlin IO thread.
+    private nonisolated static let hostQueue = DispatchQueue(label: "kototoro.source-icons", qos: .utility)
+
+    /// One load shared by every row showing the same icon; cancelled once no row is waiting for it.
+    private final class Request {
+        let token = UUID()
+        var task: Task<UIImage?, Never>?
+        var waiters = 0
+    }
+
     func clearMemory() { memory.removeAll() }
 
     /// View initialization only consults memory; a cold disk cache is loaded by the coalesced background task.
-    func cached(_ name: String) -> UIImage? { memory[name] }
+    func cached(_ source: IosSource) -> UIImage? { memory[Self.key(source)] }
+
+    /// APK artwork belongs to the package, so all languages of one extension share a single entry and host call.
+    private static func key(_ source: IosSource) -> String {
+        isPackaged(source) ? "package.\(source.group)" : source.name
+    }
+
+    private static func isPackaged(_ source: IosSource) -> Bool {
+        ["MIHON", "ANIYOMI", "TSUNDOKU"].contains(source.ecosystem) && !source.group.isEmpty
+    }
 
     func load(_ source: IosSource, runtime: IosSources) async -> UIImage? {
+        let key = Self.key(source)
+        if let image = memory[key] { return image }
+        let request = inFlight[key] ?? start(source, key: key, runtime: runtime)
+        request.waiters += 1
+        guard let task = request.task else { return nil }
+        return await withTaskCancellationHandler {
+            await task.value
+        } onCancel: {
+            Task { @MainActor in self.abandon(key, request) }
+        }
+    }
+
+    /// A row scrolled away: queued work for an icon nobody shows any more leaves the gate without running.
+    private func abandon(_ key: String, _ request: Request) {
+        request.waiters -= 1
+        guard request.waiters <= 0, inFlight[key] === request else { return }
+        inFlight[key] = nil
+        request.task?.cancel()
+    }
+
+    private func start(_ source: IosSource, key: String, runtime: IosSources) -> Request {
+        let request = Request()
+        let token = request.token
         let name = source.name
-        let packagedIcon = ["MIHON", "ANIYOMI", "TSUNDOKU"].contains(source.ecosystem)
-        if let image = cached(name) { return image }
-        let failedKey = "source.icon.v2.failed.\(name)"
+        let packaged = Self.isPackaged(source)
+        let group = source.group
+        let transport = runtime.hostTransport
+        let failedKey = "source.icon.v2.failed.\(key)"
         let failedAt = UserDefaults.standard.double(forKey: failedKey)
-        let recentlyFailed = !packagedIcon && failedAt > 0 && Date().timeIntervalSince1970 - failedAt < Self.retryInterval
-        if let running = inFlight[name] { return await running.value }
-        let targetFile = file(name)
-        let task = Task.detached(priority: .utility) { () -> UIImage? in
-            try? await withReaderStorage { () async throws -> UIImage? in
-                guard await RequestGate.icons.enter() else { return nil }
-                defer { Task { await RequestGate.icons.leave() } }
-                if let file = targetFile, let data = try? Data(contentsOf: file), let image = Self.decode(data) {
-                    return image
-                }
-                guard !recentlyFailed else { return nil }
+        let recentlyFailed = !packaged && failedAt > 0 && Date().timeIntervalSince1970 - failedAt < Self.retryInterval
+        let targetFile = file(key)
+        request.task = Task.detached(priority: .utility) { () -> UIImage? in
+            // Cached artwork neither waits behind site lookups nor takes the storage lease; a file removed meanwhile
+            // just falls through to the lookup below.
+            if let file = targetFile, let data = try? Data(contentsOf: file), let image = Self.decode(data) {
+                await self.finish(key, token, image: image, failedKey: nil)
+                return image
+            }
+            guard !recentlyFailed else {
+                await self.finish(key, token, image: nil, failedKey: nil)
+                return nil
+            }
+            let image = try? await withReaderStorage { () async throws -> UIImage? in
+                let gate = packaged ? RequestGate.hostIcons : RequestGate.icons
+                guard await gate.enter() else { return nil }
+                defer { Task { await gate.leave() } }
                 let image: UIImage?
-                if packagedIcon {
-                    let request = try JSONSerialization.data(withJSONObject: [
-                        "managementVersion": 1, "operation": "icon", "packageName": source.group,
-                    ])
-                    let response = try await runtime.manage(requestJson: String(decoding: request, as: UTF8.self))
-                    let result = try JSONSerialization.jsonObject(with: Data(response.utf8)) as? [String: Any]
-                    image = (result?["icon"] as? String).flatMap { Data(base64Encoded: $0) }.flatMap { Self.decode($0) }
+                if packaged {
+                    guard let transport else { return nil }
+                    image = try await Self.packagedIcon(group, transport: transport)
                 } else {
                     guard let homepage = try? await runtime.homepage(sourceName: name),
                           let base = URL(string: homepage), base.host() != nil else { return nil }
@@ -102,15 +147,40 @@ final class SourceIconStore {
                 }
                 return image
             }
+            let failed = image == nil && !packaged && !Task.isCancelled
+            await self.finish(key, token, image: image, failedKey: failed ? failedKey : nil)
+            return image
         }
-        inFlight[name] = task
-        let image = await task.value
-        inFlight[name] = nil
-        if let image { memory[name] = image; UserDefaults.standard.removeObject(forKey: failedKey) }
-        else if !packagedIcon, !recentlyFailed, !Task.isCancelled {
+        inFlight[key] = request
+        return request
+    }
+
+    private func finish(_ key: String, _ token: UUID, image: UIImage?, failedKey: String?) {
+        if inFlight[key]?.token == token { inFlight[key] = nil }
+        if let image {
+            memory[key] = image
+            UserDefaults.standard.removeObject(forKey: "source.icon.v2.failed.\(key)")
+        } else if let failedKey {
             UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: failedKey)
         }
-        return image
+    }
+
+    /// The host writes the artwork to a file and answers with its path, so the bytes never pass through the
+    /// interpreted JVM's Base64/JSON or the Kotlin heap.
+    private nonisolated static func packagedIcon(_ packageName: String, transport: IosSourceTransport) async throws -> UIImage? {
+        let request = String(decoding: try JSONSerialization.data(withJSONObject: [
+            "managementVersion": 1, "operation": "iconFile", "packageName": packageName,
+        ]), as: UTF8.self)
+        // The JNI transport is documented as safe to call from any thread.
+        nonisolated(unsafe) let transport = transport
+        let response: String = try await withCheckedThrowingContinuation { continuation in
+            hostQueue.async { continuation.resume(with: Result { try transport.exchange(requestJson: request) }) }
+        }
+        let result = try JSONSerialization.jsonObject(with: Data(response.utf8)) as? [String: Any]
+        guard let path = result?["iconPath"] as? String else { return nil }
+        let url = URL(fileURLWithPath: path)
+        defer { try? FileManager.default.removeItem(at: url) }
+        return (try? Data(contentsOf: url)).flatMap { decode($0) }
     }
 
     private func file(_ name: String) -> URL? {
