@@ -23,13 +23,18 @@ final class ProductFlowTests: XCTestCase {
         let done = app.navigationBars.buttons["library.selectDone"]
         XCTAssertTrue(done.waitForExistence(timeout: 5), app.debugDescription)
         XCTAssertTrue(work.isSelected)
-        XCTAssertTrue(app.navigationBars.buttons["library.selection.unfavourite"].isEnabled)
-        XCTAssertTrue(app.navigationBars.buttons["library.selection.migrate"].exists)
+        // Batch actions move to the bottom toolbar, where the tabs were.
+        XCTAssertTrue(app.toolbars.buttons["library.selection.unfavourite"].isEnabled)
+        XCTAssertTrue(app.toolbars.buttons["library.selection.unfavourite"].isHittable,
+                      "Nothing (tab bar, resume accessory) may cover the batch actions: \(app.debugDescription)")
+        XCTAssertTrue(app.toolbars.buttons["library.selection.migrate"].exists)
+        XCTAssertFalse(app.mainTab("浏览").isHittable)
         XCTAssertFalse(app.buttons["library.more"].exists, "Selection replaces the toolbar's buttons")
         shot("Library selection toolbar")
         done.tap()
         XCTAssertTrue(app.buttons["library.more"].waitForExistence(timeout: 5))
         XCTAssertFalse(work.isSelected)
+        XCTAssertTrue(app.mainTab("浏览").waitForExistence(timeout: 5))
 
         app.buttons["library.more"].tap()
         XCTAssertTrue(app.buttons["library.migrate"].waitForExistence(timeout: 5))
@@ -365,8 +370,12 @@ final class ProductFlowTests: XCTestCase {
         XCTAssertTrue(work("测试动画").isSelected && work("测试电影").isSelected, app.debugDescription)
         let actionBar = XCTAttachment(screenshot: app.screenshot()); actionBar.name = "Browse bulk selection action bar"
         actionBar.lifetime = .keepAlways; add(actionBar)
-        app.buttons["browse.selection.favourite"].tap()
-        XCTAssertTrue(category(names[0]).waitForExistence(timeout: 10))
+        // The batch action sits in the bottom toolbar, in reach while the tabs are hidden.
+        let bulkFavourite = app.toolbars.buttons["browse.selection.favourite"]
+        XCTAssertTrue(bulkFavourite.waitForExistence(timeout: 5) && bulkFavourite.isHittable, app.debugDescription)
+        XCTAssertFalse(app.mainTab("浏览").isHittable)
+        bulkFavourite.tap()
+        XCTAssertTrue(category(names[0]).waitForExistence(timeout: 10), app.debugDescription)
         XCTAssertEqual(category(names[0]).value as? String, "部分选中")
         XCTAssertEqual(category(names[1]).value as? String, "部分选中")
         category(names[2]).tap()
@@ -379,11 +388,18 @@ final class ProductFlowTests: XCTestCase {
         XCTAssertTrue(app.buttons["details.favourite"].waitForExistence(timeout: 20))
         expectation(for: NSPredicate(format: "enabled == true"), evaluatedWith: app.buttons["details.favourite"])
         waitForExpectations(timeout: 20)
-        app.buttons["details.favourite"].tap()
+        // A favourited work's heart unfavourites it in one tap; its categories are in the heart's context menu.
+        func openDetailsCategories() {
+            app.buttons["details.favourite"].press(forDuration: 1)
+            let item = app.buttons["收藏分类"]
+            XCTAssertTrue(item.waitForExistence(timeout: 5), app.debugDescription)
+            item.tap()
+        }
+        openDetailsCategories()
         XCTAssertTrue(category(names[0]).waitForExistence(timeout: 10))
         for name in names { XCTAssertEqual(category(name).value as? String, "已选中") }
         category(names[1]).tap(); save()
-        app.buttons["details.favourite"].tap()
+        openDetailsCategories()
         XCTAssertTrue(category(names[0]).waitForExistence(timeout: 10))
         XCTAssertEqual(category(names[0]).value as? String, "已选中")
         XCTAssertEqual(category(names[1]).value as? String, "未选中")
@@ -751,5 +767,68 @@ final class ProductFlowTests: XCTestCase {
         }, object: nil)
         wait(for: [resumed], timeout: 3)
         playerControl(app, "player.close").tap()
+    }
+
+    /// Typing the start of an earlier search offers it under the field; one tap runs that search.
+    @MainActor
+    func testGlobalSearchSuggestsEarlierSearchesWhileTyping() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments += ["-search.recent", "建议测试作品\n其他搜索"]
+        app.launch()
+        XCTAssertTrue(app.tabBars.buttons["搜索"].waitForExistence(timeout: 30), app.debugDescription)
+        app.tabBars.buttons["搜索"].tap()
+        let field = app.pageSearchField()
+        XCTAssertTrue(field.waitForExistence(timeout: 10), app.debugDescription)
+        field.tap()
+        field.typeText("建议")
+        let suggestion = app.buttons["search.suggestion.建议测试作品"]
+        XCTAssertTrue(suggestion.waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertFalse(app.buttons["search.suggestion.其他搜索"].exists, "Only searches starting with the typed text")
+        let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Search suggestions"
+        shot.lifetime = .keepAlways; add(shot)
+        suggestion.tap()
+        XCTAssertTrue(app.staticTexts["search.progress"].waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertEqual(field.value as? String, "建议测试作品")
+        XCTAssertFalse(suggestion.exists, "A submitted search no longer offers itself")
+    }
+
+    /// Work cells open their details from the library, from a source listing reached through details, and from search.
+    /// Needs at least one favourite.
+    @MainActor
+    func testWorkLinksOpenDetailsFromLibraryAndGlobalSearch() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["-space.enabled", "NO"]
+        app.launch()
+        app.mainTab("作品库").tap()
+        let work = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "favourite.")).firstMatch
+        XCTAssertTrue(work.waitForExistence(timeout: 30), app.debugDescription)
+        work.tap()
+        let title = app.staticTexts["details.title"]
+        XCTAssertTrue(title.waitForExistence(timeout: 20), app.debugDescription)
+        let name = title.label
+        // Details push the source's listing through their own destination; its works must open too.
+        let source = app.buttons["details.source"]
+        XCTAssertTrue(source.waitForExistence(timeout: 10), app.debugDescription)
+        source.tap()
+        let listed = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "source.content.")).firstMatch
+        XCTAssertTrue(listed.waitForExistence(timeout: 30), app.debugDescription)
+        listed.tap()
+        XCTAssertTrue(app.staticTexts["details.title"].waitForExistence(timeout: 20), app.debugDescription)
+        for _ in 0..<3 where !work.exists { app.navigationBars.buttons["BackButton"].firstMatch.tap() }
+        XCTAssertTrue(work.waitForExistence(timeout: 10))
+
+        app.tabBars.buttons["搜索"].tap()
+        let field = app.pageSearchField()
+        XCTAssertTrue(field.waitForExistence(timeout: 10), app.debugDescription)
+        field.tap()
+        field.typeText(name + "\n")
+        XCTAssertTrue(app.descendants(matching: .any)["search.library"].waitForExistence(timeout: 15), app.debugDescription)
+        let result = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "search.result.")).firstMatch
+        XCTAssertTrue(result.waitForExistence(timeout: 10), app.debugDescription)
+        result.tap()
+        XCTAssertTrue(app.staticTexts["details.title"].waitForExistence(timeout: 20), app.debugDescription)
+        XCTAssertEqual(app.staticTexts["details.title"].label, name)
     }
 }

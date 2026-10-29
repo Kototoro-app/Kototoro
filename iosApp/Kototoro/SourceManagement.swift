@@ -119,7 +119,7 @@ struct SpaceMenu: View {
                 }
                 if !compact {
                     Image(systemName: "chevron.down")
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.caption.weight(.semibold))
                 }
             }
             .font(.subheadline.weight(.semibold))
@@ -429,7 +429,7 @@ struct SourceTile: View {
                 .padding(.horizontal, 2)
 
             Text(source.kind == "video" ? String(localized: "影视") : SourceLanguage.title(source.locale))
-                .font(.system(size: 10))
+                .font(.caption2)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .padding(.horizontal, 6)

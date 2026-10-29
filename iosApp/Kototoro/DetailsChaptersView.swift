@@ -23,22 +23,57 @@ struct DetailsChaptersView: View {
     /// Downloaded books whose chapters are folded away; books open expanded, as on Android.
     @State private var collapsedBooks = Set<String>()
 
+    @State private var cache = DirectoryCache()
+
     private var content: IosSourceContent { model.details ?? model.content }
-    private var chapters: [IosSourceChapter] {
+    /// Download progress republishes the queue for every page; the directory is derived again only when what it
+    /// lists changes, not on each of those updates.
+    private var derived: DirectoryCache {
+        let key = "\(model.chaptersRevision)|\(model.selectedBranch ?? "")|\(newestFirst)|\(query)|\(selecting)"
+        guard key != cache.key else { return cache }
         let list = model.isVideo ? model.visibleChapters : model.chapterList(query: "", newestFirst: false)
         let ordered = newestFirst ? Array(list.reversed()) : list
         let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        return text.isEmpty ? ordered : ordered.filter { $0.title.localizedCaseInsensitiveContains(text) }
+        let chapters = text.isEmpty ? ordered : ordered.filter { $0.title.localizedCaseInsensitiveContains(text) }
+        cache.key = key
+        cache.chapters = chapters
+        cache.ids = chapters.map(\.id)
+        cache.idSet = Set(cache.ids)
+        cache.rows = text.isEmpty && !selecting ? ChapterRow.rows(chapters, in: content) : chapters.map(ChapterRow.chapter)
+        cache.offline.removeAll()
+        return cache
     }
+    private var chapters: [IosSourceChapter] { derived.chapters }
     private var selecting: Bool { editMode.isEditing }
+
+    /// Finished downloads of this work: a new one may mark a chapter offline.
+    private var completedDownloads: Int {
+        downloads.entries.reduce(0) {
+            $1.state == .completed && $1.request.source == content.sourceName && $1.request.contentID == content.id
+                ? $0 + 1 : $0
+        }
+    }
+
+    /// Checking a chapter's download touches the file system; each row asks once per directory revision.
+    private func offlineMark(_ chapter: IosSourceChapter) -> ChapterOfflineMark? {
+        let cache = derived
+        if cache.completed != completedDownloads {
+            cache.completed = completedDownloads
+            cache.offline.removeAll()
+        }
+        if let mark = cache.offline[chapter.id] { return mark }
+        let mark = content.bookOf(chapter: chapter) == nil ? ChapterOfflineMark.of(content, chapter) : nil
+        cache.offline[chapter.id] = .some(mark)
+        return mark
+    }
 
     var body: some View {
         ScrollViewReader { proxy in
             directory
-                .onChange(of: chapters.map(\.id), initial: true) { _, _ in
+                .onChange(of: derived.ids, initial: true) { _, _ in
                     guard !positioned, !chapters.isEmpty else { return }
                     positioned = true
-                    if let id = resume?.chapterId, chapters.contains(where: { $0.id == id }) {
+                    if let id = resume?.chapterId, derived.idSet.contains(id) {
                         proxy.scrollTo(id, anchor: .center)
                     }
                 }
@@ -93,8 +128,8 @@ struct DetailsChaptersView: View {
                     }
                     if selecting {
                         ToolbarItem(placement: .bottomBar) {
-                            Button(Set(chapters.map(\.id)).isSubset(of: selectedIDs) ? "取消全选" : "全选") {
-                                selectedIDs = BatchSelection.toggling(visible: Set(chapters.map(\.id)), in: selectedIDs)
+                            Button(derived.idSet.isSubset(of: selectedIDs) ? "取消全选" : "全选") {
+                                selectedIDs = BatchSelection.toggling(visible: derived.idSet, in: selectedIDs)
                             }
                             .disabled(chapters.isEmpty)
                             .accessibilityIdentifier("details.chapters.selectAll")
@@ -138,7 +173,7 @@ struct DetailsChaptersView: View {
     }
 
     private var directory: some View {
-        let list = chapters
+        let list = derived
         let statuses = Dictionary(downloads.entries.filter {
             $0.request.source == content.sourceName && $0.request.contentID == content.id
         }.map { ($0.request.chapterID, $0.status) }, uniquingKeysWith: { _, latest in latest })
@@ -146,11 +181,11 @@ struct DetailsChaptersView: View {
             if let downloadStatus { Text(downloadStatus).font(.footnote).foregroundStyle(.secondary) }
             if model.isLoading { ProgressView("正在更新章节…") }
             if let error = model.error { Text(error).foregroundStyle(.red) }
-            if list.isEmpty {
+            if list.chapters.isEmpty {
                 ContentUnavailableView(query.isEmpty ? "暂无章节" : "没有匹配的章节", systemImage: "list.bullet")
             }
             // Searching and selecting list chapters alone; otherwise a downloaded book gathers its chapters.
-            ForEach(query.isEmpty && !selecting ? ChapterRow.rows(list, in: content) : list.map(ChapterRow.chapter)) { row in
+            ForEach(list.rows) { row in
                 switch row {
                 case .chapter(let chapter): chapterRow(chapter, statuses: statuses)
                 case .book(let book, let chapters):
@@ -223,7 +258,7 @@ struct DetailsChaptersView: View {
         // A book's chapters are marked once, on the book they are grouped under.
         DetailsChapterLabel(chapter: chapter, resume: resume, isRead: model.isBeforeResume(chapter, resume: resume),
                             isVideo: model.isVideo, downloadStatus: status,
-                            offline: content.bookOf(chapter: chapter) == nil ? ChapterOfflineMark.of(content, chapter) : nil)
+                            offline: offlineMark(chapter))
     }
 
     private func finishSelection() {
@@ -411,6 +446,17 @@ struct DetailsReaderDestination: View {
 }
 
 /// A chapter list row: a chapter, or a downloaded book gathering its own chapters (Android's EPUB volume groups).
+/// The directory as last derived, and the offline marks its rows have looked up since.
+private final class DirectoryCache {
+    var key = ""
+    var chapters: [IosSourceChapter] = []
+    var ids: [String] = []
+    var idSet: Set<String> = []
+    var rows: [ChapterRow] = []
+    var completed = -1
+    var offline: [String: ChapterOfflineMark?] = [:]
+}
+
 enum ChapterRow: Identifiable {
     case chapter(IosSourceChapter)
     case book(IosSourceChapter, [IosSourceChapter])
@@ -426,14 +472,18 @@ enum ChapterRow: Identifiable {
     static func rows(_ chapters: [IosSourceChapter], in content: IosSourceContent) -> [ChapterRow] {
         guard content.hasBooks else { return chapters.map(ChapterRow.chapter) }
         var rows: [ChapterRow] = []
+        var group: (book: IosSourceChapter, members: [IosSourceChapter])?
         for chapter in chapters {
-            guard let book = content.bookOf(chapter: chapter) else { rows.append(.chapter(chapter)); continue }
-            if case .book(let last, let members)? = rows.last, last.id == book.id {
-                rows[rows.count - 1] = .book(last, members + [chapter])
-            } else {
-                rows.append(.book(book, [chapter]))
+            let book = content.bookOf(chapter: chapter)
+            if let current = group, current.book.id != book?.id {
+                rows.append(.book(current.book, current.members))
+                group = nil
             }
+            guard let book else { rows.append(.chapter(chapter)); continue }
+            if group == nil { group = (book, []) }
+            group?.members.append(chapter)
         }
+        if let group { rows.append(.book(group.book, group.members)) }
         return rows
     }
 }

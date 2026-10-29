@@ -133,6 +133,14 @@ struct ReadingStatsOverview: View {
         .accessibilityElement(children: .combine)
     }
 
+    private var activityAccessibilityValue: String {
+        guard let selectedDay, let day = snapshot.dailyActivity.first(where: { $0.date == selectedDay }) else {
+            let total = snapshot.dailyActivity.reduce(Int64(0)) { $0 + $1.duration }
+            return String(localized: "全部日期，共 \(ReadingStatsFormat.duration(total))")
+        }
+        return "\(day.date)，\(ReadingStatsFormat.duration(day.duration))"
+    }
+
     private var activityChart: some View {
         Chart(snapshot.dailyActivity, id: \.date) { day in
             BarMark(x: .value("日期", ReadingStatsFormat.date(day.startedAt), unit: .day),
@@ -159,6 +167,21 @@ struct ReadingStatsOverview: View {
             }
         }
         .frame(height: 58)
+        // VoiceOver cannot use the tap overlay: the chart is one adjustable element that steps through the days.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("每日活动")
+        .accessibilityValue(activityAccessibilityValue)
+        .accessibilityHint("向上或向下轻扫以逐日查看")
+        .accessibilityAdjustableAction { direction in
+            let days = snapshot.dailyActivity.map(\.date)
+            guard !days.isEmpty else { return }
+            let current = selectedDay.flatMap(days.firstIndex(of:))
+            switch direction {
+            case .increment: selectedDay = days[current.map { min($0 + 1, days.count - 1) } ?? 0]
+            case .decrement: selectedDay = days[current.map { max($0 - 1, 0) } ?? days.count - 1]
+            @unknown default: break
+            }
+        }
         .accessibilityIdentifier("stats.activity")
     }
 

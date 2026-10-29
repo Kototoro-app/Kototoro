@@ -285,15 +285,17 @@ struct ContentCollection<Destination: View, Actions: View>: View {
             }
             .padding(.horizontal, compact ? 12 : 16)
         } else {
+            let lastIdentity = items.last?.identity
             LazyVStack(spacing: 0) {
-                ForEach(items.indices, id: \.self) { index in
-                    let rawItem = items[index]
+                // Keyed by the work, as the grid is: an index would rebind a row's cover, menu and tasks to
+                // whichever work moved into that position after a refresh, filter or page.
+                ForEach(items, id: \.identity) { rawItem in
                     let item = rawItem.withMarks(lookup.marks(for: rawItem.content, key: rawItem.identity))
                     link(item) {
                         ContentRow(runtime: runtime, item: item, detailed: mode == .detailed)
                             .padding(.horizontal, 16).padding(.vertical, mode == .detailed ? 12 : 9)
                     }
-                    if index < items.count - 1 {
+                    if rawItem.identity != lastIdentity {
                         Divider().padding(.leading, mode == .detailed ? 120 : 76)
                     }
                 }
@@ -443,6 +445,8 @@ private struct CoverFrame: View {
     var showsProgress = true
     /// Compact cells (list thumbnails) keep only the counter; the row spells out the rest.
     var showsMarks = true
+    @ScaledMetric(relativeTo: .caption2) private var adultMark: CGFloat = 9
+    private var adultMarkSize: CGFloat { min(adultMark, 14) }
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
@@ -486,7 +490,7 @@ private struct CoverFrame: View {
             .overlay(alignment: .bottomTrailing) {
                 if showsMarks && item.marks.adult {
                     Text("18+")
-                        .font(.system(size: 9, weight: .heavy))
+                        .font(.system(size: adultMarkSize, weight: .heavy))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 4).padding(.vertical, 1.5)
                         .background(Color.red.opacity(0.85), in: .rect(cornerRadius: 4, style: .continuous))
@@ -508,11 +512,14 @@ private struct CoverFrame: View {
 private struct MarkIcon: View {
     let symbol: String
     let tint: Color
+    /// Grows with Dynamic Type, but stays a corner mark that leaves the cover visible.
+    @ScaledMetric(relativeTo: .caption2) private var side: CGFloat = 18
     var body: some View {
+        let side = min(self.side, 28)
         Image(systemName: symbol)
-            .font(.system(size: 9, weight: .bold))
+            .font(.system(size: side / 2, weight: .bold))
             .foregroundStyle(.white)
-            .frame(width: 18, height: 18)
+            .frame(width: side, height: side)
             .background(tint.gradient, in: .circle)
             .overlay { Circle().strokeBorder(.white.opacity(0.7), lineWidth: 1) }
     }

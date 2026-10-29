@@ -176,7 +176,11 @@ final class ReaderPresence {
     private(set) var visibleDetails = 0
     private var protectedDirectories: [UUID: Set<String>] = [:]
     var isReading: Bool { visibleReaders > 0 }
-    var shouldSuppressAccessory: Bool { visibleReaders > 0 || visibleDetails > 0 }
+    /// Pages in batch selection: their actions take the bottom bar, where the accessory would cover them.
+    private(set) var activeSelections = 0
+    var shouldSuppressAccessory: Bool { visibleReaders > 0 || visibleDetails > 0 || activeSelections > 0 }
+    func selectionBegan() { activeSelections += 1 }
+    func selectionEnded() { activeSelections = max(0, activeSelections - 1) }
     func appear() { visibleReaders += 1 }
     func disappear() {
         visibleReaders = max(0, visibleReaders - 1)
@@ -200,6 +204,21 @@ private struct ReaderPresenceModifier: ViewModifier {
     }
 }
 
+private struct SelectionPresenceModifier: ViewModifier {
+    let active: Bool
+    @State private var counted = false
+    private func set(_ value: Bool) {
+        guard value != counted else { return }
+        counted = value
+        if value { ReaderPresence.shared.selectionBegan() } else { ReaderPresence.shared.selectionEnded() }
+    }
+    func body(content: Content) -> some View {
+        content
+            .onChange(of: active, initial: true) { _, value in set(value) }
+            .onDisappear { set(false) }
+    }
+}
+
 private struct DetailsPresenceModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
@@ -212,6 +231,12 @@ extension View {
     /// Details and their pushed directories replace the tab container's global resume controls.
     func detailsPresence() -> some View {
         modifier(DetailsPresenceModifier())
+    }
+
+    /// Hides the tab bar and the resume accessory while [active], so a bottom-bar of batch actions is reachable.
+    func batchSelectionChrome(_ active: Bool) -> some View {
+        modifier(SelectionPresenceModifier(active: active))
+            .toolbar(active ? .hidden : .automatic, for: .tabBar)
     }
 
     /// Marks a full-screen reading surface (manga, novel or video) while it is on screen.

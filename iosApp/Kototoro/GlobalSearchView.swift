@@ -19,6 +19,9 @@ final class GlobalSearchModel: ObservableObject {
     }
 
     @Published private(set) var rows: [Row] = []
+    /// Sources that answered with works, in the order they answered. Results are shown in this order so a source
+    /// finishing later only adds below what is on screen; rows never move or collapse under the reader.
+    @Published private(set) var arrived: [Row] = []
     @Published private(set) var completed = 0
     @Published private(set) var isSearching = false
     @Published private(set) var submitted = ""
@@ -30,6 +33,7 @@ final class GlobalSearchModel: ObservableObject {
         task?.cancel()
         submitted = query
         rows = sources.map { Row(source: $0, status: .loading) }
+        arrived = []
         rowIndex = Dictionary(uniqueKeysWithValues: sources.enumerated().map { ($0.element.name, $0.offset) })
         completed = 0
         isSearching = !sources.isEmpty
@@ -51,6 +55,7 @@ final class GlobalSearchModel: ObservableObject {
         task = nil
         submitted = ""
         rows = []
+        arrived = []
         rowIndex = [:]
         completed = 0
         isSearching = false
@@ -97,11 +102,15 @@ final class GlobalSearchModel: ObservableObject {
     }
 
     private func applyBatch(_ batch: [(String, Status)]) {
+        var found: [(index: Int, row: Row)] = []
         for (name, status) in batch {
             if let index = rowIndex[name] {
                 rows[index].status = status
+                if case .done(let works) = status, !works.isEmpty { found.append((index, rows[index])) }
             }
         }
+        // One batch keeps the browse order (pinned first) among the sources that arrived together.
+        arrived.append(contentsOf: found.sorted { $0.index < $1.index }.map(\.row))
         completed += batch.count
     }
 
@@ -166,6 +175,17 @@ struct GlobalSearchView: View {
         .background(Color(uiColor: .systemGroupedBackground))
         .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always),
                     prompt: "搜索全部来源中的作品")
+        // While typing, earlier searches that start the same way are offered, as in Music and App Store; one tap searches.
+        .searchSuggestions {
+            let typed = query.trimmingCharacters(in: .whitespaces)
+            if !typed.isEmpty, model.submitted != typed {
+                ForEach(recent.filter { $0 != typed && $0.localizedStandardRange(of: typed)?.lowerBound == $0.startIndex }
+                    .prefix(5), id: \.self) { text in
+                    Button { submit(text) } label: { Label(text, systemImage: "clock.arrow.circlepath") }
+                        .accessibilityIdentifier("search.suggestion.\(text)")
+                }
+            }
+        }
         .navigationTitle(onSelect == nil ? "搜索" : "搜索并选择作品")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -261,21 +281,22 @@ struct GlobalSearchView: View {
         if let runtime = sources.runtime {
             localSection(String(localized: "作品库"), identifier: "search.library", matches: libraryMatches, runtime: runtime)
             localSection(String(localized: "历史"), identifier: "search.history", matches: historyMatches, runtime: runtime)
+            // Sources still searching are counted in the progress line only; results append in arrival order.
+            ForEach(model.arrived) { row in
+                if case .done(let found) = row.status {
+                    sourceHeader(row.source, count: found.count, runtime: runtime)
+                    carousel(found, runtime: runtime)
+                }
+            }
+            if model.isSearching && model.arrived.isEmpty && libraryMatches.isEmpty && historyMatches.isEmpty {
+                ProgressView().frame(maxWidth: .infinity, minHeight: 60)
+            }
             ForEach(model.rows) { row in
-                switch row.status {
-                case .loading:
-                    sourceHeader(row.source, count: nil, runtime: runtime)
-                    ProgressView().frame(maxWidth: .infinity, minHeight: 60)
-                case .failed(let message):
+                if case .failed(let message) = row.status {
                     sourceHeader(row.source, count: nil, runtime: runtime)
                     Label(message, systemImage: "exclamationmark.triangle")
                         .font(.footnote).foregroundStyle(.orange).lineLimit(2)
                         .padding(.horizontal, 20)
-                case .done(let found) where !found.isEmpty:
-                    sourceHeader(row.source, count: found.count, runtime: runtime)
-                    carousel(found, runtime: runtime)
-                case .done:
-                    EmptyView()
                 }
             }
             let empty = model.rows.filter { if case .done(let found) = $0.status { found.isEmpty } else { false } }

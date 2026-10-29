@@ -279,7 +279,12 @@ final class SuggestionsTests: XCTestCase {
         search.typeText("测试动画\n")
         let source = app.staticTexts.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label == %@",
             "search.source.", "关联搜索测试源")).firstMatch
-        XCTAssertTrue(source.waitForExistence(timeout: 30), app.debugDescription)
+        // Results append in the order sources answer, so this one may sit below rows the lazy list has not built yet.
+        let searched = NSPredicate(format: "label BEGINSWITH %@", "已搜索")
+        XCTAssertTrue(app.staticTexts["search.progress"].waitForExistence(timeout: 30), app.debugDescription)
+        wait(for: [XCTNSPredicateExpectation(predicate: searched, object: app.staticTexts["search.progress"])], timeout: 60)
+        for _ in 0..<12 where !source.exists { app.scrollViews.firstMatch.swipeUp() }
+        XCTAssertTrue(source.exists, app.debugDescription)
         let sourceName = String(source.identifier.dropFirst("search.source.".count))
         let result = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@",
             "search.result.\(sourceName).", "测试动画")).firstMatch
@@ -623,7 +628,7 @@ final class SuggestionsTests: XCTestCase {
         attach(app, "为你推荐作品列表")
         let openedAt = Date()
         work.tap()
-        XCTAssertTrue(app.staticTexts["details.title"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.staticTexts["details.title"].waitForExistence(timeout: 20), app.debugDescription)
         XCTAssertEqual(app.staticTexts["details.title"].label, "测试动画")
         XCTAssertLessThan(Date().timeIntervalSince(openedAt), 5, "Opening a cached recommendation must stay responsive")
         let episodeProgress = app.buttons.matching(NSPredicate(format: "label MATCHES %@", "全部剧集，[0-9]+/[0-9]+"))

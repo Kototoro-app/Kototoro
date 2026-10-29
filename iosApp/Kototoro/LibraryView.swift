@@ -106,6 +106,8 @@ struct LibraryView: View {
             }
             // Swiping sideways over the works moves to the previous / next category, like the chips do.
             .gesture(HorizontalSwipeGesture(onEnded: swipe))
+            // The selection's actions take the bottom bar; the tabs come back when it ends.
+            .batchSelectionChrome(selecting)
             .background(Color(uiColor: .systemGroupedBackground))
             .navigationTitle(selecting ? String(localized: "已选择 \(selected.count) 部") : String(localized: "作品库"))
             .navigationBarTitleDisplayMode(.inline)
@@ -232,6 +234,9 @@ struct LibraryView: View {
             }
             .disabled(visibleKeys.isEmpty)
             .accessibilityIdentifier("library.selectAll")
+        }
+        // Batch actions sit at the bottom, under the thumb, as in Photos and Files; the top keeps exit and select all.
+        ToolbarItemGroup(placement: .bottomBar) {
             Button("换源", systemImage: "arrow.triangle.swap") {
                 migrationSubset = selectedContents
                 migrating = true
@@ -249,6 +254,7 @@ struct LibraryView: View {
                 .disabled(selected.isEmpty)
                 .accessibilityIdentifier("library.selection.removeFromCategory")
             }
+            Spacer()
             Button("取消收藏", systemImage: "heart.slash", role: .destructive) { confirmingUnfavourite = true }
                 .disabled(selected.isEmpty)
                 .accessibilityIdentifier("library.selection.unfavourite")

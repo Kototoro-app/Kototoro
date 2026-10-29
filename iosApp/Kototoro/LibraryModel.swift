@@ -57,6 +57,12 @@ final class LibraryModel: ObservableObject {
         }
     }
     private(set) var updateChapterCounts: [String: Int] = [:]
+    /// New chapters not read yet, for the records tab's badge; works the updates feed hides are not counted.
+    var unreadUpdateChapters: Int {
+        updates.reduce(0) { total, update in
+            AdultContentFilter.hides(update.content, in: .feed) ? total : total + max(Int(update.newChapters), 0)
+        }
+    }
     @Published private(set) var isCheckingUpdates = false
     @Published private(set) var updateSummary: String?
     @Published private(set) var recordsRevision = 0

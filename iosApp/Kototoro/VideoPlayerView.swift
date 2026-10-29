@@ -1,5 +1,6 @@
 import AVFoundation
 import AVKit
+import MediaPlayer
 import Combine
 import KototoroShared
 import SwiftUI
@@ -57,6 +58,8 @@ final class VideoPlayerModel: ObservableObject {
     private var request: UUID?
     private var timeObserver: Any?
     private var observers: [AnyCancellable] = []
+    /// Lock screen, Control Center and headphone controls; the custom player does not get them from AVKit.
+    private var remoteTargets: [(MPRemoteCommand, Any)] = []
     var library: IosLibrary?
     /// An incognito session (`IncognitoGate`) records no history, progress, statistics or tracker updates.
     var incognito = false
@@ -173,6 +176,7 @@ final class VideoPlayerModel: ObservableObject {
         observers.removeAll()
         player?.pause()
         player = nil
+        clearNowPlaying()
         position = 0
         duration = 0
         isPlaying = false
@@ -193,6 +197,7 @@ final class VideoPlayerModel: ObservableObject {
         let target = max(0, duration > 0 ? min(seconds, duration - 0.5) : seconds)
         position = target
         player.seek(to: CMTime(seconds: target, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+        publishNowPlaying()
     }
 
     func skip(by seconds: Double) { seek(to: position + seconds) }
@@ -360,6 +365,7 @@ final class VideoPlayerModel: ObservableObject {
             .sink { [weak self] status in
                 self?.isPlaying = status != .paused
                 self?.isBuffering = status == .waitingToPlayAtSpecifiedRate
+                self?.publishNowPlaying()
                 self?.activity.setActive(status == .playing)
                 Task { await self?.persist() }
             }
@@ -378,8 +384,72 @@ final class VideoPlayerModel: ObservableObject {
             }
             .store(in: &observers)
         self.player = player
+        registerRemoteCommands()
         if start > 1 { player.seek(to: CMTime(seconds: start, preferredTimescale: 600)) }
         player.playImmediately(atRate: rate)
+    }
+
+    // MARK: Now Playing
+
+    private func registerRemoteCommands() {
+        guard remoteTargets.isEmpty else { return }
+        let center = MPRemoteCommandCenter.shared()
+        func on(_ command: MPRemoteCommand, _ handler: @escaping (MPRemoteCommandEvent) -> MPRemoteCommandHandlerStatus) {
+            command.isEnabled = true
+            remoteTargets.append((command, command.addTarget(handler: handler)))
+        }
+        on(center.playCommand) { [weak self] _ in
+            guard let player = self?.player else { return .commandFailed }
+            player.playImmediately(atRate: self?.rate ?? 1); return .success
+        }
+        on(center.pauseCommand) { [weak self] _ in
+            guard let player = self?.player else { return .commandFailed }
+            player.pause(); return .success
+        }
+        on(center.togglePlayPauseCommand) { [weak self] _ in
+            guard let self, self.player != nil else { return .commandFailed }
+            self.togglePlay(); return .success
+        }
+        center.skipForwardCommand.preferredIntervals = [10]
+        center.skipBackwardCommand.preferredIntervals = [10]
+        on(center.skipForwardCommand) { [weak self] _ in self?.skip(by: 10); return self == nil ? .commandFailed : .success }
+        on(center.skipBackwardCommand) { [weak self] _ in self?.skip(by: -10); return self == nil ? .commandFailed : .success }
+        on(center.changePlaybackPositionCommand) { [weak self] event in
+            guard let self, let event = event as? MPChangePlaybackPositionCommandEvent else { return .commandFailed }
+            self.seek(to: event.positionTime); return .success
+        }
+        on(center.nextTrackCommand) { [weak self] _ in
+            guard let self, let next = self.next else { return .noSuchContent }
+            Task { await self.move(to: next) }; return .success
+        }
+        on(center.previousTrackCommand) { [weak self] _ in
+            guard let self, let previous = self.previous else { return .noSuchContent }
+            Task { await self.move(to: previous) }; return .success
+        }
+    }
+
+    /// Published on play/pause/buffer changes and seeks; the system advances the elapsed time from the rate between.
+    private func publishNowPlaying() {
+        guard player != nil else { return }
+        var info: [String: Any] = [
+            MPMediaItemPropertyTitle: SourceDetailsView.episodeTitle(chapter),
+            MPMediaItemPropertyAlbumTitle: content.title,
+            MPMediaItemPropertyMediaType: MPMediaType.anyVideo.rawValue,
+            MPNowPlayingInfoPropertyElapsedPlaybackTime: position,
+            MPNowPlayingInfoPropertyPlaybackRate: isPlaying && !isBuffering ? Double(rate) : 0,
+            MPNowPlayingInfoPropertyDefaultPlaybackRate: Double(rate),
+        ]
+        if duration > 0 { info[MPMediaItemPropertyPlaybackDuration] = duration }
+        if let cover = CoverCache.shared.image(for: content) {
+            info[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(boundsSize: cover.size) { _ in cover }
+        }
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+    }
+
+    private func clearNowPlaying() {
+        for (command, target) in remoteTargets { command.removeTarget(target) }
+        remoteTargets.removeAll()
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
     }
 }
 
@@ -415,12 +485,16 @@ struct VideoPlayerView: View {
                     .ignoresSafeArea()
                     .accessibilityIdentifier("player.view")
             }
-            // Taps anywhere toggle the controls; double taps switch between fit and fill.
+            // Taps anywhere toggle the controls at once; pinching switches between fit and fill, as the system player
+            // does. A double-tap recognizer here would hold every single tap until the double-tap window ran out.
             Color.clear
                 .contentShape(Rectangle())
                 .ignoresSafeArea()
-                .onTapGesture(count: 2) { withAnimation(.snappy) { fill.toggle() } }
                 .onTapGesture { setControls(!controlsVisible) }
+                .gesture(MagnifyGesture().onEnded { value in
+                    let wanted = value.magnification > 1
+                    if wanted != fill { withAnimation(.snappy) { fill = wanted } }
+                })
             if model.isLoading || model.isBuffering { ProgressView().tint(.white).controlSize(.large).allowsHitTesting(false) }
             if let error = model.error {
                 VStack(spacing: 12) {

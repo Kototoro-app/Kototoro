@@ -63,7 +63,11 @@ final class SourceDetailsModel: ObservableObject {
     @Published var selectedLine: String? {
         didSet { rebuildVisibleChapters() }
     }
-    @Published private(set) var visibleChapters: [IosSourceChapter] = []
+    @Published private(set) var visibleChapters: [IosSourceChapter] = [] {
+        didSet { chaptersRevision += 1 }
+    }
+    /// Changes whenever the listed chapters or their order may have; views key their derived rows on it.
+    private(set) var chaptersRevision = 0
     @Published private(set) var related: [IosSourceContent] = []
     let runtime: IosSources
     @Published private(set) var content: IosSourceContent
@@ -332,6 +336,8 @@ struct SourceDetailsView: View {
     @State private var reading: PlaybackRequest?
     @State private var isTitleExpanded = false
     @State private var isSummaryExpanded = false
+    /// Folded summary height and the height it needs: the toggle is offered exactly when three lines cut it off.
+    @State private var summaryHeights = (folded: CGFloat(0), full: CGFloat(0))
     @State private var previewingCover = false
     @State private var toastMessage: String?
     @State private var destinationBrowse: IosSource?
@@ -423,12 +429,14 @@ struct SourceDetailsView: View {
                     .background(.regularMaterial, in: Capsule())
                     .padding(.top, 10)
                     .transition(.opacity.combined(with: .move(edge: .top)))
-                    .onAppear {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                            withAnimation { toastMessage = nil }
-                        }
-                    }
             }
+        }
+        // Each message gets its own two seconds (a newer one restarts the timer) and is read out by VoiceOver.
+        .task(id: toastMessage) {
+            guard let toast = toastMessage else { return }
+            AccessibilityNotification.Announcement(toast).post()
+            do { try await Task.sleep(for: .seconds(2)) } catch { return }
+            withAnimation { toastMessage = nil }
         }
         .navigationBarTitleDisplayMode(.inline)
         .task {
@@ -652,6 +660,7 @@ struct SourceDetailsView: View {
                 )
                 .shadow(color: .black.opacity(0.22), radius: 8, y: 3)
                 .accessibilityLabel("封面")
+                .accessibilityAddTraits(.isButton)
                 .accessibilityIdentifier("details.cover")
                 .anchorPreference(key: DetailsCoverBoundsKey.self, value: .bounds) { $0 }
                 .onTapGesture { previewingCover = true }
@@ -700,26 +709,31 @@ struct SourceDetailsView: View {
                             Text(src.title)
                                 .font(.caption.weight(.medium))
                             Image(systemName: "chevron.right")
-                                .font(.system(size: 8, weight: .bold))
+                                .font(.caption2.weight(.bold)).imageScale(.small)
                         }
                         .padding(.horizontal, 9)
                         .padding(.vertical, 4)
                         .background(Color(.secondarySystemFill), in: .capsule)
                         .foregroundStyle(.primary)
+                        .detailsChipHitArea()
                     }
                     .buttonStyle(.plain)
+                    .padding(.vertical, -DetailsChipHitArea.outset)
+                    .accessibilityIdentifier("details.source")
                 }
 
                 Button { managingTracking = true } label: {
                     HStack(spacing: 5) {
                         Image(systemName: "text.book.closed").font(.caption2)
                         Text(shown.metadataSiteTitle.map { "追踪 · \($0)" } ?? "追踪与资料").font(.caption.weight(.medium))
-                        Image(systemName: "chevron.right").font(.system(size: 8, weight: .bold))
+                        Image(systemName: "chevron.right").font(.caption2.weight(.bold)).imageScale(.small)
                     }
                     .padding(.horizontal, 9).padding(.vertical, 4)
                     .background(Color.accentColor.opacity(0.1), in: .capsule)
+                    .detailsChipHitArea()
                 }
                 .buttonStyle(.plain)
+                .padding(.vertical, -DetailsChipHitArea.outset)
                 .disabled(library.library == nil)
                 .accessibilityIdentifier("details.metadata")
 
@@ -736,7 +750,17 @@ struct SourceDetailsView: View {
                         .buttonBorderShape(.circle)
                         .tint(.primary)
 
-                        Button(isFavourite ? "已收藏" : "收藏", systemImage: isFavourite ? "heart.fill" : "heart") {
+                        // The header is one list row, and a row keeps a single context menu (the tags' one won, so
+                        // a long press here never offered categories). A menu with a primary action is the control's
+                        // own: a tap keeps its meaning, a long press opens these choices.
+                        Menu {
+                            Button("收藏分类", systemImage: "folder") { editingCategories = true }
+                            if isFavourite {
+                                Button("取消收藏", systemImage: "heart.slash", role: .destructive, action: removeFavourite)
+                            }
+                        } label: {
+                            Label(isFavourite ? "已收藏" : "收藏", systemImage: isFavourite ? "heart.fill" : "heart")
+                        } primaryAction: {
                             if isFavourite { removeFavourite() }
                             else { editingCategories = true }
                         }
@@ -744,12 +768,6 @@ struct SourceDetailsView: View {
                         .buttonStyle(.glass)
                         .buttonBorderShape(.circle)
                         .tint(isFavourite ? .pink : .primary)
-                        .contextMenu {
-                            Button("收藏分类", systemImage: "folder") { editingCategories = true }
-                            if isFavourite {
-                                Button("取消收藏", systemImage: "heart.slash", role: .destructive, action: removeFavourite)
-                            }
-                        }
                         .accessibilityIdentifier("details.favourite")
 
                         if shown.rating > 0 {
@@ -908,16 +926,29 @@ struct SourceDetailsView: View {
                     .foregroundStyle(.primary)
 
                 if hasSummary {
+                    // Selectable, so it takes no tap: on a device the text interaction swallows taps (see the
+                    // title). The button below expands it whenever three lines do not hold it all.
                     Text(summary)
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .lineSpacing(3)
                         .lineLimit(isSummaryExpanded ? nil : 3)
                         .textSelection(.enabled)
-                        .onTapGesture { withAnimation { isSummaryExpanded.toggle() } }
+                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
+                            if !isSummaryExpanded { summaryHeights.folded = $0 }
+                        }
+                        .background(alignment: .topLeading) {
+                            Text(summary)
+                                .font(.callout)
+                                .lineSpacing(3)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .hidden()
+                                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { summaryHeights.full = $0 }
+                                .accessibilityHidden(true)
+                        }
                         .accessibilityIdentifier("details.summary")
 
-                    if summary.count > 100 || summary.filter({ $0 == "\n" }).count >= 3 {
+                    if isSummaryExpanded || summaryHeights.full > summaryHeights.folded + 1 {
                         Button(isSummaryExpanded ? "收起" : "展开") {
                             withAnimation { isSummaryExpanded.toggle() }
                         }
@@ -1349,35 +1380,64 @@ struct CoverPreviewSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var scale: CGFloat = 1.0
     @State private var lastScale: CGFloat = 1.0
+    @State private var offset: CGSize = .zero
+    @State private var lastOffset: CGSize = .zero
+
+    /// Keeps the zoomed cover covering the screen: it can move only as far as it overhangs each edge.
+    private func clamped(_ proposed: CGSize, scale: CGFloat, in size: CGSize) -> CGSize {
+        let limitX = max(0, size.width * (scale - 1) / 2)
+        let limitY = max(0, size.height * (scale - 1) / 2)
+        return CGSize(width: min(max(proposed.width, -limitX), limitX),
+                      height: min(max(proposed.height, -limitY), limitY))
+    }
 
     var body: some View {
         NavigationStack {
             GeometryReader { geometry in
+                let size = geometry.size
                 ZStack {
                     Color.black.ignoresSafeArea()
                     CoverImage(runtime: runtime, content: content, plain: true, contentMode: .fit)
                         .accessibilityIdentifier("details.coverPreview.image")
-                        .frame(width: geometry.size.width, height: geometry.size.height)
+                        .frame(width: size.width, height: size.height)
                         .scaleEffect(scale)
+                        .offset(offset)
                         .gesture(
-                            MagnificationGesture()
+                            MagnifyGesture()
                                 .onChanged { value in
-                                    scale = max(1.0, lastScale * value)
+                                    scale = min(max(1.0, lastScale * value.magnification), 5)
+                                    offset = clamped(offset, scale: scale, in: size)
                                 }
                                 .onEnded { _ in
                                     lastScale = scale
+                                    lastOffset = offset
                                 }
+                        )
+                        // Panning only once zoomed: at 1x the sheet's own drag-to-dismiss keeps working.
+                        .simultaneousGesture(
+                            DragGesture()
+                                .onChanged { value in
+                                    offset = clamped(CGSize(width: lastOffset.width + value.translation.width,
+                                                            height: lastOffset.height + value.translation.height),
+                                                     scale: scale, in: size)
+                                }
+                                .onEnded { _ in lastOffset = offset },
+                            including: scale > 1 ? .all : .none
                         )
                         .onTapGesture(count: 2) {
                             withAnimation(.spring()) {
                                 scale = scale > 1.5 ? 1.0 : 2.5
                                 lastScale = scale
+                                offset = .zero
+                                lastOffset = .zero
                             }
                         }
                 }
             }
             .navigationTitle("封面")
             .navigationBarTitleDisplayMode(.inline)
+            // A drag on the zoomed cover moves the cover, not the sheet.
+            .interactiveDismissDisabled(scale > 1)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("完成") { dismiss() }
@@ -1720,7 +1780,7 @@ struct ChapterThumbnailsView: View {
                         .foregroundStyle(.primary)
                         .lineLimit(1)
                     Image(systemName: "chevron.down")
-                        .font(.system(size: 10, weight: .bold))
+                        .font(.caption.weight(.bold))
                         .foregroundStyle(.secondary)
                 }
                 .padding(.horizontal, 10)
@@ -1777,3 +1837,15 @@ struct ChapterThumbnailsView: View {
     }
 }
 
+
+/// The header's label-sized chips keep their look and spacing but take touches over the 44 pt height the HIG asks
+/// for: the label grows a transparent band that the button's negative padding takes back out of the layout.
+enum DetailsChipHitArea {
+    static let outset: CGFloat = 8
+}
+
+private extension View {
+    func detailsChipHitArea() -> some View {
+        padding(.vertical, DetailsChipHitArea.outset).contentShape(.rect)
+    }
+}

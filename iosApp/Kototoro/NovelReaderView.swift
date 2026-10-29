@@ -681,6 +681,7 @@ struct NovelReaderView: View {
         .background(style.colors.background.ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar, .tabBar)
         .statusBarHidden(chromeHidden)
+        .persistentSystemOverlays(chromeHidden ? .hidden : .automatic)
         .sheet(item: $activeSheet) { sheet in
             switch sheet {
             case .chapters: navigationSheet

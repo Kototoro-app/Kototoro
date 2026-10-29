@@ -158,7 +158,7 @@ final class LocalImportTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["阅读时段"].waitForExistence(timeout: 5))
         app.buttons["stats.expand"].tap()
         app.selectRecordsFilter("all")
-        XCTAssertTrue(app.staticTexts["历史、书签与下载"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["历史、书签与下载"].waitForExistence(timeout: 10), app.debugDescription)
         XCTAssertTrue(app.staticTexts["发现更新"].exists)
         let event = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@",
             "timeline.read-", "fixture_comic")).firstMatch
@@ -169,16 +169,18 @@ final class LocalImportTests: XCTestCase {
         XCTAssertEqual(XCTWaiter.wait(for: [coverLoaded], timeout: 10), .completed,
                        "The timeline must display the fixture's red cover, not just the event text")
         attach("日期居中双列时间轴")
+        // A tap opens the work itself, pushed onto the records stack.
         event.tap()
-        XCTAssertTrue(app.staticTexts["阅读时长"].waitForExistence(timeout: 5), app.debugDescription)
-        XCTAssertTrue(app.buttons["打开作品"].exists)
-        XCTAssertFalse(app.sheets.firstMatch.exists, "Record details belong to the records navigation stack")
-        XCTAssertTrue(app.navigationBars.buttons["BackButton"].firstMatch.exists)
-        app.buttons["打开作品"].tap()
         XCTAssertTrue(app.detailsReadButton().waitForExistence(timeout: 20), app.debugDescription)
-        XCTAssertFalse(app.sheets.firstMatch.exists)
+        XCTAssertFalse(app.sheets.firstMatch.exists, "The work belongs to the records navigation stack")
         app.navigationBars.buttons["BackButton"].firstMatch.tap()
-        XCTAssertTrue(app.buttons["打开作品"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["timeline.filter.all"].waitForExistence(timeout: 10))
+        // The record's own facts stay in the row's context menu.
+        event.press(forDuration: 1)
+        let detail = app.buttons["记录详情"]
+        XCTAssertTrue(detail.waitForExistence(timeout: 5), app.debugDescription)
+        detail.tap()
+        XCTAssertTrue(app.staticTexts["阅读时长"].waitForExistence(timeout: 5), app.debugDescription)
         app.navigationBars.buttons["BackButton"].firstMatch.tap()
         XCTAssertTrue(app.buttons["timeline.filter.all"].waitForExistence(timeout: 10))
     }
@@ -268,6 +270,12 @@ final class LocalImportTests: XCTestCase {
         let pause = app.buttons["player.playPause"]
         XCTAssertTrue(pause.waitForExistence(timeout: 5), app.debugDescription)
         pause.tap()
+        // A single tap on the picture toggles the controls on its own; no double-tap recognizer holds it back.
+        let surface = app.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.35))
+        surface.tap()
+        XCTAssertTrue(pause.waitForNonExistence(timeout: 2), app.debugDescription)
+        surface.tap()
+        XCTAssertTrue(pause.waitForExistence(timeout: 2), app.debugDescription)
         showVideoControls()
         // An earlier run on this simulator may already hold the episode, in which case there is nothing to enqueue.
         if download.exists, download.label != "本集已下载" {
@@ -856,14 +864,13 @@ final class LocalImportTests: XCTestCase {
         XCTAssertTrue(work.waitForExistence(timeout: 15), app.debugDescription)
         attach("记录下载筛选")
         app.selectRecordsFilter("all")
-        XCTAssertTrue(app.staticTexts["历史、书签与下载"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["历史、书签与下载"].waitForExistence(timeout: 10), app.debugDescription)
         let download = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@",
             "timeline.download.", "fixture_reader_chapters")).firstMatch
         XCTAssertTrue(download.waitForExistence(timeout: 10), app.debugDescription)
         attach("时间轴历史与下载")
         app.selectRecordsFilter("downloads")
         work.tap()
-        app.buttons["打开作品"].tap()
         app.openDetailsChapters()
         let local = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@",
             "chapter.", "本地")).firstMatch

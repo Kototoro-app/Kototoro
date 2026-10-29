@@ -1496,6 +1496,8 @@ struct SourceReaderView: View {
         .background(EdgeSwipeBack(enabled: settings.value.edgeSwipeBack))
         .toolbar(.hidden, for: .navigationBar, .tabBar)
         .statusBarHidden(!controls)
+        // The home indicator fades with the controls, as in Books; a swipe from the edge still brings it back.
+        .persistentSystemOverlays(controls ? .automatic : .hidden)
         .onAppear { isReaderVisible = true; model.setReadingActive(scenePhase == .active); updateIdleTimer() }
         .onChange(of: settings.value.keepScreenOn) { _, _ in updateIdleTimer() }
         .onChange(of: scenePhase) { previous, phase in

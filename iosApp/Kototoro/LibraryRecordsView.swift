@@ -174,6 +174,9 @@ private struct RecordsPage: View {
                                 }
                             }
                             .fixedSize(horizontal: false, vertical: true)
+                            // VoiceOver hears the chips as one group of record types, each marked when selected.
+                            .accessibilityElement(children: .contain)
+                            .accessibilityLabel("记录类型")
                         }
                         if stats.loading { ProgressView().controlSize(.small) }
                     }.padding(.horizontal)
@@ -432,7 +435,7 @@ private struct RecordUpdateDownloadButton: View {
                     }
                 }
                 .font(.body)
-                .frame(width: 28, height: 28)
+                .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
                 .accessibilityLabel(preparing ? String(localized: "正在加入队列")
                       : chapters.isEmpty || !pending.isEmpty ? String(localized: "下载更新")
@@ -693,15 +696,9 @@ private struct RecordsTimeline: View {
     private func eventRow(_ item: TimelineItem, alignment: HorizontalAlignment, showsKind: Bool) -> some View {
         Button {
             if let bookmark = item.bookmark { open(bookmark, of: item.content); return }
-            selected = item
-            if let event = item.event, event.isUpdate {
-                Task {
-                    do {
-                        try await library.library?.markUpdateSeen(event: event)
-                        seenEvents.insert(event.id)
-                    } catch { /* A later refresh can retry acknowledging this reminder. */ }
-                }
-            }
+            // A record leads straight to its work; the record's own facts stay one long press away.
+            openedWork = item.downloadCount == nil ? item.content : item.content.withoutChapters
+            markSeen(item)
         } label: {
             let cover = CoverImage(runtime: runtime, content: item.content)
                 .frame(width: 32, height: 48)
@@ -742,7 +739,7 @@ private struct RecordsTimeline: View {
                     }
                     Text(metaLine(item, showsKind: showsKind)).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
                         // Leaves room for the update's download icon at the row's far edge.
-                        .padding(alignment == .leading ? .trailing : .leading, item.isUpdate ? 32 : 0)
+                        .padding(alignment == .leading ? .trailing : .leading, item.isUpdate ? 36 : 0)
                 }
                 .frame(maxWidth: .infinity, alignment: alignment == .leading ? .leading : .trailing)
                 if alignment == .trailing { cover }
@@ -756,14 +753,32 @@ private struct RecordsTimeline: View {
                 Button("继续阅读", systemImage: "book") { open(bookmark, of: item.content) }
                 Button("打开作品", systemImage: "info.circle") { openedWork = item.content }
                 Button("删除书签", systemImage: "trash", role: .destructive) { remove(bookmark, of: item.content) }
+            } else {
+                Button("打开作品", systemImage: "book") {
+                    openedWork = item.downloadCount == nil ? item.content : item.content.withoutChapters
+                    markSeen(item)
+                }
+                Button("记录详情", systemImage: "info.circle") { selected = item; markSeen(item) }
             }
         }
         .accessibilityIdentifier("timeline.\(item.id)")
         // A sibling of the row button, aligned with its time line, so the two taps stay separate.
         .overlay(alignment: alignment == .leading ? .bottomTrailing : .bottomLeading) {
             if let event = item.event, event.isUpdate {
-                RecordUpdateDownloadButton(event: event, runtime: runtime).offset(y: 6)
+                // 44 pt to touch; the glyph keeps its place on the row's time line.
+                RecordUpdateDownloadButton(event: event, runtime: runtime).offset(x: alignment == .leading ? 8 : -8, y: 14)
             }
+        }
+    }
+
+    /// Opening an update acknowledges it, so its unseen dot goes away.
+    private func markSeen(_ item: TimelineItem) {
+        guard let event = item.event, event.isUpdate, event.isUnseen, !seenEvents.contains(event.id) else { return }
+        Task {
+            do {
+                try await library.library?.markUpdateSeen(event: event)
+                seenEvents.insert(event.id)
+            } catch { /* A later refresh can retry acknowledging this reminder. */ }
         }
     }
 

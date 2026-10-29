@@ -109,16 +109,16 @@ struct WorkNotesView: View {
                                        description: Text("这部作品的书签可在详情页查看。"))
             }
             ForEach(items, id: \.id) { note in
-                VStack(alignment: .leading, spacing: 8) {
-                    if let path = note.imagePath, let image = UIImage(contentsOfFile: path) {
-                        Image(uiImage: image).resizable().scaledToFit()
-                            .frame(maxHeight: 220).clipShape(RoundedRectangle(cornerRadius: 10))
+                // A button, so the row highlights when pressed and VoiceOver can open it.
+                Button { open(note) } label: {
+                    VStack(alignment: .leading, spacing: 8) {
+                        if let path = note.imagePath { NoteSnapshot(path: path) }
+                        Text(place(note)).font(.caption).foregroundStyle(.secondary)
+                        if let text = note.note, !text.isEmpty { Text(text).foregroundStyle(.primary) }
                     }
-                    Text(place(note)).font(.caption).foregroundStyle(.secondary)
-                    if let text = note.note, !text.isEmpty { Text(text) }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
                 }
-                .contentShape(Rectangle())
-                .onTapGesture { open(note) }
                 .swipeActions {
                     Button("删除", role: .destructive) { Task { await delete(note) } }
                     Button("编辑") { draft = note.note ?? ""; editing = note }.tint(.orange)
@@ -177,5 +177,34 @@ struct WorkNotesView: View {
         if details == nil { details = try? await library.library?.storedDetails(content: content) }
         items = (try? await notes.mediaNotes(content: content)) ?? []
         markings = (try? await library.library?.markings.forWork(content: content)) ?? []
+    }
+}
+
+/// A note's page snapshot, read and downsampled off the main thread: the list scrolls while snapshots decode, and a
+/// full-resolution screenshot per row would hold the main thread and its memory.
+private struct NoteSnapshot: View {
+    let path: String
+    @State private var image: UIImage?
+    private static let cache = NSCache<NSString, UIImage>()
+
+    var body: some View {
+        Group {
+            if let image = image ?? Self.cache.object(forKey: path as NSString) {
+                Image(uiImage: image).resizable().scaledToFit()
+                    .frame(maxHeight: 220).clipShape(RoundedRectangle(cornerRadius: 10))
+            }
+        }
+        .task(id: path) {
+            guard Self.cache.object(forKey: path as NSString) == nil else { return }
+            let path = path
+            // 220 pt high at 3x, with room for wide screenshots.
+            let decoded = await Task.detached(priority: .userInitiated) { () -> UIImage? in
+                guard let data = FileManager.default.contents(atPath: path) else { return nil }
+                return try? SourceImageFile.decode(data: data, maxPixelSize: 1000)
+            }.value
+            guard let decoded, !Task.isCancelled else { return }
+            Self.cache.setObject(decoded, forKey: path as NSString)
+            image = decoded
+        }
     }
 }

@@ -233,7 +233,11 @@ struct SourceBrowseView: View {
             ContentCollection(runtime: model.runtime, items: model.contentItems, mode: mode,
                               identifierPrefix: "source.content.",
                               onItemAppear: { item in
-                                  if item.id == model.items.last?.id, model.error == nil { Task { await model.loadMore() } }
+                                  // Ask for the next page about two screens early, so a fling does not hit the end
+                                  // and wait for the network there.
+                                  guard model.error == nil, model.items.suffix(12).contains(where: { $0.id == item.id })
+                                  else { return }
+                                  Task { await model.loadMore() }
                               }, selectedKeys: onPick != nil ? [] : (selecting ? selectedKeys : nil),
                               onSelect: { item in
                                   if let onPick { onPick(item.content); return }
@@ -283,6 +287,8 @@ struct SourceBrowseView: View {
         .navigationTitle(selecting ? String(localized: "已选择 \(selectedKeys.count) 部") : model.source.title)
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(selecting)
+        .toolbar(selecting ? .visible : .hidden, for: .bottomBar)
+        .batchSelectionChrome(selecting)
         // The system search field under the title, as the main pages place theirs: pulling down reveals it and
         // scrolling the works hides it again.
         .searchable(text: $model.query, isPresented: $searchPresented,
@@ -312,11 +318,15 @@ struct SourceBrowseView: View {
                         selectedKeys = selectedKeys.count == model.items.count ? [] : Set(model.items.map(ContentMarks.key))
                     }
                     .accessibilityIdentifier("browse.selection.all")
-                    Button("收藏分类", systemImage: "heart") {
+                }
+                ToolbarItem(placement: .bottomBar) {
+                    Button("收藏到分类（\(selectedKeys.count)）", systemImage: "heart") {
                         favouriteRequest = FavouriteCategoryRequest(
                             contents: model.items.filter { selectedKeys.contains(ContentMarks.key($0)) })
                     }
                     .disabled(selectedKeys.isEmpty)
+                    .labelStyle(.titleAndIcon)
+                    .buttonStyle(.borderedProminent)
                     .accessibilityIdentifier("browse.selection.favourite")
                 }
             } else {

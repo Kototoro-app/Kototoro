@@ -35,6 +35,7 @@ struct ContentView: View {
             Tab("记录", systemImage: "clock.arrow.circlepath", value: MainTab.records) {
                 LibraryRecordsView()
             }
+            .badge(library.unreadUpdateChapters)
             Tab("设置", systemImage: "gearshape", value: MainTab.settings) {
             NavigationStack {
                 SettingsView(library: library, extensionUpdates: repositories.updatesCount)

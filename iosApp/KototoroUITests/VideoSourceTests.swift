@@ -173,7 +173,7 @@ final class VideoSourceTests: XCTestCase {
         waitForExpectations(timeout: 15)
         attach(app, "Apple CMS browse grid")
         // The filter sheet mirrors the quick category, and resetting it restores the full listing.
-        let filter = app.buttons["browse.filter"]
+        let filter = app.buttons["browse.filterChip"]
         XCTAssertTrue(filter.waitForExistence(timeout: 10), app.debugDescription)
         filter.tap()
         let included = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND value == %@",
