@@ -60,7 +60,7 @@ abstract class SuggestionDao : MangaQueryBuilder.ConditionCallback {
     @Query("SELECT COUNT(*) FROM suggestions")
     abstract fun observeCount(): Flow<Int>
 
-    @Query("SELECT manga.title FROM suggestions LEFT JOIN manga ON suggestions.manga_id = manga.manga_id WHERE manga.title LIKE :query")
+    @Query("SELECT DISTINCT manga.title FROM suggestions LEFT JOIN manga ON suggestions.manga_id = manga.manga_id WHERE manga.title LIKE :query")
     abstract suspend fun getTitles(query: String): List<String>
 
     @Query("SELECT tags.* FROM suggestions LEFT JOIN tags ON (tag_id IN (SELECT tag_id FROM manga_tags WHERE manga_tags.manga_id = suggestions.manga_id)) GROUP BY tag_id ORDER BY COUNT(tags.tag_id) DESC LIMIT :limit")
