@@ -848,7 +848,8 @@ class LocalContentParser {
         forceRefresh: Boolean = false,
         action: suspend (File, ContentZipArchive?) -> T,
     ): T {
-        if (hasZipExtension(file.name.orEmpty())) {
+        // EPUB parsing needs a real file; the generic ZIP path only discovers image chapters.
+        if (hasZipExtension(file.name.orEmpty()) && file.name?.endsWith(".epub", ignoreCase = true) != true) {
             val archive = runInterruptible(Dispatchers.IO) {
                 ContentZipArchive.open(App.getInstance().contentResolver, file.uri)
             }
