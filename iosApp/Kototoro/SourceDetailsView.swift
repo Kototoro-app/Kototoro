@@ -146,7 +146,8 @@ final class SourceDetailsModel: ObservableObject {
     }
 
     func chapterList(query: String, newestFirst: Bool) -> [IosSourceChapter] {
-        var chapters = ordered(self.chapters)
+        // Non-video ordering is already prepared when details or the sort preference changes.
+        var chapters = isVideo ? ordered(self.chapters) : visibleChapters
         if branches.count > 1 { chapters = chapters.filter { $0.branch == selectedBranch } }
         let text = query.trimmingCharacters(in: .whitespaces)
         if !text.isEmpty { chapters = chapters.filter { $0.title.localizedCaseInsensitiveContains(text) } }
@@ -355,10 +356,7 @@ struct SourceDetailsView: View {
     @AppStorage("details.newestFirst") private var newestFirst = false
     /// "source" (default) or "number"; see SourceDetailsModel.orderByNumber.
     @AppStorage("details.chapterOrder") private var chapterOrder = "source"
-    @AppStorage(PanoramaKeys.enabled) private var panorama = true
     @AppStorage(TagFilterStore.warningsKey) private var tagWarnings = true
-    @AppStorage(PanoramaKeys.layout) private var panoramaLayout = PanoramaLayout.top
-    @State private var scrollOffset: CGFloat = 0
     @State private var headerReadVisible = true
     /// Opened from "continue reading": go straight on with the chapter being read, once.
     private let autoResume: Bool
@@ -414,9 +412,7 @@ struct SourceDetailsView: View {
         .toolbar(.visible, for: .navigationBar)
         .toolbar(headerReadVisible ? .hidden : .visible, for: .bottomBar)
         .detailsPresence()
-        .onScrollGeometryChange(for: CGFloat.self, of: { $0.contentOffset.y + $0.contentInsets.top }) { _, offset in
-            scrollOffset = offset
-        }
+        .modifier(DetailsBackdropModifier(runtime: model.runtime, work: shownContent))
         .refreshable { await refreshDetails() }
         .overlay(alignment: .top) {
             if let toast = toastMessage {
@@ -434,14 +430,6 @@ struct SourceDetailsView: View {
                     }
             }
         }
-        .backgroundPreferenceValue(DetailsCoverBoundsKey.self) { bounds in
-            GeometryReader { geometry in
-                backdrop(coverBottom: bounds.map { geometry[$0].maxY + scrollOffset })
-            }
-            .ignoresSafeArea()
-        }
-        // Over the panorama the bar stays clear; the title appears once the header has scrolled away.
-        .navigationTitle(panorama && scrollOffset < 170 ? "" : shownContent.title)
         .navigationBarTitleDisplayMode(.inline)
         .task {
             model.downloads = downloads
@@ -967,25 +955,6 @@ struct SourceDetailsView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .modifier(DetailsContentPanel())
         }
-    }
-
-    /// Android's panorama cover at the top (or the softly blurred cover when it is turned off), faded into the
-    /// grouped background.
-    private func backdrop(coverBottom: CGFloat?) -> some View {
-        ZStack(alignment: .top) {
-            Color(uiColor: .systemGroupedBackground)
-            if panorama {
-                DetailsPanorama(runtime: model.runtime, content: shownContent,
-                                scrollOffset: scrollOffset, coverBottom: coverBottom)
-            } else {
-                CoverImage(runtime: model.runtime, content: shownContent, plain: true)
-                    .frame(height: 420).frame(maxWidth: .infinity)
-                    .blur(radius: 50).opacity(0.5)
-                    .mask(LinearGradient(colors: [.black, .black.opacity(0.6), .clear], startPoint: .top, endPoint: .bottom))
-            }
-        }
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
     }
 
     @ViewBuilder

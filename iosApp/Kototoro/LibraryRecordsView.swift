@@ -415,7 +415,7 @@ private struct RecordUpdateDownloadButton: View {
                                 refreshOffline()
                             }
                             let remaining = pending.filter { !ReaderDownloads.isDownloaded(content: content, chapter: $0) }
-                            if !remaining.isEmpty { try queue.enqueue(content: content, chapters: remaining) }
+                            if !remaining.isEmpty { try await queue.enqueue(content: content, chapters: remaining) }
                             refreshOffline()
                         }
                     } catch { self.error = error.localizedDescription }
@@ -472,7 +472,7 @@ private struct RecordsTimeline: View {
     @State private var seenEvents = Set<String>()
 
     /// A reading or update event, or the chapters of one work that finished downloading on one day.
-    private struct TimelineItem: Identifiable {
+    private struct TimelineItem: Identifiable, Hashable {
         enum Kind {
             case event(IosTimelineEvent)
             case download(count: Int)
@@ -482,6 +482,9 @@ private struct RecordsTimeline: View {
         let content: IosSourceContent
         let timestamp: Int64
         let kind: Kind
+
+        static func == (lhs: Self, rhs: Self) -> Bool { lhs.id == rhs.id }
+        func hash(into hasher: inout Hasher) { hasher.combine(id) }
 
         var event: IosTimelineEvent? { if case .event(let event) = kind { event } else { nil } }
         var isUpdate: Bool { event?.isUpdate == true }
@@ -580,54 +583,51 @@ private struct RecordsTimeline: View {
             .alert("书签操作失败", isPresented: Binding(get: { bookmarkError != nil }, set: { if !$0 { bookmarkError = nil } })) {
                 Button("好") { bookmarkError = nil }
             } message: { Text(bookmarkError ?? "") }
-            .sheet(item: $selected) { item in
-                NavigationStack {
-                    List {
-                        Section {
-                            Text(item.content.title).font(.headline)
-                            LabeledContent(timeTitle(item),
-                                value: ReadingStatsFormat.date(item.timestamp).formatted(date: .abbreviated, time: .shortened))
-                            if let event = item.event {
-                                if event.isUpdate {
-                                    LabeledContent("来源更新时间", value: sourceUpdateDate(event))
-                                }
-                                if event.duration > 0 {
-                                    LabeledContent(isVideo(item) ? "播放时长" : "阅读时长",
-                                                   value: ReadingStatsFormat.duration(event.duration))
-                                }
-                                if !event.isUpdate && event.count > 0 {
-                                    LabeledContent(isVideo(item) ? "播放次数" : "阅读次数", value: "\(event.count)")
-                                }
-                                Text(event.detail).font(.subheadline)
-                            } else if let count = item.downloadCount {
-                                LabeledContent("下载完成", value: String(localized: "\(count) 章"))
+            .navigationDestination(item: $selected) { item in
+                List {
+                    Section {
+                        Text(item.content.title).font(.headline)
+                        LabeledContent(timeTitle(item),
+                            value: ReadingStatsFormat.date(item.timestamp).formatted(date: .abbreviated, time: .shortened))
+                        if let event = item.event {
+                            if event.isUpdate {
+                                LabeledContent("来源更新时间", value: sourceUpdateDate(event))
                             }
-                        }
-                        if let event = item.event, !event.updateChapters.isEmpty {
-                            Section("更新章节") {
-                                ForEach(event.updateChapters, id: \.key) { chapter in
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(chapter.title)
-                                        Text(chapter.sourceUpdatedAt > 0
-                                             ? ReadingStatsFormat.date(chapter.sourceUpdatedAt).formatted(date: .abbreviated, time: .shortened)
-                                             : String(localized: "来源更新时间未知"))
-                                            .font(.caption).foregroundStyle(.secondary)
-                                        Text(chapter.isRead ? String(localized: "已读完") : String(localized: "待读"))
-                                            .font(.caption).foregroundStyle(.secondary)
-                                    }
-                                }
+                            if event.duration > 0 {
+                                LabeledContent(isVideo(item) ? "播放时长" : "阅读时长",
+                                               value: ReadingStatsFormat.duration(event.duration))
                             }
-                        }
-                        NavigationLink("打开作品") {
-                            SourceDetailsView(runtime: runtime,
-                                              content: item.downloadCount == nil ? item.content : item.content.withoutChapters)
+                            if !event.isUpdate && event.count > 0 {
+                                LabeledContent(isVideo(item) ? "播放次数" : "阅读次数", value: "\(event.count)")
+                            }
+                            Text(event.detail).font(.subheadline)
+                        } else if let count = item.downloadCount {
+                            LabeledContent("下载完成", value: String(localized: "\(count) 章"))
                         }
                     }
-                    .navigationTitle(recordTitle(item))
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { selected = nil } } }
+                    if let event = item.event, !event.updateChapters.isEmpty {
+                        Section("更新章节") {
+                            ForEach(event.updateChapters, id: \.key) { chapter in
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(chapter.title)
+                                    Text(chapter.sourceUpdatedAt > 0
+                                         ? ReadingStatsFormat.date(chapter.sourceUpdatedAt).formatted(date: .abbreviated, time: .shortened)
+                                         : String(localized: "来源更新时间未知"))
+                                        .font(.caption).foregroundStyle(.secondary)
+                                    Text(chapter.isRead ? String(localized: "已读完") : String(localized: "待读"))
+                                        .font(.caption).foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                    }
+                    NavigationLink("打开作品") {
+                        SourceDetailsView(runtime: runtime,
+                                          content: item.downloadCount == nil ? item.content : item.content.withoutChapters)
+                    }
                 }
-                .presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
+                .navigationTitle(recordTitle(item))
+                .navigationBarTitleDisplayMode(.inline)
+                .accessibilityIdentifier("records.detail")
             }
         }
     }

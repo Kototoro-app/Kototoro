@@ -46,7 +46,12 @@ final class LocalImportTests: XCTestCase {
     }
 
     @MainActor
-    func testBottomSpaceAccessoryRemainsUsableWhenTabBarMinimizes() throws {
+    func testMainTabsAndContinueReadingRemainReachableWhileScrolling() throws {
+        importFile(source: "LOCAL", file: "fixture_comic", reuse: true)
+        app.detailsReadButton().tap()
+        XCTAssertTrue(app.images["reader.image"].firstMatch.waitForExistence(timeout: 30))
+        app.terminate()
+        app.launch()
         app.mainTab("记录").tap()
         let space = app.buttons["continueReading.space"]
         XCTAssertTrue(space.waitForExistence(timeout: 10), app.debugDescription)
@@ -55,17 +60,18 @@ final class LocalImportTests: XCTestCase {
         app.buttons["space.select.ALL"].tap()
         XCTAssertTrue(app.buttons["space.close"].waitForNonExistence(timeout: 5))
         let collapsed = app.tabBars.buttons.matching(NSPredicate(format: "value == %@", "已折叠")).firstMatch
-        for _ in 0..<3 where !collapsed.exists {
+        for _ in 0..<3 {
             app.scrollViews.firstMatch.swipeUp()
+            XCTAssertFalse(collapsed.exists, "Scrolling must keep the high-frequency navigation available")
+            for title in ["作品库", "浏览", "记录", "设置"] {
+                XCTAssertTrue(app.tabBars.buttons[title].isHittable, app.debugDescription)
+            }
         }
-        XCTAssertTrue(collapsed.waitForExistence(timeout: 5), app.debugDescription)
         XCTAssertTrue(space.isHittable)
         let resume = app.buttons["continueReading"]
-        XCTAssertTrue(resume.exists)
-        XCTAssertLessThanOrEqual(space.frame.width, 44)
-        XCTAssertGreaterThan(resume.frame.width, space.frame.width * 2)
+        XCTAssertTrue(resume.isHittable)
         XCTAssertLessThan(space.frame.maxX, resume.frame.midX)
-        attach("收缩后的空间与续读入口")
+        attach("滚动后常驻的主导航与续读入口")
         space.tap()
         XCTAssertTrue(app.buttons["space.select.VIDEO"].waitForExistence(timeout: 5))
         app.buttons["space.select.VIDEO"].tap()
@@ -166,6 +172,15 @@ final class LocalImportTests: XCTestCase {
         event.tap()
         XCTAssertTrue(app.staticTexts["阅读时长"].waitForExistence(timeout: 5), app.debugDescription)
         XCTAssertTrue(app.buttons["打开作品"].exists)
+        XCTAssertFalse(app.sheets.firstMatch.exists, "Record details belong to the records navigation stack")
+        XCTAssertTrue(app.navigationBars.buttons["BackButton"].firstMatch.exists)
+        app.buttons["打开作品"].tap()
+        XCTAssertTrue(app.detailsReadButton().waitForExistence(timeout: 20), app.debugDescription)
+        XCTAssertFalse(app.sheets.firstMatch.exists)
+        app.navigationBars.buttons["BackButton"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["打开作品"].waitForExistence(timeout: 10))
+        app.navigationBars.buttons["BackButton"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["timeline.filter.all"].waitForExistence(timeout: 10))
     }
 
     /// The comic fixture has a red cover/page 1 and a blue page 2; inspect pixels rather than placeholder presence.
@@ -555,6 +570,7 @@ final class LocalImportTests: XCTestCase {
         app.detailsReadButton().tap()
         XCTAssertTrue(app.images["reader.image"].firstMatch.waitForExistence(timeout: 20))
         selectReaderMode("从右到左")
+        setReaderEdgeSwipeBack(true)
         app.sliders["reader.progress"].adjust(toNormalizedSliderPosition: 0)
         waitForPage("1")
         swipe(from: 0.15)
@@ -568,6 +584,60 @@ final class LocalImportTests: XCTestCase {
         selectReaderMode("条漫")
         swipe(from: 0.005)
         XCTAssertTrue(app.detailsReadButton().waitForExistence(timeout: 10), app.debugDescription)
+    }
+
+    @MainActor
+    func testDisabledEdgeSwipeKeepsComicOpenAcrossModesAndRestart() throws {
+        importFile(source: "LOCAL", file: "fixture_comic", reuse: true)
+        app.detailsReadButton().tap()
+        XCTAssertTrue(app.images["reader.image"].firstMatch.waitForExistence(timeout: 20))
+        setReaderEdgeSwipeBack(false)
+        func swipeFromEdge() {
+            let window = app.windows.firstMatch
+            window.coordinate(withNormalizedOffset: CGVector(dx: 0.005, dy: 0.5)).press(forDuration: 0.1,
+                thenDragTo: window.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.5)),
+                withVelocity: .slow, thenHoldForDuration: 0.1)
+        }
+        for mode in ["从右到左", "条漫", "横向条漫（连续）"] {
+            if !app.buttons["reader.more"].isHittable {
+                app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.35)).tap()
+            }
+            selectReaderMode(mode)
+            swipeFromEdge()
+            XCTAssertTrue(app.images["reader.image"].firstMatch.exists, "Disabled edge exit dismissed \(mode)")
+        }
+        app.terminate()
+        app.launch()
+        importFile(source: "LOCAL", file: "fixture_comic", reuse: true)
+        app.detailsReadButton().tap()
+        XCTAssertTrue(app.images["reader.image"].firstMatch.waitForExistence(timeout: 20))
+        swipeFromEdge()
+        XCTAssertTrue(app.images["reader.image"].firstMatch.exists, "The work must retain its gesture preference")
+        if !app.buttons["reader.back"].isHittable {
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.35)).tap()
+        }
+        app.buttons["reader.back"].tap()
+        XCTAssertTrue(app.detailsReadButton().waitForExistence(timeout: 10))
+        // The normal details navigation must recover its system back gesture after leaving the reader.
+        swipeFromEdge()
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "source.content."))
+            .firstMatch.waitForExistence(timeout: 10), app.debugDescription)
+    }
+
+    @MainActor
+    private func setReaderEdgeSwipeBack(_ enabled: Bool) {
+        if !app.buttons["reader.more"].isHittable {
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.35)).tap()
+        }
+        app.buttons["reader.more"].tap()
+        app.segmentedControls.buttons["控件"].tap()
+        let toggle = app.switches["reader.option.edgeSwipeBack"]
+        let options = app.otherElements["reader.morePanel"].scrollViews.firstMatch
+        for _ in 0..<6 where !toggle.isHittable { options.swipeUp() }
+        XCTAssertTrue(toggle.waitForExistence(timeout: 5), app.debugDescription)
+        if (toggle.value as? String == "1") != enabled { toggle.tap() }
+        XCTAssertEqual(toggle.value as? String, enabled ? "1" : "0")
+        app.buttons["reader.panel.close"].tap()
     }
 
     @MainActor

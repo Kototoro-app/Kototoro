@@ -3,6 +3,12 @@
 接手开发先读 [iOS 阶段交接记录](../docs/architecture/ios-development-handoff-2026-10.md)，
 其中列出调用链、生命周期约束、验证证据与后续工作入口。
 当前产品实施与验收状态见 [主要功能实施记录](../docs/architecture/ios-product-implementation-2026-10.md)。
+2026-10-29 导航、阅读手势修改和各页面性能检查见
+[iOS 导航与性能记录](../docs/architecture/ios-navigation-performance-2026-10.md)：
+记录详情推入现有导航栈；主底栏滚动时保持展开，继续阅读保留独立附件；漫画“更多 → 控件”
+可关闭“边缘滑动返回”，按作品保存，也可设为全局默认。该轮尚未在 Xcode/真机完成验收。
+后续将下载队列的读取/编码/提交与 Widget 缩略图/快照写入移到后台 actor，
+缓存自动维护增加空闲合并与扫描间隔；对应并发、持久化和预算回归也需在 Mac 验收。
 逐项补全的当前清单见 [iOS / Android 关键功能差距](../docs/architecture/ios-android-feature-parity-2026-10.md)。
 
 本模块已打通 SwiftUI 作品库分类 → Kotlin/Native → 共享 Room v84 数据库，以及可选的

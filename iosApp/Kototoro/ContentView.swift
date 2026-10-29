@@ -51,7 +51,8 @@ struct ContentView: View {
         .tabViewSearchActivation(.searchTabSelection)
         .tabViewStyle(.sidebarAdaptable)
         .modifier(MainTabPlacement())
-        .tabBarMinimizeBehavior(.onScrollDown)
+        // Switching sections is more frequent than resuming; keep every tab reachable while scrolling.
+        .tabBarMinimizeBehavior(.never)
         .continueReadingAccessory(
             enabled: !ReaderPresence.shared.shouldSuppressAccessory && (spacesEnabled || latest != nil)
         )
@@ -80,9 +81,16 @@ struct ContentView: View {
             await library.refreshMissingSources(installed: sources.sources.map(\.name))
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .background { downloads.setForeground(false); BackgroundUpdates.shared.schedule() }
-            else if phase == .active {
-                downloads.setForeground(true)
+            if phase == .background {
+                let save = ReaderBackgroundSave()
+                save.begin(name: "pause-downloads")
+                Task {
+                    defer { save.end() }
+                    await downloads.setForeground(false)
+                }
+                BackgroundUpdates.shared.schedule()
+            } else if phase == .active {
+                Task { await downloads.setForeground(true) }
                 Task { await repositories.checkForUpdates(force: false) }
                 Task { await library.googleDrive.sync(library, automatic: true) }
                 Task { await WebDavConfig.backUpIfDue(library.library) }
@@ -128,6 +136,7 @@ struct ContentView: View {
         }
         .task(id: library.library == nil) {
             guard let database = library.library else { return }
+            await downloads.prepare()
             await storage.prepare(queue: downloads)
             sources.attach(database)
             repositories.attach(library: database, sources: sources)

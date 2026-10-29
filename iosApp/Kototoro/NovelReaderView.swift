@@ -1053,8 +1053,10 @@ struct NovelReaderView: View {
 
     private func enqueue(_ chapters: [IosSourceChapter]) {
         guard !chapters.isEmpty else { return }
-        do { try downloads.enqueue(content: model.content, chapters: chapters) }
-        catch { downloadError = error.localizedDescription }
+        Task {
+            do { try await downloads.enqueue(content: model.content, chapters: chapters) }
+            catch { downloadError = error.localizedDescription }
+        }
     }
 
     private func chapterRow(_ item: IosSourceChapter) -> some View {

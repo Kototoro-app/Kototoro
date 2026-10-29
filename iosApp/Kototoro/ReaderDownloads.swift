@@ -134,7 +134,7 @@ enum ReaderDownloads {
             try await ReaderDownloadStore.shared.write(Manifest(pages: archive, images: []), in: dir, name: "partial.json")
         }
         var records: [ImageRecord] = []
-        try progress(0, pages.count)
+        try await progress(0, pages.count)
         // Sequential requests bound decode and extension memory on the interpreter-backed JVM.
         for (index, page) in pages.enumerated() {
             try Task.checkCancellation()
@@ -170,7 +170,7 @@ enum ReaderDownloads {
             try await ReaderDownloadStore.shared.write(Manifest(pages: archive, images: checkpointRecords),
                                                        in: dir, name: "partial.json")
             try Task.checkCancellation()
-            try progress(records.count, pages.count)
+            try await progress(records.count, pages.count)
         }
         try Task.checkCancellation()
         let value = Manifest(pages: archive, images: records)
@@ -206,12 +206,12 @@ extension ReaderDownloadQueue {
         }
     }
 
-    func enqueue(content: IosSourceContent, chapters: [IosSourceChapter], streamURL: String? = nil) throws {
+    func enqueue(content: IosSourceContent, chapters: [IosSourceChapter], streamURL: String? = nil) async throws {
         let codec = IosDownloadArchive()
         // A downloaded book's chapters download as the book, once.
         var seen = Set<String>()
         let chapters = chapters.map { content.bookOf(chapter: $0) ?? $0 }.filter { seen.insert($0.id).inserted }
-        try enqueue(chapters.map { chapter in
+        try await enqueue(chapters.map { chapter in
             ReaderDownloadRequest(source: content.sourceName, contentID: content.id, chapterID: chapter.id,
                                   title: content.title, chapterTitle: chapter.title,
                                   payload: try codec.encode(content: content, chapter: chapter),
@@ -281,7 +281,7 @@ enum NovelDownloads {
             if case .image(let url) = block { return url.absoluteString } else { return nil }
         }) where !urls.contains(url) { urls.append(url) }
         let total = urls.count + 1
-        try progress(1, total)
+        try await progress(1, total)
         var images: [String: String] = [:]
         for (index, address) in urls.enumerated() {
             try Task.checkCancellation()
@@ -297,7 +297,7 @@ enum NovelDownloads {
                 try await Task.detached(priority: .utility) { try data.write(to: target, options: .atomic) }.value
             }
             images[address] = name
-            try progress(index + 2, total)
+            try await progress(index + 2, total)
         }
         try Task.checkCancellation()
         let book = dir.appendingPathComponent(bookName)

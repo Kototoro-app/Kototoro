@@ -63,12 +63,8 @@ final class SourceIconStore {
     private static let retryInterval: TimeInterval = 7 * 24 * 3600
     func clearMemory() { memory.removeAll() }
 
-    func cached(_ name: String) -> UIImage? {
-        if let image = memory[name] { return image }
-        guard let file = file(name), let data = try? Data(contentsOf: file), let image = UIImage(data: data) else { return nil }
-        memory[name] = image
-        return image
-    }
+    /// View initialization only consults memory; a cold disk cache is loaded by the coalesced background task.
+    func cached(_ name: String) -> UIImage? { memory[name] }
 
     func load(_ source: IosSource, runtime: IosSources) async -> UIImage? {
         let name = source.name
@@ -76,13 +72,17 @@ final class SourceIconStore {
         if let image = cached(name) { return image }
         let failedKey = "source.icon.v2.failed.\(name)"
         let failedAt = UserDefaults.standard.double(forKey: failedKey)
-        if !packagedIcon, failedAt > 0, Date().timeIntervalSince1970 - failedAt < Self.retryInterval { return nil }
+        let recentlyFailed = !packagedIcon && failedAt > 0 && Date().timeIntervalSince1970 - failedAt < Self.retryInterval
         if let running = inFlight[name] { return await running.value }
         let targetFile = file(name)
         let task = Task.detached(priority: .utility) { () -> UIImage? in
             try? await withReaderStorage { () async throws -> UIImage? in
                 guard await RequestGate.icons.enter() else { return nil }
                 defer { Task { await RequestGate.icons.leave() } }
+                if let file = targetFile, let data = try? Data(contentsOf: file), let image = Self.decode(data) {
+                    return image
+                }
+                guard !recentlyFailed else { return nil }
                 let image: UIImage?
                 if packagedIcon {
                     let request = try JSONSerialization.data(withJSONObject: [
@@ -90,7 +90,7 @@ final class SourceIconStore {
                     ])
                     let response = try await runtime.manage(requestJson: String(decoding: request, as: UTF8.self))
                     let result = try JSONSerialization.jsonObject(with: Data(response.utf8)) as? [String: Any]
-                    image = (result?["icon"] as? String).flatMap { Data(base64Encoded: $0) }.flatMap { UIImage(data: $0) }
+                    image = (result?["icon"] as? String).flatMap { Data(base64Encoded: $0) }.flatMap { Self.decode($0) }
                 } else {
                     guard let homepage = try? await runtime.homepage(sourceName: name),
                           let base = URL(string: homepage), base.host() != nil else { return nil }
@@ -107,7 +107,9 @@ final class SourceIconStore {
         let image = await task.value
         inFlight[name] = nil
         if let image { memory[name] = image; UserDefaults.standard.removeObject(forKey: failedKey) }
-        else if !packagedIcon, !Task.isCancelled { UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: failedKey) }
+        else if !packagedIcon, !recentlyFailed, !Task.isCancelled {
+            UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: failedKey)
+        }
         return image
     }
 
@@ -125,14 +127,20 @@ final class SourceIconStore {
             request.setValue("image/*", forHTTPHeaderField: "Accept")
             guard let (data, response) = try? await URLSession.shared.data(for: request),
                   let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode),
-                  let source = CGImageSourceCreateWithData(data as CFData, nil),
-                  let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
-                      kCGImageSourceCreateThumbnailFromImageAlways: true,
-                      kCGImageSourceThumbnailMaxPixelSize: 96,
-                  ] as CFDictionary),
-                  image.width >= 16 else { continue }
-            return UIImage(cgImage: image)
+                  let image = decode(data), image.size.width >= 16 else { continue }
+            return image
         }
         return nil
+    }
+
+    private nonisolated static func decode(_ data: Data) -> UIImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceThumbnailMaxPixelSize: 96,
+                kCGImageSourceShouldCacheImmediately: true,
+              ] as CFDictionary) else { return nil }
+        return UIImage(cgImage: image)
     }
 }

@@ -49,6 +49,44 @@ struct DetailsCoverBoundsKey: PreferenceKey {
     }
 }
 
+/// Per-frame scroll state belongs to the decoration, keeping chapter and metadata views out of its update path.
+struct DetailsBackdropModifier: ViewModifier {
+    let runtime: IosSources
+    let work: IosSourceContent
+    @AppStorage(PanoramaKeys.enabled) private var panorama = true
+    @State private var scrollOffset: CGFloat = 0
+
+    func body(content: Content) -> some View {
+        content
+            .onScrollGeometryChange(for: CGFloat.self, of: { $0.contentOffset.y + $0.contentInsets.top }) { _, offset in
+                scrollOffset = offset
+            }
+            .backgroundPreferenceValue(DetailsCoverBoundsKey.self) { bounds in
+                GeometryReader { geometry in
+                    backdrop(coverBottom: bounds.map { geometry[$0].maxY + scrollOffset })
+                }
+                .ignoresSafeArea()
+            }
+            .navigationTitle(panorama && scrollOffset < 170 ? "" : work.title)
+    }
+
+    private func backdrop(coverBottom: CGFloat?) -> some View {
+        ZStack(alignment: .top) {
+            Color(uiColor: .systemGroupedBackground)
+            if panorama {
+                DetailsPanorama(runtime: runtime, content: work, scrollOffset: scrollOffset, coverBottom: coverBottom)
+            } else {
+                CoverImage(runtime: runtime, content: work, plain: true)
+                    .frame(height: 420).frame(maxWidth: .infinity)
+                    .blur(radius: 50).opacity(0.5)
+                    .mask(LinearGradient(colors: [.black, .black.opacity(0.6), .clear], startPoint: .top, endPoint: .bottom))
+            }
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
 /// The cover as a wide panorama behind the details header. [scrollOffset] is the list's offset from its resting
 /// position: positive scrolls the banner away with the content, negative (pull to refresh) stretches it.
 struct DetailsPanorama: View {

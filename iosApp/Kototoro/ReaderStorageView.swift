@@ -17,6 +17,8 @@ final class ReaderStorageModel: ObservableObject {
     @Published private(set) var isWorking = false
     private(set) var store: ReaderStorageStore?
     private weak var queue: ReaderDownloadQueue?
+    private var automaticTrim: Task<Void, Never>?
+    private var trimSchedule = ReaderCacheTrimSchedule()
 
     private static let backingStore: Result<ReaderStorageStore, Error> = Result {
         let data = try NativeSourceTransport.dataDirectory
@@ -50,7 +52,7 @@ final class ReaderStorageModel: ObservableObject {
             self.error = error.localizedDescription
             queue.setStorageFailure(error.localizedDescription)
         }
-        await ReaderStorageAccess.shared.setIdleAction { [weak self] in await self?.trimAutomatically() }
+        await ReaderStorageAccess.shared.setIdleAction { [weak self] in await self?.scheduleAutomaticTrim() }
     }
 
     func refresh() async {
@@ -118,10 +120,29 @@ final class ReaderStorageModel: ObservableObject {
         }
     }
 
-    func trimAutomatically() async {
-        guard let store, !isWorking, !ReaderPresence.shared.isReading, ReaderStorageBudget.bytes > 0,
+    private func scheduleAutomaticTrim() {
+        automaticTrim?.cancel()
+        automaticTrim = Task { [weak self] in
+            do { try await Task.sleep(for: .seconds(3)) } catch { return }
+            guard let self, !Task.isCancelled else { return }
+            self.automaticTrim = nil
+            await self.trimAutomatically()
+        }
+    }
+
+    func trimAutomatically(force: Bool = false) async {
+        let budget = ReaderStorageBudget.bytes
+        let now = ContinuousClock().now
+        guard let store, !isWorking, !ReaderPresence.shared.isReading, budget > 0,
+              force || trimSchedule.isDue(at: now, budget: budget),
               queue?.storageFailure == nil else { return }
-        do { try await maintenance { try await store.trimCaches(to: ReaderStorageBudget.bytes) } }
+        do {
+            try await maintenance {
+                // A busy lease must not consume the scan interval: record only after entering maintenance.
+                self.trimSchedule.recordAttempt(at: ContinuousClock().now, budget: budget)
+                try await store.trimCaches(to: budget)
+            }
+        }
         catch ReaderStorageError.busy { return }
         catch { self.error = error.localizedDescription }
     }
@@ -231,7 +252,7 @@ struct ReaderStorageView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task { await model.refresh() }
         .refreshable { await model.refresh() }
-        .onChange(of: limit) { _, _ in Task { await model.trimAutomatically(); await model.refresh() } }
+        .onChange(of: limit) { _, _ in Task { await model.trimAutomatically(force: true); await model.refresh() } }
         .alert(confirmingCacheClear ? "清除图像缓存？" : "删除离线文件？", isPresented: Binding(
             get: { confirmingCacheClear || selected != nil },
             set: { if !$0 { confirmingCacheClear = false; selected = nil } }

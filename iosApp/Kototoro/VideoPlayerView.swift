@@ -685,12 +685,14 @@ struct VideoPlayerView: View {
         let done = model.isDownloaded || entry?.state == .completed
         let busy = entry?.state == .queued || entry?.state == .running
         return Button {
-            do {
-                try downloads.enqueue(content: model.content, chapters: [model.chapter],
-                                      streamURL: model.streams.indices.contains(model.streamIndex)
-                                          ? model.streams[model.streamIndex].url : nil)
-                setControls(true)
-            } catch { downloadError = error.localizedDescription }
+            Task {
+                do {
+                    try await downloads.enqueue(content: model.content, chapters: [model.chapter],
+                                          streamURL: model.streams.indices.contains(model.streamIndex)
+                                              ? model.streams[model.streamIndex].url : nil)
+                    setControls(true)
+                } catch { downloadError = error.localizedDescription }
+            }
         } label: {
             Image(systemName: done ? "checkmark.circle.fill" : (busy ? "arrow.down.circle.dotted" : "arrow.down.circle"))
                 .font(.title3).frame(width: 44, height: 44)

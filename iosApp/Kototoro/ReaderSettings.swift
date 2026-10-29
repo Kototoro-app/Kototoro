@@ -22,6 +22,7 @@ struct ReaderPreferences: Codable, Equatable {
     var floatingActions = ["bookmark"]
     var tapZones = true
     var reverseTaps = false
+    var edgeSwipeBack = true
     var keepScreenOn = true
     var horizontalReversed = false
 
@@ -48,6 +49,7 @@ struct ReaderPreferences: Codable, Equatable {
         floatingActions = try container.decodeIfPresent([String].self, forKey: .floatingActions) ?? ["bookmark"]
         tapZones = try container.decodeIfPresent(Bool.self, forKey: .tapZones) ?? true
         reverseTaps = try container.decodeIfPresent(Bool.self, forKey: .reverseTaps) ?? false
+        edgeSwipeBack = try container.decodeIfPresent(Bool.self, forKey: .edgeSwipeBack) ?? true
         keepScreenOn = try container.decodeIfPresent(Bool.self, forKey: .keepScreenOn) ?? true
         // Existing horizontal works used RTL before the independent direction setting was introduced.
         horizontalReversed = try container.decodeIfPresent(Bool.self, forKey: .horizontalReversed) ?? (mode == 4)

@@ -210,10 +210,14 @@ struct ReaderChapterPanel: View {
     private func batch(download: Bool) {
         let selected = chapters.filter { selection.contains($0.id) }
         if download {
-            do {
-                try downloads.enqueue(content: model.content, chapters: selected)
-                status = String(localized: "已加入下载队列，共 \(selected.count) 章")
-            } catch { status = error.localizedDescription }
+            busy = true
+            Task {
+                defer { busy = false }
+                do {
+                    try await downloads.enqueue(content: model.content, chapters: selected)
+                    status = String(localized: "已加入下载队列，共 \(selected.count) 章")
+                } catch { status = error.localizedDescription }
+            }
             return
         }
         busy = true
@@ -224,7 +228,9 @@ struct ReaderChapterPanel: View {
                     status = download ? String(localized: "下载 \(done + 1)/\(selected.count)") : String(localized: "移除 \(done + 1)/\(selected.count)")
                     // A removed task can still own a finishing JNI request; do not delete its destination yet.
                     guard !downloads.isFinishing(content: model.content, chapter: chapter) else {
-                        if let entry = downloads.entry(content: model.content, chapter: chapter) { try downloads.pause(entry.id) }
+                        if let entry = downloads.entry(content: model.content, chapter: chapter) {
+                            try await downloads.pause(entry.id)
+                        }
                         status = String(localized: "已暂停下载，请待当前请求结束后移除下载")
                         busy = false
                         return
@@ -347,6 +353,10 @@ struct ReaderMorePanel: View {
                         Toggle("点击屏幕边缘翻页", isOn: $settings.value.tapZones)
                             .accessibilityIdentifier("reader.option.tapZones")
                         Toggle("反转点击区域", isOn: $settings.value.reverseTaps).disabled(!settings.value.tapZones)
+                        Toggle("边缘滑动返回", isOn: $settings.value.edgeSwipeBack)
+                            .accessibilityIdentifier("reader.option.edgeSwipeBack")
+                        Text("关闭后可从屏幕边缘滑动翻页，点按画面显示控件后使用返回按钮退出。")
+                            .font(.caption).foregroundStyle(.secondary)
                         Text("左右两侧或上下边缘翻页，中间显示或隐藏控件；双击缩放，双指捏合缩放。")
                             .font(.caption).foregroundStyle(.secondary)
                         Button(savedDefault ? "已设为全局默认" : "将当前设置设为全局默认") {

@@ -549,10 +549,11 @@ struct CoverImage: View {
         } else {
             task = Task.detached(priority: .userInitiated) {
                 try await withReaderStorage {
-                    // Check local disk thumbnail before acquiring concurrency gates or calling network/Kotlin
-                    if let diskImage = CoverCache.shared.imageFromDisk(for: content) {
-                        return diskImage
+                    // Disk thumbnails share the decode budget and are checked before network/Kotlin requests.
+                    let diskImage = try await gated(RequestGate.coverDecoding, priority: 1) {
+                        CoverCache.shared.imageFromDisk(for: content)
                     }
+                    if let diskImage { return diskImage }
                     // Android's cover loader: at most eight downloads and three decodes at a time across the app.
                     // Extension covers use the source's own client in the JVM, outside its per-source call order.
                     if runtime.fetchesCovers(content: content) {
@@ -629,9 +630,7 @@ final class CoverCache: @unchecked Sendable {
     private static let diskCacheDirectory: URL? = {
         let urls = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)
         guard let base = urls.first else { return nil }
-        let dir = base.appendingPathComponent("covers", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        return dir
+        return base.appendingPathComponent("covers", isDirectory: true)
     }()
 
     private static func hexDigest(data: Data) -> String {
@@ -668,6 +667,7 @@ final class CoverCache: @unchecked Sendable {
 
     static func saveToDisk(_ data: Data, for url: URL) {
         guard let file = diskFile(for: url) else { return }
+        try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
         try? data.write(to: file, options: .atomic)
     }
 
@@ -678,24 +678,14 @@ final class CoverCache: @unchecked Sendable {
 
     func imageFromDisk(for content: IosSourceContent) -> UIImage? {
         guard let file = Self.thumbnailFile(for: content),
-              FileManager.default.fileExists(atPath: file.path),
               let data = try? Data(contentsOf: file, options: .mappedIfSafe),
-              let image = UIImage(data: data) else {
-            return nil
-        }
+              let image = try? Self.preparedThumbnail(data) else { return nil }
         return image
     }
 
+    /// Called from view initializers and bodies: disk lookup and decoding belong to the shared loading task.
     func image(for content: IosSourceContent) -> UIImage? {
-        if let memoryImage = cache.object(forKey: key(content)) {
-            return memoryImage
-        }
-        if let diskImage = imageFromDisk(for: content) {
-            let cost = diskImage.cgImage.map { $0.bytesPerRow * $0.height } ?? Int(diskImage.size.width * diskImage.size.height * 4)
-            cache.setObject(diskImage, forKey: key(content), cost: cost)
-            return diskImage
-        }
-        return nil
+        cache.object(forKey: key(content))
     }
 
     func clear() {
@@ -713,6 +703,7 @@ final class CoverCache: @unchecked Sendable {
         Task.detached(priority: .utility) {
             guard !FileManager.default.fileExists(atPath: file.path) else { return }
             if let jpeg = image.jpegData(compressionQuality: 0.85) {
+                try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
                 try? jpeg.write(to: file, options: .atomic)
             }
         }
@@ -732,14 +723,19 @@ final class CoverCache: @unchecked Sendable {
 
     static func decode(_ data: Data) async throws -> UIImage {
         try await Task.detached(priority: .userInitiated) {
-            guard let source = CGImageSourceCreateWithData(data as CFData, nil),
-                  let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
-                    kCGImageSourceCreateThumbnailFromImageAlways: true,
-                    kCGImageSourceCreateThumbnailWithTransform: true,
-                    kCGImageSourceThumbnailMaxPixelSize: 600,
-                  ] as CFDictionary) else { throw URLError(.cannotDecodeContentData) }
-            return UIImage(cgImage: image)
+            try preparedThumbnail(data)
         }.value
+    }
+
+    private static func preparedThumbnail(_ data: Data) throws -> UIImage {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceThumbnailMaxPixelSize: 600,
+                kCGImageSourceShouldCacheImmediately: true,
+              ] as CFDictionary) else { throw URLError(.cannotDecodeContentData) }
+        return UIImage(cgImage: image)
     }
 }
 

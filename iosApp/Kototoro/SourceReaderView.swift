@@ -1493,7 +1493,7 @@ struct SourceReaderView: View {
             }
         }
         .background(settings.background.ignoresSafeArea())
-        .background(EdgeSwipeBack())
+        .background(EdgeSwipeBack(enabled: settings.value.edgeSwipeBack))
         .toolbar(.hidden, for: .navigationBar, .tabBar)
         .statusBarHidden(!controls)
         .onAppear { isReaderVisible = true; model.setReadingActive(scenePhase == .active); updateIdleTimer() }
@@ -2078,8 +2078,10 @@ struct SourceReaderView: View {
         case "downloads": showingDownloads = true
         case "download":
             guard !downloading else { return }
-            do { try downloads.enqueue(content: model.content, chapters: [model.chapter]); downloadStatus = nil }
-            catch { downloadStatus = error.localizedDescription }
+            Task {
+                do { try await downloads.enqueue(content: model.content, chapters: [model.chapter]); downloadStatus = nil }
+                catch { downloadStatus = error.localizedDescription }
+            }
         default: break
         }
     }
@@ -2092,13 +2094,13 @@ private final class ReaderScrollTracker {
     var pagedOffset = CGPoint.zero
 }
 
-/// A short position write owns its background-time lease, including the system's expiration path.
+/// A short reading-state write owns its background-time lease, including the system's expiration path.
 @MainActor
-private final class ReaderBackgroundSave {
+final class ReaderBackgroundSave {
     private var identifier: UIBackgroundTaskIdentifier = .invalid
 
-    func begin() {
-        identifier = UIApplication.shared.beginBackgroundTask(withName: "reader-save-position") { [weak self] in
+    func begin(name: String = "reader-save-position") {
+        identifier = UIApplication.shared.beginBackgroundTask(withName: name) { [weak self] in
             self?.end()
         }
     }
@@ -2114,38 +2116,70 @@ private final class ReaderBackgroundSave {
 /// is on screen this restores that edge gesture (not the full-width content swipe, which would fight page turns),
 /// and hands the previous delegate back when it leaves. Only touches that land in a narrow band at the leading edge
 /// reach it, so a broad thumb further in never holds the reader's drags waiting for the swipe back to fail.
+/// Disabling it releases the edge to reading gestures; both system navigation gestures are restored on exit.
 struct EdgeSwipeBack: UIViewControllerRepresentable {
     static let band: CGFloat = 20
+    var enabled = true
 
-    func makeUIViewController(context: Context) -> Controller { Controller() }
-    func updateUIViewController(_ controller: Controller, context: Context) {}
+    func makeUIViewController(context: Context) -> Controller {
+        let controller = Controller()
+        controller.enabled = enabled
+        return controller
+    }
+    func updateUIViewController(_ controller: Controller, context: Context) { controller.enabled = enabled }
 
     final class Controller: UIViewController, UIGestureRecognizerDelegate {
         private weak var previous: UIGestureRecognizerDelegate?
         private weak var recognizer: UIGestureRecognizer?
-        /// SwiftUI turns the gesture off again while its bar is hidden; keep it on while the reader shows.
+        private weak var contentRecognizer: UIGestureRecognizer?
+        private var previousEnabled = false
+        private var previousContentEnabled = false
+        private var installed = false
+        var enabled = true { didSet { applyPolicy() } }
+        /// SwiftUI can reset gesture availability while its bar is hidden; enforce only this visible reader's policy.
         private var enabledObservation: NSKeyValueObservation?
+        private var contentObservation: NSKeyValueObservation?
 
         override func viewDidAppear(_ animated: Bool) {
             super.viewDidAppear(animated)
             guard let gesture = navigationController?.interactivePopGestureRecognizer, gesture.delegate !== self else { return }
             previous = gesture.delegate
             recognizer = gesture
+            previousEnabled = gesture.isEnabled
+            contentRecognizer = navigationController?.interactiveContentPopGestureRecognizer
+            previousContentEnabled = contentRecognizer?.isEnabled ?? false
+            installed = true
             gesture.delegate = self
-            gesture.isEnabled = true
-            enabledObservation = gesture.observe(\.isEnabled, options: [.new]) { gesture, change in
-                if change.newValue == false { DispatchQueue.main.async { gesture.isEnabled = true } }
+            applyPolicy()
+            enabledObservation = gesture.observe(\.isEnabled, options: [.new]) { [weak self] _, _ in
+                DispatchQueue.main.async { self?.applyPolicy() }
+            }
+            contentObservation = contentRecognizer?.observe(\.isEnabled, options: [.new]) { [weak self] _, _ in
+                DispatchQueue.main.async { self?.applyPolicy() }
             }
         }
 
         override func viewWillDisappear(_ animated: Bool) {
             super.viewWillDisappear(animated)
+            installed = false
             enabledObservation = nil
-            if let recognizer, recognizer.delegate === self { recognizer.delegate = previous }
+            contentObservation = nil
+            if let recognizer, recognizer.delegate === self {
+                recognizer.delegate = previous
+                recognizer.isEnabled = previousEnabled
+            }
+            contentRecognizer?.isEnabled = previousContentEnabled
+        }
+
+        private func applyPolicy() {
+            guard installed else { return }
+            if recognizer?.isEnabled != enabled { recognizer?.isEnabled = enabled }
+            // Full-width navigation competes with both paged and continuous horizontal reading.
+            if contentRecognizer?.isEnabled == true { contentRecognizer?.isEnabled = false }
         }
 
         func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-            (navigationController?.viewControllers.count ?? 0) > 1
+            enabled && (navigationController?.viewControllers.count ?? 0) > 1
         }
 
         func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {

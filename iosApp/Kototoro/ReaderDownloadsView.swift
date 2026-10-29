@@ -56,7 +56,9 @@ struct ReaderDownloadsView: View {
             }
         }
         .overlay {
-            if queue.entries.isEmpty && queue.error == nil && queue.storageFailure == nil {
+            if queue.isLoading {
+                ProgressView("正在读取下载队列…")
+            } else if queue.entries.isEmpty && queue.error == nil && queue.storageFailure == nil {
                 ContentUnavailableView("暂无下载任务", systemImage: "arrow.down.circle",
                                        description: Text("在漫画、小说或视频播放器中下载章节与剧集。已保存文件可从“存储管理”查看。"))
                     .allowsHitTesting(false)
@@ -64,6 +66,7 @@ struct ReaderDownloadsView: View {
         }
         .navigationTitle("下载")
         .navigationBarTitleDisplayMode(.inline)
+        .task { await queue.prepare() }
     }
 
     private func row(_ entry: ReaderDownloadEntry, runtime: IosSources?, content: IosSourceContent?) -> some View {
@@ -87,17 +90,17 @@ struct ReaderDownloadsView: View {
                 HStack {
                     switch entry.state {
                     case .queued, .running:
-                        Button("暂停", systemImage: "pause") { perform { try queue.pause(entry.id) } }
+                        Button("暂停", systemImage: "pause") { perform { try await queue.pause(entry.id) } }
                             .accessibilityIdentifier("download.pause.\(entry.id)")
                     case .paused, .failed:
                         Button(entry.state == .failed ? "重试" : "继续", systemImage: "arrow.clockwise") {
-                            perform { try queue.resume(entry.id) }
+                            perform { try await queue.resume(entry.id) }
                         }.accessibilityIdentifier("download.resume.\(entry.id)")
                     case .completed: EmptyView()
                     }
                     Spacer()
                     Button("移除任务", systemImage: "xmark", role: .destructive) {
-                        perform { try queue.remove(entry.id) }
+                        perform { try await queue.remove(entry.id) }
                     }.accessibilityIdentifier("download.remove.\(entry.id)")
                 }.buttonStyle(.borderless)
             }
@@ -105,9 +108,11 @@ struct ReaderDownloadsView: View {
         .padding(.vertical, 4)
     }
 
-    private func perform(_ action: () throws -> Void) {
-        do { try action(); actionError = nil }
-        catch { actionError = error.localizedDescription }
+    private func perform(_ action: @escaping () async throws -> Void) {
+        Task {
+            do { try await action(); actionError = nil }
+            catch { actionError = error.localizedDescription }
+        }
     }
 }
 

@@ -80,10 +80,10 @@ enum VideoDownloads {
             throw VideoDownloadError.noStream
         }
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        try progress(0, 100)
+        try await progress(0, 100)
         // Media takes the first 90% of the bar; subtitle files are small and finish it.
         let media = try await MediaFile.fetch(stream, into: dir) { percent in
-            try progress(Int(Double(percent) * 0.9), 100)
+            try await progress(Int(Double(percent) * 0.9), 100)
         }
         try Task.checkCancellation()
         let subtitles = await SubtitleFiles.fetch(stream, into: dir)
@@ -91,7 +91,7 @@ enum VideoDownloads {
         let manifest = Manifest(file: media.file, kind: media.kind, bytes: media.bytes, url: stream.url,
                                 label: stream.label, quality: Int(stream.quality), subtitles: subtitles)
         try JSONEncoder().encode(manifest).write(to: dir.appendingPathComponent(manifestName), options: .atomic)
-        try progress(100, 100)
+        try await progress(100, 100)
     }
 
     /// Drop media left over from an earlier attempt; `video.json` is the only marker of a usable episode.
@@ -111,7 +111,7 @@ enum VideoDownloads {
         /// address that does not say, from the first bytes of the body.
         @MainActor
         static func fetch(_ stream: IosSourcePage, into directory: URL,
-                          progress: @escaping (Int) throws -> Void) async throws -> MediaFile {
+                          progress: @escaping (Int) async throws -> Void) async throws -> MediaFile {
             guard let url = URL(string: stream.url) else { throw URLError(.badURL) }
             discardMedia(in: directory)
             if url.isFileURL {
@@ -125,7 +125,7 @@ enum VideoDownloads {
                 let transfer = VideoFileDownloader().fetch(url: url, headers: stream.headers, to: partial)
                 for try await percent in transfer {
                     try Task.checkCancellation()
-                    try progress(percent)
+                    try await progress(percent)
                 }
                 let downloaded = partial
                 // A playlist served under a neutral address must not be saved as if it were the video.
@@ -165,13 +165,13 @@ enum VideoDownloads {
 
         @MainActor
         private static func downloadHLS(_ url: URL, headers: [String: String], into directory: URL,
-                                        progress: @escaping (Int) throws -> Void) async throws -> MediaFile {
+                                        progress: @escaping (Int) async throws -> Void) async throws -> MediaFile {
             let partial = directory.appendingPathComponent(partialName + ".movpkg")
             try? FileManager.default.removeItem(at: partial)
             let transfer = VideoHLSDownloader().fetch(url: url, headers: headers, to: partial)
             for try await percent in transfer {
                 try Task.checkCancellation()
-                try progress(percent)
+                try await progress(percent)
             }
             let downloaded = partial
             let name = "video.movpkg"

@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		C7B000000000000000000001 /* WidgetSnapshotStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7B000000000000000000004 /* WidgetSnapshotStore.swift */; };
+		C7B000000000000000000002 /* WidgetSnapshotStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7B000000000000000000004 /* WidgetSnapshotStore.swift */; };
+		C7B000000000000000000003 /* WidgetSnapshotStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7B000000000000000000005 /* WidgetSnapshotStoreTests.swift */; };
 		C0FFEE000000000000000024 /* KototoroWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE000000000000000023 /* KototoroWidget.swift */; };
 		C0FFEE000000000000000034 /* KototoroWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = C0FFEE000000000000000028 /* KototoroWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
         CF2200000000000000000001 /* WebKitHttpRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF2200000000000000000004 /* WebKitHttpRequest.swift */; };
@@ -171,6 +174,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		C7B000000000000000000004 /* WidgetSnapshotStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetSnapshotStore.swift; sourceTree = "<group>"; };
+		C7B000000000000000000005 /* WidgetSnapshotStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetSnapshotStoreTests.swift; sourceTree = "<group>"; };
 		C0FFEE000000000000000023 /* KototoroWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KototoroWidget.swift; sourceTree = "<group>"; };
 		C0FFEE000000000000000025 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		C0FFEE000000000000000026 /* KototoroWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = KototoroWidget.entitlements; sourceTree = "<group>"; };
@@ -393,6 +398,7 @@
 				C0FFEE00000000000000001E /* LibraryFilter.swift */,
 				C0FFEE000000000000000020 /* PdfImport.swift */,
 				C0FFEE000000000000000022 /* WidgetSnapshot.swift */,
+				C7B000000000000000000004 /* WidgetSnapshotStore.swift */,
 				F1000000000000000000000C /* VideoDownloads.swift */,
 				F10000000000000000000002 /* ReaderSettings.swift */,
 				F10000000000000000000001 /* LibraryRecordsView.swift */,
@@ -452,6 +458,7 @@
 				FD0000000000000000000002 /* ReaderDownloadStoreTests.swift */,
 				FD0000000000000000000003 /* ReaderSettingsTests.swift */,
 				C7A000000000000000000005 /* ReaderStripZoomSessionTests.swift */,
+				C7B000000000000000000005 /* WidgetSnapshotStoreTests.swift */,
 				D00000000000000000000014 /* VideoSourceTests.swift */,
 				E00000000000000000000014 /* ExtensionEcosystemTests.swift */,
 			);
@@ -699,6 +706,7 @@
 				C0FFEE00000000000000001D /* LibraryFilter.swift in Sources */,
 				C0FFEE00000000000000001F /* PdfImport.swift in Sources */,
 				C0FFEE000000000000000021 /* WidgetSnapshot.swift in Sources */,
+				C7B000000000000000000001 /* WidgetSnapshotStore.swift in Sources */,
 				F0000000000000000000000C /* VideoDownloads.swift in Sources */,
 				F00000000000000000000002 /* ReaderSettings.swift in Sources */,
 				F00000000000000000000001 /* LibraryRecordsView.swift in Sources */,
@@ -774,6 +782,8 @@
 				FC0000000000000000000005 /* ReaderSettingsTests.swift in Sources */,
 				C7A000000000000000000002 /* ReaderStripZoomSession.swift in Sources */,
 				C7A000000000000000000003 /* ReaderStripZoomSessionTests.swift in Sources */,
+				C7B000000000000000000002 /* WidgetSnapshotStore.swift in Sources */,
+				C7B000000000000000000003 /* WidgetSnapshotStoreTests.swift in Sources */,
 				D00000000000000000000004 /* VideoSourceTests.swift in Sources */,
 				E00000000000000000000004 /* ExtensionEcosystemTests.swift in Sources */,
 			);

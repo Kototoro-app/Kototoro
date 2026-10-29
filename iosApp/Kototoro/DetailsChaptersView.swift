@@ -233,12 +233,14 @@ struct DetailsChaptersView: View {
 
     private func enqueue(_ chapters: [IosSourceChapter]) {
         guard !chapters.isEmpty else { return }
-        do {
-            try downloads.enqueue(content: content, chapters: chapters)
-            downloadStatus = model.isVideo ? String(localized: "已加入下载队列：\(chapters.count) 集")
-                : String(localized: "已加入下载队列：\(chapters.count) 章")
-            finishSelection()
-        } catch { downloadError = error.localizedDescription }
+        Task {
+            do {
+                try await downloads.enqueue(content: content, chapters: chapters)
+                downloadStatus = model.isVideo ? String(localized: "已加入下载队列：\(chapters.count) 集")
+                    : String(localized: "已加入下载队列：\(chapters.count) 章")
+                finishSelection()
+            } catch { downloadError = error.localizedDescription }
+        }
     }
 }
 

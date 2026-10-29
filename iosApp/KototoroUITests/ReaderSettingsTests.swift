@@ -3,6 +3,17 @@ import SwiftUI
 import XCTest
 
 final class ReaderSettingsTests: XCTestCase {
+    func testEdgeSwipeBackMigratesAndPersistsWithoutChangingPageLayout() throws {
+        let legacy = try JSONDecoder().decode(ReaderPreferences.self, from: Data("{}".utf8))
+        XCTAssertTrue(legacy.edgeSwipeBack)
+        var disabled = legacy
+        disabled.edgeSwipeBack = false
+        let restored = try JSONDecoder().decode(ReaderPreferences.self, from: JSONEncoder().encode(disabled))
+        XCTAssertFalse(restored.edgeSwipeBack)
+        XCTAssertEqual(restored, disabled)
+        XCTAssertTrue(legacy.hasSameLayout(as: restored), "A navigation preference must preserve the page position")
+    }
+
     func testDefaultPagedReaderIsRightToLeftAndSavedChoicesAreRetained() throws {
         XCTAssertEqual(ReaderPreferences().mode, 1)
         XCTAssertTrue(ReaderPreferences().readsRightToLeft)

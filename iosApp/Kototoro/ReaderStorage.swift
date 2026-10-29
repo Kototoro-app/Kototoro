@@ -13,6 +13,23 @@ enum ReaderStorageError: LocalizedError, Equatable {
     }
 }
 
+/// Automatic maintenance follows actual image idle time and scans at most once per minute for the same budget.
+struct ReaderCacheTrimSchedule {
+    private var lastAttempt: ContinuousClock.Instant?
+    private var lastBudget: Int64?
+
+    func isDue(at now: ContinuousClock.Instant, budget: Int64) -> Bool {
+        guard budget > 0 else { return false }
+        guard lastBudget == budget, let lastAttempt else { return true }
+        return now >= lastAttempt.advanced(by: .seconds(60))
+    }
+
+    mutating func recordAttempt(at now: ContinuousClock.Instant, budget: Int64) {
+        lastAttempt = now
+        lastBudget = budget
+    }
+}
+
 /// Image requests keep their lease until the actual request/decode ends, including canceled JNI calls.
 /// Maintenance refuses active users; requests arriving during maintenance wait without changing files.
 actor ReaderStorageAccess {
@@ -263,9 +280,10 @@ actor ReaderStorageStore {
     /// A soft byte budget: leases protect reading/downloads; the caller retries when their last user finishes.
     func trimCaches(to limit: Int64) throws {
         guard limit > 0 else { return }
-        let entries = try caches.flatMap { try records($0.directory) }.sorted { $0.modified < $1.modified }
+        let entries = try caches.flatMap { try records($0.directory) }
         var total = entries.reduce(Int64(0)) { $0 + $1.bytes }
-        for record in entries where total > limit {
+        guard total > limit else { return }
+        for record in entries.sorted(by: { $0.modified < $1.modified }) where total > limit {
             try Task.checkCancellation()
             try files.removeItem(at: record.url)
             total -= record.bytes
