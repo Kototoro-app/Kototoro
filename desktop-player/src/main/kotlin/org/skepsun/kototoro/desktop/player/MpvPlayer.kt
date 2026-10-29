@@ -1,8 +1,13 @@
 package org.skepsun.kototoro.desktop.player
 
+import com.sun.jna.Native
 import com.sun.jna.Pointer
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.serialization.json.Json
@@ -58,6 +63,9 @@ data class MpvState(
 
 class MpvException(message: String) : Exception(message)
 
+/** Pointer input on mpv's own window, which takes every mouse event over the picture before the app could see it. */
+enum class MpvInput { CLICK, DOUBLE_CLICK, MOVE, WHEEL_UP, WHEEL_DOWN }
+
 /**
  * One libmpv instance. With [windowId] mpv renders into that native window (an AWT canvas' HWND); without it there is
  * no video or audio output unless [renderMode] selects a render API backend. A daemon thread drains the
@@ -73,6 +81,10 @@ class MpvPlayer(
     private val handle: Pointer = native.mpv_create() ?: throw MpvException(createFailureReason())
     private val mutableState = MutableStateFlow(MpvState())
     val state: StateFlow<MpvState> = mutableState.asStateFlow()
+    private val mutableInput = MutableSharedFlow<MpvInput>(extraBufferCapacity = 32,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST)
+    /** Mouse input over the picture when mpv draws into a window (see [bindPointerInput]). */
+    val input: SharedFlow<MpvInput> = mutableInput.asSharedFlow()
     @Volatile private var closed = false
     @Volatile private var pending: MpvStream? = null
     private val json = Json { ignoreUnknownKeys = true }
@@ -94,6 +106,10 @@ class MpvPlayer(
             defaults["wid"] = windowId.toString()
             defaults["force-window"] = "yes"
             defaults["vo"] = "gpu"
+            // mpv's window covers the canvas and swallows the mouse; it reports it back instead (bindPointerInput),
+            // and hides the idle cursor over the picture as players do.
+            defaults["input-cursor"] = "yes"
+            defaults["cursor-autohide"] = "1000"
         } else {
             defaults["vo"] = "null"
             defaults["ao"] = "null"
@@ -107,6 +123,7 @@ class MpvPlayer(
                 if (!tolerated) check(code, "option $name")
             }
             check(native.mpv_initialize(handle), "initialize")
+            if (renderMode == MpvRenderMode.NONE && windowId != null) bindPointerInput()
             renderer = when (renderMode) {
                 MpvRenderMode.NONE -> null
                 MpvRenderMode.SOFTWARE -> MpvSoftwareRenderer(native, handle)
@@ -189,10 +206,33 @@ class MpvPlayer(
         version == null || version.component1().toInt() > 0 || version.component2().toInt() >= 38
     }
 
+    /**
+     * Default bindings stay off, so only these reach the app: each becomes a `kototoro-input` client message. The
+     * section is forced so it wins over anything else, and lets mpv hide the cursor.
+     */
+    private fun bindPointerInput() {
+        val bindings = mapOf("MBTN_LEFT" to MpvInput.CLICK, "MBTN_LEFT_DBL" to MpvInput.DOUBLE_CLICK,
+            "MOUSE_MOVE" to MpvInput.MOVE, "WHEEL_UP" to MpvInput.WHEEL_UP, "WHEEL_DOWN" to MpvInput.WHEEL_DOWN)
+        command("define-section", INPUT_SECTION, bindings.entries.joinToString("\n") { (key, input) ->
+            "$key script-message $INPUT_MESSAGE ${input.name}"
+        }, "force")
+        command("enable-section", INPUT_SECTION, "allow-hide-cursor")
+    }
+
+    private fun onClientMessage(data: Pointer?) {
+        data ?: return
+        val count = data.getInt(0)
+        if (count < 2) return
+        val arguments = data.getPointer(Native.POINTER_SIZE.toLong())?.getPointerArray(0, count) ?: return
+        if (arguments[0].getString(0, "UTF-8") != INPUT_MESSAGE) return
+        runCatching { MpvInput.valueOf(arguments[1].getString(0, "UTF-8")) }.getOrNull()?.let(mutableInput::tryEmit)
+    }
+
     private fun eventLoop() {
         while (!closed) {
             val event = native.mpv_wait_event(handle, 0.5)
             when (event.getInt(0)) {
+                MpvNative.EVENT_CLIENT_MESSAGE -> onClientMessage(event.getPointer(16))
                 MpvNative.EVENT_SHUTDOWN -> return
                 MpvNative.EVENT_START_FILE -> mutableState.update { it.copy(loading = true, ended = false, error = null) }
                 MpvNative.EVENT_FILE_LOADED -> onLoaded()
@@ -298,6 +338,9 @@ class MpvPlayer(
         native.mpv_terminate_destroy(handle)
     }
 }
+
+private const val INPUT_SECTION = "kototoro-pointer"
+private const val INPUT_MESSAGE = "kototoro-input"
 
 /** Names the usual reason a fresh player cannot be created, so the log is not just "it failed". */
 private fun createFailureReason(): String {

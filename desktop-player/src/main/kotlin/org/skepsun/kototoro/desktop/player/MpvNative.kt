@@ -32,6 +32,7 @@ internal interface MpvNative : Library {
         const val EVENT_START_FILE = 6
         const val EVENT_END_FILE = 7
         const val EVENT_FILE_LOADED = 8
+        const val EVENT_CLIENT_MESSAGE = 16
         const val EVENT_PLAYBACK_RESTART = 21
 
         const val END_REASON_ERROR = 4

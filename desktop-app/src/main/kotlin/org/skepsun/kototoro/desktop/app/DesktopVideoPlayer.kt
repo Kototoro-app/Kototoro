@@ -23,6 +23,8 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.*
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
@@ -42,6 +44,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.desktop.player.MpvEnhancement
 import org.skepsun.kototoro.desktop.player.MpvEnhancementMode
+import org.skepsun.kototoro.desktop.player.MpvInput
 import org.skepsun.kototoro.desktop.player.MpvLocator
 import org.skepsun.kototoro.desktop.player.MpvShaderLibrary
 import org.skepsun.kototoro.desktop.player.MpvPlayer
@@ -292,59 +295,132 @@ private fun PlayerContent(controller: DesktopController, state: DesktopAppState,
             seekFeedbackJob = scope.launch { delay(1000); seekFeedback = null }
         }
     }
-    Box(Modifier.fillMaxSize()) {
-        Column(Modifier.fillMaxSize().focusRequester(focus).focusable().onPreviewKeyEvent { event ->
-            if (event.type != KeyEventType.KeyDown || event.isCtrlPressed || event.isAltPressed) return@onPreviewKeyEvent false
-            when (event.key) {
-                Key.Spacebar, Key.K -> { control { it.togglePause() }; true }
-                Key.DirectionLeft, Key.J -> { jump(if (event.isShiftPressed) -30.0 else -5.0); true }
-                Key.DirectionRight, Key.L -> { jump(if (event.isShiftPressed) 30.0 else 5.0); true }
-                Key.DirectionUp -> { control { it.setVolume(mpv.volume + 5) }; true }
-                Key.DirectionDown -> { control { it.setVolume(mpv.volume - 5) }; true }
-                Key.M -> { control { it.setMuted(!mpv.muted) }; true }
-                Key.N -> { if (hasNext) controller.changeVideoEpisode(true); true }
-                Key.F, Key.F11 -> { onToggleFullscreen?.invoke(); true }
-                Key.Escape -> { if (episodesOpen) episodesOpen = false else back(); true }
-                else -> false
+    // Android's player chrome: over the picture, shown by moving or clicking on it, gone after a while of playing.
+    var chromeShown by remember { mutableStateOf(true) }
+    var activity by remember { mutableStateOf(0) }
+    var chromeHovered by remember { mutableStateOf(false) }
+    val wake = { chromeShown = true; activity++ }
+    // Windows reports a "move" to whatever window comes under a still pointer, as when the chrome hides; only a pointer
+    // that really moved shows it again.
+    val lastPointer = remember { arrayOfNulls<java.awt.Point>(1) }
+    val pointerMoved = { at: java.awt.Point? ->
+        if (at != null && at != lastPointer[0]) {
+            val first = lastPointer[0] == null
+            lastPointer[0] = at
+            if (!first) wake()
+        }
+    }
+    LaunchedEffect(chromeShown, activity, mpv.paused, mpv.loaded, chromeHovered, openPlayerMenus.value, episodesOpen,
+        castOpen, state.cast) {
+        if (chromeShown && mpv.loaded && !mpv.paused && !chromeHovered && openPlayerMenus.value == 0 && !episodesOpen &&
+            !castOpen && state.cast == null) {
+            delay(ChromeTimeoutMillis)
+            chromeShown = false
+        }
+    }
+    // A hidden window never reports the pointer leaving it.
+    LaunchedEffect(chromeShown) { if (!chromeShown) chromeHovered = false }
+    val toggleFullscreen: () -> Unit = { onToggleFullscreen?.invoke(); focus.requestFocus() }
+    // mpv's window takes the mouse over the picture and reports it (MpvPlayer.input); the macOS panel is plain Swing.
+    // One click shows or hides the chrome, a double click toggles fullscreen, the wheel sets the volume.
+    LaunchedEffect(player) {
+        val current = player ?: return@LaunchedEffect
+        var pendingClick: Job? = null
+        current.input.collect { input ->
+            when (input) {
+                MpvInput.MOVE -> pointerMoved(java.awt.MouseInfo.getPointerInfo()?.location)
+                MpvInput.CLICK -> if (pendingClick?.isActive == true) pendingClick?.cancel() else {
+                    pendingClick = launch {
+                        delay(DoubleClickMillis)
+                        if (chromeShown) chromeShown = false else wake()
+                    }
+                }
+                MpvInput.DOUBLE_CLICK -> { pendingClick?.cancel(); toggleFullscreen() }
+                MpvInput.WHEEL_UP -> { control { it.setVolume(mpv.volume + 5) }; wake() }
+                MpvInput.WHEEL_DOWN -> { control { it.setVolume(mpv.volume - 5) }; wake() }
             }
-        }) {
-            Row(Modifier.fillMaxWidth().height(56.dp).background(PlayerPanel).padding(horizontal = 12.dp),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextButton(back) { Text(desktopText("video.backToDetails"), color = PlayerText) }
-                Column(Modifier.weight(1f)) {
-                    Text(state.content?.title.orEmpty(), color = PlayerText, fontWeight = FontWeight.SemiBold,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(video.chapter.title ?: desktopText("common.episodeTitle", video.chapter.number), color = PlayerMuted, fontSize = 12.sp,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-                TextButton({ if (castMenu.mayOpen()) castOpen = true }, enabled = player != null,
-                    modifier = Modifier.onGloballyPositioned { castAnchor = it.boundsInWindow() }.testTag("video-cast")) {
-                    Text(if (state.cast != null) desktopText("video.casting") else desktopText("video.cast"), color = PlayerText)
-                }
-                TextButton({ episodesOpen = !episodesOpen }, modifier = Modifier.testTag("video-episodes")) {
-                    Text(desktopText("video.episodes"), color = PlayerText)
-                }
-                TextButton({ onToggleFullscreen?.invoke() }, enabled = onToggleFullscreen != null) {
-                    Text(if (fullscreen) desktopText("video.exitFullscreen") else desktopText("video.fullscreen"), color = PlayerText)
-                }
-            }
-            Row(Modifier.weight(1f).fillMaxWidth()) {
-                val backdrop = rememberVideoBackdrop(state)
-                Box(Modifier.weight(1f).fillMaxHeight().background(backdrop)) {
-                    SwingPanel(background = backdrop, factory = { canvas }, modifier = Modifier.fillMaxSize().testTag("video-surface"))
-                }
-                if (episodesOpen) EpisodeList(controller, state, video, Modifier.width(300.dp).fillMaxHeight())
-            }
-            val active = state.cast
-            if (active != null) {
-                CastControls(active, onEnd = { controller.endCast() })
-            } else {
-                Controls(canvas, video, mpv, failure ?: enhancementError, hasPrevious, hasNext, !closing && player != null,
-                    controller, ::control, state.videoEnhancement, state.videoSettings, jump)
+            if (input != MpvInput.MOVE) focus.requestFocus()
+        }
+    }
+    DisposableEffect(canvas) {
+        val listener = object : java.awt.event.MouseAdapter() {
+            override fun mouseMoved(event: java.awt.event.MouseEvent) { pointerMoved(event.locationOnScreen) }
+            override fun mouseClicked(event: java.awt.event.MouseEvent) {
+                if (event.clickCount >= 2) toggleFullscreen() else if (chromeShown) chromeShown = false else wake()
             }
         }
-        // Compose content cannot cover mpv's native window, so the bubble floats over the controls, not the picture.
-        seekFeedback?.let { VideoSeekFeedback(it, Modifier.fillMaxWidth().height(120.dp).align(Alignment.BottomCenter)) }
+        canvas.addMouseListener(listener)
+        canvas.addMouseMotionListener(listener)
+        onDispose { canvas.removeMouseListener(listener); canvas.removeMouseMotionListener(listener) }
+    }
+    Box(Modifier.fillMaxSize().focusRequester(focus).focusable().onPreviewKeyEvent { event ->
+        if (event.type != KeyEventType.KeyDown || event.isCtrlPressed || event.isAltPressed) return@onPreviewKeyEvent false
+        wake()
+        when (event.key) {
+            Key.Spacebar, Key.K -> { control { it.togglePause() }; true }
+            Key.DirectionLeft, Key.J -> { jump(if (event.isShiftPressed) -30.0 else -5.0); true }
+            Key.DirectionRight, Key.L -> { jump(if (event.isShiftPressed) 30.0 else 5.0); true }
+            Key.DirectionUp -> { control { it.setVolume(mpv.volume + 5) }; true }
+            Key.DirectionDown -> { control { it.setVolume(mpv.volume - 5) }; true }
+            Key.M -> { control { it.setMuted(!mpv.muted) }; true }
+            Key.N -> { if (hasNext) controller.changeVideoEpisode(true); true }
+            Key.F, Key.F11 -> { toggleFullscreen(); true }
+            Key.Escape -> {
+                when {
+                    fullscreen -> toggleFullscreen()
+                    episodesOpen -> episodesOpen = false
+                    else -> back()
+                }
+                true
+            }
+            else -> false
+        }
+    }) {
+        Row(Modifier.fillMaxSize()) {
+            val backdrop = rememberVideoBackdrop(state)
+            Box(Modifier.weight(1f).fillMaxHeight().background(backdrop)) {
+                SwingPanel(background = backdrop, factory = { canvas }, modifier = Modifier.fillMaxSize().testTag("video-surface"))
+            }
+            if (episodesOpen) EpisodeList(controller, state, video, Modifier.width(300.dp).fillMaxHeight())
+        }
+    }
+    val hover = { inside: Boolean -> chromeHovered = inside; if (inside) wake() }
+    PlayerOverlayWindow(canvas, chromeShown, PlayerOverlayPlacement.TOP, 64.dp, hover) {
+        Row(Modifier.fillMaxSize()
+            .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.75f), Color.Transparent)))
+            .padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TextButton(back) { Text(desktopText("video.backToDetails"), color = PlayerText) }
+            Column(Modifier.weight(1f)) {
+                Text(state.content?.title.orEmpty(), color = PlayerText, fontWeight = FontWeight.SemiBold,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(video.chapter.title ?: desktopText("common.episodeTitle", video.chapter.number), color = PlayerMuted, fontSize = 12.sp,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            TextButton({ if (castMenu.mayOpen()) castOpen = true }, enabled = player != null,
+                modifier = Modifier.screenAnchor(canvas) { castAnchor = it }.testTag("video-cast")) {
+                Text(if (state.cast != null) desktopText("video.casting") else desktopText("video.cast"), color = PlayerText)
+            }
+            TextButton({ episodesOpen = !episodesOpen }, modifier = Modifier.testTag("video-episodes")) {
+                Text(desktopText("video.episodes"), color = PlayerText)
+            }
+            TextButton(toggleFullscreen, enabled = onToggleFullscreen != null, modifier = Modifier.testTag("video-fullscreen")) {
+                Text(if (fullscreen) desktopText("video.exitFullscreen") else desktopText("video.fullscreen"), color = PlayerText)
+            }
+        }
+    }
+    PlayerOverlayWindow(canvas, chromeShown, PlayerOverlayPlacement.BOTTOM, 176.dp, hover) {
+        val active = state.cast
+        if (active != null) {
+            CastControls(active, onEnd = { controller.endCast() })
+        } else {
+            Controls(canvas, video, mpv, failure ?: enhancementError, hasPrevious, hasNext, !closing && player != null,
+                controller, ::control, state.videoEnhancement, state.videoSettings, jump)
+        }
+    }
+    // The seeking bubble sits in the middle of the picture, as on Android.
+    PlayerOverlayWindow(canvas, seekFeedback != null, PlayerOverlayPlacement.CENTER, 120.dp, {}) {
+        seekFeedback?.let { VideoSeekFeedback(it, Modifier.fillMaxSize()) }
     }
     if (castOpen) {
         CastDialog(canvas, castAnchor, onDismiss = { castOpen = false; castMenu.closed() }) { device ->
@@ -466,7 +542,7 @@ private fun Menu(host: java.awt.Component, label: String, entries: List<Pair<Str
     var anchor by remember { mutableStateOf(Rect.Zero) }
     val toggle = remember { PlayerMenuToggle() }
     TextButton({ if (toggle.mayOpen()) open = true }, enabled = enabled,
-        modifier = Modifier.onGloballyPositioned { anchor = it.boundsInWindow() }.testTag(tag)) {
+        modifier = Modifier.screenAnchor(host) { anchor = it }.testTag(tag)) {
         Text(label, color = if (enabled) PlayerText else PlayerMuted, maxLines = 1)
     }
     if (open) {
@@ -489,7 +565,7 @@ private fun EnhancementMenu(host: java.awt.Component, enhancement: MpvEnhancemen
     var anchor by remember { mutableStateOf(Rect.Zero) }
     val toggle = remember { PlayerMenuToggle() }
     TextButton({ if (toggle.mayOpen()) open = true }, enabled = enabled,
-        modifier = Modifier.onGloballyPositioned { anchor = it.boundsInWindow() }.testTag("video-enhancement")) {
+        modifier = Modifier.screenAnchor(host) { anchor = it }.testTag("video-enhancement")) {
         Text(if (enhancement.mode == MpvEnhancementMode.OFF) desktopText("video.enhancement") else enhancement.mode.title,
             color = if (enabled) PlayerText else PlayerMuted, maxLines = 1)
     }
@@ -546,10 +622,36 @@ private class PlayerMenuToggle {
     fun mayOpen() = System.currentTimeMillis() - closedAt > 300
 }
 
+/** Menus and their button live in different windows (the chrome is one, see [PlayerOverlayWindow]). */
+private val LocalPlayerWindow = staticCompositionLocalOf<java.awt.Window?> { null }
+
+/** The player menus open now: the chrome stays while one is open, since hiding it would close it too. */
+private val openPlayerMenus = mutableStateOf(0)
+
+private const val ChromeTimeoutMillis = 3000L
+private const val DoubleClickMillis = 300L
+
+/**
+ * Reports where the element is on screen, in AWT's logical pixels: the window that draws it is the chrome
+ * ([LocalPlayerWindow]) or, outside it, the window holding [host].
+ */
+@Composable
+private fun Modifier.screenAnchor(host: java.awt.Component, onAnchor: (Rect) -> Unit): Modifier {
+    val window = LocalPlayerWindow.current
+    val density = LocalDensity.current.density
+    return onGloballyPositioned { coordinates ->
+        val root = (window ?: javax.swing.SwingUtilities.getWindowAncestor(host)) as? javax.swing.RootPaneContainer
+        val origin = root?.contentPane?.takeIf { it.isShowing }?.locationOnScreen ?: return@onGloballyPositioned
+        val bounds = coordinates.boundsInWindow()
+        onAnchor(Rect(origin.x + bounds.left / density, origin.y + bounds.top / density,
+            origin.x + bounds.right / density, origin.y + bounds.bottom / density))
+    }
+}
+
 /**
  * A player menu floating over the picture, as Android's do. mpv draws into a heavyweight native window that stays above
  * every Compose layer of the main window, so the menu is a modeless undecorated window of its own, sized once next to
- * [anchor] (bounds in the main window). compose.layers.type=WINDOW gave every popup such a window, but those follow
+ * [anchor] (on screen, see [screenAnchor]). compose.layers.type=WINDOW gave every popup such a window, but those follow
  * their draw bounds and crashed skiko when one resized while drawing; this one never resizes. It closes on Escape and
  * when it loses focus, which also covers the main window moving under it.
  */
@@ -557,23 +659,22 @@ private class PlayerMenuToggle {
 @Composable
 private fun PlayerMenuWindow(host: java.awt.Component, anchor: Rect, width: Dp, height: Dp, onDismiss: () -> Unit,
     content: @Composable () -> Unit) {
-    val density = LocalDensity.current.density
     val dismiss by rememberUpdatedState(onDismiss)
     val body by rememberUpdatedState(content)
     DisposableEffect(host) {
         val owner = javax.swing.SwingUtilities.getWindowAncestor(host)
-        val origin = (owner as? javax.swing.RootPaneContainer)?.contentPane?.takeIf { it.isShowing }?.locationOnScreen
-        if (owner == null || origin == null) {
+        if (owner == null || anchor == Rect.Zero) {
             dismiss()
             return@DisposableEffect onDispose { }
         }
+        openPlayerMenus.value++
         val w = width.value.roundToInt()
         val h = height.value.roundToInt()
         val screen = owner.graphicsConfiguration.bounds
         // Right-aligned with its button; above it (the bar sits under the picture), below when there is no room.
-        val x = (origin.x + anchor.right / density - w).roundToInt()
-        val above = origin.y + anchor.top / density - h - 6
-        val y = if (above >= screen.y) above else origin.y + anchor.bottom / density + 6
+        val x = (anchor.right - w).roundToInt()
+        val above = anchor.top - h - 6
+        val y = if (above >= screen.y) above else anchor.bottom + 6
         val dialog = ComposeDialog(owner, java.awt.Dialog.ModalityType.MODELESS)
         dialog.isUndecorated = true
         dialog.setBounds(x.coerceIn(screen.x, screen.x + screen.width - w),
@@ -590,10 +691,99 @@ private fun PlayerMenuWindow(host: java.awt.Component, anchor: Rect, width: Dp, 
             override fun windowLostFocus(event: java.awt.event.WindowEvent) = dismiss()
         })
         dialog.isVisible = true
-        onDispose { dialog.dispose() }
+        onDispose {
+            openPlayerMenus.value--
+            dialog.dispose()
+        }
     }
 }
 
+internal enum class PlayerOverlayPlacement { TOP, BOTTOM, CENTER }
+
+/**
+ * Part of the player's chrome over the picture: a transparent, non-focusable window of its own (for the reason in
+ * [PlayerMenuWindow]) that follows [host] as it moves and resizes, [height] tall across its width ([CENTER] is a
+ * 360-wide box in its middle). Hiding it keeps the window, so showing it again is immediate. Being non-focusable, a
+ * click on it leaves the keyboard with the player.
+ */
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+@Composable
+private fun PlayerOverlayWindow(host: java.awt.Component, visible: Boolean, placement: PlayerOverlayPlacement,
+    height: Dp, onHover: (Boolean) -> Unit, content: @Composable () -> Unit) {
+    val body by rememberUpdatedState(content)
+    val hover by rememberUpdatedState(onHover)
+    val wanted by rememberUpdatedState(visible)
+    // Brings the window in line with the picture and [visible]; set once the effect below runs.
+    val sync = remember { arrayOf<() -> Unit>({}) }
+    DisposableEffect(host) {
+        var owner: java.awt.Window? = null
+        var window: ComposeDialog? = null
+        // The canvas joins a window only after composition, and can leave it and come back: (re)create on demand.
+        fun create(into: java.awt.Window) = ComposeDialog(into, java.awt.Dialog.ModalityType.MODELESS).apply {
+            isUndecorated = true
+            isTransparent = true
+            focusableWindowState = false
+            val self = this
+            setContent {
+                CompositionLocalProvider(LocalPlayerWindow provides self) {
+                    MaterialTheme(colorScheme = darkColorScheme()) {
+                        Box(Modifier.fillMaxSize()
+                            .onPointerEvent(PointerEventType.Enter) { hover(true) }
+                            .onPointerEvent(PointerEventType.Exit) { hover(false) },
+                            contentAlignment = when (placement) {
+                                PlayerOverlayPlacement.TOP -> Alignment.TopCenter
+                                PlayerOverlayPlacement.BOTTOM -> Alignment.BottomCenter
+                                PlayerOverlayPlacement.CENTER -> Alignment.Center
+                            }) { body() }
+                    }
+                }
+            }
+        }
+        val follow = object : java.awt.event.ComponentAdapter() {
+            override fun componentMoved(event: java.awt.event.ComponentEvent) = sync[0]()
+            override fun componentResized(event: java.awt.event.ComponentEvent) = sync[0]()
+        }
+        sync[0] = sync@{
+            val showing = host.isShowing
+            val ancestor = javax.swing.SwingUtilities.getWindowAncestor(host)
+            if (ancestor !== owner) {
+                owner?.removeComponentListener(follow)
+                window?.dispose()
+                window = null
+                owner = ancestor
+                ancestor?.addComponentListener(follow)
+            }
+            if (!showing || ancestor == null) { window?.isVisible = false; return@sync }
+            if (!wanted) { window?.isVisible = false; return@sync }
+            val current = window ?: create(ancestor).also { window = it }
+            val origin = host.locationOnScreen
+            val h = height.value.roundToInt().coerceAtMost(host.height)
+            when (placement) {
+                PlayerOverlayPlacement.TOP -> current.setBounds(origin.x, origin.y, host.width, h)
+                PlayerOverlayPlacement.BOTTOM -> current.setBounds(origin.x, origin.y + host.height - h, host.width, h)
+                PlayerOverlayPlacement.CENTER -> {
+                    val w = 360.coerceAtMost(host.width)
+                    current.setBounds(origin.x + (host.width - w) / 2, origin.y + (host.height - h) / 2, w, h)
+                }
+            }
+            if (!current.isVisible) current.isVisible = true
+        }
+        val hierarchy = java.awt.event.HierarchyListener { event ->
+            if (event.changeFlags and java.awt.event.HierarchyEvent.SHOWING_CHANGED.toLong() != 0L) sync[0]()
+        }
+        host.addComponentListener(follow)
+        host.addHierarchyListener(hierarchy)
+        sync[0]()
+        onDispose {
+            sync[0] = {}
+            host.removeComponentListener(follow)
+            host.removeHierarchyListener(hierarchy)
+            owner?.removeComponentListener(follow)
+            window?.dispose()
+        }
+    }
+    LaunchedEffect(visible) { sync[0]() }
+}
 /** Shown instead of the player when no libmpv is installed: where to put it, and ways to watch meanwhile. */
 @Composable
 private fun MissingLibrary(controller: DesktopController, video: DesktopVideo, state: DesktopAppState, dataRoot: Path,

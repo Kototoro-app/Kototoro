@@ -6,7 +6,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
-import androidx.compose.ui.window.WindowPlacement
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -61,7 +60,6 @@ internal fun runDesktop(args: Array<String>) {
         var startupError by remember { mutableStateOf<String?>(null) }
         var closing by remember { mutableStateOf(false) }
         val windowState = rememberWindowState(width = 1260.dp, height = 850.dp)
-        var previousPlacement by remember { mutableStateOf(WindowPlacement.Floating) }
         val scope = rememberCoroutineScope()
         var startup by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
         // One quit path for the window button, the titlebar close and an update that needs the process to end.
@@ -106,14 +104,9 @@ internal fun runDesktop(args: Array<String>) {
         ) {
             window.minimumSize = Dimension(920, 620)
             val owner = controller
+            val fullscreen = rememberDesktopFullscreen(window, windowState)
             if (owner == null) DesktopStartup(startupError) else DesktopApp(owner, closing,
-                fullscreen = windowState.placement == WindowPlacement.Fullscreen, onToggleFullscreen = {
-                    if (windowState.placement == WindowPlacement.Fullscreen) windowState.placement = previousPlacement
-                    else {
-                        previousPlacement = windowState.placement
-                        windowState.placement = WindowPlacement.Fullscreen
-                    }
-                }, onExitRequest = requestExit)
+                fullscreen = fullscreen.active, onToggleFullscreen = fullscreen::toggle, onExitRequest = requestExit)
         }
     }
 }
