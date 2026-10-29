@@ -5,6 +5,8 @@ import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
 import org.skepsun.kototoro.core.model.isAdultTagKeyword
+import org.skepsun.kototoro.core.source.ChapterArtwork
+import org.skepsun.kototoro.core.source.ChapterArtworkCodec
 import org.skepsun.kototoro.parsers.model.ContentRating
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentChapter
@@ -114,6 +116,8 @@ fun Content.toAniyomiAnime(): SAnime {
 
 fun SEpisode.toKotoChapter(source: ContentSource, overrideNumber: Float? = null): ContentChapter {
     val chapterNumber = overrideNumber ?: (if (episode_number >= 0) episode_number else 0f)
+    val baseUrl = ((source as? AniyomiAnimeSource)?.animeCatalogueSource as? AnimeHttpSource)?.baseUrl.orEmpty()
+    val preview = resolveUrl(baseUrl, preview_url)
     return ContentChapter(
         id = generateId(url, source.name, "episode"),
         title = name.takeIf { it.isNotBlank() },
@@ -124,6 +128,7 @@ fun SEpisode.toKotoChapter(source: ContentSource, overrideNumber: Float? = null)
         uploadDate = date_upload,
         branch = scanlator,
         source = source,
+        sourceData = preview?.let { ChapterArtworkCodec.encode(ChapterArtwork(it)) },
     )
 }
 
@@ -134,6 +139,7 @@ fun ContentChapter.toAniyomiEpisode(): SEpisode {
         this.episode_number = this@toAniyomiEpisode.number
         this.date_upload = this@toAniyomiEpisode.uploadDate
         this.scanlator = this@toAniyomiEpisode.scanlator
+        this.preview_url = ChapterArtworkCodec.decode(this@toAniyomiEpisode.sourceData)?.posterUrl
     }
 }
 

@@ -18,8 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import org.skepsun.kototoro.core.source.SourceChapter
 import org.skepsun.kototoro.core.source.SourceContent
-import org.skepsun.kototoro.cloudstream.runtime.CloudstreamContentMetadata
-import org.skepsun.kototoro.cloudstream.runtime.CloudstreamMetadataCodec
+import org.skepsun.kototoro.core.source.ChapterArtworkCodec
 import org.skepsun.kototoro.core.ui.chapters.*
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderPanelIcons
 
@@ -107,14 +106,11 @@ internal fun DesktopChapterDirectoryCard(
 }
 
 private fun chapterThumbnailContent(chapter: SourceChapter): SourceContent? {
-    val metadata = CloudstreamMetadataCodec.decodeEpisode(chapter.sourceData) ?: return null
-    val url = metadata.posterUrl?.takeIf(String::isNotBlank) ?: return null
+    val metadata = ChapterArtworkCodec.decode(chapter.sourceData) ?: return null
     return SourceContent(
         id = chapter.id, title = desktopChapterTitle(chapter), altTitles = emptySet(),
         url = chapter.url, publicUrl = chapter.url, rating = 0f, contentRating = null,
-        coverUrl = url, tags = emptySet(), state = null, authors = emptySet(), source = chapter.source,
-        sourceData = CloudstreamMetadataCodec.encodeContent(
-            CloudstreamContentMetadata(posterHeaders = metadata.posterHeaders),
-        ),
+        coverUrl = metadata.posterUrl, tags = emptySet(), state = null, authors = emptySet(), source = chapter.source,
+        sourceData = chapter.sourceData,
     )
 }

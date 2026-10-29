@@ -95,6 +95,7 @@ class AniyomiSourceRuntimeTest {
         val source = client.getSources().single().name
         val details = client.getDetails(client.getList(source, 0, null, null).single(), SourceDetailsFetchMode.ALLOW_CACHE)
         val first = details.chapters!!.single { it.title == "First" }
+        assertEquals("https://anime.invalid/episode-preview.jpg", ChapterArtworkCodec.decode(first.sourceData)?.posterUrl)
         val pages = client.getPages(first, null)
         // The blank-URL video is dropped and the preferred 720p stream is offered before 360p.
         assertEquals(listOf("720p", "360p"), pages.map { it.playbackLabel })

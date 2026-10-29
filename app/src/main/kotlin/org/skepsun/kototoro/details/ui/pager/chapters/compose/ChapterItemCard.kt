@@ -23,7 +23,8 @@ import coil3.compose.AsyncImage
 import coil3.network.NetworkHeaders
 import coil3.network.httpHeaders
 import coil3.request.ImageRequest
-import org.skepsun.kototoro.cloudstream.runtime.CloudstreamMetadataCodec
+import org.skepsun.kototoro.core.source.ChapterArtworkCodec
+import org.skepsun.kototoro.core.util.ext.mangaSourceExtra
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.ui.adaptive.tvHorizontalEdgeGuard
 import org.skepsun.kototoro.core.ui.chapters.ChapterCardData
@@ -129,13 +130,16 @@ fun ChapterGridCard(
 
 @Composable
 private fun chapterThumbnail(item: ChapterListItem): (@Composable BoxScope.() -> Unit)? {
-    val metadata = remember(item.chapter.sourceData) { CloudstreamMetadataCodec.decodeEpisode(item.chapter.sourceData) }
-    val thumbnailUrl = metadata?.posterUrl?.takeIf(String::isNotBlank) ?: return null
+    val metadata = remember(item.chapter.sourceData) {
+        ChapterArtworkCodec.decode(item.chapter.sourceData)
+    } ?: return null
+    val thumbnailUrl = metadata.posterUrl
     val context = LocalContext.current
     val request = remember(context, item.chapter.source.name, metadata) {
         val cacheKey = "${item.chapter.source.name}:$thumbnailUrl:${metadata.posterHeaders.hashCode()}"
         ImageRequest.Builder(context)
             .data(thumbnailUrl)
+            .mangaSourceExtra(item.chapter.source)
             .httpHeaders(NetworkHeaders.Builder().apply {
                 metadata.posterHeaders.forEach { (name, value) -> set(name, value) }
             }.build())
