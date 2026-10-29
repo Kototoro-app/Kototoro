@@ -19,10 +19,9 @@ import java.nio.file.Path
 import kotlin.system.exitProcess
 
 fun main(args: Array<String>) {
-    // The video surface is Swing interop (a native mpv canvas, or the macOS frame panel), which always stacks above
-    // Compose content drawn into the window; menus and dialogs opened over the picture were hidden behind it. Popup
-    // layers as their own windows stay on top of it. Read once by Compose, so it is set before any Compose class loads.
-    if (System.getProperty("compose.layers.type") == null) System.setProperty("compose.layers.type", "WINDOW")
+    // Keep Compose's default popup layers. compose.layers.type=WINDOW (once set here so player menus stay above the
+    // native video surface) crashed the JVM on the first dropdown or dialog: on Windows a popup window's bounds change
+    // re-renders it inside its own frame and skiko dies in PictureRecorder.finishRecordingAsPicture.
     try {
         runDesktop(args)
     } catch (error: Throwable) {

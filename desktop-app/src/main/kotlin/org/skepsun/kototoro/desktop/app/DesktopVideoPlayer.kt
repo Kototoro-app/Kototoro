@@ -1,25 +1,36 @@
 package org.skepsun.kototoro.desktop.app
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.awt.ComposeDialog
 import androidx.compose.ui.awt.SwingPanel
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.*
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sun.jna.Native
@@ -44,6 +55,7 @@ import java.awt.Toolkit
 import java.awt.datatransfer.StringSelection
 import java.nio.file.Files
 import java.nio.file.Path
+import kotlin.math.roundToInt
 
 private val PlayerBackground = Color(0xFF0E1116)
 private val PlayerPanel = Color(0xFF171B22)
@@ -254,6 +266,8 @@ private fun PlayerContent(controller: DesktopController, state: DesktopAppState,
     }
     var episodesOpen by remember { mutableStateOf(false) }
     var castOpen by remember { mutableStateOf(false) }
+    var castAnchor by remember { mutableStateOf(Rect.Zero) }
+    val castMenu = remember { PlayerMenuToggle() }
     // While a renderer plays, this window stays paused; when the cast ends it continues from the renderer's position.
     LaunchedEffect(player, state.cast) { if (state.cast != null) player?.let { p -> withContext(Dispatchers.IO) { runCatching { p.setPaused(true) } } } }
     LaunchedEffect(player, state.castEndedAt) {
@@ -303,7 +317,8 @@ private fun PlayerContent(controller: DesktopController, state: DesktopAppState,
                     Text(video.chapter.title ?: desktopText("common.episodeTitle", video.chapter.number), color = PlayerMuted, fontSize = 12.sp,
                         maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-                TextButton({ castOpen = true }, enabled = player != null, modifier = Modifier.testTag("video-cast")) {
+                TextButton({ if (castMenu.mayOpen()) castOpen = true }, enabled = player != null,
+                    modifier = Modifier.onGloballyPositioned { castAnchor = it.boundsInWindow() }.testTag("video-cast")) {
                     Text(if (state.cast != null) desktopText("video.casting") else desktopText("video.cast"), color = PlayerText)
                 }
                 TextButton({ episodesOpen = !episodesOpen }, modifier = Modifier.testTag("video-episodes")) {
@@ -324,16 +339,17 @@ private fun PlayerContent(controller: DesktopController, state: DesktopAppState,
             if (active != null) {
                 CastControls(active, onEnd = { controller.endCast() })
             } else {
-                Controls(video, mpv, failure ?: enhancementError, hasPrevious, hasNext, !closing && player != null, controller, ::control,
-                    state.videoEnhancement, state.videoSettings, jump)
+                Controls(canvas, video, mpv, failure ?: enhancementError, hasPrevious, hasNext, !closing && player != null,
+                    controller, ::control, state.videoEnhancement, state.videoSettings, jump)
             }
         }
         // Compose content cannot cover mpv's native window, so the bubble floats over the controls, not the picture.
         seekFeedback?.let { VideoSeekFeedback(it, Modifier.fillMaxWidth().height(120.dp).align(Alignment.BottomCenter)) }
     }
     if (castOpen) {
-        CastDialog(onDismiss = { castOpen = false }) { device ->
+        CastDialog(canvas, castAnchor, onDismiss = { castOpen = false; castMenu.closed() }) { device ->
             castOpen = false
+            castMenu.closed()
             controller.startCast(device)
         }
     }
@@ -355,9 +371,9 @@ private fun EpisodeList(controller: DesktopController, state: DesktopAppState, v
 }
 
 @Composable
-private fun Controls(video: DesktopVideo, mpv: MpvState, failure: String?, hasPrevious: Boolean, hasNext: Boolean,
-    enabled: Boolean, controller: DesktopController, control: ((MpvPlayer) -> Unit) -> Unit, enhancement: MpvEnhancement,
-    settings: DesktopVideoSettings, jump: (Double) -> Unit) {
+private fun Controls(host: java.awt.Component, video: DesktopVideo, mpv: MpvState, failure: String?, hasPrevious: Boolean,
+    hasNext: Boolean, enabled: Boolean, controller: DesktopController, control: ((MpvPlayer) -> Unit) -> Unit,
+    enhancement: MpvEnhancement, settings: DesktopVideoSettings, jump: (Double) -> Unit) {
     Column(Modifier.fillMaxWidth().testTag("video-controls")) {
         // Android draws a black gradient out of the control bar (`bg_video_bottom_gradient`), the second opacity.
         if (settings.gradientOpacity > 0f) {
@@ -372,15 +388,16 @@ private fun Controls(video: DesktopVideo, mpv: MpvState, failure: String?, hasPr
                     ),
             )
         }
-        ControlsBar(video, mpv, failure, hasPrevious, hasNext, enabled, controller, control, enhancement, settings, jump)
+        ControlsBar(host, video, mpv, failure, hasPrevious, hasNext, enabled, controller, control, enhancement, settings, jump)
     }
 }
 
 /** The bar itself: its panel is translucent by Android's `video_controls_alpha`, so the video shows through. */
 @Composable
-private fun ControlsBar(video: DesktopVideo, mpv: MpvState, failure: String?, hasPrevious: Boolean, hasNext: Boolean,
-    enabled: Boolean, controller: DesktopController, control: ((MpvPlayer) -> Unit) -> Unit, enhancement: MpvEnhancement,
-    settings: DesktopVideoSettings, jump: (Double) -> Unit) {
+private fun ControlsBar(host: java.awt.Component, video: DesktopVideo, mpv: MpvState, failure: String?,
+    hasPrevious: Boolean, hasNext: Boolean, enabled: Boolean, controller: DesktopController,
+    control: ((MpvPlayer) -> Unit) -> Unit, enhancement: MpvEnhancement, settings: DesktopVideoSettings,
+    jump: (Double) -> Unit) {
     var dragging by remember { mutableStateOf<Float?>(null) }
     Column(
         Modifier
@@ -415,19 +432,19 @@ private fun ControlsBar(video: DesktopVideo, mpv: MpvState, failure: String?, ha
             PlayerButton("+10s", enabled, "video-forward") { jump(10.0) }
             PlayerButton(desktopText("video.nextEpisode"), enabled && hasNext) { controller.changeVideoEpisode(true) }
             Spacer(Modifier.weight(1f))
-            Menu(desktopText("video.quality", video.label(video.selected)), video.streams.indices.map { video.label(it) to (it == video.selected) },
+            Menu(host, desktopText("video.quality", video.label(video.selected)), video.streams.indices.map { video.label(it) to (it == video.selected) },
                 enabled && video.streams.size > 1, "video-quality") { controller.selectVideoStream(it) }
-            Menu(desktopText("video.subtitles"), listOf(desktopText("common.close") to mpv.subtitles.none { it.selected }) + mpv.subtitles.map { it.label to it.selected },
+            Menu(host, desktopText("video.subtitles"), listOf(desktopText("common.close") to mpv.subtitles.none { it.selected }) + mpv.subtitles.map { it.label to it.selected },
                 enabled && mpv.subtitles.isNotEmpty(), "video-subtitles") { index ->
                 control { it.selectSubtitle(if (index == 0) null else mpv.subtitles[index - 1].id) }
             }
-            Menu(desktopText("video.audio"), mpv.audio.map { it.label to it.selected }, enabled && mpv.audio.size > 1, "video-audio") { index ->
+            Menu(host, desktopText("video.audio"), mpv.audio.map { it.label to it.selected }, enabled && mpv.audio.size > 1, "video-audio") { index ->
                 control { it.selectAudio(mpv.audio[index].id) }
             }
-            Menu("${trimSpeed(mpv.speed)}x", Speeds.map { "${trimSpeed(it)}x" to (it == mpv.speed) }, enabled, "video-speed") { index ->
+            Menu(host, "${trimSpeed(mpv.speed)}x", Speeds.map { "${trimSpeed(it)}x" to (it == mpv.speed) }, enabled, "video-speed") { index ->
                 control { it.setSpeed(Speeds[index]) }
             }
-            EnhancementMenu(enhancement, enabled) { controller.setVideoEnhancement(it) }
+            EnhancementMenu(host, enhancement, enabled) { controller.setVideoEnhancement(it) }
             PlayerButton(if (mpv.muted) desktopText("video.unmute") else desktopText("video.mute"), enabled) { control { it.setMuted(!mpv.muted) } }
             Slider(mpv.volume.toFloat(), { volume -> control { it.setVolume(volume.toInt()) } }, valueRange = 0f..130f,
                 enabled = enabled, modifier = Modifier.width(120.dp).testTag("video-volume"))
@@ -443,16 +460,22 @@ private fun PlayerButton(label: String, enabled: Boolean, tag: String? = null, o
 }
 
 @Composable
-private fun Menu(label: String, entries: List<Pair<String, Boolean>>, enabled: Boolean, tag: String, onSelect: (Int) -> Unit) {
+private fun Menu(host: java.awt.Component, label: String, entries: List<Pair<String, Boolean>>, enabled: Boolean,
+    tag: String, onSelect: (Int) -> Unit) {
     var open by remember { mutableStateOf(false) }
-    Box {
-        TextButton({ open = true }, enabled = enabled, modifier = Modifier.testTag(tag)) {
-            Text(label, color = if (enabled) PlayerText else PlayerMuted, maxLines = 1)
-        }
-        DropdownMenu(open, { open = false }) {
-            entries.forEachIndexed { index, (title, selected) ->
-                DropdownMenuItem(onClick = { open = false; onSelect(index) },
-                    text = { Text((if (selected) "✓ " else "   ") + title) })
+    var anchor by remember { mutableStateOf(Rect.Zero) }
+    val toggle = remember { PlayerMenuToggle() }
+    TextButton({ if (toggle.mayOpen()) open = true }, enabled = enabled,
+        modifier = Modifier.onGloballyPositioned { anchor = it.boundsInWindow() }.testTag(tag)) {
+        Text(label, color = if (enabled) PlayerText else PlayerMuted, maxLines = 1)
+    }
+    if (open) {
+        val close = { open = false; toggle.closed() }
+        PlayerMenuWindow(host, anchor, 240.dp, (entries.size * PlayerMenuRowHeight.value + 12).coerceAtMost(420f).dp, close) {
+            LazyColumn(Modifier.fillMaxSize()) {
+                itemsIndexed(entries) { index, (title, selected) ->
+                    PlayerMenuRow(title, selected, "$tag:$index") { close(); onSelect(index) }
+                }
             }
         }
     }
@@ -460,31 +483,114 @@ private fun Menu(label: String, entries: List<Pair<String, Boolean>>, enabled: B
 
 /** Anime4K presets and FSR, as in the Android player's enhancement dialog; FSR adds its sharpness slider. */
 @Composable
-private fun EnhancementMenu(enhancement: MpvEnhancement, enabled: Boolean, onChange: (MpvEnhancement) -> Unit) {
+private fun EnhancementMenu(host: java.awt.Component, enhancement: MpvEnhancement, enabled: Boolean,
+    onChange: (MpvEnhancement) -> Unit) {
     var open by remember { mutableStateOf(false) }
-    Box {
-        TextButton({ open = true }, enabled = enabled, modifier = Modifier.testTag("video-enhancement")) {
-            Text(if (enhancement.mode == MpvEnhancementMode.OFF) desktopText("video.enhancement") else enhancement.mode.title,
-                color = if (enabled) PlayerText else PlayerMuted, maxLines = 1)
-        }
-        DropdownMenu(open, { open = false }) {
-            MpvEnhancementMode.entries.forEach { mode ->
-                DropdownMenuItem(onClick = { onChange(enhancement.copy(mode = mode))
-                    if (mode != MpvEnhancementMode.FSR) open = false },
-                    modifier = Modifier.testTag("video-enhancement:${mode.name}"),
-                    text = { Text((if (mode == enhancement.mode) "✓ " else "   ") + mode.title) })
-            }
-            if (enhancement.mode == MpvEnhancementMode.FSR) {
-                Column(Modifier.width(260.dp).padding(horizontal = 16.dp, vertical = 8.dp)) {
-                    Text(desktopText("video.fsrSharpness", (enhancement.fsrSharpness * 100).toInt()), fontSize = 13.sp)
-                    var draft by remember(enhancement.fsrSharpness) { mutableStateOf(enhancement.fsrSharpness) }
-                    Slider(draft, { draft = it }, valueRange = 0f..1f,
-                        onValueChangeFinished = { onChange(enhancement.copy(fsrSharpness = draft)) })
+    var anchor by remember { mutableStateOf(Rect.Zero) }
+    val toggle = remember { PlayerMenuToggle() }
+    TextButton({ if (toggle.mayOpen()) open = true }, enabled = enabled,
+        modifier = Modifier.onGloballyPositioned { anchor = it.boundsInWindow() }.testTag("video-enhancement")) {
+        Text(if (enhancement.mode == MpvEnhancementMode.OFF) desktopText("video.enhancement") else enhancement.mode.title,
+            color = if (enabled) PlayerText else PlayerMuted, maxLines = 1)
+    }
+    if (open) {
+        val close = { open = false; toggle.closed() }
+        // Sized for the FSR slider too, so choosing FSR does not have to resize the window.
+        val height = MpvEnhancementMode.entries.size * PlayerMenuRowHeight.value + 150
+        PlayerMenuWindow(host, anchor, 300.dp, height.coerceAtMost(520f).dp, close) {
+            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                MpvEnhancementMode.entries.forEach { mode ->
+                    PlayerMenuRow(mode.title, mode == enhancement.mode, "video-enhancement:${mode.name}") {
+                        onChange(enhancement.copy(mode = mode))
+                        if (mode != MpvEnhancementMode.FSR) close()
+                    }
                 }
+                if (enhancement.mode == MpvEnhancementMode.FSR) {
+                    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+                        Text(desktopText("video.fsrSharpness", (enhancement.fsrSharpness * 100).toInt()), color = PlayerText,
+                            fontSize = 13.sp)
+                        var draft by remember(enhancement.fsrSharpness) { mutableStateOf(enhancement.fsrSharpness) }
+                        Slider(draft, { draft = it }, valueRange = 0f..1f,
+                            onValueChangeFinished = { onChange(enhancement.copy(fsrSharpness = draft)) })
+                    }
+                }
+                Text(desktopText("video.enhancementHint"), color = PlayerMuted, fontSize = 12.sp,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp))
             }
-            Text(desktopText("video.enhancementHint"), fontSize = 12.sp,
-                modifier = Modifier.width(260.dp).padding(horizontal = 16.dp, vertical = 6.dp))
         }
+    }
+}
+
+private val PlayerMenuRowHeight = 44.dp
+private val PlayerMenuAccent = Color(0xFF7FD1B9)
+
+/** Android's player menu row (`VideoSelectionDialog`): the chosen entry in the accent colour with a check. */
+@Composable
+private fun PlayerMenuRow(title: String, selected: Boolean, tag: String, onClick: () -> Unit) {
+    Row(Modifier.fillMaxWidth().heightIn(min = PlayerMenuRowHeight).clickable(onClick = onClick)
+        .padding(horizontal = 16.dp).testTag(tag), verticalAlignment = Alignment.CenterVertically) {
+        Text(title, color = if (selected) PlayerMenuAccent else PlayerText, fontSize = 14.sp,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1,
+            overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        if (selected) Icon(painterResource("icons/ic_check.svg"), null, tint = PlayerMenuAccent, modifier = Modifier.size(18.dp))
+    }
+}
+
+/**
+ * A menu window closes when it loses focus, which a click on its own button causes first; that click must not open
+ * it again straight away.
+ */
+private class PlayerMenuToggle {
+    private var closedAt = 0L
+    fun closed() { closedAt = System.currentTimeMillis() }
+    fun mayOpen() = System.currentTimeMillis() - closedAt > 300
+}
+
+/**
+ * A player menu floating over the picture, as Android's do. mpv draws into a heavyweight native window that stays above
+ * every Compose layer of the main window, so the menu is a modeless undecorated window of its own, sized once next to
+ * [anchor] (bounds in the main window). compose.layers.type=WINDOW gave every popup such a window, but those follow
+ * their draw bounds and crashed skiko when one resized while drawing; this one never resizes. It closes on Escape and
+ * when it loses focus, which also covers the main window moving under it.
+ */
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+@Composable
+private fun PlayerMenuWindow(host: java.awt.Component, anchor: Rect, width: Dp, height: Dp, onDismiss: () -> Unit,
+    content: @Composable () -> Unit) {
+    val density = LocalDensity.current.density
+    val dismiss by rememberUpdatedState(onDismiss)
+    val body by rememberUpdatedState(content)
+    DisposableEffect(host) {
+        val owner = javax.swing.SwingUtilities.getWindowAncestor(host)
+        val origin = (owner as? javax.swing.RootPaneContainer)?.contentPane?.takeIf { it.isShowing }?.locationOnScreen
+        if (owner == null || origin == null) {
+            dismiss()
+            return@DisposableEffect onDispose { }
+        }
+        val w = width.value.roundToInt()
+        val h = height.value.roundToInt()
+        val screen = owner.graphicsConfiguration.bounds
+        // Right-aligned with its button; above it (the bar sits under the picture), below when there is no room.
+        val x = (origin.x + anchor.right / density - w).roundToInt()
+        val above = origin.y + anchor.top / density - h - 6
+        val y = if (above >= screen.y) above else origin.y + anchor.bottom / density + 6
+        val dialog = ComposeDialog(owner, java.awt.Dialog.ModalityType.MODELESS)
+        dialog.isUndecorated = true
+        dialog.setBounds(x.coerceIn(screen.x, screen.x + screen.width - w),
+            y.roundToInt().coerceIn(screen.y, screen.y + screen.height - h), w, h)
+        dialog.setContent(onPreviewKeyEvent = { event ->
+            (event.type == KeyEventType.KeyDown && event.key == Key.Escape).also { if (it) dismiss() }
+        }, onKeyEvent = { false }) {
+            MaterialTheme(colorScheme = darkColorScheme()) {
+                Box(Modifier.fillMaxSize().background(PlayerPanel).border(1.dp, Color(0xFF2A303A))
+                    .padding(vertical = 6.dp)) { body() }
+            }
+        }
+        dialog.addWindowFocusListener(object : java.awt.event.WindowAdapter() {
+            override fun windowLostFocus(event: java.awt.event.WindowEvent) = dismiss()
+        })
+        dialog.isVisible = true
+        onDispose { dialog.dispose() }
     }
 }
 
@@ -594,30 +700,41 @@ class DesktopCast private constructor(
     }
 }
 
+/** Android's DLNA device dialog, as a player menu window under the cast button (a Compose dialog would sit under mpv). */
 @Composable
-private fun CastDialog(onDismiss: () -> Unit, onSelect: (org.skepsun.kototoro.desktop.player.DlnaDevice) -> Unit) {
+private fun CastDialog(host: java.awt.Component, anchor: Rect, onDismiss: () -> Unit,
+    onSelect: (org.skepsun.kototoro.desktop.player.DlnaDevice) -> Unit) {
     var devices by remember { mutableStateOf<List<org.skepsun.kototoro.desktop.player.DlnaDevice>?>(null) }
     var round by remember { mutableStateOf(0) }
     LaunchedEffect(round) {
         devices = null
         devices = withContext(Dispatchers.IO) { runCatching { org.skepsun.kototoro.desktop.player.DlnaDiscovery.discover() }.getOrDefault(emptyList()) }
     }
-    AlertDialog(onDismissRequest = onDismiss, title = { Text(desktopText("video.castDialogTitle")) }, text = {
-        Column(Modifier.widthIn(min = 360.dp).testTag("cast-dialog"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            val found = devices
-            when {
-                found == null -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp); Text(desktopText("video.castSearching"))
-                }
-                found.isEmpty() -> Text(desktopText("video.castNotFound"))
-                else -> found.forEach { device ->
-                    OutlinedButton({ onSelect(device) }, modifier = Modifier.fillMaxWidth().testTag("cast-device:${device.name}")) {
-                        Text(device.name)
+    PlayerMenuWindow(host, anchor, 380.dp, 320.dp, onDismiss) {
+        Column(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp).testTag("cast-dialog"),
+            verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(desktopText("video.castDialogTitle"), color = PlayerText, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                val found = devices
+                when {
+                    found == null -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                        Text(desktopText("video.castSearching"), color = PlayerText)
+                    }
+                    found.isEmpty() -> Text(desktopText("video.castNotFound"), color = PlayerMuted)
+                    else -> found.forEach { device ->
+                        OutlinedButton({ onSelect(device) }, modifier = Modifier.fillMaxWidth().testTag("cast-device:${device.name}")) {
+                            Text(device.name)
+                        }
                     }
                 }
             }
+            Row(Modifier.align(Alignment.End)) {
+                TextButton({ round++ }) { Text(desktopText("video.castSearchAgain")) }
+                TextButton(onDismiss) { Text(desktopText("common.cancel")) }
+            }
         }
-    }, confirmButton = { TextButton({ round++ }) { Text(desktopText("video.castSearchAgain")) } }, dismissButton = { TextButton(onDismiss) { Text(desktopText("common.cancel")) } })
+    }
 }
 
 @Composable
