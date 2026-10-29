@@ -52,7 +52,11 @@ internal fun DesktopTiledImage(image: DesktopReaderImage, node: VisibleNode?, di
                     val y = size.height / image.height
                     val bounds = tile.logicalRect
                     val region = tile.decodeRegion
-                    clipRect(bounds.left * x, bounds.top * y, bounds.right * x, bounds.bottom * y) {
+                    // Anti-aliased clips on fractional edges leave each shared edge half transparent, which drew a
+                    // grid over the page (issue #602); reaching into the neighbour's seam padding keeps it opaque.
+                    val right = bounds.right * x + if (bounds.right < image.width) TILE_SEAM_OVERLAP_PX else 0f
+                    val bottom = bounds.bottom * y + if (bounds.bottom < image.height) TILE_SEAM_OVERLAP_PX else 0f
+                    clipRect(bounds.left * x, bounds.top * y, right, bottom) {
                         val left = (region.left * x).roundToInt()
                         val top = (region.top * y).roundToInt()
                         drawImage(pixels, dstOffset = IntOffset(left, top), dstSize = IntSize(
@@ -67,6 +71,9 @@ internal fun DesktopTiledImage(image: DesktopReaderImage, node: VisibleNode?, di
         }
     }
 }
+
+/** Stays inside [org.skepsun.kototoro.reader.core.TileGrid.DEFAULT_SEAM_PADDING_PX] at any chosen sample size. */
+private const val TILE_SEAM_OVERLAP_PX = 1f
 
 internal val DesktopReaderImage.tiled: Boolean get() = regionSupported &&
     (height > 4096 || width.toLong() * height > DesktopImageDecoder.MAXIMUM_PIXELS)
