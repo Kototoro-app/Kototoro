@@ -198,6 +198,7 @@ internal fun DesktopDetailsChapters(
                             }
                         },
                         modifier = Modifier.testTag("read-chapter:${chapter.id}"),
+                        covers = controller.session.covers,
                         onLongClick = {
                             if (enabled) {
                                 ui.selecting = true

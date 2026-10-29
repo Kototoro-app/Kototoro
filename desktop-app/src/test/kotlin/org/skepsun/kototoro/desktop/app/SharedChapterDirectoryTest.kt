@@ -1,14 +1,19 @@
 package org.skepsun.kototoro.desktop.app
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.background
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Text
+import androidx.compose.material3.Surface
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asSkiaBitmap
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -18,8 +23,49 @@ import androidx.compose.ui.unit.dp
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import org.skepsun.kototoro.core.ui.chapters.*
+import org.jetbrains.skia.Image
+import java.nio.file.Files
+import java.nio.file.Path
 
 class SharedChapterDirectoryTest {
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun `episode thumbnails sit before list titles and above grid titles at narrow and wide widths`() {
+        for (width in listOf(340, 960)) for (grid in listOf(false, true)) {
+            runDesktopComposeUiTest(width = width, height = 240) {
+                var clicks = 0
+                setContent {
+                    DesktopTheme(DesktopAppearance.LIGHT) {
+                        Surface(color = MaterialTheme.colorScheme.background) {
+                            Box(Modifier.padding(12.dp).width(if (grid) 180.dp else 316.dp)) {
+                                val data = ChapterCardData("Episode 12", "A familiar scene", isBookmarked = true)
+                                val image: @Composable BoxScope.() -> Unit = {
+                                    Box(Modifier.fillMaxSize().background(Color(0xFF385D86)).testTag("thumbnail"))
+                                }
+                                if (grid) ChapterGridCard(data, false, { clicks++ },
+                                    modifier = Modifier.testTag("episode"), thumbnail = image)
+                                else ChapterListCard(data, false, { clicks++ },
+                                    modifier = Modifier.testTag("episode"), thumbnail = image)
+                            }
+                        }
+                    }
+                }
+                val thumbnail = onNodeWithTag("thumbnail", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+                val title = onNodeWithText("Episode 12", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+                assertEquals(16f / 9f, thumbnail.width / thumbnail.height, .03f)
+                if (grid) assertTrue(title.top >= thumbnail.bottom) else assertTrue(title.left >= thumbnail.right)
+                onNodeWithTag("episode").performClick()
+                assertEquals(1, clicks)
+                onNodeWithContentDescription("Bookmarked", useUnmergedTree = true).assertExists()
+                val path = Files.createDirectories(Path.of("build/reports/desktop-smoke"))
+                    .resolve("episode-thumbnail-$width-${if (grid) "grid" else "list"}.png")
+                Image.makeFromBitmap(onRoot().captureToImage().asSkiaBitmap()).use { image ->
+                    image.encodeToData()?.use { Files.write(path, it.bytes) }
+                }
+            }
+        }
+    }
+
     private data class Entry(val number: Int, val header: Boolean = false)
     private val entries = (0..119).flatMap { number ->
         if (number % 10 == 0) listOf(Entry(number, true), Entry(number)) else listOf(Entry(number))

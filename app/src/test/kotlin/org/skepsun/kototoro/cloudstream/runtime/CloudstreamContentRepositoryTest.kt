@@ -21,6 +21,21 @@ import org.skepsun.kototoro.cloudstream.model.CloudstreamSource
 class CloudstreamContentRepositoryTest {
 
 	@Test
+	fun `episode thumbnail and artwork headers survive chapter metadata round trips`() = runTest {
+		val response = testApi.newTvSeriesLoadResponse("Series", "/series", TvType.TvSeries,
+			listOf(testApi.newEpisode("episode") { posterUrl = "https://image.test/episode.jpg" })) {
+			posterHeaders = mapOf("Referer" to "https://example.test/")
+		}
+
+		val chapter = mapCloudstreamChapters(response, testSource).single()
+		val metadata = CloudstreamMetadataCodec.decodeEpisode(chapter.sourceData)
+
+		assertEquals("https://image.test/episode.jpg", metadata?.posterUrl)
+		assertEquals(mapOf("Referer" to "https://example.test/"), metadata?.posterHeaders)
+		assertTrue(CloudstreamMetadataCodec.decodeEpisode("{\"posterUrl\":\"old.jpg\"}")!!.posterHeaders.isEmpty())
+	}
+
+	@Test
 	fun `blank or structured episode names use a readable fallback`() {
 		assertEquals("Episode 6", resolveCloudstreamEpisodeTitle(null, 6))
 		assertEquals("Episode 6", resolveCloudstreamEpisodeTitle("  ", 6))

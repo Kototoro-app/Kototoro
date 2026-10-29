@@ -531,6 +531,7 @@ fun mapCloudstreamChapters(response: LoadResponse, source: CloudstreamSource): L
                         score = episode.score.toKotoRating(),
                         description = episode.description,
                         runtimeSeconds = episode.runTime,
+                        posterHeaders = CloudstreamArtworkHeaders.persistable(response.posterHeaders.orEmpty()),
                     ),
                 ),
             )

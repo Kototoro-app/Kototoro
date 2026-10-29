@@ -1,6 +1,8 @@
 package org.skepsun.kototoro.details.ui.pager.chapters.compose
 
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
@@ -11,10 +13,17 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import org.skepsun.kototoro.R
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.layout.ContentScale
+import coil3.compose.AsyncImage
+import coil3.network.NetworkHeaders
+import coil3.network.httpHeaders
+import coil3.request.ImageRequest
+import org.skepsun.kototoro.cloudstream.runtime.CloudstreamMetadataCodec
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.ui.adaptive.tvHorizontalEdgeGuard
 import org.skepsun.kototoro.core.ui.chapters.ChapterCardData
@@ -45,6 +54,7 @@ fun ChapterListCard(
     // The row's click target stops before the trailing buttons, so on a television RIGHT steps from
     // the title onto the download / translate buttons instead of leaving the panel.
     focusModifier = Modifier.tvFocusable(shape = RoundedCornerShape(8.dp), borderWidth = 2.dp, addFocusTarget = false),
+    thumbnail = chapterThumbnail(item),
     actions = if (onDownload != null || onTranslate != null) {
         {
             // Whatever the row ends with has nothing to its right. Without the guard RIGHT scrolls
@@ -114,7 +124,34 @@ fun ChapterGridCard(
     focusRequester = focusRequester,
     modifier = modifier,
     focusModifier = Modifier.tvFocusable(shape = RoundedCornerShape(8.dp), borderWidth = 3.dp, addFocusTarget = false),
+    thumbnail = chapterThumbnail(item),
 )
+
+@Composable
+private fun chapterThumbnail(item: ChapterListItem): (@Composable BoxScope.() -> Unit)? {
+    val metadata = remember(item.chapter.sourceData) { CloudstreamMetadataCodec.decodeEpisode(item.chapter.sourceData) }
+    val thumbnailUrl = metadata?.posterUrl?.takeIf(String::isNotBlank) ?: return null
+    val context = LocalContext.current
+    val request = remember(context, item.chapter.source.name, metadata) {
+        val cacheKey = "${item.chapter.source.name}:$thumbnailUrl:${metadata.posterHeaders.hashCode()}"
+        ImageRequest.Builder(context)
+            .data(thumbnailUrl)
+            .httpHeaders(NetworkHeaders.Builder().apply {
+                metadata.posterHeaders.forEach { (name, value) -> set(name, value) }
+            }.build())
+            .memoryCacheKey(cacheKey)
+            .diskCacheKey(cacheKey)
+            .build()
+    }
+    return {
+        AsyncImage(
+            model = request,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize(),
+        )
+    }
+}
 
 @Composable
 private fun ChapterListItem.cardData() = ChapterCardData(

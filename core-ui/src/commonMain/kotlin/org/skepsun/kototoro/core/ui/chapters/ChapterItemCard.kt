@@ -50,6 +50,7 @@ fun ChapterListCard(
     focusModifier: Modifier = Modifier,
     enabled: Boolean = true,
     actions: (@Composable RowScope.() -> Unit)? = null,
+    thumbnail: (@Composable BoxScope.() -> Unit)? = null,
 ) {
     val titleColor = when {
         item.isCurrent -> MaterialTheme.colorScheme.primary
@@ -85,6 +86,11 @@ fun ChapterListCard(
                 .heightIn(min = 56.dp).padding(horizontal = 8.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            if (thumbnail != null) {
+                Box(Modifier.padding(end = 12.dp).width(80.dp).aspectRatio(16f / 9f).clip(RoundedCornerShape(6.dp))) {
+                    thumbnail()
+                }
+            }
             if (item.isCurrent) {
                 Icon(ReaderPanelIcons.CurrentChapter, null, tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(end = 8.dp).size(16.dp))
@@ -140,7 +146,7 @@ fun ChapterListCard(
     }
 }
 
-/** Android's square chapter card with its size-dependent typography and corner status markers. */
+/** Chapter grid card; hosts supply episode artwork while status, title and interaction stay shared. */
 @Composable
 fun ChapterGridCard(
     item: ChapterCardData,
@@ -152,6 +158,7 @@ fun ChapterGridCard(
     focusModifier: Modifier = Modifier,
     enabled: Boolean = true,
     actions: (@Composable RowScope.() -> Unit)? = null,
+    thumbnail: (@Composable BoxScope.() -> Unit)? = null,
 ) {
     val titleColor = if (item.isUnread) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
     Column(
@@ -163,7 +170,7 @@ fun ChapterGridCard(
             .semantics { if (!enabled) disabled() },
     ) {
     Card(
-        modifier = Modifier.fillMaxWidth().aspectRatio(1f),
+        modifier = Modifier.fillMaxWidth().aspectRatio(if (thumbnail == null) 1f else 16f / 9f),
         shape = RoundedCornerShape(8.dp),
         colors = CardDefaults.cardColors(containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer
             else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .5f)),
@@ -176,8 +183,10 @@ fun ChapterGridCard(
                 maxWidth < 88.dp -> MaterialTheme.typography.bodyMedium
                 else -> MaterialTheme.typography.titleMedium
             }
-            Text(item.title, style = titleStyle, color = titleColor, maxLines = 1, textAlign = TextAlign.Center,
-                overflow = TextOverflow.Ellipsis, modifier = Modifier.align(Alignment.Center))
+            if (thumbnail != null) thumbnail() else {
+                Text(item.title, style = titleStyle, color = titleColor, maxLines = 1, textAlign = TextAlign.Center,
+                    overflow = TextOverflow.Ellipsis, modifier = Modifier.align(Alignment.Center))
+            }
             Row(Modifier.align(Alignment.BottomEnd).padding(6.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (item.isDownloaded) {
                     Icon(ReaderPanelIcons.SaveOk, "Downloaded", tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -201,6 +210,10 @@ fun ChapterGridCard(
                     modifier = Modifier.align(Alignment.TopStart).padding(6.dp).size(16.dp))
             }
         }
+    }
+    if (thumbnail != null) {
+        Text(item.title, style = MaterialTheme.typography.labelMedium, color = titleColor, maxLines = 2,
+            overflow = TextOverflow.Ellipsis, modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
     }
     if (actions != null) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, content = actions)
