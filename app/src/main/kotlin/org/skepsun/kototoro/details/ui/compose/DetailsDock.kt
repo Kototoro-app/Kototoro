@@ -396,7 +396,8 @@ internal fun DetailsPaneActionsRow(
                     else -> 0
                 }
                 val tabScrollStepPx = with(LocalDensity.current) {
-                    (tabButtonWidth + tabSpacing).roundToPx()
+                    // Collapsed tabs have no spacing, so scrolling must use the same button step.
+                    (tabButtonWidth + if (showAllDockTabs) tabSpacing else 0.dp).roundToPx()
                 }
                 LaunchedEffect(selectedDockTabIndex, tabsScrollState.maxValue, tabScrollStepPx) {
                     tabsScrollState.animateScrollTo(
