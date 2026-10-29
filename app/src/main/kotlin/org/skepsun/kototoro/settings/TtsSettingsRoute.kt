@@ -51,6 +51,7 @@ import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.reader.novel.tts.LegadoTtsParser
 import org.skepsun.kototoro.reader.novel.tts.TtsPlaybackSpeed
+import org.skepsun.kototoro.reader.novel.tts.TtsPlaybackPitch
 import org.skepsun.kototoro.reader.novel.tts.engine.HttpTTSEngine
 import org.skepsun.kototoro.reader.novel.tts.engine.SystemTTSEngine
 import org.skepsun.kototoro.reader.novel.tts.engine.TTSEngine
@@ -85,6 +86,9 @@ fun TtsSettingsRoute(
     val speed = settings.observeAsState(TtsPlaybackSpeed.KEY) {
         TtsPlaybackSpeed.read(prefs)
     }.value
+    val pitch = settings.observeAsState(TtsPlaybackPitch.KEY) {
+        TtsPlaybackPitch.read(prefs)
+    }.value
     val systemVoice = settings.observeAsState(TtsSettingsCoordinator.KEY_TTS_SYSTEM_VOICE) {
         prefs.getString(
             TtsSettingsCoordinator.KEY_TTS_SYSTEM_VOICE,
@@ -106,6 +110,7 @@ fun TtsSettingsRoute(
             enabled = enabled,
             engineType = engineType,
             speed = speed,
+            pitch = pitch,
             systemVoice = systemVoice,
             systemVoiceOptions = systemVoiceOptions,
             systemVoiceSummary = systemVoiceSummary,
@@ -122,6 +127,7 @@ fun TtsSettingsRoute(
             settings.prefs.edit { putString(TtsSettingsCoordinator.KEY_TTS_ENGINE_TYPE, value) }
         },
         onSpeedChange = { value -> TtsPlaybackSpeed.write(settings.prefs, value) },
+        onPitchChange = { value -> TtsPlaybackPitch.write(settings.prefs, value) },
         onSystemVoiceChange = { value ->
             settings.prefs.edit { putString(TtsSettingsCoordinator.KEY_TTS_SYSTEM_VOICE, value) }
         },
@@ -342,9 +348,11 @@ class TtsSettingsCoordinator(
                         isTestRunningFlow.value = false
                         true
                     }
-                    // Preview at the configured speed; a device that cannot stretch audio plays at 1.0x.
+                    // Preview with the same speed and pitch as the reader's playback.
                     runCatching {
-                        player.playbackParams = player.playbackParams.setSpeed(TtsPlaybackSpeed.read(appSettings.prefs))
+                        player.playbackParams = player.playbackParams
+                            .setSpeed(TtsPlaybackSpeed.read(appSettings.prefs))
+                            .setPitch(TtsPlaybackPitch.read(appSettings.prefs))
                     }
                     player.start()
                     shouldResetState = false

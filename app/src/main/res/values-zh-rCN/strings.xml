@@ -1789,6 +1789,9 @@
     <string name="tts_enable">启用 TTS 系统</string>
     <string name="tts_engine_type">TTS 引擎类型</string>
     <string name="tts_speed">朗读语速</string>
+    <string name="tts_pitch">朗读音调</string>
+    <string name="link_content_folder">授权文件夹</string>
+    <string name="link_content_folder_summary">授权后直接读取文件夹中的内容，无需复制导入。</string>
     <string name="tts_engine_service_label">TTS 引擎</string>
     <string name="epub_download_service_label">EPUB 下载</string>
     <string name="tts_engine_system">系统 TTS（原生）</string>

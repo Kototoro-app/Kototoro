@@ -64,10 +64,15 @@ class TtsManager(
             prefs.getString("tts_system_voice", "default") ?: "default"
         }
         playerController.setSpeed(TtsPlaybackSpeed.read(prefs))
+        playerController.setPitch(TtsPlaybackPitch.read(prefs))
     }
 
     fun setSpeed(speed: Float) {
         playerController.setSpeed(TtsPlaybackSpeed.normalize(speed))
+    }
+
+    fun setPitch(pitch: Float) {
+        playerController.setPitch(pitch)
     }
 
     companion object {

@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -24,6 +25,9 @@ import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
 import org.skepsun.kototoro.reader.novel.tts.TtsPlaybackSpeed
+import org.skepsun.kototoro.reader.novel.tts.TtsPlaybackPitch
+import androidx.compose.ui.platform.LocalContext
+import androidx.preference.PreferenceManager
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -167,11 +171,13 @@ private fun TtsButton(
     }
 }
 
-/** Shows the current TTS speed and opens a menu with the preset speeds. */
+/** Current speed plus independent speed and pitch presets for the running TTS playback. */
 @Composable
 internal fun TtsSpeedButton(speed: Float, onSpeedChange: (Float) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     val title = stringResource(R.string.tts_speed)
+    val context = LocalContext.current
+    val prefs = remember(context) { PreferenceManager.getDefaultSharedPreferences(context) }
     val isTv = LocalUiPresentationConfig.current.isTv
     // 遥控器只能靠方向键移动焦点，菜单若从第一项起步，用户每次都得从头数到当前倍速。
     // 电视上给每项挂一个 FocusRequester，展开时把焦点直接放到当前值上。
@@ -188,6 +194,8 @@ internal fun TtsSpeedButton(speed: Float, onSpeedChange: (Float) -> Unit) {
             Text(TtsPlaybackSpeed.label(speed), style = MaterialTheme.typography.labelLarge)
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            Text(title, style = MaterialTheme.typography.labelMedium,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
             TtsPlaybackSpeed.OPTIONS.forEach { option ->
                 TvDropdownMenuItem(
                     text = {
@@ -204,6 +212,23 @@ internal fun TtsSpeedButton(speed: Float, onSpeedChange: (Float) -> Unit) {
                         Modifier.focusRequester(optionFocus.getValue(option))
                     } else {
                         Modifier
+                    },
+                )
+            }
+            HorizontalDivider()
+            Text(stringResource(R.string.tts_pitch), style = MaterialTheme.typography.labelMedium,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+            val currentPitch = TtsPlaybackPitch.read(prefs)
+            TtsPlaybackPitch.OPTIONS.forEach { option ->
+                TvDropdownMenuItem(
+                    text = {
+                        Text(TtsPlaybackPitch.label(option),
+                            color = if (option == currentPitch) MaterialTheme.colorScheme.primary else Color.Unspecified,
+                        )
+                    },
+                    onClick = {
+                        TtsPlaybackPitch.write(prefs, option)
+                        expanded = false
                     },
                 )
             }

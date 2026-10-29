@@ -80,10 +80,11 @@ internal fun ContentDirectoriesScreen(
     onAddDirectory: (StorageContentKind) -> Unit,
     onRemoveDirectory: (LocalStorageRoot, StorageContentKind) -> Unit,
     onDefaultDirectory: (LocalStorageRoot, StorageContentKind) -> Unit,
+    initialKind: StorageContentKind = StorageContentKind.MANGA,
 ) {
     val listSpacing = dimensionResource(R.dimen.list_spacing_large)
     val kinds = StorageContentKind.entries
-    val pagerState = rememberPagerState(pageCount = kinds::size)
+    val pagerState = rememberPagerState(initialPage = kinds.indexOf(initialKind), pageCount = kinds::size)
     val coroutineScope = rememberCoroutineScope()
     val selectedKind = kinds[pagerState.currentPage]
     Scaffold(

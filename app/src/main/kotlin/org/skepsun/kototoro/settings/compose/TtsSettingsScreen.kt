@@ -14,11 +14,13 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.reader.novel.tts.TtsPlaybackSpeed
+import org.skepsun.kototoro.reader.novel.tts.TtsPlaybackPitch
 
 data class TtsSettingsUiState(
     val enabled: Boolean,
     val engineType: String,
     val speed: Float,
+    val pitch: Float,
     val systemVoice: String,
     val systemVoiceOptions: List<SettingsChoiceOption<String>>,
     val systemVoiceSummary: String?,
@@ -35,6 +37,7 @@ fun TtsSettingsScreen(
     onEnabledChange: (Boolean) -> Unit,
     onEngineTypeChange: (String) -> Unit,
     onSpeedChange: (Float) -> Unit,
+    onPitchChange: (Float) -> Unit,
     onSystemVoiceChange: (String) -> Unit,
     onLegadoVoiceChange: (String) -> Unit,
     onTestClick: () -> Unit,
@@ -87,6 +90,17 @@ fun TtsSettingsScreen(
                         summary = TtsPlaybackSpeed.label(state.speed),
                         enabled = state.enabled,
                         onValueChange = onSpeedChange,
+                    )
+                }
+                item {
+                    SettingsChoicePreference(
+                        title = stringResource(R.string.tts_pitch),
+                        iconRes = R.drawable.ic_audiotrack,
+                        value = state.pitch,
+                        options = TtsPlaybackPitch.OPTIONS.map { SettingsChoiceOption(it, TtsPlaybackPitch.label(it)) },
+                        summary = TtsPlaybackPitch.label(state.pitch),
+                        enabled = state.enabled,
+                        onValueChange = onPitchChange,
                     )
                 }
                 item {

@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.local.ui.compose
 
 import android.net.Uri
+import android.content.Intent
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -47,6 +48,8 @@ import org.skepsun.kototoro.local.data.LocalStorageManager
 import org.skepsun.kototoro.local.data.importer.ImportMode
 import org.skepsun.kototoro.local.data.importer.LocalImportKind
 import org.skepsun.kototoro.local.ui.ImportService
+import org.skepsun.kototoro.local.data.StorageContentKind
+import org.skepsun.kototoro.settings.storage.directories.ContentDirectoriesActivity
 
 private enum class ImportContentType(
     val kind: LocalImportKind?,
@@ -138,6 +141,20 @@ fun ImportDialog(
                     onSelectedTypeChange = { selectedType = it },
                 )
                 Column {
+                    ImportOptionItem(
+                        option = ImportOption(R.drawable.ic_folder_file, R.string.link_content_folder,
+                            R.string.link_content_folder_summary),
+                        onClick = {
+                            val kind = when (selectedType) {
+                                ImportContentType.NOVEL -> StorageContentKind.NOVEL
+                                ImportContentType.VIDEO -> StorageContentKind.VIDEO
+                                else -> StorageContentKind.MANGA
+                            }
+                            context.startActivity(Intent(context, ContentDirectoriesActivity::class.java)
+                                .putExtra(ContentDirectoriesActivity.EXTRA_CONTENT_KIND, kind.name))
+                            onDismissRequest()
+                        },
+                    )
                     ImportOptionItem(
                         option = selectedType.fileOption(),
                         onClick = {

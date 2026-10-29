@@ -1666,6 +1666,9 @@
     <string name="tts_enable">Enable TTS system</string>
     <string name="tts_engine_type">TTS engine type</string>
     <string name="tts_speed">Speech speed</string>
+    <string name="tts_pitch">Speech pitch</string>
+    <string name="link_content_folder">Link a folder</string>
+    <string name="link_content_folder_summary">Grant folder access to read its contents directly, without copying them.</string>
     <string name="tts_engine_service_label">TTS engine</string>
     <string name="epub_download_service_label">EPUB download</string>
     <string name="tts_engine_system">System TTS (Native)</string>

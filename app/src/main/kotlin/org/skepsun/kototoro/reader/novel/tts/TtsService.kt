@@ -34,10 +34,13 @@ class TtsService : LifecycleService() {
     private var stateCollectionJob: kotlinx.coroutines.Job? = null
     private var isForegroundStarted = false
 
-    // Speed set from the reader controls or from TTS settings applies to the running playback.
+    // Reader controls and TTS settings apply to the running playback without restarting synthesis.
     private val speedListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { prefs, key ->
         if (key == TtsPlaybackSpeed.KEY && ::ttsManager.isInitialized) {
             ttsManager.setSpeed(TtsPlaybackSpeed.read(prefs))
+        }
+        if (key == TtsPlaybackPitch.KEY && ::ttsManager.isInitialized) {
+            ttsManager.setPitch(TtsPlaybackPitch.read(prefs))
         }
     }
 

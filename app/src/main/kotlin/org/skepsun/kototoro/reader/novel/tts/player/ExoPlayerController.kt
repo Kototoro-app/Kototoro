@@ -2,6 +2,7 @@ package org.skepsun.kototoro.reader.novel.tts.player
 
 import android.content.Context
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackParameters
 import androidx.media3.exoplayer.ExoPlayer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -10,8 +11,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.skepsun.kototoro.reader.novel.tts.model.AudioData
+import org.skepsun.kototoro.reader.novel.tts.TtsPlaybackPitch
 
-class ExoPlayerController(context: Context) {
+class ExoPlayerController internal constructor(player: ExoPlayer) {
+
+    constructor(context: Context) : this(ExoPlayer.Builder(context).build())
 
     private val _currentItemIndex = MutableStateFlow<Int?>(null)
     val currentItemIndex = _currentItemIndex.asStateFlow()
@@ -19,7 +23,7 @@ class ExoPlayerController(context: Context) {
     private val _playbackCompleted = MutableStateFlow(false)
     val playbackCompleted = _playbackCompleted.asStateFlow()
 
-    private val player = ExoPlayer.Builder(context).build().apply {
+    private val player = player.apply {
         // 允许在锁屏和后台持续播放，防止休眠
         setWakeMode(androidx.media3.common.C.WAKE_MODE_NETWORK)
 
@@ -113,6 +117,13 @@ class ExoPlayerController(context: Context) {
 
     fun setSpeed(speed: Float) {
         player.setPlaybackSpeed(speed)
+    }
+
+    fun setPitch(pitch: Float) {
+        player.playbackParameters = PlaybackParameters(
+            player.playbackParameters.speed,
+            TtsPlaybackPitch.normalize(pitch),
+        )
     }
 
     fun seekNext() {
