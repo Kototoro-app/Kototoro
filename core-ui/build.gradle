@@ -133,16 +133,46 @@ def verifyUiStrings = tasks.register('verifyUiStrings') {
         }
         if (declared.size() < 1000) throw new GradleException("Read only ${declared.size()} Android strings: " +
             "the catalogs under app/src/main/res were not scanned as expected.") 
-        // `uiString("…")` and `uiStringArray("…")`: a name passed to a lookup, as a literal.
-        def lookup = ~/uiString(?:Array)?\("([^"$]+)"\)/
+        // `uiString(...)`, `uiStringArray(...)`, and direct `UiStrings` calls (including multi-line and `if`/`when`).
+        def callLookup = ~/\b(?:uiStringArray|uiString|strings\.string|strings\.format|strings\.array)\s*\(/
+        def literalLookup = ~/"([a-z][a-z0-9_]*)"/
         def missing = new TreeSet<String>()
         def found = new TreeSet<String>()
         sources.files.findAll { it.isFile() }.each { file ->
-            file.getText('UTF-8').eachLine { line ->
-                lookup.matcher(line).each { match ->
-                    def name = match[1]
-                    found << name
-                    if (!(name in declared) && !(name in frameworkStrings)) missing << "${file.name}: ${name}".toString()
+            def text = file.getText('UTF-8')
+            if (!text.contains('core.ui.text') && !text.contains('DesktopUiStrings')) return
+            def matcher = callLookup.matcher(text)
+            while (matcher.find()) {
+                int i = matcher.end()
+                int start = i
+                int depth = 1
+                boolean inStr = false
+                boolean esc = false
+                Integer firstEnd = null
+                while (i < text.length() && depth > 0) {
+                    char ch = text.charAt(i)
+                    if (inStr) {
+                        if (esc) esc = false
+                        else if (ch == (char) '\\') esc = true
+                        else if (ch == (char) '"') inStr = false
+                    } else {
+                        if (ch == (char) '"') inStr = true
+                        else if (ch == (char) '(') depth++
+                        else if (ch == (char) ')') {
+                            depth--
+                            if (depth == 0 && firstEnd == null) firstEnd = i
+                        } else if (ch == (char) ',' && depth == 1 && firstEnd == null) {
+                            firstEnd = i
+                        }
+                    }
+                    i++
+                }
+                if (firstEnd != null) {
+                    literalLookup.matcher(text.substring(start, firstEnd)).each { lit ->
+                        def name = lit[1]
+                        found << name
+                        if (!(name in declared) && !(name in frameworkStrings)) missing << "${file.name}: ${name}".toString()
+                    }
                 }
             }
         }
@@ -160,7 +190,7 @@ def verifyUiStrings = tasks.register('verifyUiStrings') {
         if (types.size() < 10) throw new GradleException("Read only ${types.size()} content types from " +
             "${contentTypes.name}: the enum was not scanned as expected.")
         types.each { type ->
-            def name = 'content_type_' + type.toLowerCase()
+            def name = 'content_type_' + type.toLowerCase(java.util.Locale.ROOT)
             if (!(name in declared)) missing << "ContentType.$type: $name".toString()
         }
         if (!missing.isEmpty()) {
