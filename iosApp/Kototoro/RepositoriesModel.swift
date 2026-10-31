@@ -403,6 +403,7 @@ final class RepositoriesModel: ObservableObject {
         guard result.managementVersion == 1 else { throw URLError(.cannotParseResponse) }
         hasInstalledSnapshot = true
         installed = result.installed
+        SourceIconStore.shared.artifactsChanged(result.installed, prepare: request["operation"] as? String != "list")
     }
 
     private func fetch(_ link: RepositoryLink) async throws -> IosRepositoryCatalog {

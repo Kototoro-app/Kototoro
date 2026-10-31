@@ -13,9 +13,9 @@ actor RequestGate {
     static let covers = RequestGate(limit: 8)
     /// Dedicated gate for source and extension icons, isolated from covers so background favicons never stall content covers.
     static let icons = RequestGate(limit: 4)
-    /// APK artwork from the embedded JVM, whose management calls are serialized anyway: one runs, the rest wait here
-    /// where a row scrolling away can still withdraw them.
-    static let hostIcons = RequestGate(limit: 1)
+    /// APK artwork read from installed JARs: local IO that must not queue behind site favicons, kept to a couple of
+    /// archives at a time so a fast scroll does not open every JAR at once.
+    static let extensionArtwork = RequestGate(limit: 2)
     /// Android's Coil loader: `decoderCoroutineContext(Dispatchers.IO.limitedParallelism(3))`.
     static let coverDecoding = RequestGate(limit: 3)
     /// Shared by reader overviews and tiled bases: network concurrency does not bound native decode memory.

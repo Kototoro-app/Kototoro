@@ -119,6 +119,7 @@
 		F80000000000000000000001 /* BackupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F80000000000000000000002 /* BackupView.swift */; };
 		F80000000000000000000003 /* BackupFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F80000000000000000000004 /* BackupFlowTests.swift */; };
 		F80000000000000000000005 /* SourceIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = F80000000000000000000006 /* SourceIcon.swift */; };
+		F80000000000000000000024 /* ExtensionArtwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = F80000000000000000000025 /* ExtensionArtwork.swift */; };
 		F80000000000000000000007 /* SourceFilterSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = F80000000000000000000008 /* SourceFilterSheet.swift */; };
 		F80000000000000000000009 /* DetailsPanorama.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8000000000000000000000A /* DetailsPanorama.swift */; };
 		F8000000000000000000000B /* ContentCollection.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8000000000000000000000C /* ContentCollection.swift */; };
@@ -278,6 +279,7 @@
 		F80000000000000000000002 /* BackupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupView.swift; sourceTree = "<group>"; };
 		F80000000000000000000004 /* BackupFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupFlowTests.swift; sourceTree = "<group>"; };
 		F80000000000000000000006 /* SourceIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceIcon.swift; sourceTree = "<group>"; };
+		F80000000000000000000025 /* ExtensionArtwork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtensionArtwork.swift; sourceTree = "<group>"; };
 		F80000000000000000000008 /* SourceFilterSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceFilterSheet.swift; sourceTree = "<group>"; };
 		F8000000000000000000000A /* DetailsPanorama.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailsPanorama.swift; sourceTree = "<group>"; };
 		F8000000000000000000000C /* ContentCollection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentCollection.swift; sourceTree = "<group>"; };
@@ -351,6 +353,7 @@
 				F70000000000000000000003 /* InfoPlist.xcstrings */,
 				F80000000000000000000002 /* BackupView.swift */,
 				F80000000000000000000006 /* SourceIcon.swift */,
+				F80000000000000000000025 /* ExtensionArtwork.swift */,
 				F80000000000000000000008 /* SourceFilterSheet.swift */,
 				F8000000000000000000000A /* DetailsPanorama.swift */,
 				F8000000000000000000000E /* LibraryView.swift */,
@@ -677,6 +680,7 @@
 				F20000000000000000000002 /* ReaderDownloadsView.swift in Sources */,
 				F80000000000000000000001 /* BackupView.swift in Sources */,
 				F80000000000000000000005 /* SourceIcon.swift in Sources */,
+				F80000000000000000000024 /* ExtensionArtwork.swift in Sources */,
 				F80000000000000000000007 /* SourceFilterSheet.swift in Sources */,
 				F80000000000000000000009 /* DetailsPanorama.swift in Sources */,
 				F8000000000000000000000D /* LibraryView.swift in Sources */,
