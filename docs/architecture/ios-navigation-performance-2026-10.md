@@ -114,3 +114,36 @@ iOS SDK、模拟器或连接的真机；未取得本次卡顿的 Instruments tra
 
 实现遵循 KISS/DRY/SRP：复用系统导航、现有偏好与后台请求入口；将装饰滚动状态限制在
 自己的职责内，没有另建路由框架、缓存系统或阅读布局实现。
+
+## 2026-10-31：来源图标脱离 JVM 与列表热点
+
+来源图标的加载完全不经过嵌入式 JVM：
+
+- APK 类扩展（Mihon/Aniyomi/Tsundoku）由 `ExtensionArtwork` 直接读已安装 JAR（转换器写入的
+  `META-INF/kototoro/extension-icon`，否则按清单 + `resources.arsc` 找启动图标）。安装记录由
+  `ExtensionArtifacts` 读取 `installed.json` 覆盖随包 seed，与 host 的加载顺序一致。
+- 解析器插件（kototoro/kotatsu JAR）以前靠 `describe` 取域名，会把整个插件和上千源的枚举加载进解释型 JVM。
+  现由 `ParserSiteIndex` 扫描 `site/` 下各类的常量池：唯一引用的 `*ParserSource` 字段（或按名 `valueOf` 的
+  大写字面量）对应源名，第一个像主机名的字面量（否则第一个 URL 字面量的主机）作域名。kotatsu 的
+  `@MangaSourceParser` 是 SOURCE 级注解，字节码里没有，所以不能按注解对应。索引按插件 SHA 缓存在
+  Caches/`parser-sites-v2`；本地样本覆盖率 kotatsu 1226/1252、kototoro 插件几乎全部，扫不到的源显示首字母。
+- 安装/更新后 `SourceIconStore.artifactsChanged` 在后台预先准备图标与域名索引；APK 图标文件名带构建 SHA，
+  更新后不会显示旧图标。
+- 站点图标并发请求根 `apple-touch-icon.png`、`favicon.ico` 与首页前 64 KiB 的 `<link rel="…icon">`，
+  按“touch icon > 页面声明的 touch icon > favicon.ico > 其他声明图标”选择，使用 Safari UA（部分站点拒绝
+  CFNetwork 默认 UA）。
+
+列表热点（源码层面减少的工作，未取得 Instruments 前后对比）：
+
+- 下载每页都会发布 `ReaderDownloadQueue.entries`；作品网格与作品库改为只观察 `DownloadedContent`
+  （已完成键集合，仅在集合变化时发布）。作品库筛选缓存改用其 `revision`，不再只看数量。
+- `SourcesModel.source(named:)` 用字典替换各视图按名线性扫描来源目录（每次比较都桥接 Kotlin 字符串）；
+  列表行不再订阅 `SourcesModel`，来源名由父视图传入。
+- 自定义空间每个列表只解析一次（`ContentSpace.activeCustom()`）；原先作品网格对每部作品线性查找来源，
+  开启自定义空间时是“作品数 × 来源数”。
+- 浏览页的 `availableKinds` 按 `SourcesModel.revision` 缓存；卡片简介的正则清理按文本缓存。
+
+验证：带 JVM 的模拟器构建冷缓存启动，APK 与解析器源图标均显示；站点图标逻辑在网络受限时用
+本地代理以独立 Swift 脚本验证 8 个站点全部取得图标。XCTest：`ReaderDownloadQueueTests`、
+`ExtensionPresentationTests`、`LibraryCollectionIndexTests`、`testContentSpacesAndPerPageSwitch`、
+`testCustomSpaceCanBeCreatedSelectedAndDeleted` 通过。
