@@ -5,14 +5,25 @@ import SwiftUI
 /// Owns the routed source runtime for the app's lifetime: Apple CMS sites run natively, extensions use the JVM.
 @MainActor
 final class SourcesModel: ObservableObject {
-    @Published private(set) var sources: [IosSource] = []
+    @Published private(set) var sources: [IosSource] = [] {
+        didSet {
+            byName = Dictionary(sources.map { ($0.name, $0) }, uniquingKeysWith: { first, _ in first })
+            revision += 1
+        }
+    }
+    /// Bumped whenever the catalog or the source settings change, for values views derive from both.
+    private(set) var revision = 0
+    /// Rows look their source up while scrolling; a linear scan bridged every Kotlin name of a large catalog.
+    private var byName: [String: IosSource] = [:]
+
+    func source(named name: String) -> IosSource? { byName[name] }
     @Published private(set) var catalogRevision = 0
     @Published private(set) var extensionError: String?
     @Published private(set) var error: String?
     @Published private(set) var isLoading = false
     @Published private(set) var runtime: IosSources?
     /// Shared source switches, pins, manual positions and usage metrics; absent rows use defaults.
-    @Published private(set) var settings: [String: IosSourceSetting] = [:]
+    @Published private(set) var settings: [String: IosSourceSetting] = [:] { didSet { revision += 1 } }
     nonisolated(unsafe) private var ownedRuntime: IosSources?
     private var videoSources: IosVideoSources?
     private var library: IosLibrary?
@@ -107,7 +118,7 @@ final class SourcesModel: ObservableObject {
     }
 
     func recordUsage(sourceName: String) async {
-        guard let library, let source = sources.first(where: { $0.name == sourceName }) else { return }
+        guard let library, let source = byName[sourceName] else { return }
         do {
             if settings[sourceName] == nil {
                 // Materialize effective positions before inserting a usage row, preserving the catalog's manual order.
@@ -307,14 +318,23 @@ struct SourcesView: View {
         let newSourceCount: Int
     }
 
+    /// Derived once per catalog/settings change: the body asks for it several times, and each pass bridged every
+    /// source's content type out of Kotlin.
+    private final class KindsCache { var key: String?; var kinds: Set<String> = [] }
+    @State private var kindsCache = KindsCache()
+
     /// Content types among the enabled sources, independent of the search text so the switch stays put.
     private var availableKinds: Set<String> {
+        let key = "\(model.revision)|\(showAdult)"
+        if kindsCache.key == key { return kindsCache.kinds }
         var kinds = Set<String>()
         for source in model.sources {
             if model.isEnabled(source) && (showAdult || !source.isAdult) {
                 kinds.insert(source.mediaKind)
             }
         }
+        kindsCache.key = key
+        kindsCache.kinds = kinds
         return kinds
     }
 
@@ -328,12 +348,13 @@ struct SourcesView: View {
         let hidden = SourceFilterOption.decode(hiddenEcosystems)
         let selectedKind = kind
         let text = query.trimmingCharacters(in: .whitespaces)
+        let custom = spacesEnabled ? ContentSpace.activeCustom() : nil
 
         let filtered = model.sources.filter { source in
             guard model.isEnabled(source) else { return false }
             if !showAdult && source.isAdult { return false }
             if let selectedKind, source.mediaKind != selectedKind { return false }
-            if spacesEnabled && !ContentSpace.admits(source) { return false }
+            if let custom, !custom.admits(source: source) { return false }
             let eco = SourceFilterOption.ecosystemKey(source)
             if hidden.contains(eco) { return false }
             if !text.isEmpty {

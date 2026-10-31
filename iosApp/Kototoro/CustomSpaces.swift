@@ -35,21 +35,26 @@ extension ContentSpace {
         return CustomSpaceStore.shared.space(space)?.mediaKind
     }
 
+    /// The custom Space in effect, or nil when spaces are off or a built-in one is chosen. Resolve it once per
+    /// list rather than per row: filtering a large catalog asked the defaults and the store for every source.
+    @MainActor
+    static func activeCustom() -> IosCustomSpace? {
+        let space = UserDefaults.standard.string(forKey: key) ?? ""
+        guard UserDefaults.standard.object(forKey: enabledKey) as? Bool ?? true, isCustom(space) else { return nil }
+        return CustomSpaceStore.shared.space(space)
+    }
+
     /// Whether the current custom Space admits [source]; built-in Spaces admit every source of their kind.
     @MainActor
     static func admits(_ source: IosSource) -> Bool {
-        let space = UserDefaults.standard.string(forKey: key) ?? ""
-        guard UserDefaults.standard.object(forKey: enabledKey) as? Bool ?? true, isCustom(space),
-              let custom = CustomSpaceStore.shared.space(space) else { return true }
-        return custom.admits(source: source)
+        activeCustom()?.admits(source: source) ?? true
     }
 
-    /// Whether the current custom Space admits a work, by its source; works of unknown sources stay visible.
+    /// Whether [custom] admits a work, by its source; works of unknown sources stay visible.
     @MainActor
-    static func admits(_ content: IosSourceContent, sources: [IosSource]) -> Bool {
-        let space = UserDefaults.standard.string(forKey: key) ?? ""
-        guard isCustom(space), let source = sources.first(where: { $0.name == content.sourceName }) else { return true }
-        return admits(source)
+    static func admits(_ content: IosSourceContent, in custom: IosCustomSpace?, sources: SourcesModel) -> Bool {
+        guard let custom, let source = sources.source(named: content.sourceName) else { return true }
+        return custom.admits(source: source)
     }
 }
 

@@ -92,7 +92,7 @@ private struct RecordsPage: View {
     /// The content space (or this page's switch) and the in-place search over titles and authors.
     private func matches(_ content: IosSourceContent, ignoringKind: Bool = false) -> Bool {
         if !ignoringKind, let filterKind, content.mediaKind != filterKind { return false }
-        if spacesEnabled && !ContentSpace.admits(content, sources: sources.sources) { return false }
+        if spacesEnabled && !ContentSpace.admits(content, in: ContentSpace.activeCustom(), sources: sources) { return false }
         let text = query.trimmingCharacters(in: .whitespaces)
         return text.isEmpty || content.title.localizedCaseInsensitiveContains(text) ||
             content.authors.contains { $0.localizedCaseInsensitiveContains(text) }

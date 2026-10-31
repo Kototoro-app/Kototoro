@@ -556,7 +556,7 @@ struct TrackingItemPreview: View {
                     }
                     VStack(alignment: .leading, spacing: 4) {
                         Text(target.title).font(.headline).lineLimit(2)
-                        Text(sources.sources.first { $0.name == target.sourceName }?.title ?? target.sourceName)
+                        Text(sources.source(named: target.sourceName)?.title ?? target.sourceName)
                             .font(.caption).foregroundStyle(.secondary)
                     }
                 }.accessibilityIdentifier("tracking.chosenWork")

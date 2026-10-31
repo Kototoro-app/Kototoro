@@ -124,7 +124,7 @@ struct SuggestionsView: View {
                         ForEach(Array(visible.prefix(limit)), id: \.identity) { item in
                             NavigationLink { SourceDetailsView(runtime: runtime, content: item.content) } label: {
                                 SuggestionFeaturedCard(runtime: runtime, content: item.content,
-                                    sourceTitle: sources.sources.first { $0.name == item.content.sourceName }?.title ?? "",
+                                    sourceTitle: sources.source(named: item.content.sourceName)?.title ?? "",
                                     compact: compact)
                             }.buttonStyle(.plain).accessibilityIdentifier("suggestions.preview.\(item.id)")
                         }

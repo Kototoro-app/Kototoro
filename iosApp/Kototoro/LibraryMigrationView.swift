@@ -37,7 +37,7 @@ struct LibraryMigrationView: View {
         return selectable.filter { text.isEmpty || $0.title.localizedCaseInsensitiveContains(text) }
     }
     private func title(_ key: String) -> String {
-        sources.sources.first { $0.name == key }?.title ?? library.missingSources.first { $0.key == key }?.title ?? key
+        sources.source(named: key)?.title ?? library.missingSources.first { $0.key == key }?.title ?? key
     }
 
     private var selectedContents: [IosSourceContent] {
@@ -328,7 +328,7 @@ struct BatchMigrationView: View {
         sourcesChosen ? eligible.filter { selectedSources.contains($0.name) } : eligible
     }
     private func sourceTitle(_ key: String) -> String {
-        sources.sources.first { $0.name == key }?.title ?? library.missingSources.first { $0.key == key }?.title ?? key
+        sources.source(named: key)?.title ?? library.missingSources.first { $0.key == key }?.title ?? key
     }
 
     var body: some View {

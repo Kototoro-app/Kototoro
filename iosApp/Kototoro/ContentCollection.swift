@@ -203,7 +203,7 @@ struct ContentCollection<Destination: View, Actions: View>: View {
 
     @AppStorage(ContentGridSize.key) private var gridSize = 100.0
     @EnvironmentObject private var library: LibraryModel
-    @EnvironmentObject private var downloads: ReaderDownloadQueue
+    @EnvironmentObject private var downloads: DownloadedContent
     @ObservedObject private var tagFilter = TagFilterStore.shared
     @ObservedObject private var customSpaces = CustomSpaceStore.shared
     @EnvironmentObject private var sourcesModel: SourcesModel
@@ -245,17 +245,17 @@ struct ContentCollection<Destination: View, Actions: View>: View {
     private var lookup: MarksLookup {
         let favourites = marksFavourites ? library.favouriteKeys : []
         let updates = library.updateChapterCounts
-        let downloaded = downloads.completedContentKeys
+        let downloaded = downloads.keys
         return MarksLookup(favourites: favourites, updates: updates, downloaded: downloaded)
     }
 
     var body: some View {
         let adult = adultHidden
         // A custom Space also narrows works by their sources' language and kind.
-        let custom = ContentSpace.isCustom(space)
-        let shown = tagFilter.blacklist.isEmpty && !adult && !custom ? items
+        let custom = ContentSpace.isCustom(space) ? ContentSpace.activeCustom() : nil
+        let shown = tagFilter.blacklist.isEmpty && !adult && custom == nil ? items
             : items.filter { !tagFilter.hides($0.content) && !(adult && $0.content.isNsfw)
-                && (!custom || ContentSpace.admits($0.content, sources: sourcesModel.sources)) }
+                && ContentSpace.admits($0.content, in: custom, sources: sourcesModel) }
         VStack(spacing: 12) {
             collection(shown)
             if shown.count < items.count {
@@ -292,7 +292,8 @@ struct ContentCollection<Destination: View, Actions: View>: View {
                 ForEach(items, id: \.identity) { rawItem in
                     let item = rawItem.withMarks(lookup.marks(for: rawItem.content, key: rawItem.identity))
                     link(item) {
-                        ContentRow(runtime: runtime, item: item, detailed: mode == .detailed)
+                        ContentRow(runtime: runtime, item: item, detailed: mode == .detailed,
+                                   sourceTitle: sourcesModel.source(named: rawItem.content.sourceName)?.title)
                             .padding(.horizontal, 16).padding(.vertical, mode == .detailed ? 12 : 9)
                     }
                     if rawItem.identity != lastIdentity {
@@ -385,7 +386,8 @@ private struct ContentRow: View {
     let runtime: IosSources
     let item: ContentItem
     let detailed: Bool
-    @EnvironmentObject private var sources: SourcesModel
+    /// Passed in rather than observed, so a source-settings publish does not redraw every row.
+    let sourceTitle: String?
 
     var body: some View {
         let content = item.content
@@ -416,8 +418,7 @@ private struct ContentRow: View {
     }
 
     private var sourceLine: String {
-        let source = sources.sources.first { $0.name == item.content.sourceName }?.title ?? item.content.sourceName
-        return "\(source) · \(SourcesView.kindName(item.content.mediaKind))"
+        "\(sourceTitle ?? item.content.sourceName) · \(SourcesView.kindName(item.content.mediaKind))"
     }
 }
 
@@ -570,15 +571,41 @@ private struct ContentStatusLine: View {
 }
 
 enum ContentText {
+    /// Cards ask again whenever they reappear while scrolling; the regex passes run once per summary.
+    nonisolated(unsafe) private static let plainCache: NSCache<NSString, NSString> = {
+        let cache = NSCache<NSString, NSString>()
+        cache.countLimit = 1_000
+        return cache
+    }()
+    nonisolated(unsafe) private static let firstLineCache: NSCache<NSString, NSString> = {
+        let cache = NSCache<NSString, NSString>()
+        cache.countLimit = 1_000
+        return cache
+    }()
+
     /// Source summaries are often HTML; lists show plain text.
     static func plain(_ text: String) -> String {
+        let key = text as NSString
+        if let cached = plainCache.object(forKey: key) { return cached as String }
+        let plain = strip(text)
+        plainCache.setObject(plain as NSString, forKey: key)
+        return plain
+    }
+
+    static func firstLine(_ text: String) -> String {
+        let key = text as NSString
+        if let cached = firstLineCache.object(forKey: key) { return cached as String }
+        // Only the first line is needed; splitting the whole summary allocated every line of it.
+        let first = text.firstIndex(where: \.isNewline).map { String(text[..<$0]) } ?? text
+        let line = strip(first)
+        firstLineCache.setObject(line as NSString, forKey: key)
+        return line
+    }
+
+    private static func strip(_ text: String) -> String {
         text.replacingOccurrences(of: "<[^>]+>", with: " ", options: .regularExpression)
             .replacingOccurrences(of: "&nbsp;", with: " ")
             .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    static func firstLine(_ text: String) -> String {
-        plain(text.components(separatedBy: .newlines).first ?? text)
     }
 }

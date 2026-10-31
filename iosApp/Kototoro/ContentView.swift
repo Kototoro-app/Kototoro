@@ -72,6 +72,7 @@ struct ContentView: View {
         .environmentObject(library)
         .environmentObject(sources)
         .environmentObject(downloads)
+        .environmentObject(downloads.downloaded)
         .environmentObject(storage)
         .environmentObject(repositories)
         .task(id: library.library != nil) {
@@ -132,6 +133,7 @@ struct ContentView: View {
             .environmentObject(library)
             .environmentObject(sources)
             .environmentObject(downloads)
+            .environmentObject(downloads.downloaded)
             .environmentObject(storage)
             .environmentObject(repositories)
         }

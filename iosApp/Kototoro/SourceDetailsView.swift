@@ -698,7 +698,7 @@ struct SourceDetailsView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                if let src = sources.sources.first(where: { $0.name == shown.sourceName }) {
+                if let src = sources.source(named: shown.sourceName) {
                     Button {
                         browseInitialQuery = nil
                         destinationBrowse = src
@@ -790,7 +790,7 @@ struct SourceDetailsView: View {
                     ForEach(shown.authors, id: \.self) { author in
                         Section(author) {
                             Button("在当前源搜索【\(author)】") {
-                                if let src = sources.sources.first(where: { $0.name == shown.sourceName }) {
+                                if let src = sources.source(named: shown.sourceName) {
                                     destinationBrowse = src
                                     browseInitialQuery = author
                                 }

@@ -226,7 +226,7 @@ struct LibraryDuplicatesView: View {
     private func keptId(_ group: IosDuplicateGroup) -> String { keep[group.key] ?? group.recommendedId }
 
     private func sourceTitle(_ name: String) -> String {
-        sources.sources.first { $0.name == name }?.title ?? library.missingSources.first { $0.key == name }?.title ?? name
+        sources.source(named: name)?.title ?? library.missingSources.first { $0.key == name }?.title ?? name
     }
 
     private func details(_ entry: IosDuplicateEntry) -> String {

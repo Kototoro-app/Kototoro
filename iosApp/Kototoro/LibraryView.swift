@@ -45,7 +45,7 @@ struct LibraryView: View {
     @State private var findingDuplicates = false
     @State private var filtering = false
     @State private var shelf = LibraryShelfSelection()
-    @EnvironmentObject private var downloads: ReaderDownloadQueue
+    @EnvironmentObject private var downloads: DownloadedContent
     /// Batch selection: keys of the works chosen, kept across searches and categories until done.
     @State private var selecting = false
     @State private var selected: Set<String> = []
@@ -353,7 +353,7 @@ struct LibraryView: View {
     // MARK: Works
 
     private var items: [ContentItem] {
-        let key = "\(library.recordsRevision)|\(selectedKind ?? "")|\(selectedCategory ?? -1)|\(sort.rawValue)|\(query)|\(shelf.hashValue)|\(downloads.completedContentKeys.count)"
+        let key = "\(library.recordsRevision)|\(selectedKind ?? "")|\(selectedCategory ?? -1)|\(sort.rawValue)|\(query)|\(shelf.hashValue)|\(downloads.revision)"
         if itemCache.key == key {
             return itemCache.items
         }
@@ -362,7 +362,7 @@ struct LibraryView: View {
         if shelf.count > 0 {
             // Android's filter groups (shared rule): progress, downloads, chips, state, source, tags.
             let filter = shelf.filter
-            let downloaded = downloads.completedContentKeys
+            let downloaded = downloads.keys
             let updates = library.updateChapterCounts
             baseEntries = baseEntries.filter { entry in
                 let key = ContentMarks.key(entry.content)

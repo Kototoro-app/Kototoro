@@ -42,7 +42,7 @@ struct LibraryFilterSheet: View {
     private var sourceOptions: [(String, String)] {
         let counts = Dictionary(grouping: entries, by: { $0.content.sourceName }).mapValues(\.count)
         return counts.sorted { $0.value > $1.value }.map { name, count in
-            ((name), "\(sources.sources.first { $0.name == name }?.title ?? name) · \(count)")
+            ((name), "\(sources.source(named: name)?.title ?? name) · \(count)")
         }
     }
 

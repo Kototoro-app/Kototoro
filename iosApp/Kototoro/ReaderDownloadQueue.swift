@@ -63,6 +63,21 @@ struct ReaderDownloadEntry: Codable, Identifiable, Sendable {
     }
 }
 
+/// The finished-download marks alone. The queue publishes on every downloaded page; lists that draw only the
+/// "downloaded" badge observe this instead, so a running download does not re-evaluate every visible card.
+@MainActor
+final class DownloadedContent: ObservableObject {
+    @Published private(set) var keys: Set<String> = []
+    /// Bumped whenever [keys] changes, for caches keyed by the set.
+    private(set) var revision = 0
+
+    fileprivate func update(_ next: Set<String>) {
+        guard next != keys else { return }
+        keys = next
+        revision += 1
+    }
+}
+
 /// One app-owned worker. A canceled JNI call keeps its worker slot until it actually returns.
 @MainActor
 final class ReaderDownloadQueue: ObservableObject {
@@ -71,10 +86,14 @@ final class ReaderDownloadQueue: ObservableObject {
 
     @Published private(set) var entries: [ReaderDownloadEntry] = [] {
         didSet {
-            completedContentKeys = Set(entries.compactMap { $0.state == .completed ? "\($0.request.source)|\($0.request.contentID)" : nil })
+            downloaded.update(Set(entries.compactMap {
+                $0.state == .completed ? "\($0.request.source)|\($0.request.contentID)" : nil
+            }))
         }
     }
-    private(set) var completedContentKeys: Set<String> = []
+    /// Works with a finished download; observed on its own by the work lists, which only show the mark.
+    let downloaded = DownloadedContent()
+    var completedContentKeys: Set<String> { downloaded.keys }
     @Published private(set) var error: String?
     @Published private(set) var storageFailure: String?
     @Published private(set) var isLoading = true

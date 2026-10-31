@@ -198,10 +198,11 @@ struct GlobalSearchView: View {
     /// Enabled sources in browse order (pinned first, then manual order), after the search filters.
     private var targets: [IosSource] {
         let kinds = SourceFilterOption.decode(hiddenKinds)
+        let custom = ContentSpace.activeCustom()
         let enabled = sources.sources.filter { source in
             sources.isEnabled(source) && (showAdult || !source.isAdult) &&
                 (selectionMediaKind.map { source.mediaKind == $0 } ?? !kinds.contains(source.mediaKind)) &&
-                (!pinnedOnly || sources.isPinned(source)) && ContentSpace.admits(source)
+                (!pinnedOnly || sources.isPinned(source)) && (custom?.admits(source: source) ?? true)
         }
         let ordered = sources.ordered(enabled)
         return ordered.filter(sources.isPinned) + ordered.filter { !sources.isPinned($0) }

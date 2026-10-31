@@ -116,6 +116,7 @@ private struct ContinueReadingPresentation: ViewModifier {
                 .environmentObject(library)
                 .environmentObject(sources)
                 .environmentObject(downloads)
+                .environmentObject(downloads.downloaded)
             }
         }
     }
