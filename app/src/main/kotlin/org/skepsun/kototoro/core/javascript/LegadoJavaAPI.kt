@@ -34,6 +34,7 @@ import org.jsoup.Connection
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import org.jsoup.select.Elements
+import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.network.jsonsource.LegadoHttpClient
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.parser.legado.ConcurrentRateLimiter
@@ -1710,7 +1711,7 @@ class LegadoJavaAPI(
         Log.i(TAG, "startBrowserAwait called: url=$url, title=$title")
 
         try {
-            toast("正在启动浏览器进行验证...")
+            toast(context.getString(R.string.legado_browser_verification_started))
             val result = browserLauncher.launchAndWait(
                 url = url,
                 title = title,
@@ -1719,13 +1720,13 @@ class LegadoJavaAPI(
                 html = html,
             )
             if (result?.html?.isNotBlank() == true) {
-                toast("浏览器验证完成，Cookie 已同步")
+                toast(context.getString(R.string.legado_browser_verification_done))
             }
             Log.i(TAG, "Browser verification completed for: $url")
             return StrResponse(result?.url ?: url, result?.html.orEmpty())
         } catch (e: Exception) {
             Log.e(TAG, "Failed to launch browser", e)
-            toast("启动浏览器失败: ${e.message}")
+            toast(context.getString(R.string.legado_browser_verification_failed, e.message.orEmpty()))
             return StrResponse(url, "")
         }
     }

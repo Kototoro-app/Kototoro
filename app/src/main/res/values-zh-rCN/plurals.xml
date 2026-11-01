@@ -39,4 +39,7 @@
     <plurals name="history_grouped_sources">
         <item quantity="other">%1$d 个来源</item>
     </plurals>
+    <plurals name="old_chapters_in_total">
+        <item quantity="other">共 %1$d 个旧章节</item>
+    </plurals>
 </resources>

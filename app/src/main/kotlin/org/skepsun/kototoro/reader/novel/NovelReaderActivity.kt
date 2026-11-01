@@ -96,6 +96,8 @@ import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.resolveUiPresentationConfig
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassLayerBackdrop
+import org.skepsun.kototoro.local.epub.EpubError
+import org.skepsun.kototoro.local.epub.EpubException
 import org.skepsun.kototoro.local.epub.buildEpubChapterUrl
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
@@ -2771,12 +2773,15 @@ class NovelReaderActivity :
                         android.util.Log.e("NovelReaderActivity", "Failed to load EPUB internal chapter", error)
                         showLoading(false)  // Dismiss loading indicator even on error
                         // Display user-friendly error message (Requirement 6.7)
-                        val errorMessage = when {
-                            error.message?.contains("not found") == true -> getString(R.string.novel_epub_not_found)
-                            error.message?.contains("out of bounds") == true -> getString(R.string.novel_epub_index_invalid)
-                            error.message?.contains("Invalid chapter URL") == true -> getString(R.string.novel_epub_url_invalid)
-                            error.message?.contains("Failed to parse") == true -> getString(R.string.novel_epub_parse_failed)
-                            else -> getString(R.string.novel_epub_load_failed, error.message ?: "")
+                        val errorMessage = when (val epubError = (error as? EpubException)?.error) {
+                            is EpubError.FileSystemError.FileNotFound,
+                            is EpubError.ChapterLoadError.ChapterNotFound,
+                            -> getString(R.string.novel_epub_not_found)
+                            is EpubError.ChapterLoadError.IndexOutOfBounds -> getString(R.string.novel_epub_index_invalid)
+                            is EpubError.ChapterLoadError.InvalidUrl -> getString(R.string.novel_epub_url_invalid)
+                            is EpubError.ParseError -> getString(R.string.novel_epub_parse_failed)
+                            null -> getString(R.string.novel_epub_load_failed, error.message.orEmpty())
+                            else -> getString(R.string.novel_epub_load_failed, epubError.userMessage(resources))
                         }
                         showReaderMessage(errorMessage, 3000L)
                     }
@@ -3006,7 +3011,7 @@ class NovelReaderActivity :
                 // 合并所有章节内容
                 val fullContent = buildString {
                     append("《${epubContent.title}》\n")
-                    append("作者：${epubContent.author}\n")
+                    append(getString(R.string.novel_epub_author_line, epubContent.author)).append('\n')
                     append("\n")
                     append("=".repeat(40))
                     append("\n\n")

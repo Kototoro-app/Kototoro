@@ -19,7 +19,7 @@ data class DictionaryPageState(
     val rule: DictionaryRule,
     val result: DictionaryLookupResult? = null,
     val isLoading: Boolean = false,
-    val error: String? = null,
+    val error: Throwable? = null,
 )
 
 data class DictionaryUiState(
@@ -55,7 +55,7 @@ class DictionaryViewModel @Inject constructor(
                         onSuccess = { DictionaryPageState(rule = rule, result = it, isLoading = false) },
                         onFailure = { error ->
                             if (error is kotlinx.coroutines.CancellationException) throw error
-                            DictionaryPageState(rule = rule, error = error.message ?: "加载失败", isLoading = false)
+                            DictionaryPageState(rule = rule, error = error, isLoading = false)
                         },
                     )
                     _uiState.update { current ->
@@ -84,7 +84,7 @@ class DictionaryViewModel @Inject constructor(
                 onSuccess = { DictionaryPageState(rule = rule, result = it, isLoading = false) },
                 onFailure = { error ->
                     if (error is kotlinx.coroutines.CancellationException) throw error
-                    DictionaryPageState(rule = rule, error = error.message ?: "加载失败", isLoading = false)
+                    DictionaryPageState(rule = rule, error = error, isLoading = false)
                 },
             )
             _uiState.update { current ->

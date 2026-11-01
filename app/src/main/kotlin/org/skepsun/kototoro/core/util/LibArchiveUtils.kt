@@ -101,7 +101,7 @@ object LibArchiveUtils {
                 ) ?: continue
                 val entryFile = File(destDir, entryName)
                 if (!entryFile.canonicalPath.startsWith(destDir.canonicalPath)) {
-                    throw SecurityException("压缩文件只能解压到指定路径")
+                    throw SecurityException("Archive entry escapes the destination directory: $entryName")
                 }
                 val stat = ArchiveEntry.stat(entry)
                 if (stat.isDir()) {

@@ -18,4 +18,8 @@
     <string name="google_drive_authorization_pending">正在等待浏览器中的 Google 授权…</string>
     <string name="google_drive_client_configuration_failed">Google 拒绝了 OAuth 客户端配置，请检查桌面客户端类型、Google Cloud 项目和同意屏幕设置。</string>
     <string name="google_drive_client_secret_required">此构建缺少 Google 桌面 OAuth 客户端密钥，请配置后重新构建。重复登录无法解决此问题。</string>
+    <string name="sync_settings_enabled_title">同步应用设置</string>
+    <string name="sync_settings_enabled_summary">阅读器、播放器和外观设置。密码、令牌和设备路径永远不会同步。</string>
+    <string name="sync_remote_delete_incomplete">有 %1$d 个远程文件无法删除。已保留本地同步状态，请重试。</string>
+    <string name="sync_enable_required">请先开启 Google Drive 同步。</string>
 </resources>

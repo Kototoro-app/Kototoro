@@ -53,6 +53,7 @@ import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.adaptive.tvTabRing
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
+import org.skepsun.kototoro.core.util.ext.getDisplayMessage
 
 @AndroidEntryPoint
 class DictionaryActivity : BaseComposeActivity() {
@@ -212,7 +213,7 @@ private fun DictionaryPage(
                 modifier = Modifier.padding(24.dp),
             ) {
                 Text(
-                    text = page.error,
+                    text = page.error.getDisplayMessage(LocalContext.current.resources),
                     color = MaterialTheme.colorScheme.error,
                     textAlign = TextAlign.Center,
                 )

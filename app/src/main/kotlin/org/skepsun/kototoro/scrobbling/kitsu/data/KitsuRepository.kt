@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.scrobbling.kitsu.data
 
 import android.content.Context
+import androidx.annotation.StringRes
 import androidx.room.withTransaction
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.sync.Mutex
@@ -59,6 +60,10 @@ class KitsuRepository(
     private val storage: ScrobblerStorage,
     private val db: MangaDatabase,
 ) : ScrobblerRepository, ScrobblerUserProfileRepository {
+
+    private val resources = context.resources
+
+    private fun label(@StringRes id: Int, vararg args: Any): String = resources.getString(id, *args)
 
     // not in use yet
     private val clientId = context.getString(R.string.kitsu_clientId)
@@ -435,59 +440,61 @@ class KitsuRepository(
 
         // Titles
         titlesObj?.let { titles ->
-            titles.getStringOrNull("ja_jp")?.let { infobox.add("日语" to it) }
-            titles.getStringOrNull("en_jp")?.let { infobox.add("日语 (Romaji)" to it) }
-            titles.getStringOrNull("en")?.let { infobox.add("英语" to it) }
+            titles.getStringOrNull("ja_jp")?.let { infobox.add(label(R.string.kitsu_title_japanese) to it) }
+            titles.getStringOrNull("en_jp")?.let { infobox.add(label(R.string.kitsu_title_romaji) to it) }
+            titles.getStringOrNull("en")?.let { infobox.add(label(R.string.kitsu_title_english) to it) }
         }
 
         // Type
         attrs.getStringOrNull("subtype")?.let { subtype ->
-            infobox.add("类型" to subtype.replaceFirstChar { it.uppercase() })
+            infobox.add(label(R.string.kitsu_info_type) to subtype.replaceFirstChar { it.uppercase() })
         }
 
         // Status
         attrs.getStringOrNull("status")?.let { status ->
             val statusLabel = when (status) {
-                "current" -> "正在播出"
-                "finished" -> "已完结"
-                "tba" -> "待定"
-                "unreleased" -> "未播出"
-                "upcoming" -> "即将播出"
+                "current" -> label(R.string.kitsu_status_current)
+                "finished" -> label(R.string.kitsu_status_finished)
+                "tba" -> label(R.string.kitsu_status_tba)
+                "unreleased" -> label(R.string.kitsu_status_unreleased)
+                "upcoming" -> label(R.string.kitsu_status_upcoming)
                 else -> status
             }
-            infobox.add("状态" to statusLabel)
+            infobox.add(label(R.string.kitsu_info_status) to statusLabel)
         }
 
         // Dates
-        attrs.getStringOrNull("startDate")?.let { infobox.add("开始日期" to it) }
-        attrs.getStringOrNull("endDate")?.let { infobox.add("结束日期" to it) }
+        attrs.getStringOrNull("startDate")?.let { infobox.add(label(R.string.kitsu_info_start_date) to it) }
+        attrs.getStringOrNull("endDate")?.let { infobox.add(label(R.string.kitsu_info_end_date) to it) }
 
         // Age rating
         val ageRating = attrs.getStringOrNull("ageRating")
         val ageGuide = attrs.getStringOrNull("ageRatingGuide")
         if (ageRating != null) {
             val ratingStr = if (ageGuide != null) "$ageRating - $ageGuide" else ageRating
-            infobox.add("评分" to ratingStr)
+            infobox.add(label(R.string.kitsu_info_age_rating) to ratingStr)
         }
 
         // Episode count & length
         val episodeCount = attrs.optInt("episodeCount", 0)
         if (episodeCount > 0) {
-            infobox.add("集数" to episodeCount.toString())
+            infobox.add(label(R.string.kitsu_info_episodes) to episodeCount.toString())
         }
         val episodeLength = attrs.optInt("episodeLength", 0)
         if (episodeLength > 0) {
-            infobox.add("时长" to "${episodeLength}分钟/集")
+            infobox.add(
+                label(R.string.kitsu_info_episode_length) to label(R.string.kitsu_episode_length_value, episodeLength),
+            )
         }
 
         // Average rating
-        attrs.getStringOrNull("averageRating")?.let { infobox.add("平均评分" to "$it%") }
+        attrs.getStringOrNull("averageRating")?.let { infobox.add(label(R.string.kitsu_info_average_rating) to "$it%") }
 
         // Rankings
         val popularityRank = attrs.optInt("popularityRank", 0)
-        if (popularityRank > 0) infobox.add("受欢迎排名" to "#$popularityRank")
+        if (popularityRank > 0) infobox.add(label(R.string.kitsu_info_popularity_rank) to "#$popularityRank")
         val ratingRank = attrs.optInt("ratingRank", 0)
-        if (ratingRank > 0) infobox.add("好评排名" to "#$ratingRank")
+        if (ratingRank > 0) infobox.add(label(R.string.kitsu_info_rating_rank) to "#$ratingRank")
 
         // --- Tags (categories) ---
         val tags = mutableListOf<String>()
@@ -534,18 +541,18 @@ class KitsuRepository(
                 val destIdLong = destId.toLongOrNull() ?: continue
 
                 val roleLabel = when (role) {
-                    "sequel" -> "续集"
-                    "prequel" -> "前传"
-                    "alternative_setting" -> "替代设定"
-                    "alternative_version" -> "替代版本"
-                    "side_story" -> "番外篇"
-                    "parent_story" -> "母篇"
-                    "summary" -> "总集篇"
-                    "full_story" -> "完整版"
-                    "spinoff" -> "衍生作"
-                    "adaptation" -> "改编"
-                    "character" -> "角色"
-                    "other" -> "其他"
+                    "sequel" -> label(R.string.kitsu_relation_sequel)
+                    "prequel" -> label(R.string.kitsu_relation_prequel)
+                    "alternative_setting" -> label(R.string.kitsu_relation_alternative_setting)
+                    "alternative_version" -> label(R.string.kitsu_relation_alternative_version)
+                    "side_story" -> label(R.string.kitsu_relation_side_story)
+                    "parent_story" -> label(R.string.kitsu_relation_parent_story)
+                    "summary" -> label(R.string.kitsu_relation_summary)
+                    "full_story" -> label(R.string.kitsu_relation_full_story)
+                    "spinoff" -> label(R.string.kitsu_relation_spinoff)
+                    "adaptation" -> label(R.string.kitsu_relation_adaptation)
+                    "character" -> label(R.string.kitsu_relation_character)
+                    "other" -> label(R.string.kitsu_relation_other)
                     else -> role
                 }
 
@@ -656,7 +663,7 @@ class KitsuRepository(
         val infobox = buildList {
             val description = attrs.getStringOrNull("description")?.toPlainText()
             if (!description.isNullOrBlank() && description != "Wikipedia" && description != "AniDB") {
-                add("简介来源" to description)
+                add(label(R.string.kitsu_info_description_source) to description)
             }
         }
         val authorAliases = attrs.optString("name").takeIf { it.isNotBlank() }?.let(::listOf).orEmpty()
@@ -682,7 +689,9 @@ class KitsuRepository(
                     val character = characterId?.let(characterMap::get)
                     add(
                         media.toKitsuRelatedWork(
-                            relationship = character?.displayEntityName()?.let { "配音角色 · $it" } ?: "配音作品",
+                            relationship = character?.displayEntityName()
+                                ?.let { label(R.string.kitsu_voiced_character, it) }
+                                ?: label(R.string.kitsu_section_voiced_works),
                         ) ?: continue,
                     )
                 }
@@ -710,7 +719,7 @@ class KitsuRepository(
             if (voicedWorks.isNotEmpty()) {
                 add(
                     ScrobblerContentInfo.RelatedSection(
-                        title = "配音作品",
+                        title = label(R.string.kitsu_section_voiced_works),
                         items = voicedWorks,
                     ),
                 )
@@ -718,7 +727,7 @@ class KitsuRepository(
             if (staffWorks.isNotEmpty()) {
                 add(
                     ScrobblerContentInfo.RelatedSection(
-                        title = "参与作品",
+                        title = label(R.string.kitsu_section_staff_works),
                         items = staffWorks,
                     ),
                 )
@@ -739,7 +748,7 @@ class KitsuRepository(
             extraSections = extraSections,
             actions = listOf(
                 ScrobblerContentInfo.ExternalAction(
-                    title = "人物主页",
+                    title = label(R.string.kitsu_action_person_page),
                     url = "$BASE_WEB_URL/people/$id",
                 ),
             ),
@@ -808,12 +817,12 @@ class KitsuRepository(
 
         val infobox = buildList {
             attrs.optJSONObject("names")?.getStringOrNull("ja_jp")?.let {
-                add("日文名" to it)
+                add(label(R.string.kitsu_info_japanese_name) to it)
             }
             attrs.optJSONArray("otherNames")?.toStringList()
                 ?.takeIf { it.isNotEmpty() }
                 ?.joinToString(" / ")
-                ?.let { add("别名" to it) }
+                ?.let { add(label(R.string.kitsu_info_other_names) to it) }
         }
 
         return ScrobblerContentInfo(
@@ -832,14 +841,14 @@ class KitsuRepository(
             extraSections = listOfNotNull(
                 voiceActors.takeIf { it.isNotEmpty() }?.let {
                     ScrobblerContentInfo.RelatedSection(
-                        title = "声优",
+                        title = label(R.string.kitsu_section_voice_actors),
                         items = it,
                     )
                 },
             ),
             actions = listOf(
                 ScrobblerContentInfo.ExternalAction(
-                    title = "角色主页",
+                    title = label(R.string.kitsu_action_character_page),
                     url = "$BASE_WEB_URL/characters/${attrs.getStringOrNull("slug") ?: id}",
                 ),
             ),
@@ -1207,22 +1216,22 @@ class KitsuRepository(
 
     private fun String.toKitsuCharacterRoleLabel(): String {
         return when (this.lowercase()) {
-            "main" -> "主角"
-            "supporting" -> "配角"
+            "main" -> label(R.string.kitsu_role_main)
+            "supporting" -> label(R.string.kitsu_role_supporting)
             else -> this
         }
     }
 
     private fun String.toKitsuLocaleLabel(): String {
         return when (this.lowercase()) {
-            "ja_jp" -> "日配"
-            "en" -> "英配"
-            "pt_br" -> "葡配"
-            "es" -> "西配"
-            "fr" -> "法配"
-            "de" -> "德配"
-            "ko" -> "韩配"
-            "it" -> "意配"
+            "ja_jp" -> label(R.string.kitsu_dub_ja)
+            "en" -> label(R.string.kitsu_dub_en)
+            "pt_br" -> label(R.string.kitsu_dub_pt_br)
+            "es" -> label(R.string.kitsu_dub_es)
+            "fr" -> label(R.string.kitsu_dub_fr)
+            "de" -> label(R.string.kitsu_dub_de)
+            "ko" -> label(R.string.kitsu_dub_ko)
+            "it" -> label(R.string.kitsu_dub_it)
             else -> this
         }
     }

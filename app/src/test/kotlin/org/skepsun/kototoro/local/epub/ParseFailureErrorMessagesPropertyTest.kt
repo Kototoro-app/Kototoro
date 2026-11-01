@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.local.epub
 
 import io.kotest.core.spec.style.StringSpec
+import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldContain
@@ -12,6 +13,7 @@ import io.kotest.property.arbitrary.int
 import io.kotest.property.arbitrary.long
 import io.kotest.property.arbitrary.string
 import io.kotest.property.checkAll
+import org.skepsun.kototoro.R
 
 /**
  * Property-based test for parse failure error messages.
@@ -25,7 +27,7 @@ class ParseFailureErrorMessagesPropertyTest : StringSpec({
     
     "all parse errors have non-empty user messages" {
         checkAll(100, arbParseError()) { error ->
-            error.userMessage.shouldNotBeBlank()
+            error.userMessageRes shouldNotBe 0
         }
     }
     
@@ -35,18 +37,10 @@ class ParseFailureErrorMessagesPropertyTest : StringSpec({
         }
     }
     
-    "parse error user messages are in Chinese" {
-        checkAll(100, arbParseError()) { error ->
-            // User messages should contain Chinese characters or be localized
-            val hasChinese = error.userMessage.any { it.code in 0x4E00..0x9FFF }
-            hasChinese shouldBe true
-        }
-    }
-    
-    "invalid format errors contain format information" {
+"invalid format errors contain format information" {
         repeat(100) {
             val error = EpubError.ParseError.InvalidFormat()
-            error.userMessage shouldContain "格式"
+            error.userMessageRes shouldBe R.string.epub_error_invalid_format
             error.message shouldContain "format"
         }
     }
@@ -54,7 +48,7 @@ class ParseFailureErrorMessagesPropertyTest : StringSpec({
     "corrupted file errors contain filename" {
         checkAll(100, Arb.string(1..50)) { fileName ->
             val error = EpubError.ParseError.CorruptedFile(fileName)
-            error.userMessage shouldContain fileName
+            error.userMessageArgs shouldContain fileName
             error.message shouldContain fileName
         }
     }
@@ -62,7 +56,7 @@ class ParseFailureErrorMessagesPropertyTest : StringSpec({
     "missing components errors contain component name" {
         checkAll(100, Arb.string(1..30)) { component ->
             val error = EpubError.ParseError.MissingComponents(component)
-            error.userMessage shouldContain component
+            error.userMessageArgs shouldContain component
             error.message shouldContain component
         }
     }
@@ -70,7 +64,7 @@ class ParseFailureErrorMessagesPropertyTest : StringSpec({
     "unsupported version errors contain version info" {
         checkAll(100, Arb.string(1..10)) { version ->
             val error = EpubError.ParseError.UnsupportedVersion(version)
-            error.userMessage shouldContain version
+            error.userMessageArgs shouldContain version
             error.message shouldContain version
         }
     }
@@ -78,7 +72,7 @@ class ParseFailureErrorMessagesPropertyTest : StringSpec({
     "malformed HTML errors contain chapter index" {
         checkAll(100, Arb.int(0..999)) { chapterIndex ->
             val error = EpubError.ParseError.MalformedHtml(chapterIndex)
-            error.userMessage shouldContain chapterIndex.toString()
+            error.userMessageArgs shouldContain chapterIndex
             error.message shouldContain chapterIndex.toString()
         }
     }

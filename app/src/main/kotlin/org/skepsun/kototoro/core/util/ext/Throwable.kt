@@ -38,6 +38,7 @@ import org.skepsun.kototoro.core.image.ImageDecodeException
 import org.skepsun.kototoro.core.exceptions.resolve.ExceptionResolver
 import org.skepsun.kototoro.core.model.getContentType
 import org.skepsun.kototoro.core.model.getUnsupportedSourceTitleResId
+import org.skepsun.kototoro.local.epub.EpubException
 import org.skepsun.kototoro.parsers.ErrorMessages.FILTER_BOTH_LOCALE_GENRES_NOT_SUPPORTED
 import org.skepsun.kototoro.parsers.ErrorMessages.FILTER_BOTH_STATES_GENRES_NOT_SUPPORTED
 import org.skepsun.kototoro.parsers.ErrorMessages.FILTER_MULTIPLE_GENRES_NOT_SUPPORTED
@@ -108,6 +109,7 @@ private fun Throwable.getDisplayMessageOrNull(resources: Resources): String? = w
     }
 
     is ZipException -> resources.getString(R.string.error_corrupted_zip, this.message.orEmpty())
+    is EpubException -> error.userMessage(resources)
     is SQLiteFullException -> resources.getString(R.string.error_no_space_left)
     is UnsupportedFileException -> resources.getString(R.string.text_file_not_supported)
     is BadBackupFormatException -> resources.getString(R.string.unsupported_backup_message)
