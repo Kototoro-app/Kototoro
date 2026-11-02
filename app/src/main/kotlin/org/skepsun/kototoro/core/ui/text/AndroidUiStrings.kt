@@ -3,6 +3,7 @@ package org.skepsun.kototoro.core.ui.text
 import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import java.util.concurrent.ConcurrentHashMap
 
@@ -10,9 +11,8 @@ import java.util.concurrent.ConcurrentHashMap
  * Android's answer to [UiStrings]: the name is one of its own resource names, so a screen both hosts share reads the
  * Webtranslate-managed catalog instead of a second copy of the text.
  *
- * Names are resolved to ids once and cached: composition asks for the same handful of names on every recomposition,
- * while `getIdentifier` walks the resource table. A name missing from `res/values` answers itself, as Android's own
- * `getString` would fail rather than show something wrong.
+ * Known shared catalog keys resolve directly to `R.string` / `R.array` ids via [AndroidUiStringIds] so R8 resource
+ * shrinking retains them in release builds without runtime reflection; dynamic or framework fallbacks remain cached.
  */
 class AndroidUiStrings(private val context: Context) : UiStrings {
 
@@ -34,6 +34,14 @@ class AndroidUiStrings(private val context: Context) : UiStrings {
     /** The id of [name] in [cache], or null when no resource of [type] carries it. */
     @Suppress("DiscouragedApi")
     private fun id(cache: ConcurrentHashMap<String, Int>, name: String, type: String): Int? {
+        val generatedId = when (type) {
+            "string" -> AndroidUiStringIds.stringId(name)
+            "array" -> AndroidUiStringIds.arrayId(name)
+            else -> 0
+        }
+        if (generatedId != 0) {
+            return generatedId
+        }
         val id = cache.getOrPut(name) {
             // The application id carries the build suffix; the namespace is what the resources were compiled under.
             context.resources.getIdentifier(name, type, context.packageName)
@@ -51,9 +59,10 @@ class AndroidUiStrings(private val context: Context) : UiStrings {
     }
 }
 
-/** The catalog shared screens read on Android, resolved once for this composition tree. */
+/** The catalog shared screens read on Android, scoped to the current activity configuration for per-app locales. */
 @Composable
 fun rememberAndroidUiStrings(): UiStrings {
-    val context = LocalContext.current.applicationContext
-    return remember(context) { AndroidUiStrings(context) }
+    val context = LocalContext.current
+    val configuration = LocalConfiguration.current
+    return remember(context, configuration) { AndroidUiStrings(context) }
 }
