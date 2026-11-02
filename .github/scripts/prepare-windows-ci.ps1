@@ -83,6 +83,17 @@ if ($PSCmdlet.ParameterSetName -eq "Source") {
     }
     [IO.File]::WriteAllText($taskServerBuildFile, $taskServerBuild.Replace($taskTimeExpression, '"1790898154"'),
         [Text.UTF8Encoding]::new($false))
+    # The android-jar stubs are served from a moving branch that republishes 1.0.0 in place (6830765 removed
+    # android.net.Network*, which the pinned source still needs); this revision holds the pinned android-jar-1.0.0.jar.
+    $taskRootBuildFile = Join-Path "$taskSourceRoot" "build.gradle.kts"
+    $taskRootBuild = [IO.File]::ReadAllText($taskRootBuildFile)
+    $taskStubsRepository = 'https://github.com/Suwayomi/Suwayomi-Server/raw/android-jar/"'
+    if ($taskRootBuild.Split(@($taskStubsRepository), [StringSplitOptions]::None).Count -ne 2) {
+        throw "Upstream android-jar repository changed."
+    }
+    [IO.File]::WriteAllText($taskRootBuildFile, $taskRootBuild.Replace($taskStubsRepository,
+        'https://github.com/Suwayomi/Suwayomi-Server/raw/3983289d9481a8ba99c0b16350b27f41364906a2/"'),
+        [Text.UTF8Encoding]::new($false))
     $taskRuntimeRoot = Join-Path "$taskSourceRoot" "runtime-output"
     $taskPreviousJavaHome = $env:JAVA_HOME
     $taskPreviousBuildType = $env:ProductBuildType

@@ -22,6 +22,9 @@ upscale_dir="$build/linux-ci-upscalers"
 
 source_revision="eb2dc0b19a9571b27c02bebc5c883e404b7bd7fb"
 patch_revision="b86cead7dd1387b09c71e7f4b15c1e020463e422"
+# The android-jar stubs are served from a moving branch that republishes 1.0.0 in place (6830765 removed
+# android.net.Network*, which the pinned source still needs); this revision holds the pinned android-jar-1.0.0.jar.
+stubs_revision="3983289d9481a8ba99c0b16350b27f41364906a2"
 runtime_patch_sha256="ec18dcb53cfe7cd5c3b1bcaac665e5a8b76755a2911d9bdccf1d2197429788d0"
 init_script_sha256="fe3efd267a55adb796599b49e6ea92f2efe76da960ca955af00e80873559ee02"
 
@@ -180,15 +183,18 @@ build_compatibility_from_source() { # jdk25 home
     git -C "$work" apply "$downloads/suwayomi-ios-runtime.patch" || fail "cannot apply the pinned runtime patch"
     # The original artifact was built at one fixed second; freezing it keeps the existing SHA-256 pins reproducible.
     timestamp_expression='Instant.now().epochSecond.toString()'
-    python3 - "$work/server/build.gradle.kts" "$timestamp_expression" <<'PY'
+    python3 - "$work/server/build.gradle.kts" "$timestamp_expression" "$work/build.gradle.kts" "$stubs_revision" <<'PY'
 import sys
-path, expression = sys.argv[1], sys.argv[2]
-with open(path, encoding='utf-8') as source:
-    text = source.read()
-if text.count(expression) != 1:
-    sys.exit(f"prepare-linux-ci: upstream build timestamp expression changed in {path}")
-with open(path, 'w', encoding='utf-8', newline='\n') as target:
-    target.write(text.replace(expression, '"1790898154"'))
+def replace_once(path, old, new, what):
+    with open(path, encoding='utf-8') as source:
+        text = source.read()
+    if text.count(old) != 1:
+        sys.exit(f"prepare-linux-ci: upstream {what} changed in {path}")
+    with open(path, 'w', encoding='utf-8', newline='\n') as target:
+        target.write(text.replace(old, new))
+replace_once(sys.argv[1], sys.argv[2], '"1790898154"', "build timestamp expression")
+stubs = "https://github.com/Suwayomi/Suwayomi-Server/raw/"
+replace_once(sys.argv[3], stubs + 'android-jar/"', stubs + sys.argv[4] + '/"', "android-jar repository")
 PY
     (
         cd "$work"
