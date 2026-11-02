@@ -1,5 +1,7 @@
 package org.skepsun.kototoro.cloudstream.desktop
 
+import com.lagradost.cloudstream3.network.WebViewResolver
+import com.sun.net.httpserver.HttpServer
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -14,6 +16,8 @@ import org.skepsun.kototoro.core.source.SourceFilter
 import org.skepsun.kototoro.desktop.compat.MihonDesktopPlatform
 import org.skepsun.kototoro.source.host.FileSourcePreferenceStore
 import org.skepsun.kototoro.source.host.SourceImageStore
+import java.io.File
+import java.net.InetSocketAddress
 import java.nio.file.Files
 import java.nio.file.Path
 import java.security.MessageDigest
@@ -126,6 +130,36 @@ class CloudstreamDesktopRuntimeTest {
             assertTrue(streams.isNotEmpty())
         }
         plugins.forEach { registry.unload(it.fileName.toString().removeSuffix(".cs3")) }
+    }
+
+    /** 40 of 517 community plugins resolve a stream with WebViewResolver; the official JVM class finds nothing. */
+    @Test
+    fun `web view resolver finds the stream a page's frame requests`() = runBlocking<Unit> {
+        val bridge = System.getProperty("kototoro.compat.bridge.exe")?.let(::File)
+        assumeTrue(bridge?.isFile == true, "A desktop browser bridge is needed")
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0).apply {
+            createContext("/") { exchange ->
+                val body = when (exchange.requestURI.path) {
+                    "/watch" -> "<iframe src='/embed'></iframe>"
+                    "/embed" -> "<script>fetch('/hls/master.m3u8?token=abc', {headers: {'X-Embed': '1'}});</script>"
+                    else -> "#EXTM3U"
+                }.toByteArray()
+                exchange.responseHeaders.add("Content-Type", "text/html")
+                exchange.sendResponseHeaders(200, body.size.toLong())
+                exchange.responseBody.use { it.write(body) }
+            }
+            start()
+        }
+        try {
+            val base = "http://127.0.0.1:${server.address.port}"
+
+            val (found, _) = WebViewResolver(Regex("\\.m3u8"), timeout = 20_000).resolveUsingWebView("$base/watch")
+
+            assertEquals("$base/hls/master.m3u8?token=abc", found?.url?.toString())
+            assertEquals("1", found?.header("X-Embed"))
+        } finally {
+            server.stop(0)
+        }
     }
 
     private fun sha256(bytes: ByteArray) = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }

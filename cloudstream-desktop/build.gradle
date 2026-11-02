@@ -103,6 +103,8 @@ def cloudstreamDesktopJar = tasks.register('prepareCloudstreamDesktopJar', Jar) 
 	from(zipTree(cloudstreamLibrary)) {
 		// The Windows host has no NewPipe; a compatibility stub in this module's sources takes their place.
 		exclude 'com/lagradost/cloudstream3/extractors/Youtube*.class'
+		// The JVM resolver resolves nothing; this module's one drives the platform browser.
+		exclude 'com/lagradost/cloudstream3/network/WebViewResolver*.class'
 		// The JVM context helper always answers null; the host's returns the compatibility Context.
 		exclude 'com/lagradost/api/ContextHelper_jvmKt.class'
 	}
@@ -223,4 +225,11 @@ tasks.withType(Test).configureEach {
 	// Optional real plugins (not committed): a directory of `.cs3` files, e.g. from the official repository.
 	providers.gradleProperty('cloudstreamPlugins').orNull?.with { systemProperty 'kototoro.cloudstream.real', it }
 	if (providers.gradleProperty('cloudstreamOnline').isPresent()) systemProperty 'kototoro.cloudstream.online', 'true'
+	// The platform browser for WebViewResolver: the bridge :mihon-desktop-compat builds for this OS (macOS compiles it
+	// here; Windows needs the WebView2 SDK), passed only when it exists so the other tests run without one.
+	def compat = project(':mihon-desktop-compat')
+	def macOs = System.getProperty('os.name', '').startsWith('Mac')
+	def bridge = compat.layout.buildDirectory.file(macOs ? 'bridge/kototoro-webview-bridge' : 'bridge/kototoro-webview-bridge.exe')
+	if (macOs) dependsOn ':mihon-desktop-compat:compileMacosWebViewBridge'
+	doFirst { if (bridge.get().asFile.isFile()) systemProperty 'kototoro.compat.bridge.exe', bridge.get().asFile.absolutePath }
 }

@@ -4,7 +4,11 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.os.Looper
 import android.webkit.ValueCallback
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
+import android.webkit.WebViewClient
+import com.sun.net.httpserver.HttpServer
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -12,6 +16,8 @@ import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import java.io.File
+import java.net.InetSocketAddress
+import java.util.concurrent.ConcurrentLinkedQueue
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.UUID
@@ -147,6 +153,90 @@ class DesktopWebViewBridgeTest {
             activeProvider?.destroy()
             bridge.close()
             WebView.setProviderFactory(null)
+        }
+    }
+
+    /** A page that requests a stream from its script and from a frame, as video embeds do. */
+    private fun requestPage(): HttpServer = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0).apply {
+        createContext("/") { exchange ->
+            val body = when (exchange.requestURI.path) {
+                "/page" -> "<iframe src='/frame'></iframe><script>" +
+                    "fetch('/api/data', {method: 'POST', headers: {'X-Token': 'abc'}, body: '{}'});</script>"
+                "/frame" -> "<script>fetch('/media/master.m3u8?token=1');</script>"
+                else -> "{}"
+            }.toByteArray()
+            exchange.responseHeaders.add("Content-Type", if (exchange.requestURI.path.startsWith("/api")) "application/json" else "text/html")
+            exchange.sendResponseHeaders(200, body.size.toLong())
+            exchange.responseBody.use { it.write(body) }
+        }
+        start()
+    }
+
+    private suspend fun awaitRequest(requests: Collection<String>, suffix: String) = withTimeout(10000) {
+        while (requests.none { it.endsWith(suffix) }) kotlinx.coroutines.delay(50)
+    }
+
+    @Test
+    fun `bridge reports the page's requests while observing them`() = runBlocking<Unit> {
+        val exe = bridgeExecutable()
+        assumeTrue(exe != null && exe.isFile, "A desktop browser bridge executable must be available")
+        val server = requestPage()
+        val base = "http://127.0.0.1:${server.address.port}"
+        try {
+            DesktopWebViewBridge(exe!!, testProfileDir("requests")).use { bridge ->
+                bridge.start()
+                val requests = ConcurrentLinkedQueue<DesktopWebRequest>()
+                bridge.requestListener = { requests += it }
+                assertTrue(bridge.observeRequests(true))
+
+                bridge.navigate("$base/page")
+                withTimeout(10000) {
+                    while (requests.none { it.url == "$base/media/master.m3u8?token=1" }) kotlinx.coroutines.delay(50)
+                }
+
+                assertTrue(requests.any { it.url == "$base/page" && it.isForMainFrame }, "main frame: $requests")
+                val post = requests.single { it.url == "$base/api/data" }
+                assertEquals("POST", post.method)
+                assertEquals("abc", post.headers.entries.single { it.key.equals("X-Token", true) }.value)
+                assertTrue(bridge.observeRequests(false))
+            }
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun `provider hands the page's requests to shouldInterceptRequest`() = runBlocking<Unit> {
+        val exe = bridgeExecutable()
+        assumeTrue(exe != null && exe.isFile, "A desktop browser bridge executable must be available")
+        val server = requestPage()
+        val base = "http://127.0.0.1:${server.address.port}"
+        val bridge = DesktopWebViewBridge(exe!!, userDataDir = testProfileDir("provider-requests"))
+        bridge.start()
+        var activeProvider: DesktopWebViewProvider? = null
+        try {
+            if (Looper.myLooper() == null) Looper.prepare()
+            WebView.setProviderFactory { wv -> DesktopWebViewProvider(wv, bridge).also { activeProvider = it } }
+            val webView = WebView(object : ContextWrapper(null) {
+                override fun getApplicationContext(): Context = this
+            })
+            val seen = ConcurrentLinkedQueue<String>()
+            webView.webViewClient = object : WebViewClient() {
+                override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
+                    seen += request.url.toString()
+                    return null
+                }
+            }
+
+            webView.loadUrl("$base/page")
+
+            awaitRequest(seen, "/media/master.m3u8?token=1")
+            assertTrue(seen.contains("$base/api/data"), "requests: $seen")
+        } finally {
+            activeProvider?.destroy()
+            bridge.close()
+            WebView.setProviderFactory(null)
+            server.stop(0)
         }
     }
 

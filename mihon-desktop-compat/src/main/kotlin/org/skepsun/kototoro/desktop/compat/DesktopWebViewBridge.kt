@@ -66,6 +66,12 @@ class DesktopWebViewBridge(
     internal val processExitCode: Int? get() = if (process.isAlive) null else process.exitValue()
     val isRunning: Boolean get() = !closed.get() && !outputClosed.get() && process.isAlive
 
+    /**
+     * Receives the page's requests while [observeRequests] is on, on the bridge's reader thread: every navigation,
+     * frame and subresource the browser reports. Observation only; the browser still loads them itself.
+     */
+    @Volatile var requestListener: ((DesktopWebRequest) -> Unit)? = null
+
     private val process: Process
     private val writer: BufferedWriter
     private val readerThread: Thread
@@ -86,6 +92,10 @@ class DesktopWebViewBridge(
                     if (trimmed.isEmpty()) continue
                     try {
                         val obj = json.parseToJsonElement(trimmed).jsonObject
+                        if (obj["event"]?.jsonPrimitive?.content == "request") {
+                            requestEvent(obj)?.let { request -> requestListener?.invoke(request) }
+                            continue
+                        }
                         val id = obj["id"]?.jsonPrimitive?.longOrNull
                         if (id != null) {
                             val deferred = pendingRequests.remove(id)
@@ -179,6 +189,31 @@ class DesktopWebViewBridge(
         withTimeout(5000) { sendCommand("settings", buildJsonObject {
             put("javaScript", javaScript); userAgent?.let { put("userAgent", it) }
         }) }
+    }
+
+    /**
+     * Turns the `request` events on or off. False when the bridge predates them (it rejects the method), so callers
+     * can fall back to not seeing requests at all.
+     */
+    suspend fun observeRequests(enabled: Boolean): Boolean = try {
+        withTimeout(5000) { sendCommand("observeRequests", buildJsonObject { put("enabled", enabled) }) }
+        true
+    } catch (error: IllegalStateException) {
+        if (error.message?.contains("Unknown method") != true) throw error
+        false
+    }
+
+    private fun requestEvent(obj: JsonObject): DesktopWebRequest? {
+        val url = obj["url"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() } ?: return null
+        val headers = (obj["headers"] as? JsonObject).orEmpty().mapNotNull { (name, value) ->
+            (value as? kotlinx.serialization.json.JsonPrimitive)?.content?.let { name to it }
+        }.toMap()
+        return DesktopWebRequest(
+            url = url,
+            method = obj["method"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }?.uppercase() ?: "GET",
+            headers = headers,
+            isForMainFrame = obj["mainFrame"]?.jsonPrimitive?.booleanOrNull ?: false,
+        )
     }
 
     suspend fun evaluateJs(script: String, timeoutMs: Long = 10000): String = withTimeout(timeoutMs) {
@@ -316,5 +351,13 @@ class DesktopWebViewBridge(
 }
 
 data class DesktopWebDocument(val url: String, val title: String)
+
+/** One request a page made, as the bridge reports it while observing requests. */
+data class DesktopWebRequest(
+    val url: String,
+    val method: String,
+    val headers: Map<String, String>,
+    val isForMainFrame: Boolean,
+)
 
 data class DesktopBrowserWindow(val visible: Boolean, val width: Int, val height: Int, val title: String)

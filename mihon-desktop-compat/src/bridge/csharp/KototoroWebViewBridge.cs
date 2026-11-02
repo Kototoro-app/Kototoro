@@ -34,6 +34,8 @@ namespace Kototoro.WebViewBridge {
         private TaskCompletionSource<bool> navCompletion;
         private ulong? navigationId;
         private bool allowHttpErrorResponse;
+        private bool observingRequests;
+        private string mainFrameUri;
         private readonly SemaphoreSlim commands = new SemaphoreSlim(1, 1);
 
         public BridgeApplicationContext() {
@@ -137,6 +139,7 @@ namespace Kototoro.WebViewBridge {
                         }
 
                         webView.NavigationStarting += (s, e) => {
+                            mainFrameUri = e.Uri;
                             if (navCompletion != null && navigationId == null) navigationId = e.NavigationId;
                         };
                         webView.NavigationCompleted += (s, e) => {
@@ -267,6 +270,23 @@ namespace Kototoro.WebViewBridge {
                         SendResult(id, new Dictionary<string, object> { { "status", "ok" } });
                         break;
                     }
+                    case "observeRequests": {
+                        EnsureInit();
+                        bool enabled = ReadBool(@params, "enabled", false);
+                        if (enabled && !observingRequests) {
+                            // Every request of every frame and worker, reported only: the handler never sets a response.
+                            webView.AddWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.All,
+                                CoreWebView2WebResourceRequestSourceKinds.All);
+                            webView.WebResourceRequested += OnObservedRequest;
+                        } else if (!enabled && observingRequests) {
+                            webView.WebResourceRequested -= OnObservedRequest;
+                            webView.RemoveWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.All,
+                                CoreWebView2WebResourceRequestSourceKinds.All);
+                        }
+                        observingRequests = enabled;
+                        SendResult(id, new Dictionary<string, object> { { "status", "ok" } });
+                        break;
+                    }
                     case "settings": {
                         EnsureInit();
                         webView.Settings.IsScriptEnabled = ReadBool(@params, "javaScript", true);
@@ -356,6 +376,28 @@ namespace Kototoro.WebViewBridge {
                 }
             } catch (Exception ex) {
                 SendError(id, ex.Message);
+            }
+        }
+
+        private void OnObservedRequest(object sender, CoreWebView2WebResourceRequestedEventArgs e) {
+            if (isClosing) return;
+            try {
+                var headers = new Dictionary<string, object>();
+                foreach (var header in e.Request.Headers) headers[header.Key] = header.Value;
+                var evt = new Dictionary<string, object> {
+                    { "event", "request" },
+                    { "url", e.Request.Uri },
+                    { "method", e.Request.Method },
+                    { "headers", headers },
+                    { "mainFrame", e.ResourceContext == CoreWebView2WebResourceContext.Document && e.Request.Uri == mainFrameUri }
+                };
+                string line = serializer.Serialize(evt);
+                lock (Console.Out) {
+                    Console.WriteLine(line);
+                    Console.Out.Flush();
+                }
+            } catch {
+                // A request the page abandoned while it was being reported.
             }
         }
 

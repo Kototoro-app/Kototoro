@@ -71,6 +71,10 @@ Kototoro 的 `prepareCloudstreamRuntimeJar` 仍有一项宿主职责：验证最
 Windows 的 `CloudflareKiller` 也是 `cloudstream-desktop` 自带的版本：共享平台客户端（`DesktopChallengeInterceptor`）
 已经在 WebView2 中解决挑战并把放行 Cookie 存进 Cookie 库，所以它只放行请求，`getCookieHeaders`/`savedCookies`
 从该 Cookie 库读取；社区仓库 517 个插件中有 49 个创建它，没有它时这些插件在 Windows 上会被兼容性检查拒绝。
+桌面的 `WebViewResolver` 同样是模块自带的版本（官方 JVM 库那份什么都不解析，已排除）：它在平台浏览器中打开页面，
+通过桥的请求观察（`observeRequests`，经 `shouldInterceptRequest`）取第一条匹配 `interceptUrl` 的请求；浏览器只能
+观察不能应答，所以不像 Android 那样经 OkHttp 重放（`useOkhttp` 被忽略）。没有浏览器桥（Linux）时立即返回空结果。
+桌面另外依赖官方库所用的 `com.fleeksoft.ksoup:ksoup` 0.2.6（Android 端经 IReader 获得同包名的 fork）。
 
 纯 JVM 库不包含部分 Android 插件 ABI。Kototoro 在
 `app/src/main/kotlin/com/lagradost/cloudstream3/` 下提供最小宿主兼容层，包括 `Plugin`、`VideoClickAction`、

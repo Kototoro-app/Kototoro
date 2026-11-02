@@ -16,6 +16,12 @@ PersistentCookieStore 同步，避免多份浏览器持久化状态互相覆盖�
 普通导航拒绝 HTTP 错误，交互验证可显式允许错误页面；不绕过 TLS 校验，也不自动打开外部协议。
 实际站点的人机验证兼容性仍需逐站验证，离线协议测试不能证明所有站点可用。
 
+`observeRequests` 打开后，桥把页面发出的请求逐条推送为无 `id` 的 `{"event":"request",...}` 行（URL、方法、请求头、
+是否主框架），桌面 WebView 据此回调 `WebViewClient.shouldInterceptRequest`（只观察，返回值不替换响应）。
+WKWebView 没有子资源请求的公开回调：框架导航（含 iframe）来自导航委托，其余由注入所有 frame 的文档起始脚本
+上报——fetch/XHR 带页面设置的方法与请求头，其他资源取自 Resource Timing（只有 URL）；同一导航内按方法+URL 去重。
+WebView2 端用 `AddWebResourceRequestedFilter("*", All, RequestSourceKinds.All)` 观察全部 frame 与 worker 的请求。
+
 `:mihon-desktop-compat:compileMacosWebViewBridge` 使用 `xcrun swiftc` 编译；需要 Xcode Command Line Tools。
 `:desktop-app:run` 自动依赖该任务并指定桥程序；macOS 预览包将其放入 `browser/` 资源目录。
 `-PdesktopBridgeExecutable` 仍可覆盖开发运行位置，资源定位不会选择 Windows EXE。

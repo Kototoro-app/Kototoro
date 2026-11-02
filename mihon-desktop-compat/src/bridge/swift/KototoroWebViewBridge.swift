@@ -2,10 +2,65 @@ import AppKit
 import WebKit
 
 // The JVM owns this process. stdout is reserved for the existing newline-delimited bridge protocol.
-final class BrowserBridge: NSObject, WKNavigationDelegate, NSWindowDelegate {
+final class BrowserBridge: NSObject, WKNavigationDelegate, NSWindowDelegate, WKScriptMessageHandler {
     private var webView: WKWebView!
     private var window: NSWindow!
     private var navigation: (id: Any, allowHttpError: Bool, token: WKNavigation?)?
+    private var observingRequests = false
+    // Frame navigations reach the delegate and the parent's resource timing alike; report each request once.
+    private var reportedRequests = Set<String>()
+    private static let requestHandler = "kototoroRequest"
+    // WKWebView reports frame navigations to its delegate but no subresources, so pages report their own:
+    // fetch and XMLHttpRequest with the method and headers the page set, everything else from resource timing.
+    private static let requestScript = """
+    (() => {
+      if (window.__kototoroRequests) return; window.__kototoroRequests = true;
+      const seen = new Set();
+      const post = (url, method, headers) => {
+        try {
+          const href = new URL(url, location.href).href, verb = (method || 'GET').toUpperCase();
+          if (!/^https?:/.test(href) || seen.has(verb + ' ' + href)) return;
+          seen.add(verb + ' ' + href);
+          window.webkit.messageHandlers.\(requestHandler).postMessage({url: href, method: verb, headers: headers || {}});
+        } catch (e) {}
+      };
+      const fetch0 = window.fetch;
+      if (fetch0) window.fetch = function (input, init) {
+        try {
+          const req = input instanceof Request ? input : null, headers = {};
+          const source = (init && init.headers) || (req && req.headers);
+          if (source) new Headers(source).forEach((v, k) => { headers[k] = v; });
+          post(req ? req.url : String(input), (init && init.method) || (req && req.method), headers);
+        } catch (e) {}
+        return fetch0.apply(this, arguments);
+      };
+      const xhr = XMLHttpRequest.prototype, open0 = xhr.open, header0 = xhr.setRequestHeader, send0 = xhr.send;
+      xhr.open = function (method, url) { this.__kototoro = {method, url, headers: {}}; return open0.apply(this, arguments); };
+      xhr.setRequestHeader = function (k, v) { if (this.__kototoro) this.__kototoro.headers[k] = v; return header0.apply(this, arguments); };
+      xhr.send = function () { const r = this.__kototoro; if (r) post(r.url, r.method, r.headers); return send0.apply(this, arguments); };
+      // fetch and XHR were reported above with their real method and headers; timing adds what nothing else saw.
+      try { new PerformanceObserver(list => list.getEntries()
+              .filter(e => e.initiatorType !== 'fetch' && e.initiatorType !== 'xmlhttprequest')
+              .forEach(e => post(e.name, 'GET', {})))
+              .observe({type: 'resource', buffered: true}); } catch (e) {}
+    })();
+    """
+
+    private func emitRequest(url: String, method: String, headers: [String: String], mainFrame: Bool) {
+        guard reportedRequests.insert(method.uppercased() + " " + url).inserted else { return }
+        let event: [String: Any] = ["event": "request", "url": url, "method": method, "headers": headers,
+                                    "mainFrame": mainFrame]
+        if let data = try? JSONSerialization.data(withJSONObject: event) {
+            FileHandle.standardOutput.write(data + Data([10]))
+        }
+    }
+
+    func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
+        guard observingRequests, let body = message.body as? [String: Any], let url = body["url"] as? String else { return }
+        let headers = (body["headers"] as? [String: Any] ?? [:]).compactMapValues { $0 as? String }
+        emitRequest(url: url, method: body["method"] as? String ?? "GET", headers: headers,
+                    mainFrame: false)
+    }
 
     func reply(_ id: Any, _ result: [String: Any] = [:], error: String? = nil) {
         let payload: [String: Any] = error.map { ["id": id, "error": ["message": $0]] }
@@ -52,6 +107,7 @@ final class BrowserBridge: NSObject, WKNavigationDelegate, NSWindowDelegate {
         switch method {
         case "navigate", "loadHtml":
             guard navigation == nil else { reply(id, error: "Navigation in progress"); return }
+            reportedRequests.removeAll()
             if method == "navigate" {
                 guard let text = p["url"] as? String, let url = URL(string: text),
                       ["http", "https"].contains(url.scheme?.lowercased() ?? ""), url.host != nil else {
@@ -79,6 +135,19 @@ final class BrowserBridge: NSObject, WKNavigationDelegate, NSWindowDelegate {
                              characterEncodingName: "utf-8", baseURL: base ?? URL(string: "about:blank")!)
                 navigation = (id, true, token)
             }
+        case "observeRequests":
+            let enabled = p["enabled"] as? Bool ?? false
+            let controller = webView.configuration.userContentController
+            if enabled && !observingRequests {
+                controller.add(self, name: Self.requestHandler)
+                controller.addUserScript(WKUserScript(source: Self.requestScript, injectionTime: .atDocumentStart,
+                                                      forMainFrameOnly: false))
+            } else if !enabled && observingRequests {
+                controller.removeScriptMessageHandler(forName: Self.requestHandler)
+                controller.removeAllUserScripts()
+            }
+            observingRequests = enabled
+            reply(id, ["status": "ok"])
         case "stop":
             webView.stopLoading()
             finish(error: "Navigation stopped")
@@ -201,6 +270,10 @@ final class BrowserBridge: NSObject, WKNavigationDelegate, NSWindowDelegate {
     func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction,
                  decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
         let allowed = ["http", "https", "about", "data", "blob"].contains(action.request.url?.scheme?.lowercased() ?? "")
+        if observingRequests, allowed, let url = action.request.url, ["http", "https"].contains(url.scheme?.lowercased() ?? "") {
+            emitRequest(url: url.absoluteString, method: action.request.httpMethod ?? "GET",
+                        headers: action.request.allHTTPHeaderFields ?? [:], mainFrame: action.targetFrame?.isMainFrame ?? true)
+        }
         decisionHandler(allowed ? .allow : .cancel)
         if !allowed { finish(error: "Unsupported navigation scheme") }
     }
