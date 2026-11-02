@@ -1144,6 +1144,7 @@ private fun ReaderCutoutAwareInfoBarLayout(
         alignment = when (layout) {
             ReaderInfoBarLayout.CENTERED -> ReaderInfoBarAlignment.CENTERED
             ReaderInfoBarLayout.SPLIT -> ReaderInfoBarAlignment.SPLIT
+            ReaderInfoBarLayout.SPLIT_LEADING_PROGRESS -> ReaderInfoBarAlignment.SPLIT_LEADING_PROGRESS
         },
         readingStatus = readingStatus,
         progressStatus = progressStatus,

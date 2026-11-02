@@ -3022,6 +3022,7 @@ SHA-256 指紋:
     <string name="reader_info_bar_layout">閱讀狀態排版</string>
     <string name="reader_info_bar_layout_centered">居中緊湊</string>
     <string name="reader_info_bar_layout_split">左右分欄</string>
+    <string name="reader_info_bar_layout_split_leading_progress">左右分欄（進度靠左）</string>
     <string name="reader_info_bar_cutout_avoidance">避讓螢幕挖孔（實驗性）</string>
     <string name="reader_info_bar_cutout_avoidance_summary">實驗性功能：將閱讀資訊移出攝像頭挖孔或劉海區域</string>
     <string name="source_test_availability_filter_title">測試可用性</string>

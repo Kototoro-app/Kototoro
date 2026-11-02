@@ -197,6 +197,93 @@ class ReaderInfoBarGeometryTest {
     }
 
     @Test
+    fun `split groups that fit on neither side of a cutout stay on their own side`() {
+        val placement = resolveReaderInfoBarPlacement(
+            width = 1080,
+            desiredReadingWidth = 300,
+            systemStatusWidth = 230,
+            alignment = ReaderInfoBarAlignment.SPLIT,
+            leftPadding = 24,
+            rightPadding = 24,
+            cutout = ReaderInfoBarCutout(left = 200, right = 900),
+            cutoutSpacing = 12,
+        )
+
+        assertEquals(24, placement.readingX)
+        assertEquals(164, placement.readingWidth)
+        assertEquals(912, placement.systemStatusX)
+        assertEquals(144, placement.systemStatusWidth)
+    }
+
+    @Test
+    fun `reading yields to a status slot pushed onto its side of the cutout`() {
+        val placement = resolveReaderInfoBarPlacement(
+            width = 1080,
+            desiredReadingWidth = 850,
+            systemStatusWidth = 150,
+            alignment = ReaderInfoBarAlignment.SPLIT,
+            leftPadding = 24,
+            rightPadding = 24,
+            cutout = ReaderInfoBarCutout(left = 960, right = 1080),
+            cutoutSpacing = 12,
+        )
+
+        assertEquals(798, placement.systemStatusX)
+        assertEquals(798, placement.readingX + placement.readingWidth)
+    }
+
+    @Test
+    fun `leading progress follows the reading status`() {
+        val placement = resolveReaderInfoBarLeadingProgressPlacement(
+            readingEnd = 324,
+            limit = 894,
+            desiredProgressWidth = 60,
+            itemSpacing = 26,
+            cutout = null,
+            cutoutSpacing = 12,
+        )
+
+        assertEquals(ReaderInfoBarItemPlacement(x = 350, width = 60), placement)
+    }
+
+    @Test
+    fun `leading progress keeps clear of a centred camera`() {
+        val clear = resolveReaderInfoBarLeadingProgressPlacement(
+            readingEnd = 324,
+            limit = 894,
+            desiredProgressWidth = 60,
+            itemSpacing = 26,
+            cutout = ReaderInfoBarCutout(left = 490, right = 590),
+            cutoutSpacing = 12,
+        )
+        val pushed = resolveReaderInfoBarLeadingProgressPlacement(
+            readingEnd = 450,
+            limit = 894,
+            desiredProgressWidth = 60,
+            itemSpacing = 26,
+            cutout = ReaderInfoBarCutout(left = 490, right = 590),
+            cutoutSpacing = 12,
+        )
+
+        assertEquals(ReaderInfoBarItemPlacement(x = 350, width = 60), clear)
+        assertEquals(ReaderInfoBarItemPlacement(x = 602, width = 60), pushed)
+    }
+
+    @Test
+    fun `leading progress shrinks before the cutout when nothing fits past it`() {
+        val placement = resolveReaderInfoBarLeadingProgressPlacement(
+            readingEnd = 300,
+            limit = 640,
+            desiredProgressWidth = 80,
+            itemSpacing = 26,
+            cutout = ReaderInfoBarCutout(left = 400, right = 590),
+            cutoutSpacing = 12,
+        )
+
+        assertEquals(ReaderInfoBarItemPlacement(x = 326, width = 62), placement)
+    }
+
+    @Test
     fun `rounded corner geometry protects content at its actual vertical position`() {
         val padding = resolveReaderInfoBarRoundedCornerPadding(
             edgeDistanceToCenter = 158,

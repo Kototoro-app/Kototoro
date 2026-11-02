@@ -27,7 +27,7 @@ class ReaderInfoBarMeasureTest {
     @Test
     fun `zero available progress width does not trigger a second measure`() {
         val progress = Child(140)
-        measure(ReaderInfoBarAlignment.SPLIT, ReaderInfoBarCutout(80, 232), progress)
+        measure(ReaderInfoBarAlignment.SPLIT, ReaderInfoBarCutout(80, 200), progress)
         assertEquals(1, progress.measurements.size)
         assertEquals(0, progress.measurements.single().maxWidth)
     }
@@ -63,6 +63,30 @@ class ReaderInfoBarMeasureTest {
         assertEquals(84, reading.measurements.single().maxWidth)
         assertEquals(30, progress.measurements.single().maxWidth)
         assertEquals(1, system.measurements.size)
+    }
+
+    @Test
+    fun `a cutout wider than half the bar is ignored instead of squeezing every item`() {
+        for (alignment in ReaderInfoBarAlignment.entries) {
+            val reading = Child(80)
+            val progress = Child(30)
+            val system = Child(40)
+
+            measure(alignment, ReaderInfoBarCutout(30, 230), progress, system, reading)
+
+            assertEquals(80, reading.measurements.single().maxWidth)
+            assertEquals(30, progress.measurements.single().maxWidth)
+            assertEquals(40, system.measurements.single().maxWidth)
+        }
+    }
+
+    @Test
+    fun `split status slot is measured with the room its side of the cutout leaves`() {
+        val system = Child(60)
+
+        measure(ReaderInfoBarAlignment.SPLIT, ReaderInfoBarCutout(60, 180), Child(30), system)
+
+        assertEquals(44, system.measurements.single().maxWidth)
     }
 
     @Test

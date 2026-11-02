@@ -117,6 +117,10 @@ fun ReaderSettingsScreen(
     val readerInfoBarLayoutOptions = listOf(
         SettingsChoiceOption(ReaderInfoBarLayout.CENTERED, stringResource(R.string.reader_info_bar_layout_centered)),
         SettingsChoiceOption(ReaderInfoBarLayout.SPLIT, stringResource(R.string.reader_info_bar_layout_split)),
+        SettingsChoiceOption(
+            ReaderInfoBarLayout.SPLIT_LEADING_PROGRESS,
+            stringResource(R.string.reader_info_bar_layout_split_leading_progress),
+        ),
     )
     val pagesPreloadNames = listOf("1", "2", "0")
     val eInkModeEnabled = settings.observeAsState(AppSettings.KEY_EINK_MODE) { isEInkModeEnabled }.value

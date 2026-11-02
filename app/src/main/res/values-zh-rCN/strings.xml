@@ -588,6 +588,7 @@
     <string name="reader_info_bar_layout">阅读状态排版</string>
     <string name="reader_info_bar_layout_centered">居中紧凑</string>
     <string name="reader_info_bar_layout_split">左右分栏</string>
+    <string name="reader_info_bar_layout_split_leading_progress">左右分栏（进度靠左）</string>
     <string name="reader_info_bar_cutout_avoidance">避让屏幕挖孔（实验性）</string>
     <string name="reader_info_bar_cutout_avoidance_summary">实验性功能：将阅读信息移出摄像头挖孔或刘海区域</string>
     <string name="comics_archive">漫画压缩包</string>

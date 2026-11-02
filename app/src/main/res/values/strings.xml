@@ -1032,6 +1032,7 @@
     <string name="reader_info_bar_layout">Information bar layout</string>
     <string name="reader_info_bar_layout_centered">Centered</string>
     <string name="reader_info_bar_layout_split">Split sides</string>
+    <string name="reader_info_bar_layout_split_leading_progress">Split sides, progress on the left</string>
     <string name="reader_info_bar_cutout_avoidance">Avoid display cutout (experimental)</string>
     <string name="reader_info_bar_cutout_avoidance_summary">Experimental: move reader information away from camera cutouts and notches</string>
     <string name="comics_archive">Comics archive</string>
