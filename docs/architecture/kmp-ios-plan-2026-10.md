@@ -3968,7 +3968,7 @@ ZIP SHA-256：57DD7959A4F9FF476D968ACFBC9EFBCF0B2051ABD4B322D9E9559D8F4CBE3CA5�
   播放器顶栏“投屏”对话框搜索设备，投屏中控制条换成远端进度/暂停/±10s/结束。验证：`DlnaTest`（假渲染器与要求 Referer 的假站点）；
   窗口探针投屏到假渲染器（中继 200、约 4.9MB、动作序列、本机暂停、结束后从 12s 继续）。本次窗口探针截屏可用，视频区实测彩色像素。
 - **随包分发**：`-PwithWindowsDistribution` 时 `prepareBundledThirdParty` 按固定版本与 SHA-256 取得 libmpv（zhongfly/mpv-winbuild LGPL 版
-  2026-10-03，bsdtar 解 7z）与 realcugan/realesrgan ncnn-vulkan 官方包（可用 `-PlibmpvDirectory`/`-PncnnDirectory` 提供本地副本，否则 GitHub 资产 API
+  2026-10-03 的 libmpv-2.dll；上游约一个月删一次旧 release，所以改从本仓库孤立 tag `third-party-mirror` 的 release 取同一 DLL）与 realcugan/realesrgan ncnn-vulkan 官方包（可用 `-PlibmpvDirectory`/`-PncnnDirectory` 提供本地副本，否则 GitHub 资产 API
   下载并缓存于根 `build/third-party-downloads`），放入 `resources/mpv`、`resources/upscale/<tool>`（去掉示例媒体），写 `THIRD_PARTY_PLAYBACK.md`
   许可与来源说明。运行时优先使用随包程序。`--check-runtime` 新增播放器（lavfi 测试流）与两种 ncnn 超分自检；`windowsDistributionTest` 断言均来自
   resources。安装包体积约增加 200 MB（libmpv 101 MB、ncnn 程序与模型 102 MB）。

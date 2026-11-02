@@ -478,9 +478,12 @@ def ncnnDirectory = providers.gradleProperty('ncnnDirectory').getOrNull()
 
 // Pinned third-party playback/upscaling artifacts for the Windows distribution (fetched once into the build cache).
 def bundledDownloads = [
-    libmpv: [repo: 'zhongfly/mpv-winbuild', tag: '2026-10-03-413ff0b1cd',
-        asset: 'mpv-dev-lgpl-x86_64-20261003-git-413ff0b1cd.7z',
-        sha256: '12a9966bad239672c97276f01a9e625504e0b1d1fdcff95256066eeb8ffb1f21'],
+    // zhongfly/mpv-winbuild deletes releases after about a month, so libmpv-2.dll comes from the project's own
+    // third-party-mirror release: the DLL of mpv-dev-lgpl-x86_64-20261003-git-413ff0b1cd.7z (SHA-256 12a9966b…),
+    // byte for byte the one Kototoro 2.3.4 shipped (mpv v0.41.0-1095-g413ff0b1c).
+    libmpv: [repo: 'Kototoro-app/Kototoro', tag: 'third-party-mirror', asset: 'libmpv-2-20261003-git-413ff0b1cd.dll',
+        sha256: '6209dfe89b45d726bedc3b932e9321e9d1a49b64b2e1fefdf8c2973e384e7001',
+        version: '2026-10-03-413ff0b1cd', build: 'zhongfly/mpv-winbuild'],
     realcugan: [repo: 'nihui/realcugan-ncnn-vulkan', tag: '20220728', asset: 'realcugan-ncnn-vulkan-20220728-windows.zip',
         sha256: 'c6e08d46c11704b1e3a1ada9ddd591cb5005f52f132136c8633ba25def400e01'],
     realesrgan: [repo: 'xinntao/Real-ESRGAN', tag: 'v0.2.5.0', asset: 'realesrgan-ncnn-vulkan-20220424-windows.zip',
@@ -536,29 +539,7 @@ def prepareBundledThirdParty = tasks.register('prepareBundledThirdParty') {
         if (suppliedDll != null && suppliedDll.isFile()) {
             project.copy { from suppliedDll; into mpv }
         } else {
-            def archive = pinnedArtifact('libmpv', null)
-            def unpack = new File(temporaryDir, 'mpv'); project.delete(unpack); unpack.mkdirs()
-            // Prefer 7-Zip (preinstalled on GitHub's Windows images), then Windows' bsdtar by path. Older bsdtar
-            // builds (windows-2022) lack LZMA, and Git's GNU tar, first on CI PATH, reads neither 7z nor "D:\" paths.
-            def systemRoot = System.getenv('SystemRoot')
-            def extractors = [
-                [new File(System.getenv('ProgramFiles') ?: 'C:/Program Files', '7-Zip/7z.exe'),
-                    ['x', '-y', "-o${unpack.absolutePath}", archive.absolutePath, 'libmpv-2.dll']],
-                [systemRoot != null ? new File(systemRoot, 'System32/tar.exe') : null,
-                    ['-xf', archive.absolutePath, '-C', unpack.absolutePath, 'libmpv-2.dll']],
-            ].findAll { it[0]?.isFile() }
-            def failures = []
-            for (extractor in extractors) {
-                def command = ([extractor[0].absolutePath] + extractor[1]).collect { it.toString() }
-                def process = new ProcessBuilder(command).redirectErrorStream(true).start()
-                def output = process.inputStream.text
-                if (process.waitFor() == 0 && new File(unpack, 'libmpv-2.dll').isFile()) break
-                failures << "${extractor[0].name}: ${output.trim()}"
-            }
-            if (!new File(unpack, 'libmpv-2.dll').isFile()) {
-                throw new GradleException("Cannot extract libmpv-2.dll (${failures.join('; ') ?: 'no 7z or bsdtar found'})")
-            }
-            project.copy { from new File(unpack, 'libmpv-2.dll'); into mpv }
+            project.copy { from pinnedArtifact('libmpv', null); into mpv; rename { 'libmpv-2.dll' } }
         }
         ['realcugan', 'realesrgan'].each { key ->
             def supplied = ncnnDirectory != null ? new File(ncnnDirectory, bundledDownloads[key].asset) : null
@@ -584,7 +565,7 @@ def prepareBundledThirdParty = tasks.register('prepareBundledThirdParty') {
 
 | Component | Version | Licence | Source |
 |---|---|---|---|
-| libmpv (LGPL build, with FFmpeg, libplacebo) | ${bundledDownloads.libmpv.tag} | LGPL-2.1-or-later | https://github.com/mpv-player/mpv, build: https://github.com/${bundledDownloads.libmpv.repo} |
+| libmpv (LGPL build, with FFmpeg, libplacebo) | ${bundledDownloads.libmpv.version} | LGPL-2.1-or-later | https://github.com/mpv-player/mpv, build: https://github.com/${bundledDownloads.libmpv.build} |
 | realcugan-ncnn-vulkan (ncnn, Real-CUGAN models) | ${bundledDownloads.realcugan.tag} | MIT (program), BSD-3-Clause (ncnn) | https://github.com/${bundledDownloads.realcugan.repo} |
 | realesrgan-ncnn-vulkan (ncnn, Real-ESRGAN models) | ${bundledDownloads.realesrgan.tag} | BSD-3-Clause | https://github.com/${bundledDownloads.realesrgan.repo} |
 | Anime4K GLSL shaders | as in the Android app | MIT | https://github.com/bloc97/Anime4K |
