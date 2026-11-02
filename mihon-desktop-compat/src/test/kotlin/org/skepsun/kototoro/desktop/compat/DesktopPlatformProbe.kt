@@ -99,8 +99,11 @@ object DesktopPlatformProbe {
                 val platform = MihonDesktopPlatform(root.resolve("compat"))
                 val loader = platform.initialize(prefs)
                 val app = platform.preferenceContext() as Application
-                check(app.filesDir.toPath().startsWith(root.resolve("compat")))
-                check(app.cacheDir.toPath().startsWith(root.resolve("compat")))
+                // The platform keeps the real path of its data directory; macOS temp directories sit behind
+                // /var -> /private/var, so compare with the real path of the directory it created.
+                val compat = root.resolve("compat").toRealPath()
+                check(app.filesDir.toPath().startsWith(compat))
+                check(app.cacheDir.toPath().startsWith(compat))
                 check(!Files.exists(root.resolve("compat/server.conf")))
                 val helper = Injekt.getInstance<NetworkHelper>(NetworkHelper::class.java)
                 check(CookieHandler.getDefault() != null)

@@ -70,7 +70,8 @@ object DesktopBrowserCookieProbe {
                                     ?: error("Secure cookie missing in native jar after push; all names=" + browser.getCookies("").map { it.name })
                                 check(native.isSecure && native.isHttpOnly && !native.isSession && native.path == "/other")
                                 check(native.domain == protectedUrl.host)
-                                check(native.expiresEpochMillis == expiry)
+                                // Cookie expiry has second resolution: WKWebView keeps seconds, WebView2 the milliseconds.
+                                check(native.expiresEpochMillis?.div(1000) == expiry / 1000)
                                 browser.navigate(url)
                                 val request = site.requests.poll(3, java.util.concurrent.TimeUnit.SECONDS) ?: error("No browser request")
                                 check(request.headers["Cookie"].orEmpty().joinToString().contains("sdk_value=from_sdk"))
