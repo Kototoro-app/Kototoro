@@ -42,6 +42,9 @@ import javax.inject.Singleton
 
 class SourceGroupFormatException(message: String) : IllegalArgumentException(message)
 
+/** The group file declares a schema newer than [SOURCE_GROUP_SCHEMA_VERSION]; the app must be updated. */
+class SourceGroupNewerSchemaException : IllegalArgumentException("Source group schema is newer than supported")
+
 class SourceGroupTooLargeException : IOException("Source group file is too large")
 
 data class ApplyProgress(
@@ -171,10 +174,20 @@ class SourceGroupRepository @Inject constructor(
 		val input = context.contentResolver.openInputStream(uri)
 			?: throw IOException("Cannot open input stream")
 		val bytes = input.use { readLimited(it, SOURCE_GROUP_MAX_BYTES) }
-		val decoded = runCatching { SourceGroupJson.decode(bytes.toString(Charsets.UTF_8)) }
-			.getOrElse { throw SourceGroupFormatException(it.message ?: "Invalid JSON") }
+		val text = bytes.toString(Charsets.UTF_8)
+		val decoded = runCatching { SourceGroupJson.decode(text) }
+			.getOrElse { error ->
+				// A newer file may carry a body this version cannot decode; its schema still tells it apart.
+				if ((SourceGroupJson.peekSchema(text) ?: 0) > SOURCE_GROUP_SCHEMA_VERSION) {
+					throw SourceGroupNewerSchemaException()
+				}
+				throw SourceGroupFormatException(error.message ?: "Invalid JSON")
+			}
+		if (decoded.isNewerSchema()) {
+			throw SourceGroupNewerSchemaException()
+		}
 		if (!decoded.isValid()) {
-			throw SourceGroupFormatException("Unsupported schema or invalid id")
+			throw SourceGroupFormatException("Invalid schema or id")
 		}
 		// Importing is idempotent: the same id replaces the stored group instead of adding a copy.
 		val updated = groupFile(decoded.id).exists()
