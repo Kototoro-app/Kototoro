@@ -169,6 +169,10 @@ jobs:
           asset="Kototoro-$VERSION_NAME-ios-$CHANNEL-unsigned"
           cp "$IOS_DIR/release-ios/Kototoro-$MARKETING-ios-jvm-unsigned.ipa" "release-ios/$asset.ipa"
           (cd release-ios && shasum -a 256 "$asset.ipa" > "$asset.sha256")
+          # Read by the AltStore source that the docs site publishes (iosApp/Scripts/altstore-source.py).
+          python3 iosApp/Scripts/altstore-source.py metadata "release-ios/$asset.ipa" \
+            iosApp/Kototoro/Kototoro.entitlements iosApp/KototoroWidget/KototoroWidget.entitlements \
+            -o "release-ios/$asset.altstore.json"
           ls -l release-ios
 
       - name: Upload iOS package

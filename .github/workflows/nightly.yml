@@ -218,6 +218,7 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
+      actions: write
     steps:
       - uses: actions/download-artifact@v7
         with:
@@ -232,3 +233,8 @@ jobs:
           test -n "$GH_TOKEN"
           gh release view "$TAG_NAME" --repo "$NIGHTLY_REPOSITORY" >/dev/null
           gh release upload "$TAG_NAME" release-ios/* --repo "$NIGHTLY_REPOSITORY" --clobber
+      # The docs site rebuilds the AltStore sources from the releases, so the new IPA appears in them.
+      - name: Refresh AltStore sources
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run docs-pages.yml --repo "${{ github.repository }}" --ref devel

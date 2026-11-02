@@ -60,6 +60,18 @@ The IPA is **unsigned** and requires **iOS 26 or later**. Kototoro is not on the
 install the IPA yourself with a sideloading tool such as AltStore or SideStore (or your own Apple developer
 account). Free Apple accounts need to refresh the signature every 7 days.
 
+#### AltStore / SideStore source
+
+Add a source instead of downloading IPAs by hand; AltStore and SideStore then show new builds as updates.
+
+| Channel | Source URL | Add on the device |
+|---|---|---|
+| Release | `https://kototoro-app.github.io/Kototoro/altstore/release.json` | [AltStore](altstore://source?url=https://kototoro-app.github.io/Kototoro/altstore/release.json) · [SideStore](sidestore://source?url=https://kototoro-app.github.io/Kototoro/altstore/release.json) |
+| Nightly | `https://kototoro-app.github.io/Kototoro/altstore/nightly.json` | [AltStore](altstore://source?url=https://kototoro-app.github.io/Kototoro/altstore/nightly.json) · [SideStore](sidestore://source?url=https://kototoro-app.github.io/Kototoro/altstore/nightly.json) |
+
+Both channels install the same app (`org.skepsun.kototoro.ios`), so add only one of them. The sources list the
+last ten iOS builds of their channel and are regenerated from the GitHub releases after each one is published.
+
 ### What works
 
 - SwiftUI app on the shared Kotlin core: library with categories, history, bookmarks, continue reading;
