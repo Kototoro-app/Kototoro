@@ -55,6 +55,12 @@ data class ApplyProgress(
 	val manualInstall: List<String> = emptyList(),
 )
 
+/** [updated] is true when an imported group replaced a stored group with the same id. */
+data class SourceGroupImportResult(
+	val group: SourceGroup,
+	val updated: Boolean,
+)
+
 @Singleton
 class SourceGroupRepository @Inject constructor(
 	@ApplicationContext private val context: Context,
@@ -161,7 +167,7 @@ class SourceGroupRepository @Inject constructor(
 		output.use { it.write(file.readBytes()) }
 	}
 
-	suspend fun importFromUri(uri: Uri): SourceGroup = withContext(Dispatchers.IO) {
+	suspend fun importFromUri(uri: Uri): SourceGroupImportResult = withContext(Dispatchers.IO) {
 		val input = context.contentResolver.openInputStream(uri)
 			?: throw IOException("Cannot open input stream")
 		val bytes = input.use { readLimited(it, SOURCE_GROUP_MAX_BYTES) }
@@ -170,14 +176,10 @@ class SourceGroupRepository @Inject constructor(
 		if (!decoded.isValid()) {
 			throw SourceGroupFormatException("Unsupported schema or invalid id")
 		}
-		// Never overwrite an existing group on import: duplicate it under a fresh id instead.
-		val stored = if (groupFile(decoded.id).exists()) {
-			decoded.copy(id = UUID.randomUUID().toString())
-		} else {
-			decoded
-		}
-		writeGroup(stored)
-		stored
+		// Importing is idempotent: the same id replaces the stored group instead of adding a copy.
+		val updated = groupFile(decoded.id).exists()
+		writeGroup(decoded)
+		SourceGroupImportResult(group = decoded, updated = updated)
 	}
 
 	/**
@@ -217,15 +219,24 @@ class SourceGroupRepository @Inject constructor(
 			manualInstall = manualPackages.map { it.pkg },
 		)
 		try {
+			val failedRepoUrls = mutableSetOf<String>()
 			for (repo in group.repos) {
-				runGuarded(errors, context.getString(R.string.source_groups_error_repo, repo.url)) {
+				val ok = runGuarded(errors, context.getString(R.string.source_groups_error_repo, repo.url)) {
 					applyRepo(repo)
 				}
+				if (!ok) failedRepoUrls += repo.url.trimEnd('/')
 				tick()
 			}
 
 			val catalogCache = HashMap<ExternalExtensionType, List<RepoAvailableExtension>>()
 			for (pkg in missing) {
+				// A package that comes from a repository which just failed cannot be fetched either:
+				// skip it so one broken repository does not add a second, chained error.
+				val pkgRepoUrl = pkg.repoUrl?.trimEnd('/')
+				if (pkgRepoUrl != null && pkgRepoUrl in failedRepoUrls) {
+					tick()
+					continue
+				}
 				runGuarded(errors, context.getString(R.string.source_groups_error_package, pkg.pkg)) {
 					applyPackage(pkg, catalogCache)
 				}
@@ -235,6 +246,16 @@ class SourceGroupRepository @Inject constructor(
 			group.sourceStates.forEach { state ->
 				runGuarded(errors, context.getString(R.string.source_groups_error_source, state.source)) {
 					ensureSourceRow(state)
+				}
+			}
+
+			// A lock already set on this device always wins over the group: it is kept as it is, and
+			// every state the group wanted to change on such a source is reported as skipped.
+			val deviceLocks = group.sourceStates.associate { it.source to contentSources.lockState(it.source) }
+			group.sourceStates.forEach { state ->
+				val deviceLock = deviceLocks[state.source] ?: return@forEach
+				if (deviceLock != state.enabled || (state.locked != null && state.locked != deviceLock)) {
+					errors += context.getString(R.string.source_groups_skipped_locked, state.source)
 				}
 			}
 
@@ -250,7 +271,7 @@ class SourceGroupRepository @Inject constructor(
 
 			for (state in group.sourceStates) {
 				runGuarded(errors, context.getString(R.string.source_groups_error_source, state.source)) {
-					applySourceDetails(state)
+					applySourceDetails(state, deviceLocks[state.source])
 				}
 				tick()
 			}
@@ -324,10 +345,11 @@ class SourceGroupRepository @Inject constructor(
 		)
 	}
 
-	private suspend fun applySourceDetails(state: SourceGroupSourceState) {
+	/** [deviceLock] is the lock this device already has on the source; it is never replaced by the group's. */
+	private suspend fun applySourceDetails(state: SourceGroupSourceState, deviceLock: Boolean?) {
 		val source = contentSources.resolveSource(state.source)
 		contentSources.setIsPinned(listOf(source), state.pinned)
-		if (state.locked != null) {
+		if (state.locked != null && deviceLock == null) {
 			contentSources.setSourceLock(source, state.locked)
 		}
 		if (!state.source.startsWith("JSON_")) {
@@ -352,14 +374,17 @@ class SourceGroupRepository @Inject constructor(
 			?.trim()
 			?.takeIf { it.isNotEmpty() }
 
-	private suspend fun runGuarded(errors: MutableList<String>, label: String, block: suspend () -> Unit) {
-		try {
+	/** Runs [block]; a failure is recorded in [errors] and reported as false so dependent steps can be skipped. */
+	private suspend fun runGuarded(errors: MutableList<String>, label: String, block: suspend () -> Unit): Boolean {
+		return try {
 			block()
+			true
 		} catch (e: CancellationException) {
 			throw e
 		} catch (e: Exception) {
 			Log.w(TAG, "Source group step failed: $label", e)
 			errors += "$label: ${e.localizedMessage ?: e.javaClass.simpleName}"
+			false
 		}
 	}
 
