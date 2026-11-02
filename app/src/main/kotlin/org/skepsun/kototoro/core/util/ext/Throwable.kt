@@ -15,6 +15,7 @@ import org.jsoup.HttpStatusException
 import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.backups.domain.BackupPayloadGuard
+import org.skepsun.kototoro.cloudstream.runtime.CloudstreamMissingNewPipeException
 import org.skepsun.kototoro.core.exceptions.BadBackupFormatException
 import org.skepsun.kototoro.core.exceptions.CaughtException
 import org.skepsun.kototoro.core.exceptions.CloudFlareBlockedException
@@ -90,6 +91,7 @@ private fun Throwable.getDisplayMessageOrNull(resources: Resources): String? = w
     is InteractiveActionRequiredException -> resources.getString(R.string.additional_action_required)
     is CloudFlareProtectedException -> resources.getString(R.string.captcha_required_message)
     is CloudFlareBlockedException -> resources.getString(R.string.blocked_by_server_message)
+    is CloudstreamMissingNewPipeException -> resources.getString(R.string.cloudstream_newpipe_required)
     is ActivityNotFoundException,
     is UnsupportedOperationException,
         -> resources.getString(R.string.operation_not_supported)

@@ -319,6 +319,7 @@ class CloudstreamCatalog(
         }
         var success = false
         val firstError = runCatchingCancellable { success = loadLinksOnce() }.exceptionOrNull()
+        var lastError = firstError
         var completed = firstError == null
         var challengeRetried = false
         if (firstError != null) {
@@ -332,7 +333,10 @@ class CloudstreamCatalog(
                 challengeRetried = true
                 if (platform.resolveChallenge(challenge, chapter.url, "loadLinks")) {
                     val retry = runCatchingCancellable { loadLinksOnce() }
-                        .onFailure { platform.error("loadLinks retry failed source=${source.displayName}", it) }
+                        .onFailure {
+                            lastError = it
+                            platform.error("loadLinks retry failed source=${source.displayName}", it)
+                        }
                     completed = retry.isSuccess
                     success = retry.getOrDefault(false)
                 }
@@ -343,7 +347,10 @@ class CloudstreamCatalog(
                 platform.warn("loadLinks plugin fallbacks exhausted after a challenge source=${source.displayName}")
                 if (platform.resolveChallenge(challenge, chapter.url, "loadLinks fallback")) {
                     val retry = runCatchingCancellable { loadLinksOnce() }
-                        .onFailure { platform.error("loadLinks fallback retry failed source=${source.displayName}", it) }
+                        .onFailure {
+                            lastError = it
+                            platform.error("loadLinks fallback retry failed source=${source.displayName}", it)
+                        }
                     completed = retry.isSuccess
                     success = retry.getOrDefault(false)
                 }
@@ -351,6 +358,11 @@ class CloudstreamCatalog(
         }
         if (completed) playbackCache.finish(cacheKey)
         val pages = links.values.filter { it.type in PLAYABLE_LINK_TYPES }.map { it.toPage() }
+        // An empty list would only say "no links"; a plugin that needs NewPipe can never find any here.
+        val missingNewPipe = lastError?.takeIf { it.isMissingNewPipe() }
+        if (pages.isEmpty() && missingNewPipe != null && !chapter.url.isDirectPlayableUrl()) {
+            throw CloudstreamMissingNewPipeException(missingNewPipe)
+        }
         if (platform.isDebug) {
             platform.debug(
                 "loadLinks done source=${source.displayName} success=$success links=${pages.size} " +

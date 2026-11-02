@@ -125,6 +125,7 @@
     <string name="_import">Import</string>
     <string name="delete">Delete</string>
     <string name="operation_not_supported">This operation is not supported</string>
+    <string name="cloudstream_newpipe_required">This extension needs NewPipe classes that the NewPipe bundled with Kototoro does not have, so it cannot play videos. Try updating the extension or Kototoro.</string>
     <string name="text_file_not_supported">Either pick a ZIP or CBZ file.</string>
     <string name="no_description">No description</string>
     <string name="clear_pages_cache">Clear page cache</string>

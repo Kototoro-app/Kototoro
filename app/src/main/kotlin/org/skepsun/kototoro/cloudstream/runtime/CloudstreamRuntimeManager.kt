@@ -39,6 +39,7 @@ import java.util.zip.ZipFile
 import javax.inject.Inject
 import javax.inject.Singleton
 import okhttp3.OkHttpClient
+import org.schabi.newpipe.extractor.NewPipe
 
 @Singleton
 class CloudstreamRuntimeManager @Inject constructor(
@@ -143,6 +144,8 @@ class CloudstreamRuntimeManager @Inject constructor(
             }
             .build()
         app.defaultHeaders = mapOf("User-Agent" to cloudstreamUserAgent)
+        // As the official app does at start-up: the library's YouTube extractor and YouTube plugins need it (#608).
+        NewPipe.init(CloudstreamNewPipeDownloader(contentHttpClient))
         writeDiagnostic(
             "network:configured interceptors=${contentHttpClient.interceptors.joinToString(",") { it::class.java.simpleName }} " +
                 "networkInterceptors=${contentHttpClient.networkInterceptors.joinToString(",") { it::class.java.simpleName }} " +

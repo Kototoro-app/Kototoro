@@ -15,7 +15,7 @@ open class YoutubeExtractor : ExtractorApi() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit,
     ) {
-        // Intentionally left blank: the host app does not ship NewPipe, so this
+        // Intentionally left blank: the Windows host does not ship NewPipe (Android does), so this
         // compatibility stub only satisfies legacy Cloudstream runtime linkage.
     }
 }

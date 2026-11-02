@@ -4426,7 +4426,8 @@ kototoro/kotatsu/UMA parser 插件复用平台的共享 HTTP 客户端，因此�
     Java 21 toolchain 编译（`options.release = 11`，本模块自己的字节码仍为 11）。漏掉它时引用 `showToast("…")`
     的插件在 Windows 被兼容性检查判定缺宿主类、Android 却照常加载，夹具插件已固定链接该桥方法。
   - 只有 `CloudStreamApp` 是桌面版：成员与 Android 相同，去掉基于 Fragment 的浏览器方法，改用系统浏览器。
-- 运行库：官方 jvmJar 去掉宿主替换的 `Youtube*` 和 `ContextHelper_jvmKt`（与 Android 的处理一致），依赖版本沿用 app 锁定的
+- 运行库：官方 jvmJar 去掉宿主替换的 `Youtube*`（Windows 不带 NewPipe，用模块内空实现；Android 已改为打包 NewPipe 并保留官方类）
+  和 `ContextHelper_jvmKt`（与 Android 的处理一致），依赖版本沿用 app 锁定的
   NiceHttp、jackson、jsoup、rhino、ktor-http、datetime、io、cryptography、fuzzywuzzy、gson。
 - `CloudstreamPluginRegistry`：
   - 读取 manifest，做兼容性检查；把 dex 转成 jar（按哈希缓存），每个插件用独立 URLClassLoader，父加载器包含官方库、

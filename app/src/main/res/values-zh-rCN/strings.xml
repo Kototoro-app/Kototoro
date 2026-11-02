@@ -164,6 +164,7 @@
     <string name="about_discord" translatable="false">Discord</string>
     <string name="delete">删除</string>
     <string name="operation_not_supported">操作无效</string>
+    <string name="cloudstream_newpipe_required">此扩展所需的 NewPipe 组件与 Kototoro 内置的版本不兼容，无法播放视频。请尝试更新扩展或 Kototoro。</string>
     <string name="text_file_not_supported">必须选择一个 ZIP 或 CBZ 文件。</string>
     <string name="no_description">暂无简介</string>
     <string name="clear_pages_cache">清除页面缓存</string>

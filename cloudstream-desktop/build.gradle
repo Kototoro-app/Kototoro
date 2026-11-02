@@ -88,7 +88,7 @@ def cloudstreamDesktopJar = tasks.register('prepareCloudstreamDesktopJar', Jar) 
 	preserveFileTimestamps = false
 	reproducibleFileOrder = true
 	from(zipTree(cloudstreamLibrary)) {
-		// A compatibility stub ships in :cloudstream-shared; the host has no NewPipe.
+		// The Windows host has no NewPipe; a compatibility stub in this module's sources takes their place.
 		exclude 'com/lagradost/cloudstream3/extractors/Youtube*.class'
 		// The JVM context helper always answers null; the host's returns the compatibility Context.
 		exclude 'com/lagradost/api/ContextHelper_jvmKt.class'

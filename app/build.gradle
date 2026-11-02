@@ -318,8 +318,6 @@ def cloudstreamSanitizedJarTask = tasks.register('prepareCloudstreamRuntimeJar',
 		}
 		zipTree(sourceJar)
 	}) {
-		// Kototoro supplies an Android-aware YouTube extractor implementation.
-		exclude 'com/lagradost/cloudstream3/extractors/Youtube*.class'
 		// library:jvmJar contains a no-op JVM resolver. Kototoro supplies the Android implementation.
 		exclude 'com/lagradost/cloudstream3/network/WebViewResolver*.class'
 		// The JVM context helper always returns null. Kototoro supplies the Android implementation.
@@ -376,6 +374,8 @@ def cloudstreamSanitizedJarTask = tasks.register('prepareCloudstreamRuntimeJar',
 				'com/lagradost/cloudstream3/plugins/BasePlugin.class',
 				'com/lagradost/cloudstream3/utils/ExtractorApi.class',
 				'com/lagradost/cloudstream3/utils/JsInterpreterKt.class',
+				// The official NewPipe-backed extractor; the host bundles NewPipeExtractor for it (#608).
+				'com/lagradost/cloudstream3/extractors/YoutubeExtractor.class',
 			].each { requiredEntry ->
 				if (verifiedZipFile.getEntry(requiredEntry) == null) {
 					throw new GradleException("Sanitized Cloudstream jar is missing ${requiredEntry}")
@@ -558,8 +558,13 @@ dependencies {
 	implementation libs.xsoup
 	implementation libs.jsonpath
 	
-	// Rhino JavaScript engine for Legado compatibility
+	// Rhino JavaScript engine for Legado compatibility (NewPipeExtractor runs YouTube's player JS on it too)
 	implementation libs.rhino
+	// Cloudstream's YouTube extractor and YouTube plugins resolve streams with NewPipeExtractor, as in the official app
+	implementation(libs.newpipe.extractor) {
+		// The javax.script adapter: Android has no javax.script, and NewPipe calls Rhino directly.
+		exclude group: 'org.mozilla', module: 'rhino-engine'
+	}
 	// QuickJS library (Android packaged)
 	implementation libs.quickjsKt
 

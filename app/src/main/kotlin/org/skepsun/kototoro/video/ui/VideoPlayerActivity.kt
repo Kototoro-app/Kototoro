@@ -31,6 +31,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onStart
@@ -54,6 +55,7 @@ import org.skepsun.kototoro.core.ui.BaseComposeFullscreenActivity
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.resolveUiPresentationConfig
 import org.skepsun.kototoro.core.ui.compose.KototoroSnackbarHost
+import org.skepsun.kototoro.core.util.ext.getDisplayMessage
 import org.skepsun.kototoro.core.util.ext.getParcelableExtraCompat
 import org.skepsun.kototoro.core.model.parcelable.ParcelableContent
 import org.skepsun.kototoro.core.nav.ReaderIntent
@@ -65,6 +67,7 @@ import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentSource as ParsersContentSource
 import org.skepsun.kototoro.cloudstream.model.CloudstreamSource
 import org.skepsun.kototoro.cloudstream.runtime.CloudstreamContentRepository
+import org.skepsun.kototoro.cloudstream.runtime.CloudstreamMissingNewPipeException
 import org.skepsun.kototoro.cloudstream.runtime.CloudstreamPlaybackEvent
 import org.skepsun.kototoro.cloudstream.runtime.resolveCloudstreamEpisodeTitle
 import org.skepsun.kototoro.cloudstream.runtime.shouldResolveCloudstreamPlaybackLocator
@@ -2487,6 +2490,10 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         }
     }
 
+    /**
+     * Collects the episode's Cloudstream links and starts the first one. True when playback started, or when the
+     * failure was already reported to the viewer, so callers do not cover it with a generic error.
+     */
     private suspend fun loadAndPlayCloudstreamChapter(
         repo: CloudstreamContentRepository,
         chapter: ContentChapter,
@@ -2564,9 +2571,11 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             "VideoPlayerActivity",
             "Cloudstream activity bridge registered chapter=${chapter.id} activity=${javaClass.simpleName}",
         )
+        var missingNewPipe: CloudstreamMissingNewPipeException? = null
         val playbackEvents = repo.getPlaybackEvents(chapter, clearCache)
             .onStart { setCloudstreamLinkResolutionActive(playbackInstance, true) }
             .onCompletion { setCloudstreamLinkResolutionActive(playbackInstance, false) }
+            .catch { error -> missingNewPipe = error as? CloudstreamMissingNewPipeException ?: throw error }
         playbackEvents.collect { event ->
             if (playbackInstance != cloudstreamPlaybackInstance) return@collect
             when (event) {
@@ -2628,6 +2637,11 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             }
         }
         if (playbackInstance != cloudstreamPlaybackInstance) return false
+        missingNewPipe?.let { error ->
+            Log.w("VideoPlayerActivity", "Cloudstream plugin needs NewPipe source=${source.name}", error)
+            showPlayerMessage(error.getDisplayMessage(resources), SnackbarDuration.Long)
+            return true
+        }
         refreshVideos()
         return startPlayerFromAvailableLink()
     }

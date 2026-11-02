@@ -76,6 +76,8 @@ jsonpath = "2.8.0"
 commonsCompress = "1.28.0"
 rhino = "1.8.1"
 jsoup = "1.22.1"
+# Cloudstream plugins (YouTube ones) link against the copy the official app bundles; keep the same tag.
+newpipeExtractor = "v0.26.3"
 ktor = "3.5.0"
 kotlinxDatetime = "0.8.0"
 kotlinxIo = "0.9.1"
@@ -229,6 +231,7 @@ xsoup = { module = "us.codecraft:xsoup", version.ref = "xsoup" }
 jsonpath = { module = "com.jayway.jsonpath:json-path", version.ref = "jsonpath" }
 commons-compress = { module = "org.apache.commons:commons-compress", version.ref = "commonsCompress" }
 jsoup = { module = "org.jsoup:jsoup", version.ref = "jsoup" }
+newpipe-extractor = { module = "com.github.teamnewpipe:NewPipeExtractor", version.ref = "newpipeExtractor" }
 ktor-http = { module = "io.ktor:ktor-http", version.ref = "ktor" }
 ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
 ktor-client-okhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "ktor" }

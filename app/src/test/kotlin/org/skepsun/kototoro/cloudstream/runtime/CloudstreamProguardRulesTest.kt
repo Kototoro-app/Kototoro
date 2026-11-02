@@ -18,4 +18,15 @@ class CloudstreamProguardRulesTest : FunSpec({
         content shouldContain "-keep class androidx.fragment.app.** { *; }"
         content shouldContain "-keep class androidx.appcompat.app.** { *; }"
     }
+
+    test("proguard rules keep NewPipeExtractor whole for YouTube plugins") {
+        val rulesFile = listOf(
+            File("proguard-rules.pro"),
+            File("app/proguard-rules.pro"),
+            File("../app/proguard-rules.pro"),
+        ).first { it.exists() }
+        val content = rulesFile.readText()
+        content shouldContain "-keep class org.schabi.newpipe.extractor.** { *; }"
+        content shouldContain "-keep class com.grack.nanojson.** { *; }"
+    }
 })

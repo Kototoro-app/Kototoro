@@ -1487,6 +1487,7 @@
     <string name="open_reading_page_in_browser">在浏览器中打开阅读页面</string>
     <string name="open_website">打开网站</string>
     <string name="operation_not_supported">操作无效</string>
+    <string name="cloudstream_newpipe_required">此扩展所需的 NewPipe 组件与 Kototoro 内置的版本不兼容，无法播放视频。请尝试更新扩展或 Kototoro。</string>
     <string name="options">选项</string>
     <string name="order_added">添加日期（降序）</string>
     <string name="order_oldest">最旧</string>

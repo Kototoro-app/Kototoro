@@ -64,10 +64,10 @@ cmp build/cloudstream-runtime/library-jvm-1.0.1.jar \
 升级到新提交时，需要同步更新 `app/build.gradle` 中的文件名、来源提交注释和
 `cloudstreamSourceSha256`。不要只替换 JAR，否则 `prepareCloudstreamRuntimeJar` 应当因哈希不一致而失败。
 
-Kototoro 的 `prepareCloudstreamRuntimeJar` 仍有两项宿主职责：
-
-1. 排除 `Youtube*.class`，使用 Kototoro 的 Android 版 YouTube 实现。
-2. 验证最终 JAR 没有宿主依赖副本，并检查必要运行时类仍然存在。
+Kototoro 的 `prepareCloudstreamRuntimeJar` 仍有一项宿主职责：验证最终 JAR 没有宿主依赖副本，并检查必要运行时类
+仍然存在。官方库的 `Youtube*` 提取器保留：Android 与官方应用一样打包 NewPipeExtractor（版本同官方，见
+`newpipeExtractor`），由 `CloudstreamRuntimeManager` 调用 `NewPipe.init`，YouTube 插件直接链接的 NewPipe 类也由此提供
+（issue #608）。Windows 不带 NewPipe，`cloudstream-desktop` 仍排除这些类并用自带的空实现。
 
 纯 JVM 库不包含部分 Android 插件 ABI。Kototoro 在
 `app/src/main/kotlin/com/lagradost/cloudstream3/` 下提供最小宿主兼容层，包括 `Plugin`、`VideoClickAction`、

@@ -6,6 +6,7 @@
     <string name="try_again">重試</string>
     <string name="history_is_empty">尚無歷史紀錄</string>
     <string name="operation_not_supported">不支援此操作</string>
+    <string name="cloudstream_newpipe_required">此擴充所需的 NewPipe 元件與 Kototoro 內建的版本不相容，無法播放影片。請嘗試更新擴充或 Kototoro。</string>
     <string name="text_local_holder_secondary">從線上來源儲存或者匯入檔案。</string>
     <string name="text_history_holder_primary">您所閱讀的將被顯示在此</string>
     <string name="text_history_holder_secondary">在側「瀏覽」部分找到想要閱讀的內容</string>
