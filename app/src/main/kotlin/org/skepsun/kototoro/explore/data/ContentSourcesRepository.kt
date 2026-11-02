@@ -681,19 +681,55 @@ class ContentSourcesRepository @Inject constructor(
         return dao.observeIsEnabled(source.name).onStart { assimilateNewSources() }
     }
 
-    fun observeEnabledSourcesCount(): Flow<Int> {
+    /** Enabled and total counts, always derived from one source set and one NSFW filter. */
+    private data class SourceCounts(val total: Int, val enabled: Int)
+
+    private fun observeSourceCounts(): Flow<SourceCounts> {
         return combine(
             observeIsNsfwDisabled(),
-            observeAllEnabled().flatMapLatest { isAllSourcesEnabled ->
-                dao.observeAll(!isAllSourcesEnabled, SourcesSortOrder.MANUAL)
-            }
-        ) { skipNsfw, sources ->
-            sources.count {
-                it.source.toContentSourceOrNull()?.let { s ->
-                    (!skipNsfw || !s.isNsfw())
-                } == true
-            }
-        }.distinctUntilChanged().onStart { assimilateNewSources() }
+            observeAllEnabled(),
+            dao.observeAll(false, SourcesSortOrder.MANUAL),
+            jsonDao.observeAllSummaries(),
+            combine(
+                observeJarParserSourceChanges(),
+                observeExternalExtensionChanges(),
+                cloudstreamRuntimeManager.sources,
+            ) { _, _, _ -> Unit },
+        ) { skipNsfw, allEnabled, rows, jsonSummaries, _ ->
+            computeSourceCounts(skipNsfw, allEnabled, rows, jsonSummaries)
+        }.flowOn(Dispatchers.Default)
+    }
+
+    private fun computeSourceCounts(
+        skipNsfw: Boolean,
+        allEnabled: Boolean,
+        rows: List<MangaSourceEntity>,
+        jsonSummaries: List<JsonSourceSummary>,
+    ): SourceCounts {
+        // Same pool as the unified catalog: built-in + Cloudstream, Mihon/Aniyomi/IReader/Tsundoku, JSON.
+        val sources = LinkedHashMap<String, ContentSource>()
+        allContentSources.forEach { sources[it.name] = it }
+        getEnabledMihonSources().forEach { sources[it.name] = it }
+        getEnabledAniyomiSources().forEach { sources[it.name] = it }
+        getEnabledIReaderSources().forEach { sources[it.name] = it }
+        getEnabledTsundokuNovelSources().forEach { sources[it.name] = it }
+        jsonSummaries.forEach { sources[it.id] = JsonSourceListSource(it) }
+        val enabledRows = rows.filter { it.isEnabled }.mapToSet { it.source }
+        val jsonById = jsonSummaries.associateBy { it.id }
+        var total = 0
+        var enabled = 0
+        for ((name, source) in sources) {
+            if (skipNsfw && source.isNsfw()) continue
+            total++
+            // Same rule as UnifiedSourceCatalogRepository: JSON uses its own flag, the rest the db row.
+            val isEnabled = jsonById[name]?.enabled ?: (allEnabled || name in enabledRows)
+            if (isEnabled) enabled++
+        }
+        return SourceCounts(total = total, enabled = enabled)
+    }
+
+    fun observeEnabledSourcesCount(): Flow<Int> {
+        return observeSourceCounts().map { it.enabled }.distinctUntilChanged().onStart { assimilateNewSources() }
     }
 
     fun observeAvailableSourcesCount(): Flow<Int> {
@@ -711,30 +747,7 @@ class ContentSourcesRepository @Inject constructor(
     }
 
     fun observeTotalSourcesCount(): Flow<Int> {
-        return combine(
-            observeJarParserSourceChanges(),
-            observeExternalExtensionChanges(),
-            cloudstreamRuntimeManager.sources,
-            jsonDao.observeAllSummaries(),
-        ) { _, _, cs, jsonSummaries ->
-            val set = HashSet<String>()
-            allContentSources.forEach { set.add(it.name) }
-            cs.forEach { set.add(it.name) }
-            jsonSummaries.forEach { set.add(it.id) }
-            mihonExtensionManager.installedExtensions.value.forEach { ext ->
-                ext.sources.forEach { set.add(it.name) }
-            }
-            aniyomiExtensionManager.installedExtensions.value.forEach { ext ->
-                ext.sources.forEach { set.add(it.name) }
-            }
-            ireaderExtensionManager.installedExtensions.value.forEach { ext ->
-                ext.sources.forEach { set.add(it.name) }
-            }
-            tsundokuExtensionManager.installedExtensions.value.forEach { ext ->
-                ext.sources.forEach { set.add(it.name) }
-            }
-            set.size
-        }.distinctUntilChanged().onStart { assimilateNewSources() }
+        return observeSourceCounts().map { it.total }.distinctUntilChanged().onStart { assimilateNewSources() }
     }
 
     fun observeBuiltInSourcesCount(): Flow<Int> {
