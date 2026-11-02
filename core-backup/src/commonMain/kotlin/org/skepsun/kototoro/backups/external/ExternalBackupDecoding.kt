@@ -250,9 +250,13 @@ private fun AniyomiBackupManga.toRecord(
 }
 
 /**
- * The chapter URL and timestamp to restore as reading history. A dated history entry always wins; titles marked
- * read by hand or by a tracker have no history, so the furthest read chapter stands in, dated when the title was
- * added to the library so it sorts below real history.
+ * The chapter URL and timestamp to restore as reading history. Mihon's history points at the chapter opened last,
+ * while chapters can be marked read without being opened (by hand, on another device, by a tracker), and Kototoro
+ * keeps one stopping point that counts everything before it as read. So a dated history entry wins only while its
+ * chapter is still unread, a resume point with a saved page; once that chapter is read (or missing from the
+ * backup), a later chapter marked read moves the stopping point there, keeping the real last-read time. Titles
+ * with no history at all fall back to the furthest read chapter, dated when the title was added to the library so
+ * they sort below real history.
  */
 private class MangaHistory(val chapterUrl: String, val timestamp: Long, val page: Int)
 
@@ -261,16 +265,28 @@ private fun resolveMangaHistory(
     chapters: List<MihonBackupChapter>,
     favoriteTimestamp: Long?,
 ): MangaHistory? {
+    val furthest = chapters.furthestReadChapter()
     if (history != null && history.lastRead > 0L) {
-        val page = chapters.firstOrNull { it.url == history.url }?.resumePage() ?: 0
-        return MangaHistory(history.url, history.lastRead, page)
+        val opened = chapters.firstOrNull { it.url == history.url }
+        if (furthest != null && (opened == null || opened.read && furthest.isAfter(opened))) {
+            return MangaHistory(furthest.url, history.lastRead, furthest.resumePage())
+        }
+        return MangaHistory(history.url, history.lastRead, opened?.resumePage() ?: 0)
     }
-    val chapter = chapters.furthestReadChapter() ?: return null
+    val chapter = furthest ?: return null
     return MangaHistory(chapter.url, favoriteTimestamp ?: 1L, chapter.resumePage())
 }
 
 // Same zero-based index as the reader's page list; an out-of-range page opens the chapter from its start.
 private fun MihonBackupChapter.resumePage(): Int = lastPageRead.coerceIn(0L, Int.MAX_VALUE.toLong()).toInt()
+
+// Chapter numbers decide when both chapters have one; otherwise Mihon's source order, which counts from the newest.
+private fun MihonBackupChapter.isAfter(other: MihonBackupChapter): Boolean =
+    if (chapterNumber > 0f && other.chapterNumber > 0f && chapterNumber != other.chapterNumber) {
+        chapterNumber > other.chapterNumber
+    } else {
+        sourceOrder < other.sourceOrder
+    }
 
 private fun List<MihonBackupChapter>.furthestReadChapter(): MihonBackupChapter? {
     val read = filter { it.read }

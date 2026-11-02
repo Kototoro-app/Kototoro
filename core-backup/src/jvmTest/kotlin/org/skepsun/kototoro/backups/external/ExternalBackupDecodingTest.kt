@@ -247,7 +247,7 @@ class ExternalBackupDecodingTest {
     }
 
     @Test
-    fun `a real history entry wins over read chapters and unread titles get none`() {
+    fun `a history entry on an unread chapter wins over read chapters and unread titles get none`() {
         val withHistory = decodeSingle(
             MihonBackupManga(
                 source = mangaDexId,
@@ -273,5 +273,71 @@ class ExternalBackupDecodingTest {
         assertNull(unread.historyChapterUrl)
         assertNull(unread.historyTimestamp)
         assertEquals(0, unread.historyPage)
+    }
+
+    @Test
+    fun `a read history chapter gives way to a later chapter marked read without being opened`() {
+        val record = decodeSingle(
+            MihonBackupManga(
+                source = mangaDexId,
+                url = "/manga/42",
+                chapters = listOf(
+                    MihonBackupChapter(url = "/ch/251", read = true, chapterNumber = 251f, sourceOrder = 0),
+                    MihonBackupChapter(url = "/ch/250", read = true, chapterNumber = 250f, sourceOrder = 1),
+                    MihonBackupChapter(url = "/ch/249", read = true, lastPageRead = 30, chapterNumber = 249f, sourceOrder = 2),
+                ),
+                history = listOf(MihonBackupHistory(url = "/ch/249", lastRead = 1_700_000_500_000L)),
+            ),
+        )
+        assertEquals("/ch/251", record.historyChapterUrl)
+        assertEquals(1_700_000_500_000L, record.historyTimestamp)
+    }
+
+    @Test
+    fun `a read history chapter stays when nothing later is read and unnumbered chapters use source order`() {
+        val latest = decodeSingle(
+            MihonBackupManga(
+                source = mangaDexId,
+                url = "/manga/42",
+                chapters = listOf(
+                    MihonBackupChapter(url = "/ch/3", chapterNumber = 3f, sourceOrder = 0),
+                    MihonBackupChapter(url = "/ch/2", read = true, lastPageRead = 9, chapterNumber = 2f, sourceOrder = 1),
+                    MihonBackupChapter(url = "/ch/1", read = true, chapterNumber = 1f, sourceOrder = 2),
+                ),
+                history = listOf(MihonBackupHistory(url = "/ch/2", lastRead = 1_700_000_500_000L)),
+            ),
+        )
+        assertEquals("/ch/2", latest.historyChapterUrl)
+        assertEquals(9, latest.historyPage)
+
+        val unnumbered = decodeSingle(
+            MihonBackupManga(
+                source = mangaDexId,
+                url = "/manga/42",
+                chapters = listOf(
+                    MihonBackupChapter(url = "/extra-2", read = true, sourceOrder = 0),
+                    MihonBackupChapter(url = "/extra-1", read = true, sourceOrder = 1),
+                ),
+                history = listOf(MihonBackupHistory(url = "/extra-1", lastRead = 1_700_000_500_000L)),
+            ),
+        )
+        assertEquals("/extra-2", unnumbered.historyChapterUrl)
+    }
+
+    @Test
+    fun `a history chapter missing from the backup falls back to the furthest read chapter`() {
+        val record = decodeSingle(
+            MihonBackupManga(
+                source = mangaDexId,
+                url = "/manga/42",
+                chapters = listOf(
+                    MihonBackupChapter(url = "/ch/2", read = true, chapterNumber = 2f, sourceOrder = 0),
+                    MihonBackupChapter(url = "/ch/1", read = true, chapterNumber = 1f, sourceOrder = 1),
+                ),
+                history = listOf(MihonBackupHistory(url = "/gone", lastRead = 1_700_000_500_000L)),
+            ),
+        )
+        assertEquals("/ch/2", record.historyChapterUrl)
+        assertEquals(1_700_000_500_000L, record.historyTimestamp)
     }
 }
