@@ -139,6 +139,7 @@ fun ReaderSettingsScreen(
     val novelReaderControlOptions = listOf(
         SettingsChoiceOption(ReaderControl.BOOKMARK, stringResource(R.string.bookmark_add)),
         SettingsChoiceOption(ReaderControl.TRANSLATE, stringResource(R.string.novel_translate)),
+        SettingsChoiceOption(ReaderControl.TTS, stringResource(R.string.novel_read_aloud)),
     )
     val pagerState = rememberPagerState(
         initialPage = READER_SETTINGS_COMMON_PAGE,

@@ -1558,6 +1558,7 @@
     <string name="novel_theme_sepia">復古</string>
     <string name="novel_theme_slate">暗灰</string>
     <string name="novel_translate">翻譯</string>
+    <string name="novel_read_aloud">朗讀</string>
     <string name="novel_translation_bilingual">雙語</string>
     <string name="novel_translation_display_mode">翻譯顯示模式</string>
     <string name="novel_translation_only">僅譯文</string>

@@ -773,6 +773,7 @@
     <string name="novel_translation_bilingual">Bilingual</string>
     <string name="clear_translation_cache">Clear Translation Cache</string>
     <string name="novel_translate">Translate</string>
+    <string name="novel_read_aloud">Read aloud</string>
     <string name="novel_reset">Reset</string>
     <string name="novel_chapters_count">%1$d Chapters</string>
     <string name="chapters_count_info">%d chapters</string>

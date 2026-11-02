@@ -109,17 +109,24 @@ private fun NovelFloatingControlButton(
             R.drawable.ic_bookmark_added
         } else R.drawable.ic_bookmark
         ReaderControl.TRANSLATE -> R.drawable.ic_translate
+        ReaderControl.TTS -> R.drawable.ic_voice_input
         else -> return
     }
     val label = when (control) {
         ReaderControl.BOOKMARK -> if (state.isCurrentPageBookmarked) R.string.bookmark_remove else R.string.bookmark_add
         ReaderControl.TRANSLATE -> R.string.novel_translate
+        ReaderControl.TTS -> R.string.novel_read_aloud
     }
     val onClick = when (control) {
         ReaderControl.BOOKMARK -> callbacks.onBookmark
         ReaderControl.TRANSLATE -> callbacks.onToggleTranslation
+        ReaderControl.TTS -> callbacks.onTts
     }
-    val active = control == ReaderControl.TRANSLATE && state.settings?.isTranslationEnabled == true
+    val active = when (control) {
+        ReaderControl.TRANSLATE -> state.settings?.isTranslationEnabled == true
+        ReaderControl.TTS -> state.ttsState != TtsState.IDLE
+        else -> false
+    }
     ReaderFloatingControlButton(
         icon = painterResource(icon),
         contentDescription = stringResource(label),
