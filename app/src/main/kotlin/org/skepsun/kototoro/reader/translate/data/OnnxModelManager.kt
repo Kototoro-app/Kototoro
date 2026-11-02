@@ -16,6 +16,7 @@ import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
 import org.skepsun.kototoro.core.network.BaseHttpClient
+import org.skepsun.kototoro.core.util.archiveEntryFile
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -509,10 +510,7 @@ class OnnxModelManager @Inject constructor(
             ZipInputStream(FileInputStream(zipFile)).use { zipInput ->
                 var entry = zipInput.nextEntry
                 while (entry != null) {
-                    val outFile = File(targetDir, entry.name).canonicalFile
-                    check(outFile.path.startsWith(targetDir.canonicalPath)) {
-                        "Blocked zip-slip path: ${entry.name}"
-                    }
+                    val outFile = archiveEntryFile(targetDir, entry.name)
                     if (entry.isDirectory) {
                         outFile.mkdirs()
                     } else {

@@ -145,6 +145,24 @@ class BackupPayloadGuardTest {
 		BackupPayloadGuard.requireRestorableWorkSnapshot(backup, operation = "manual backup creation")
 	}
 
+	@Test
+	fun `an entry that expands past the section limit is refused without holding it`() {
+		val bomb = File.createTempFile("backup_guard_bomb", ".zip").apply {
+			deleteOnExit()
+			ZipOutputStream(outputStream()).use { output ->
+				output.putNextEntry(ZipEntry(BackupSection.CONTENTS.entryName))
+				val zeros = ByteArray(1 shl 20)
+				repeat(129) { output.write(zeros) }
+				output.closeEntry()
+			}
+		}
+		assert(bomb.length() < 1L shl 20) { "fixture should compress well" }
+
+		assertThrows(BackupPayloadGuard.OversizedBackupException::class.java) {
+			BackupPayloadGuard.inspect(bomb)
+		}
+	}
+
 	private fun backupFile(vararg sections: Pair<BackupSection, String>): File {
 		return File.createTempFile("backup_guard", ".zip").apply {
 			deleteOnExit()

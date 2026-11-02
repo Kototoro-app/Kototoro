@@ -12,6 +12,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.decodeFromString
 import org.skepsun.kototoro.backups.data.model.BackupIndex
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.zip.ZipInputStream
 
@@ -28,6 +29,9 @@ object BackupPayloadGuard {
         "Refusing $operation: backup has work state with missing anchor manga: " +
             anchorIds.joinToString(),
     )
+
+    /** A backup whose entries expand past what a real library writes, refused before it is held in memory. */
+    class OversizedBackupException(detail: String) : IllegalArgumentException("Refusing oversized backup: $detail")
 
     data class Inspection(
         val sectionBytes: Map<BackupSection, Int>,
@@ -49,8 +53,10 @@ object BackupPayloadGuard {
         val unknownEntries = LinkedHashMap<String, Int>()
         ZipInputStream(file.inputStream()).use { input ->
             var entry = input.nextEntry
+            var entries = 0
             while (entry != null) {
-                val bytes = input.readBytes().size
+                if (++entries > MAX_ENTRIES) throw OversizedBackupException("more than $MAX_ENTRIES entries")
+                val bytes = input.countEntryBytes(entry.name).toInt()
                 val section = BackupSection.of(entry)
                 if (section != null) {
                     sectionBytes[section] = bytes
@@ -105,7 +111,9 @@ object BackupPayloadGuard {
             while (entry != null) {
                 if (BackupSection.of(entry) == BackupSection.INDEX) {
                     return runCatching {
-                        json.decodeFromString<List<BackupIndex>>(input.readBytes().decodeToString()).single()
+                        json.decodeFromString<List<BackupIndex>>(
+                            input.readEntryBytes(entry.name, MAX_INDEX_BYTES).decodeToString(),
+                        ).single()
                     }.getOrNull()
                 }
                 input.closeEntry()
@@ -168,20 +176,42 @@ object BackupPayloadGuard {
             while (entry != null) {
                 val section = BackupSection.of(entry)
                 if (section in SEMANTIC_GUARD_SECTIONS) {
-                    val text = input.readBytes().decodeToString()
+                    val text = input.readEntryBytes(entry.name, MAX_SECTION_BYTES).decodeToString()
                     sections[section!!] = runCatching {
                         json.parseToJsonElement(text).jsonArray
                     }.getOrElse { error ->
                         throw IllegalStateException("Refusing backup snapshot inspection: invalid JSON in ${section.entryName}.", error)
                     }
-                } else {
-                    input.readBytes()
                 }
                 input.closeEntry()
                 entry = input.nextEntry
             }
         }
         return sections
+    }
+
+    /** Counts the current entry's uncompressed bytes without holding them, refusing more than a section may have. */
+    private fun ZipInputStream.countEntryBytes(name: String): Long {
+        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+        var total = 0L
+        while (true) {
+            val read = read(buffer)
+            if (read < 0) return total
+            total += read
+            if (total > MAX_SECTION_BYTES) throw OversizedBackupException("$name expands past $MAX_SECTION_BYTES bytes")
+        }
+    }
+
+    /** The current entry's bytes, refusing to grow past [limit] however small the compressed entry is. */
+    private fun ZipInputStream.readEntryBytes(name: String, limit: Long): ByteArray {
+        val output = ByteArrayOutputStream()
+        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+        while (true) {
+            val read = read(buffer)
+            if (read < 0) return output.toByteArray()
+            if (output.size() + read > limit) throw OversizedBackupException("$name expands past $limit bytes")
+            output.write(buffer, 0, read)
+        }
     }
 
     private fun JsonArray?.hasItems(): Boolean = this != null && isNotEmpty()
@@ -250,6 +280,10 @@ object BackupPayloadGuard {
 
     private const val EMPTY_JSON_ARRAY_BYTES = 2
     private const val MAX_REPORTED_IDS = 8
+    /** Far above a real library: the index is one small object, a section a few tens of MiB at most. */
+    private const val MAX_ENTRIES = 10_000
+    private const val MAX_INDEX_BYTES = 1L shl 20
+    private const val MAX_SECTION_BYTES = 128L shl 20
     private val KOTOTORO_APPLICATION_IDS = setOf(
         "org.skepsun.kototoro",
         "org.skepsun.kototoro.debug",
