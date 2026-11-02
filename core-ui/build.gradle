@@ -89,6 +89,10 @@ kotlin {
         // System back for shared sheets (the Windows host handles Esc itself).
         androidMain.dependencies {
             implementation "androidx.activity:activity-compose:${libs.versions.activity.get()}"
+            // Compile Android against the material3 the app ships (1.5.0-alpha26), not the alpha22 that the CMP
+            // artifact brings: alpha26 reordered Slider's parameters, and the alpha22 call landed on the kept
+            // overload, which dropped valueRange so every shared slider snapped to its minimum.
+            api libs.androidx.compose.material3.expressive
         }
         jvmTest.dependencies {
             implementation 'org.junit.jupiter:junit-jupiter:5.8.2'
