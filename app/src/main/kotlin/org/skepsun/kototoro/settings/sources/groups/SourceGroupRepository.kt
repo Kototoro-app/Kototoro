@@ -432,7 +432,7 @@ class SourceGroupRepository @Inject constructor(
 				installMode = SOURCE_GROUP_INSTALL_MODE_SYSTEM,
 			)
 		}
-		return result.distinctBy { it.kind to it.pkg }
+		return result.distinctBy { Triple(it.kind, it.pkg, it.installMode) }
 	}
 
 	private fun isPackageInstalled(pkg: SourceGroupPackage): Boolean {
