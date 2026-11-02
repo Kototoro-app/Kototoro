@@ -68,6 +68,9 @@ Kototoro 的 `prepareCloudstreamRuntimeJar` 仍有一项宿主职责：验证最
 仍然存在。官方库的 `Youtube*` 提取器保留：Android 与官方应用一样打包 NewPipeExtractor（版本同官方，见
 `newpipeExtractor`），由 `CloudstreamRuntimeManager` 调用 `NewPipe.init`，YouTube 插件直接链接的 NewPipe 类也由此提供
 （issue #608）。Windows 不带 NewPipe，`cloudstream-desktop` 仍排除这些类并用自带的空实现。
+Windows 的 `CloudflareKiller` 也是 `cloudstream-desktop` 自带的版本：共享平台客户端（`DesktopChallengeInterceptor`）
+已经在 WebView2 中解决挑战并把放行 Cookie 存进 Cookie 库，所以它只放行请求，`getCookieHeaders`/`savedCookies`
+从该 Cookie 库读取；社区仓库 517 个插件中有 49 个创建它，没有它时这些插件在 Windows 上会被兼容性检查拒绝。
 
 纯 JVM 库不包含部分 Android 插件 ABI。Kototoro 在
 `app/src/main/kotlin/com/lagradost/cloudstream3/` 下提供最小宿主兼容层，包括 `Plugin`、`VideoClickAction`、
