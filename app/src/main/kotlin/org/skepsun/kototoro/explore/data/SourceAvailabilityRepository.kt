@@ -5,9 +5,21 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import org.skepsun.kototoro.core.model.ContentSourceAvailability
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.util.ext.findCloudFlareException
 import org.skepsun.kototoro.parsers.model.ContentSource
 import javax.inject.Inject
 import javax.inject.Singleton
+
+/**
+ * Single mapping from a failed availability probe to a stored state: a Cloudflare exception
+ * anywhere in the cause chain is CLOUDFLARE, every other failure is EMPTY.
+ */
+fun classifyAvailability(error: Throwable): ContentSourceAvailability =
+    if (error.findCloudFlareException() != null) {
+        ContentSourceAvailability.CLOUDFLARE
+    } else {
+        ContentSourceAvailability.EMPTY
+    }
 
 @Singleton
 class SourceAvailabilityRepository @Inject constructor(
