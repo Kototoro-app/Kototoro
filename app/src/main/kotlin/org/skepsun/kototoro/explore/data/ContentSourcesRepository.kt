@@ -1554,7 +1554,7 @@ class ContentSourcesRepository @Inject constructor(
         if (startsWith("JSON_")) {
             // The name is the entity id; hit the manager's per-id cache instead of re-running a
             // full-table observe per resolved source, which froze every listing pass.
-            val entity = kotlinx.coroutines.runBlocking { jsonSourceManager.getById(this) }
+            val entity = kotlinx.coroutines.runBlocking { jsonSourceManager.getById(this@toContentSourceOrNull) }
             if (entity != null) {
                 return org.skepsun.kototoro.core.jsonsource.JsonContentSource(entity)
             }
