@@ -87,4 +87,6 @@
     <string name="extension_file_delete_failed">Could not delete %1$s.</string>
     <string name="source_groups_export_lost">The export target was lost. Please try exporting again.</string>
     <string name="extension_repo_update_failed">Update failed: %1$s</string>
+    <string name="source_groups_updated">Group updated</string>
+    <string name="source_groups_skipped_locked">Source %1$s is locked on this device, skipped</string>
 </resources>
