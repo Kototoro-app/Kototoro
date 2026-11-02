@@ -80,6 +80,18 @@ class ContentDataRepository @Inject constructor(
         }
     }
 
+    suspend fun saveChaptersReversed(manga: Content, isReversed: Boolean) {
+        db.withTransaction {
+            val stored = storeContentAndReturn(manga, replaceExisting = false)
+            val entity = db.getPreferencesDao().find(stored.id) ?: newEntity(stored.id)
+            db.getPreferencesDao().upsert(entity.copy(isChaptersReversed = isReversed))
+        }
+    }
+
+    suspend fun isChaptersReversed(mangaId: Long): Boolean {
+        return db.getPreferencesDao().find(mangaId)?.isChaptersReversed == true
+    }
+
     suspend fun resetColorFilters() {
         db.getPreferencesDao().resetColorFilters()
     }

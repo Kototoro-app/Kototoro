@@ -1,6 +1,70 @@
 import XCTest
 
 final class SourceRuntimeTests: XCTestCase {
+    /// Online check with MangaK's repository JAR staged in the real JVM preview profile.
+    @MainActor
+    func testMangaKBrowsingThroughPackagedRuntime() throws {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchEnvironment["KOTOTORO_SOURCE_DIAGNOSTICS"] = "1"
+        app.launchArguments += ["-space.enabled", "YES", "-space.kind", "MANGA", "-sources.showAdult", "YES"]
+        app.launch()
+        app.mainTab("浏览").tap()
+        XCTAssertTrue(app.staticTexts["sources.extensionRuntime"].waitForExistence(timeout: 30), app.debugDescription)
+        let search = app.pageSearchField()
+        XCTAssertTrue(search.waitForExistence(timeout: 30), app.debugDescription)
+        search.tap()
+        search.typeText("MIHON_5020395055978987501")
+        let source = app.buttons["source.MIHON_5020395055978987501"]
+        XCTAssertTrue(source.waitForExistence(timeout: 90), app.debugDescription)
+        source.tap()
+        let item = app.descendants(matching: .any).matching(
+            NSPredicate(format: "identifier BEGINSWITH %@", "source.content.")
+        ).firstMatch
+        wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            item.exists || app.staticTexts["sources.error"].exists
+        }, object: nil)], timeout: 90)
+        let browse = XCTAttachment(screenshot: app.screenshot())
+        browse.name = "MangaK listing through packaged JVM"
+        browse.lifetime = .keepAlways
+        add(browse)
+        XCTAssertTrue(item.exists, app.debugDescription)
+        item.tap()
+        let chapter = chapterButton(in: app)
+        wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            chapter.exists || app.staticTexts["details.error"].exists
+        }, object: nil)], timeout: 90)
+        XCTAssertTrue(chapter.exists, app.debugDescription)
+        chapter.tap()
+        let image = app.images["reader.image"]
+        wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            image.exists || app.staticTexts["reader.error"].exists
+        }, object: nil)], timeout: 90)
+        let reader = XCTAttachment(screenshot: app.screenshot())
+        reader.name = "MangaK first chapter through packaged JVM"
+        reader.lifetime = .keepAlways
+        add(reader)
+        XCTAssertTrue(image.exists, app.debugDescription)
+    }
+
+    /// Also runs with the empty device Release profile: local sources appear after the extension catalog settles.
+    @MainActor
+    func testPackagedExtensionRuntimeStartsWithoutLinkageErrors() throws {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments += ["-space.enabled", "YES", "-space.kind", "MANGA"]
+        app.launch()
+        app.mainTab("浏览").tap()
+        XCTAssertTrue(app.staticTexts["sources.extensionRuntime"].waitForExistence(timeout: 30), app.debugDescription)
+        XCTAssertTrue(app.buttons["source.LOCAL"].waitForExistence(timeout: 90), app.debugDescription)
+        XCTAssertFalse(app.staticTexts["sources.extensionError"].exists, app.debugDescription)
+        XCTAssertFalse(app.staticTexts["sources.error"].exists, app.debugDescription)
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "Packaged extension runtime startup"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+    }
+
     func testFixtureRuntimeExplainsAndBlocksRealExtensionInstallation() throws {
         continueAfterFailure = false
         let app = XCUIApplication()
@@ -198,7 +262,7 @@ final class SourceRuntimeTests: XCTestCase {
         assertPosition(app, page: 2, total: 2)
         app.buttons["reader.back"].tap()
         XCTAssertTrue(chapterButton(in: app).waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["details.resume"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.detailsReadButton().waitForExistence(timeout: 10))
         app.navigationBars.buttons.firstMatch.tap()
         XCTAssertTrue(item(app, "popular 1").waitForExistence(timeout: 5))
         let screenshot = XCTAttachment(screenshot: app.screenshot())
@@ -208,7 +272,7 @@ final class SourceRuntimeTests: XCTestCase {
         app.tabBars.buttons["浏览"].tap()
         XCTAssertTrue(source.waitForExistence(timeout: 90)); source.tap()
         XCTAssertTrue(item(app, "popular 1").waitForExistence(timeout: 30)); item(app, "popular 1").tap()
-        XCTAssertTrue(app.buttons["details.resume"].waitForExistence(timeout: 30)); app.buttons["details.resume"].tap()
+        XCTAssertTrue(app.detailsReadButton().waitForExistence(timeout: 30)); app.detailsReadButton().tap()
         XCTAssertTrue(app.images["reader.image"].waitForExistence(timeout: 30), app.debugDescription)
         assertPosition(app, page: 2, total: 2)
         XCTAssertFalse(app.buttons["reader.nextChapter"].isEnabled)
@@ -481,15 +545,15 @@ func revealChapter(in app: XCUIApplication, timeout: TimeInterval = 60) -> XCUIE
     let error = app.staticTexts["details.error"]
     let deadline = Date().addingTimeInterval(timeout)
     while !chapter.exists && !error.exists && Date() < deadline {
-        if app.buttons["details.start"].exists || app.buttons["details.resume"].exists {
+        if app.buttons["details.header.read"].exists || app.buttons["details.read"].exists {
             app.collectionViews.firstMatch.swipeUp(velocity: .slow)
         } else {
             _ = chapter.waitForExistence(timeout: 1)
         }
     }
     // The tab bar and its continue-reading accessory float over the list's end: keep the row clear of them.
-    let overlays = [app.buttons["continueReading"], app.tabBars.firstMatch]
-    for _ in 0..<3 where chapter.exists {
+    let overlays = [app.buttons["details.read"], app.buttons["continueReading"], app.tabBars.firstMatch]
+    for _ in 0..<4 where chapter.exists {
         let covered = overlays.contains { $0.exists && $0.frame.minY < chapter.frame.maxY + 8 && $0.frame.height > 0 }
         guard covered else { break }
         app.collectionViews.firstMatch.swipeUp(velocity: .slow)

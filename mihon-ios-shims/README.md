@@ -18,6 +18,8 @@
 | JsonReader | 自写流式 token 状态机，嵌套跳过、类型检查、完整 64 位整数和可选宽松解析 |
 | zstd | 已有 aircompressor 的 Java 编解码器，供 OkHttp 和 Okio ABI 使用，关闭传递到底层流 |
 | 系统资源 / 内存 / 时钟 | 独立 Resources、Configuration、DisplayMetrics、JVM 内存数据与单调时钟 |
+| WebView 基类 / 输入事件 | AbsoluteLayout 显示资源；内存 MotionEvent 指针数据，经兼容 provider 转发到 WKWebView 页面 |
+| 浏览器虚拟显示 | RGBA ImageReader/Surface 渲染目标、DisplayManager/VirtualDisplay/Presentation 生命周期，交由 WKWebView 挂载和渲染；HandlerThread 使用真实兼容 Looper |
 | 网络适配 | ServerConfig 的 FlareSolverr 配置 ABI 和 UserAgentInterceptor；WebView 与 Cookie 在 mihon-ios-compat |
 | 网络传输 | 替换 OkHttp 5.4.0 的 `ConnectInterceptor`：连接、TLS 与解压改由 URLSession 执行（`NativeTransport`）；应用/网络拦截器、重定向、Cookie jar、缓存仍在 OkHttp。WebSocket、自定义信任/主机名校验、证书固定与显式代理保留 OkHttp 连接；`-Dkototoro.native.net=false` 关闭 |
 | 消息摘要 | JCA 提供者 `KototoroIOS`（CommonCrypto 的 MD5/SHA-1/SHA-256/SHA-384/SHA-512，含常用别名与 OID）在 native 注册后插到首位，图片物化、产物校验、扩展与 JSSE 的 `MessageDigest` 均使用；`-Dkototoro.native.digest=false` 关闭 |
@@ -26,6 +28,12 @@
 会明确报不支持；PDF 当前只支持整页默认变换；ImageDecoder 自动去边和背景覆盖不支持；复杂 Android span/bidi 排版、
 任意 Path、宽色域和硬件 Bitmap 不支持。WebP 编码仅在系统 ImageIO 实际提供该编码器时成功，不把其他格式伪装成 WebP。
 JDK collation 与 ICU 的语言排序不保证完全一致。
+
+浏览器虚拟显示仅覆盖扩展将 WebView 放入 Presentation 并排空 ImageReader 的用法。页面由 WKWebView 直接渲染，
+没有 Android CPU 图像队列，因此 acquire 返回 null，不伪造帧或图像回调；不支持像素平面读取、录屏、镜像或安全显示。
+Presentation 移除、虚拟显示释放和 WebView 销毁会解除挂载，移除回调可关闭 reader 和排空线程。
+为保留固定 AndroidCompat 的完整 View ABI，构建时沿用其 View.class，仅将仍为桩的 final getParent()
+改为读取既有 mParent 字段；其他方法保持输入字节码。此生成类保留输入 API 的来源与许可，不视为独立重写。
 
 Unicode 数据的原始地址与 SHA-256 记录在 `nfkc-casefold-17.txt`，随 JAR 包含 Unicode-3.0 许可。
 OpenJDK、AndroidCompat/Suwayomi 和其他依赖仍保留各自来源及许可；自行替换 shim 不等于重新许可这些依赖。

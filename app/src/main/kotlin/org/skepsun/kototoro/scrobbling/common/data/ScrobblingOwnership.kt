@@ -42,10 +42,13 @@ suspend fun MangaDatabase.rebindScrobblingToManga(
     scrobbler: Int,
     sourceMangaId: Long,
     targetMangaId: Long,
+    sourceTargetId: Long,
+    sourceMediaType: String,
     fallback: () -> ScrobblingEntity,
 ): ScrobblingEntity {
     val dao = getScrobblingDao()
-    val current = dao.findByLocalManga(scrobbler, sourceMangaId)
+    val current = dao.findAllByTargetId(scrobbler, sourceTargetId)
+        .firstOrNull { it.mangaId == sourceMangaId && it.mediaType == sourceMediaType }
     return rebindScrobblingToManga(
         dao = dao,
         current = current,

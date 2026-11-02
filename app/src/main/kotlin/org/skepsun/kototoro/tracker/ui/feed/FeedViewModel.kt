@@ -483,9 +483,7 @@ class FeedViewModel @Inject constructor(
 
     fun onItemClick(item: FeedItem) {
         launchJob(Dispatchers.Default, CoroutineStart.ATOMIC) {
-            if (item.id > 0L) {
-                repository.markAsRead(item.id)
-            }
+            item.logIds.filter { it > 0L }.forEach { repository.markAsRead(it) }
         }
     }
 
@@ -494,13 +492,17 @@ class FeedViewModel @Inject constructor(
             return
         }
         launchJob(Dispatchers.Default) {
-            for (id in ids) {
+            val snapshot = repositoryIdsForGroupedItems(ids)
+            for (id in snapshot) {
                 if (id > 0L) {
                     repository.markAsRead(id)
                 }
             }
         }
     }
+
+    private fun repositoryIdsForGroupedItems(ids: Collection<Long>): List<Long> =
+        ids.flatMap { id -> (content.value.filterIsInstance<FeedItem>().firstOrNull { it.id == id })?.logIds ?: listOf(id) }
 
     fun selectCategory(categoryId: Long) {
         selectedCategoryId.value = categoryId

@@ -1,6 +1,17 @@
 package org.skepsun.kototoro.ios
 
+import kotlinx.cinterop.BetaInteropApi
+import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.cinterop.addressOf
+import kotlinx.cinterop.convert
+import kotlinx.cinterop.usePinned
 import org.skepsun.kototoro.reader.core.*
+import org.skepsun.kototoro.reader.image.DecodePlan
+import org.skepsun.kototoro.reader.image.DecodePlanner
+import org.skepsun.kototoro.reader.image.ImageSourceMetadata
+import org.skepsun.kototoro.reader.image.RendererCapabilities
+import platform.Foundation.NSData
+import platform.Foundation.create
 
 data class IosReaderPlacement(
     val index: Int,
@@ -14,9 +25,16 @@ data class IosReaderSlot(val index: Int, val anchor: Int, val placements: List<I
 /** Stable chapter-local identity, independent of its current index in the scene window. */
 data class IosReaderPage(val chapterId: String, val index: Int)
 data class IosReaderProgress(val index: Int, val offset: Float)
+/** A continuous viewport's reading page and offset (as [IosReader.progress]) with its last visible page. */
+data class IosReaderPosition(val index: Int, val offset: Float, val lastVisible: Int)
 data class IosReaderViewport(val x: Float, val y: Float)
 data class IosReaderSize(val width: Int, val height: Int)
 data class IosReaderRect(val left: Int, val top: Int, val width: Int, val height: Int)
+/**
+ * One page of a continuous strip's resource window ([IosReader.resourceWindow]): [priority] 0 is on screen, 1 is the
+ * near lookahead (decoded before it scrolls in), 2 the far lookahead (downloaded only, [decode] false).
+ */
+data class IosReaderRequest(val index: Int, val priority: Int, val decode: Boolean)
 data class IosReaderTile(
     val row: Int,
     val col: Int,
@@ -67,6 +85,39 @@ class IosReader {
     private var horizontalReversed = false
     /** Continuous modes' cross-axis zoom: the strip is laid out this many times wider (taller for mode 4). */
     private var zoom = 1f
+    /**
+     * Continuous scenes identify pages by chapter-local identity, as Android's webtoon keys pages by `readerKey`:
+     * a window that gains or loses a chapter keeps every page's id, so [MutableReaderScene.updatePages] keeps the
+     * reading anchor. Paged scenes keep window positions (with split halves in [specLookup]).
+     */
+    private val stableIds = HashMap<IosReaderPage, Long>()
+    private var nextStableId = STABLE_ID_BASE
+    private val indexById = HashMap<Long, Int>()
+    /**
+     * Bumped whenever [slots] may change while the scene's own [ReaderScene.revision] does not: a new scene, new page
+     * ids or a reset. With [sceneRevision] it tells the host its slots are still current.
+     */
+    var layoutGeneration = 0L
+        private set
+    val sceneRevision: Long get() = scene?.revision ?: -1L
+    /** The last resolved viewport: one scroll frame asks for its position, last page and resource window. */
+    private var resolvedScene: ReaderScene? = null
+    private var resolvedRevision = -1L
+    private var resolvedGeneration = -1L
+    private var resolvedViewport: ReaderViewport? = null
+    private var resolvedFrame: ReaderFrame? = null
+    /** The continuous resource window: Android's webtoon one, or its reduced form (see [setPreloadReduction]). */
+    private var prediction = ReaderPrediction(FULL_PREDICTION)
+    private var preloadReduction = false
+    /**
+     * The window's still-unknown pages are laid out at the decoded pages' average ratio once it converges, as
+     * Android's webtoon does (`ReaderChapterRatioEstimator`): a page placeholder then has about its real size, where
+     * an estimated page is one screen tall. Continuous modes only; a new scene starts over.
+     */
+    private var ratioEstimator = ReaderChapterRatioEstimator()
+    private var unknownRatio: Float? = null
+    /** Android's decode planning (single bitmap or tiles), shared through reader-core. */
+    private val decodePlanner = DecodePlanner()
 
     fun configure(count: Int, width: Int, height: Int, mode: Int, doublePage: Boolean, cover: Boolean, fit: Int) =
         configure(count, width, height, mode, doublePage, cover, fit, false)
@@ -108,12 +159,62 @@ class IosReader {
 
     /** Retains measured dimensions by identity when adjacent pages prepend or the active chapter changes. */
     fun setPages(pages: List<IosReaderPage>) {
+        assignPages(pages)
+        rebuild()
+    }
+
+    /**
+     * Replaces a continuous strip's pages in place, like Android's webtoon window expansion
+     * (`VerticalReaderScene.updatePages`): the page under the viewport at ([viewportX], [viewportY]) keeps its place
+     * on screen, and the returned viewport is where the strip must now scroll to show it there. Null when there was no
+     * strip to keep (paged modes, or nothing laid out yet): the caller restores its reading position instead.
+     */
+    fun setPages(pages: List<IosReaderPage>, viewportX: Float, viewportY: Float): IosReaderViewport? {
+        val current = scene
+        if (mode < 3 || current == null || current.pageCount == 0 || current is PagedReaderScene) {
+            setPages(pages)
+            return null
+        }
+        assignPages(pages)
+        specLookup.clear()
+        val compensation = current.updatePages(sceneHints(), viewport(viewportX, viewportY))
+        indexScene()
+        val bounds = compensation?.compensatedViewport?.bounds ?: return null
+        return IosReaderViewport(bounds.left, bounds.top)
+    }
+
+    private fun assignPages(pages: List<IosReaderPage>) {
         val measured = pageKeys.mapIndexedNotNull { index, key -> sizes[index]?.let { key to it } }.toMap()
         sizes.clear()
         pages.forEachIndexed { index, key -> measured[key]?.let { sizes[index] = it } }
         pageKeys = pages.toList()
         count = pages.size
-        rebuild()
+    }
+
+    private fun sceneHints(): List<Pair<PageId, PageGeometryHint>> {
+        val unknown = unknownRatio?.takeIf { mode >= 3 }?.let { PageGeometryHint.AspectRatio(it) }
+            ?: PageGeometryHint.Estimated(0.7f)
+        return (0 until count).map { sceneId(it) to (sizes[it] ?: unknown) }
+    }
+
+    private fun viewport(x: Float, y: Float) =
+        ReaderViewport(FloatRect.fromLtwh(x, y, width.toFloat(), height.toFloat()))
+
+    /** The scene id of window position [index]. */
+    private fun sceneId(index: Int): PageId {
+        if (mode < 3) return PageId(index.toLong())
+        val key = pageKeys.getOrNull(index) ?: return PageId(index.toLong())
+        return PageId(stableIds.getOrPut(key) { nextStableId++ })
+    }
+
+    /** The window position of a scene page id (the page itself for a split half). */
+    private fun windowIndex(id: PageId): Int =
+        if (mode >= 3) indexById[id.value] ?: id.value.toInt() else specLookup[id.value]?.first ?: id.value.toInt()
+
+    private fun indexScene() {
+        layoutGeneration++
+        indexById.clear()
+        if (mode >= 3) for (index in 0 until count) indexById[sceneId(index).value] = index
     }
 
     /**
@@ -128,7 +229,12 @@ class IosReader {
         if (mode >= 3) rebuild()
     }
 
-    fun reset() { sizes.clear(); specLookup.clear(); pageKeys = emptyList(); scene = null; count = 0 }
+    fun reset() {
+        layoutGeneration++
+        ratioEstimator = ReaderChapterRatioEstimator(); unknownRatio = null
+        sizes.clear(); specLookup.clear(); pageKeys = emptyList(); scene = null; count = 0
+        stableIds.clear(); indexById.clear()
+    }
 
     fun setImageSize(index: Int, width: Int, height: Int) {
         updateImageSize(index, width, height, null)
@@ -136,9 +242,7 @@ class IosReader {
 
     /** Returns the compensated continuous viewport when a late image size changes the strip layout. */
     fun setImageSize(index: Int, width: Int, height: Int, viewportX: Float, viewportY: Float): IosReaderViewport? =
-        updateImageSize(index, width, height, ReaderViewport(
-            FloatRect.fromLtwh(viewportX, viewportY, this.width.toFloat(), this.height.toFloat()),
-        ))
+        updateImageSize(index, width, height, viewport(viewportX, viewportY))
 
     private fun updateImageSize(index: Int, width: Int, height: Int, viewport: ReaderViewport?): IosReaderViewport? {
         if (index !in 0 until count || width <= 0 || height <= 0) return null
@@ -148,18 +252,59 @@ class IosReader {
         if (splitWide && !doublePage && mode < 3) {
             rebuild()
         } else {
-            val compensation = scene?.updatePageHint(PageId(index.toLong()), hint, viewport)
-            if (mode >= 3 && compensation != null) {
-                val bounds = compensation.compensatedViewport.bounds
+            val current = scene
+            val compensation = current?.updatePageHint(sceneId(index), hint, viewport)
+            var compensated = compensation?.compensatedViewport ?: viewport
+            // The chapter's ratio moved: every unknown page takes it at once, anchored like the size change itself.
+            val ratio = if (mode >= 3) ratioEstimator.onDecoded(width, height) else null
+            if (current != null && ratio != null) {
+                unknownRatio = ratio
+                val relayout = current.updatePages(sceneHints(), compensated)
+                compensated = relayout?.compensatedViewport ?: compensated
+                if (relayout == null && compensation == null) return null
+            } else if (compensation == null) {
+                return null
+            }
+            if (mode >= 3 && compensated != null) {
+                val bounds = compensated.bounds
                 return IosReaderViewport(bounds.left, bounds.top)
             }
         }
         return null
     }
 
+    /**
+     * Whether a continuous page decoded at [width]×[height] (already at the size the strip shows it) is better drawn
+     * as tiles than as one bitmap, by Android's `DecodePlanner`: one bitmap while it fits the renderer's 8192 px edge
+     * and the 64 MB working set, since many tile textures cost far more to draw each frame than one sampled bitmap.
+     */
+    fun plansTiled(width: Int, height: Int, viewportWidth: Int, viewportHeight: Int): Boolean {
+        if (width <= 0 || height <= 0) return false
+        val plan = decodePlanner.plan(
+            pageId = PageId(0),
+            metadata = ImageSourceMetadata(IntSize(width, height)),
+            viewportWidth = viewportWidth.coerceAtLeast(1),
+            viewportHeight = viewportHeight.coerceAtLeast(1),
+            capabilities = RendererCapabilities.Resolved(MAXIMUM_DIMENSION, MAXIMUM_DIMENSION),
+        )
+        return plan is DecodePlan.Tiled
+    }
+
+    /**
+     * Android's reduced preload (`isPreloadReductionEnabled`): a smaller continuous resource window, for Low Power
+     * Mode. Returns whether it changed, in which case the next plan starts over.
+     */
+    fun setPreloadReduction(enabled: Boolean): Boolean {
+        if (enabled == preloadReduction) return false
+        preloadReduction = enabled
+        prediction = ReaderPrediction(if (enabled) REDUCED_PREDICTION else FULL_PREDICTION)
+        return true
+    }
+
     private fun rebuild() {
+        layoutGeneration++
         specLookup.clear()
-        val pages = (0 until count).map { PageId(it.toLong()) to (sizes[it] ?: PageGeometryHint.Estimated(0.7f)) }
+        val pages = sceneHints()
         val direction = if (mode == 1 || mode == 4 && horizontalReversed) SceneReadingDirection.RIGHT_TO_LEFT else
             if (mode == 2 || mode == 3) SceneReadingDirection.TOP_TO_BOTTOM else SceneReadingDirection.LEFT_TO_RIGHT
         scene = when (mode) {
@@ -198,6 +343,7 @@ class IosReader {
                     specs)
             }
         }
+        indexScene()
     }
 
     private fun zoomed(extent: Int): Int = (extent * zoom).toInt().coerceAtLeast(1)
@@ -213,23 +359,117 @@ class IosReader {
             })
         } else current.pageGeometries.mapIndexed { index, geometry ->
             val b = geometry.sceneBounds
-            IosReaderSlot(index, geometry.pageId.value.toInt(), listOf(
+            IosReaderSlot(index, windowIndex(geometry.pageId), listOf(
                 IosReaderPlacement(index, b.left, b.top, b.width, b.height, 0)))
         }
     }
 
+    /**
+     * Each continuous slot's row for the host's per-frame lookups, as 32-bit floats in one buffer instead of an object
+     * per slot and placement: slot index, anchor, placement count, then the first placement's x, y, width, height,
+     * page index and segment ([SLOT_TABLE_COLUMNS] values per slot, in [slots] order).
+     */
+    @OptIn(ExperimentalForeignApi::class, BetaInteropApi::class)
+    fun slotTable(): NSData {
+        val current = scene ?: return NSData()
+        val table: FloatArray
+        if (current is PagedReaderScene) {
+            // Few slots, several placements each: built from the same slots the host holds.
+            val slots = slots()
+            table = FloatArray(slots.size * SLOT_TABLE_COLUMNS)
+            slots.forEachIndexed { row, slot ->
+                val first = slot.placements.firstOrNull()
+                writeRow(table, row, slot.index, slot.anchor, slot.placements.size, first?.x ?: 0f, first?.y ?: 0f,
+                    first?.width ?: 0f, first?.height ?: 0f, first?.index ?: -1, first?.segment ?: 0)
+            }
+        } else {
+            // A strip's slot is its page: written straight from the scene, without a slot object per page.
+            val geometries = current.pageGeometries
+            table = FloatArray(geometries.size * SLOT_TABLE_COLUMNS)
+            geometries.forEachIndexed { index, geometry ->
+                val b = geometry.sceneBounds
+                writeRow(table, index, index, windowIndex(geometry.pageId), 1, b.left, b.top, b.width, b.height, index, 0)
+            }
+        }
+        if (table.isEmpty()) return NSData()
+        return table.usePinned { NSData.create(bytes = it.addressOf(0), length = (table.size * 4).convert()) }
+    }
+
+    private fun writeRow(
+        table: FloatArray, row: Int, index: Int, anchor: Int, count: Int,
+        x: Float, y: Float, width: Float, height: Float, page: Int, segment: Int,
+    ) {
+        val base = row * SLOT_TABLE_COLUMNS
+        table[base] = index.toFloat(); table[base + 1] = anchor.toFloat(); table[base + 2] = count.toFloat()
+        table[base + 3] = x; table[base + 4] = y; table[base + 5] = width; table[base + 6] = height
+        table[base + 7] = page.toFloat(); table[base + 8] = segment.toFloat()
+    }
+
+    private fun resolveFrame(x: Float, y: Float): ReaderFrame? {
+        val current = scene ?: return null
+        val viewport = viewport(x, y)
+        val cached = resolvedFrame
+        if (cached != null && resolvedScene === current && resolvedRevision == current.revision &&
+            resolvedGeneration == layoutGeneration && resolvedViewport == viewport) {
+            return cached
+        }
+        return current.resolve(viewport).also {
+            resolvedScene = current; resolvedRevision = current.revision; resolvedGeneration = layoutGeneration
+            resolvedViewport = viewport
+            resolvedFrame = it
+        }
+    }
+
     fun progress(x: Float, y: Float): IosReaderProgress {
-        val frame = scene?.resolve(ReaderViewport(FloatRect.fromLtwh(x, y, width.toFloat(), height.toFloat())))
-        val rawId = frame?.progress?.activePageId?.value ?: 0L
-        val pageIndex = specLookup[rawId]?.first ?: rawId.toInt()
+        val frame = resolveFrame(x, y)
+        val pageIndex = frame?.progress?.activePageId?.let(::windowIndex) ?: 0
         return IosReaderProgress(pageIndex, (frame?.progress?.intraPageOffsetPx ?: 0f) / continuousZoom)
     }
 
     /** The last page in reading order that the viewport at ([x], [y]) shows, or -1 when it shows none. */
     fun lastVisible(x: Float, y: Float): Int {
-        val frame = scene?.resolve(ReaderViewport(FloatRect.fromLtwh(x, y, width.toFloat(), height.toFloat())))
-        val rawId = frame?.progress?.lastVisiblePageId?.value ?: return -1
-        return specLookup[rawId]?.first ?: rawId.toInt()
+        val frame = resolveFrame(x, y)
+        return frame?.progress?.lastVisiblePageId?.let(::windowIndex) ?: -1
+    }
+
+    /** [progress] and [lastVisible] of one viewport in one call, for the strip's scroll frames. */
+    fun position(x: Float, y: Float): IosReaderPosition {
+        val progress = progress(x, y)
+        return IosReaderPosition(progress.index, progress.offset, lastVisible(x, y))
+    }
+
+    /**
+     * The continuous strip's resource window for the viewport at ([x], [y]) moving at [velocityX]/[velocityY] px/s
+     * (physical, positive towards larger offsets), from the shared prediction Android's webtoon uses: pages on screen,
+     * then the lookahead that grows with the fling. Null when the window is the one planned last (pixel scrolling
+     * within the same pages), unless [force]. Paged modes have none.
+     */
+    fun resourceWindow(
+        x: Float,
+        y: Float,
+        velocityX: Float,
+        velocityY: Float,
+        dragging: Boolean,
+        force: Boolean,
+    ): List<IosReaderRequest>? {
+        val current = scene ?: return null
+        if (mode < 3 || current is PagedReaderScene) return null
+        val frame = resolveFrame(x, y) ?: return null
+        val motion = ViewportMotion(velocityX, velocityY, dragging)
+        val window = prediction.predictWindowIfChanged(current, frame, motion, force) ?: return null
+        return window.requests.mapNotNull { request ->
+            val index = windowIndex(request.pageId)
+            if (index !in 0 until count) return@mapNotNull null
+            IosReaderRequest(
+                index = index,
+                priority = when (request.priority) {
+                    PrefetchPriority.IMMEDIATE -> 0
+                    PrefetchPriority.HIGH -> 1
+                    else -> 2
+                },
+                decode = request.readiness == PrefetchReadiness.PRESENTATION_READY,
+            )
+        }
     }
 
     fun decodeSize(width: Int, height: Int): IosReaderSize {
@@ -294,8 +534,8 @@ class IosReader {
                 (specLookup[it.pageId.value]?.first ?: it.pageId.value.toInt()) == index
             }
         } else {
-            val frame = current.resolve(ReaderViewport(FloatRect.fromLtwh(x, y, width.toFloat(), height.toFloat())))
-            frame.visibleNodes.firstOrNull { it.pageId.value.toInt() == index }
+            val id = sceneId(index)
+            current.resolve(viewport(x, y)).visibleNodes.firstOrNull { it.pageId == id }
         } ?: return emptyList()
         val pixelScale = density * if (current is PagedReaderScene) cameraScale else 1f
         return VisibleImageTiles.resolve(node, IntSize(encodedWidth, encodedHeight), pixelScale).map { spec ->
@@ -380,7 +620,7 @@ class IosReader {
     fun autoScrollDelay(speed: Float): Long = ReaderAutoScroll.pageSwitchDelayMs(speed)
 
     fun scrollOrigin(index: Int, offset: Float): Float = scene?.resolveViewportOriginForPage(
-        PageId(index.toLong()), if (mode == 3) height.toFloat() else width.toFloat(), offset * continuousZoom,
+        sceneId(index), if (mode == 3) height.toFloat() else width.toFloat(), offset * continuousZoom,
     )?.coerceIn(0f, scrollLimit()) ?: 0f
 
     fun scrollLimit(): Float = ((scene?.totalSceneExtent ?: 0f) - if (mode == 3) height else width).coerceAtLeast(0f)
@@ -392,8 +632,25 @@ class IosReader {
 
     companion object {
         const val MAXIMUM_PIXELS = 4L * 1024 * 1024
+        const val SLOT_TABLE_COLUMNS = 9
+        /** Android's webtoon resource window (`ComposeSceneWebtoonReader`'s default `ReaderPredictionConfig`). */
+        private val FULL_PREDICTION = ReaderPredictionConfig(
+            staticAheadFraction = 3.0f,
+            staticBehindFraction = 1.5f,
+            lookaheadHorizonSeconds = 0.8f,
+            maxLookaheadExtraPx = 8000f,
+        )
+        /** Its reduced form (`isPreloadReductionEnabled`). */
+        private val REDUCED_PREDICTION = ReaderPredictionConfig(
+            staticAheadFraction = 1.0f,
+            staticBehindFraction = 0.5f,
+            lookaheadHorizonSeconds = 0.4f,
+            maxLookaheadExtraPx = 3000f,
+        )
+        /** Above any window position and split-half id, so a stable id never names a position. */
+        private const val STABLE_ID_BASE = 1L shl 40
         const val MAXIMUM_DIMENSION = 16384
-        const val MINIMUM_ZOOM = 1f
+        const val MINIMUM_ZOOM = 0.5f
         const val MAXIMUM_ZOOM = 4f
         /** Paged slots zoom as far as the shared camera allows (Android's paged reader, 5×). */
         const val MAXIMUM_PAGE_ZOOM = PagedCameraTransform.MAX_SCALE

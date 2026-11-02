@@ -84,6 +84,51 @@ class ParserSourceRuntimeTest {
     }
 
     @Test
+    fun `browser session user agent matches requests when the platform supplies its own default`() = runBlocking {
+        val source = "FIXTURE_KOTOTORO_ONLY"
+        val sdkClient = okhttp3.OkHttpClient.Builder().addInterceptor { chain ->
+            val request = chain.request()
+            chain.proceed(if (request.header("User-Agent") == null) {
+                request.newBuilder().header("User-Agent", "SDK desktop default").build()
+            } else request)
+        }.build()
+        TestPlatform(root.resolve("sdk"), sdkClient).use { sdkPlatform ->
+            ParserPluginRegistry(sdkPlatform).use { sdkRegistry ->
+                sdkRegistry.load(Fixtures.kototoro, "kototoro-parsers")
+                val sdkRuntime = ParserSourceRuntime(sdkRegistry, sdkPlatform)
+                val session = sdkRuntime.browserSession(source)
+                sdkRegistry.withParser(source) { handle ->
+                    val client = ParserLoaderContext(sdkPlatform) { handle.parser }.httpClient
+                    val request = okhttp3.Request.Builder().url(server.url("/list"))
+                        .tag(org.skepsun.kototoro.parsers.model.ContentSource::class.java, handle.parser.source).build()
+                    client.newCall(request).execute().close()
+                }
+                assertEquals(session.userAgent, requests.poll(5, TimeUnit.SECONDS)!!.getHeader("User-Agent"))
+            }
+        }
+    }
+
+    @Test
+    fun `parser requests carry the parser headers and go through its interceptor`() = runBlocking {
+        useServerAsDomain("FIXTURE_KOTOTORO_ONLY")
+        registry.withParser("FIXTURE_KOTOTORO_ONLY") { handle ->
+            val client = ParserLoaderContext(platform) { handle.parser }.httpClient
+            val tagged = okhttp3.Request.Builder().url(server.url("/api/list"))
+                .tag(org.skepsun.kototoro.parsers.model.ContentSource::class.java, handle.parser.source).build()
+            client.newCall(tagged).execute().close()
+            client.newCall(okhttp3.Request.Builder().url(server.url("/other")).build()).execute().close()
+        }
+        val parserRequest = requests.poll(5, TimeUnit.SECONDS)!!
+        assertEquals("/api/list", parserRequest.path)
+        assertEquals("kototoro", parserRequest.getHeader("X-Fixture-Arch"))
+        assertEquals("https://${server.hostName}:${server.port}/", parserRequest.getHeader("Referer"))
+        assertNotNull(parserRequest.getHeader("User-Agent"))
+        val untagged = requests.poll(5, TimeUnit.SECONDS)!!
+        assertEquals("/other", untagged.path)
+        assertNull(untagged.getHeader("X-Fixture-Arch"), "a request no parser tagged is left alone")
+    }
+
+    @Test
     fun `EPUB only chapters download through parser headers and expose text and local illustrations`() = runBlocking {
         val bytes = java.io.ByteArrayOutputStream().also { output ->
             java.util.zip.ZipOutputStream(output).use { zip ->
@@ -119,6 +164,13 @@ class ParserSourceRuntimeTest {
         requireNotNull(text)
         assertTrue(text.html.contains("第一章正文"))
         assertTrue(text.html.contains("第二章正文"))
+        // Each chapter of the book is its own section, so a download can list them.
+        assertEquals(2, text.sections.size)
+        assertEquals(0, text.sections[0].start)
+        val first = text.html.substring(0, text.sections[1].start)
+        val second = text.html.substring(text.sections[1].start)
+        assertTrue("第一章正文" in first && "第二章正文" !in first)
+        assertTrue("第二章正文" in second && "第一章正文" !in second)
         val image = Path.of(java.net.URI(text.images.single().url))
         assertTrue(Files.readAllBytes(image).contentEquals(Fixtures.png))
         assertTrue(image.toRealPath().startsWith(root.resolve("images").toRealPath()))

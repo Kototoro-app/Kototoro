@@ -30,7 +30,7 @@ object TrackingLogItemMapper {
                 preferredLocalMangaId = track.preferredLocalMangaId,
                 manga = track.manga,
                 chapters = chapterTitles,
-                createdAt = track.lastChapterDate ?: track.lastCheck ?: Instant.EPOCH,
+                createdAt = track.lastCheck ?: Instant.EPOCH,
                 isNew = if (unreadOwnerIds != null) {
                     track.newChapters > 0 && track.manga.id in unreadOwnerIds
                 } else {

@@ -12,6 +12,16 @@ class SuggestionRulesTest {
 	private val exact: SuggestionTagMatcher = { a, b -> a.equals(b, ignoreCase = true) }
 
 	@Test
+	fun `portable matching uses Android mean length and strict threshold`() {
+		assertTrue(suggestionTagsMatch("ACTION", "action"))
+		assertTrue(suggestionTagsMatch("Romance", "romanse"))
+		assertTrue(suggestionTagsMatch("奇幻", "奇幻"))
+		assertFalse(suggestionTagsMatch("Action", "Horror"))
+		assertFalse(suggestionTagsMatch("abc", "ab"), "distance equals the 0.4 threshold")
+		assertFalse(suggestionTagsMatch("", ""))
+	}
+
+	@Test
 	fun `seed tags put the whitelist first then the most frequent tags`() {
 		assertEquals(listOf("b", "a", "c"), listOf("a", "b", "b", "c", "a", "b").mostFrequent(3))
 		assertEquals(listOf("a", "b"), listOf("a", "b").mostFrequent(5), "ties keep first appearance")

@@ -27,4 +27,5 @@ enum class ReadingMode {
 enum class TextDirection {
     LTR,  // 从左到右
     RTL,  // 从右到左
+    AUTO, // 按段落首个强方向字符自动判断（阿拉伯语、希伯来语段落为从右到左）
 }

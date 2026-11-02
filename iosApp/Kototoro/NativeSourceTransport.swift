@@ -20,7 +20,7 @@ final class NativeSourceTransport: IosSourceTransport {
     }()
     private static let storageName = isFixtureRuntime ? "sources-fixture" : "sources"
 
-    static let fixtureInstallationMessage = "此构建仅包含独立测试源，无法安装真实扩展。请使用包含真实扩展运行时的构建。"
+    static let fixtureInstallationMessage = String(localized: "此构建仅包含独立测试源，无法安装真实扩展。请使用包含真实扩展运行时的构建。")
 
     static var dataDirectory: URL {
         get throws {
@@ -54,7 +54,7 @@ final class NativeSourceTransport: IosSourceTransport {
         condition.lock()
         defer { condition.unlock() }
         while opening { condition.wait() }
-        guard !closed else { throw failure("源会话已关闭") }
+        guard !closed else { throw failure(String(localized: "源会话已关闭")) }
         if session == nil {
             opening = true
             condition.unlock()
@@ -95,7 +95,7 @@ final class NativeSourceTransport: IosSourceTransport {
 
     private func open() throws {
         guard Self.isAvailable, let resources = Bundle.main.resourceURL else {
-            throw failure("此构建未包含扩展运行时")
+            throw failure(String(localized: "此构建未包含扩展运行时"))
         }
         let runtime = resources.appendingPathComponent("jvm", isDirectory: true)
         let home = runtime.appendingPathComponent("java_bundle", isDirectory: true)
@@ -131,10 +131,10 @@ final class NativeSourceTransport: IosSourceTransport {
         let configURL = configDirectory.appendingPathComponent("config.json")
         guard var config = try JSONSerialization.jsonObject(with: Data(contentsOf: configURL)) as? [String: Any],
               var extensions = config["jars"] as? [[String: Any]] else {
-            throw failure("扩展运行时配置无效")
+            throw failure(String(localized: "扩展运行时配置无效"))
         }
         for index in extensions.indices {
-            guard let path = extensions[index]["path"] as? String else { throw failure("扩展路径缺失") }
+            guard let path = extensions[index]["path"] as? String else { throw failure(String(localized: "扩展路径缺失")) }
             extensions[index]["path"] = configDirectory.appendingPathComponent(path).path
         }
         config["jars"] = extensions
@@ -142,7 +142,7 @@ final class NativeSourceTransport: IosSourceTransport {
         // directory, so make them absolute like the extension JARs.
         if var plugins = config["plugins"] as? [[String: Any]] {
             for index in plugins.indices {
-                guard let path = plugins[index]["path"] as? String else { throw failure("插件路径缺失") }
+                guard let path = plugins[index]["path"] as? String else { throw failure(String(localized: "插件路径缺失")) }
                 plugins[index]["path"] = configDirectory.appendingPathComponent(path).path
             }
             config["plugins"] = plugins
@@ -174,7 +174,7 @@ final class NativeSourceTransport: IosSourceTransport {
     }
 
     private func nativeFailure(_ error: UnsafeMutablePointer<CChar>?) -> NSError {
-        failure(error.map { String(cString: $0) } ?? "扩展运行时调用失败")
+        failure(error.map { String(cString: $0) } ?? String(localized: "扩展运行时调用失败"))
     }
 
     private func failure(_ message: String) -> NSError {

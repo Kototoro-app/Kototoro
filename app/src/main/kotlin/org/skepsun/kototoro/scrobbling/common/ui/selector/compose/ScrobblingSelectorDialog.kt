@@ -46,6 +46,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
+import org.skepsun.kototoro.scrobbling.common.ui.scrobblerIconTint
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
@@ -60,6 +62,7 @@ import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.tvTabRing
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.core.ui.compose.CompactContentCoverShape
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
@@ -94,12 +97,12 @@ fun ScrobblingSelectorDialog(
         TopAppBar(
             title = { Text(stringResource(R.string.tracking)) },
             navigationIcon = {
-                IconButton(onClick = onDismissRequest) {
+                IconButton(onClick = onDismissRequest, modifier = Modifier.tvIconButtonRing()) {
                     Icon(Icons.Default.Close, contentDescription = stringResource(R.string.close))
                 }
             },
             actions = {
-                IconButton(onClick = { isSearchExpanded = !isSearchExpanded }) {
+                IconButton(onClick = { isSearchExpanded = !isSearchExpanded }, modifier = Modifier.tvIconButtonRing()) {
                     Icon(
                         imageVector = if (isSearchExpanded) Icons.Default.Close else Icons.Default.Search,
                         contentDescription = stringResource(R.string.search),
@@ -155,7 +158,7 @@ private fun ScrobblerSearchField(
             ),
         placeholder = { Text(stringResource(R.string.search)) },
         trailingIcon = {
-                IconButton(onClick = submit) {
+                IconButton(onClick = submit, modifier = Modifier.tvIconButtonRing()) {
                     Icon(Icons.Default.Search, contentDescription = stringResource(R.string.search))
                 }
             },
@@ -188,6 +191,7 @@ private fun ScrobblerTabs(viewModel: ScrobblingSelectorViewModel) {
                 scrobblers.forEachIndexed { index, scrobbler ->
                     val title = stringResource(scrobbler.scrobblerService.titleResId)
                     Tab(
+                        modifier = Modifier.tvTabRing(),
                         selected = selectedIndex == index,
                         onClick = { if (!isLoading) viewModel.setScrobblerIndex(index) },
                         text = {
@@ -209,6 +213,8 @@ private fun ScrobblerTabs(viewModel: ScrobblingSelectorViewModel) {
                             Icon(
                                 painter = rememberSafePainter(scrobbler.scrobblerService.iconResId),
                                 contentDescription = null,
+                                tint = scrobblerIconTint(scrobbler.scrobblerService.iconResId),
+                                modifier = Modifier.size(24.dp),
                             )
                         },
                     )
@@ -218,7 +224,7 @@ private fun ScrobblerTabs(viewModel: ScrobblingSelectorViewModel) {
             IconButton(
                 onClick = viewModel::onDoneClick,
                 enabled = !isLoading,
-                modifier = Modifier.padding(end = dimensionResource(R.dimen.toolbar_button_margin)),
+                modifier = Modifier.padding(end = dimensionResource(R.dimen.toolbar_button_margin)).tvIconButtonRing(),
             ) {
                 Icon(
                     painter = rememberSafePainter(

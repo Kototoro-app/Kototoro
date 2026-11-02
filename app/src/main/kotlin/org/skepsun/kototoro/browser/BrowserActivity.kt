@@ -27,6 +27,7 @@ import org.skepsun.kototoro.core.parser.ParserContentRepository
 import org.skepsun.kototoro.core.network.CommonHeaders
 import org.skepsun.kototoro.core.network.cookies.sensitiveValueFingerprint
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
+import org.skepsun.kototoro.core.util.ext.makeSnackbar
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
 import org.skepsun.kototoro.parsers.model.ContentSource
 import kotlin.coroutines.resume
@@ -70,7 +71,7 @@ class BrowserActivity : BaseBrowserActivity() {
                 proxyProvider.applyWebViewConfig()
             } catch (e: Exception) {
                 e.printStackTraceDebug()
-                Snackbar.make(browserWebView, e.getDisplayMessage(resources), Snackbar.LENGTH_LONG).show()
+                browserWebView.makeSnackbar(e.getDisplayMessage(resources), Snackbar.LENGTH_LONG).show()
             }
             if (savedInstanceState == null) {
                 val url = intent?.dataString
@@ -161,7 +162,7 @@ class BrowserActivity : BaseBrowserActivity() {
 
         R.id.action_browser -> {
             if (!router.openExternalBrowser(browserWebView.url.orEmpty(), item.title)) {
-                Snackbar.make(browserWebView, R.string.operation_not_supported, Snackbar.LENGTH_SHORT).show()
+                browserWebView.makeSnackbar(R.string.operation_not_supported, Snackbar.LENGTH_SHORT).show()
             }
             true
         }

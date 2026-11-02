@@ -48,21 +48,33 @@ public final class FilterSource extends HttpSource {
             throw new IllegalStateException("Cached native controls were not restored");
         }
     }
-    private Observable<MangasPage> result(String title) {
-        SManga manga = new SMangaImpl(); manga.setTitle(title); manga.setUrl("/filtered");
-        return Observable.just(new MangasPage(Collections.singletonList(manga), true));
+    /**
+     * Two full pages, then an empty one: a page of rows is what a real source answers, and it also keeps the
+     * browse grid's end-of-list trigger waiting for a scroll instead of fetching the next page right away.
+     */
+    private static final int PAGE_SIZE = 40;
+    private Observable<MangasPage> result(String title, int page) {
+        if (page > 2) return Observable.just(new MangasPage(Collections.emptyList(), false));
+        List<SManga> mangas = new ArrayList<>(PAGE_SIZE);
+        for (int i = 0; i < PAGE_SIZE; i++) {
+            SManga manga = new SMangaImpl();
+            manga.setTitle(i == 0 ? title : title + " " + i);
+            manga.setUrl("/filtered/" + page + "/" + i);
+            mangas.add(manga);
+        }
+        return Observable.just(new MangasPage(mangas, page < 2));
     }
     @Override public Observable<MangasPage> fetchPopularManga(int page) {
         defaults(); System.setProperty("fixture.filters.last", "popular:" + page);
-        return result("热门 " + page);
+        return result("热门 " + page, page);
     }
     @Override public Observable<MangasPage> fetchLatestUpdates(int page) {
         defaults(); System.setProperty("fixture.filters.last", "latest:" + page);
         // A slow site: the window must stay usable and a newer navigation must replace this request.
         if (Boolean.getBoolean("fixture.filters.slow")) {
-            return result("最新 " + page).delay(5, java.util.concurrent.TimeUnit.SECONDS);
+            return result("最新 " + page, page).delay(5, java.util.concurrent.TimeUnit.SECONDS);
         }
-        return result("最新 " + page);
+        return result("最新 " + page, page);
     }
     @Override public Observable<MangasPage> fetchSearchManga(int page, String query, FilterList filters) {
         if (filters != controls || !(filters.get(1) instanceof Flag) || !"opaque".equals(opaque.getState())) {
@@ -73,7 +85,7 @@ public final class FilterSource extends HttpSource {
             + edition.getValues()[edition.getState()].key + "|" + author.getState() + "|" + sort;
         System.setProperty("fixture.filters.last", received);
         if (Boolean.getBoolean("fixture.filters.fail")) return Observable.error(new java.io.IOException("Fixture filter failure"));
-        return result("筛选结果 " + page + " " + query);
+        return result("筛选结果 " + page + " " + query, page);
     }
     @Override public Observable<SManga> fetchMangaDetails(SManga manga) { return Observable.just(manga); }
     @Override public Observable<List<SChapter>> fetchChapterList(SManga manga) { return Observable.just(Collections.emptyList()); }

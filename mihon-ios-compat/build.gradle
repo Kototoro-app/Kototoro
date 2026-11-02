@@ -47,6 +47,24 @@ dependencies {
 
 tasks.withType(Test).configureEach { useJUnitPlatform() }
 
+// The adapter calls host constructors directly: rebuild the entire project-owned runtime as one ABI unit.
+// Third-party artifacts retain the versions and ordering selected by the staged profile.
+def iosHostProjects = configurations.runtimeClasspath.incoming.artifactView {
+    componentFilter { it instanceof org.gradle.api.artifacts.component.ProjectComponentIdentifier }
+}.files
+tasks.register('stageIosHost', Sync) {
+    from(tasks.named('jar'))
+    from(iosHostProjects)
+    rename { name ->
+        switch (name) {
+            case 'mihon-ios-compat.jar': return '05-mihon-ios-compat.jar'
+            case 'mihon-ios-shims.jar': return '00-kototoro-ios-shims.jar'
+            default: return "10-${name}"
+        }
+    }
+    into layout.buildDirectory.dir('ios-host')
+}
+
 tasks.register('stagePreview', Sync) {
     dependsOn tasks.named('jar')
     def target = rootProject.layout.projectDirectory.dir('iosApp/build/jvm/ios-adapter')

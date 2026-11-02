@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.desktop.app
 
+import org.skepsun.kototoro.core.db.DATABASE_VERSION
 import kotlinx.coroutines.runBlocking
 import org.skepsun.kototoro.desktop.runtime.DesktopRuntime
 import java.awt.Window
@@ -34,6 +35,13 @@ internal object DesktopWindowProbe {
                 SwingUtilities.invokeAndWait {
                     check(requireNotNull(window).width >= 920)
                     check(requireNotNull(window).height >= 620)
+                    // The running window must use Android's launcher artwork, not AWT's default icon.
+                    val icons = (window as? java.awt.Frame)?.iconImages.orEmpty()
+                    val iconSizes = icons.map { it.getWidth(null) to it.getHeight(null) }
+                    check(iconSizes.isNotEmpty()) { "Production window has no application icon" }
+                    check(iconSizes.any { (width, height) -> width >= 128 && width == height }) {
+                        "Production window icon is not the Android app icon: $iconSizes"
+                    }
                     window!!.dispatchEvent(WindowEvent(window, WindowEvent.WINDOW_CLOSING))
                 }
             } catch (error: Throwable) { failure.set(error) }
@@ -42,7 +50,7 @@ internal object DesktopWindowProbe {
         watchdog.join(1000)
         failure.get()?.let { throw it }
         check(!watchdog.isAlive) { "Window watchdog remained active" }
-        runBlocking { DesktopRuntime.open(root).use { check(it.storageInfo().schemaVersion == 84) } }
+        runBlocking { DesktopRuntime.open(root).use { check(it.storageInfo().schemaVersion == DATABASE_VERSION) } }
         val moved = root.resolveSibling("$mode-closed")
         Files.move(root, moved)
         Files.move(moved, root)

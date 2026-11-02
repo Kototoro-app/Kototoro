@@ -42,7 +42,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -80,6 +79,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.compose.KototoroSlider
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
@@ -132,6 +133,7 @@ fun VideoPlayerControls(
     onAction: (VideoPlayerAction) -> Unit,
     onInteractionStart: () -> Unit = {},
     onInteractionEnd: () -> Unit = {},
+    noteButtonFocusRequester: FocusRequester? = null,
     modifier: Modifier = Modifier,
 ) {
     val isTvPresentation = LocalUiPresentationConfig.current.isTv
@@ -166,6 +168,7 @@ fun VideoPlayerControls(
                 onInteractionStart = onInteractionStart,
                 onInteractionEnd = onInteractionEnd,
                 primaryFocusRequester = primaryFocusRequester,
+                noteButtonFocusRequester = noteButtonFocusRequester,
             )
         }
     }
@@ -255,6 +258,7 @@ fun VideoPlayerBottomControls(
     onInteractionStart: () -> Unit = {},
     onInteractionEnd: () -> Unit = {},
     primaryFocusRequester: FocusRequester? = null,
+    noteButtonFocusRequester: FocusRequester? = null,
     modifier: Modifier = Modifier,
 ) {
     val tokens = LocalInterfaceStyleTokens.current
@@ -316,12 +320,12 @@ fun VideoPlayerBottomControls(
                     modifier = Modifier.weight(1f).padding(start = 8.dp),
                 )
                 Text(
-                    text = formatDuration(state.positionMs),
+                    text = formatPlaybackTime(state.positionMs),
                     style = MaterialTheme.typography.labelMedium,
                     modifier = Modifier.padding(start = 8.dp),
                 )
                 Text(text = "/", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(horizontal = 2.dp))
-                Text(text = formatDuration(state.durationMs), style = MaterialTheme.typography.labelMedium)
+                Text(text = formatPlaybackTime(state.durationMs), style = MaterialTheme.typography.labelMedium)
             }
             BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
                 val showSecondaryActions = maxWidth >= 600.dp * LocalDensity.current.fontScale
@@ -381,6 +385,7 @@ fun VideoPlayerBottomControls(
                             },
                             contentDescription = stringResource(R.string.video_add_note),
                             onClick = { onAction(VideoPlayerAction.AddNote) },
+                            focusRequester = noteButtonFocusRequester,
                         )
                     }
                     PlayerTextButton(
@@ -455,7 +460,7 @@ private fun PlayerIconButton(
         modifier = modifier
             .size(if (isTvPresentation) 48.dp else 36.dp)
             .then(focusModifier)
-            .semantics { this.contentDescription = contentDescription },
+            .semantics { this.contentDescription = contentDescription }.tvIconButtonRing(),
         content = icon,
     )
 }
@@ -537,7 +542,7 @@ private fun PlayerChapterButton(
     val isTvPresentation = LocalUiPresentationConfig.current.isTv
     var isFocused by remember { mutableStateOf(false) }
     val focusShape = RoundedCornerShape(10.dp)
-    TextButton(
+    TvTextButton(
         onClick = onClick,
         modifier = modifier
             .height(if (isTvPresentation) 48.dp else 40.dp)
@@ -594,7 +599,7 @@ private fun PlayerTextButton(
     val isTvPresentation = LocalUiPresentationConfig.current.isTv
     var isFocused by remember { mutableStateOf(false) }
     val focusShape = RoundedCornerShape(10.dp)
-    TextButton(
+    TvTextButton(
         onClick = onClick,
         modifier = modifier
             .height(if (isTvPresentation) 48.dp else 40.dp)
@@ -609,14 +614,5 @@ private fun PlayerTextButton(
         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp),
     ) {
         Text(text = text, color = PlayerControlsForeground, style = MaterialTheme.typography.labelLarge)
-    }
-}
-
-internal fun formatDuration(valueMs: Long): String {
-    val seconds = (valueMs.coerceAtLeast(0L) / 1000L).toInt()
-    return if (seconds >= 3600) {
-        "%d:%02d:%02d".format(seconds / 3600, (seconds % 3600) / 60, seconds % 60)
-    } else {
-        "%d:%02d".format(seconds / 60, seconds % 60)
     }
 }

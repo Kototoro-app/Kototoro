@@ -1463,6 +1463,7 @@
     <string name="novel_theme_sepia">复古</string>
     <string name="novel_theme_slate">暗灰</string>
     <string name="novel_translate">翻译</string>
+    <string name="novel_read_aloud">朗读</string>
     <string name="novel_translation_bilingual">双语</string>
     <string name="novel_translation_display_mode">翻译显示模式</string>
     <string name="novel_translation_only">仅译文</string>
@@ -1486,6 +1487,7 @@
     <string name="open_reading_page_in_browser">在浏览器中打开阅读页面</string>
     <string name="open_website">打开网站</string>
     <string name="operation_not_supported">操作无效</string>
+    <string name="cloudstream_newpipe_required">此扩展所需的 NewPipe 组件与 Kototoro 内置的版本不兼容，无法播放视频。请尝试更新扩展或 Kototoro。</string>
     <string name="options">选项</string>
     <string name="order_added">添加日期（降序）</string>
     <string name="order_oldest">最旧</string>
@@ -1707,6 +1709,7 @@
     <string name="reader_info_bar_layout">阅读状态排版</string>
     <string name="reader_info_bar_layout_centered">居中紧凑</string>
     <string name="reader_info_bar_layout_split">左右分栏</string>
+    <string name="reader_info_bar_layout_split_leading_progress">左右分栏（进度靠左）</string>
     <string name="reader_info_bar_cutout_avoidance">避让屏幕挖孔（实验性）</string>
     <string name="reader_info_bar_cutout_avoidance_summary">实验性功能：将阅读信息移出摄像头挖孔或刘海区域</string>
     <string name="reader_info_bar_summary">在屏幕顶部显示当前时间和阅读进度</string>
@@ -2542,6 +2545,12 @@
     <string name="tracking_season_winter">冬季</string>
     <string name="tracking_source">追踪源</string>
     <string name="translate_title">翻译标题</string>
+    <string name="translate_chapter">翻译本章</string>
+    <string name="translate">翻译</string>
+    <string name="translate_chapter_again">重新翻译</string>
+    <string name="translate_chapter_again_summary">本章已有翻译。重新翻译会覆盖当前设置对应的译文。</string>
+    <string name="cancel_translation">取消翻译</string>
+    <string name="translation_cancelled">已取消翻译</string>
     <string name="translating">翻译中…</string>
     <string name="translating_">翻译中…</string>
     <string name="translation">翻译</string>

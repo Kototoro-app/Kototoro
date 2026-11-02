@@ -1,5 +1,7 @@
 package org.skepsun.kototoro.details.ui.compose
 
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import org.skepsun.kototoro.core.ui.compose.DetailsMetadataItem
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.combinedClickable
@@ -513,47 +515,19 @@ fun MetadataItem(
     onClick: (() -> Unit)? = null,
     showNavigationIndicator: Boolean = false,
 ) {
-    val contentAlpha = if (valueMuted) 0.62f else 1f
-    Row(
-        modifier = modifier
-            .then(
-                if (onClick != null) {
-                    Modifier
-                        .tvFocusable(shape = RoundedCornerShape(8.dp), addFocusTarget = false)
-                        .clickable(onClick = onClick)
-                } else {
-                    Modifier
-                },
-            )
-            .padding(horizontal = 4.dp, vertical = 3.dp),
-        horizontalArrangement = Arrangement.spacedBy(7.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        iconRes?.let {
-            Icon(
-                painter = rememberSafePainter(it),
-                contentDescription = label,
-                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = contentAlpha),
-                modifier = Modifier.size(15.dp),
-            )
-        }
-        Text(
-            text = value,
-            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = contentAlpha),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
-        )
-        if (showNavigationIndicator) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = contentAlpha),
-                modifier = Modifier.size(16.dp),
-            )
-        }
-    }
+    DetailsMetadataItem(
+        label = label,
+        value = value,
+        icon = iconRes?.let { rememberSafePainter(it) },
+        modifier = modifier,
+        valueMuted = valueMuted,
+        onClick = onClick,
+        navigationIcon = if (showNavigationIndicator) {
+            rememberVectorPainter(Icons.AutoMirrored.Filled.KeyboardArrowRight)
+        } else {
+            null
+        },
+    )
 }
 
 @Composable

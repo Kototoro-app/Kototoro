@@ -52,4 +52,16 @@ class TabletPreviewChaptersTest {
         val chapters = listOf(Chapter(1f)) + (2..5).map { Chapter(it.toFloat(), "B") }
         assertEquals(chapters, groups(chapters).earliest)
     }
+
+    @Test
+    fun `the picked branch replaces the first chapter's and an unknown one falls back`() {
+        val chapters = (1..4).flatMap { listOf(Chapter(it.toFloat(), "A"), Chapter(it.toFloat(), "B")) } +
+            Chapter(9f, " ")
+        assertEquals(listOf("A", "B"), tabletPreviewBranches(chapters) { it.branch })
+        val picked = resolveTabletPreviewChapters(chapters, { it.branch }, { it.number }, { it.date }, "B")
+        assertTrue(picked.earliest.all { it.branch == "B" })
+        assertEquals("B", picked.firstChapter!!.branch)
+        val unknown = resolveTabletPreviewChapters(chapters, { it.branch }, { it.number }, { it.date }, "gone")
+        assertEquals("A", unknown.firstChapter!!.branch)
+    }
 }

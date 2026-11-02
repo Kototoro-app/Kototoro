@@ -22,7 +22,7 @@ internal object DesktopDownloadCleanup {
     fun inspect(storage: FileSourcePreferenceStore, checkpoint: () -> Unit): DesktopDownloadCleanupPlan {
         val snapshots = storage.snapshots(checkpoint)
         val chunks = snapshots.filter { it.namespace.startsWith(CHUNKS) }.associateBy { it.namespace.removePrefix(CHUNKS) }
-        require(chunks.keys.all { it.matches(Regex("[0-9a-f]{64}")) }) { "下载块身份无效，无法回收" }
+        require(chunks.keys.all { it.matches(Regex("[0-9a-f]{64}")) }) { desktopText("error.downloadBlockIdentity") }
         val referenced = mutableSetOf<String>()
         for (root in snapshots.filter { it.namespace.startsWith(ROOTS) }) {
             checkpoint()
@@ -31,8 +31,8 @@ internal object DesktopDownloadCleanup {
             require(root.namespace == ROOTS + DesktopDownloadStore.key(manifest.contentId, manifest.chapter))
             val pages = manifest.chunks.flatMapIndexed { index, hash ->
                 checkpoint()
-                val encoded = text(storage.readStored(chunks[hash] ?: throw IOException("下载清单缺少数据块"))["pages"])
-                require(imageKey(encoded.toByteArray()) == hash) { "下载数据块校验失败" }
+                val encoded = text(storage.readStored(chunks[hash] ?: throw IOException(desktopText("error.downloadManifestMissingBlock")))["pages"])
+                require(imageKey(encoded.toByteArray()) == hash) { desktopText("error.downloadBlockChecksum") }
                 val chunk = SourceProtocolJson.decodeFromString<SourceDownloadChunk>(encoded)
                 require(chunk.pages.size == minOf(SourceDownloadManifest.CHUNK_SIZE,
                     manifest.pageCount - index * SourceDownloadManifest.CHUNK_SIZE))
@@ -47,5 +47,5 @@ internal object DesktopDownloadCleanup {
     }
 
     private fun text(value: SourcePreferenceValue?) = (value as? SourcePreferenceValue.Text)?.value
-        ?: throw IOException("下载清单数据不完整")
+        ?: throw IOException(desktopText("error.downloadManifestIncomplete"))
 }

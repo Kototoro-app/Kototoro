@@ -17,14 +17,18 @@ final class ReaderStorageModel: ObservableObject {
     @Published private(set) var isWorking = false
     private(set) var store: ReaderStorageStore?
     private weak var queue: ReaderDownloadQueue?
+    private var automaticTrim: Task<Void, Never>?
+    private var trimSchedule = ReaderCacheTrimSchedule()
 
     private static let backingStore: Result<ReaderStorageStore, Error> = Result {
         let data = try NativeSourceTransport.dataDirectory
         return ReaderStorageStore(downloads: data.appendingPathComponent("downloads"), caches: [
-            ReaderCacheLocation(id: "images", title: "页面与封面", directory: data.appendingPathComponent("images")),
-            ReaderCacheLocation(id: "source-icons", title: "来源图标",
+            ReaderCacheLocation(id: "images", title: String(localized: "页面与大图"), directory: data.appendingPathComponent("images")),
+            ReaderCacheLocation(id: "covers", title: String(localized: "封面缓存"),
+                                directory: URL.cachesDirectory.appendingPathComponent("covers")),
+            ReaderCacheLocation(id: "source-icons", title: String(localized: "来源图标"),
                                 directory: URL.cachesDirectory.appendingPathComponent("source-icons")),
-            ReaderCacheLocation(id: "extension-icons", title: "扩展图标",
+            ReaderCacheLocation(id: "extension-icons", title: String(localized: "扩展图标"),
                                 directory: URL.cachesDirectory.appendingPathComponent("extension-icons"))
         ])
     }
@@ -48,7 +52,7 @@ final class ReaderStorageModel: ObservableObject {
             self.error = error.localizedDescription
             queue.setStorageFailure(error.localizedDescription)
         }
-        await ReaderStorageAccess.shared.setIdleAction { [weak self] in await self?.trimAutomatically() }
+        await ReaderStorageAccess.shared.setIdleAction { [weak self] in await self?.scheduleAutomaticTrim() }
     }
 
     func refresh() async {
@@ -116,10 +120,29 @@ final class ReaderStorageModel: ObservableObject {
         }
     }
 
-    func trimAutomatically() async {
-        guard let store, !isWorking, !ReaderPresence.shared.isReading, ReaderStorageBudget.bytes > 0,
+    private func scheduleAutomaticTrim() {
+        automaticTrim?.cancel()
+        automaticTrim = Task { [weak self] in
+            do { try await Task.sleep(for: .seconds(3)) } catch { return }
+            guard let self, !Task.isCancelled else { return }
+            self.automaticTrim = nil
+            await self.trimAutomatically()
+        }
+    }
+
+    func trimAutomatically(force: Bool = false) async {
+        let budget = ReaderStorageBudget.bytes
+        let now = ContinuousClock().now
+        guard let store, !isWorking, !ReaderPresence.shared.isReading, budget > 0,
+              force || trimSchedule.isDue(at: now, budget: budget),
               queue?.storageFailure == nil else { return }
-        do { try await maintenance { try await store.trimCaches(to: ReaderStorageBudget.bytes) } }
+        do {
+            try await maintenance {
+                // A busy lease must not consume the scan interval: record only after entering maintenance.
+                self.trimSchedule.recordAttempt(at: ContinuousClock().now, budget: budget)
+                try await store.trimCaches(to: budget)
+            }
+        }
         catch ReaderStorageError.busy { return }
         catch { self.error = error.localizedDescription }
     }
@@ -197,7 +220,7 @@ struct ReaderStorageView: View {
                     ForEach(snapshot.items) { item in
                         HStack {
                             VStack(alignment: .leading, spacing: 5) {
-                                Text(item.metadata?.title ?? "未关联的离线章节").font(.headline)
+                                Text(item.metadata?.title ?? String(localized: "未关联的离线章节")).font(.headline)
                                 if let metadata = item.metadata {
                                     Text(metadata.chapterTitle).foregroundStyle(.secondary)
                                 } else if let modified = item.modified {
@@ -212,7 +235,7 @@ struct ReaderStorageView: View {
                                 .accessibilityIdentifier("storage.delete.\(item.id)")
                         }.accessibilityElement(children: .contain)
                             .accessibilityLabel(
-                                "\(item.metadata?.title ?? "离线章节") · \(item.metadata?.chapterTitle ?? "")"
+                                "\(item.metadata?.title ?? String(localized: "离线章节")) · \(item.metadata?.chapterTitle ?? "")"
                             )
                             .accessibilityIdentifier("storage.chapter.\(item.id)")
                     }
@@ -229,7 +252,7 @@ struct ReaderStorageView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task { await model.refresh() }
         .refreshable { await model.refresh() }
-        .onChange(of: limit) { _, _ in Task { await model.trimAutomatically(); await model.refresh() } }
+        .onChange(of: limit) { _, _ in Task { await model.trimAutomatically(force: true); await model.refresh() } }
         .alert(confirmingCacheClear ? "清除图像缓存？" : "删除离线文件？", isPresented: Binding(
             get: { confirmingCacheClear || selected != nil },
             set: { if !$0 { confirmingCacheClear = false; selected = nil } }
@@ -244,8 +267,8 @@ struct ReaderStorageView: View {
             if confirmingCacheClear {
                 Text("页面、封面和图标需要重新加载。离线章节和本地导入作品会保留。")
             } else {
-                Text("\(selected?.metadata?.title ?? "离线章节") · \(selected?.metadata?.chapterTitle ?? "")\n"
-                     + "删除后需重新下载。收藏和阅读进度会保留。")
+                Text("\(selected?.metadata?.title ?? String(localized: "离线章节")) · \(selected?.metadata?.chapterTitle ?? "")\n"
+                     + String(localized: "删除后需重新下载。收藏和阅读进度会保留。"))
             }
         }
     }

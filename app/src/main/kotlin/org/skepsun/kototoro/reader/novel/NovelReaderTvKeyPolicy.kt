@@ -13,6 +13,23 @@ internal fun shouldInterceptNovelReaderTvBack(
 ): Boolean = isTvPresentation && controlsVisible && !hasSubOverlay
 
 /**
+ * Determines whether a D-pad key on TV presentation should bring the reader chrome back.
+ *
+ * Reading mode hides the chrome and hands every D-pad key to the content, and BACK already means
+ * "leave the reader", so without this rule the menu could not be reopened from reading mode at
+ * all. Television apps universally use UP to reveal the controls.
+ */
+internal fun shouldShowNovelReaderTvChrome(
+    isTvPresentation: Boolean,
+    controlsVisible: Boolean,
+    hasSubOverlay: Boolean,
+    keyCode: Int,
+): Boolean = isTvPresentation &&
+    !controlsVisible &&
+    !hasSubOverlay &&
+    keyCode == KeyEvent.KEYCODE_DPAD_UP
+
+/**
  * Resolves page step delta for PAGE_UP and PAGE_DOWN keys on TV presentation.
  */
 internal fun resolveNovelReaderPageKeyDelta(

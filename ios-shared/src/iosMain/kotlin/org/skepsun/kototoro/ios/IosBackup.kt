@@ -31,7 +31,7 @@ class IosBackupPreview internal constructor(
         consume: suspend (T) -> Unit) {
         val entry = zip.entries.firstOrNull { BackupSection.of(it.name) == section } ?: return
         val rows = LibraryBackupJson.parseToJsonElement(zip.read(entry).decodeToString()) as? JsonArray
-            ?: throw IllegalArgumentException("备份节格式无效：${entry.name}")
+            ?: throw IllegalArgumentException(localized("备份节格式无效：%@", entry.name))
         for (row in rows) {
             currentCoroutineContext().ensureActive()
             consume(LibraryBackupJson.decodeFromJsonElement(serializer, row))
@@ -45,10 +45,10 @@ internal class IosBackupService(private val library: IosLibrary) {
     suspend fun preview(path: String): IosBackupPreview = withContext(Dispatchers.IO) {
         val zip = BackupZipReader.open(path)
         val indexEntry = zip.entries.singleOrNull { BackupSection.of(it.name) == BackupSection.INDEX }
-            ?: throw IllegalArgumentException("所选文件没有 Kototoro/Kotatsu 备份索引")
+            ?: throw IllegalArgumentException(localized("所选文件没有 Kototoro/Kotatsu 备份索引"))
         val indices = LibraryBackupJson.decodeFromString(ListSerializer(BackupIndex.serializer()),
             zip.read(indexEntry).decodeToString())
-        require(indices.size == 1) { "备份索引数量无效" }
+        require(indices.size == 1) { localized("备份索引数量无效") }
         val index = indices.single()
         LibraryBackup.requireSupported(index)
         val sections = zip.entries.mapNotNull { BackupSection.of(it.name) }.toSet()

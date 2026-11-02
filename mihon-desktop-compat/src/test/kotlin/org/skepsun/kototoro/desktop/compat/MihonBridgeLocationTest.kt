@@ -11,7 +11,22 @@ class MihonBridgeLocationTest {
 
     @Test
     fun `packaged bridge is discovered relative to Compose resources`() = properties(null) {
-        assertEquals(bridge().toFile(), MihonDesktopPlatform.defaultBridgeExecutable())
+        assertEquals(bridge().toFile(), MihonDesktopPlatform.defaultBridgeExecutable("Windows 11"))
+    }
+
+    @Test
+    fun `macOS never discovers a packaged Windows executable`() = properties(null) {
+        assertNull(MihonDesktopPlatform.defaultBridgeExecutable("Mac OS X"))
+    }
+
+    @Test
+    fun `macOS discovers WKWebView bridge for both Mac and Darwin names`() = properties(null) {
+        val native = Files.createFile(directory.resolve("browser/kototoro-webview-bridge"))
+        for (name in listOf("Mac OS X", "Darwin")) {
+            assertEquals(native.toFile(), MihonDesktopPlatform.defaultBridgeExecutable(name))
+        }
+        assertEquals(bridge().toFile(), MihonDesktopPlatform.defaultBridgeExecutable("Windows 11"))
+        assertNull(MihonDesktopPlatform.defaultBridgeExecutable("Linux"))
     }
 
     @Test

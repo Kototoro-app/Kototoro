@@ -1,6 +1,8 @@
 package org.skepsun.kototoro.source.host
 
 import org.skepsun.kototoro.core.source.MihonModelRules
+import org.skepsun.kototoro.core.source.ChapterArtwork
+import org.skepsun.kototoro.core.source.ChapterArtworkCodec
 import org.skepsun.kototoro.core.source.SourceChapter
 import org.skepsun.kototoro.core.source.SourceContent
 import org.skepsun.kototoro.core.source.SourceExternalTrack
@@ -81,11 +83,13 @@ internal class AniyomiModelAdapter(private val lease: MihonJarRegistry.SourceLea
     fun episode(episode: Any, parentUrl: String, number: Float): SourceChapter {
         val url = read(episode, "getUrl") as String
         val scanlator = (read(episode, "getScanlator") as? String)?.takeIf(String::isNotBlank)
+        val preview = MihonModelRules.resolveUrl(baseUrl, read(episode, "getPreview_url") as? String)
         return SourceChapter(
             id = MihonModelRules.chapterId(url, source.name, parentUrl),
             title = (read(episode, "getName") as? String)?.takeIf(String::isNotBlank),
             number = number, volume = 0, url = url, scanlator = scanlator,
             uploadDate = (read(episode, "getDate_upload") as? Long) ?: 0, branch = scanlator, source = source,
+            sourceData = preview?.let { ChapterArtworkCodec.encode(ChapterArtwork(it)) },
         )
     }
 
@@ -95,6 +99,7 @@ internal class AniyomiModelAdapter(private val lease: MihonJarRegistry.SourceLea
         write(it, "setEpisode_number", chapter.number)
         write(it, "setDate_upload", chapter.uploadDate)
         write(it, "setScanlator", chapter.scanlator)
+        write(it, "setPreview_url", ChapterArtworkCodec.decode(chapter.sourceData)?.posterUrl)
     }
 
     fun copyEpisode(episode: Any): Any = create("SEpisodeImpl").also {

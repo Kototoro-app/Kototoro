@@ -18,6 +18,15 @@ abstract class TrackLogsDao : MangaQueryBuilder.ConditionCallback {
     @Query("SELECT * FROM track_logs ORDER BY created_at DESC")
     abstract suspend fun dump(): List<TrackLogEntity>
 
+    @Query("SELECT * FROM track_logs WHERE manga_id = :mangaId ORDER BY created_at, id")
+    abstract suspend fun findByOwner(mangaId: Long): List<TrackLogEntity>
+
+    @Query("UPDATE track_logs SET chapter_metadata = :metadata WHERE id = :id")
+    abstract suspend fun updateChapterMetadata(id: Long, metadata: String)
+
+    @Query("UPDATE track_logs SET unread = 0")
+    abstract suspend fun markAllAsSeen()
+
     @Query(
         """
         SELECT *
@@ -49,7 +58,7 @@ abstract class TrackLogsDao : MangaQueryBuilder.ConditionCallback {
     )
     abstract suspend fun deleteOrphans()
 
-    @Query("UPDATE track_logs SET unread = 0 WHERE id = :id")
+    @Query("UPDATE track_logs SET unread = 0 WHERE id = :id AND unread = 1")
     abstract suspend fun markAsRead(id: Long)
 
     @Query("UPDATE track_logs SET unread = 0 WHERE manga_id = :ownerId AND unread = 1")
@@ -90,7 +99,7 @@ abstract class TrackLogsDao : MangaQueryBuilder.ConditionCallback {
                 WHEN tracks.chapters_new > 1 THEN 'New chapters x ' || tracks.chapters_new
                 ELSE 'New chapters'
             END,
-            MAX(tracks.last_chapter_date, tracks.last_check_time, 0),
+            MAX(tracks.last_check_time, 0),
             1
         FROM tracks
         WHERE tracks.chapters_new > 0

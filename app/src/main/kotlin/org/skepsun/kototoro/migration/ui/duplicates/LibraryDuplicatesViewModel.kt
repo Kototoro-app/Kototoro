@@ -48,7 +48,8 @@ class LibraryDuplicatesViewModel @Inject constructor(
         launchJob(Dispatchers.Default) {
             val rows = database.getMigrationDao().findLibraryRows()
             val unhealthy = sourceHealthUseCase().filter { it.status.needsAttention }.mapTo(HashSet()) { it.source.name }
-            val groups = DuplicateGrouper.group(rows, unhealthy, settings.ignoredDuplicateKeys)
+            val trackingIds = database.getMigrationDao().findLibraryTrackingIds()
+            val groups = DuplicateGrouper.group(rows, unhealthy, settings.ignoredDuplicateKeys, trackingIds)
             _state.value = LibraryDuplicatesState(
                 groups = groups.map { DuplicateGroupUi(it, it.recommendedId) },
                 isLoading = false,

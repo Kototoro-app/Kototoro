@@ -5,13 +5,25 @@ import SwiftUI
 /// Owns the routed source runtime for the app's lifetime: Apple CMS sites run natively, extensions use the JVM.
 @MainActor
 final class SourcesModel: ObservableObject {
-    @Published private(set) var sources: [IosSource] = []
+    @Published private(set) var sources: [IosSource] = [] {
+        didSet {
+            byName = Dictionary(sources.map { ($0.name, $0) }, uniquingKeysWith: { first, _ in first })
+            revision += 1
+        }
+    }
+    /// Bumped whenever the catalog or the source settings change, for values views derive from both.
+    private(set) var revision = 0
+    /// Rows look their source up while scrolling; a linear scan bridged every Kotlin name of a large catalog.
+    private var byName: [String: IosSource] = [:]
+
+    func source(named name: String) -> IosSource? { byName[name] }
+    @Published private(set) var catalogRevision = 0
     @Published private(set) var extensionError: String?
     @Published private(set) var error: String?
     @Published private(set) var isLoading = false
     @Published private(set) var runtime: IosSources?
     /// Shared source switches, pins, manual positions and usage metrics; absent rows use defaults.
-    @Published private(set) var settings: [String: IosSourceSetting] = [:]
+    @Published private(set) var settings: [String: IosSourceSetting] = [:] { didSet { revision += 1 } }
     nonisolated(unsafe) private var ownedRuntime: IosSources?
     private var videoSources: IosVideoSources?
     private var library: IosLibrary?
@@ -29,12 +41,12 @@ final class SourcesModel: ObservableObject {
     var extensionSourceList: [IosSource] { sources.filter { $0.kind == "extension" } }
 
     static let ecosystems: [(id: String, title: String, icon: String)] = [
-        ("LOCAL", "本地作品", "folder"),
-        ("MIHON", "Mihon 漫画", "book.closed"),
-        ("TSUNDOKU", "Tsundoku 小说", "text.book.closed"),
-        ("ANIYOMI", "Aniyomi 动漫", "play.rectangle"),
-        ("JAR", "解析器插件（kototoro / kotatsu / UMA）", "shippingbox"),
-        ("TVBOX", "苹果 CMS / TVBox 影视", "play.tv"),
+        ("LOCAL", String(localized: "本地作品"), "folder"),
+        ("MIHON", String(localized: "Mihon 漫画"), "book.closed"),
+        ("TSUNDOKU", String(localized: "Tsundoku 小说"), "text.book.closed"),
+        ("ANIYOMI", String(localized: "Aniyomi 动漫"), "play.rectangle"),
+        ("JAR", String(localized: "解析器插件（kototoro / kotatsu / UMA）"), "shippingbox"),
+        ("TVBOX", String(localized: "苹果 CMS / TVBox 影视"), "play.tv"),
     ]
 
     func isEnabled(_ source: IosSource) -> Bool { settings[source.name]?.enabled ?? Self.defaultEnabled(source) }
@@ -61,22 +73,34 @@ final class SourcesModel: ObservableObject {
 
     /// Ties retain manual order; sections keep pinned sources first independently of the selected sort.
     func ordered(_ list: [IosSource], by sort: SourceSort) -> [IosSource] {
-        let manual = ordered(list)
-        guard sort != .manual else { return manual }
-        return manual.enumerated().sorted { lhs, rhs in
+        guard !list.isEmpty else { return [] }
+        if sort == .manual { return ordered(list) }
+        return list.enumerated().sorted { lhs, rhs in
             switch sort {
-            case .manual: return lhs.offset < rhs.offset
+            case .manual:
+                let left = settings[lhs.element.name]?.sortKey ?? Int32.max
+                let right = settings[rhs.element.name]?.sortKey ?? Int32.max
+                return left != right ? left < right : lhs.offset < rhs.offset
             case .title:
                 let comparison = lhs.element.title.localizedStandardCompare(rhs.element.title)
-                return comparison == .orderedSame ? lhs.offset < rhs.offset : comparison == .orderedAscending
+                if comparison != .orderedSame { return comparison == .orderedAscending }
+                let left = settings[lhs.element.name]?.sortKey ?? Int32.max
+                let right = settings[rhs.element.name]?.sortKey ?? Int32.max
+                return left != right ? left < right : lhs.offset < rhs.offset
             case .lastUsed:
                 let left = settings[lhs.element.name]?.lastUsedAt ?? 0
                 let right = settings[rhs.element.name]?.lastUsedAt ?? 0
-                return left == right ? lhs.offset < rhs.offset : left > right
+                if left != right { return left > right }
+                let leftKey = settings[lhs.element.name]?.sortKey ?? Int32.max
+                let rightKey = settings[rhs.element.name]?.sortKey ?? Int32.max
+                return leftKey != rightKey ? leftKey < rightKey : lhs.offset < rhs.offset
             case .popularity:
                 let left = settings[lhs.element.name]?.storedContentCount ?? 0
                 let right = settings[rhs.element.name]?.storedContentCount ?? 0
-                return left == right ? lhs.offset < rhs.offset : left > right
+                if left != right { return left > right }
+                let leftKey = settings[lhs.element.name]?.sortKey ?? Int32.max
+                let rightKey = settings[rhs.element.name]?.sortKey ?? Int32.max
+                return leftKey != rightKey ? leftKey < rightKey : lhs.offset < rhs.offset
             }
         }.map(\.element)
     }
@@ -94,7 +118,7 @@ final class SourcesModel: ObservableObject {
     }
 
     func recordUsage(sourceName: String) async {
-        guard let library, let source = sources.first(where: { $0.name == sourceName }) else { return }
+        guard let library, let source = byName[sourceName] else { return }
         do {
             if settings[sourceName] == nil {
                 // Materialize effective positions before inserting a usage row, preserving the catalog's manual order.
@@ -202,9 +226,11 @@ final class SourcesModel: ObservableObject {
                     defaults.set(Int(appVersion), forKey: "sources.catalogVersion")
                 }
                 rows = try await library.sourceSettings()
+                try await library.recovery.remember(sources: catalog.sources)
             }
             settings = Dictionary(rows.map { ($0.name, $0) }, uniquingKeysWith: { first, _ in first })
             sources = catalog.sources
+            catalogRevision += 1
             library?.updateSources(sources: catalog.sources)
             extensionError = catalog.extensionError
         } catch {
@@ -216,11 +242,11 @@ final class SourcesModel: ObservableObject {
     func importSource(url: String, title: String) async throws -> String {
         guard let videoSources, let runtime else { throw CancellationError() }
         let summary = try await videoSources.importFrom(url: url.trimmingCharacters(in: .whitespacesAndNewlines),
-                                                       title: title)
+                                                        title: title)
         try await runtime.sourcesChanged()
         await load()
-        var text = "已导入 \(summary.imported) 个站点"
-        if summary.skippedSpiderSites > 0 { text += "，跳过 \(summary.skippedSpiderSites) 个需要爬虫运行时的站点" }
+        var text = String(localized: "已导入 \(summary.imported) 个站点")
+        if summary.skippedSpiderSites > 0 { text += String(localized: "，跳过 \(summary.skippedSpiderSites) 个需要爬虫运行时的站点") }
         return text
     }
 
@@ -230,6 +256,7 @@ final class SourcesModel: ObservableObject {
             try await videoSources.delete(id: source.name)
             try await runtime.sourcesChanged()
             sources.removeAll { $0.name == source.name }
+            catalogRevision += 1
         } catch {
             self.error = error.localizedDescription
         }
@@ -244,9 +271,9 @@ enum SourceGrouping: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .ecosystem: "按来源类型"
-        case .content: "按内容类型"
-        case .none: "不分组"
+        case .ecosystem: String(localized: "按来源类型")
+        case .content: String(localized: "按内容类型")
+        case .none: String(localized: "不分组")
         }
     }
 }
@@ -256,16 +283,18 @@ enum SourceSort: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .manual: "手动顺序"
-        case .title: "名称"
-        case .lastUsed: "最近使用"
-        case .popularity: "使用频率"
+        case .manual: String(localized: "手动顺序")
+        case .title: String(localized: "名称")
+        case .lastUsed: String(localized: "最近使用")
+        case .popularity: String(localized: "使用频率")
         }
     }
 }
 
 struct SourcesView: View {
-    @ObservedObject var library: LibraryModel
+    /// Held without observing: the library publishes often (update checks, refreshes) and every publish would rebuild
+    /// and re-diff the whole source list mid-scroll; only actions and the preview sheet read it.
+    let library: LibraryModel
     @ObservedObject var model: SourcesModel
     @State private var query = ""
     @AppStorage("sources.showAdult") private var showAdult = false
@@ -280,58 +309,96 @@ struct SourcesView: View {
     @AppStorage("sources.sort") private var sort = SourceSort.manual
     @AppStorage("sources.newOnly") private var newOnly = false
     @State private var reordering = false
+    @State private var migration: LibraryMigrationRequest?
+    @State private var trackingPreview: TrackingPreviewSelection?
     @Environment(\.openGlobalSearch) private var openGlobalSearch
+
+    private struct DisplaySources {
+        let sections: [(id: String, title: String, sources: [IosSource])]
+        let newSourceCount: Int
+    }
+
+    /// Derived once per catalog/settings change: the body asks for it several times, and each pass bridged every
+    /// source's content type out of Kotlin.
+    private final class KindsCache { var key: String?; var kinds: Set<String> = [] }
+    @State private var kindsCache = KindsCache()
 
     /// Content types among the enabled sources, independent of the search text so the switch stays put.
     private var availableKinds: Set<String> {
-        Set(model.sources.filter { model.isEnabled($0) && (showAdult || !$0.isAdult) }.map(\.mediaKind))
+        let key = "\(model.revision)|\(showAdult)"
+        if kindsCache.key == key { return kindsCache.kinds }
+        var kinds = Set<String>()
+        for source in model.sources {
+            if model.isEnabled(source) && (showAdult || !source.isAdult) {
+                kinds.insert(source.mediaKind)
+            }
+        }
+        kindsCache.key = key
+        kindsCache.kinds = kinds
+        return kinds
     }
 
     /// The content space, or this page's own switch while spaces are off.
     private var kind: String? {
-        ContentSpace.filter(enabled: spacesEnabled, space: space, page: pageKind, available: availableKinds)
+        if spacesEnabled { return ContentSpace.kind(space) }
+        return ContentKindPicker.effective(pageKind, available: availableKinds)
     }
 
-    /// Enabled sources after search, the content type and the display menu's filters, in the chosen order.
-    private var filteredSources: [IosSource] {
-        let ecosystems = SourceFilterOption.decode(hiddenEcosystems)
-        let selected = kind
-        return SourcesModel.ecosystems.filter { !ecosystems.contains($0.id) }.flatMap { ecosystem in
-            model.sources(ecosystem.id, query: query, showAdult: showAdult).filter { selected == nil || $0.mediaKind == selected }
+    private var displaySources: DisplaySources {
+        let hidden = SourceFilterOption.decode(hiddenEcosystems)
+        let selectedKind = kind
+        let text = query.trimmingCharacters(in: .whitespaces)
+        let custom = spacesEnabled ? ContentSpace.activeCustom() : nil
+
+        let filtered = model.sources.filter { source in
+            guard model.isEnabled(source) else { return false }
+            if !showAdult && source.isAdult { return false }
+            if let selectedKind, source.mediaKind != selectedKind { return false }
+            if let custom, !custom.admits(source: source) { return false }
+            let eco = SourceFilterOption.ecosystemKey(source)
+            if hidden.contains(eco) { return false }
+            if !text.isEmpty {
+                let matchesTitle = source.title.localizedCaseInsensitiveContains(text)
+                let matchesName = source.name.localizedCaseInsensitiveContains(text)
+                if !matchesTitle && !matchesName { return false }
+            }
+            return true
         }
-    }
 
-    private var newSourceCount: Int { filteredSources.filter(model.isNewSource).count }
-
-    private var visibleSources: [IosSource] {
-        model.ordered(filteredSources.filter { !newOnly || model.isNewSource($0) }, by: sort)
-    }
-
-    /// Pinned sources first in their own section, then the rest grouped as chosen.
-    private var sections: [(id: String, title: String, sources: [IosSource])] {
-        let visible = visibleSources
-        let pinned = visible.filter(model.isPinned)
-        let rest = visible.filter { !model.isPinned($0) }
+        let newCount = filtered.reduce(0) { model.isNewSource($1) ? $0 + 1 : $0 }
+        let visible = model.ordered(filtered.filter { !newOnly || model.isNewSource($0) }, by: sort)
+        var pinned: [IosSource] = []
+        var rest: [IosSource] = []
+        pinned.reserveCapacity(min(visible.count, 8))
+        rest.reserveCapacity(visible.count)
+        for source in visible {
+            if model.isPinned(source) { pinned.append(source) }
+            else { rest.append(source) }
+        }
         var result: [(id: String, title: String, sources: [IosSource])] = []
-        if !pinned.isEmpty { result.append(("pinned", "置顶", pinned)) }
+        if !pinned.isEmpty { result.append(("pinned", String(localized: "置顶"), pinned)) }
         switch effectiveGrouping {
         case .ecosystem:
+            let grouped = Dictionary(grouping: rest, by: { SourceFilterOption.ecosystemKey($0) })
             for ecosystem in SourcesModel.ecosystems {
-                let members = rest.filter { SourceFilterOption.ecosystemKey($0) == ecosystem.id }
-                if !members.isEmpty { result.append((ecosystem.id, ecosystem.title, members)) }
+                if let members = grouped[ecosystem.id], !members.isEmpty {
+                    result.append((ecosystem.id, ecosystem.title, members))
+                }
             }
         case .content:
+            let grouped = Dictionary(grouping: rest, by: \.mediaKind)
             for kind in SourceFilterOption.kinds {
-                let members = rest.filter { $0.mediaKind == kind.id }
-                if !members.isEmpty { result.append((kind.id, kind.title, members)) }
+                if let members = grouped[kind.id], !members.isEmpty {
+                    result.append((kind.id, kind.title, members))
+                }
             }
         case .none:
-            if !rest.isEmpty { result.append(("all", pinned.isEmpty ? "全部来源" : "其他来源", rest)) }
+            if !rest.isEmpty { result.append(("all", pinned.isEmpty ? String(localized: "全部来源") : String(localized: "其他来源"), rest)) }
         }
-        return result
+        return DisplaySources(sections: result, newSourceCount: newCount)
     }
 
-    private var disabledCount: Int { model.sources.filter { !model.isEnabled($0) }.count }
+    private var disabledCount: Int { model.sources.reduce(0) { !model.isEnabled($1) ? $0 + 1 : $0 } }
     private var isKindSelected: Bool { kind != nil }
 
     /// Grouping by content type only means something while every kind is shown; a single kind groups by source
@@ -345,40 +412,50 @@ struct SourcesView: View {
     }
 
     var body: some View {
+        let display = displaySources
         NavigationStack {
             Group {
-                if layout == .grid { grid } else { list }
+                if layout == .grid { grid(display) } else { list(display) }
             }
             .overlay {
                 if model.isLoading && model.sources.isEmpty { ProgressView("正在读取源…") }
             }
             .navigationTitle("浏览")
-            .spaceSubtitle(spacesEnabled ? ContentSpace.subtitle(space) : "")
+            .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: SourceRoute.self) { route in
                 if let runtime = model.runtime {
                     SourceBrowseView(runtime: runtime, source: route.source)
                 }
             }
             // The system search field under the title; the search tab stays the app-wide search.
-            .pageSearch(text: $query, prompt: "搜索源")
+            .pageSearch(text: $query, prompt: String(localized: "搜索源"))
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    if spacesEnabled { SpaceMenu() }
+                }
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     NavigationLink { RepositoriesView() } label: {
                         Label("仓库与扩展", systemImage: "shippingbox")
                     }.accessibilityIdentifier("sources.repositories")
-                    if spacesEnabled { SpaceMenu() }
                     displayMenu
                 }
             }
             .refreshable { await model.load() }
             .onAppear(perform: migrateHiddenKinds)
             .sheet(isPresented: $reordering) { SourceOrderSheet() }
-            .task(id: library.library == nil) {
-                guard let database = library.library else { return }
-                model.attach(database)
-                await model.load()
+            .sheet(item: $migration) { request in
+                NavigationStack { BatchMigrationView(contents: request.contents) }
             }
         }
+        // Presentation belongs to the screen, not a List row that can be recreated as source usage changes.
+        .sheet(item: $trackingPreview, onDismiss: { Task { await library.refresh() } }) { selection in
+            TrackingItemPreview(item: selection.item, tracking: selection.tracking, content: nil, onBound: {})
+        }
+    }
+
+    private func previewTracking(_ item: IosTrackingItem) {
+        guard let tracking = library.library?.tracking else { return }
+        trackingPreview = TrackingPreviewSelection(item: item, tracking: tracking)
     }
 
     /// The former menu hid kinds; one remaining kind becomes the switch's selection, anything else shows all.
@@ -391,19 +468,28 @@ struct SourcesView: View {
 
     // MARK: Layouts
 
-    private var list: some View {
+    private func list(_ display: DisplaySources) -> some View {
         List {
             if !spacesEnabled && ContentKindPicker.isShown(availableKinds) {
                 Section { ContentKindPicker(selection: $pageKind, available: availableKinds) }
                     .listRowBackground(Color.clear)
                     .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
             }
+            if query.isEmpty && !newOnly {
+                Section {
+                    BrowseRecommendationsView(spaceKind: kind, onPreview: previewTracking)
+                        .listRowBackground(Color.clear).listRowSeparator(.hidden)
+                        // Transparent List rows still clip their contents to the cell's rounded corners.
+                        .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
+                }
+            }
             statusSections
-            if newSourceCount > 0 { Section { newSourcesNotice } }
-            ForEach(sections, id: \.id) { section in
+            if display.newSourceCount > 0 { Section { newSourcesNotice(count: display.newSourceCount) } }
+            ForEach(display.sections, id: \.id) { section in
                 Section("\(section.title) · \(section.sources.count)") {
                     ForEach(section.sources, id: \.name) { source in
                         sourceLink(source)
+                            .contextMenu { sourceActions(source) }
                             .swipeActions(edge: .leading) {
                                 let pinned = model.isPinned(source)
                                 Button(pinned ? "取消置顶" : "置顶", systemImage: pinned ? "pin.slash" : "pin") {
@@ -421,16 +507,19 @@ struct SourcesView: View {
                     }
                 }
             }
-            emptyState
+            emptyState(hasSections: !display.sections.isEmpty)
             if disabledCount > 0 { Section { disabledFooter } }
         }
     }
 
-    private var grid: some View {
+    private func grid(_ display: DisplaySources) -> some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 18) {
                 if !spacesEnabled && ContentKindPicker.isShown(availableKinds) {
                     ContentKindPicker(selection: $pageKind, available: availableKinds).padding(.horizontal, 16)
+                }
+                if query.isEmpty && !newOnly {
+                    BrowseRecommendationsView(spaceKind: kind, onPreview: previewTracking).padding(.horizontal, 16)
                 }
                 if let error = model.error {
                     Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.red).padding(.horizontal)
@@ -442,15 +531,17 @@ struct SourcesView: View {
                     }
                     runtimeLabel.padding(.horizontal, 20)
                 }
-                if newSourceCount > 0 { newSourcesNotice.padding(.horizontal, 20) }
-                ForEach(sections, id: \.id) { section in
+                if display.newSourceCount > 0 { newSourcesNotice(count: display.newSourceCount).padding(.horizontal, 20) }
+                ForEach(display.sections, id: \.id) { section in
                     VStack(alignment: .leading, spacing: 8) {
                         Text("\(section.title) · \(section.sources.count)")
                             .font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
                             .padding(.horizontal, 20)
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 92), spacing: 10)], spacing: 10) {
                             ForEach(section.sources, id: \.name) { source in
-                                NavigationLink(value: SourceRoute(source: source)) { SourceTile(source: source) }
+                                NavigationLink(value: SourceRoute(source: source)) {
+                                    SourceTile(runtime: model.runtime, source: source)
+                                }
                                     .buttonStyle(.plain)
                                     .accessibilityIdentifier("source.\(source.name)")
                                     .contextMenu { sourceActions(source) }
@@ -459,7 +550,7 @@ struct SourcesView: View {
                         .padding(.horizontal, 16)
                     }
                 }
-                emptyState.padding(.top, 40)
+                emptyState(hasSections: !display.sections.isEmpty).padding(.top, 40)
                 if disabledCount > 0 { disabledFooter.padding(.horizontal, 20) }
             }
             .padding(.vertical, 8)
@@ -469,6 +560,12 @@ struct SourcesView: View {
 
     @ViewBuilder
     private func sourceActions(_ source: IosSource) -> some View {
+        if source.ecosystem != "LOCAL" {
+            Button("迁移此来源的收藏与历史", systemImage: "arrow.triangle.swap") {
+                migration = LibraryMigrationRequest(contents: (library.favourites + library.history)
+                    .map(\.content).filter { $0.sourceName == source.name })
+            }
+        }
         let pinned = model.isPinned(source)
         Button(pinned ? "取消置顶" : "置顶", systemImage: pinned ? "pin.slash" : "pin") {
             Task { await model.setPinned(source, !pinned) }
@@ -505,24 +602,24 @@ struct SourcesView: View {
 
     /// Shown only with the embedded extension runtime (preview builds name their profile here).
     private var runtimeLabel: some View {
-        Text(model.previewLabel ?? "扩展运行时已启用")
+        Text(model.previewLabel ?? String(localized: "扩展运行时已启用"))
             .font(.footnote).foregroundStyle(.secondary)
             .accessibilityIdentifier("sources.extensionRuntime")
     }
 
-    private var newSourcesNotice: some View {
+    private func newSourcesNotice(count: Int) -> some View {
         Button {
             newOnly.toggle()
         } label: {
-            Label(newOnly ? "正在显示本版本新增的 \(newSourceCount) 个来源 · 显示全部"
-                          : "本版本新增 \(newSourceCount) 个来源 · 查看", systemImage: "sparkles")
+            Label(newOnly ? "正在显示本版本新增的 \(count) 个来源 · 显示全部"
+                          : "本版本新增 \(count) 个来源 · 查看", systemImage: "sparkles")
                 .font(.footnote)
         }
         .accessibilityIdentifier("sources.newNotice")
     }
 
     @ViewBuilder
-    private var emptyState: some View {
+    private func emptyState(hasSections: Bool) -> some View {
         if model.sources.isEmpty && !model.isLoading && model.error == nil {
             ContentUnavailableView {
                 Label("还没有来源", systemImage: "safari")
@@ -536,7 +633,7 @@ struct SourcesView: View {
                 .accessibilityIdentifier("sources.addVideo.inline")
             }
             .listRowBackground(Color.clear)
-        } else if !model.sources.isEmpty && sections.isEmpty {
+        } else if !model.sources.isEmpty && !hasSections {
             if newOnly || query.trimmingCharacters(in: .whitespaces).isEmpty {
                 ContentUnavailableView {
                     Label("没有符合条件的来源", systemImage: "line.3.horizontal.decrease")
@@ -616,32 +713,42 @@ struct SourcesView: View {
 
     private func sourceLink(_ source: IosSource) -> some View {
         NavigationLink(value: SourceRoute(source: source)) {
-            HStack(spacing: 12) {
-                SourceIcon(runtime: model.runtime, source: source)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(source.title)
-                    if model.isNewSource(source) { SourceNewBadge() }
-                    Text(source.kind == "video" ? "影视站点"
-                         : source.kind == "local" ? "导入的\(Self.kindName(source.mediaKind))文件"
-                         : [SourceLanguage.title(source.locale), Self.kindName(source.mediaKind)].joined(separator: " · "))
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                if model.isPinned(source) {
-                    Spacer()
-                    Image(systemName: "pin.fill").font(.caption).foregroundStyle(.orange).accessibilityLabel("已置顶")
-                }
-            }
+            SourceRow(runtime: model.runtime, source: source, pinned: model.isPinned(source))
         }
         .accessibilityIdentifier("source.\(source.name)")
+    }
+}
+
+/// A browse row built from plain values, so a publish that leaves the source unchanged does not redraw it.
+private struct SourceRow: View {
+    let runtime: IosSources?
+    let source: IosSource
+    let pinned: Bool
+
+    var body: some View {
+        HStack(spacing: 12) {
+            SourceIcon(runtime: runtime, source: source)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(source.title)
+                Text(source.kind == "video" ? String(localized: "影视站点")
+                     : source.kind == "local" ? String(localized: "导入的\(SourcesView.kindName(source.mediaKind))文件")
+                     : [SourceLanguage.title(source.locale), SourcesView.kindName(source.mediaKind)].joined(separator: " · "))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            if pinned {
+                Spacer()
+                Image(systemName: "pin.fill").font(.caption).foregroundStyle(.orange).accessibilityLabel("已置顶")
+            }
+        }
     }
 }
 
 extension SourcesView {
     static func kindName(_ mediaKind: String) -> String {
         switch mediaKind {
-        case "VIDEO": "视频"
-        case "NOVEL": "小说"
-        default: "漫画"
+        case "VIDEO": String(localized: "视频")
+        case "NOVEL": String(localized: "小说")
+        default: String(localized: "漫画")
         }
     }
 }

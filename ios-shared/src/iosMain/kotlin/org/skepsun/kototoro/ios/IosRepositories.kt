@@ -18,6 +18,10 @@ class IosExtension internal constructor(internal val value: ExtensionStoreIndex.
     val languages: List<String> get() = value.sources.map { it.language }.distinct()
     val isAdult: Boolean get() = value.contentWarning == ExtensionStoreIndex.ContentWarning.NSFW
     val sourceNames: List<String> get() = value.sources.map { it.name }
+    /** Keep 64-bit identities as strings across the Swift bridge. Legacy name-only indexes provide no match. */
+    fun sourceKeys(kind: String): List<String> = if (kind in setOf("MIHON", "ANIYOMI", "TSUNDOKU")) {
+        value.sources.filter { it.id != 0L }.map { "${kind}_${it.id}" }
+    } else emptyList()
     val iconUrl: String get() = value.resources.iconUrl
 }
 class IosRepositoryCatalog internal constructor(
@@ -26,6 +30,9 @@ class IosRepositoryCatalog internal constructor(
     val resourceBaseUrl: String = url,
 ) {
     val extensions: List<IosExtension> get() = rows.map(::IosExtension)
+
+    /** Absolute address of an `apk/…` or `icon/…` entry, resolved like Android (also for catalogs saved with a list-file base). */
+    fun resolve(path: String): String = ExtensionRepoUrls.resolveResource(resourceBaseUrl, path)
 }
 
 /** Shared decoders and existing repository table; Swift supplies URL loading and SHA-256. */
@@ -58,7 +65,7 @@ class IosRepositories(private val library: IosLibrary) {
         val norm = normalizeRepoUrl(url)
         return IosRepositoryCatalog(norm, kind, index.name, index.signingKey, index.extensionListUrl,
             index.contact.website, index.extensionList?.extensions.orEmpty(),
-            if (norm.endsWith('/')) norm else "$norm/")
+            ExtensionRepoUrls.resourceBase(norm))
     }
 
     @Throws(Exception::class)
@@ -79,8 +86,9 @@ class IosRepositories(private val library: IosLibrary) {
             fromIndex?.extensionList?.extensions ?: decodeExtensionStoreList(payload, protobuf).extensions
         }
         val norm = normalizeRepoUrl(catalog.url)
+        // As on Android, apk/ and icon/ resolve against the repository base, never against the list file.
         return IosRepositoryCatalog(norm, catalog.kind, catalog.title, signingKey, null, catalog.website,
-            rows, url)
+            rows, ExtensionRepoUrls.resourceBase(norm))
     }
 
     @Throws(Exception::class)
@@ -97,10 +105,10 @@ class IosRepositories(private val library: IosLibrary) {
                 asset.getValue("browser_download_url").jsonPrimitive.content, ""), "parser", code, version,
                 ExtensionStoreIndex.ContentWarning.UNSPECIFIED, emptyList())
         }
-        require(rows.isNotEmpty()) { "此 GitHub 发布没有 JAR 插件" }
+        require(rows.isNotEmpty()) { localized("此 GitHub 发布没有 JAR 插件") }
         val norm = normalizeRepoUrl(url)
         return IosRepositoryCatalog(norm, "JAR", root["name"]?.jsonPrimitive?.contentOrNull?.ifBlank { null } ?: version,
-            "", null, norm, rows, if (norm.endsWith('/')) norm else "$norm/")
+            "", null, norm, rows, ExtensionRepoUrls.resourceBase(norm))
     }
 
     @Throws(Exception::class)
@@ -117,16 +125,20 @@ class IosRepositories(private val library: IosLibrary) {
             previous.signingKeyFingerprint == catalog.url.hashCode().toString(16) ||
             type == ExternalExtensionType.JAR
         )
+        // Legacy arrays have no signing key; Swift stores SHA-256(URL) until repo.json supplies one.
+        val isUrlIdentityUpgrade = previous != null && catalog.signingKey.isNotBlank() &&
+            previous.signingKeyFingerprint.equals(sha256Hex(normalizedUrl), ignoreCase = true)
         val matchesPrevious = previous == null ||
             isLegacyPseudoFingerprint ||
+            isUrlIdentityUpgrade ||
             previous.signingKeyFingerprint.equals(fingerprint, ignoreCase = true) ||
             (catalog.signingKey.isNotBlank() && previous.signingKeyFingerprint.equals(catalog.signingKey.trim(), ignoreCase = true)) ||
             (catalog.signingKey.isNotBlank() && previous.signingKeyFingerprint.equals(sha256Hex(catalog.signingKey.trim()), ignoreCase = true))
         require(matchesPrevious) {
-            "仓库签名信息已变化，请核对地址"
+            localized("仓库签名信息已变化，请核对地址")
         }
         val duplicate = dao.getByFingerprint(type, fingerprint)
-        require(duplicate == null || duplicate.baseUrl == normalizedUrl || duplicate.baseUrl == catalog.url) { "此仓库已从其他地址添加" }
+        require(duplicate == null || duplicate.baseUrl == normalizedUrl || duplicate.baseUrl == catalog.url) { localized("此仓库已从其他地址添加") }
         val time = kotlin.time.Clock.System.now().toEpochMilliseconds()
         if (previous != null && previous.baseUrl != normalizedUrl) {
             dao.delete(type, previous.baseUrl)
@@ -149,18 +161,7 @@ class IosRepositories(private val library: IosLibrary) {
     internal companion object {
         private val supported = setOf("MIHON", "ANIYOMI", "TSUNDOKU", "JAR")
 
-        internal fun normalizeRepoUrl(url: String): String {
-            var clean = url.trim()
-            for (suffix in listOf("/index.min.json", "/index.json", "/index.pb", "/repo.json")) {
-                if (clean.endsWith(suffix, ignoreCase = true)) {
-                    clean = clean.dropLast(suffix.length)
-                }
-            }
-            while (clean.endsWith('/') && clean.length > 8) {
-                clean = clean.dropLast(1)
-            }
-            return clean
-        }
+        internal fun normalizeRepoUrl(url: String): String = ExtensionRepoUrls.repositoryBase(url)
 
         /**
          * Android's `deriveRepoName`: GitHub-hosted indexes (raw.githubusercontent.com / github.com) are named

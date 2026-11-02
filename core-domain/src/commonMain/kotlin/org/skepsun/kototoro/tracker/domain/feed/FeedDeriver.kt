@@ -7,6 +7,9 @@ import org.skepsun.kototoro.core.model.TagBlacklist
 import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.explore.ui.model.SourceTag
 import org.skepsun.kototoro.core.db.ListFilterCriteria
+import org.skepsun.kototoro.tracker.data.TrackLogEntity
+import org.skepsun.kototoro.tracker.domain.dailyUpdateGroups
+import org.skepsun.kototoro.tracker.domain.encodeUpdateChapters
 
 /**
  * Pure in-memory derivation of the visible feed items from a complete
@@ -17,7 +20,7 @@ import org.skepsun.kototoro.core.db.ListFilterCriteria
  * the feed scope (category / group tab / source tags / preset), NSFW
  * exclusion and the tag blacklist. The database is never re-queried.
  *
- * Ordering follows the legacy SQL exactly: pinned first, then `created_at`
+ * Ordering uses the discovery timestamp `created_at`
  * descending, then the log id descending (the tie-break the F0
  * characterization pins down). Date headers are derived from the same
  * `calculateDateGroup` bucket the legacy chain used, but for the full list in
@@ -61,8 +64,22 @@ object FeedDeriver {
         } else {
             input.snapshot.rows
         }
+        val byLogId = rows.associateBy { it.logId }
+        val grouped = dailyUpdateGroups(rows.filter { it.logId > 0 }.map { row ->
+            TrackLogEntity(row.logId, row.ownerId, row.chapters.joinToString("\n"), row.createdAt,
+                row.unread, row.chapterMetadata)
+        }).map { group ->
+            val latest = group.logs.maxWith(compareBy<TrackLogEntity> { it.createdAt }.thenBy { it.id })
+            byLogId.getValue(latest.id).copy(
+                chapters = group.names, createdAt = group.discoveredAt, unread = group.isUnseen,
+                logIds = group.logs.map { it.id }, pendingCount = group.pendingCount,
+                chapterMetadata = if (group.chapters.isEmpty()) "" else encodeUpdateChapters(group.chapters),
+                updateCount = group.count,
+                updateChapters = group.chapters,
+            )
+        } + rows.filter { it.logId <= 0 }
         val textQuery = LibraryTextQuery(input.query)
-        val visible = rows.asSequence()
+        val visible = grouped.asSequence()
             .filter { row -> row.isVisible(input) && row.matchesText(textQuery) }
             .sortedWith(FEED_ORDER)
             .take(input.feedLimit.coerceAtLeast(0))
@@ -89,7 +106,7 @@ object FeedDeriver {
      * de-duplicated against) the log rows. Mirrors the legacy combination of
      * `resolveAllTrackingLogItems` with `ensureUnreadUpdateLogs`: a tracked
      * work without a log yet shows up as a synthetic item dated by
-     * `last_chapter_date ?? last_check_time`.
+     * `last_check_time` (legacy fallback only).
      */
     private fun deriveShowAllRows(input: Input): List<FeedCardRow> {
         val logRows = input.snapshot.rows
@@ -104,7 +121,7 @@ object FeedDeriver {
                     entityId = update.entityId,
                     preferredLocalMangaId = update.preferredLocalMangaId,
                     chapters = List(update.newChapters.coerceAtLeast(1)) { "" },
-                    createdAt = update.lastChapterDate ?: update.lastCheckTime,
+                    createdAt = update.lastCheckTime,
                     unread = update.newChapters > 0,
                     isPinned = update.isPinned,
                     displayMangaId = update.displayMangaId,
@@ -198,9 +215,8 @@ object FeedDeriver {
         }
     }
 
-    /** The comparator behind the legacy SQL: pinned, created_at DESC, id DESC. */
-    private val FEED_ORDER = compareByDescending<FeedCardRow> { it.isPinned }
-        .thenByDescending { it.createdAt }
+    /** Timeline order is discovery time DESC, id DESC, independent of a work's pinned state. */
+    private val FEED_ORDER = compareByDescending<FeedCardRow> { it.createdAt }
         .thenByDescending { it.logId }
 }
 

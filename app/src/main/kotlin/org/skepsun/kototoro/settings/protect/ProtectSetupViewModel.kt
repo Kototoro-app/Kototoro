@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.settings.protect
 
+import org.skepsun.kototoro.core.prefs.AppPasswordHash
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
@@ -13,7 +14,6 @@ import org.skepsun.kototoro.core.ui.BaseViewModel
 import org.skepsun.kototoro.core.util.ext.MutableEventFlow
 import org.skepsun.kototoro.core.util.ext.call
 import org.skepsun.kototoro.parsers.util.isNumeric
-import org.skepsun.kototoro.parsers.util.md5
 import javax.inject.Inject
 
 @HiltViewModel
@@ -39,7 +39,7 @@ class ProtectSetupViewModel @Inject constructor(
             onClearText.call(Unit)
         } else {
             if (firstPassword.value == password) {
-                settings.appPassword = password.md5()
+                settings.appPassword = AppPasswordHash.hash(password)
                 settings.isAppPasswordNumeric = password.isNumeric()
                 onPasswordSet.call(Unit)
             } else {

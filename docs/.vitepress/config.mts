@@ -17,9 +17,29 @@ export default defineConfig({
     /(\.\.\/)+scripts\//,
     /^\/Users\//,
     /(\.\.\/)+komikku\//,
+    // Source files cited from the iOS parity/audit notes. These relative links are correct — they
+    // resolve on GitHub and in an IDE — but a .kt/.swift/.gradle file is not a site page, so the
+    // VitePress build treats them as dead. Listed per module rather than as a blanket `(\.\./)+` so
+    // a genuinely broken doc-to-doc link still fails the build.
+    /(\.\.\/)+(iosApp|ios-shared|reader-core|core-local|core-ui|core-library|source-host|parser-host|mihon-ios-shims)\//,
   ],
   lastUpdated: true,
   cleanUrls: true,
+  vite: {
+    build: {
+      // Two expected artifacts exceed Vite's 500 kB default, neither of them vendor code:
+      //   1. the local search index — one ~5.2 MB lazily-imported chunk holding every page's text
+      //      (VitePress emits one index per locale and offers no per-page exclusion); it is fetched
+      //      only when the search box is opened, and gzips to a fraction of that on Pages;
+      //   2. single-page markdown chunks — VitePress compiles each .md into its own lazy chunk, and
+      //      a few historical plan/audit notes are large enough on their own: 1.32 MB
+      //      (superpowers/plans/2026-09-29-migration-and-duplicates), 800 kB
+      //      (…/2026-09-28-reader-options-panel-redesign), 753 kB (architecture/kmp-ios-plan-2026-10).
+      // The limit is raised so these known cases stop masking new warnings. The real lever, if this
+      // ever matters, is trimming those oversized docs — not splitting the bundle.
+      chunkSizeWarningLimit: 5500,
+    },
+  },
   head: [
     ["link", { rel: "icon", href: `${base}icon.png` }],
     ["meta", { name: "theme-color", content: "#0f766e" }],
@@ -48,6 +68,7 @@ export default defineConfig({
         text: "Guides",
         items: [
           { text: "Getting Started", link: "/getting-started" },
+          { text: "Windows & iOS (Preview)", link: "/platforms" },
           { text: "Reader Features", link: "/reader-features" },
           { text: "Automatic Translation", link: "/automatic-translation" },
           { text: "Source Integrations", link: "/source-integrations" },
@@ -61,6 +82,10 @@ export default defineConfig({
         items: [
           { text: "Architecture Review", link: "/architecture/architecture-review" },
           { text: "Architecture Roadmap", link: "/architecture/architecture-roadmap" },
+          { text: "KMP / iOS Plan", link: "/architecture/kmp-ios-plan-2026-10" },
+          { text: "Windows Feature Parity", link: "/architecture/windows-feature-parity-2026-10" },
+          { text: "Linux Native Capabilities", link: "/architecture/desktop-linux-native-2026-10" },
+          { text: "iOS Feature Parity", link: "/architecture/ios-android-feature-parity-2026-10" },
           { text: "Reader Scene Closure Plan (2026-09)", link: "/architecture/reader-scene-closure-plan-2026-09" },
           { text: "Favourites Library Plan", link: "/architecture/favourites-komikku-alignment-implementation-plan-2026-09" },
           { text: "Unified Cloudflare Solver", link: "/architecture/unified-cloudflare-solver-plan-2026-08" },

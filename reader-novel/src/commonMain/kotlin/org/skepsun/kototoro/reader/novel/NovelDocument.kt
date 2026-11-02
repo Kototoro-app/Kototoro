@@ -123,4 +123,32 @@ fun buildNovelLineDocument(text: String): List<NovelDocumentBlock> {
     return blocks
 }
 
+/**
+ * [this] document with [translations] (by block index) on its text blocks, shown as [mode]. Blocks keep their
+ * source ranges, so positions, history and bookmarks stay those of the original chapter; untranslated blocks and
+ * blank translations show the original.
+ */
+fun List<NovelDocumentBlock>.withNovelTranslations(
+    translations: Map<Int, String>,
+    mode: NovelTranslationDisplayMode,
+): List<NovelDocumentBlock> = mapIndexed { index, block ->
+    val translation = translations[index]?.trim()?.takeIf { it.isNotEmpty() }
+    if (block is NovelDocumentBlock.Text && translation != null && translation != block.original) {
+        block.copy(translation = translation, displayMode = mode)
+    } else {
+        block
+    }
+}
+
+/**
+ * The lines a reader shows for a text block, as Android's novel reader does: the original, its translation alone,
+ * or the original followed by the translation (bilingual).
+ */
+val NovelDocumentBlock.Text.displayLines: List<String>
+    get() = when {
+        translation == null -> listOf(original)
+        displayMode == NovelTranslationDisplayMode.TRANSLATION_ONLY -> listOf(translation)
+        else -> listOf(original, translation)
+    }
+
 private val LINE_IMAGE = Regex("""📷\s*\[图片:\s*([^\]]+)]""")

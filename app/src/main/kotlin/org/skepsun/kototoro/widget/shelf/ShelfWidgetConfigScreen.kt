@@ -41,6 +41,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.widget.shelf.model.CategoryItem
 
@@ -65,7 +66,7 @@ internal fun ShelfWidgetConfigScreen(
                 ),
                 title = { Text(stringResource(R.string.manga_shelf)) },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateUp) {
+                    IconButton(onClick = onNavigateUp, modifier = Modifier.tvIconButtonRing()) {
                         Icon(
                             imageVector = Icons.Default.Close,
                             contentDescription = stringResource(R.string.close),

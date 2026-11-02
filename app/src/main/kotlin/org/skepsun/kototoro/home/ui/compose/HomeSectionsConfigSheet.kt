@@ -25,6 +25,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.tvTabRing
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.prefs.observeAsState
@@ -114,6 +115,7 @@ fun HomeSectionsConfigRoute(
                 ) {
                     tabTitles.forEachIndexed { index, title ->
                         Tab(
+                            modifier = Modifier.tvTabRing(),
                             selected = selectedTabIndex == index,
                             onClick = { selectedTabIndex = index },
                             text = {

@@ -21,6 +21,19 @@ class ReaderOptionsPanelHostTest {
     }
 
     @Test
+    fun `a television gets the solid surface even with a reader backdrop`() {
+        assertEquals(
+            ReaderPanelSurfaceMode.Opaque,
+            readerPanelSurfaceMode(true, eInk = false, hasBackdrop = true, isTv = true),
+        )
+        // E-ink still wins: its panel is drawn with its own paper colours and border.
+        assertEquals(
+            ReaderPanelSurfaceMode.EInk,
+            readerPanelSurfaceMode(true, eInk = true, hasBackdrop = true, isTv = true),
+        )
+    }
+
+    @Test
     fun `scrim is lighter over glass and absent on e-ink`() {
         assertEquals(0.32f, readerPanelScrimAlpha(ReaderPanelSurfaceMode.Glass))
         assertEquals(0.42f, readerPanelScrimAlpha(ReaderPanelSurfaceMode.Opaque))

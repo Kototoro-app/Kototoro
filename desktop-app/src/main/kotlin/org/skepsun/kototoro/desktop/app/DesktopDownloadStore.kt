@@ -23,7 +23,7 @@ internal class DesktopDownloadStore(private val preferences: SourcePreferenceSto
                 preferences.open("desktop_download_index_v2_$shard").snapshot()
             } catch (_: Exception) {
                 unreadableShards.add(shard)
-                errors.add("下载索引读取失败：$shard")
+                errors.add(desktopText("error.downloadIndexRead", shard))
                 continue
             }
             for ((identity, value) in entries) {
@@ -34,14 +34,14 @@ internal class DesktopDownloadStore(private val preferences: SourcePreferenceSto
                     restored.add(read(identity))
                     registered.add(identity)
                 } catch (_: Exception) {
-                    errors.add("下载记录损坏：$identity")
+                    errors.add(desktopText("error.downloadRecordCorrupt", identity))
                 }
             }
         }
         mutableRecords.value = restored
         // Legacy snapshots stay intact. A completed new publication always wins over the old flat record.
         val legacy = try { preferences.open("desktop_downloads").snapshot() } catch (_: Exception) {
-            errors.add("旧版下载索引读取失败，已保留原文件")
+            errors.add(desktopText("error.downloadLegacyIndex"))
             emptyMap()
         }
         for ((identity, value) in legacy) {
@@ -51,7 +51,7 @@ internal class DesktopDownloadStore(private val preferences: SourcePreferenceSto
                     require(identity == key(it.contentId, it.chapter))
                 }
             } catch (_: Exception) {
-                errors.add("下载记录损坏：$identity")
+                errors.add(desktopText("error.downloadRecordCorrupt", identity))
                 continue
             }
             try {
@@ -59,7 +59,7 @@ internal class DesktopDownloadStore(private val preferences: SourcePreferenceSto
                 save(record)
             } catch (_: IOException) {
                 mutableRecords.value += record
-                errors.add("下载记录迁移失败，已保留原记录：$identity")
+                errors.add(desktopText("error.downloadMigrationFailed", identity))
             }
         }
     }
@@ -78,7 +78,7 @@ internal class DesktopDownloadStore(private val preferences: SourcePreferenceSto
         }
         val manifest = SourceDownloadManifest(record.contentId, record.chapter, record.extensionRevision,
             record.contentTitle, record.pages.size, chunks)
-        write("desktop_download_chapter_v2_$identity", "manifest",
+        write("${MANIFEST}$identity", "manifest",
             SourcePreferenceValue.Text(SourceProtocolJson.encodeToString(manifest)))
         if (identity !in registered) {
             write("desktop_download_index_v2_${identity.first()}", identity, SourcePreferenceValue.Toggle(true))
@@ -90,6 +90,23 @@ internal class DesktopDownloadStore(private val preferences: SourcePreferenceSto
     @Synchronized
     fun previewCleanup(storage: FileSourcePreferenceStore, checkpoint: () -> Unit = {}) =
         DesktopDownloadCleanup.inspect(storage, checkpoint)
+
+    /**
+     * Forgets one saved chapter. The index entry goes first, then the manifest: a manifest that is still indexed would
+     * be restored on the next start, while an unindexed one turns its blocks into garbage the cleanup pass reclaims.
+     */
+    @Synchronized
+    fun delete(contentId: Long, chapter: SourceChapter, storage: FileSourcePreferenceStore): Boolean {
+        val identity = key(contentId, chapter)
+        if (mutableRecords.value.none { key(it.contentId, it.chapter) == identity }) return false
+        preferences.open("desktop_download_index_v2_${identity.first()}")
+            .edit(SourcePreferenceEdit(changes = mapOf(identity to null)))
+        registered.remove(identity)
+        val manifest = storage.snapshots().firstOrNull { it.namespace == MANIFEST + identity }
+        if (manifest != null) storage.removeSnapshot(manifest)
+        mutableRecords.value = mutableRecords.value.filter { key(it.contentId, it.chapter) != identity }
+        return true
+    }
 
     @Synchronized
     fun cleanup(plan: DesktopDownloadCleanupPlan, storage: FileSourcePreferenceStore,
@@ -111,7 +128,7 @@ internal class DesktopDownloadStore(private val preferences: SourcePreferenceSto
 
     private fun read(identity: String): SourceChapterDownload {
         val manifest = SourceProtocolJson.decodeFromString<SourceDownloadManifest>(
-            text(preferences.open("desktop_download_chapter_v2_$identity").snapshot()["manifest"]))
+            text(preferences.open("${MANIFEST}$identity").snapshot()["manifest"]))
         require(identity == key(manifest.contentId, manifest.chapter))
         val pages = manifest.chunks.flatMapIndexed { index, hash ->
             val encoded = text(preferences.open("desktop_download_pages_v2_$hash").snapshot()["pages"])
@@ -133,9 +150,9 @@ internal class DesktopDownloadStore(private val preferences: SourcePreferenceSto
         val saved = try {
             preferences.open(namespace).edit(SourcePreferenceEdit(changes = mapOf(key to value)))
         } catch (error: IllegalArgumentException) {
-            throw IOException("下载记录过大，无法保存", error)
+            throw IOException(desktopText("error.downloadRecordTooLarge"), error)
         }
-        if (!saved) throw IOException("下载记录磁盘保存失败")
+        if (!saved) throw IOException(desktopText("error.downloadSaveFailed"))
     }
 
     fun find(contentId: Long, chapter: SourceChapter) = records.value.firstOrNull {
@@ -147,6 +164,8 @@ internal class DesktopDownloadStore(private val preferences: SourcePreferenceSto
     }
 
     companion object {
+        const val MANIFEST = "desktop_download_chapter_v2_"
+
         fun key(contentId: Long, chapter: SourceChapter) = imageKey(
             "${chapter.source.name}\u0000$contentId\u0000${chapter.id}".toByteArray())
 

@@ -12,12 +12,12 @@ class ForegroundActivityHolderTest : FunSpec({
     lateinit var holder: ForegroundActivityHolder
 
     beforeTest {
-        CommonActivity.setActivityInstance(null)
+        CommonActivity.INSTANCE.setActivityInstance(null)
         holder = ForegroundActivityHolder()
     }
 
     afterTest {
-        CommonActivity.setActivityInstance(null)
+        CommonActivity.INSTANCE.setActivityInstance(null)
     }
 
     test("paused activity remains available to Cloudstream plugins") {
@@ -27,7 +27,7 @@ class ForegroundActivityHolderTest : FunSpec({
         holder.onActivityPaused(activity)
 
         holder.current.shouldBeNull()
-        CommonActivity.activity shouldBe activity
+        CommonActivity.INSTANCE.activity shouldBe activity
     }
 
     test("destroyed activity is removed from Cloudstream bridge") {
@@ -38,7 +38,7 @@ class ForegroundActivityHolderTest : FunSpec({
         holder.onActivityDestroyed(activity)
 
         holder.current.shouldBeNull()
-        CommonActivity.activity.shouldBeNull()
+        CommonActivity.INSTANCE.activity.shouldBeNull()
     }
 
     test("destroying an old activity does not clear the newer activity") {
@@ -51,6 +51,6 @@ class ForegroundActivityHolderTest : FunSpec({
         holder.onActivityDestroyed(oldActivity)
 
         holder.current shouldBe newActivity
-        CommonActivity.activity shouldBe newActivity
+        CommonActivity.INSTANCE.activity shouldBe newActivity
     }
 })

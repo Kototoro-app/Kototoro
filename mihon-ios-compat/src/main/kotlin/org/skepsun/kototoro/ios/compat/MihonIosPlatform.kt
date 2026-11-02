@@ -92,11 +92,14 @@ class MihonIosPlatform : SourceHostPreferenceUiPlatform, SourceHostRuntimePlatfo
         previousInjekt = Injekt
         Injekt = InjektScope(KoinRegistrar())
         WebView.setProviderFactory { throw UnsupportedOperationException("WKWebView is not connected") }
+        // Read before the store loads it: its own startup load loses cookies of dotted domains.
+        val savedCookies = app.getSharedPreferences("cookie_store", 0).all
         app.onCreate()
         previousCookies = CookieHandler.getDefault()
         val helper = try { koin.koin.get<NetworkHelper>() } finally {
             ownedCookies = CookieHandler.getDefault().takeUnless { it === previousCookies }
         }
+        restoreIosCookies(helper.cookieStore, savedCookies)
         // Kototoro's per-source domain setting reaches extensions whose address R8 folded into a constant.
         client = installDomainRewrite(helper)
         installWebView()
@@ -239,6 +242,7 @@ private class IosApplication(private val root: Path, private val preferences: Mi
     override fun getNoBackupFilesDir(): File = backup
     override fun getSystemService(name: String): Any = when (name) {
         Context.ACTIVITY_SERVICE -> org.skepsun.kototoro.ios.shims.IosServices.activityManager()
+        Context.DISPLAY_SERVICE -> org.skepsun.kototoro.ios.shims.IosServices.displayManager()
         else -> throw UnsupportedOperationException("iOS service: $name")
     }
     override fun getResources(): android.content.res.Resources = android.content.res.Resources.getSystem()

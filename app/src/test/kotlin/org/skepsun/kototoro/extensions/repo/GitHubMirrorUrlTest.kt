@@ -12,6 +12,7 @@ class GitHubMirrorUrlTest {
 
     private val rawUrl = "https://raw.githubusercontent.com/skepsun/kototoro-parsers/repo/index.min.json"
     private val githubUrl = "https://github.com/keiyoushi/extensions/raw/repo/index.pb"
+    private val githubRawFileUrl = "https://raw.githubusercontent.com/keiyoushi/extensions/repo/index.pb"
     private val releaseUrl = "https://github.com/keiyoushi/extensions/releases/download/0.1/example.apk"
     private val jarUrl = "https://raw.githubusercontent.com/skepsun/kototoro-parsers/repo/apk/plugin.jar"
 
@@ -48,8 +49,11 @@ class GitHubMirrorUrlTest {
         )
         applyGitHubMirror(rawUrl, entry) shouldBe
             "https://raw.example.com/skepsun/kototoro-parsers/repo/index.min.json"
+        // A raw file addressed through github.com is mirrored as the raw.githubusercontent.com file.
         applyGitHubMirror(githubUrl, entry) shouldBe
-            "https://gh.example.com/keiyoushi/extensions/raw/repo/index.pb"
+            "https://raw.example.com/keiyoushi/extensions/repo/index.pb"
+        applyGitHubMirror(releaseUrl, entry) shouldBe
+            "https://gh.example.com/keiyoushi/extensions/releases/download/0.1/example.apk"
     }
 
     @Test
@@ -57,7 +61,20 @@ class GitHubMirrorUrlTest {
         listOf("gh-proxy.com", "ghfast.top", "github.moeyy.xyz", "wget.la").forEach { host ->
             val entry = prefix(host)
             applyGitHubMirror(rawUrl, entry) shouldBe "https://$host/$rawUrl"
-            applyGitHubMirror(githubUrl, entry) shouldBe "https://$host/$githubUrl"
+            applyGitHubMirror(githubUrl, entry) shouldBe "https://$host/$githubRawFileUrl"
+            applyGitHubMirror(releaseUrl, entry) shouldBe "https://$host/$releaseUrl"
+        }
+    }
+
+    @Test
+    fun `github raw web urls are mirrored as raw githubusercontent files`() {
+        // gh.monlor.com answered github.com/<owner>/<repo>/raw/... with a jsDelivr redirect that keeps "/raw/" in
+        // the path (404), which broke the Keiyoushi repository; the raw.githubusercontent.com form is served.
+        GitHubMirrorCatalog.rawFileUrl(githubUrl) shouldBe githubRawFileUrl
+        GitHubMirrorCatalog.rawFileUrl("https://github.com/o/r/raw/refs/heads/main/a/b.json") shouldBe
+            "https://raw.githubusercontent.com/o/r/refs/heads/main/a/b.json"
+        listOf(releaseUrl, rawUrl, "https://github.com/o/r", "https://github.com/o/r/raw").forEach { url ->
+            GitHubMirrorCatalog.rawFileUrl(url) shouldBe url
         }
     }
 

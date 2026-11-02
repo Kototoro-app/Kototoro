@@ -8,6 +8,9 @@ import org.skepsun.kototoro.sync.google.data.model.SyncExtensionRepo
 import org.skepsun.kototoro.sync.google.data.model.SyncJsonSource
 import org.skepsun.kototoro.sync.google.data.model.SyncSourceState
 import org.skepsun.kototoro.sync.google.data.model.SyncFeedState
+import org.skepsun.kototoro.tracker.domain.decodeUpdateChapters
+import org.skepsun.kototoro.tracker.domain.encodeUpdateChapters
+import org.skepsun.kototoro.tracker.domain.mergeUpdateChapters
 import org.skepsun.kototoro.sync.google.data.model.SyncTrackLog
 import org.skepsun.kototoro.sync.google.data.model.SyncTrack
 import org.skepsun.kototoro.sync.google.data.model.SyncStats
@@ -96,7 +99,7 @@ object GoogleDriveSyncMerger {
             .groupBy { it.id }
             .values
             .map { items ->
-                items.maxByOrNull { it.createdAt } ?: items.first()
+                items.maxWithOrNull(compareBy({ it.deletedAt }, { it.createdAt })) ?: items.first()
             }
             .sortedBy { it.id }
 
@@ -106,7 +109,7 @@ object GoogleDriveSyncMerger {
             .groupBy { it.mangaId }
             .values
             .map { items ->
-                items.maxByOrNull { it.updatedAt } ?: items.first()
+                items.maxWithOrNull(compareBy({ it.updatedAt }, { it.deletedAt })) ?: items.first()
             }
             .sortedByDescending { it.updatedAt }
 
@@ -116,7 +119,7 @@ object GoogleDriveSyncMerger {
             .groupBy { it.mangaId to it.categoryId }
             .values
             .map { items ->
-                items.maxByOrNull { it.updatedAt } ?: items.first()
+                items.maxWithOrNull(compareBy({ it.updatedAt }, { it.deletedAt })) ?: items.first()
             }
             .sortedByDescending { it.updatedAt }
 
@@ -144,7 +147,13 @@ object GoogleDriveSyncMerger {
             .map { it.withMangaId(it.mangaId.toSurvivorId()) }
             .groupBy { Triple(it.mangaId, it.chapters, it.createdAt) }
             .values
-            .map { it.first() }
+            .map { copies ->
+                val first = copies.first()
+                SyncTrackLog(mangaId = first.mangaId, chapters = first.chapters, createdAt = first.createdAt,
+                    isUnread = copies.all { it.isUnread },
+                    chapterMetadata = if (copies.all { it.chapterMetadata.isBlank() }) "" else
+                        encodeUpdateChapters(mergeUpdateChapters(copies.map { decodeUpdateChapters(it.chapterMetadata) })))
+            }
             .sortedByDescending { it.createdAt }
 
         // 8. Extension repos, source states, json sources, extension packages
@@ -237,6 +246,7 @@ object GoogleDriveSyncMerger {
         chapters = chapters,
         createdAt = createdAt,
         isUnread = isUnread,
+        chapterMetadata = chapterMetadata,
     )
 
     private fun mergeExtensionRepos(items: List<SyncExtensionRepo>): SyncExtensionRepo {

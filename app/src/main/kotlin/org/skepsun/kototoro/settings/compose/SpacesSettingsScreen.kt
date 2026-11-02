@@ -16,7 +16,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
@@ -27,7 +30,6 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -46,8 +48,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -59,6 +65,12 @@ import org.skepsun.kototoro.core.model.titleResId
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.SpaceSwitcherPosition
 import org.skepsun.kototoro.core.prefs.observeAsState
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
+import org.skepsun.kototoro.core.ui.adaptive.rememberTvFieldExit
+import org.skepsun.kototoro.core.ui.adaptive.rememberTvTextFieldReadOnlyState
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
+import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
 import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.space.domain.BuiltInSpaces
@@ -257,10 +269,30 @@ private fun SpaceDefinitionRow(
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
     val isArtworkBackground = LocalBackgroundStyle.current.usesArtworkBackdrop
+    val isTv = LocalUiPresentationConfig.current.isTv
+    // A remote has no TAB. The row owns a focus target (tap-to-edit) and the trailing switch and
+    // overflow button are separate stops, but RIGHT from a custom space row did nothing while TAB
+    // walked switch -> menu, so enable/disable, edit, reorder and delete of a custom space were
+    // touch-only on TV. Wire the chain explicitly - row -> switch -> menu and back - and give every
+    // switch a ring, because a stop without an outline reads as nothing from a sofa.
+    val rowFocusRequester = remember { FocusRequester() }
+    val switchFocusRequester = remember { FocusRequester() }
+    val menuFocusRequester = remember { FocusRequester() }
+    val hasTrailingControls = !space.isBuiltIn
+    val trailingChain = isTv && hasTrailingControls
 
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .then(
+                if (trailingChain) {
+                    Modifier
+                        .focusRequester(rowFocusRequester)
+                        .focusProperties { right = switchFocusRequester }
+                } else {
+                    Modifier
+                },
+            )
             .clickable(enabled = !space.isBuiltIn, onClick = onEdit)
             .settingsPreferenceLayout(enabled = space.enabled || space.isBuiltIn),
         verticalAlignment = Alignment.CenterVertically,
@@ -308,9 +340,36 @@ private fun SpaceDefinitionRow(
                 checked = space.enabled,
                 onCheckedChange = onEnabledChange,
                 colors = settingsSwitchColors(),
+                modifier = if (isTv) {
+                    Modifier
+                        .focusRequester(switchFocusRequester)
+                        .then(
+                            if (trailingChain) {
+                                Modifier.focusProperties {
+                                    left = rowFocusRequester
+                                    right = menuFocusRequester
+                                }
+                            } else {
+                                Modifier
+                            },
+                        )
+                        .tvFocusable(shape = CircleShape, addFocusTarget = false)
+                } else {
+                    Modifier
+                },
             )
             Box {
-                IconButton(onClick = { menuExpanded = true }) {
+                IconButton(
+                    onClick = { menuExpanded = true },
+                    modifier = if (trailingChain) {
+                        Modifier
+                            .focusRequester(menuFocusRequester)
+                            .focusProperties { left = switchFocusRequester }
+                            .tvFocusable(shape = CircleShape, addFocusTarget = false)
+                    } else {
+                        Modifier
+                    },
+                ) {
                     Icon(
                         imageVector = Icons.Default.MoreVert,
                         contentDescription = stringResource(R.string.more),
@@ -326,7 +385,7 @@ private fun SpaceDefinitionRow(
                         MaterialTheme.colorScheme.surfaceContainer
                     },
                 ) {
-                    DropdownMenuItem(
+                    TvDropdownMenuItem(
                         text = { Text(stringResource(R.string.edit)) },
                         leadingIcon = {
                             Icon(Icons.Default.Edit, contentDescription = null)
@@ -336,7 +395,7 @@ private fun SpaceDefinitionRow(
                             onEdit()
                         },
                     )
-                    DropdownMenuItem(
+                    TvDropdownMenuItem(
                         text = { Text(stringResource(R.string.move_up)) },
                         leadingIcon = {
                             Icon(Icons.Default.KeyboardArrowUp, contentDescription = null)
@@ -347,7 +406,7 @@ private fun SpaceDefinitionRow(
                             onMove(-1)
                         },
                     )
-                    DropdownMenuItem(
+                    TvDropdownMenuItem(
                         text = { Text(stringResource(R.string.move_down)) },
                         leadingIcon = {
                             Icon(Icons.Default.KeyboardArrowDown, contentDescription = null)
@@ -359,7 +418,7 @@ private fun SpaceDefinitionRow(
                         },
                     )
                     HorizontalDivider()
-                    DropdownMenuItem(
+                    TvDropdownMenuItem(
                         text = {
                             Text(
                                 text = stringResource(R.string.delete),
@@ -393,6 +452,13 @@ private fun SpaceEditorDialog(
     onConfirm: (SpaceContext) -> Unit,
 ) {
     var draft by remember(initial) { mutableStateOf(initial) }
+    // The confirm button is disabled until a name and a content type exist, and a disabled button
+    // cannot take focus, so leaving the field would land nowhere. Point the exit at "Select all"
+    // until the form is valid: one press there satisfies the requirement, and the ring really moves.
+    val canConfirm = draft.title?.isNotBlank() == true && draft.allowedContentTypes.isNotEmpty()
+    val selectAllRequester = remember { FocusRequester() }
+    val fieldExit = rememberTvFieldExit(target = if (canConfirm) null else selectAllRequester)
+    val readOnlyState = rememberTvTextFieldReadOnlyState()
     val allContentTypes = remember { ContentType.entries.filterNot { it == ContentType.OTHER } }
 
     SettingsAlertDialog(
@@ -421,7 +487,10 @@ private fun SpaceEditorDialog(
                     },
                     trailingIcon = {
                         if (!draft.title.isNullOrEmpty()) {
-                            IconButton(onClick = { draft = draft.copy(title = "") }) {
+                            IconButton(
+                                onClick = { draft = draft.copy(title = "") },
+                                modifier = Modifier.tvIconButtonRing(),
+                            ) {
                                 Icon(
                                     imageVector = Icons.Default.Clear,
                                     contentDescription = stringResource(android.R.string.cancel),
@@ -431,7 +500,13 @@ private fun SpaceEditorDialog(
                     },
                     shape = RoundedCornerShape(12.dp),
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
+                    readOnly = readOnlyState.isReadOnly,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { fieldExit.onDone() }),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .then(readOnlyState.fieldModifier)
+                        .then(fieldExit.fieldModifier),
                 )
 
                 // Content Types Section
@@ -476,6 +551,13 @@ private fun SpaceEditorDialog(
                                     allowedContentTypes = if (isAllSelected) emptySet() else allContentTypes.toSet(),
                                 )
                             },
+                            modifier = Modifier
+                                .focusRequester(selectAllRequester)
+                                .tvFocusable(
+                                    enabled = true,
+                                    shape = RoundedCornerShape(8.dp),
+                                    addFocusTarget = false,
+                                ),
                         ) {
                             Text(
                                 text = stringResource(if (isAllSelected) R.string.deselect_all else R.string.select_all),
@@ -523,6 +605,10 @@ private fun SpaceEditorDialog(
                                     null
                                 },
                                 shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.tvFocusable(
+                                    shape = RoundedCornerShape(8.dp),
+                                    addFocusTarget = false,
+                                ),
                             )
                         }
                     }
@@ -561,7 +647,13 @@ private fun SpaceEditorDialog(
                                 }
                             }
                             if (draft.sourceLanguages.isNotEmpty()) {
-                                TextButton(onClick = { draft = draft.copy(sourceLanguages = emptySet()) }) {
+                                TextButton(
+                                    onClick = { draft = draft.copy(sourceLanguages = emptySet()) },
+                                    modifier = Modifier.tvFocusable(
+                                        shape = RoundedCornerShape(8.dp),
+                                        addFocusTarget = false,
+                                    ),
+                                ) {
                                     Text(
                                         text = stringResource(R.string.all_languages),
                                         style = MaterialTheme.typography.labelMedium,
@@ -610,6 +702,10 @@ private fun SpaceEditorDialog(
                                         null
                                     },
                                     shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.tvFocusable(
+                                        shape = RoundedCornerShape(8.dp),
+                                        addFocusTarget = false,
+                                    ),
                                 )
                             }
                         }
@@ -648,7 +744,13 @@ private fun SpaceEditorDialog(
                             }
                         }
                         if (draft.sourceKinds.isNotEmpty()) {
-                            TextButton(onClick = { draft = draft.copy(sourceKinds = emptySet()) }) {
+                            TextButton(
+                                onClick = { draft = draft.copy(sourceKinds = emptySet()) },
+                                modifier = Modifier.tvFocusable(
+                                    shape = RoundedCornerShape(8.dp),
+                                    addFocusTarget = false,
+                                ),
+                            ) {
                                 Text(
                                     text = stringResource(R.string.all_sources),
                                     style = MaterialTheme.typography.labelMedium,
@@ -695,6 +797,10 @@ private fun SpaceEditorDialog(
                                     null
                                 },
                                 shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.tvFocusable(
+                                    shape = RoundedCornerShape(8.dp),
+                                    addFocusTarget = false,
+                                ),
                             )
                         }
                     }
@@ -704,7 +810,8 @@ private fun SpaceEditorDialog(
         confirmButton = {
             SettingsDialogActionButton(
                 text = stringResource(android.R.string.ok),
-                enabled = draft.title?.isNotBlank() == true && draft.allowedContentTypes.isNotEmpty(),
+                enabled = canConfirm,
+                modifier = fieldExit.targetModifier,
                 onClick = {
                     onConfirm(
                         draft.copy(

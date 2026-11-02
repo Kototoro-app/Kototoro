@@ -16,8 +16,9 @@ object MihonFilterRules {
                     val checkboxes = linkedSetOf<SourceTag>()
                     for (child in node.children) {
                         val tags = tags(child, node.name, source).toSet()
-                        if (child.kind == SourceFilterKind.SELECT || child.kind == SourceFilterKind.SORT) {
-                            if (tags.isNotEmpty()) groups += SourceTagGroup("${node.name} - ${child.name}", tags)
+                        if (child.kind in standaloneKinds) {
+                            if (tags.isNotEmpty()) groups += SourceTagGroup("${node.name} - ${child.name}", tags,
+                                isExclusive = child.kind != SourceFilterKind.TEXT)
                         } else {
                             checkboxes += tags
                         }
@@ -25,12 +26,19 @@ object MihonFilterRules {
                     if (checkboxes.isNotEmpty()) groups += SourceTagGroup(node.name, checkboxes)
                 }
                 else -> tags(node, null, source).toSet().takeIf(Set<SourceTag>::isNotEmpty)?.let {
-                    groups += SourceTagGroup(header, it)
+                    groups += SourceTagGroup(if (node.kind in standaloneKinds) node.name else header, it,
+                        isExclusive = node.kind == SourceFilterKind.SELECT || node.kind == SourceFilterKind.SORT)
                 }
             }
         }
-        val merged = groups.groupBy { it.title }.map { (title, items) ->
-            SourceTagGroup(title, items.flatMap { it.tags }.toSet())
+        // Only merge checkbox/genre sections; separate native selects must keep their own exclusivity.
+        val merged = mutableListOf<SourceTagGroup>()
+        for (group in groups) {
+            val index = if (group.isExclusive) -1 else merged.indexOfFirst {
+                !it.isExclusive && it.title == group.title
+            }
+            if (index < 0) merged += group
+            else merged[index] = merged[index].copy(tags = merged[index].tags + group.tags)
         }
         return SourceFilterOptions(
             merged.flatMap { it.tags }.toSet(), merged, emptySet(), emptySet(), emptySet(), emptySet(), emptySet(),
@@ -78,6 +86,15 @@ object MihonFilterRules {
                                 remember(SourceFilterValue.Sort(index, ascending))
                             } else {
                                 remember(SourceFilterValue.Choice(index))
+                            }
+                        }
+                        if (node.kind == SourceFilterKind.SORT) {
+                            for (ascending in listOf(true, false)) {
+                                val directedKey = sortKey(key, raw, ascending)
+                                if (directedKey in selected) {
+                                    consumedSelected += directedKey
+                                    remember(SourceFilterValue.Sort(index, ascending))
+                                }
                             }
                         }
                     }
@@ -136,7 +153,14 @@ object MihonFilterRules {
                     SourceTag(it, "$prefix${node.name}/$it", source)
                 }
             }
-            SourceFilterKind.SORT -> node.values.map { SourceTag(it, "sort:$prefix${node.name}/$it", source) }
+            SourceFilterKind.SORT -> node.values.flatMap { value ->
+                val ascending = (node.state as? SourceFilterValue.Sort)?.ascending ?: false
+                listOf(
+                    SourceTag("$value ${if (ascending) "↑" else "↓"}", "sort:$prefix${node.name}/$value", source),
+                    SourceTag("$value ${if (ascending) "↓" else "↑"}",
+                        sortKey("$prefix${node.name}", value, !ascending), source),
+                )
+            }
             SourceFilterKind.TEXT -> listOf(SourceTag("📝 ${node.name}", "text:$prefix${node.name}", source))
             SourceFilterKind.GROUP -> node.children.flatMap {
                 tags(it, if (parent == null) node.name else "$parent/${node.name}", source)
@@ -144,4 +168,9 @@ object MihonFilterRules {
             else -> emptyList()
         }
     }
+
+    private val standaloneKinds = setOf(SourceFilterKind.SELECT, SourceFilterKind.SORT, SourceFilterKind.TEXT)
+
+    private fun sortKey(key: String, value: String, ascending: Boolean): String =
+        "sort-${if (ascending) "asc" else "desc"}:$key/$value"
 }

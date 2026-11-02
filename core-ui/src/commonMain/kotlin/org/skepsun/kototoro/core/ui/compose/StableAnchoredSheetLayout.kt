@@ -38,15 +38,20 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
@@ -92,6 +97,23 @@ fun stableSheetAnchorOffsets(hostHeightPx: Float, peekHeightPx: Float?): Map<Sta
 fun stableSheetInitialAnchor(usePeekAnchor: Boolean): StableSheetAnchor =
     if (usePeekAnchor) StableSheetAnchor.Middle else StableSheetAnchor.ThreeQuarter
 
+/**
+ * Whether a peek sheet collapses its header to make room for the content. With a peek stop that is any
+ * anchor above it. A peek too tall for a stop (a phone in landscape) opens at three quarters already
+ * filled by the header, so only dragging to full collapses it; dragging back down restores it. A sheet
+ * that [openExpanded] has no peek stop by design and keeps its header.
+ */
+fun stableSheetHeaderCollapsed(
+    usePeekAnchor: Boolean,
+    hasPeekAnchor: Boolean,
+    openExpanded: Boolean,
+    target: StableSheetAnchor,
+): Boolean = usePeekAnchor && when {
+    hasPeekAnchor -> target == StableSheetAnchor.Full || target == StableSheetAnchor.ThreeQuarter
+    openExpanded -> false
+    else -> target == StableSheetAnchor.Full
+}
+
 /** [preferred], or three quarters when [offsets] has no such anchor (a peek too tall for a middle anchor). */
 fun stableSheetOpenAnchor(
     offsets: Map<StableSheetAnchor, Float>,
@@ -132,6 +154,22 @@ private class StableSheetState(
     private var hostHeightPx by mutableFloatStateOf(0f)
     private var peekHeightPx: Float? by mutableStateOf(null)
     private var nestedDragInProgress = false
+
+    /**
+     * Whether the last pointer input was scroll-only (a mouse wheel or a trackpad's two-finger scroll).
+     * Those arrive as scroll input without any press, so the nested connection must not take them: it would
+     * drag the sheet away instead of scrolling the list inside it, which on Windows dismissed the reader's
+     * chapter panel on the first wheel tick (issue #601). A press is what makes a drag legitimate.
+     */
+    private var scrollOnlyPointer = false
+
+    fun noteScrollInput() {
+        scrollOnlyPointer = true
+    }
+
+    fun notePressedInput() {
+        scrollOnlyPointer = false
+    }
 
     /** Until then the sheet sits hidden only because it has not opened yet, not because it was dismissed. */
     private var hasOpened by mutableStateOf(false)
@@ -194,6 +232,8 @@ private class StableSheetState(
 
     fun hasNestedDrag(): Boolean = nestedDragInProgress
 
+    fun isScrollOnlyPointer(): Boolean = scrollOnlyPointer
+
     suspend fun settle(velocityY: Float): StableSheetAnchor {
         nestedDragInProgress = false
         val target = targetAnchor(velocityY)
@@ -206,6 +246,31 @@ private class StableSheetState(
         hasOpened = true
         val target = stableSheetOpenAnchor(stableSheetAnchorOffsets(hostHeightPx, peekHeightPx), openAnchor)
         anchoredState.animateTo(target, animationSpec = StableSheetAnimationSpec)
+    }
+
+    /**
+     * Moves one anchor towards the top (a wider sheet), for a device that has no drag gesture: a
+     * remote can press a tab but cannot pull the sheet up, so the details would stay off screen.
+     */
+    suspend fun expandOne(): StableSheetAnchor? = stepAnchor(-1)
+
+    /** Moves one anchor towards the bottom but never to [StableSheetAnchor.Hidden]. */
+    suspend fun collapseOne(): StableSheetAnchor? = stepAnchor(1, allowHidden = false)
+
+    /** Whether a narrower anchor exists below the settled one (the peek counts, hidden does not). */
+    fun canCollapse(): Boolean {
+        val visible = StableSheetAnchor.entries.filter { anchoredState.anchors.positionOf(it).isFinite() }
+        val index = visible.indexOf(anchoredState.settledValue)
+        return index >= 0 && visible.getOrNull(index + 1)?.let { it != StableSheetAnchor.Hidden } == true
+    }
+
+    private suspend fun stepAnchor(direction: Int, allowHidden: Boolean = true): StableSheetAnchor? {
+        val visible = StableSheetAnchor.entries.filter { anchoredState.anchors.positionOf(it).isFinite() }
+        val current = anchoredState.settledValue
+        val next = visible.getOrNull(visible.indexOf(current) + direction) ?: return null
+        if (!allowHidden && next == StableSheetAnchor.Hidden) return null
+        anchoredState.animateTo(next, animationSpec = StableSheetAnimationSpec)
+        return next
     }
 
     suspend fun dismiss(): Boolean {
@@ -259,7 +324,7 @@ private fun rememberStableSheetNestedScrollConnection(
     return remember(state) {
         object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                if (source != NestedScrollSource.UserInput) return Offset.Zero
+                if (source != NestedScrollSource.UserInput || state.isScrollOnlyPointer()) return Offset.Zero
                 val isPartiallyExpanded = state.offset > 0f
                 if (!state.hasNestedDrag() && (!isPartiallyExpanded || available.y == 0f)) return Offset.Zero
                 val consumed = state.dispatchNestedDelta(available.y)
@@ -271,7 +336,9 @@ private fun rememberStableSheetNestedScrollConnection(
                 available: Offset,
                 source: NestedScrollSource,
             ): Offset {
-                if (source != NestedScrollSource.UserInput || available.y <= 0f) return Offset.Zero
+                if (source != NestedScrollSource.UserInput || state.isScrollOnlyPointer() || available.y <= 0f) {
+                    return Offset.Zero
+                }
                 return Offset(0f, state.dispatchNestedDelta(available.y))
             }
 
@@ -300,6 +367,10 @@ class StableSheetSlotScope internal constructor(
     val contentBottomPadding: Dp,
     /** Animates the sheet away, then calls `onDismissRequest`. */
     val dismiss: () -> Unit,
+    /** One anchor up: a wider sheet, for a device that cannot drag it. */
+    val expand: () -> Unit,
+    /** One anchor down, stopping at the peek; a no-op when there is nothing to collapse. */
+    val collapse: () -> Unit,
     /** Expanded beyond an available peek anchor, which can restore the header when dragged down. */
     val isExpandedPastPeek: Boolean = false,
 )
@@ -320,11 +391,21 @@ fun StableAnchoredSheetLayout(
     /**
      * Opens at three quarters with no peek stop, as a landscape tablet does when the peek is too tall for one; the
      * header then stays in view (it only collapses when a sheet is dragged past an available peek).
+     * Without it, a peek too tall for a stop (a phone in landscape) collapses the header at full height.
      */
     openExpanded: Boolean = false,
+    /**
+     * Back moves one anchor down before it dismisses: with a remote there is no drag gesture, so
+     * without this an expanded sheet could only be left by closing it.
+     */
+    collapseBeforeDismiss: Boolean = false,
     sheet: @Composable (StableSheetSlotScope) -> Unit,
 ) {
     val density = LocalDensity.current
+    // Keyboard focus scrolling reports itself as user input, so the nested scroll connection would
+    // treat a D-pad press at the end of a list as a drag and pull the sheet back down.
+    val isTv = LocalUiPresentationConfig.current.isTv
+    val receivesNestedScroll = !isTv
     val state = remember(density) {
         StableSheetState(
             density,
@@ -370,11 +451,32 @@ fun StableAnchoredSheetLayout(
         snapshotFlow { state.hasAnchors }.first { it }
         state.open()
     }
-    PlatformBackHandler(onBack = dismissWithAnimation)
+    PlatformBackHandler(
+        onBack = {
+            if (collapseBeforeDismiss && state.canCollapse()) {
+                coroutineScope.launch { state.collapseOne() }
+            } else {
+                dismissWithAnimation()
+            }
+        },
+    )
 
     BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
+            // Parents see a pointer first in the initial pass, so the kind is known before the sheet's
+            // own content dispatches its nested scroll.
+            .pointerInput(state) {
+                awaitPointerEventScope {
+                    while (true) {
+                        when (awaitPointerEvent(PointerEventPass.Initial).type) {
+                            PointerEventType.Scroll -> state.noteScrollInput()
+                            PointerEventType.Press -> state.notePressedInput()
+                            else -> Unit
+                        }
+                    }
+                }
+            }
             .onSizeChanged { state.updateHostHeight(it.height.toFloat()) },
     ) {
         val sheetWidth = calculateStableSheetWidth(maxWidth, sheetMaxWidth)
@@ -387,6 +489,9 @@ fun StableAnchoredSheetLayout(
                             .coerceIn(0f, 1f),
                     ),
                 )
+                // 遥控器上遮罩不该是一个可聚焦目标：方向键一旦落到它上面，
+                // 一次 CENTER 就会把用户正在操作的面板关掉。
+                .focusProperties { if (isTv) canFocus = false }
                 .clickable(onClick = dismissWithAnimation),
         )
         // Before the first measure pass the host height is unknown, so place the sheet by the constraints.
@@ -398,17 +503,27 @@ fun StableAnchoredSheetLayout(
                 .fillMaxHeight()
                 .align(Alignment.TopCenter)
                 .offset { IntOffset(0, offset.roundToInt()) }
-                .nestedScroll(nestedScrollConnection),
+                .then(if (receivesNestedScroll) Modifier.nestedScroll(nestedScrollConnection) else Modifier),
         ) {
             sheet(
                 StableSheetSlotScope(
                     dragModifier = sheetDragModifier,
                     contentBottomPadding = with(density) { offset.toDp() },
                     dismiss = dismissWithAnimation,
-                    isExpandedPastPeek = usePeekAnchor &&
-                        state.anchoredState.anchors.positionOf(StableSheetAnchor.Middle).isFinite() &&
-                        (state.anchoredState.targetValue == StableSheetAnchor.Full ||
-                            state.anchoredState.targetValue == StableSheetAnchor.ThreeQuarter),
+                    expand = {
+                        coroutineScope.launch { state.expandOne() }
+                        Unit
+                    },
+                    collapse = {
+                        coroutineScope.launch { state.collapseOne() }
+                        Unit
+                    },
+                    isExpandedPastPeek = stableSheetHeaderCollapsed(
+                        usePeekAnchor = usePeekAnchor,
+                        hasPeekAnchor = state.anchoredState.anchors.positionOf(StableSheetAnchor.Middle).isFinite(),
+                        openExpanded = openExpanded,
+                        target = state.anchoredState.targetValue,
+                    ),
                 ),
             )
         }

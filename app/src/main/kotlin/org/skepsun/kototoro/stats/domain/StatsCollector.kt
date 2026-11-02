@@ -2,6 +2,7 @@ package org.skepsun.kototoro.stats.domain
 
 import androidx.collection.LongSparseArray
 import androidx.collection.set
+import androidx.room.withTransaction
 import dagger.hilt.android.ViewModelLifecycle
 import dagger.hilt.android.scopes.ViewModelScoped
 import kotlinx.coroutines.Dispatchers
@@ -46,6 +47,7 @@ class StatsCollector @Inject constructor(
         }
         val pagesDelta = if (entry.state.page != state.page || entry.state.chapterId != state.chapterId) 1 else 0
         val newEntry = entry.copy(
+            state = state,
             stats = StatsEntity(
                 mangaId = mangaId,
                 startedAt = entry.stats.startedAt,
@@ -59,13 +61,21 @@ class StatsCollector @Inject constructor(
 
     @Synchronized
     fun onPause(mangaId: Long) {
+        stats[mangaId]?.let { entry ->
+            commit(entry.stats.copy(duration = (System.currentTimeMillis() - entry.stats.startedAt).coerceAtLeast(0)))
+        }
         stats.remove(mangaId)
     }
 
     private fun commit(entity: StatsEntity) {
         viewModelScope.launch(Dispatchers.Default) {
             runCatchingCancellable {
-                db.getStatsDao().upsert(entity)
+                db.withTransaction {
+                    val dao = db.getStatsDao()
+                    val previous = dao.find(entity.mangaId, entity.startedAt)
+                    dao.upsert(entity.copy(duration = maxOf(entity.duration, previous?.duration ?: 0),
+                        pages = maxOf(entity.pages, previous?.pages ?: 0)))
+                }
             }.onFailure { e ->
                 e.printStackTraceDebug()
             }

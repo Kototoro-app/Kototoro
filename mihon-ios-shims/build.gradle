@@ -1,3 +1,9 @@
+import org.objectweb.asm.ClassReader
+import org.objectweb.asm.ClassVisitor
+import org.objectweb.asm.ClassWriter
+import org.objectweb.asm.MethodVisitor
+import org.objectweb.asm.Opcodes
+
 // Android classes the iOS JVM lacks, for extensions running on the embedded OpenJDK Mobile (no java.desktop, no
 // Android framework). Each class here takes the place of an `android.jar` stub (which throws "Stub!") or of a
 // desktop implementation in AndroidCompat (AWT / ImageIO), so the jar goes first on the iOS class path. Written for
@@ -22,6 +28,47 @@ def apis = fileTree(file(compatibility.get())) {
     include '*.jar'
     exclude '000-*', 'kotlin-stdlib*'
 }
+
+// View.getParent is final in the pinned API and still throws Stub!, so a subclass cannot supply it. Keep the
+// existing View ABI and implementation, replacing only this accessor by its ordinary mParent field read.
+abstract class GenerateBrowserViewShim extends DefaultTask {
+    @InputFile abstract RegularFileProperty getCompatibilityJar()
+    @OutputDirectory abstract DirectoryProperty getOutputDirectory()
+
+    @TaskAction void generate() {
+        byte[] original
+        new java.util.zip.ZipFile(compatibilityJar.get().asFile).withCloseable { archive ->
+            original = archive.getInputStream(archive.getEntry('android/view/View.class')).withCloseable { it.bytes }
+        }
+        def writer = new ClassWriter(0)
+        int[] replaced = [0]
+        new ClassReader(original).accept(new ClassVisitor(Opcodes.ASM9, writer) {
+            @Override MethodVisitor visitMethod(int access, String name, String descriptor, String signature,
+                    String[] exceptions) {
+                def method = super.visitMethod(access, name, descriptor, signature, exceptions)
+                if (name != 'getParent' || descriptor != '()Landroid/view/ViewParent;') return method
+                replaced[0]++
+                method.visitCode()
+                method.visitVarInsn(Opcodes.ALOAD, 0)
+                method.visitFieldInsn(Opcodes.GETFIELD, 'android/view/View', 'mParent', 'Landroid/view/ViewParent;')
+                method.visitInsn(Opcodes.ARETURN)
+                method.visitMaxs(1, 1)
+                method.visitEnd()
+                return null
+            }
+        }, 0)
+        if (replaced[0] != 1) throw new GradleException('Pinned View.getParent ABI changed')
+        def target = new File(outputDirectory.get().asFile, 'android/view/View.class')
+        target.parentFile.mkdirs()
+        target.bytes = writer.toByteArray()
+    }
+}
+
+def browserViewShim = tasks.register('generateBrowserViewShim', GenerateBrowserViewShim) {
+    compatibilityJar = file(compatibility.get() + '/AndroidCompat-1.0.jar')
+    outputDirectory = layout.buildDirectory.dir('generated/browser-view')
+}
+sourceSets.main.output.dir([builtBy: browserViewShim], browserViewShim.flatMap { it.outputDirectory })
 
 dependencies {
     implementation libs.kotlinx.serialization.json

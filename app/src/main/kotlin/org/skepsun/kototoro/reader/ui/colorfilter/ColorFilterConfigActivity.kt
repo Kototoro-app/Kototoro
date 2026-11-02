@@ -19,7 +19,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -32,6 +31,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.core.util.ext.observeEvent
 import org.skepsun.kototoro.reader.domain.ReaderColorFilter
@@ -93,7 +93,7 @@ class ColorFilterConfigActivity : BaseComposeActivity() {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
             ) {
-                TextButton(onClick = onClose) { Text(stringResource(R.string.close)) }
+                TvTextButton(onClick = onClose) { Text(stringResource(R.string.close)) }
                 Text(stringResource(R.string.color_correction), style = MaterialTheme.typography.titleLarge)
                 Button(onClick = onDone, enabled = !isLoading) { Text(stringResource(R.string.done)) }
             }
@@ -123,18 +123,18 @@ class ColorFilterConfigActivity : BaseComposeActivity() {
             title = { Text(stringResource(R.string.apply)) },
             text = { Text(stringResource(R.string.color_correction_apply_text)) },
             confirmButton = {
-                TextButton(onClick = {
+                TvTextButton(onClick = {
                     saveDialogVisible = false
                     viewModel.save()
                 }) { Text(stringResource(R.string.this_manga)) }
             },
             dismissButton = {
                 Row {
-                    TextButton(onClick = {
+                    TvTextButton(onClick = {
                         saveDialogVisible = false
                         viewModel.saveGlobally()
                     }) { Text(stringResource(R.string.globally)) }
-                    TextButton(onClick = { saveDialogVisible = false }) {
+                    TvTextButton(onClick = { saveDialogVisible = false }) {
                         Text(stringResource(android.R.string.cancel))
                     }
                 }
@@ -149,18 +149,18 @@ class ColorFilterConfigActivity : BaseComposeActivity() {
             title = { Text(stringResource(R.string.color_correction)) },
             text = { Text(stringResource(R.string.text_unsaved_changes_prompt)) },
             confirmButton = {
-                TextButton(onClick = {
+                TvTextButton(onClick = {
                     discardDialogVisible = false
                     saveDialogVisible = true
                 }) { Text(stringResource(R.string.save)) }
             },
             dismissButton = {
                 Row {
-                    TextButton(onClick = {
+                    TvTextButton(onClick = {
                         discardDialogVisible = false
                         finishAfterTransition()
                     }) { Text(stringResource(R.string.discard)) }
-                    TextButton(onClick = { discardDialogVisible = false }) {
+                    TvTextButton(onClick = { discardDialogVisible = false }) {
                         Text(stringResource(android.R.string.cancel))
                     }
                 }

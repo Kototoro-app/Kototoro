@@ -10,7 +10,10 @@ Artifacts come from repositories listed on the Kototoro repo hub, pinned by SHA-
   * JAR       kototoro-parsers plugin 137   -> parser enum names, served by :parser-host
 
 Everything is written under ignored iosApp/build; nothing enters the default distribution.
+--runtime-only stages the same runtime without the samples, which Release IPAs drop anyway; CI uses it so the
+build does not depend on third-party extension releases that may be removed.
 """
+import argparse
 import hashlib
 import json
 import os
@@ -32,9 +35,9 @@ ARTIFACTS = [
      "https://github.com/keiyoushi/extensions/releases/download/24bc6c2/tachiyomi-zh.zaimanhua-v1.6.0.apk",
      "f6605e36a7d1453b60814bb6f7340a8f724183b11ee3f95e02d9542753ba81fe"),
     # Cloudflare-protected site (comix.to): the automatic hidden-browser pass and the manual verification.
-    ("tachiyomi-en.comix-v1.6.46.apk",
-     "https://github.com/keiyoushi/extensions/releases/download/b5d2cd5/tachiyomi-en.comix-v1.6.46.apk",
-     "3166a50b565a5bc92c8ad8e4fb64a916695c2c4201e2d7ac465a333da461e3a0"),
+    ("tachiyomi-en.comix-v1.6.59.apk",
+     "https://github.com/keiyoushi/extensions/releases/download/949dea2/tachiyomi-en.comix-v1.6.59.apk",
+     "042127481c1928d2ca7cfb519e0943df21a31c7824b789db0bc7c1692b4e770e"),
     ("tachiyomi-en.allnovelfull-v1.6.19.apk",
      "https://github.com/NovelSourcery/extensions/releases/download/ba92ea4/tachiyomi-en.allnovelfull-v1.6.19.apk",
      "3f1d1e774069974e85007e09c487f0d9c5cc3928126d47c660222ea7d82c1c8b"),
@@ -69,6 +72,9 @@ def sha256(path):
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--runtime-only", action="store_true", help="Skip the sample extensions")
+    artifacts = [] if parser.parse_args().runtime_only else ARTIFACTS
     if not (SOURCE / "libkototoro-jvm.a").is_file():
         raise RuntimeError("Run build-jvm-preview.py first")
     if not (SOURCE / "runtime-origin.json").is_file():
@@ -90,7 +96,7 @@ def main():
     sources = TARGET / "sources"
     sources.mkdir()
     pairs = []
-    for name, url, expected in ARTIFACTS:
+    for name, url, expected in artifacts:
         local = WORK / name
         if not local.exists():
             builder.run(["curl", "--fail", "--location", "--retry", "3", "--output", local, url])
@@ -101,13 +107,13 @@ def main():
     env = dict(os.environ)
     env["JAVA_HOME"] = os.environ.get("KOTOTORO_JVM_BOOT_JDK") or subprocess.check_output(
         ["/usr/libexec/java_home", "-v", "24"], text=True).strip()
+    conversion = [":dex-convert:convertApk", "-PconvertPairs=" + "|".join(pairs)] if pairs else []
     output = subprocess.run(
-        [ROOT / "gradlew", ":mihon-ios-compat:stagePreview", ":dex-convert:convertApk", "--console=plain",
-         "-PwithMihonIosCompat", "-PmihonIosCompatibilityDirectory=" + str(compatibility),
-         "-PconvertPairs=" + "|".join(pairs), "--no-daemon"],
+        [ROOT / "gradlew", ":mihon-ios-compat:stagePreview", *conversion, "--console=plain",
+         "-PwithMihonIosCompat", "-PmihonIosCompatibilityDirectory=" + str(compatibility), "--no-daemon"],
         cwd=ROOT, env=env, check=True, text=True, stdout=subprocess.PIPE).stdout
     converted = [json.loads(line.split(" ", 1)[1]) for line in output.splitlines() if line.startswith("CONVERTED ")]
-    if len(converted) != len(ARTIFACTS):
+    if len(converted) != len(artifacts):
         raise RuntimeError("Converter did not report every artifact:\n" + output)
 
     for name in ["java_bundle", "include"]:
@@ -135,7 +141,7 @@ def main():
             shutil.copy2(item, lib / ("20-" + item.name))
 
     jars, plugins = [], []
-    for (name, _, _), info in zip(ARTIFACTS, converted):
+    for (name, _, _), info in zip(artifacts, converted):
         relative = Path(info["output"]).name
         if info["kind"] == "apk":
             jars.append({"path": relative, "identity": {

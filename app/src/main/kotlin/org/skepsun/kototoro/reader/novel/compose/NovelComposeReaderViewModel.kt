@@ -16,6 +16,7 @@ import org.skepsun.kototoro.reader.novel.NovelReaderSettings
 import org.skepsun.kototoro.reader.novel.ReadingMode
 import org.skepsun.kototoro.core.replace.ReplaceRule
 import org.skepsun.kototoro.parsers.model.ContentChapter
+import org.skepsun.kototoro.reader.novel.tts.TtsPlaybackSpeed
 import org.skepsun.kototoro.reader.novel.tts.TtsState
 import org.skepsun.kototoro.reader.novel.annotation.NovelMarkingEntity
 import org.skepsun.kototoro.bookmarks.domain.Bookmark
@@ -58,6 +59,7 @@ data class NovelComposeReaderUiState(
     val message: NovelReaderMessage? = null,
     val ttsControlsVisible: Boolean = false,
     val ttsState: TtsState = TtsState.IDLE,
+    val ttsSpeed: Float = TtsPlaybackSpeed.DEFAULT,
     val ttsHighlightRange: IntRange? = null,
     val progressValue: Float = 0f,
     val progressMax: Float = 0f,
@@ -602,6 +604,10 @@ class NovelComposeReaderViewModel @Inject constructor() : ViewModel() {
             ttsState = state,
             ttsHighlightRange = if (state == TtsState.IDLE) null else _uiState.value.ttsHighlightRange,
         )
+    }
+
+    fun publishTtsSpeed(speed: Float) {
+        _uiState.value = _uiState.value.copy(ttsSpeed = speed)
     }
 
     fun publishTtsHighlight(range: IntRange?) {

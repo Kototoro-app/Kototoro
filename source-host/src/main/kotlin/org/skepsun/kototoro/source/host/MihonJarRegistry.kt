@@ -17,6 +17,7 @@ import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.WeakHashMap
+import java.util.zip.ZipFile
 import kotlin.coroutines.AbstractCoroutineContextElement
 import kotlin.coroutines.CoroutineContext
 
@@ -49,6 +50,20 @@ class MihonJarRegistry(
     private val extensions = linkedMapOf<String, Extension>()
     private val retirementFailures = mutableListOf<Exception>()
     private var closed = false
+
+    /** Reads immutable APK artwork without constructing the source or making site requests. */
+    @Synchronized
+    internal fun icon(packageName: String): ByteArray? {
+        requireOpen()
+        val extension = extensions[packageName] ?: return null
+        return ZipFile(extension.path.toFile()).use { zip ->
+            val entry = zip.getEntry(org.skepsun.kototoro.dex.ApkIcon.ENTRY)
+                ?: return org.skepsun.kototoro.dex.ApkIcon.read(zip)
+            if (entry.size > 4 * 1024 * 1024) return null
+            zip.getInputStream(entry).use { it.readNBytes(4 * 1024 * 1024 + 1) }
+                .takeIf { it.size <= 4 * 1024 * 1024 }
+        }
+    }
 
     @Synchronized
     fun load(path: Path, expected: MihonJarIdentity): LoadedMihonExtension {

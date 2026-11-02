@@ -1,12 +1,9 @@
 package org.skepsun.kototoro.details.domain
 
-import org.skepsun.kototoro.core.model.ContentIdentityKeys
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
-import org.skepsun.kototoro.tracking.discovery.domain.normalizeStrictTitleKey
-import java.net.URI
 import javax.inject.Inject
 
 class RelatedContentUseCase @Inject constructor(
@@ -27,47 +24,25 @@ class RelatedContentUseCase @Inject constructor(
     }
 }
 
+/**
+ * The work itself out of its source's related list. The rule is shared with Windows
+ * ([org.skepsun.kototoro.details.domain.RelatedWorkRules]); only the projection onto its fields is Android's.
+ */
 internal fun filterCurrentWorkFromRelated(
     seed: Content,
     candidates: List<Content>,
-): List<Content> {
-    return candidates.filterNot { candidate ->
-        if (candidate.source.name != seed.source.name) {
-            return@filterNot false
-        }
-        candidate.id == seed.id ||
-            ContentIdentityKeys.hasSameIdentity(
-                source = seed.source.name,
-                url = seed.url,
-                publicUrl = seed.publicUrl,
-                otherSource = candidate.source.name,
-                otherUrl = candidate.url,
-                otherPublicUrl = candidate.publicUrl,
-            ) ||
-            hasSameTitleAndCoverResource(seed, candidate)
-    }
-}
+): List<Content> = RelatedWorkRules.filterCurrentWork(
+    seed = seed.toRelatedWorkKey(),
+    candidates = candidates,
+    key = Content::toRelatedWorkKey,
+)
 
-private fun hasSameTitleAndCoverResource(left: Content, right: Content): Boolean {
-    val leftTitle = normalizeStrictTitleKey(left.title, listOf(left.source.name))
-    val rightTitle = normalizeStrictTitleKey(right.title, listOf(right.source.name))
-    if (leftTitle.isBlank() || leftTitle != rightTitle) {
-        return false
-    }
-    val leftCoverKeys = sequenceOf(left.coverUrl, left.largeCoverUrl)
-        .mapNotNull(::coverResourceKey)
-        .toSet()
-    return sequenceOf(right.coverUrl, right.largeCoverUrl)
-        .mapNotNull(::coverResourceKey)
-        .any(leftCoverKeys::contains)
-}
-
-private fun coverResourceKey(value: String?): String? {
-    val raw = value?.trim()?.takeIf(String::isNotEmpty) ?: return null
-    val uri = runCatching { URI(raw) }.getOrNull() ?: return raw
-    if (!uri.scheme.equals("http", ignoreCase = true) && !uri.scheme.equals("https", ignoreCase = true)) {
-        return raw
-    }
-    val path = uri.rawPath.orEmpty().ifBlank { return raw }
-    return path
-}
+private fun Content.toRelatedWorkKey() = RelatedWorkKey(
+    sourceName = source.name,
+    id = id,
+    url = url,
+    publicUrl = publicUrl,
+    title = title,
+    coverUrl = coverUrl,
+    largeCoverUrl = largeCoverUrl,
+)

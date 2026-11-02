@@ -8,7 +8,6 @@ import org.skepsun.kototoro.parsers.util.findById
 import org.skepsun.kototoro.stats.data.StatsRepository
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
-import kotlin.math.roundToInt
 
 class ReadingTimeUseCase @Inject constructor(
     private val settings: AppSettings,
@@ -25,14 +24,14 @@ class ReadingTimeUseCase @Inject constructor(
             return null
         }
         val isOnHistoryBranch = history != null && chapters.findById(history.chapterId) != null
-        // Impossible task, I guess. Good luck on this.
-        var averageTimeSec: Int = 20 /* pages */ * getSecondsPerPage(manga.id) * chapters.size
-        if (isOnHistoryBranch) {
-            averageTimeSec = (averageTimeSec * (1f - history.percent)).roundToInt()
-        }
-        if (averageTimeSec < 60) {
-            return null
-        }
+        // Shared with iOS: novels and videos get no page-based estimate (it used to count 20 "pages" per chapter for
+        // them too, which means nothing for lines or episodes).
+        val averageTimeSec = ReadingTimeEstimate.remainingSeconds(
+            contentType = manga.toContent().source.contentType.name,
+            chapterCount = chapters.size,
+            progress = history?.percent?.takeIf { isOnHistoryBranch },
+            secondsPerPage = getSecondsPerPage(manga.id).toLong(),
+        )?.toInt() ?: return null
         return ReadingTime(
             minutes = (averageTimeSec / 60) % 60,
             hours = averageTimeSec / 3600,

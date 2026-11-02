@@ -60,6 +60,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.tvChipRing
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.core.model.ContentTypeFamily
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
@@ -226,6 +227,7 @@ private fun ConfigContent(
                             modifier = Modifier.size(18.dp),
                         )
                     },
+                    modifier = Modifier.tvChipRing(),
                 )
             }
         }

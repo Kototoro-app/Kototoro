@@ -36,7 +36,11 @@ release.keystore
 app/keystore/
 *.sh
 !scripts/build_cloudstream_runtime.sh
+!desktop-app/run-macos.sh
+!desktop-app/run-linux.sh
+!desktop-app/smoke-linux.sh
 !.github/scripts/publish_gitcode_release.sh
+!.github/scripts/prepare-linux-ci.sh
 *.log
 __pycache__/
 node_modules/
@@ -47,7 +51,8 @@ docs/.vitepress/dist/
 .claude/settings.local.json
 .claude/scheduled_tasks.lock
 .mindfs/
-.tmp/
+# Local scratch at the repo root: adb dumps, screenshots and one-off debug scripts
+/.tmp*
 .pi-esr-memory/
 .pi-loom/
 .pirc.json

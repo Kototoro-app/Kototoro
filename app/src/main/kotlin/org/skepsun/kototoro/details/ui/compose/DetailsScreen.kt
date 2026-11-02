@@ -45,7 +45,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -100,6 +99,7 @@ import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.compose.KototoroPullToRefreshBox
+import org.skepsun.kototoro.core.ui.compose.KototoroSnackbarHost
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassLayerBackdrop
 import org.skepsun.kototoro.core.ui.compose.sharedCoverMemoryCacheKey
@@ -339,6 +339,7 @@ private fun DetailsScreenContent(
     val metadataSearchError = metadataSearchUiState.errorMessage
     val languagePresets by viewModel.languagePresets.collectAsStateWithLifecycle()
     val activeLanguagePresetId by viewModel.activeLanguagePresetId.collectAsStateWithLifecycle()
+    val globalTagBlacklistCount by viewModel.globalTagBlacklistCount.collectAsStateWithLifecycle()
     val readingSearchSources = readingSearchUiState.sources
     val readingSearchQuery = readingSearchUiState.query
     val readingSearchSections = readingSearchUiState.sections
@@ -533,7 +534,8 @@ private fun DetailsScreenContent(
         org.skepsun.kototoro.migration.domain.SourceHealthStatus.UNINSTALLED -> stringResource(R.string.migration_health_uninstalled)
         org.skepsun.kototoro.migration.domain.SourceHealthStatus.BROKEN -> stringResource(R.string.migration_health_broken)
         org.skepsun.kototoro.migration.domain.SourceHealthStatus.FAILING -> stringResource(R.string.migration_health_failing)
-        // A disabled source still works; the entry being open proves it, so no migrate prompt.
+        // A disabled or merely suspicious source still works; the entry being open proves it, so no migrate prompt.
+        org.skepsun.kototoro.migration.domain.SourceHealthStatus.SUSPICIOUS,
         org.skepsun.kototoro.migration.domain.SourceHealthStatus.DISABLED,
         org.skepsun.kototoro.migration.domain.SourceHealthStatus.HEALTHY -> null
     }
@@ -777,6 +779,12 @@ private fun DetailsScreenContent(
                 settings.gridSizePages = updatedValue.toInt()
             }
         }
+    }
+    val chapterGridSizeValue by settings.observeAsState(AppSettings.KEY_GRID_SIZE_CHAPTERS) {
+        gridSizeChapters.toFloat()
+    }
+    val updateChapterGridSize: (Float) -> Unit = remember(settings) {
+        { value -> settings.gridSizeChapters = value.toInt() }
     }
     val updatePageThumbnailAspectRatio: (Float) -> Unit = remember(detailsPaneState, settings) {
         { value ->
@@ -1224,7 +1232,7 @@ private fun DetailsScreenContent(
                             Scaffold(
                                 modifier = paneModifier,
                                 containerColor = Color.Transparent,
-                                snackbarHost = { SnackbarHost(snackbarHostState) },
+                                snackbarHost = { KototoroSnackbarHost(snackbarHostState) },
                                 topBar = {
                                     CompositionLocalProvider(
                                         LocalLiquidGlassBackdrop provides detailsContentBackdrop,
@@ -1385,6 +1393,7 @@ private fun DetailsScreenContent(
                                     isDownloadedOnly = isDownloadedOnly,
                                     isDownloadedFilterVisible = mangaDetails?.local != null,
                                     pageGridSizeValue = pageGridSizeValue,
+                                    chapterGridSizeValue = chapterGridSizeValue,
                                     pageThumbnailAspectRatio = pageThumbnailAspectRatioValue,
                                     isPageThumbnailsFitPreview = isPageThumbnailsFitPreview,
                                     onChapterQueryChange = updateChapterQuery,
@@ -1395,6 +1404,7 @@ private fun DetailsScreenContent(
                                     onToggleMergeRepeatedChapters = { viewModel.setMergeRepeatedChapters(!isMergeRepeatedChapters) },
                                     onToggleDownloadedOnly = { viewModel.isDownloadedOnly.value = !isDownloadedOnly },
                                     onPageGridSizeChange = updatePageGridSize,
+                                    onChapterGridSizeChange = updateChapterGridSize,
                                     onPageThumbnailAspectRatioChange = updatePageThumbnailAspectRatio,
                                     onTogglePageThumbnailsFitPreview = togglePageThumbnailsFitPreview,
                                     showCollapsedHandle = false,
@@ -1570,6 +1580,7 @@ private fun DetailsScreenContent(
                             isDownloadedOnly = isDownloadedOnly,
                             isDownloadedFilterVisible = mangaDetails?.local != null,
                             pageGridSizeValue = pageGridSizeValue,
+                            chapterGridSizeValue = chapterGridSizeValue,
                             pageThumbnailAspectRatio = pageThumbnailAspectRatioValue,
                             isPageThumbnailsFitPreview = isPageThumbnailsFitPreview,
                             onChapterQueryChange = updateChapterQuery,
@@ -1580,6 +1591,7 @@ private fun DetailsScreenContent(
                             onToggleMergeRepeatedChapters = { viewModel.setMergeRepeatedChapters(!isMergeRepeatedChapters) },
                             onToggleDownloadedOnly = { viewModel.isDownloadedOnly.value = !isDownloadedOnly },
                             onPageGridSizeChange = updatePageGridSize,
+                            onChapterGridSizeChange = updateChapterGridSize,
                             onPageThumbnailAspectRatioChange = updatePageThumbnailAspectRatio,
                             onTogglePageThumbnailsFitPreview = togglePageThumbnailsFitPreview,
                             showCollapsedHandle = true,
@@ -1592,7 +1604,7 @@ private fun DetailsScreenContent(
                     }
                 }
                 // Hosted above the pane: inside the Scaffold the bottom dock drew over it.
-                SnackbarHost(
+                KototoroSnackbarHost(
                     snackbarHostState,
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
@@ -1745,6 +1757,7 @@ private fun DetailsScreenContent(
 
             if (showFavoriteDialog && isWorkActionEnabled && content != null) {
             val allCategories by viewModel.allCategories.collectAsStateWithLifecycle()
+            val hasHiddenCategories by viewModel.hasHiddenCategories.collectAsStateWithLifecycle()
             val memberCategoryIds = remember(favouriteCategories) {
                 favouriteCategories.mapTo(mutableSetOf()) { it.id }
             }
@@ -1757,9 +1770,15 @@ private fun DetailsScreenContent(
                 },
                 onManageCategories = {
                     detailsScreenState.setShowFavoriteDialog(false)
+                    viewModel.setShowAllCategories(false)
                     handleActionClick(DetailsAction.ManageCategories)
                 },
-                onDismiss = { detailsScreenState.setShowFavoriteDialog(false) },
+                onDismiss = {
+                    detailsScreenState.setShowFavoriteDialog(false)
+                    viewModel.setShowAllCategories(false)
+                },
+                hasHiddenCategories = hasHiddenCategories,
+                onShowAllCategories = { viewModel.setShowAllCategories(true) },
             )
             }
 
@@ -1862,6 +1881,8 @@ private fun DetailsScreenContent(
                     scopeFilterUiState = readingSearchScopeFilterUiState,
                     languagePresets = languagePresets,
                     activeLanguagePresetId = activeLanguagePresetId,
+                    blacklistedTagCount = globalTagBlacklistCount,
+                    onOpenGlobalTagBlacklist = appRouter::openGlobalTagBlacklist,
                     currentContent = content,
                     unavailableText = stringResource(R.string.details_reading_source_unavailable),
                     onSearchQueryChange = viewModel::updateReadingSearchQuery,

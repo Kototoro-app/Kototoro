@@ -2,6 +2,7 @@ package org.skepsun.kototoro.download.ui.worker
 
 import android.net.Uri
 import androidx.work.Data
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -96,5 +97,47 @@ class DownloadTaskDataTest {
 		assertTrue(data.toByteArray().size <= Data.MAX_DATA_BYTES)
 		assertTrue(restored.executionChapterIds contentEquals chapterIds)
 		assertEquals(null, restored.executionChapterRefs)
+	}
+
+	@Test
+	fun `translate task keeps its kind through WorkManager serialization`() {
+		val task = DownloadTask.createExecutionTask(
+			executionMangaId = 1L,
+			isPaused = false,
+			isSilent = true,
+			executionChapterIds = longArrayOf(7L),
+			destination = null,
+			format = null,
+			allowMeteredNetwork = true,
+			kind = DownloadTaskKind.TRANSLATE,
+		)
+
+		val restored = DownloadTask(task.toData())
+
+		// A task that silently degrades to DOWNLOAD would download the chapter and never translate it.
+		assertEquals(DownloadTaskKind.TRANSLATE, restored.kind)
+		assertTrue(restored.executionChapterIds!!.toList() == listOf(7L))
+		// Without the flag the job must reuse existing renders instead of overwriting them.
+		assertFalse(restored.isRetranslation)
+	}
+
+	@Test
+	fun `re-translation task keeps its flag through WorkManager serialization`() {
+		val task = DownloadTask.createExecutionTask(
+			executionMangaId = 1L,
+			isPaused = false,
+			isSilent = true,
+			executionChapterIds = longArrayOf(7L),
+			destination = null,
+			format = null,
+			allowMeteredNetwork = true,
+			kind = DownloadTaskKind.TRANSLATE,
+			isRetranslation = true,
+		)
+
+		val restored = DownloadTask(task.toData())
+
+		assertEquals(DownloadTaskKind.TRANSLATE, restored.kind)
+		assertTrue(restored.isRetranslation)
 	}
 }

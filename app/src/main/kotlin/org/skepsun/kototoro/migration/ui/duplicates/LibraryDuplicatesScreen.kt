@@ -27,7 +27,6 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -42,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.ContentSource
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.migration.domain.DuplicateGroupEntry
 import org.skepsun.kototoro.migration.ui.migrationTitle
 import org.skepsun.kototoro.migration.ui.rememberCoverRequest
@@ -121,8 +121,12 @@ fun LibraryDuplicatesScreen(
             onDismissRequest = onDismissMergeAll,
             title = { Text(pluralStringResource(R.plurals.library_duplicates_merge_all, state.groups.size, state.groups.size)) },
             text = { Text(stringResource(R.string.library_duplicates_merge_all_message)) },
-            confirmButton = { TextButton(onClick = onConfirmMergeAll) { Text(stringResource(R.string.library_duplicates_merge)) } },
-            dismissButton = { TextButton(onClick = onDismissMergeAll) { Text(stringResource(android.R.string.cancel)) } },
+            confirmButton = {
+                TvTextButton(onClick = onConfirmMergeAll) { Text(stringResource(R.string.library_duplicates_merge)) }
+            },
+            dismissButton = {
+                TvTextButton(onClick = onDismissMergeAll) { Text(stringResource(android.R.string.cancel)) }
+            },
         )
     }
 }
@@ -178,7 +182,7 @@ private fun GroupCard(
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                TextButton(onClick = onIgnore, enabled = enabled && !ui.isMerging) {
+                TvTextButton(onClick = onIgnore, enabled = enabled && !ui.isMerging) {
                     Text(stringResource(R.string.library_duplicates_not_duplicates))
                 }
                 Spacer(Modifier.width(4.dp))

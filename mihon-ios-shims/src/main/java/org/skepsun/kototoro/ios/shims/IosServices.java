@@ -11,4 +11,8 @@ public final class IosServices {
     public static Object activityManager() {
         return new ActivityManager();
     }
+
+    public static Object displayManager() {
+        return new android.hardware.display.DisplayManager();
+    }
 }

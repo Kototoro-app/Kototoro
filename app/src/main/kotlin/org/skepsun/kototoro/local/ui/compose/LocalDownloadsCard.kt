@@ -1,6 +1,8 @@
 package org.skepsun.kototoro.local.ui.compose
 
 import androidx.compose.foundation.layout.Box
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.compose.AppLayoutTokens
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -31,11 +33,13 @@ import androidx.work.WorkInfo
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.flow.FlowCollector
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
 import org.skepsun.kototoro.core.util.FileSize
 import org.skepsun.kototoro.core.util.ext.takeIfUsableImageUri
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
 import org.skepsun.kototoro.core.util.ext.calculateTimeAgo
 import org.skepsun.kototoro.download.ui.list.DownloadItemModel
+import org.skepsun.kototoro.download.ui.list.formatDownloadSize
 import org.skepsun.kototoro.download.ui.list.DownloadsViewModel
 import org.skepsun.kototoro.list.ui.model.LoadingState
 import org.skepsun.kototoro.local.ui.LocalDownloadStorageStats
@@ -268,6 +272,7 @@ private fun FeaturedTask(
                 style = MaterialTheme.typography.bodySmall,
             )
             val details = buildList {
+                formatDownloadSize(item.byteProgress, item.currentChapterTitle)?.let { add(it) }
                 when {
                     item.isStuck -> add(stringResource(R.string.stuck))
                     item.hasEta -> item.getEtaString()?.toString()?.let { add(it) }
@@ -293,7 +298,7 @@ private fun FeaturedTask(
             }
         }
         if (item.canPause || item.canResume) {
-            TextButton(onClick = {
+            TvTextButton(onClick = {
                 if (item.canPause) onPause(item) else onResume(item)
             }) {
                 if (item.canPause) {
@@ -375,11 +380,20 @@ private fun ActiveTaskRow(
                 style = MaterialTheme.typography.labelSmall,
                 color = if (item.workState == WorkInfo.State.FAILED) colors.error else colors.onSurfaceVariant,
             )
+            formatDownloadSize(item.byteProgress, item.currentChapterTitle)?.let { size ->
+                Text(
+                    text = size,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = colors.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
         if (item.canPause || item.canResume) {
             IconButton(
                 onClick = { if (item.canPause) onPause(item) else onResume(item) },
-                modifier = Modifier.size(36.dp),
+                modifier = Modifier.size(36.dp).tvIconButtonRing(),
             ) {
                 if (item.canPause) {
                     Icon(
@@ -522,12 +536,12 @@ private fun DownloadBatchMenu(
 ) {
     var expanded by remember { mutableStateOf(false) }
     Box {
-        IconButton(onClick = { expanded = true }) {
+        IconButton(onClick = { expanded = true }, modifier = Modifier.tvIconButtonRing()) {
             Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.local_download_batch))
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             if (summary.canPause) {
-                DropdownMenuItem(
+                TvDropdownMenuItem(
                     text = { Text(stringResource(R.string.local_download_pause_all)) },
                     onClick = {
                         expanded = false
@@ -536,7 +550,7 @@ private fun DownloadBatchMenu(
                 )
             }
             if (summary.canResume) {
-                DropdownMenuItem(
+                TvDropdownMenuItem(
                     text = { Text(stringResource(R.string.local_download_resume_all)) },
                     onClick = {
                         expanded = false

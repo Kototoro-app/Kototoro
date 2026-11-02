@@ -17,6 +17,7 @@ import org.skepsun.kototoro.core.ui.compose.ReorderDialog
 import org.skepsun.kototoro.core.ui.compose.ReorderItem
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.platform.LocalContext
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.nav.AppRouter
@@ -52,6 +53,8 @@ fun KototoroFavoritesListScreen(
     libraryQuery: String = "",
     onClearLibraryQuery: () -> Unit = {},
     modifier: Modifier = Modifier,
+    /** TV only: anchor for DOWN from the category tabs (the sort control heads the quick-filter row). */
+    quickFilterFocusRequester: FocusRequester? = null,
 ) {
     // The state holder is the favourites container, handed in as a per-category slice:
     // there is no page-level ViewModel and no space binding to do here (Phase 6).
@@ -73,6 +76,7 @@ fun KototoroFavoritesListScreen(
                 onSortOrderSelected = onSortOrderSelected,
                 compact = true,
                 onReorderClick = if (canReorder) { { orderItems = listHost.orderItems() } } else null,
+                focusRequester = quickFilterFocusRequester,
             )
         }
     } else {

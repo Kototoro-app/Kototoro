@@ -1,5 +1,6 @@
 import AVFoundation
 import AVKit
+import MediaPlayer
 import Combine
 import KototoroShared
 import SwiftUI
@@ -8,6 +9,12 @@ import SwiftUI
 /// and Picture in Picture support. Advances to the next episode of the same line at the end.
 @MainActor
 final class VideoPlayerModel: ObservableObject {
+    private lazy var activity = ReadingActivityRecorder(content: content)
+
+    func finishReadingActivity() async {
+        activity.setActive(false)
+        await activity.flush()
+    }
     @Published private(set) var chapter: IosSourceChapter
     @Published private(set) var player: AVPlayer?
     @Published private(set) var error: String?
@@ -36,6 +43,10 @@ final class VideoPlayerModel: ObservableObject {
     private var cues: IosSubtitles?
     private var cueObserver: Any?
     private var subtitleTask: Task<Void, Never>?
+    /// Playing the copy on disk, not a stream; the viewer is told so the source does not look broken.
+    @Published private(set) var isOffline = false
+    /// The episode is already downloaded (by this player or from the episode list).
+    @Published private(set) var isDownloaded = false
     /// The viewer's last choice, kept across streams and episodes of this session.
     private var subtitlesOff = false
     private var preferredSubtitle: String?
@@ -47,7 +58,11 @@ final class VideoPlayerModel: ObservableObject {
     private var request: UUID?
     private var timeObserver: Any?
     private var observers: [AnyCancellable] = []
+    /// Lock screen, Control Center and headphone controls; the custom player does not get them from AVKit.
+    private var remoteTargets: [(MPRemoteCommand, Any)] = []
     var library: IosLibrary?
+    /// An incognito session (`IncognitoGate`) records no history, progress, statistics or tracker updates.
+    var incognito = false
     private var lastSavedAt = 0.0
 
     init(runtime: IosSources, content: IosSourceContent, chapter: IosSourceChapter) {
@@ -81,13 +96,24 @@ final class VideoPlayerModel: ObservableObject {
         isLoading = true
         error = nil
         defer { if self.request == request { isLoading = false } }
+        isDownloaded = VideoDownloads.isDownloaded(content: content, chapter: selected)
         do {
+            // A finished download plays from disk: no source request, no stale hoster, no subtitles to fetch.
+            if let offline = VideoDownloads.offline(content: content, chapter: selected) {
+                if position == 0, let saved = try await library?.position(content: content), saved.chapterId == selected.id {
+                    position = Double(saved.scroll)
+                }
+                try Task.checkCancellation()
+                guard self.request == request else { return }
+                play(offline, from: position)
+                return
+            }
             let pages = try await runtime.pages(chapter: selected)
             try Task.checkCancellation()
             guard self.request == request else { return }
             guard !pages.isEmpty else {
                 throw NSError(domain: "org.skepsun.kototoro.video", code: 1,
-                              userInfo: [NSLocalizedDescriptionKey: "此剧集没有可播放的地址"])
+                              userInfo: [NSLocalizedDescriptionKey: String(localized: "此剧集没有可播放的地址")])
             }
             streams = pages
             if position == 0, let saved = try await library?.position(content: content), saved.chapterId == selected.id {
@@ -99,6 +125,21 @@ final class VideoPlayerModel: ObservableObject {
         }
     }
 
+    /// Play the downloaded episode: its own subtitles, and no headers because nothing leaves the device.
+    private func play(_ offline: VideoDownloads.Offline, from start: Double) {
+        error = nil
+        isOffline = true
+        streams = []
+        streamIndex = 0
+        externalSubtitles = offline.subtitles
+        play(url: offline.url, headers: [:], from: start)
+    }
+
+    /// Re-read the download state after a download finishes while the player is open.
+    func refreshDownloadState() {
+        isDownloaded = VideoDownloads.isDownloaded(content: content, chapter: chapter)
+    }
+
     /// Switches stream and resumes from the current position.
     func select(stream index: Int) {
         guard streams.indices.contains(index) else { return }
@@ -106,7 +147,7 @@ final class VideoPlayerModel: ObservableObject {
         stop(keepStreams: true)
         streamIndex = index
         guard let url = URL(string: streams[index].url) else {
-            error = "无效的播放地址"
+            error = String(localized: "无效的播放地址")
             return
         }
         error = nil
@@ -122,6 +163,9 @@ final class VideoPlayerModel: ObservableObject {
     }
 
     func stop(keepStreams: Bool = false) {
+        activity.setActive(false)
+        isOffline = false
+        Task { await activity.flush() }
         if !keepStreams {
             streams = []
             streamIndex = 0
@@ -132,6 +176,7 @@ final class VideoPlayerModel: ObservableObject {
         observers.removeAll()
         player?.pause()
         player = nil
+        clearNowPlaying()
         position = 0
         duration = 0
         isPlaying = false
@@ -152,6 +197,7 @@ final class VideoPlayerModel: ObservableObject {
         let target = max(0, duration > 0 ? min(seconds, duration - 0.5) : seconds)
         position = target
         player.seek(to: CMTime(seconds: target, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+        publishNowPlaying()
     }
 
     func skip(by seconds: Double) { seek(to: position + seconds) }
@@ -252,10 +298,37 @@ final class VideoPlayerModel: ObservableObject {
         selectDefaultExternalSubtitle()
     }
 
+    /// Saves the current moment as a note (Android's video time-point notes) with its frame when the media
+    /// allows one (streams such as HLS give no frame); returns what to tell the viewer.
+    func saveNote(_ text: String) async -> String {
+        guard let library else { return String(localized: "无法保存笔记") }
+        let duration = player?.currentItem?.duration.seconds ?? 0
+        var path: String?
+        if let asset = player?.currentItem?.asset {
+            let generator = AVAssetImageGenerator(asset: asset)
+            generator.appliesPreferredTrackTransform = true
+            generator.maximumSize = CGSize(width: 1280, height: 1280)
+            if let frame = try? await generator.image(at: CMTime(seconds: position, preferredTimescale: 600)).image {
+                path = NoteImages.save(UIImage(cgImage: frame))
+            }
+        }
+        do {
+            _ = try await library.notes.saveVideo(content: content, chapter: chapter, positionMs: Int64(position * 1000),
+                durationMs: duration.isFinite ? Int64(duration * 1000) : 0, imagePath: path, note: text)
+            return String(localized: "已存为笔记")
+        } catch {
+            NoteImages.remove(path)
+            return error.localizedDescription
+        }
+    }
+
     func persist() async {
+        guard !incognito else { return }
         guard position.isFinite, position > 0, let library else { return }
         let duration = player?.currentItem?.duration.seconds ?? 0
         let progress = duration.isFinite && duration > 0 ? min(999, Int(position / duration * 1000)) : 0
+        activity.update(library: library, chapter: chapter, index: progress, count: 1000, scroll: Float(position))
+        await activity.flush()
         do { try await library.recordPosition(content: content, chapter: chapter, index: Int32(progress),
                                               count: 1000, scroll: Float(position)) }
         catch { self.error = error.localizedDescription }
@@ -292,6 +365,9 @@ final class VideoPlayerModel: ObservableObject {
             .sink { [weak self] status in
                 self?.isPlaying = status != .paused
                 self?.isBuffering = status == .waitingToPlayAtSpecifiedRate
+                self?.publishNowPlaying()
+                self?.activity.setActive(status == .playing)
+                Task { await self?.persist() }
             }
             .store(in: &observers)
         item.publisher(for: \.status)
@@ -303,13 +379,77 @@ final class VideoPlayerModel: ObservableObject {
                 if self.streamIndex + 1 < self.streams.count {
                     self.select(stream: self.streamIndex + 1)
                 } else {
-                    self.error = item.error?.localizedDescription ?? "无法播放此剧集"
+                    self.error = item.error?.localizedDescription ?? String(localized: "无法播放此剧集")
                 }
             }
             .store(in: &observers)
         self.player = player
+        registerRemoteCommands()
         if start > 1 { player.seek(to: CMTime(seconds: start, preferredTimescale: 600)) }
         player.playImmediately(atRate: rate)
+    }
+
+    // MARK: Now Playing
+
+    private func registerRemoteCommands() {
+        guard remoteTargets.isEmpty else { return }
+        let center = MPRemoteCommandCenter.shared()
+        func on(_ command: MPRemoteCommand, _ handler: @escaping (MPRemoteCommandEvent) -> MPRemoteCommandHandlerStatus) {
+            command.isEnabled = true
+            remoteTargets.append((command, command.addTarget(handler: handler)))
+        }
+        on(center.playCommand) { [weak self] _ in
+            guard let player = self?.player else { return .commandFailed }
+            player.playImmediately(atRate: self?.rate ?? 1); return .success
+        }
+        on(center.pauseCommand) { [weak self] _ in
+            guard let player = self?.player else { return .commandFailed }
+            player.pause(); return .success
+        }
+        on(center.togglePlayPauseCommand) { [weak self] _ in
+            guard let self, self.player != nil else { return .commandFailed }
+            self.togglePlay(); return .success
+        }
+        center.skipForwardCommand.preferredIntervals = [10]
+        center.skipBackwardCommand.preferredIntervals = [10]
+        on(center.skipForwardCommand) { [weak self] _ in self?.skip(by: 10); return self == nil ? .commandFailed : .success }
+        on(center.skipBackwardCommand) { [weak self] _ in self?.skip(by: -10); return self == nil ? .commandFailed : .success }
+        on(center.changePlaybackPositionCommand) { [weak self] event in
+            guard let self, let event = event as? MPChangePlaybackPositionCommandEvent else { return .commandFailed }
+            self.seek(to: event.positionTime); return .success
+        }
+        on(center.nextTrackCommand) { [weak self] _ in
+            guard let self, let next = self.next else { return .noSuchContent }
+            Task { await self.move(to: next) }; return .success
+        }
+        on(center.previousTrackCommand) { [weak self] _ in
+            guard let self, let previous = self.previous else { return .noSuchContent }
+            Task { await self.move(to: previous) }; return .success
+        }
+    }
+
+    /// Published on play/pause/buffer changes and seeks; the system advances the elapsed time from the rate between.
+    private func publishNowPlaying() {
+        guard player != nil else { return }
+        var info: [String: Any] = [
+            MPMediaItemPropertyTitle: SourceDetailsView.episodeTitle(chapter),
+            MPMediaItemPropertyAlbumTitle: content.title,
+            MPMediaItemPropertyMediaType: MPMediaType.anyVideo.rawValue,
+            MPNowPlayingInfoPropertyElapsedPlaybackTime: position,
+            MPNowPlayingInfoPropertyPlaybackRate: isPlaying && !isBuffering ? Double(rate) : 0,
+            MPNowPlayingInfoPropertyDefaultPlaybackRate: Double(rate),
+        ]
+        if duration > 0 { info[MPMediaItemPropertyPlaybackDuration] = duration }
+        if let cover = CoverCache.shared.image(for: content) {
+            info[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(boundsSize: cover.size) { _ in cover }
+        }
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+    }
+
+    private func clearNowPlaying() {
+        for (command, target) in remoteTargets { command.removeTarget(target) }
+        remoteTargets.removeAll()
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
     }
 }
 
@@ -317,6 +457,7 @@ final class VideoPlayerModel: ObservableObject {
 /// seconds of playback, always shown while paused. PiP and AirPlay use the system controllers.
 struct VideoPlayerView: View {
     @EnvironmentObject private var library: LibraryModel
+    @EnvironmentObject private var downloads: ReaderDownloadQueue
     @StateObject private var model: VideoPlayerModel
     @Environment(\.dismiss) private var dismiss
     @State private var controlsVisible = true
@@ -325,9 +466,15 @@ struct VideoPlayerView: View {
     @State private var fill = false
     @State private var pip = PictureInPicture()
     @State private var showingEpisodes = false
+    @State private var downloadError: String?
+    @State private var noting = false
+    @State private var noteText = ""
+    @State private var noteMessage: String?
 
-    init(runtime: IosSources, content: IosSourceContent, chapter: IosSourceChapter) {
-        _model = StateObject(wrappedValue: VideoPlayerModel(runtime: runtime, content: content, chapter: chapter))
+    init(runtime: IosSources, content: IosSourceContent, chapter: IosSourceChapter, incognito: Bool = false) {
+        let model = VideoPlayerModel(runtime: runtime, content: content, chapter: chapter)
+        model.incognito = incognito
+        _model = StateObject(wrappedValue: model)
     }
 
     var body: some View {
@@ -338,12 +485,16 @@ struct VideoPlayerView: View {
                     .ignoresSafeArea()
                     .accessibilityIdentifier("player.view")
             }
-            // Taps anywhere toggle the controls; double taps switch between fit and fill.
+            // Taps anywhere toggle the controls at once; pinching switches between fit and fill, as the system player
+            // does. A double-tap recognizer here would hold every single tap until the double-tap window ran out.
             Color.clear
                 .contentShape(Rectangle())
                 .ignoresSafeArea()
-                .onTapGesture(count: 2) { withAnimation(.snappy) { fill.toggle() } }
                 .onTapGesture { setControls(!controlsVisible) }
+                .gesture(MagnifyGesture().onEnded { value in
+                    let wanted = value.magnification > 1
+                    if wanted != fill { withAnimation(.snappy) { fill = wanted } }
+                })
             if model.isLoading || model.isBuffering { ProgressView().tint(.white).controlSize(.large).allowsHitTesting(false) }
             if let error = model.error {
                 VStack(spacing: 12) {
@@ -372,62 +523,110 @@ struct VideoPlayerView: View {
         .persistentSystemOverlays(controlsVisible ? .automatic : .hidden)
         .task { model.library = library.library; await model.load() }
         .onChange(of: model.isPlaying) { _, playing in if playing { scheduleHide() } else { setControls(true) } }
+        .onChange(of: downloads.completedContentKeys) { _, _ in model.refreshDownloadState() }
         .sheet(isPresented: $showingEpisodes, onDismiss: { setControls(true) }) {
             VideoEpisodesView(model: model)
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
-        .onDisappear { Task { await model.persist(); model.stop(); await library.refresh() } }
+        .alert("无法下载", isPresented: Binding(get: { downloadError != nil },
+                                            set: { if !$0 { downloadError = nil } })) {
+            Button("好") { downloadError = nil }
+        } message: { Text(downloadError ?? "") }
+        .alert("记下这一刻", isPresented: $noting) {
+            TextField("写下想法（可选）", text: $noteText)
+            Button("保存") { Task { noteMessage = await model.saveNote(noteText) } }
+            Button("取消", role: .cancel) {}
+        }
+        .alert(noteMessage ?? "", isPresented: Binding(get: { noteMessage != nil }, set: { if !$0 { noteMessage = nil } })) {
+            Button("好") { noteMessage = nil }
+        }
+        .onDisappear {
+            Task {
+                await model.persist()
+                await model.finishReadingActivity()
+                model.stop()
+                await library.refresh()
+                if !model.incognito {
+                    await library.trackingAccounts.syncAfterReading(model.content, tracking: library.library?.tracking)
+                }
+            }
+        }
     }
 
     // MARK: Controls
 
     private var controls: some View {
-        ZStack {
-            LinearGradient(colors: [.black.opacity(0.55), .clear, .clear, .black.opacity(0.65)],
-                           startPoint: .top, endPoint: .bottom)
-                .ignoresSafeArea()
-                .allowsHitTesting(false)
-            VStack(spacing: 0) {
-                topBar
-                Spacer()
-                centerBar
-                Spacer()
-                bottomBar
+        GlassEffectContainer(spacing: 12) {
+            ZStack {
+                // Lighter than the scrim the flat controls needed: the glass carries most of the
+                // separation now, and a heavy gradient would flatten it back into a dark bar.
+                LinearGradient(colors: [.black.opacity(0.34), .clear, .clear, .black.opacity(0.46)],
+                               startPoint: .top, endPoint: .bottom)
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
+                VStack(spacing: 0) {
+                    topBar
+                    Spacer(minLength: 0)
+                    centerBar
+                    Spacer(minLength: 0)
+                    bottomBar
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
+            .foregroundStyle(.white)
         }
-        .foregroundStyle(.white)
     }
 
     private var topBar: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 10) {
             Button("关闭", systemImage: "xmark") { dismiss() }
                 .labelStyle(.iconOnly)
                 .font(.title3.weight(.semibold))
                 .frame(width: 44, height: 44)
-                .contentShape(Rectangle())
+                .contentShape(Circle())
+                .glassEffect(.regular.interactive(), in: .circle)
                 .accessibilityIdentifier("player.close")
             VStack(alignment: .leading, spacing: 1) {
                 Text(model.content.title).font(.subheadline.weight(.semibold)).lineLimit(1)
-                Text(SourceDetailsView.episodeTitle(model.chapter)).font(.caption).foregroundStyle(.white.opacity(0.8))
-                    .lineLimit(1)
-                    .accessibilityIdentifier("player.title")
+                HStack(spacing: 6) {
+                    Text(SourceDetailsView.episodeTitle(model.chapter)).lineLimit(1)
+                        .accessibilityIdentifier("player.title")
+                    if model.isOffline {
+                        Label("离线", systemImage: "arrow.down.circle.fill")
+                            .labelStyle(.titleAndIcon)
+                            .accessibilityIdentifier("player.offline")
+                    }
+                }
+                .font(.caption).foregroundStyle(.white.opacity(0.8))
             }
             Spacer(minLength: 0)
+            Button("记笔记", systemImage: "note.text.badge.plus") {
+                hideTask?.cancel()
+                model.player?.pause()
+                noteText = ""
+                noting = true
+            }
+            .labelStyle(.iconOnly).font(.title3).frame(width: 44, height: 44)
+            .glassEffect(.regular.interactive(), in: .circle)
+            .accessibilityIdentifier("player.note")
             if model.chapters.count > 1 {
                 Button("选集", systemImage: "list.bullet") {
                     hideTask?.cancel()
                     showingEpisodes = true
                 }
-                .labelStyle(.iconOnly).font(.title3).frame(width: 40, height: 40)
+                .labelStyle(.iconOnly).font(.title3).frame(width: 44, height: 44)
+                .glassEffect(.regular.interactive(), in: .circle)
                 .accessibilityIdentifier("player.episodes")
             }
-            AirPlayButton().frame(width: 36, height: 36)
+            // The route picker draws its own glyph; it only borrows the circle so the row stays level.
+            AirPlayButton().frame(width: 44, height: 44)
+                .glassEffect(.regular, in: .circle)
             if pip.isPossible {
                 Button("画中画", systemImage: "pip.enter") { pip.start() }
-                    .labelStyle(.iconOnly).font(.title3).frame(width: 40, height: 40)
+                    .labelStyle(.iconOnly).font(.title3).frame(width: 44, height: 44)
+                    .glassEffect(.regular.interactive(), in: .circle)
                     .accessibilityIdentifier("player.pip")
             }
             if model.streams.count > 1 {
@@ -439,8 +638,9 @@ struct VideoPlayerView: View {
                     }
                 } label: {
                     Label("线路", systemImage: "antenna.radiowaves.left.and.right").labelStyle(.iconOnly)
-                        .font(.title3).frame(width: 40, height: 40)
+                        .font(.title3).frame(width: 44, height: 44)
                 }
+                .glassEffect(.regular.interactive(), in: .circle)
                 .accessibilityIdentifier("player.streams")
             }
         }
@@ -448,58 +648,68 @@ struct VideoPlayerView: View {
     }
 
     private var centerBar: some View {
-        HStack(spacing: 36) {
+        HStack(spacing: 16) {
             if let previous = model.previous {
-                circleButton("上一集", "backward.end.fill", size: 22) { Task { await model.move(to: previous) } }
+                circleButton(String(localized: "上一集"), "backward.end.fill", size: 22) { Task { await model.move(to: previous) } }
                     .accessibilityIdentifier("player.previous")
             }
-            circleButton("后退 10 秒", "gobackward.10", size: 26) { model.skip(by: -10) }
-            circleButton(model.isPlaying ? "暂停" : "播放", model.isPlaying ? "pause.fill" : "play.fill", size: 40) {
+            circleButton(String(localized: "后退 10 秒"), "gobackward.10", size: 26) { model.skip(by: -10) }
+            circleButton(model.isPlaying ? String(localized: "暂停") : String(localized: "播放"),
+                         model.isPlaying ? "pause.fill" : "play.fill", size: 40, tinted: true) {
                 model.togglePlay()
             }
             .accessibilityIdentifier("player.playPause")
-            circleButton("前进 10 秒", "goforward.10", size: 26) { model.skip(by: 10) }
+            circleButton(String(localized: "前进 10 秒"), "goforward.10", size: 26) { model.skip(by: 10) }
             if let next = model.next {
-                circleButton("下一集", "forward.end.fill", size: 22) { Task { await model.move(to: next) } }
+                circleButton(String(localized: "下一集"), "forward.end.fill", size: 22) { Task { await model.move(to: next) } }
                     .accessibilityIdentifier("player.next")
             }
         }
     }
 
-    private func circleButton(_ title: String, _ icon: String, size: CGFloat, action: @escaping () -> Void) -> some View {
+    /// Circle glass buttons: the diameter follows the glyph but never drops below the 44 pt touch target.
+    private func circleButton(_ title: String, _ icon: String, size: CGFloat, tinted: Bool = false,
+                              action: @escaping () -> Void) -> some View {
         Button { action(); scheduleHide() } label: {
             Image(systemName: icon).font(.system(size: size, weight: .semibold))
-                .frame(width: size * 1.9, height: size * 1.9)
+                .frame(width: max(44, size * 1.6), height: max(44, size * 1.6))
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
+        .glassEffect(tinted ? .regular.tint(.accentColor).interactive() : .regular.interactive(), in: .circle)
         .accessibilityLabel(title)
     }
 
     private var bottomBar: some View {
-        VStack(spacing: 6) {
-            Slider(value: Binding(get: { scrubbing ?? model.position },
-                                  set: { scrubbing = $0 }),
-                   in: 0...max(model.duration, 1)) { editing in
-                if !editing, let target = scrubbing { model.seek(to: target); scrubbing = nil; scheduleHide() }
-                if editing { hideTask?.cancel() }
+        VStack(spacing: 10) {
+            HStack(spacing: 10) {
+                Text(Self.time(scrubbing ?? model.position)).font(.caption.monospacedDigit()).fixedSize()
+                Slider(value: Binding(get: { scrubbing ?? model.position },
+                                      set: { scrubbing = $0 }),
+                       in: 0...max(model.duration, 1)) { editing in
+                    if !editing, let target = scrubbing { model.seek(to: target); scrubbing = nil; scheduleHide() }
+                    if editing { hideTask?.cancel() }
+                }
+                .tint(.white)
+                .disabled(model.duration <= 0)
+                .accessibilityIdentifier("player.scrubber")
+                Text(Self.time(model.duration)).font(.caption.monospacedDigit()).fixedSize().opacity(0.75)
             }
-            .tint(.white)
-            .disabled(model.duration <= 0)
-            .accessibilityIdentifier("player.scrubber")
-            HStack(spacing: 14) {
-                Text(Self.time(scrubbing ?? model.position)).monospacedDigit()
-                Text("/ " + Self.time(model.duration)).monospacedDigit().foregroundStyle(.white.opacity(0.7))
-                Spacer()
+            .padding(.horizontal, 14)
+            .frame(height: 44)
+            .glassEffect(.regular, in: .capsule)
+            HStack(spacing: 10) {
+                if let status = downloadStatus { Text(status).font(.caption).opacity(0.8) }
+                Spacer(minLength: 0)
                 Menu {
                     Picker("播放速度", selection: Binding(get: { model.rate }, set: { model.setRate($0) })) {
                         ForEach([0.5, 0.75, 1, 1.25, 1.5, 2] as [Float], id: \.self) { Text(Self.rateTitle($0)).tag($0) }
                     }
                 } label: {
                     Text(Self.rateTitle(model.rate)).font(.footnote.weight(.semibold))
-                        .padding(.horizontal, 10).padding(.vertical, 5)
-                        .background(.white.opacity(0.18), in: .capsule)
+                        .frame(height: 44).padding(.horizontal, 12)
                 }
+                .glassEffect(.regular.interactive(), in: .capsule)
                 .accessibilityIdentifier("player.rate")
                 if !model.audioOptions.isEmpty || !model.subtitleOptions.isEmpty || !model.externalSubtitles.isEmpty {
                     Menu {
@@ -519,19 +729,52 @@ struct VideoPlayerView: View {
                             }
                         }
                     } label: {
-                        Image(systemName: "captions.bubble").font(.title3).frame(width: 36, height: 32)
+                        Image(systemName: "captions.bubble").font(.title3).frame(width: 44, height: 44)
                     }
+                    .glassEffect(.regular.interactive(), in: .circle)
                     .accessibilityIdentifier("player.tracks")
                 }
                 Button(fill ? "适应屏幕" : "填充屏幕",
                        systemImage: fill ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right") {
                     withAnimation(.snappy) { fill.toggle() }
                 }
-                .labelStyle(.iconOnly).font(.title3).frame(width: 36, height: 32)
+                .labelStyle(.iconOnly).font(.title3).frame(width: 44, height: 44)
+                .glassEffect(.regular.interactive(), in: .circle)
+                downloadButton
             }
             .font(.caption)
         }
         .buttonStyle(.plain)
+    }
+
+    /// The progress the download queue shows for this episode, once it has a task.
+    private var downloadStatus: String? {
+        guard let entry = downloads.entry(content: model.content, chapter: model.chapter),
+              entry.state != .completed else { return nil }
+        return entry.status
+    }
+
+    private var downloadButton: some View {
+        let entry = downloads.entry(content: model.content, chapter: model.chapter)
+        let done = model.isDownloaded || entry?.state == .completed
+        let busy = entry?.state == .queued || entry?.state == .running
+        return Button {
+            Task {
+                do {
+                    try await downloads.enqueue(content: model.content, chapters: [model.chapter],
+                                          streamURL: model.streams.indices.contains(model.streamIndex)
+                                              ? model.streams[model.streamIndex].url : nil)
+                    setControls(true)
+                } catch { downloadError = error.localizedDescription }
+            }
+        } label: {
+            Image(systemName: done ? "checkmark.circle.fill" : (busy ? "arrow.down.circle.dotted" : "arrow.down.circle"))
+                .font(.title3).frame(width: 44, height: 44)
+        }
+        .glassEffect(.regular.interactive(), in: .circle)
+        .disabled(done || busy)
+        .accessibilityLabel(done ? String(localized: "本集已下载") : String(localized: "下载本集"))
+        .accessibilityIdentifier("player.download")
     }
 
     private var subtitleChoice: Binding<SubtitleChoice> {
@@ -597,7 +840,7 @@ private struct VideoEpisodesView: View {
                     Section {
                         Picker("线路", selection: $selectedLine) {
                             ForEach(model.lines, id: \.self) { line in
-                                Text(line ?? "默认").tag(line)
+                                Text(line ?? String(localized: "默认")).tag(line)
                             }
                         }
                         .pickerStyle(.menu)
@@ -631,12 +874,12 @@ private struct VideoEpisodesView: View {
 
 extension VideoPlayerView {
     static func streamName(_ stream: IosSourcePage, _ index: Int) -> String {
-        stream.label?.trimmingCharacters(in: .whitespaces).nilIfEmpty ?? "线路 \(index + 1)"
+        stream.label?.trimmingCharacters(in: .whitespaces).nilIfEmpty ?? String(localized: "线路 \(index + 1)")
     }
 
     static func subtitleName(_ track: SubtitleTrack, _ index: Int, failed: Bool) -> String {
-        let name = SubtitleLanguage.title(track.lang) ?? "外挂字幕 \(index + 1)"
-        return failed ? "\(name)（加载失败）" : name
+        let name = SubtitleLanguage.title(track.lang) ?? String(localized: "外挂字幕 \(index + 1)")
+        return failed ? String(localized: "\(name)（加载失败）") : name
     }
 }
 
@@ -712,6 +955,10 @@ extension SubtitleTrack {
 enum SubtitleFile {
     static func download(_ track: SubtitleTrack, streamHeaders: [String: String]) async throws -> String {
         guard let url = URL(string: track.url) else { throw URLError(.badURL) }
+        // A downloaded episode keeps its subtitles beside it: read the file instead of asking the network.
+        if url.isFileURL {
+            return decode(try await Task.detached(priority: .userInitiated) { try Data(contentsOf: url) }.value)
+        }
         var request = URLRequest(url: url, timeoutInterval: 30)
         for (name, value) in streamHeaders.merging(track.headers, uniquingKeysWith: { _, own in own }) {
             request.setValue(value, forHTTPHeaderField: name)

@@ -30,10 +30,10 @@ internal class DesktopSourceDiagnostics(root: Path) {
             cause = cause.cause
         }
         val description = when {
-            causes.any { it is LinkageError || it is ClassNotFoundException } -> "来源运行时不兼容"
-            causes.any { it is IOException } -> "来源网络请求失败"
-            causes.any { it is SerializationException } -> "来源数据解析失败"
-            else -> "来源执行失败"
+            causes.any { it is LinkageError || it is ClassNotFoundException } -> desktopText("error.sourceRuntimeIncompatible")
+            causes.any { it is IOException } -> desktopText("error.sourceNetworkFailed")
+            causes.any { it is SerializationException } -> desktopText("error.sourceParseFailed")
+            else -> desktopText("error.sourceExecutionFailed")
         }
         val id = UUID.randomUUID().toString().take(8)
         val text = buildString {
@@ -60,7 +60,8 @@ internal class DesktopSourceDiagnostics(root: Path) {
     /** The error as the user sees it: category, what the source reported, then where the stack traces are. */
     @Synchronized
     fun message(requestId: String?): String? = entries[requestId]?.let { entry ->
-        "${entry.description}：${entry.detail}\n（诊断 ${entry.id}" + if (saved) "，日志：$path）" else "，诊断日志写入失败）"
+        desktopText("error.diagnosticHeader", entry.description, entry.detail) + "\n" +
+            if (saved) desktopText("error.diagnostic", entry.id, path) else desktopText("error.diagnosticNoLog", entry.id)
     }
 
     /** Distinct messages along the cause chain, outermost first; wrappers without a message are skipped. */

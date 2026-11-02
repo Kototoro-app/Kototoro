@@ -16,7 +16,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -32,11 +31,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.ReaderAnimation
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
+import org.skepsun.kototoro.core.ui.adaptive.tvVerticalEdgeGuard
 import org.skepsun.kototoro.reader.novel.NovelPageTurnAnimation
 import org.skepsun.kototoro.reader.novel.NovelReaderSettings
 import org.skepsun.kototoro.reader.novel.NovelReaderThemePreset
 import org.skepsun.kototoro.reader.novel.NovelTranslationDisplayMode
 import org.skepsun.kototoro.reader.novel.ReadingMode
+import org.skepsun.kototoro.reader.novel.TextDirection
 import org.skepsun.kototoro.reader.novel.novelReaderPalette
 import org.skepsun.kototoro.reader.ui.compose.ReaderAnimationIcon
 import org.skepsun.kototoro.reader.ui.compose.ReaderOptionsDetailTabs
@@ -147,6 +150,9 @@ private fun NovelQuickLayer(
                     )
                 },
                 contentPadding = PaddingValues(0.dp),
+                // Top row of the quick layer: UP has nowhere visible to go, the header above is
+                // already collapsed to the drag handle.
+                modifier = Modifier.tvVerticalEdgeGuard(blockUp = true),
             )
         },
         actions = {
@@ -299,14 +305,13 @@ private fun NovelReadingPage(
     update: NovelSettingsUpdate,
 ) = ReaderOptionsPageList {
     item {
-        ReaderOptionSection(stringResource(R.string.novel_reading_mode)) {
-            ReaderChoiceChips(
-                options = listOf(stringResource(R.string.novel_mode_paged), stringResource(R.string.novel_mode_scroll)),
-                selectedIndex = if (settings.readingMode == ReadingMode.PAGED) 0 else 1,
-                onSelected = { update { copy(readingMode = if (it == 0) ReadingMode.PAGED else ReadingMode.SCROLL) } },
-                icon = { NovelReadingModeIcon(it) },
-            )
-        }
+        NovelReadingModeOptions(
+            paged = settings.readingMode == ReadingMode.PAGED,
+            onPagedChange = { paged ->
+                update { copy(readingMode = if (paged) ReadingMode.PAGED else ReadingMode.SCROLL) }
+            },
+            icon = { NovelReadingModeIcon(it) },
+        )
     }
     if (settings.readingMode == ReadingMode.PAGED) {
         item {
@@ -318,6 +323,20 @@ private fun NovelReadingPage(
                     icon = { NovelPageAnimationIcon(NovelPageTurnAnimation.entries[it]) },
                 )
             }
+        }
+    }
+    item {
+        ReaderOptionSection(stringResource(R.string.novel_text_direction)) {
+            val directions = listOf(TextDirection.AUTO, TextDirection.LTR, TextDirection.RTL)
+            ReaderChoiceChips(
+                options = listOf(
+                    stringResource(R.string.novel_text_direction_auto),
+                    stringResource(R.string.novel_text_direction_ltr),
+                    stringResource(R.string.novel_text_direction_rtl),
+                ),
+                selectedIndex = directions.indexOf(settings.textDirection),
+                onSelected = { update { copy(textDirection = directions[it]) } },
+            )
         }
     }
     item {
@@ -376,11 +395,17 @@ private fun NovelTranslationToolsPage(
     }
     item {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilledTonalButton(onClick = onToggleTranslation, modifier = Modifier.fillMaxWidth()) {
+            FilledTonalButton(
+                onClick = onToggleTranslation,
+                modifier = Modifier.fillMaxWidth().tvFocusable(addFocusTarget = false),
+            ) {
                 Icon(painterResource(R.drawable.ic_translate), contentDescription = null)
                 Text(stringResource(R.string.novel_reader_translation_start), modifier = Modifier.padding(start = 8.dp))
             }
-            FilledTonalButton(onClick = onClearTranslationCache, modifier = Modifier.fillMaxWidth()) {
+            FilledTonalButton(
+                onClick = onClearTranslationCache,
+                modifier = Modifier.fillMaxWidth().tvFocusable(addFocusTarget = false),
+            ) {
                 Icon(painterResource(R.drawable.ic_delete), contentDescription = null)
                 Text(stringResource(R.string.clear_translation_cache), modifier = Modifier.padding(start = 8.dp))
             }
@@ -433,10 +458,10 @@ private fun NovelResetRow(onReset: () -> Unit) {
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.weight(1f),
                 )
-                TextButton(onClick = { confirming = false }) {
+                TvTextButton(onClick = { confirming = false }) {
                     Text(stringResource(android.R.string.cancel))
                 }
-                TextButton(onClick = { confirming = false; onReset() }) {
+                TvTextButton(onClick = { confirming = false; onReset() }) {
                     Text(stringResource(R.string.reset))
                 }
             }

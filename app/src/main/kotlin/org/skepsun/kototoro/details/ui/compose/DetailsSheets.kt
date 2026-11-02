@@ -1,6 +1,5 @@
 package org.skepsun.kototoro.details.ui.compose
 
-
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -27,7 +26,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -48,6 +46,7 @@ import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.rememberGlassSurfaceColors
@@ -357,7 +356,7 @@ internal fun TrackingReviewsSheet(
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 if (!externalUrl.isNullOrBlank()) {
-                    TextButton(onClick = { onOpenExternal(externalUrl) }) {
+                    TvTextButton(onClick = { onOpenExternal(externalUrl) }) {
                         Text(stringResource(R.string.details_more_reviews))
                     }
                 }
@@ -440,7 +439,7 @@ internal fun TrackingReviewsSheet(
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurface,
                             )
-                            TextButton(
+                            TvTextButton(
                                 modifier = Modifier.align(Alignment.End),
                                 onClick = { onOpenExternal(review.url) },
                             ) {
@@ -492,7 +491,7 @@ internal fun TrackingCommentsSheet(
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 if (!externalUrl.isNullOrBlank()) {
-                    TextButton(onClick = { onOpenExternal(externalUrl) }) {
+                    TvTextButton(onClick = { onOpenExternal(externalUrl) }) {
                         Text(stringResource(R.string.details_more_comments))
                     }
                 }

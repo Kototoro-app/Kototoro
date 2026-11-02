@@ -136,13 +136,21 @@ npm run docs:build
 
 ## 项目架构
 
+### UI 演进约束
+
+Android 与桌面的 UI 按 CMP 共享呈现演进；Windows 与 macOS 始终共用 `desktop-app`。
+新增页面、改版现有桌面页面、修复跨端 UI 或提取组件前，必须阅读
+[`docs/architecture/shared-ui-guidelines.md`](docs/architecture/shared-ui-guidelines.md)。
+优先把现有 Android 呈现提取到 `core-ui/commonMain` 并让两端实际消费，逐步收敛既有独立实现。
+
 ### 模块结构
 - `app/` - 主应用模块，包含所有功能实现（compose + view）
 - `parser-api/` - 共享的解析器接口定义（KMP：纯叶子模型在 `commonMain`；`Content*` 等带二进制兼容垫片的类和 `org.koitharu.kotatsu.parsers.*` 外部 ABI 在 `androidMain`，不要改动其 JVM 签名）
 - `core-db/` - 共享 Room 数据库（KMP）：`MangaDatabase`、实体、DAO 在 `commonMain`，85 个旧迁移在 `androidMain`；包名不变，仍是 `org.skepsun.kototoro.core.db` 等
 - `core-domain/` - 共享业务规则（KMP）：身份键、同步合并/导入、更新计数、四类列表快照与派生、书架、排序/浏览分组，
   换源写入计划/章节映射、阅读进度/历史章节恢复与标题匹配。筛选复用 `core-db/ListFilterCriteria`，
-  黑名单通过 `TagBlacklist` 消费平台词库。Android 资源、标签对象、追踪 UI 枚举、语言分支策略与
+  黑名单通过 `TagBlacklist` 消费平台词库；标签目录 `TagTaxonomy`（334 个永久 ID、别名索引与繁简标签钩子）
+  也在此模块，平台只注入简→繁转换器。Android 资源、追踪 UI 枚举、语言分支策略与
   Unicode/Locale 适配留在 `app`；收藏快照使用持久化状态名称，快照和进度的 Compose 不可变约定由
   `app/compose-stability.conf` 保持，进度模式枚举的偏好反射合约由 `app/proguard-rules.pro` 保持。
   授权、事务、仓库、扩展安装与 Hilt 仍在 `app`；Google Drive 与 WebDAV HTTP 协议进入 `core-net`。
@@ -217,7 +225,10 @@ npm run docs:build
   `DexRepair` 在转换前修复 R8 内联构造器（`new-instance T` + 祖先 `<init>`），`ApkManifestReader` 解码二进制清单，
   `ApkExtensionConverter` 产出带文本清单的扩展 JAR；`-PrealApkDirectory` 用真实 APK 验证并逐类链接校验。
 - `desktop-player/` - libmpv（JNA）播放器：`MpvPlayer` 可嵌入原生窗口或无输出运行，`MpvLocator` 运行时查找
-  `libmpv-2.dll`（不随仓库分发）；`-PlibmpvDirectory` 启用真实播放测试。
+  平台库（Windows `libmpv-2.dll`、macOS `libmpv.2.dylib`、Linux `libmpv.so.2`；不随仓库分发，Linux 还查
+  发行版库目录、`LD_LIBRARY_PATH` 与 `ldconfig` 缓存，见 `docs/architecture/desktop-linux-native-2026-10.md`）；
+  `MpvLocale` 在建实例前把 `LC_NUMERIC` 切到 `C`（mpv 的硬性要求，Linux 桌面默认不满足），`MpvPlayer` 按
+  `mpv-version` 选 `loadfile` 的参数形式（0.37 不接受 `<index>`/`<options>`）；`-PlibmpvDirectory` 启用真实播放测试。
 - source-host 的 `MihonJarRegistry` 同时承载 Mihon、Tsundoku（`TSUNDOKU_<id>`，`getChapterContent`）与 Aniyomi
   （`ANIYOMI_<id>`，`AniyomiSourceRuntime`；animesource ABI 移植在 `mihon-desktop-compat`）。- `desktop-runtime/` - Windows/JVM 平台存储装配：持久化数据根目录、共享 v84 `MangaDatabase` builder、
   bundled SQLite、图片与偏好 store；没有平行 schema/DAO。`DesktopRuntime.open` 验证 schema 后交付实例，
@@ -227,13 +238,280 @@ npm run docs:build
   DesktopLibraryBackup 复用 core-backup 导出/合并恢复收藏分类、收藏、历史、书签、统计、内容与来源排序；
   ZIP 私有预览/CRC、流式预算、完整事务回滚、分类映射和历史 tombstone 保护见 §53–54。
   书签使用完整主键，统计会话计数取较大值，旧 Work 状态按锚点投影；不重建实体体系。
+  归档读取与 Android 写入器同规则：`LibraryBackupJson` 开 `allowSpecialFloatingPointValues`（进度的
+  `NaN`/`Infinity` 在建行时归一化，`scroll` 落 0、`percent` 记 `-1`，会话 percent 落 0..1），
+  `BookmarkBackup` 的 `tags`/`image_url`/`percent` 有默认值，所以老写入器或缺快照图的书签不再让整份档案读不进来；
+  安卓导出的 ZIP 因此能直接恢复，见计划 §185。
   运行时沿用 Room 2.8.4/SQLite 2.6.2；其他备份节/外部格式与同步/高级控件/完整兼容层仍待，见计划 §30–35、§53–54。
 - `desktop-app/` - 可选 Windows Compose Desktop 外壳（`-PwithDesktopApp`，同时启用 compat）：
   对照 Android 平板的 80dp 主导航、浏览来源栏、2:3 封面网格和 1000dp 详情分栏；辅助功能集中于更多。
   阅读器独占内容区，支持工具栏收起、页码滑条、章节/选项/书签侧面板和原生窗口全屏。
-  收藏与历史提供快照搜索、分类/来源/进度筛选抽屉及排序；书签可跨章恢复页码与连续滚动位置，见计划 §59–60。
+  收藏与历史提供快照搜索、分类/来源/进度/标签/出版状态/下载/宏（新章节·收藏·18+）筛选抽屉及排序
+  （各多选组与 Android 同为组内“或”、跨组“且”，下载为三态单选）；收藏卡片沿用 Android 的封面右上角
+  新章节数字角标（读完的作品与历史页不画）；书签可跨章恢复页码与连续滚动位置，
+  详情书签标签支持“选择书签”多选删除（对应 Android 长按）；收藏页的“分类管理”对话框可新建/重命名/
+  调序/删除分类，增删改查放在 `core-library` 的 `SourceLibrary`（删除连带该分类的收藏记录），
+  见计划 §59–61、§131–134。Android 的顶层书签页（`NavItem.BOOKMARKS`，标签取 `R.string.notes`）
+  也已接上（`DesktopScreen.BOOKMARKS`，从首页快捷卡、主导航“书签”或更多页进入）：按作品分节列出所有保存的位置
+  （章节标题 + 位置 + 小说摘录），点一条按 Android 的 `.incognito()` 打开阅读器回到那一页与像素位置，
+  选择栏是全选/清除/删除，成人目标 `sources.nsfw.bookmarks` 滤掉整部作品；共享规则是
+  `DesktopBookmarkShelf.desktopBookmarkShelf`（`SourceLibrary.bookmarkGroups` 回填章节标题），
+  Android 的 SAVE（PageSaveHelper）在 Windows 无对应管线所以选择栏只留删除，见计划 §195。
+  共享锚定面板的滚轮/触控板滚动曾把章节面板滚走并关闭（issue #601）：`StableSheetState` 现在按最近的指针输入类型
+  区分（`noteScrollInput`/`notePressedInput`，面板根节点在 initial pass 上观察 `Scroll`/`Press`），只有按下的拖动才让
+  嵌套滚动挪面板，所以滚轮永远滚列表、拖标题仍收起；回归用 `StableSheetWheelScrollTest` 与 `DesktopChapterPanelScrollTest`
+  （真实阅读器章节面板里的滚轮步），见计划 §196。
+  Android 的更新页也已接上（`DesktopScreen.UPDATED`，导航项 `DesktopNavItem.UPDATED`，默认不在五项上限里，
+  和书签页一样可从“导航配置”换进去；主入口是订阅页轮播的“全部”）：折叠规则在 `desktop-runtime` 的
+  `DesktopUpdates.kt`（按 `displayMangaId ?: mangaId` 归并、章节数相加、`lastChapterDate` 取最大、置顶优先），
+  头部是 Android 的 `updated_header_summary`/`updated_header_all_read`，行是“继续阅读 + 移除”，
+  成人目标沿用 `sources.nsfw.updates`；点开一行只 `markSeen`（Android 的 `clearReadUpdates`），
+  “移除”与“全部标为已读”走 Android 的 `completePendingUpdates`（清计数、留历史与进度），见计划 §197。
+  Android 的推荐页也已接上（`DesktopScreen.SUGGESTIONS`，导航项 `DesktopNavItem.SUGGESTIONS`，同样要经“导航配置”
+  换进侧栏；主入口是首页推荐轮播的“全部”）：芯片是 `desktop-runtime` 的 `DesktopSuggestionFilters.kt`
+  （Android `SuggestionsListQuickFilter` 的 5 个高频标签 → 两个成人宏（`isSuggestionsExcludeNsfw` 时不给）→ 3 个高频来源，
+  `acceptsSuggestionFilters` 与 Android 的 SQL 一样跨芯片取“且”，所以两个宏同时选中必然空），页面头部是
+  Android 头部卡的 `suggestions_header_subtitle` 与“换一批”，未开启推荐时页面自己给出开启提示（导航项仍总是可添加，
+  配置页对该行显示 `suggestions_unavailable_text`），点卡片进详情再返回原列表，见计划 §198。
+  浏览页有两个安卓行为已对齐（§199）：结果列表不再是“手动下一页”，`ContentGrid` 末尾的组合页脚
+  （`onReachEnd`/`endReached`，`LaunchedEffect(contents.size)`）像 Android Paging 的 loader item 一样滚到哪追加到哪，
+  结束判定只用空批次（`browseExhausted`，`MihonSourceRuntime` 不透传 `hasNextPage`），`browseNextPage()` 仍是手动
+  “下一批”那条 append 路径，上一批保持替换语义；来源瓦片的图标也不再只有首字母——Mihon/Aniyomi/Tsundoku 走
+  APK 自带的启动图标（`desktop-runtime` 的 `DesktopExtensionIcons` 在转换前从 `res/mipmap-*` 取出存成
+  `<sha256>.icon`，与 Android `fetchPluginIcon` 一样本地且不联网），解析插件问自己的 `getFavicons()`，
+  TVBox/JSON 用文档的 `iconUrl`，最后才退到 `siteUrl`/`favicon.ico`/`<link rel="icon">`，都没有就画首字母。
+  少选项下拉框也按安卓的画法铺成标签按钮（§200）：`core-ui` 的 `core/ui/chips/ChoiceChips.kt` 是安卓
+  `FilterSheetRoute` 那两个私有 chip helper 的共享版（`ChoiceChipFlow` 六 dp 间距、`ChoiceChip` 最小 36dp 高配
+  `labelLarge`，安卓只保留自己的 `tvChipRing()` 后委托过去，5 个调用点不动），Windows 来源筛选对话框里选项数
+  不超过 5 的 `SELECT`/`SORT` 行直接铺 chip、一次点击即选中，更长仍是 `OutlinedButton` + 菜单两步，
+  排序的方向与「清除」跟 chip 同排（与菜单行一致，也不多占一行），值仍是原生索引
+  （`Choice(index)`/`Sort(index, ascending)`），回归用 `DesktopFilterChipsTest`（3 条）与改造后的
+  `DesktopFilterProbe`（断言 chip 未选中代替「未选择」文字），见计划 §200。
+  连续阅读器的「条漫分割」也补上了（§201）：`DesktopReaderSettings` 多一个 `webtoonGaps`（键 `webtoon_gaps`，默认关，
+  与安卓同默认），连续阅读器里共享场景的 `spacing` 与 `LazyColumn` 的 `spacedBy` 共用一个值——关时 0dp（原来写死 8dp）、
+  开时用安卓 `webtoon_pages_gap` 的 24dp，所以页与页的缝与历史锚点始终一致；阅读设置页「页面」节只在连续模式多这一行
+  开关（安卓也只在设置页给这个开关，侧面板不加），文案直接用安卓的 `webtoon_gaps`/`webtoon_gaps_summary`，
+  回归用 `DesktopReaderWebtoonGapsTest`（探针 `reader-webtoon-gaps`：缝 0 → 24dp → 0，并在设置页点开关断言状态）。
+  安卓的「章节标题在底部」也补上了（§202）：`DesktopReaderSettings` 多一个 `chapterTitleAtBottom`（键
+  `reader_chapter_title_bottom`，默认关，与安卓同默认），开着时阅读器顶栏不再画那枚作品/章节药丸，改在底部
+  进度坞上方同一基线画一枚（共享 `ReaderChapterTitleChip`，与安卓 `ComposeReaderActivityScaffold` 的摆放一致），
+  侧面板「布局」页的开关就是把共享面板的 `features.chapterTitleAtBottom` 打开、读写同一个值，阅读设置页「页面」节
+  也有一行（文案用安卓 `reader_chapter_title_at_bottom`/`_summary`）；回归用 `DesktopReaderTitleBottomTest`
+  （探针 `reader-title-bottom`：默认只有顶栏一枚、开了之后剩一枚且在画面下半，设置页点开关断言状态）。
+  安卓的「减少页面预加载」也补上了（§203）：`DesktopReaderSettings` 多一个 `reducePagePreloading`（键
+  `reader_reduce_offscreen_quality`，默认关，与安卓同默认；安卓的标签说“预加载”，存的却是视口外页），分页阅读器的
+  预取窗口在 `prefetchAroundSlot` 里按开关切换——关时 reader-core 的 `PagedSceneResourceWindowStrategy` 取前后各两槽并
+  预呈现相邻槽、章末还提前预加载下一章，开时只取前后各一槽且不预呈现、不预加载下一章，开关一改若正停在阅读器就立刻
+  取消并重排队列（已加载的页保留）；连续模式本来就不留视口外的页，所以开关只在分页生效。共享面板的
+  `ReaderOptionsFeatures.performance` 因此拆成 `optimization`/`preloadReduction` 两个旗标，安卓用默认值照旧画两行，
+  Windows 只打开后者（没有安卓那种页面位图内存缓存可关），阅读设置页「页面」节同样多一行（文案用安卓
+  `reader_reduce_page_preloading`/`_summary`）；回归用 `DesktopPreloadReductionTest`（探针 `preload-reduction`：5 页章节默认读出
+  `{0,1,2}`、侧面板打开开关后重进只剩 `{0,1}`，设置页点开关断言状态并写回默认）。
+  安卓的「连续（横向）」阅读模式也补上了（§204）：`DesktopReaderMode` 多一个 `CONTINUOUS_HORIZONTAL`，并给出
+  `isContinuous`/`isVerticalStrip` 两个派生判定（原来各处对 `CONTINUOUS` 的等值比较都换成前者，裁剪、自动跨章让位、
+  键盘让位、滚动操作与设置页的行取舍因此自动跟上）；条带几何抽成 `DesktopStripLayout`（`scene`/`extent`/`frame`），
+  竖条仍是 `VerticalReaderScene`，横条是 `DesktopHorizontalScrollLayout` 包 reader-core 的 `HorizontalReaderScene`
+  （按窗口高度适配页面，`reversed` 同时给场景 `RIGHT_TO_LEFT` 与 `LazyRow(reverseLayout = true)`，所以第 0 页永远
+  贴在自己那一侧），`DesktopScrollReader` 在同一份 `LazyListState` 上换轴：`LazyRow` + 横向滚动条 + 底部 16dp 槽，
+  滚轮只有竖轮所以手动按 48dp/格映射到横轴，拖动/甩动取 `dx` 乘方向符号，左右方向键、PageDown/Up 与空格按一屏
+  90% 走；模式仍存 `mode` 键，方向用安卓自己的 `reader_continuous_horizontal_reversed`
+  （`continuousHorizontalReversed`，追加为最后一个字段），共享面板多出第五个模式芯片（文案 `continuous_horizontal`）
+  与该模式专属的「反向」开关（`reader-options-horizontal-reversed`），阅读设置页的模式对话框自动多一项、间隙行只在
+  竖条出现；回归用 `DesktopHorizontalStripTest`（探针 `reader-horizontal-strip`：一页一行、顶边齐平、按 400x600
+  适配窗口高度，滚轮推走条带，反向开关让下一页跑到左边，关章后模式/方向/像素位一起恢复）。
+  安卓的「自动检测阅读模式」也补上了（§205）：判定 `(pages.size * 0.3).roundToInt()` 处的页、`width * 1.8f < height`
+  已下沉 reader-core 的 `ReaderModeDetection`（`probePageIndex`/`isWebtoonPage`/`MIN_WEBTOON_RATIO`，含 `jvmTest`），
+  安卓 `DetectReaderModeUseCase` 改为调用它、只保留取 URL 与 `BitmapFactory`；Windows 的 `DesktopReaderSettings` 多一个
+  `readerModeDetection`（键 `reader_mode_detect`，默认开，与安卓同默认），阅读设置页「页面」节紧跟「阅读模式」一行
+  （文案用安卓 `detect_reader_mode`/`_summary`）。打开章时先解析模式：每作品记忆优先，没有记忆且开关打开、当前不是连续
+  模式时才用 `session.readerImage(30% 页)` 判条漫（判为条漫即 `CONTINUOUS`，正反两向都写记忆），结果放进本次的
+  `readerSettings`；记忆存阅读偏好 store 的 `reader_modes`（`"<contentId>=<MODE>"` 字符串集合），手动换模式时也在阅读器里
+  写一条（对应安卓 `saveReaderMode`），所以下次打开仍是那个模式；离开阅读器时把偏好里的模式换回来，检测结果只跟那部作品走；
+  回归用 `DesktopModeDetectTest`（探针 `reader-mode-detect`，fixture 新增 `fixture.reader.probe.tall` 把第 2 页变 400x2400：
+  关开关仍是分页、开开关出条带、再关开关仍是条带，且离开后偏好里的模式未变）。
+  `DesktopProbes` 的白名单同时开始透传 `fixture.*`；`:reader-core:jvmTest` 的隔离守卫也补上 `reader.image` 包。
   .pb/新版 JSON 仓库添加/列表/搜索、JAR 安装/更新/导入及身份恢复；新产物保存到应用管理的 SHA 目录。
-  来源浏览/搜索、详情、收藏、分页图片阅读、历史与标准源设置，以及可选网页/HTML/JS 调试。
+  仓库可“忘记”（只删索引条目，已安装扩展与 JAR 保留，重新添加即恢复）。
+  来源浏览/搜索、详情、收藏、分页图片阅读、历史与源设置，以及可选网页/HTML/JS 调试。
+  源设置按 Android 折成带标题的 section（`host:` 行置默认节、有标题 GROUP 各自成节、嵌套的有标题 GROUP 折成
+  Android 的分组标签行而不是被摊平），开关整行可点、
+  选项/多选/文本/动作行显示当前值并开对话框，行组件在 `core-ui` 的 `core/ui/settings/SharedSettingsRows.kt`
+  与 Android/iOS 共用，见计划 §135、§186。推荐设置另有独立页面（更多 → 推荐设置）：推荐/标签/来源三节，
+  每个已装来源的“优先/排除”打开 Android 自己的来源选择器（`DesktopSuggestionSources.kt`：搜索框、内容类型与
+  来源类型两组芯片、待定选择与清空/取消/确定，摘要只写前三个名字加 `+N`），标签用文本对话框；
+  更新检查的频率也改成单选对话框。单选/多选/文本三种设置对话框集中在 `DesktopSettingsDialogs.kt`，
+  源设置页共用，见计划 §136、§173。“更多 → 扩展与仓库”已收敛为 Android 的来源/仓库/扩展包三页；
+  标签栏 `ExtensionManagementTabs` 和仓库卡片 `ExtensionRepositoryCard` 位于 `core-ui/commonMain`，
+  Android 与桌面实际共用。统一添加入口接入仓库、TVBox/CMS 链接和 JAR/APK/CS3/JSON 文件；
+  TVBox 站点按已有 `sourceLocator` 聚合为仓库，来源启停/选择在来源页，扩展包页区分已安装/可安装。
+  当前共享的是这些组件，尚未宣称整张扩展管理页面已共用。已安装的包仍可展开成它声明的来源（
+  `DesktopInstalledEntry.sourceNames` 现算自 registry，包行 `extension-sources:<id>` 切换展开，
+  来源行是 `SettingsSplitSwitchRow`：标题进该来源自己的设置页 `controller.sourceSettings(name)`，
+  行尾开关只切 `disabled_sources`，摘要写内容类型 · 生态 · 语言，见计划 §181）。“来源”标签页提供搜索框、全部/启用/禁用筛选和逐个来源的启用开关；
+  按当前筛选结果“全部启用/全部禁用”并先弹 Android 的确认框，纯筛选逻辑在 `DesktopSourceSwitch.kt`，
+  `disabled_sources` 存在 `desktop_extensions`，`DesktopAppState.disabledSources`/`enabledSources` 把“已装”与
+  “可用”分开，关掉的来源不再出现在来源栏/来源网格/筛选器/搜索建议/换源候选，但它的收藏进度与下载都保留，
+  见计划 §174、§175。来源页另有 Android 的选中态（`UnifiedSourceSelectionBar`）：Android 用长按进入，Windows 让
+  “全选”兼作入口，进入后行变整行复选、`已选 N` 配启用/禁用/NSFW/测试/删除，测试走 `startSourceTest(选中的名字)` 只跑选中的来源
+  （Android 的 `testSources(ids)`），见计划 §192。选择栏的「删除」也补齐了：折叠规则
+  `SelectedSourcesDeletePlan`/`SourceDeletionCandidate`/`selectedSourcesDeletePlan` 已下沉 `core-domain`（每个包只出现一次、
+  无包来源不参与、单文件 JAR 插件只报告不删），Android 的 `buildDeletePlan` 与 Windows 的
+  `sourceDeletePlan(selected, installedEntries)` 都只是投影，Windows 确认后走 `uninstallPackages(packageIds)`
+  在一个操作里逐个卸载并刷新状态，弹窗沿用 Android 那四条 `unified_sources_delete_selected_*` 文案，见计划 §194。选择栏的 NSFW 芯片走 Android 的每来源成人标记覆盖：规则
+  （`SelectedSourcesNsfwAction`/`SourceNsfwOverrideSet`/`changedNsfwSources`）已下沉 `core-domain`，Android 的
+  `AppSettings.setSourceNsfwOverride` 与统一来源页也改吃它；Windows 把两个集合写进 `desktop_extensions` 的
+  `source_nsfw_overrides`/`source_sfw_overrides`（与 Android 同键），`isNsfwSource(overrides)` 先看覆盖再看内容类型的
+  `HENTAI_` 前缀，来源栏/网格的成人过滤与推荐生成共用这份有效标记，混选时弹 Android 的“为所选源设置NSFW”，见计划 §193。“更多”页本身也是分节设置页（功能/外观/高级工具），
+  功能行带随包图标（`SettingsValueRow` 的 `leadingIcon`），语言/主题/界面风格改开单选对话框，
+  见计划 §138；阅读设置另有独立页面（更多 → 阅读设置），分“页面/翻页”两节编辑同一份
+  `DesktopReaderSettings`（模式、方向、缩放、背景、页码、裁剪、自动跨章、动画、速度），
+  不与阅读器侧面板冲突，见计划 §139；收藏与历史支持长按进入批量选择（顶栏换成数量/全选/分类/移出，
+  收藏的“分类”是勾选集合即目标分类集合的批量对话框，历史移除连进度一起删），见计划 §140。
+  来源设置另有独立页面（更多 → 来源设置）：概览节改来源排序（安装顺序/名称/语言/自定义顺序）、来源总览的网格或列表、
+  按语言分组（组前加语言标题），成人内容节选“来源与浏览/收藏/历史/订阅/更新/书签与笔记”六个过滤目标（来源侧滤掉 HENTAI_ 类型来源，
+  书架侧作为展示规则并入筛选，订阅页的“订阅”滤时间线行、“更新”滤新章节轮播，书签页滤整部作品，筛空时显示筛选空态），
+  设置存 `desktop_background` 的 `sources_*` 四键，见计划 §141、§146、§195。选到“自定义顺序”时概览节会多出 Android 的
+  “重新排序”行（平铺的上移/下移对话框，保存才写盘并切到该顺序，序列存 `sources_order`），见计划 §182。
+  概览节最后一行是 Android 的“设置向导”（`source-setting-wizard`）：Windows 版是简介/外观/完成三页
+  （简介与完成页直接用 Android 的 `welcome_intro_*`/`welcome_done_*` 原句，外观页把开关换成主题、界面风格、语言，
+  打开的就是“更多”页那三个单选对话框；Android 的权限页与空间页在桌面没有对应能力，整页不搬，
+  向导也不会像手机那样首次启动自动弹出，只能从这一行进入），完成页的两个跳转落到“扩展与仓库”与“图书馆备份”，
+  见计划 §183。
+  “扩展与仓库”的已安装区末尾还有 Android 的来源测试（`extension-test-sources` → `DesktopScreen.SOURCE_TEST`，
+  标题用 `source_test_title`）：对每个已启用来源依次问主列表/封面/详情/章节/页面/搜索六步，
+  判定 PASS/FAIL/SKIP/CHALLENGE、单步 20 s 与单源 90 s 超时、同时三个来源都照 Android 的 `SourceTester`；
+  RANDOM 一步没有 Windows 操作所以不跑，PAGES 按内容类型分开验（图片真下载、小说正文非空、视频流地址 GET 200），
+  挑战只报告不弹浏览器；进度在自己的 StateFlow 里（不进 `DesktopAppState`，不占 `action{}` 的 gate），
+  可取消、可导出与 Android `exportJson` 同形的 JSON、可“禁用失败的来源”（写同一份 `disabled_sources`），
+  见计划 §184。
+  概览下方的“远程来源”节是 Android `remote_sources` 分组里的“插件去重优先级顺序”（`jar_priority_order`）：
+  单文件 JAR 去重规则 `JarSourcePriority.kt` 已与 Android 共享到 `core-domain`，Windows 把同一把键写进
+  `desktop_extensions`（值是 parser 插件 id 的逗号分隔列表，Android 侧是 JAR 文件名），
+  `DesktopSession.open` 据此给 `ParserPluginRegistry` 排优先级，所以同名声明的来源由排在前面的插件提供；
+  对话框逐行上移/下移并即时写盘，行下注明“下次启动生效”（registry 只在打开时排一次），见计划 §176。
+  同一节还有 Android 的“显示已损坏来源”（`show_broken_sources`，默认关）：Android 的“损坏”是作者用 `@Broken`
+  标记的解析器（不是加载失败），parser host 现在按字节预筛 JAR 条目、只对含该注解的类 `loadClass` 读
+  `@ContentSourceParser`/`@MangaSourceParser` 的名字，`ParserSourceInfo.broken` 随目录文件 v2 的末列缓存下来；
+  开关存 `desktop_extensions`，关着时坏源不出现在来源栏/网格/筛选器/建议/换源候选（仍安装、仍可调用，
+  标题按 Android 拼上“（已损坏）”），打开后各处直接出现，见计划 §177。
+  同一节再有 Android 的“扩展安装行为”（`extension_install_behavior`）：策略枚举 `ExtensionInstallPolicy`
+  （询问/仅安装/安装并启用）与其编解码已从 `app` 搬到 `core-domain` 的 `commonMain`，Android 与 Windows 共用；
+  Windows 按 Android 的 `UnifiedSourceKind` 名分五类 `MIHON`/`TSUNDOKU`/`ANIYOMI`/`JAR`/`CLOUDSTREAM`
+  （`DesktopInstallKind`，仓库条目按包名标记 `.animeextension.`/`.novelextension.`/`.cs3` 与解析器插件判定，
+  文件导入只能看 jar/APK 流水线、小说 jar 记 MIHON，JSON 来源没有“装完是否启用”这一步故不在列表内），
+  值存 `desktop_extensions` 的 `extension_install_policies`（与 Android 同键，仍是 `"<type>=<POLICY>"` 文本集合、
+  `ASK_EVERY_TIME` 不落盘）；装包后按答案用 `setSourcesEnabled` 落到 `disabled_sources`，
+  目录行遇到“询问”先弹 Android 的 `UnifiedInstallChoiceDialog`（勾选记住即写该类型策略），
+  更新与文件导入不提问，见计划 §178。
+  来源设置的“标签”节是全局标签黑名单页（对应 Android 的“标签黑名单”）：搜索词库目录、按类别分组、
+  点芯片切换、长按看键/英文/类别/别名、可“清空”或把词库不认识的标题加为 `raw:` 模式；
+  选择存 `desktop_background` 的 `global_tag_blacklist`（与 Android 同键同格式，字符串是词库 ID 或 `raw:` 键），
+  匹配规则在 `core-domain` 的 `TagTitleBlacklist`，收藏/历史书架、订阅时间线、更新轮播、浏览/搜索结果、
+  主页更新与推荐都在渲染前应用它，见计划 §151、§152。
+  同一“标签”节还有 Android 的“高亮敏感类别”开关：警示词表（110 条，含俄语别名）在 `core-domain` 的
+  `TagWarnings`，Android 的 `ContentListMapper` 与 Windows 详情页共用；命中时详情标签芯片换成 warning 色，
+  开关存 `desktop_background` 的 `tags_warnings`（与 Android 同键，默认开），见计划 §153。
+  “成人”节另有 Android 的“成人漫画无痕模式”三态（启用/每次询问/禁用，默认每次询问）：键 `incognito_nsfw`
+  与 Android 同、值存枚举名，成人的判定来自 `core-source` 的 `SourceContent.isNsfw`（`ADULT` 或
+  `HENTAI_` 来源类型），与 `SourceLibrary` 写历史时同一份。预览卡与详情页的 `preview-incognito`
+  （共享 `TabletPreviewContent` 的可选 `incognito` 动作）起一次“什么都不记录”的阅读会话
+  （`DesktopAppState.readerIncognito` / `savesProgress`，四处自动保存都过它），
+  ASK 时先弹 Android 那个“不再询问”对话框再打开阅读器，见计划 §154。
+  更多 → 服务（`services-open`，对应 Android 的 `ServicesSettingsScreen`）收着推荐与统计两个入口及其开关：推荐行进
+  “推荐设置”，阅读统计是 Android 的分裂行（标题进统计页、行尾开关只切记录），下面还有“阅读时间估算”整行开关；
+  两个键沿用 Android 的 `stats_on`/`reading_time`（存 `desktop_services`），`stats_on` 关掉后阅读仍写历史与进度、
+  只是 `SourceLibrary.statsRecording` 让会话与统计行不再落盘，`reading_time` 决定详情页是否画“预计剩余”那一行
+  （Android 算了这份估计却没有界面渲染，Windows 把它摆进详情事实里），见计划 §180。
+  同一页还有 Android 的“相关漫画”（`related_manga`，键同名、存 `desktop_services`、默认开）：关掉后详情页不再问来源。
+  详情页的相关作品列表（`details-related`，标题用 `details_related_works`）走独立 `relatedJob`，先试
+  `SourceRuntime.getRelated`，失败/为空就退回搜索（`core-domain` 的 `RelatedContentRules` 生成标题/别名查询、
+  只留标题命中的结果、取最小组；Android 的 `RelatedContentSearchFallback` 已改为同一份代码），
+  再用 `core-domain` 的 `RelatedWorkRules` 滤掉作品自己（同 id、同 URL 身份、同严格标题键配同一张封面路径，
+  Android 的 `RelatedContentUseCase` 也改成调它，两端只各自提供 `RelatedWorkKey` 投影），
+  Windows 侧 `desktop-runtime` 的 `desktopRelatedWorks` 只多一层去重；卡片点击进那部作品的详情。
+  Mihon 桌面 host 没有相关 API，所以 Windows 上大多数来源走的就是搜索回退，见计划 §191。
+  统计页（`stats-back`）对应 Android 的 `StatsScreen`：周期切换、类型筛选（全部/漫画/小说/视频）、
+  总时长/活跃天数/会话/作品、连续天数、每日活动、时段分布、类型占比、作品榜与清空确认。数据来自
+  `core-library` 的 `ReadingSessionTracker`——阅读器各处自动保存经 `SourceLibrary.recordPage` 统一 tick，
+  session 由 `beginReadingStop` 在进入阅读器前打开、离开时 `finishReadingSession` 关闭
+  （无痕不打开；一次阅读器打开算一个 session），读模型复用 `core-domain` 的 `deriveReadingStatistics`，
+  类型筛选就是把该函数吃的 `kinds` 映射按类型过滤，见计划 §155、§156。作品榜点一行先开 Android 的
+  `ContentStatsDialog` 单作品统计弹窗（标题、90 天柱状图、首次阅读时间、总时长/会话/页数或章节或集数，
+  只有“详情”才导航；读模型是 `SourceLibrary.contentReadingStats`），见计划 §157。
+  更多 → 存储与网络（`storage-settings-open`）对应 Android 的存储与网络枢纽：“存储用量”节按数据根目录的顶层子项
+  分成数据库/图片/偏好与下载记录/日志/其他/可用空间，Canvas 比例条加每行大小与卷百分比，图片行还会写
+  “已保存章节保留多少”（那部分与图片目录是同一份，不重复计入），并有一行 Kototoro 占用 / 磁盘可用 / 卷容量；
+  “网络”节是代理入口。读模型在 `desktop-runtime` 的 `DesktopStorageUsage`（只读元数据、不跟随符号链接、
+  可用空间取 `usableSpace`、百分比按整卷），进页面时在 IO 线程遍历一次，见计划 §159。
+  枢纽的“数据清除”节（`cleanup-open`）进 Android 的 `DataCleanupSettingsScreen` 对应的数据清理页
+  （`DesktopScreen.DATA_CLEANUP`）：只列这台机器真能执行的项——“缓存”节的清除缩略图/图片缓存复用下载页的
+  `clearImageCache()`（保留已保存章节引用的 blob）、清除页面缓存走新的 `DesktopReaderImages.clearIndex()`
+  （只删 `desktop_reader_images` 记录，blob 交图片预算回收），“隐私”节的清除更新记录复用订阅页的确认弹窗
+  （§171）；“章节”节是 Android 的“删除已读章节/自动删除已读章节”：已读由历史决定（`desktop-runtime` 的
+  `desktopReadChapterIds`/`desktopChapterCandidates`/`desktopReadSavedChapters`，同分支、按话号取当前章节之前的
+  章节再与已保存章节取交集），删除走下载页批量移除那条序列（`pause`/`settle`/`store.delete`/`forget`，
+  blob 交图片预算回收，没有已保存章节时该行禁用），自动开关存 `desktop_cleanup` 的 `chapters_clear_auto`
+  （与 Android 同键，开时每次会话打开跑一次、零删除不弹提示）；本地漫画/小说/视频缓存、HTTP 缓存、搜索历史、
+  Cookie/浏览器数据与整个数据库在 Windows 没有实现，不出行，见计划 §172、§190。
+  更多 → 存储与网络 → 代理（`proxy-settings-open`）对应 Android 的 `ProxySettingsScreen`：类型 DIRECT/HTTP/SOCKS、地址、端口、
+  可选用户名密码与“测试连接”，值读写 Android 同名的 `proxy_type_2`/`proxy_address`/`proxy_port`/`proxy_login`/
+  `proxy_password`（类型存枚举名），compat 客户端的 `ProxySelector`/`Authenticator` 每次请求才读当前值，
+  保存后清一次连接池，所以换代理不用重启应用；测试连接与 Android 一样请求 `http://neverssl.com`，成功弹
+  `connection_ok`，失败弹异常消息，代理页的返回按钮回到枢纽，见计划 §158。
+  更多 → 播放设置（`playback-settings-open`）对应 Android 的 `PlaybackSettingsScreen`：播放背景（Android
+  `video_backgrounds` 的五个值）、解码器（仅硬件/优先硬件/仅软件，映射到 libmpv 的 `hwdec` 与 `hwdec-fallback`）、
+  控件不透明度与渐隐不透明度（共享 `SettingsSliderRow`，拖动只改本地 draft、松手才写盘），四键用 Android 同名
+  `video_background`/`video_decoder_mode`/`video_controls_alpha`/`video_gradient_alpha`；播放器的视频面/外框取该背景，
+  控件条与其上方渐隐取这两个不透明度，见计划 §160。
+  存储与网络页的“网络”节还有 Android 的 GitHub 镜像（`github-mirror-open` → `github-mirror-dialog`）：
+  目录与该反代改写规则 `GitHubMirrorCatalog` 已下沉 `core-net`（包名不变，Android 的
+  `displayName(context)` 留在 `app`），Windows 用 `DesktopGitHubMirror` 读写 `desktop_network` 的
+  `github_mirror`（与 Android 同键，值存镜像 id），`rewrite(url)` 每次读当前值，所以换镜像即时生效；
+  应用更新下载、超分模型下载、扩展 JAR/解析器/Cloudstream 列表都过它，`api.github.com` 的版本查询
+  与仓库索引地址本身不改写，见计划 §161。同一节还有 Android 的镜像测速（`github-mirror-probe`，
+  按钮 `github-mirror-probe-start`/`-cancel`/`-fastest`）：`DesktopGitHubMirror.probe()` 用 JDK
+  `HttpClient` 并行拉 `GitHubMirrorCatalog.PROBE_URL`（6 s 超时、响应头即通），进度/结果在
+  `probeState`/`probeResults` 两个 flow 里（页面 `collectAsState()` 直接读，`DesktopAppState` 不加字段），
+  取消走 `runInterruptible` 会真的断开 socket；文案全用 Android 的 `mirror_probe_*`，
+  对话框选项追加 `" · 213 ms"`/`" · 超时"` 与最快的标记，探测的结果模型与目标 URL 也在 `core-net`
+  共享（Android 侧的本地声明已删除、改从 `core.prefs` 导入这些类型），见计划 §162。
+  更多页“关于与更新”卡对应 Android 的 `AboutSettingsScreen`/`AppUpdateScreen`：除了检查/下载/重启安装，
+  现在也显示 Android `UpdateDescription` 那三行（新版本号、`app-update-size` 安装包大小、`app-update-published`
+  发布日期）与发布说明本身（`app-update-notes`，用 `core-ui` 新增的共享 Markdown 子集渲染），行尾
+  `app-update-changelog` 进新页“更新日志”（`DesktopScreen.CHANGELOG`，对齐 Android 的 `ChangelogScreen`）：
+  本频道所有可安装版本按新→旧一张卡一版，带当前版本徽标、日期、包大小与各版说明，每次会话只拉一次、
+  “重新加载”才重拉。Markdown 解析 `core-ui` 的 `parseMarkdownBlocks`/`parseMarkdownInline`、
+  渲染 `MarkdownText`/`markdownPlainText` 都在 `core/ui/markdown/`（纯共享、无新依赖，Android 仍用 Markwon）；
+  `desktop-runtime` 的 `DesktopAppUpdateClient.releases()` 与更新检查共用 `offerableFor(channel)`
+  过滤（有包有下载地址、stable 不列预发布），所以说明列出的版本就是它真会装的版本，见计划 §163。
+  同一张卡还有 Android 的 `allow_unstable_updates`（`app-update-unstable`）：稳定版可以让更新器改跟 nightly 仓库，
+  nightly 包则固定为开且禁用（换频道会丢掉旧频道找到的版本、说明与日志缓存）；频道由
+  `desktopUpdateChannel(版本戳, 开关)` 合成，更新检查/下载/更新日志共用它，开关存 `desktop_app_updates` 的
+  `app_update_unstable`。卡下方另有 Android 的 `about_group_support` 链接组（`about-link:<key>`，使用手册/源码/
+  Ko-fi/爱发电/Discord，摘要即地址，整行点开系统浏览器，打不开就提示地址）。这些地址仍取自 Android 的
+  `values/constants.xml`：`prepareDesktopStrings` 现在额外读该文件但只收 `url_*`，其余构建键与 OAuth
+  client secret 不复制进桌面 catalog，见计划 §164。
+  收藏/历史的“筛选与排序”抽屉另有“布局”一节（封面网格 / 每行一个作品，对应 Android 的 ListMode），
+  选择存 `desktop_library` 的 `library_list_mode`，列表模式下 `ContentGrid` 渲染 `content-list` 行视图，
+  点击/长按语义与卡片一致，见计划 §142。
+  扩展与仓库页可导入 TVBox/苹果 CMS 链接：配置按 Android 的同一份文档存进 `desktop_json_sources` 的
+  `json_sources`，站点以 TVBOX 来源进入来源栏（第 4 条路由 `MacCmsSourceRuntime`），封面在协议返回
+  UNSUPPORTED 时由 Session 直接 GET URL 落盘；type 3/4 爬虫站点明确跳过，见计划 §143。
+  收藏/历史的选择栏另有“标为已完成”（对应 Android 的 MARK_AS_COMPLETED）：确认后每部作品的阅读位置
+  移到最后一章、percent 记为 1，原进度被覆盖（与 Android 弹窗的警告一致），见计划 §144。
+  收藏的选择栏还有“置顶/取消置顶”（对应 Android 的 PIN）：写 `favourites.pinned`，置顶作品在每种
+  排序里都排最前（历史书架不受影响），卡片在右下角画 `ic_pin` 角标，见计划 §145。
+  收藏的选择栏另有“分享”（对应 Android 的 SHARE）：Windows 没有分享面板，改成写系统剪贴板——单部作品是
+  “标题 + 空行 + 链接”，多选每行“标题 - 链接”，链接取 `publicUrl`、为空退回 `url`，写后回读一致才算成功，
+  失败时提示并以可选中的文本对话框给出同一段链接，见计划 §147。
+  历史的选择栏同样有“分类”（对应 Android 历史页的 FAVOURITE）：打开的是收藏页那个分类对话框，
+  勾上任意分类即成为收藏、取消最后一个分类即退回纯历史行，行本身留在历史页，见计划 §148。
+  收藏与历史的选择栏另有“下载”（对应 Android 两条书架栏的 SAVE）：弹窗给出详情页那套章节范围
+  （全部/未读/前 10、25、50 章），按每部作品各自的进度与已保存章节计算，章节取本地已存列表且覆盖
+  全部分支（离线也可用），novel/video 与没有可下章节的作品直接跳过，结果以总章数报出，见计划 §149。
+  收藏的选择栏还有“迁移”（对应 Android 的 MIGRATE）：一次一部作品，先选同内容类型的另一个来源，
+  用作品标题在该来源搜索并挑出对应作品，“保留原作品”即 COPY、否则 REPLACE，分类/进度/统计随
+  `SourceLibrary.migrate` 在一个事务里迁移，下载与书签留在原作品上，见计划 §150。
   索引模型共用 core-source，APK-only 明确不可安装，构造/持久化失败保留旧扩展；范围见计划 §56。
   reader-core 决定单页/双页/RTL 的可见页面、宽图独页、Fit 排版与进度锚点；键盘翻页和同分支跨章按钮
   已接入。阅读模式/方向保存于原偏好 store，历史 percent 包含页组末页，page 保留起始锚点用于恢复。
@@ -262,16 +540,52 @@ npm run docs:build
   请求/artifact/尺寸，不受阅读索引淘汰影响，读取仍校验 SHA/大小，下载不写入阅读进度。
   队列归 Controller scope，退出取消，重启保持暂停；64 页内容寻址块、每章原子清单与分片
   发现索引已接，旧平面记录自动迁移并保留，不再把全量/单章页面请求塞入一个 4 MiB snapshot。
+  详情章节行的溢出菜单提供标为已读/未读（写原历史，首章标未读清空记录）与删除本地下载；
+  后者与下载页批量移除共用 store 删除序列。详情目录的批量模式（选择章节按钮或按住行进入）按当前
+  筛选全选/清除，并提供批量下载/标为已读/删除本地下载，退出模式后点击恢复导航。
   底层单文件上限保持原值；元数据占用预览和确认回收未引用旧块已接，按磁盘全部清单
-  重新核对，包括未发现清单；损坏/不完整图阻止回收，旧缓存视图退休。图片总磁盘预算与元数据驻留控制仍待。
+  重新核对，包括未发现清单；损坏/不完整图阻止回收，旧缓存视图退休。图片总磁盘预算已接：
+  下载页显示图片目录占用/已保存章节占用/上限，预设档位与手动清理即时执行，后台循环按 10 分钟
+  节流回收最久未使用的 `*.img`，`verifiedImagePath` 命中刷新文件时间作 LRU，已保存章节引用的
+  blob 永不删除，刚发布两分钟（手动清理五秒）内不动，残留 `.image-*.part` 一小时后清除。
+  元数据驻留控制仍待。
   图书馆备份页已接导出/私有文件预览/取消/确认合并，包含书签/统计，未安装扩展也显示已恢复库；
-  退出关闭未确认的预览。其他备份节与外部格式/同步、预测预取/其他格式区域解码/下载批量管理与
-  导出/完整缓存清理/筛选预设与自定义控件继续推进。
+  退出关闭未确认的预览。同页 WebDAV 云同步已接：设置持久化、连接测试、上传并保留清理、远端列表、
+  下载后复用本地预览/合并，自动备份间隔由应用内计时器按“距上次成功上传”判定（首次启动即上传、
+  失败退避十分钟、改设置或手动上传重排，不与手动并发；Google Drive/系统同步仍待）。
+  上传前先在数据根 `backups` 写一份 Android 命名的本地副本（`kototoro_yyyyMMdd-HHmm.bk.zip`，
+  `desktop-runtime` 的 `DesktopLocalBackups`：`.part` + 原子改名的发布、按“删除旧备份/最大备份数”清理、
+  手工导出的文件永不删），所以服务器 500 也有可恢复副本；保留开关打开时即使没配服务器，
+  计时器也会纯本地按间隔备份（`DesktopAutoBackup.Saved`），见计划 §187。
+  同一张卡还有 Android 的“启动时自动恢复”（`webdav_auto_restore`，默认关、需要完整目的地）：
+  应用打开会话时（以及保存设置后）检查一次，按本地日历日每天至多一次，把远端最新的 V3 备份下载后
+  走同一条预览/合并路恢复，并把合并后的快照传回服务器；空列表算“今天已查过”，失败不算（下次再试），
+  见计划 §188。
+  本地副本目录也像 Android 的“备份文件保存目录”（`backups_output_directory`）一样可选：设置里的
+  `output_directory` 为自选文件夹，空即数据根 `backups`，`desktop-runtime` 的
+  `desktopBackupDirectory(chosen, fallback)` 在自选目录失效（空/不存在/不是目录/不可写）时回落到数据根
+  （同 Android 的 SAF tree 失效回落），页面行为“选择… / 恢复默认 / 打开”，见计划 §189。
+  详情页的批量下载
+  菜单按全部/未读/翻译分支/前 N 章算待下章节（以未筛选列表下标判定未读，重复话号也不错位），
+  下载页显示章/页/图片占用并按章多选批量暂停、继续、重试与移除（移除先取消等待再删索引与清单，
+  遗留页面块转入可回收元数据，图片文件不删）；已完成章节可导出为 CBZ（逐页复核 SHA、文件名
+  去非法字符、再次导出覆盖、失败不留半包），也可“导出全部已完成章节”一次写入整个文件夹
+  （跳过未完成项，单章失败只计数不中断）；自动回收默认开启，启动与队列空闲时清理未引用块，
+  只动元数据块、清单异常时整体放弃。其他备份节与外部格式、
+  预测预取/其他格式区域解码/筛选预设与自定义控件继续推进。
   Windows 本地打包已接：独立 JVM/EXE、ZIP 与 per-user MSI，程序目录在 LocalAppData/Kototoro-App，
   与用户数据隔离；移动目录原生/窗口测试、MSI 全文件 SHA/目录检查已接。实际安装/升级/卸载、
   S3/签名仍待，见 README 与计划 §35、§40–54。
+  共享文案层已接：`core-ui` 的 `UiStrings`/`LocalUiStrings`/`uiString` 让共享界面按 Android 资源名取词，
+  Android 走 `R.string`（`AndroidUiStrings`），Windows 走 `prepareDesktopStrings` 由同一份
+  `app/src/main/res` 导出的目录（`DesktopUiStrings`），内容类型标题改为派生自类型名而不再各存一份，
+  重复的 `label.contentType.*` 已删除；`:core-ui:verifyUiStrings` 校验共享键与 `ContentType` 都有资源。
+  界面栈已统一为 Material 3：`DesktopTheme` 删除 Material 2 桥接，桌面 23 个外壳文件改用
+  `material3` 控件/角色，与共享组件的颜色、字体、圆角令牌一致，暗色分支读 `LocalDesktopDark`。
 - `core-net/` - 共享 HTTP 协议（KMP）：`GoogleDriveSyncApi`、嵌套 `DriveFile` 与 API 异常保持原包名。
-  WebDAV 的 `WebDavBackupClient`、远端备份分类/选取/保留规则与 `RemoteNamespace` 也在 commonMain。
+  WebDAV 的 `WebDavBackupClient`、远端备份分类/选取/保留规则与 `RemoteNamespace` 也在 commonMain；
+  multistatus/HTTP 日期解析 `parseWebDavResources` 同样在 commonMain（无 DOM，Windows 与 iOS 共用），
+  Android 的 `WebDavResponseParser` 只是它的薄封装。
   MALSync 的 `MALSyncMappingApi`、跨站映射分类/ID 选择/去重规则与窄投影模型也在 commonMain；
   `ScrobblerService` 的 Android 资源、平台 JSON 取值以及 Repository 的 64 项 LRU/同键去重留在应用。
   取消不写入空缓存；普通 HTTP/网络/解析失败仍保留既有空结果回退。
@@ -281,7 +595,7 @@ npm run docs:build
   平台注入并管理 Ktor `HttpClient`；Android 的 Hilt 网络模块复用 `createKtorOkHttpClient`，
   保留各自超时、重定向和连接恢复设置，WebDAV 继承原基础客户端的代理、Cookie 与拦截器。
   共享协议释放每次响应、保留各自重试边界并传递取消；WebDAV 文件通过 channel 回调流式传输。
-  授权、Repository、WebDAV XML/日期解析与文件 IO、其他 tracker/scrobbler 客户端及 iOS 引擎装配仍由平台负责，
+  授权、Repository、WebDAV 文件 IO、其他 tracker/scrobbler 客户端及 iOS 引擎装配仍由平台负责，
   Ktor 版本复用既有 3.5.0
 - `docs/` - VitePress 文档站点
 
@@ -358,8 +672,8 @@ KMP/iOS 方案与进度见 `docs/architecture/kmp-ios-plan-2026-10.md`。KMP 模
 - 自动回退到完整 APK 下载
 
 **数据库**：
-- Room 数据库（`MangaDatabase`）在 KMP 模块 `core-db/`，DATABASE_VERSION = 84（`core-db/src/commonMain/.../core/db/MangaDatabase.kt`）；导出的 schema 仍位于 `app/schemas/org.skepsun.kototoro.core.db.MangaDatabase/`（已提交，由 `core-db` 的 Room 插件导出，`app` 的 androidTest 以 assets 读取）
-- 迁移文件 `core-db/src/androidMain/kotlin/org/skepsun/kototoro/core/db/migrations/Migration1To2.kt` 到 `Migration83To84.kt`（另含历史遗留的降级迁移 `Migration24To23.kt`，仍保留在 `getDatabaseMigrations` 列表中，位于 `core-db` 的 `MangaDatabaseMigrations.kt`）
+- Room 数据库（`MangaDatabase`）在 KMP 模块 `core-db/`，DATABASE_VERSION = 85（`core-db/src/commonMain/.../core/db/MangaDatabase.kt`）；导出的 schema 仍位于 `app/schemas/org.skepsun.kototoro.core.db.MangaDatabase/`（已提交，由 `core-db` 的 Room 插件导出，`app` 的 androidTest 以 assets 读取）
+- 迁移文件 `core-db/src/androidMain/kotlin/org/skepsun/kototoro/core/db/migrations/Migration1To2.kt` 到 `Migration83To84.kt`（另含历史遗留的降级迁移 `Migration24To23.kt`，仍保留在 `getDatabaseMigrations` 列表中，位于 `core-db` 的 `MangaDatabaseMigrations.kt`）；84→85 起的迁移在 commonMain（`Migration84To85.kt` 与 `sharedDatabaseMigrations()`），Android/Windows/iOS 三端共用
 - Android 必须继续使用框架 SQLite 驱动：旧迁移实现的是 `migrate(SupportSQLiteDatabase)`，换成 `BundledSQLiteDriver` 会抛 `NotImplementedError`
 - DAO 的过滤条件使用数据类型 `ListFilterCriteria`（`core-db`）；应用层的 `ListFilterOption`（带资源 id 与图标）在 Repository 边界用 `toCriteria()` 转换
 - 用户状态（收藏/历史/统计/偏好/追踪）直接挂在 `manga` 行上；实体图谱与 work 表已在 v84 移除（`Migration83To84` → `ProjectionOwnershipMigrationResolver`）
@@ -449,11 +763,11 @@ RELEASE_KEY_PASSWORD=***
 ## 常见任务
 
 ### 添加新的数据库迁移
-1. 在 `core-db/src/androidMain/kotlin/org/skepsun/kototoro/core/db/migrations/` 创建新的 `MigrationXToY.kt`
-2. 在 `core-db` 的 `MangaDatabaseMigrations.kt` 中的 `getDatabaseMigrations` 列表里注册迁移
+1. 在 `core-db/src/commonMain/kotlin/org/skepsun/kototoro/core/db/migrations/` 创建 `open class MigrationXToY`，覆写 `migrate(connection: SQLiteConnection)`（Windows/iOS 的 bundled 驱动调用它），SQL 放在 companion 常量里，并加入 `sharedDatabaseMigrations()`（桌面 `DesktopDatabase` 与 iOS `IosLibrary` 的 builder 注册的就是它）
+2. 在 `core-db` 的 `MangaDatabaseMigrations.kt` 中的 `getDatabaseMigrations` 列表里注册一个子类，覆写 `migrate(db: SupportSQLiteDatabase)` 执行同一 SQL（Android framework 驱动只调用这个重载，默认实现会抛 `NotImplementedError`）；参考 `AndroidMigration84To85`
 3. 递增 `core-db` 中 `MangaDatabase.kt` 的 `DATABASE_VERSION` 常量
 4. 更新 `app/schemas/org.skepsun.kototoro.core.db.MangaDatabase/` 中的 schema JSON（构建 `core-db` 时由 Room KSP 导出，需提交）
-5. 实体、DAO 只能使用 commonMain 可用的 API（不要用 `System.currentTimeMillis()`、`java.*`、`SupportSQLiteQuery`、`BuildConfig`、资源 id 等）；用 `./gradlew :core-db:compileCommonMainKotlinMetadata` 检查。新迁移用 `app/src/androidTest/.../MangaDatabaseSnapshotChainTest` 验证（把新的快照版本加进它的 `snapshots` 列表）；该包里 `MangaDatabaseTest` 有 4 个既有失败，见 `docs/architecture/kmp-ios-plan-2026-10.md` §12
+5. 实体、DAO 只能使用 commonMain 可用的 API（不要用 `System.currentTimeMillis()`、`java.*`、`SupportSQLiteQuery`、`BuildConfig`、资源 id 等）；用 `./gradlew :core-db:compileCommonMainKotlinMetadata` 检查。新迁移用 `app/src/androidTest/.../MangaDatabaseSnapshotChainTest` 验证 Android（把新的快照版本加进它的 `snapshots` 列表），用 `core-db` 的 `SharedMigrationTest`（`:core-db:jvmTest`）验证 bundled 驱动从旧版本文件升级；该包里 `MangaDatabaseTest` 有 4 个既有失败，见 `docs/architecture/kmp-ios-plan-2026-10.md` §12
 
 ### 添加新的源类型
 1. 在对应模块（如 `mihon/`、`ireader/`）实现源接口

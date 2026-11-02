@@ -6,6 +6,7 @@ import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
+import java.nio.file.attribute.FileTime
 import java.security.MessageDigest
 
 /** Validate immutable image blobs before publishing a persisted cache hit. */
@@ -26,7 +27,11 @@ internal suspend fun verifiedImagePath(directory: Path, relativePath: String, sh
             }
         }
         context.ensureActive()
-        return path.takeIf { imageHex(digest.digest()) == sha256 }
+        val valid = imageHex(digest.digest()) == sha256
+        // Access time is unreliable on Windows, so a verified hit stamps the blob's modification time instead: the
+        // image budget evicts by last modification and would otherwise treat a re-read page as the oldest one.
+        if (valid) runCatching { Files.setLastModifiedTime(path, FileTime.fromMillis(System.currentTimeMillis())) }
+        return path.takeIf { valid }
     } catch (_: IOException) { return null }
 }
 

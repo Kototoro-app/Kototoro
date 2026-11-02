@@ -7,8 +7,46 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		C7B000000000000000000001 /* WidgetSnapshotStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7B000000000000000000004 /* WidgetSnapshotStore.swift */; };
+		C7B000000000000000000002 /* WidgetSnapshotStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7B000000000000000000004 /* WidgetSnapshotStore.swift */; };
+		C7B000000000000000000003 /* WidgetSnapshotStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7B000000000000000000005 /* WidgetSnapshotStoreTests.swift */; };
+		C0FFEE000000000000000024 /* KototoroWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE000000000000000023 /* KototoroWidget.swift */; };
+		C0FFEE000000000000000034 /* KototoroWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = C0FFEE000000000000000028 /* KototoroWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+        CF2200000000000000000001 /* WebKitHttpRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF2200000000000000000004 /* WebKitHttpRequest.swift */; };
+        CF2100000000000000000001 /* BrowserVerificationState.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF2100000000000000000004 /* BrowserVerificationState.swift */; };
+        CF2100000000000000000002 /* BrowserVerificationState.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF2100000000000000000004 /* BrowserVerificationState.swift */; };
+        CF2100000000000000000003 /* BrowserVerificationStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF2100000000000000000005 /* BrowserVerificationStateTests.swift */; };
+        AD7400000000000000000005 /* TrackingRecommendationsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD7400000000000000000006 /* TrackingRecommendationsView.swift */; };
+        AD7400000000000000000003 /* SuggestionsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD7400000000000000000004 /* SuggestionsTests.swift */; };
+        AD7400000000000000000001 /* SuggestionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD7400000000000000000002 /* SuggestionsView.swift */; };
+		C7A000000000000000000001 /* ReaderStripZoomSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A000000000000000000004 /* ReaderStripZoomSession.swift */; };
+		C7A000000000000000000002 /* ReaderStripZoomSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A000000000000000000004 /* ReaderStripZoomSession.swift */; };
+		C7A000000000000000000003 /* ReaderStripZoomSessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A000000000000000000005 /* ReaderStripZoomSessionTests.swift */; };
+		BE0000000000000000000001 /* GoogleDriveAuth.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE0000000000000000000011 /* GoogleDriveAuth.swift */; };
+		BE0000000000000000000002 /* GoogleDriveSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE0000000000000000000012 /* GoogleDriveSync.swift */; };
+		BE0000000000000000000003 /* GoogleDriveSyncTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE0000000000000000000013 /* GoogleDriveSyncTests.swift */; };
+		BE0000000000000000000004 /* GoogleDriveAuth.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE0000000000000000000011 /* GoogleDriveAuth.swift */; };
+		BD0000000000000000000001 /* BookmarkImageStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD0000000000000000000005 /* BookmarkImageStore.swift */; };
+		BD0000000000000000000002 /* BookmarkImageStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD0000000000000000000005 /* BookmarkImageStore.swift */; };
+		BD0000000000000000000003 /* BookmarkPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD0000000000000000000006 /* BookmarkPreview.swift */; };
+		BD0000000000000000000004 /* BookmarkImageStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD0000000000000000000007 /* BookmarkImageStoreTests.swift */; };
+		AD0000000000000000000006 /* DetailsChaptersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD0000000000000000000007 /* DetailsChaptersView.swift */; };
+		B21000000000000000000001 /* LibraryCollectionIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = B21000000000000000000011 /* LibraryCollectionIndex.swift */; };
+		B21000000000000000000002 /* LibraryCollectionIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = B21000000000000000000011 /* LibraryCollectionIndex.swift */; };
+		B21000000000000000000003 /* LibraryCollectionIndexTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B21000000000000000000012 /* LibraryCollectionIndexTests.swift */; };
+        AD7100000000000000000003 /* TrackingSitesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD7100000000000000000004 /* TrackingSitesTests.swift */; };
+        AD7100000000000000000001 /* TrackingAccounts.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD7100000000000000000002 /* TrackingAccounts.swift */; };
+		B10000000000000000000005 /* BatchSelectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000004 /* BatchSelectionTests.swift */; };
+		B10000000000000000000003 /* BatchSelection.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000001 /* BatchSelection.swift */; };
+		B10000000000000000000002 /* BatchSelection.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000001 /* BatchSelection.swift */; };
+		AF0000000000000000000002 /* MissingSourcesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF0000000000000000000012 /* MissingSourcesView.swift */; };
+		AF0000000000000000000001 /* LibraryMigrationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF0000000000000000000011 /* LibraryMigrationView.swift */; };
+		D7C0000000000000000000A1 /* LibraryDuplicatesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7C0000000000000000000A2 /* LibraryDuplicatesView.swift */; };
+		AE0000000000000000000002 /* ReadingStatisticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE0000000000000000000012 /* ReadingStatisticsView.swift */; };
+		AE0000000000000000000001 /* ReadingActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE0000000000000000000011 /* ReadingActivity.swift */; };
         AC0000000000000000000001 /* TrackingSitesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC0000000000000000000002 /* TrackingSitesView.swift */; };
 		AB0000000000000000000001 /* SourceChangeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB0000000000000000000002 /* SourceChangeView.swift */; };
+		AB0000000000000000000003 /* SourceSelectionSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB0000000000000000000004 /* SourceSelectionSheet.swift */; };
 		FE0000000000000000000001 /* ReaderStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000001 /* ReaderStorage.swift */; };
 		FE0000000000000000000002 /* ReaderStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000001 /* ReaderStorage.swift */; };
 		FE0000000000000000000003 /* ReaderStorageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000002 /* ReaderStorageView.swift */; };
@@ -40,6 +78,26 @@
 		F00000000000000000000001 /* LibraryRecordsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000001 /* LibraryRecordsView.swift */; };
 		F00000000000000000000002 /* ReaderSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000002 /* ReaderSettings.swift */; };
 		F00000000000000000000003 /* ReaderDownloads.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000003 /* ReaderDownloads.swift */; };
+		C0FFEE000000000000000001 /* NovelTranslation.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE000000000000000002 /* NovelTranslation.swift */; };
+		C0FFEE000000000000000003 /* TagFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE000000000000000004 /* TagFilter.swift */; };
+		C0FFEE000000000000000005 /* ReadingIncognito.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE000000000000000006 /* ReadingIncognito.swift */; };
+		C0FFEE000000000000000007 /* ReaderPageTranslation.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE000000000000000008 /* ReaderPageTranslation.swift */; };
+		C0FFEE0000000000000000B1 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE0000000000000000B2 /* SettingsView.swift */; };
+		C0FFEE000000000000000009 /* NovelSpeech.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE00000000000000000A /* NovelSpeech.swift */; };
+		C0FFEE00000000000000000B /* ReplaceRulesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE00000000000000000C /* ReplaceRulesView.swift */; };
+		C0FFEE00000000000000000D /* NotesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE00000000000000000E /* NotesView.swift */; };
+		C0FFEE0000000000000000A1 /* NovelMarkingStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE0000000000000000A2 /* NovelMarkingStyle.swift */; };
+		C0FFEE00000000000000000F /* SavedFilters.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE000000000000000010 /* SavedFilters.swift */; };
+		C0FFEE000000000000000011 /* DownloadSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE000000000000000012 /* DownloadSettings.swift */; };
+		C0FFEE000000000000000013 /* WebDavSyncView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE000000000000000014 /* WebDavSyncView.swift */; };
+		C0FFEE000000000000000015 /* GitHubMirror.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE000000000000000016 /* GitHubMirror.swift */; };
+		C0FFEE000000000000000017 /* AppLock.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE000000000000000018 /* AppLock.swift */; };
+		C0FFEE000000000000000019 /* BackgroundUpdates.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE00000000000000001A /* BackgroundUpdates.swift */; };
+		C0FFEE00000000000000001B /* CustomSpaces.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE00000000000000001C /* CustomSpaces.swift */; };
+		C0FFEE00000000000000001D /* LibraryFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE00000000000000001E /* LibraryFilter.swift */; };
+		C0FFEE00000000000000001F /* PdfImport.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE000000000000000020 /* PdfImport.swift */; };
+		C0FFEE000000000000000021 /* WidgetSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE000000000000000022 /* WidgetSnapshot.swift */; };
+		F0000000000000000000000C /* VideoDownloads.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1000000000000000000000C /* VideoDownloads.swift */; };
 		F00000000000000000000004 /* ReaderPanels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000004 /* ReaderPanels.swift */; };
 		F00000000000000000000005 /* RepositoriesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000005 /* RepositoriesView.swift */; };
 		F00000000000000000000006 /* ProductFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000006 /* ProductFlowTests.swift */; };
@@ -56,9 +114,12 @@
 		F40000000000000000000004 /* ExtensionPresentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F50000000000000000000003 /* ExtensionPresentationTests.swift */; };
 		F40000000000000000000005 /* RepositoryManagementTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F50000000000000000000004 /* RepositoryManagementTests.swift */; };
 		F60000000000000000000001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F70000000000000000000001 /* Assets.xcassets */; };
+		F60000000000000000000002 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = F70000000000000000000002 /* Localizable.xcstrings */; };
+		F60000000000000000000003 /* InfoPlist.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = F70000000000000000000003 /* InfoPlist.xcstrings */; };
 		F80000000000000000000001 /* BackupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F80000000000000000000002 /* BackupView.swift */; };
 		F80000000000000000000003 /* BackupFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F80000000000000000000004 /* BackupFlowTests.swift */; };
 		F80000000000000000000005 /* SourceIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = F80000000000000000000006 /* SourceIcon.swift */; };
+		F80000000000000000000024 /* ExtensionArtwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = F80000000000000000000025 /* ExtensionArtwork.swift */; };
 		F80000000000000000000007 /* SourceFilterSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = F80000000000000000000008 /* SourceFilterSheet.swift */; };
 		F80000000000000000000009 /* DetailsPanorama.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8000000000000000000000A /* DetailsPanorama.swift */; };
 		F8000000000000000000000B /* ContentCollection.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8000000000000000000000C /* ContentCollection.swift */; };
@@ -72,10 +133,14 @@
 		FA0000000000000000000002 /* ImageLoadPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB0000000000000000000001 /* ImageLoadPolicy.swift */; };
 		FA0000000000000000000003 /* ImageLoadPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB0000000000000000000002 /* ImageLoadPolicyTests.swift */; };
 		FA0000000000000000000005 /* ReaderPageTurn.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB0000000000000000000004 /* ReaderPageTurn.swift */; };
+		FA00000000000000000000F7 /* ReaderStrip.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB00000000000000000000F7 /* ReaderStrip.swift */; };
 		FA0000000000000000000006 /* ContinueReading.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB0000000000000000000005 /* ContinueReading.swift */; };
 		FA0000000000000000000007 /* SourceSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB0000000000000000000007 /* SourceSettingsView.swift */; };
 		FA0000000000000000000008 /* SourceWebBrowser.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB0000000000000000000008 /* SourceWebBrowser.swift */; };
 		FA0000000000000000000099 /* UITestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB0000000000000000000099 /* UITestSupport.swift */; };
+		AD0000000000000000000001 /* DetailsChapterPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD0000000000000000000004 /* DetailsChapterPreview.swift */; };
+		AD0000000000000000000002 /* DetailsChapterPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD0000000000000000000004 /* DetailsChapterPreview.swift */; };
+		AD0000000000000000000003 /* DetailsChapterPreviewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD0000000000000000000005 /* DetailsChapterPreviewTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -86,11 +151,66 @@
 			remoteGlobalIDString = A00000000000000000000030;
 			remoteInfo = Kototoro;
 		};
+		C0FFEE000000000000000031 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A00000000000000000000032 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = C0FFEE00000000000000002A;
+			remoteInfo = KototoroWidget;
+		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		C0FFEE000000000000000033 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				C0FFEE000000000000000034 /* KototoroWidget.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		C7B000000000000000000004 /* WidgetSnapshotStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetSnapshotStore.swift; sourceTree = "<group>"; };
+		C7B000000000000000000005 /* WidgetSnapshotStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetSnapshotStoreTests.swift; sourceTree = "<group>"; };
+		C0FFEE000000000000000023 /* KototoroWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KototoroWidget.swift; sourceTree = "<group>"; };
+		C0FFEE000000000000000025 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		C0FFEE000000000000000026 /* KototoroWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = KototoroWidget.entitlements; sourceTree = "<group>"; };
+		C0FFEE000000000000000027 /* Kototoro.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Kototoro.entitlements; sourceTree = "<group>"; };
+		C0FFEE000000000000000028 /* KototoroWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = KototoroWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+        CF2200000000000000000004 /* WebKitHttpRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebKitHttpRequest.swift; sourceTree = "<group>"; };
+        CF2100000000000000000004 /* BrowserVerificationState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserVerificationState.swift; sourceTree = "<group>"; };
+        CF2100000000000000000005 /* BrowserVerificationStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserVerificationStateTests.swift; sourceTree = "<group>"; };
+        AD7400000000000000000006 /* TrackingRecommendationsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackingRecommendationsView.swift; sourceTree = "<group>"; };
+        AD7400000000000000000004 /* SuggestionsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SuggestionsTests.swift; sourceTree = "<group>"; };
+        AD7400000000000000000002 /* SuggestionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SuggestionsView.swift; sourceTree = "<group>"; };
+		C7A000000000000000000004 /* ReaderStripZoomSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderStripZoomSession.swift; sourceTree = "<group>"; };
+		C7A000000000000000000005 /* ReaderStripZoomSessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderStripZoomSessionTests.swift; sourceTree = "<group>"; };
+		BE0000000000000000000011 /* GoogleDriveAuth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleDriveAuth.swift; sourceTree = "<group>"; };
+		BE0000000000000000000012 /* GoogleDriveSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleDriveSync.swift; sourceTree = "<group>"; };
+		BE0000000000000000000013 /* GoogleDriveSyncTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleDriveSyncTests.swift; sourceTree = "<group>"; };
+		BD0000000000000000000005 /* BookmarkImageStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookmarkImageStore.swift; sourceTree = "<group>"; };
+		BD0000000000000000000006 /* BookmarkPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookmarkPreview.swift; sourceTree = "<group>"; };
+		BD0000000000000000000007 /* BookmarkImageStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookmarkImageStoreTests.swift; sourceTree = "<group>"; };
+		AD0000000000000000000007 /* DetailsChaptersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailsChaptersView.swift; sourceTree = "<group>"; };
+		B21000000000000000000011 /* LibraryCollectionIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryCollectionIndex.swift; sourceTree = "<group>"; };
+		B21000000000000000000012 /* LibraryCollectionIndexTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryCollectionIndexTests.swift; sourceTree = "<group>"; };
+        AD7100000000000000000004 /* TrackingSitesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackingSitesTests.swift; sourceTree = "<group>"; };
+        AD7100000000000000000002 /* TrackingAccounts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackingAccounts.swift; sourceTree = "<group>"; };
+		B10000000000000000000004 /* BatchSelectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchSelectionTests.swift; sourceTree = "<group>"; };
+		B10000000000000000000001 /* BatchSelection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchSelection.swift; sourceTree = "<group>"; };
+		AF0000000000000000000012 /* MissingSourcesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MissingSourcesView.swift; sourceTree = "<group>"; };
+		D7C0000000000000000000A2 /* LibraryDuplicatesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryDuplicatesView.swift; sourceTree = "<group>"; };
+		AF0000000000000000000011 /* LibraryMigrationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryMigrationView.swift; sourceTree = "<group>"; };
+		AE0000000000000000000012 /* ReadingStatisticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingStatisticsView.swift; sourceTree = "<group>"; };
+		AE0000000000000000000011 /* ReadingActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingActivity.swift; sourceTree = "<group>"; };
         AC0000000000000000000002 /* TrackingSitesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackingSitesView.swift; sourceTree = "<group>"; };
 		AB0000000000000000000002 /* SourceChangeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceChangeView.swift; sourceTree = "<group>"; };
+		AB0000000000000000000004 /* SourceSelectionSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceSelectionSheet.swift; sourceTree = "<group>"; };
 		FF0000000000000000000001 /* ReaderStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderStorage.swift; sourceTree = "<group>"; };
 		FF0000000000000000000002 /* ReaderStorageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderStorageView.swift; sourceTree = "<group>"; };
 		FF0000000000000000000003 /* ReaderStorageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderStorageTests.swift; sourceTree = "<group>"; };
@@ -121,6 +241,26 @@
 		F10000000000000000000001 /* LibraryRecordsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryRecordsView.swift; sourceTree = "<group>"; };
 		F10000000000000000000002 /* ReaderSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderSettings.swift; sourceTree = "<group>"; };
 		F10000000000000000000003 /* ReaderDownloads.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderDownloads.swift; sourceTree = "<group>"; };
+		C0FFEE000000000000000002 /* NovelTranslation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NovelTranslation.swift; sourceTree = "<group>"; };
+		C0FFEE000000000000000004 /* TagFilter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagFilter.swift; sourceTree = "<group>"; };
+		C0FFEE000000000000000006 /* ReadingIncognito.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingIncognito.swift; sourceTree = "<group>"; };
+		C0FFEE000000000000000008 /* ReaderPageTranslation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderPageTranslation.swift; sourceTree = "<group>"; };
+		C0FFEE0000000000000000B2 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		C0FFEE00000000000000000A /* NovelSpeech.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NovelSpeech.swift; sourceTree = "<group>"; };
+		C0FFEE00000000000000000C /* ReplaceRulesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReplaceRulesView.swift; sourceTree = "<group>"; };
+		C0FFEE00000000000000000E /* NotesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotesView.swift; sourceTree = "<group>"; };
+		C0FFEE0000000000000000A2 /* NovelMarkingStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NovelMarkingStyle.swift; sourceTree = "<group>"; };
+		C0FFEE000000000000000010 /* SavedFilters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedFilters.swift; sourceTree = "<group>"; };
+		C0FFEE000000000000000012 /* DownloadSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadSettings.swift; sourceTree = "<group>"; };
+		C0FFEE000000000000000014 /* WebDavSyncView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebDavSyncView.swift; sourceTree = "<group>"; };
+		C0FFEE000000000000000016 /* GitHubMirror.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitHubMirror.swift; sourceTree = "<group>"; };
+		C0FFEE000000000000000018 /* AppLock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLock.swift; sourceTree = "<group>"; };
+		C0FFEE00000000000000001A /* BackgroundUpdates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundUpdates.swift; sourceTree = "<group>"; };
+		C0FFEE00000000000000001C /* CustomSpaces.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomSpaces.swift; sourceTree = "<group>"; };
+		C0FFEE00000000000000001E /* LibraryFilter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryFilter.swift; sourceTree = "<group>"; };
+		C0FFEE000000000000000020 /* PdfImport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PdfImport.swift; sourceTree = "<group>"; };
+		C0FFEE000000000000000022 /* WidgetSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetSnapshot.swift; sourceTree = "<group>"; };
+		F1000000000000000000000C /* VideoDownloads.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoDownloads.swift; sourceTree = "<group>"; };
 		F10000000000000000000004 /* ReaderPanels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderPanels.swift; sourceTree = "<group>"; };
 		F10000000000000000000005 /* RepositoriesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RepositoriesView.swift; sourceTree = "<group>"; };
 		F10000000000000000000006 /* ProductFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductFlowTests.swift; sourceTree = "<group>"; };
@@ -134,9 +274,12 @@
 		F50000000000000000000003 /* ExtensionPresentationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtensionPresentationTests.swift; sourceTree = "<group>"; };
 		F50000000000000000000004 /* RepositoryManagementTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RepositoryManagementTests.swift; sourceTree = "<group>"; };
 		F70000000000000000000001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		F70000000000000000000002 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
+		F70000000000000000000003 /* InfoPlist.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = InfoPlist.xcstrings; sourceTree = "<group>"; };
 		F80000000000000000000002 /* BackupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupView.swift; sourceTree = "<group>"; };
 		F80000000000000000000004 /* BackupFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupFlowTests.swift; sourceTree = "<group>"; };
 		F80000000000000000000006 /* SourceIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceIcon.swift; sourceTree = "<group>"; };
+		F80000000000000000000025 /* ExtensionArtwork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtensionArtwork.swift; sourceTree = "<group>"; };
 		F80000000000000000000008 /* SourceFilterSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceFilterSheet.swift; sourceTree = "<group>"; };
 		F8000000000000000000000A /* DetailsPanorama.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailsPanorama.swift; sourceTree = "<group>"; };
 		F8000000000000000000000C /* ContentCollection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentCollection.swift; sourceTree = "<group>"; };
@@ -149,10 +292,13 @@
 		FB0000000000000000000001 /* ImageLoadPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageLoadPolicy.swift; sourceTree = "<group>"; };
 		FB0000000000000000000002 /* ImageLoadPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageLoadPolicyTests.swift; sourceTree = "<group>"; };
 		FB0000000000000000000004 /* ReaderPageTurn.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderPageTurn.swift; sourceTree = "<group>"; };
+		FB00000000000000000000F7 /* ReaderStrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderStrip.swift; sourceTree = "<group>"; };
 		FB0000000000000000000005 /* ContinueReading.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContinueReading.swift; sourceTree = "<group>"; };
 		FB0000000000000000000007 /* SourceSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceSettingsView.swift; sourceTree = "<group>"; };
 		FB0000000000000000000008 /* SourceWebBrowser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceWebBrowser.swift; sourceTree = "<group>"; };
 		FB0000000000000000000099 /* UITestSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITestSupport.swift; sourceTree = "<group>"; };
+		AD0000000000000000000004 /* DetailsChapterPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailsChapterPreview.swift; sourceTree = "<group>"; };
+		AD0000000000000000000005 /* DetailsChapterPreviewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailsChapterPreviewTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -170,6 +316,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		C0FFEE00000000000000002C /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -178,6 +331,7 @@
 			children = (
 				A00000000000000000000021 /* Kototoro */,
 				A00000000000000000000022 /* KototoroUITests */,
+				C0FFEE000000000000000029 /* KototoroWidget */,
 				A00000000000000000000023 /* Products */,
 				B00000000000000000000011 /* Native/KototoroJVM.cpp */,
 				F90000000000000000000031 /* Native/KototoroNative.mm */,
@@ -187,11 +341,19 @@
 		A00000000000000000000021 /* Kototoro */ = {
 			isa = PBXGroup;
 			children = (
+				C0FFEE000000000000000027 /* Kototoro.entitlements */,
+				BE0000000000000000000011 /* GoogleDriveAuth.swift */,
+				BE0000000000000000000012 /* GoogleDriveSync.swift */,
+				BD0000000000000000000005 /* BookmarkImageStore.swift */,
+				BD0000000000000000000006 /* BookmarkPreview.swift */,
 				FF0000000000000000000001 /* ReaderStorage.swift */,
 				FF0000000000000000000002 /* ReaderStorageView.swift */,
 				F70000000000000000000001 /* Assets.xcassets */,
+				F70000000000000000000002 /* Localizable.xcstrings */,
+				F70000000000000000000003 /* InfoPlist.xcstrings */,
 				F80000000000000000000002 /* BackupView.swift */,
 				F80000000000000000000006 /* SourceIcon.swift */,
+				F80000000000000000000025 /* ExtensionArtwork.swift */,
 				F80000000000000000000008 /* SourceFilterSheet.swift */,
 				F8000000000000000000000A /* DetailsPanorama.swift */,
 				F8000000000000000000000E /* LibraryView.swift */,
@@ -205,16 +367,46 @@
 				FD0000000000000000000001 /* ReaderDownloadStore.swift */,
 				FB0000000000000000000005 /* ContinueReading.swift */,
 				FB0000000000000000000008 /* SourceWebBrowser.swift */,
+                CF2100000000000000000004 /* BrowserVerificationState.swift */,
+                CF2200000000000000000004 /* WebKitHttpRequest.swift */,
 				FB0000000000000000000007 /* SourceSettingsView.swift */,
                 AC0000000000000000000002 /* TrackingSitesView.swift */,
+                AD7400000000000000000002 /* SuggestionsView.swift */,
+                AD7400000000000000000006 /* TrackingRecommendationsView.swift */,
+                AD7100000000000000000002 /* TrackingAccounts.swift */,
 				FB0000000000000000000004 /* ReaderPageTurn.swift */,
+				FB00000000000000000000F7 /* ReaderStrip.swift */,
+				C7A000000000000000000004 /* ReaderStripZoomSession.swift */,
 				F30000000000000000000002 /* ReaderDownloadsView.swift */,
 				F10000000000000000000007 /* RepositoryLink.swift */,
 				F10000000000000000000005 /* RepositoriesView.swift */,
 				F10000000000000000000004 /* ReaderPanels.swift */,
 				F10000000000000000000003 /* ReaderDownloads.swift */,
+				C0FFEE000000000000000002 /* NovelTranslation.swift */,
+				C0FFEE000000000000000004 /* TagFilter.swift */,
+				C0FFEE000000000000000006 /* ReadingIncognito.swift */,
+				C0FFEE000000000000000008 /* ReaderPageTranslation.swift */,
+				C0FFEE0000000000000000B2 /* SettingsView.swift */,
+				C0FFEE00000000000000000A /* NovelSpeech.swift */,
+				C0FFEE00000000000000000C /* ReplaceRulesView.swift */,
+				C0FFEE00000000000000000E /* NotesView.swift */,
+				C0FFEE0000000000000000A2 /* NovelMarkingStyle.swift */,
+				C0FFEE000000000000000010 /* SavedFilters.swift */,
+				C0FFEE000000000000000012 /* DownloadSettings.swift */,
+				C0FFEE000000000000000014 /* WebDavSyncView.swift */,
+				C0FFEE000000000000000016 /* GitHubMirror.swift */,
+				C0FFEE000000000000000018 /* AppLock.swift */,
+				C0FFEE00000000000000001A /* BackgroundUpdates.swift */,
+				C0FFEE00000000000000001C /* CustomSpaces.swift */,
+				C0FFEE00000000000000001E /* LibraryFilter.swift */,
+				C0FFEE000000000000000020 /* PdfImport.swift */,
+				C0FFEE000000000000000022 /* WidgetSnapshot.swift */,
+				C7B000000000000000000004 /* WidgetSnapshotStore.swift */,
+				F1000000000000000000000C /* VideoDownloads.swift */,
 				F10000000000000000000002 /* ReaderSettings.swift */,
 				F10000000000000000000001 /* LibraryRecordsView.swift */,
+				AE0000000000000000000012 /* ReadingStatisticsView.swift */,
+				AE0000000000000000000011 /* ReadingActivity.swift */,
 				A00000000000000000000011 /* KototoroApp.swift */,
 				A00000000000000000000012 /* ContentView.swift */,
 				A00000000000000000000013 /* LibraryModel.swift */,
@@ -222,7 +414,15 @@
 				F80000000000000000000023 /* ExtensionWebKit.swift */,
 				B00000000000000000000013 /* SourcesView.swift */,
 				C00000000000000000000011 /* SourceDetailsView.swift */,
+				AD0000000000000000000004 /* DetailsChapterPreview.swift */,
+				AD0000000000000000000007 /* DetailsChaptersView.swift */,
 				AB0000000000000000000002 /* SourceChangeView.swift */,
+				AB0000000000000000000004 /* SourceSelectionSheet.swift */,
+				AF0000000000000000000012 /* MissingSourcesView.swift */,
+				B10000000000000000000001 /* BatchSelection.swift */,
+				B21000000000000000000011 /* LibraryCollectionIndex.swift */,
+				AF0000000000000000000011 /* LibraryMigrationView.swift */,
+				D7C0000000000000000000A2 /* LibraryDuplicatesView.swift */,
 				C00000000000000000000012 /* SourceReaderView.swift */,
 				C00000000000000000000013 /* SourceImageFile.swift */,
 				C00000000000000000000014 /* SourceImageLoader.swift */,
@@ -237,10 +437,18 @@
 		A00000000000000000000022 /* KototoroUITests */ = {
 			isa = PBXGroup;
 			children = (
+				BE0000000000000000000013 /* GoogleDriveSyncTests.swift */,
+				BD0000000000000000000007 /* BookmarkImageStoreTests.swift */,
+                CF2100000000000000000005 /* BrowserVerificationStateTests.swift */,
 				FF0000000000000000000003 /* ReaderStorageTests.swift */,
 				F50000000000000000000004 /* RepositoryManagementTests.swift */,
 				F80000000000000000000004 /* BackupFlowTests.swift */,
 				F80000000000000000000021 /* LocalImportTests.swift */,
+                AD7100000000000000000004 /* TrackingSitesTests.swift */,
+                AD7400000000000000000004 /* SuggestionsTests.swift */,
+				AD0000000000000000000005 /* DetailsChapterPreviewTests.swift */,
+				B10000000000000000000004 /* BatchSelectionTests.swift */,
+				B21000000000000000000012 /* LibraryCollectionIndexTests.swift */,
 				F50000000000000000000003 /* ExtensionPresentationTests.swift */,
 				F30000000000000000000003 /* ReaderDownloadQueueTests.swift */,
 				FB0000000000000000000002 /* ImageLoadPolicyTests.swift */,
@@ -252,6 +460,8 @@
 				C00000000000000000000015 /* SourceImageFileTests.swift */,
 				FD0000000000000000000002 /* ReaderDownloadStoreTests.swift */,
 				FD0000000000000000000003 /* ReaderSettingsTests.swift */,
+				C7A000000000000000000005 /* ReaderStripZoomSessionTests.swift */,
+				C7B000000000000000000005 /* WidgetSnapshotStoreTests.swift */,
 				D00000000000000000000014 /* VideoSourceTests.swift */,
 				E00000000000000000000014 /* ExtensionEcosystemTests.swift */,
 			);
@@ -263,8 +473,19 @@
 			children = (
 				A00000000000000000000015 /* Kototoro.app */,
 				A00000000000000000000016 /* KototoroUITests.xctest */,
+				C0FFEE000000000000000028 /* KototoroWidget.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		C0FFEE000000000000000029 /* KototoroWidget */ = {
+			isa = PBXGroup;
+			children = (
+				C0FFEE000000000000000023 /* KototoroWidget.swift */,
+				C0FFEE000000000000000025 /* Info.plist */,
+				C0FFEE000000000000000026 /* KototoroWidget.entitlements */,
+			);
+			path = KototoroWidget;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -279,10 +500,12 @@
 				A00000000000000000000042 /* Frameworks */,
 				A00000000000000000000043 /* Resources */,
 				B00000000000000000000040 /* Embed Optional JVM Resources */,
+				C0FFEE000000000000000033 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				C0FFEE000000000000000032 /* PBXTargetDependency */,
 			);
 			name = Kototoro;
 			productName = Kototoro;
@@ -307,6 +530,23 @@
 			productReference = A00000000000000000000016 /* KototoroUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		C0FFEE00000000000000002A /* KototoroWidget */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C0FFEE00000000000000002E /* Build configuration list for PBXNativeTarget "KototoroWidget" */;
+			buildPhases = (
+				C0FFEE00000000000000002B /* Sources */,
+				C0FFEE00000000000000002C /* Frameworks */,
+				C0FFEE00000000000000002D /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = KototoroWidget;
+			productName = KototoroWidget;
+			productReference = C0FFEE000000000000000028 /* KototoroWidget.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -322,6 +562,9 @@
 					A00000000000000000000031 = {
 						CreatedOnToolsVersion = 27.0;
 						TestTargetID = A00000000000000000000030;
+					};
+					C0FFEE00000000000000002A = {
+						CreatedOnToolsVersion = 27.0;
 					};
 				};
 			};
@@ -341,6 +584,7 @@
 			targets = (
 				A00000000000000000000030 /* Kototoro */,
 				A00000000000000000000031 /* KototoroUITests */,
+				C0FFEE00000000000000002A /* KototoroWidget */,
 			);
 		};
 /* End PBXProject section */
@@ -351,10 +595,19 @@
 			buildActionMask = 2147483647;
 			files = (
 				F60000000000000000000001 /* Assets.xcassets in Resources */,
+				F60000000000000000000002 /* Localizable.xcstrings in Resources */,
+				F60000000000000000000003 /* InfoPlist.xcstrings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		A00000000000000000000046 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C0FFEE00000000000000002D /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -401,6 +654,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				BE0000000000000000000001 /* GoogleDriveAuth.swift in Sources */,
+				BE0000000000000000000002 /* GoogleDriveSync.swift in Sources */,
+				BD0000000000000000000001 /* BookmarkImageStore.swift in Sources */,
+				BD0000000000000000000003 /* BookmarkPreview.swift in Sources */,
 				FE0000000000000000000001 /* ReaderStorage.swift in Sources */,
 				FE0000000000000000000003 /* ReaderStorageView.swift in Sources */,
 				F40000000000000000000001 /* RepositoriesModel.swift in Sources */,
@@ -410,12 +667,20 @@
 				FC0000000000000000000001 /* ReaderDownloadStore.swift in Sources */,
 				FA0000000000000000000006 /* ContinueReading.swift in Sources */,
 				FA0000000000000000000008 /* SourceWebBrowser.swift in Sources */,
+                CF2100000000000000000001 /* BrowserVerificationState.swift in Sources */,
+                CF2200000000000000000001 /* WebKitHttpRequest.swift in Sources */,
 				FA0000000000000000000007 /* SourceSettingsView.swift in Sources */,
                 AC0000000000000000000001 /* TrackingSitesView.swift in Sources */,
+                AD7400000000000000000001 /* SuggestionsView.swift in Sources */,
+                AD7400000000000000000005 /* TrackingRecommendationsView.swift in Sources */,
+                AD7100000000000000000001 /* TrackingAccounts.swift in Sources */,
 				FA0000000000000000000005 /* ReaderPageTurn.swift in Sources */,
+				FA00000000000000000000F7 /* ReaderStrip.swift in Sources */,
+				C7A000000000000000000001 /* ReaderStripZoomSession.swift in Sources */,
 				F20000000000000000000002 /* ReaderDownloadsView.swift in Sources */,
 				F80000000000000000000001 /* BackupView.swift in Sources */,
 				F80000000000000000000005 /* SourceIcon.swift in Sources */,
+				F80000000000000000000024 /* ExtensionArtwork.swift in Sources */,
 				F80000000000000000000007 /* SourceFilterSheet.swift in Sources */,
 				F80000000000000000000009 /* DetailsPanorama.swift in Sources */,
 				F8000000000000000000000D /* LibraryView.swift in Sources */,
@@ -426,8 +691,31 @@
 				F00000000000000000000005 /* RepositoriesView.swift in Sources */,
 				F00000000000000000000004 /* ReaderPanels.swift in Sources */,
 				F00000000000000000000003 /* ReaderDownloads.swift in Sources */,
+				C0FFEE000000000000000001 /* NovelTranslation.swift in Sources */,
+				C0FFEE000000000000000003 /* TagFilter.swift in Sources */,
+				C0FFEE000000000000000005 /* ReadingIncognito.swift in Sources */,
+				C0FFEE000000000000000007 /* ReaderPageTranslation.swift in Sources */,
+				C0FFEE0000000000000000B1 /* SettingsView.swift in Sources */,
+				C0FFEE000000000000000009 /* NovelSpeech.swift in Sources */,
+				C0FFEE00000000000000000B /* ReplaceRulesView.swift in Sources */,
+				C0FFEE00000000000000000D /* NotesView.swift in Sources */,
+				C0FFEE0000000000000000A1 /* NovelMarkingStyle.swift in Sources */,
+				C0FFEE00000000000000000F /* SavedFilters.swift in Sources */,
+				C0FFEE000000000000000011 /* DownloadSettings.swift in Sources */,
+				C0FFEE000000000000000013 /* WebDavSyncView.swift in Sources */,
+				C0FFEE000000000000000015 /* GitHubMirror.swift in Sources */,
+				C0FFEE000000000000000017 /* AppLock.swift in Sources */,
+				C0FFEE000000000000000019 /* BackgroundUpdates.swift in Sources */,
+				C0FFEE00000000000000001B /* CustomSpaces.swift in Sources */,
+				C0FFEE00000000000000001D /* LibraryFilter.swift in Sources */,
+				C0FFEE00000000000000001F /* PdfImport.swift in Sources */,
+				C0FFEE000000000000000021 /* WidgetSnapshot.swift in Sources */,
+				C7B000000000000000000001 /* WidgetSnapshotStore.swift in Sources */,
+				F0000000000000000000000C /* VideoDownloads.swift in Sources */,
 				F00000000000000000000002 /* ReaderSettings.swift in Sources */,
 				F00000000000000000000001 /* LibraryRecordsView.swift in Sources */,
+				AE0000000000000000000002 /* ReadingStatisticsView.swift in Sources */,
+				AE0000000000000000000001 /* ReadingActivity.swift in Sources */,
 				A00000000000000000000001 /* KototoroApp.swift in Sources */,
 				A00000000000000000000002 /* ContentView.swift in Sources */,
 				A00000000000000000000003 /* LibraryModel.swift in Sources */,
@@ -437,7 +725,15 @@
 				F80000000000000000000022 /* ExtensionWebKit.swift in Sources */,
 				B00000000000000000000003 /* SourcesView.swift in Sources */,
 				C00000000000000000000001 /* SourceDetailsView.swift in Sources */,
+				AD0000000000000000000001 /* DetailsChapterPreview.swift in Sources */,
+				AD0000000000000000000006 /* DetailsChaptersView.swift in Sources */,
 				AB0000000000000000000001 /* SourceChangeView.swift in Sources */,
+				AB0000000000000000000003 /* SourceSelectionSheet.swift in Sources */,
+				AF0000000000000000000002 /* MissingSourcesView.swift in Sources */,
+				B10000000000000000000002 /* BatchSelection.swift in Sources */,
+				B21000000000000000000001 /* LibraryCollectionIndex.swift in Sources */,
+				AF0000000000000000000001 /* LibraryMigrationView.swift in Sources */,
+				D7C0000000000000000000A1 /* LibraryDuplicatesView.swift in Sources */,
 				C00000000000000000000002 /* SourceReaderView.swift in Sources */,
 				C00000000000000000000003 /* SourceImageFile.swift in Sources */,
 				C00000000000000000000004 /* SourceImageLoader.swift in Sources */,
@@ -451,12 +747,26 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				BE0000000000000000000003 /* GoogleDriveSyncTests.swift in Sources */,
+				BE0000000000000000000004 /* GoogleDriveAuth.swift in Sources */,
+				BD0000000000000000000002 /* BookmarkImageStore.swift in Sources */,
+				BD0000000000000000000004 /* BookmarkImageStoreTests.swift in Sources */,
+                CF2100000000000000000002 /* BrowserVerificationState.swift in Sources */,
+                CF2100000000000000000003 /* BrowserVerificationStateTests.swift in Sources */,
 				FE0000000000000000000002 /* ReaderStorage.swift in Sources */,
 				FE0000000000000000000004 /* ReaderStorageTests.swift in Sources */,
 				F40000000000000000000005 /* RepositoryManagementTests.swift in Sources */,
 				F80000000000000000000003 /* BackupFlowTests.swift in Sources */,
 				F80000000000000000000020 /* LocalImportTests.swift in Sources */,
+                AD7100000000000000000003 /* TrackingSitesTests.swift in Sources */,
+                AD7400000000000000000003 /* SuggestionsTests.swift in Sources */,
+				AD0000000000000000000002 /* DetailsChapterPreview.swift in Sources */,
+				AD0000000000000000000003 /* DetailsChapterPreviewTests.swift in Sources */,
 				F40000000000000000000003 /* ExtensionPresentation.swift in Sources */,
+				B10000000000000000000003 /* BatchSelection.swift in Sources */,
+				B21000000000000000000002 /* LibraryCollectionIndex.swift in Sources */,
+				B21000000000000000000003 /* LibraryCollectionIndexTests.swift in Sources */,
+				B10000000000000000000005 /* BatchSelectionTests.swift in Sources */,
 				F40000000000000000000004 /* ExtensionPresentationTests.swift in Sources */,
 				F20000000000000000000003 /* ReaderDownloadQueueTests.swift in Sources */,
 				F20000000000000000000004 /* ReaderDownloadQueue.swift in Sources */,
@@ -474,8 +784,20 @@
 				FC0000000000000000000003 /* ReaderDownloadStoreTests.swift in Sources */,
 				FC0000000000000000000004 /* ReaderSettings.swift in Sources */,
 				FC0000000000000000000005 /* ReaderSettingsTests.swift in Sources */,
+				C7A000000000000000000002 /* ReaderStripZoomSession.swift in Sources */,
+				C7A000000000000000000003 /* ReaderStripZoomSessionTests.swift in Sources */,
+				C7B000000000000000000002 /* WidgetSnapshotStore.swift in Sources */,
+				C7B000000000000000000003 /* WidgetSnapshotStoreTests.swift in Sources */,
 				D00000000000000000000004 /* VideoSourceTests.swift in Sources */,
 				E00000000000000000000004 /* ExtensionEcosystemTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C0FFEE00000000000000002B /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C0FFEE000000000000000024 /* KototoroWidget.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -486,6 +808,11 @@
 			isa = PBXTargetDependency;
 			target = A00000000000000000000030 /* Kototoro */;
 			targetProxy = A00000000000000000000047 /* PBXContainerItemProxy */;
+		};
+		C0FFEE000000000000000032 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = C0FFEE00000000000000002A /* KototoroWidget */;
+			targetProxy = C0FFEE000000000000000031 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -540,11 +867,15 @@
 					"$(SRCROOT)/build/jvm/include",
 				);
 				INFOPLIST_FILE = Kototoro/Info.plist;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Kototoro;
 				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = NO;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				KOTOTORO_GOOGLE_CLIENT_ID = "937269114137-hokgnkluseamu8r7o618c0kj7pcsakrj.apps.googleusercontent.com";
+				KOTOTORO_GOOGLE_REVERSED_CLIENT_ID = "com.googleusercontent.apps.937269114137-hokgnkluseamu8r7o618c0kj7pcsakrj";
 				KOTOTORO_JVM = 0;
 				MARKETING_VERSION = 0.1.0;
 				ONLY_ACTIVE_ARCH = YES;
@@ -565,6 +896,7 @@
 					CoreText,
 					"$(KOTOTORO_JVM_LDFLAGS)",
 				);
+				CODE_SIGN_ENTITLEMENTS = Kototoro/Kototoro.entitlements;
 				PRODUCT_BUNDLE_IDENTIFIER = org.skepsun.kototoro.ios;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_OBJC_BRIDGING_HEADER = "$(SRCROOT)/Kototoro/Kototoro-Bridging-Header.h";
@@ -593,11 +925,15 @@
 					"$(SRCROOT)/build/jvm/include",
 				);
 				INFOPLIST_FILE = Kototoro/Info.plist;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Kototoro;
 				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = NO;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				KOTOTORO_GOOGLE_CLIENT_ID = "937269114137-hokgnkluseamu8r7o618c0kj7pcsakrj.apps.googleusercontent.com";
+				KOTOTORO_GOOGLE_REVERSED_CLIENT_ID = "com.googleusercontent.apps.937269114137-hokgnkluseamu8r7o618c0kj7pcsakrj";
 				KOTOTORO_JVM = 0;
 				MARKETING_VERSION = 0.1.0;
 				ONLY_ACTIVE_ARCH = NO;
@@ -618,6 +954,7 @@
 					CoreText,
 					"$(KOTOTORO_JVM_LDFLAGS)",
 				);
+				CODE_SIGN_ENTITLEMENTS = Kototoro/Kototoro.entitlements;
 				PRODUCT_BUNDLE_IDENTIFIER = org.skepsun.kototoro.ios;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_OBJC_BRIDGING_HEADER = "$(SRCROOT)/Kototoro/Kototoro-Bridging-Header.h";
@@ -649,6 +986,44 @@
 			};
 			name = Release;
 		};
+		C0FFEE00000000000000002F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = KototoroWidget/KototoroWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 53L8K3RJ32;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = KototoroWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Kototoro;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = org.skepsun.kototoro.ios.widget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		C0FFEE000000000000000030 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = KototoroWidget/KototoroWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 53L8K3RJ32;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = KototoroWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Kototoro;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = org.skepsun.kototoro.ios.widget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -675,6 +1050,15 @@
 			buildConfigurations = (
 				A00000000000000000000064 /* Debug */,
 				A00000000000000000000065 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		C0FFEE00000000000000002E /* Build configuration list for PBXNativeTarget "KototoroWidget" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C0FFEE00000000000000002F /* Debug */,
+				C0FFEE000000000000000030 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

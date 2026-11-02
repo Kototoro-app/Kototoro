@@ -138,17 +138,32 @@ class LocalBookReader(
         val index = files.firstOrNull { it == INDEX }?.let { name ->
             runCatching { json.parseToJsonElement(zip.read(("/$name").toPath()) { readUtf8() }).jsonObject }.getOrNull()
         }
+        // Mihon and other readers describe an archive in ComicInfo.xml; Kototoro's own index.json takes precedence.
+        val comicInfo = if (index != null) null else files
+            .firstOrNull { it.equals(ComicInfo.FILE_NAME, ignoreCase = true) }
+            ?.let { name -> runCatching { zip.read(("/$name").toPath()) { readUtf8() } }.getOrNull() }
+            ?.let(ComicInfo::parse)
+        val title = index?.string("title") ?: comicInfo?.series ?: fallbackTitle
         val indexed = index?.let { indexedChapters(it, images) }.orEmpty()
-        val chapters = indexed.ifEmpty { folderChapters(images, index?.string("title") ?: fallbackTitle) }
+        val chapters = indexed.ifEmpty {
+            folderChapters(images, title).let { folders ->
+                // A single-chapter archive takes the chapter's own name and number from ComicInfo.
+                val single = folders.singleOrNull() ?: return@let folders
+                listOf(single.copy(
+                    title = comicInfo?.title ?: single.title,
+                    number = comicInfo?.chapterNumber ?: single.number,
+                ))
+            }
+        }
         require(chapters.isNotEmpty()) { "压缩包里没有图片" }
         val coverEntry = index?.string("cover_entry")?.takeIf { it in files }
         return LocalBook(
-            title = index?.string("title") ?: fallbackTitle,
-            authors = index?.let { it.strings("authors").ifEmpty { listOfNotNull(it.string("author")) } }.orEmpty(),
-            description = index?.string("description"),
-            tags = (index?.get("tags") as? JsonArray).orEmpty().mapNotNull {
-                (it as? JsonObject)?.string("title")
-            },
+            title = title,
+            authors = index?.let { it.strings("authors").ifEmpty { listOfNotNull(it.string("author")) } }
+                ?: comicInfo?.authors.orEmpty(),
+            description = index?.string("description") ?: comicInfo?.summary,
+            tags = index?.let { (it["tags"] as? JsonArray).orEmpty().mapNotNull { tag -> (tag as? JsonObject)?.string("title") } }
+                ?: comicInfo?.allTags.orEmpty(),
             cover = coverEntry ?: chapters.first().pages.first(),
             chapters = chapters,
         )
@@ -201,6 +216,23 @@ class LocalBookReader(
 
     private fun readEpub(file: Path, fallbackTitle: String, splitSections: Boolean): LocalBook {
         val zip = fileSystem.openZip(file)
+        try {
+            return readEpub(zip, fallbackTitle, splitSections, withChapters = true)
+        } finally {
+            zip.close()
+        }
+    }
+
+    /** Reads packaging metadata from an already opened archive without opening the TOC or chapter documents. */
+    fun readEpubMetadata(archive: FileSystem, fallbackTitle: String): LocalBook =
+        readEpub(archive, fallbackTitle, splitSections = false, withChapters = false)
+
+    private fun readEpub(
+        zip: FileSystem,
+        fallbackTitle: String,
+        splitSections: Boolean,
+        withChapters: Boolean,
+    ): LocalBook {
         fun read(entry: String): String? = runCatching { zip.read(("/$entry").toPath()) { readUtf8() } }.getOrNull()
         val container = read("META-INF/container.xml") ?: throw IllegalArgumentException("EPUB 缺少 container.xml")
         val opfPath = LocalXml.tags(container, "rootfile").firstNotNullOfOrNull { it["full-path"] }
@@ -211,6 +243,19 @@ class LocalBookReader(
             val href = item["href"] ?: return@mapNotNull null
             id to EpubItem(resolveHref(opfPath, href), item["media-type"].orEmpty(), item["properties"].orEmpty())
         }.toMap()
+        val coverId = LocalXml.tags(opf, "meta").firstOrNull { it["name"] == "cover" }?.get("content")
+        val cover = manifest.values.firstOrNull { "cover-image" in it.properties }?.href
+            ?: coverId?.let { manifest[it]?.href }?.takeIf(LocalFiles::isImage)
+            ?: manifest.values.firstOrNull { LocalFiles.isImage(it.href) && "cover" in it.href.lowercase() }?.href
+        val metadata = LocalBook(
+            title = LocalXml.texts(opf, "title").firstOrNull() ?: fallbackTitle,
+            authors = LocalXml.texts(opf, "creator").distinct(),
+            description = LocalXml.texts(opf, "description").firstOrNull(),
+            tags = LocalXml.texts(opf, "subject").distinct(),
+            cover = cover,
+            chapters = emptyList(),
+        )
+        if (!withChapters) return metadata
         val spine = LocalXml.tags(opf, "itemref").mapNotNull { manifest[it["idref"]] }
             .filter { it.mediaType.contains("html") || it.href.endsWith("html", ignoreCase = true) }
         require(spine.isNotEmpty()) { "EPUB 没有正文" }
@@ -229,18 +274,7 @@ class LocalBookReader(
                     section = anchor, sectionEnd = sections.getOrNull(index + 1)?.second)
             }
         }
-        val coverId = LocalXml.tags(opf, "meta").firstOrNull { it["name"] == "cover" }?.get("content")
-        val cover = manifest.values.firstOrNull { "cover-image" in it.properties }?.href
-            ?: coverId?.let { manifest[it]?.href }?.takeIf(LocalFiles::isImage)
-            ?: manifest.values.firstOrNull { LocalFiles.isImage(it.href) && "cover" in it.href.lowercase() }?.href
-        return LocalBook(
-            title = LocalXml.texts(opf, "title").firstOrNull() ?: fallbackTitle,
-            authors = LocalXml.texts(opf, "creator").distinct(),
-            description = LocalXml.texts(opf, "description").firstOrNull(),
-            tags = LocalXml.texts(opf, "subject").distinct(),
-            cover = cover,
-            chapters = chapters,
-        )
+        return metadata.copy(chapters = chapters)
     }
 
     /** One table-of-contents entry: its title and where it points (a document, optionally an anchor in it). */

@@ -23,6 +23,47 @@ import java.util.jar.JarOutputStream
 import java.util.jar.JarEntry
 
 class DesktopRepositoriesTest {
+    @Test
+    fun `Aniyomi root and protobuf indexes preserve sources alongside torrent entries`() = runBlocking<Unit> {
+        val bytes = requireNotNull(javaClass.getResourceAsStream("/fixtures/aniyomi-index.protobuf"))
+            .use { it.readBytes() }
+        val gzip = ByteArrayOutputStream().also { output ->
+            GZIPOutputStream(output).use { it.write(bytes) }
+        }.toByteArray()
+        serve(mapOf("/index.pb" to gzip)).use { server ->
+            withRepositories { repos ->
+                for (address in listOf(server.url, server.url + "/index.pb")) {
+                    val catalog = repos.fetch(address)
+                    assertEquals("Yūzōnō", catalog.repository.name)
+                    assertEquals(2, catalog.extensions.size)
+                    assertEquals(8542735178285060053L, catalog.extensions[0].sources.single().id)
+                    assertEquals("AnimeOnsen", catalog.extensions[0].sources.single().name)
+                    assertEquals(5093529078954574163L, catalog.extensions[1].sources.single().id)
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `Aniyomi external protobuf lists use the same shared decoder`() = runBlocking<Unit> {
+        val bytes = requireNotNull(javaClass.getResourceAsStream("/fixtures/aniyomi-extensions.protobuf"))
+            .use { it.readBytes() }
+        val metadata = ExtensionStoreIndex(name = "Aniyomi", extensionListUrl = "lists/extensions.pb")
+        serve(mapOf("/index.pb" to encoded(metadata), "/lists/extensions.pb" to bytes)).use { server ->
+            withRepositories { repos ->
+                val catalog = repos.fetch(server.url + "/index.pb")
+                assertEquals(2, catalog.extensions.size)
+                assertEquals(8542735178285060053L, catalog.extensions[0].sources.single().id)
+                assertEquals(5093529078954574163L, catalog.extensions[1].sources.single().id)
+            }
+        }
+    }
+
+    private companion object {
+        // 2009-01-01, inside the DOS timestamp range both zip headers can express.
+        const val FIXTURE_TIME = 1230768000000L
+    }
+
     @TempDir lateinit var directory: Path
     private val index = ExtensionStoreIndex("测试仓库", "FIX", "key", ExtensionStoreIndex.Contact("https://fixture.invalid"),
         ExtensionStoreIndex.ExtensionList(listOf(extension())))
@@ -275,6 +316,36 @@ class DesktopRepositoriesTest {
         assertEquals("FixtureProvider", DesktopExtensionFiles.cloudstreamPluginId("FixtureProvider.cs3"))
     }
 
+    @Test
+    fun `a forgotten repository disappears from the saved list and from the next start`() = runBlocking<Unit> {
+        val first = encoded(index)
+        val second = encoded(index.copy(name = "第二个仓库"))
+        serve(mapOf("/one/index.pb" to first, "/two/index.pb" to second)).use { server ->
+            val root = directory.resolve("data")
+            FileSourcePreferenceStore(root.resolve("prefs")).use { store ->
+                DesktopRepositories(root, store.open("repos")).use { repos ->
+                    repos.fetch(server.url + "/one/index.pb")
+                    repos.fetch(server.url + "/two/index.pb")
+                    assertEquals(2, repos.saved().size)
+                    // An unknown address changes nothing and reports it, so the UI can say the entry is gone.
+                    assertFalse(repos.remove(server.url + "/missing/index.pb"))
+                    assertEquals(2, repos.saved().size)
+                    assertTrue(repos.remove(server.url + "/one/index.pb"))
+                    assertEquals(listOf(server.url + "/two/index.pb"), repos.saved().map { it.indexUrl })
+                    // Re-adding works, so forgetting is not a one-way door.
+                    repos.fetch(server.url + "/one/index.pb")
+                    assertEquals(2, repos.saved().size)
+                    assertTrue(repos.remove(server.url + "/two/index.pb"))
+                }
+            }
+            FileSourcePreferenceStore(root.resolve("prefs")).use { store ->
+                DesktopRepositories(root, store.open("repos")).use { repos ->
+                    assertEquals(listOf(server.url + "/one/index.pb"), repos.saved().map { it.indexUrl })
+                }
+            }
+        }
+    }
+
     private fun cs3(): ByteArray = ByteArrayOutputStream().also { output ->
         java.util.zip.ZipOutputStream(output).use { zip ->
             zip.putNextEntry(java.util.zip.ZipEntry("manifest.json"))
@@ -290,16 +361,18 @@ class DesktopRepositoriesTest {
     }
 
     // Data-only archive for the inspector; actual extension construction is exercised by source-host/UI fixtures.
+    // Entries otherwise default to the current time, which makes two archives with the same content differ byte for
+    // byte: the download/import comparison below then fails whenever the two builds land in different seconds.
     private fun jar(pkg: String = "fixture.extension"): ByteArray = ByteArrayOutputStream().also { output ->
         JarOutputStream(output).use { jar ->
-            jar.putNextEntry(JarEntry("AndroidManifest.xml"))
+            jar.putNextEntry(JarEntry("AndroidManifest.xml").apply { time = FIXTURE_TIME })
             jar.write("""<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="$pkg"
               android:versionCode="1" android:versionName="1.6.1"><application android:label="源">
               <meta-data android:name="tachiyomix.extensionLib" android:value="1.6"/>
               <meta-data android:name="tachiyomi.extension.class" android:value=".Source"/>
               <meta-data android:name="tachiyomi.extension.nsfw" android:value="0"/>
               </application></manifest>""".toByteArray()); jar.closeEntry()
-            jar.putNextEntry(JarEntry("${pkg.replace('.', '/')}/Source.class"))
+            jar.putNextEntry(JarEntry("${pkg.replace('.', '/')}/Source.class").apply { time = FIXTURE_TIME })
             jar.write(byteArrayOf(0xca.toByte(), 0xfe.toByte(), 0xba.toByte(), 0xbe.toByte(), 0, 0, 0, 52))
             jar.closeEntry()
         }

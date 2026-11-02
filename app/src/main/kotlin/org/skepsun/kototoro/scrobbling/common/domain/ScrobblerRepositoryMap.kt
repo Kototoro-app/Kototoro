@@ -9,6 +9,7 @@ import org.skepsun.kototoro.scrobbling.simkl.data.SimklRepository
 import org.skepsun.kototoro.scrobbling.shikimori.data.ShikimoriRepository
 import org.skepsun.kototoro.scrobbling.bangumi.data.BangumiRepository
 import org.skepsun.kototoro.scrobbling.mangaupdates.data.MangaUpdatesRepository
+import org.skepsun.kototoro.scrobbling.mangabaka.data.MangaBakaRepository
 import javax.inject.Inject
 import javax.inject.Provider
 
@@ -20,6 +21,7 @@ class ScrobblerRepositoryMap @Inject constructor(
     private val bangumiRepository: Provider<BangumiRepository>,
     private val mangaUpdatesRepository: Provider<MangaUpdatesRepository>,
     private val simklRepository: Provider<SimklRepository>,
+    private val mangaBakaRepository: Provider<MangaBakaRepository>,
 ) {
 
     operator fun get(scrobblerService: ScrobblerService): ScrobblerRepository = when (scrobblerService) {
@@ -30,5 +32,6 @@ class ScrobblerRepositoryMap @Inject constructor(
         ScrobblerService.BANGUMI -> bangumiRepository
         ScrobblerService.MANGAUPDATES -> mangaUpdatesRepository
         ScrobblerService.SIMKL -> simklRepository
+        ScrobblerService.MANGABAKA -> mangaBakaRepository
     }.get()
 }

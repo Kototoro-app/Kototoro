@@ -1,7 +1,25 @@
 name: Windows Package
 
 on:
+  # A manual run builds Windows alone, without the Android and iOS jobs of the nightly: the quickest way to check that
+  # a desktop change compiles and still packages. Leave `ref` empty to build the branch the run was started from.
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Commit or branch to build'
+        required: false
+        default: ''
+        type: string
+      channel:
+        description: 'Package channel: nightly or release'
+        required: false
+        default: 'nightly'
+        type: string
   workflow_call:
+    secrets:
+      GOOGLE_DRIVE_DESKTOP_CLIENT_SECRET:
+        description: Desktop Google OAuth client configuration
+        required: false
     inputs:
       ref:
         required: true
@@ -33,25 +51,25 @@ jobs:
     outputs:
       artifact-name: kototoro-windows-${{ inputs.channel }}-${{ github.run_id }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: ${{ inputs.ref }}
           submodules: recursive
 
       - name: Set up compatibility bootstrap JDK 25
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '25.0.1'
 
       - name: Set up packaging JDK 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '21'
 
       - name: Set up Gradle JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
@@ -65,6 +83,7 @@ jobs:
       - name: Prepare pinned Windows build inputs
         env:
           COMPATIBILITY_URL: ${{ inputs.compatibility-url }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           if ($env:COMPATIBILITY_URL) {
             & "./.github/scripts/prepare-windows-ci.ps1" -CompatibilityUrl "$env:COMPATIBILITY_URL"
@@ -86,11 +105,54 @@ jobs:
             if ($process.ExitCode -ne 0) { throw "WebView2 Runtime installation failed: $($process.ExitCode)" }
           }
 
+      # Hosted runners have no GPU driver, so no Vulkan loader: the packaged libmpv imports vulkan-1.dll and the
+      # ncnn upscalers need a Vulkan device. Install the Khronos loader and Mesa's CPU driver (lavapipe) so the
+      # distribution test still plays video and upscales pages with the bundled components.
+      - name: Install software Vulkan
+        run: |
+          $downloads = Join-Path "$env:RUNNER_TEMP" 'vulkan'
+          New-Item -ItemType Directory -Path "$downloads" -Force | Out-Null
+          $inputs = @(
+            @{ Name = 'VulkanRT-X64-1.4.350.0-Installer.exe'
+               Url = 'https://sdk.lunarg.com/sdk/download/1.4.350.0/windows/VulkanRT-X64-1.4.350.0-Installer.exe'
+               Sha256 = '2e26a920afe0cc7adb49c3133fb9dd36fc7a4a1e93277717800c48b32eefffdf' },
+            @{ Name = 'mesa3d-26.2.4-release-msvc.7z'
+               Url = 'https://github.com/pal1000/mesa-dist-win/releases/download/26.2.4/mesa3d-26.2.4-release-msvc.7z'
+               Sha256 = '351fc8c8b695878ffb3eaa044b3ead08672a48b1a045e3c3e3975811df0f6695' }
+          )
+          foreach ($item in $inputs) {
+            $file = Join-Path "$downloads" $item.Name
+            & curl.exe --fail --location --retry 3 --connect-timeout 20 --silent --show-error --output "$file" $item.Url
+            if ($LASTEXITCODE -ne 0) { throw "Download failed: $($item.Name)" }
+            if ((Get-FileHash -LiteralPath "$file" -Algorithm SHA256).Hash -ne $item.Sha256) {
+              throw "SHA-256 mismatch: $($item.Name)"
+            }
+          }
+          $process = Start-Process -FilePath (Join-Path "$downloads" $inputs[0].Name) -ArgumentList '/S' -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Vulkan Runtime installation failed: $($process.ExitCode)" }
+          if (!(Test-Path -LiteralPath "$env:SystemRoot/System32/vulkan-1.dll")) { throw 'vulkan-1.dll was not installed.' }
+          $mesa = Join-Path "$downloads" 'mesa'
+          & 7z x -y "-o$mesa" (Join-Path "$downloads" $inputs[1].Name) 'x64/*' | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'Mesa extraction failed.' }
+          $icd = @(Get-ChildItem -LiteralPath "$mesa/x64" -Filter 'lvp_icd*.json')
+          if ($icd.Count -ne 1) { throw "Expected one lavapipe ICD manifest, found $($icd.Count)." }
+          # The test launches the packaged EXE with a reduced environment, so register the driver machine-wide.
+          $drivers = 'HKLM:\SOFTWARE\Khronos\Vulkan\Drivers'
+          New-Item -Path $drivers -Force | Out-Null
+          New-ItemProperty -Path $drivers -Name $icd[0].FullName -PropertyType DWord -Value 0 -Force | Out-Null
+          $vulkaninfo = Get-Command vulkaninfo -ErrorAction SilentlyContinue
+          if ($vulkaninfo) {
+            $summary = & $vulkaninfo.Source --summary 2>&1 | Out-String
+            Write-Output $summary
+            if ($summary -notmatch 'llvmpipe') { throw 'Vulkan does not expose the lavapipe device.' }
+          }
+
       - name: Build and verify Windows package
         id: package
         env:
           CHANNEL: ${{ inputs.channel }}
           VERSION_NAME: ${{ inputs.version-name }}
+          KOTOTORO_GOOGLE_DESKTOP_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_DESKTOP_CLIENT_SECRET }}
         run: |
           if ($env:CHANNEL -notin @('release', 'nightly')) { throw 'Unknown Windows channel.' }
           $versionLines = & "./gradlew.bat" -q printVersionName --no-daemon --console=plain
@@ -102,10 +164,13 @@ jobs:
           if ($versionName -notmatch '^[A-Za-z0-9][A-Za-z0-9.+-]*$') { throw 'Invalid asset version.' }
           $arguments = @('-PwithDesktopApp', '-PwithWindowsDistribution',
             "-PmihonCompatibilityDirectory=$PWD/build/windows-ci-compatibility", '-PmihonCompatibilityJavaVersion=21',
-            "-PdesktopPackageVersion=$packageVersion", ":desktop-app:windowsPortableZip",
+            "-PdesktopPackageVersion=$packageVersion", "-PdesktopVersionName=$versionName",
+            "-PdesktopChannel=$env:CHANNEL", ":desktop-app:windowsPortableZip",
             "-Dorg.gradle.java.installations.paths=$env:JAVA_HOME_21_X64,$env:JAVA_HOME",
             '-Dorg.gradle.jvmargs=-Xmx3g', '-Pkotlin.daemon.jvmargs=-Xmx3g', '--max-workers=2',
             '--no-configuration-cache', '--no-daemon', '--console=plain', '--stacktrace')
+          # Compile the desktop tests too: they share these sources and nothing else builds them on Windows.
+          $arguments += ':desktop-app:compileTestKotlin'
           if ($env:CHANNEL -eq 'release') {
             $wixBin = @("$env:WIX", "$env:WIX/bin") | Where-Object {
               $_ -and (Test-Path -LiteralPath "$_/dark.exe")
@@ -115,6 +180,26 @@ jobs:
           }
           & "./gradlew.bat" @arguments
           if ($LASTEXITCODE -ne 0) { throw 'Windows packaging or distribution checks failed.' }
+          # The self-update compares this copy against the published releases, so what the image says about itself has
+          # to match the asset it is published as. The probe asks GitHub, but it writes its report even when the runner
+          # cannot reach it, so the assertions below only read the stamp and the install layout.
+          $imageExe = 'desktop-app/build/compose/binaries/main/app/Kototoro/Kototoro.exe'
+          if (!(Test-Path -LiteralPath $imageExe)) { throw 'The packaged image has no launcher.' }
+          $updateReport = Join-Path $env:RUNNER_TEMP 'update-check.properties'
+          $probe = Start-Process -FilePath $imageExe -ArgumentList @('--check-update', $updateReport, '--channel', $env:CHANNEL) -PassThru
+          if (!$probe.WaitForExit(180000)) { $probe.Kill(); throw 'The packaged update check did not finish.' }
+          if (!(Test-Path -LiteralPath $updateReport)) { throw 'The packaged image wrote no update report.' }
+          $stamp = @{}
+          Get-Content -LiteralPath $updateReport | Where-Object { $_ -match '^[^#!=\s][^=]*=' } | ForEach-Object {
+            $pair = $_ -split '=', 2
+            $stamp[$pair[0].Trim()] = $pair[1]
+          }
+          if ($stamp['version.name'] -ne $versionName) { throw "Stamped version '$($stamp['version.name'])' is not '$versionName'." }
+          if ($stamp['version.channel'] -ne $env:CHANNEL) { throw "Stamped channel '$($stamp['version.channel'])' is not '$env:CHANNEL'." }
+          if ($stamp['install.supported'] -ne 'true' -or $stamp['install.kind'] -ne 'portable') {
+            throw "The packaged image does not recognise itself: supported=$($stamp['install.supported']) kind=$($stamp['install.kind'])"
+          }
+          Get-Content -LiteralPath $updateReport
           New-Item -ItemType Directory -Path 'release-windows' -Force | Out-Null
           $assetStem = "Kototoro-$versionName-windows-x64-$env:CHANNEL"
           Copy-Item -LiteralPath "desktop-app/build/compose/binaries/main/portable/Kototoro-Windows-local-preview-$packageVersion.zip" -Destination "release-windows/$assetStem.zip"
@@ -127,7 +212,7 @@ jobs:
           $checksums | Set-Content -LiteralPath "release-windows/$assetStem.sha256" -Encoding utf8
 
       - name: Upload Windows package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: kototoro-windows-${{ inputs.channel }}-${{ github.run_id }}
           path: release-windows/*
@@ -137,7 +222,7 @@ jobs:
 
       - name: Upload packaging diagnostics
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: windows-diagnostics-${{ inputs.channel }}-${{ github.run_id }}
           path: |

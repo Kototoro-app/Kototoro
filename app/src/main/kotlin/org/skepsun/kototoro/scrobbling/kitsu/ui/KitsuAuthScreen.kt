@@ -51,6 +51,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
+import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 
 private val emailRegex = Regex("^[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,6}$", RegexOption.IGNORE_CASE)
@@ -77,8 +79,8 @@ fun KitsuAuthScreen(
     ) {
         AuthHeader(
             title = R.string.kitsu,
-            icon = R.drawable.ic_kitsu,
-            tintIcon = true,
+            icon = R.drawable.ic_kitsu_brand,
+            tintIcon = false,
         )
         Text(
             text = stringResource(R.string.email_password_enter_hint),
@@ -94,7 +96,7 @@ fun KitsuAuthScreen(
             textStyle = androidx.compose.ui.text.TextStyle(fontSize = 16.sp),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next),
             keyboardActions = KeyboardActions(onNext = { passwordFocusRequester.requestFocus() }),
-            modifier = authFieldModifier().padding(top = 30.dp),
+            modifier = authFieldModifier().padding(top = 30.dp).tvTextInputFocusEscape(),
         )
         OutlinedTextField(
             value = password,
@@ -104,7 +106,7 @@ fun KitsuAuthScreen(
             textStyle = androidx.compose.ui.text.TextStyle(fontSize = 16.sp),
             visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
             trailingIcon = {
-                IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                IconButton(onClick = { passwordVisible = !passwordVisible }, modifier = Modifier.tvIconButtonRing()) {
                     Icon(
                         imageVector = if (passwordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
                         contentDescription = stringResource(if (passwordVisible) R.string.hide else R.string.show),
@@ -115,7 +117,7 @@ fun KitsuAuthScreen(
             keyboardActions = KeyboardActions(
                 onDone = { submit() },
             ),
-            modifier = authFieldModifier().padding(top = 8.dp).focusRequester(passwordFocusRequester),
+            modifier = authFieldModifier().padding(top = 8.dp).focusRequester(passwordFocusRequester).tvTextInputFocusEscape(),
         )
         Spacer(Modifier.weight(1f))
         Row(

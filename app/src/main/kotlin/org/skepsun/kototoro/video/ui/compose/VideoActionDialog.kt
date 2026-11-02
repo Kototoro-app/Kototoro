@@ -29,6 +29,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -122,11 +123,13 @@ internal fun VideoActionDialog(
     state: VideoActionDialogState,
     onDismissRequest: () -> Unit,
     onItemSelected: (VideoActionDialogItem, IntRect) -> Unit,
+    hidden: Boolean = false,
 ) {
     val isTvPresentation = LocalUiPresentationConfig.current.isTv
     val gapPx = with(androidx.compose.ui.platform.LocalDensity.current) { 6.dp.roundToPx() }
     val marginPx = with(androidx.compose.ui.platform.LocalDensity.current) { 8.dp.roundToPx() }
     val maxHeight = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * 0.72f).dp
+    val (menuMinWidth, menuMaxWidth) = playerMenuWidth(phoneMin = 268.dp, phoneMax = 340.dp)
     Popup(
         popupPositionProvider = PlayerMenuPositionProvider(
             targetBounds = state.anchorBounds,
@@ -140,10 +143,14 @@ internal fun VideoActionDialog(
     ) {
         Surface(
             modifier = Modifier
-                .widthIn(min = 268.dp, max = 340.dp)
-                .heightIn(max = maxHeight),
+                .widthIn(min = menuMinWidth, max = menuMaxWidth)
+                .heightIn(max = maxHeight)
+                // Kept composed but invisible while a sub-surface owns its own window: dropping the
+                // panel would forget which row the user was on, so Back from the sub-surface would
+                // re-home the ring on the first row instead of the row that opened it.
+                .alpha(if (hidden) 0f else 1f),
             shape = RoundedCornerShape(18.dp),
-            color = Color.Black.copy(alpha = 0.86f),
+            color = playerMenuContainerColor(phoneAlpha = 0.86f),
             contentColor = Color.White,
             border = BorderStroke(1.dp, Color.White.copy(alpha = 0.16f)),
             shadowElevation = 12.dp,
@@ -212,11 +219,13 @@ private fun VideoActionItem(
     onItemSelected: (VideoActionDialogItem, IntRect) -> Unit,
 ) {
     var itemBounds = IntRect.Zero
+    val minRowHeight = playerMenuRowMinHeight(if (compact) 60.dp else 56.dp)
+    val rowTextStyle = playerMenuRowTextStyle(compact)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = if (compact) 60.dp else 56.dp)
+            .heightIn(min = minRowHeight)
             .onGloballyPositioned { coordinates ->
                 val bounds = coordinates.boundsInWindow()
                 itemBounds = IntRect(
@@ -248,7 +257,7 @@ private fun VideoActionItem(
         ) {
             Text(
                 text = item.title,
-                style = if (compact) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelLarge,
+                style = rowTextStyle,
                 color = Color.White,
                 maxLines = if (compact) 2 else 1,
                 overflow = TextOverflow.Ellipsis,

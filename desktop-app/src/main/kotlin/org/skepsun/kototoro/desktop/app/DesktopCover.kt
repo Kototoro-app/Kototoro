@@ -3,7 +3,7 @@ package org.skepsun.kototoro.desktop.app
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.*
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,12 +32,12 @@ internal fun DesktopCover(content: SourceContent, cache: DesktopCovers, modifier
     val cover = rememberDesktopCover(content, cache, large, revision)
     Box(modifier, contentAlignment = Alignment.Center) {
         val image = cover.bitmap
-        if (image != null) Image(image, "${content.title}封面", contentScale = ContentScale.Crop,
+        if (image != null) Image(image, desktopText("details.cover", content.title), contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize().testTag("cover:${content.id}"))
         else Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(content.title.take(1), fontSize = 44.sp, color = Accent)
             if (cover.failed) TextButton({ revision++ }, modifier = Modifier.testTag("cover-retry:${content.id}")) {
-                Text("重试封面")
+                Text(desktopText("error.coverRetry"))
             }
         }
     }
@@ -53,7 +53,7 @@ private fun rememberDesktopCover(content: SourceContent, cache: DesktopCovers, l
         value = DesktopCoverState()
         if (!url.isNullOrBlank()) try {
             val path = cache.load(content, large, refresh = revision > 0)
-            val bitmap = withContext(Dispatchers.IO) {
+            val bitmap = withContext(DesktopDispatchers.decode) {
                 // The conversion creates a separate Bitmap retained by Compose.
                 SkiaImage.makeFromEncoded(Files.readAllBytes(path)).use { it.toComposeImageBitmap() }
             }

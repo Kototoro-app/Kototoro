@@ -1,5 +1,7 @@
 package org.skepsun.kototoro.desktop.compat
 
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -67,6 +69,42 @@ class DesktopBrowserChallenges internal constructor(
         withContext(requestOwner.asContextElement(currentCoroutineContext()[Job])) { block() }
 
     internal fun isRequestCancelled(): Boolean = requestOwner.get()?.isCancelled == true
+
+    private val interactions = java.util.concurrent.atomic.AtomicInteger()
+
+    /**
+     * A user-initiated operation (browsing, details, reading). Only while one runs may an unsolved challenge open the
+     * verification window: icons, covers, update checks and prefetches would otherwise pop windows for sources the
+     * user is not even looking at. Extensions often issue requests with `enqueue`, whose callbacks run on OkHttp's
+     * threads, so this is a session-wide count rather than a thread-local mark.
+     */
+    suspend fun <T> withInteraction(block: suspend () -> T): T {
+        interactions.incrementAndGet()
+        try { return withRequestCancellation(block) } finally { interactions.decrementAndGet() }
+    }
+
+    internal val interactionActive: Boolean get() = interactions.get() > 0
+
+    private val mutableBlocked = MutableStateFlow<List<String>>(emptyList())
+
+    /**
+     * Sites (one root URL per host) whose background requests met a challenge nobody was asked to solve: Android's
+     * "captcha required" notification. The app lists them; verifying one is a user action that requests it again.
+     */
+    val blocked = mutableBlocked.asStateFlow()
+
+    internal fun reportBlocked(url: okhttp3.HttpUrl) {
+        val root = url.newBuilder().encodedPath("/").query(null).fragment(null).build().toString()
+        mutableBlocked.update { sites -> if (root in sites) sites else sites + root }
+    }
+
+    /** A host that answers normally again (verified here or anywhere else) leaves the list. */
+    internal fun reportPassed(url: okhttp3.HttpUrl) {
+        if (mutableBlocked.value.isEmpty()) return
+        mutableBlocked.update { sites -> sites.filterNot { it.toHttpUrlOrNull()?.host == url.host } }
+    }
+
+    fun dismissBlocked(site: String) = mutableBlocked.update { it - site }
 
     suspend fun showWindow(id: Long): DesktopBrowserWindow? = withContext(Dispatchers.IO) {
         val engine = synchronized(this@DesktopBrowserChallenges) {

@@ -20,6 +20,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -31,9 +32,10 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -62,6 +64,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.graphics.Color
@@ -81,14 +84,18 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import java.text.BreakIterator
 import coil3.compose.AsyncImage
 import coil3.request.CachePolicy
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.compose.KototoroSheetSurface
 import org.skepsun.kototoro.core.ui.compose.SheetDragHandle
 import org.skepsun.kototoro.core.ui.compose.contentCoverCacheKey
@@ -110,6 +117,12 @@ import org.skepsun.kototoro.space.domain.SpaceId
 import org.skepsun.kototoro.core.util.ext.mangaExtra
 
 private const val SPACE_SWITCHER_FAB_MIN_ALPHA = 0.60f
+private const val SpacePanelWidthFraction = 0.68f
+private val SpacePanelMaxWidth = 280.dp
+
+/** Width of the space switcher panel: the design fraction, but never wider than the phone cap. */
+internal fun spacePanelWidth(availableWidth: Dp): Dp =
+    minOf(availableWidth * SpacePanelWidthFraction, SpacePanelMaxWidth)
 
 internal class SpacePanelDragDirection {
 
@@ -158,8 +171,9 @@ fun BoxScope.SpaceSidekick(
         position == SpaceSwitcherPosition.CENTER_LEFT
     val isCentered = position == SpaceSwitcherPosition.CENTER_LEFT ||
         position == SpaceSwitcherPosition.CENTER_RIGHT
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
 
-    Box(modifier = modifier.zIndex(20f)) {
+    val drawer: @Composable BoxScope.() -> Unit = {
         AnimatedVisibility(
             visible = state.switcherVisible,
             enter = fadeIn(),
@@ -169,6 +183,7 @@ fun BoxScope.SpaceSidekick(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(Color.Black.copy(alpha = 0.32f))
+                    .focusProperties { canFocus = false }
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
@@ -183,18 +198,43 @@ fun BoxScope.SpaceSidekick(
             enter = slideInHorizontally(initialOffsetX = { if (isLeft) -it else it }),
             exit = slideOutHorizontally(targetOffsetX = { if (isLeft) -it else it }),
         ) {
-            SpaceSidekickPanel(
-                state = state,
-                onAction = onAction,
-                resumeItems = resumeItems,
-                onResume = onResume,
-                onDismiss = { onAction(SpaceAction.DismissSwitcher) },
-                isLeft = isLeft,
-            )
+            // Resolve the width against the real constraints: a fillMaxWidth(fraction) followed by
+            // widthIn(max) cannot shrink an already exact width, which let the panel cover 68% of a
+            // TV screen instead of the intended 280dp cap.
+            BoxWithConstraints(modifier = Modifier.fillMaxHeight()) {
+                SpaceSidekickPanel(
+                    state = state,
+                    onAction = onAction,
+                    resumeItems = resumeItems,
+                    onResume = onResume,
+                    onDismiss = { onAction(SpaceAction.DismissSwitcher) },
+                    isLeft = isLeft,
+                    width = spacePanelWidth(maxWidth),
+                )
+            }
+        }
+    }
+
+    Box(modifier = modifier.zIndex(20f)) {
+        if (isTvPresentation) {
+            if (state.switcherVisible) {
+                Dialog(
+                    onDismissRequest = { onAction(SpaceAction.DismissSwitcher) },
+                    properties = DialogProperties(
+                        usePlatformDefaultWidth = false,
+                        decorFitsSystemWindows = false,
+                    ),
+                ) {
+                    Box(modifier = Modifier.fillMaxSize(), content = drawer)
+                }
+            }
+        } else {
+            drawer()
         }
 
         AnimatedVisibility(
-            visible = visible && !state.switcherVisible,
+            // Keep the TV opener attached so the modal window can restore its focus on close.
+            visible = visible && (!state.switcherVisible || isTvPresentation),
             modifier = Modifier
                 .align(
                     when {
@@ -235,6 +275,10 @@ internal fun BoxScope.SpaceSidekickHandle(
     val label = activeSpace?.title ?: stringResource(presentation.labelRes)
     val description = stringResource(R.string.space_switcher_content_description, label)
     var dragDistance by remember { mutableFloatStateOf(0f) }
+    // A remote cannot drag this 32dp edge sliver, and a focus ring around it would sit half outside
+    // the screen with nothing to reach from DOWN. The rail carries the real space button, so on TV
+    // the handle is not drawn at all — it used to stay on top of the reader page as a dead sliver.
+    if (LocalUiPresentationConfig.current.isTv) return
     val openDragThreshold = with(LocalDensity.current) { 36.dp.toPx() }
     val shape = if (isLeft) {
         RoundedCornerShape(topEnd = 18.dp, bottomEnd = 18.dp)
@@ -261,7 +305,6 @@ internal fun BoxScope.SpaceSidekickHandle(
                     onDragCancel = { dragDistance = 0f },
                 )
             }
-            .tvFocusable(shape = shape, enabled = state.switcherEnabled, addFocusTarget = false)
             .clickable(
                 enabled = state.switcherEnabled,
                 role = Role.Button,
@@ -315,6 +358,7 @@ private fun SpaceSidekickPanel(
     onResume: (SpaceId) -> Unit,
     onDismiss: () -> Unit,
     isLeft: Boolean,
+    width: Dp,
 ) {
     var horizontalDragOffset by remember(isLeft) { mutableFloatStateOf(0f) }
     val isTvPresentation = LocalUiPresentationConfig.current.isTv
@@ -322,10 +366,12 @@ private fun SpaceSidekickPanel(
     val defaultFocusIndex = remember(state.spaces, state.activeSpaceId) {
         state.spaces.indexOfFirst { it.id == state.activeSpaceId }.takeIf { it >= 0 } ?: 0
     }
-    LaunchedEffect(isTvPresentation, state.switcherVisible, defaultFocusIndex) {
-        if (isTvPresentation && state.switcherVisible) {
+    val listState = rememberLazyListState()
+    LaunchedEffect(isTvPresentation, state.switcherVisible, defaultFocusIndex, state.switchInProgress) {
+        if (isTvPresentation && state.switcherVisible && !state.switchInProgress && state.spaces.isNotEmpty()) {
+            listState.scrollToItem(defaultFocusIndex)
             withFrameNanos { }
-            runCatching { defaultFocusRequester.requestFocus() }
+            defaultFocusRequester.requestFocus()
         }
     }
     val dismissThreshold = with(LocalDensity.current) { 72.dp.toPx() }
@@ -337,8 +383,7 @@ private fun SpaceSidekickPanel(
     GlassSurface(
         modifier = Modifier
             .fillMaxHeight()
-            .fillMaxWidth(0.68f)
-            .widthIn(max = 280.dp)
+            .width(width)
             .graphicsLayer { translationX = horizontalDragOffset }
             .pointerInput(isLeft, onDismiss) {
                 var dismissed = false
@@ -417,6 +462,7 @@ private fun SpaceSidekickPanel(
                 modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 14.dp),
             )
             LazyColumn(
+                state = listState,
                 modifier = Modifier
                     .fillMaxSize()
                     .then(if (isTvPresentation) Modifier.focusGroup() else Modifier)
@@ -589,7 +635,7 @@ private fun SpaceSidekickCardContent(
                 enabled = enabled,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .size(48.dp),
+                    .size(48.dp).tvIconButtonRing(),
             ) {
                 Surface(
                     modifier = Modifier.size(42.dp),
@@ -897,7 +943,7 @@ private fun SpaceRow(
             }
         }
         if (resumeItem?.canResume == true) {
-            IconButton(onClick = onResume, enabled = enabled) {
+            IconButton(onClick = onResume, enabled = enabled, modifier = Modifier.tvIconButtonRing()) {
                 Icon(
                     painter = painterResource(presentation.resumeIconRes),
                     contentDescription = stringResource(

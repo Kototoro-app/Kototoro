@@ -2,6 +2,7 @@ package org.skepsun.kototoro.list.ui.compose
 
 import android.util.Log
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -48,6 +49,9 @@ import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.compose.gridPosterCardStyle
 import org.skepsun.kototoro.core.ui.compose.KototoroSheetSurface
 import org.skepsun.kototoro.core.ui.compose.SheetDragHandle
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
+import org.skepsun.kototoro.core.ui.adaptive.tvSliderDpad
+import org.skepsun.kototoro.core.ui.adaptive.tvTakeInitialFocus
 import org.skepsun.kototoro.core.ui.compose.KototoroSlider
 import org.skepsun.kototoro.list.domain.ListSortOrder
 
@@ -129,6 +133,7 @@ fun DisplayOptionsSheet(
                 Column(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .tvTakeInitialFocus()
                             .verticalScroll(rememberScrollState())
                             .padding(horizontal = 24.dp)
                             .padding(bottom = 24.dp, top = 6.dp),
@@ -227,6 +232,7 @@ fun DisplayOptionsSheet(
                         Switch(
                             checked = showExtraInfo,
                             onCheckedChange = { settings.showExtraInfoOnCards = it },
+                            modifier = Modifier.tvFocusable(shape = CircleShape, addFocusTarget = false),
                         )
                     }
 
@@ -309,74 +315,42 @@ private fun GroupingSection(
             checked = enabled,
             enabled = available,
             onCheckedChange = onEnabledChange,
+            modifier = Modifier.tvFocusable(
+                enabled = available,
+                shape = CircleShape,
+                addFocusTarget = false,
+            ),
         )
     }
 }
 
+/** Android's resources and TV focus around the shared chips (core-ui DisplayModeOptions). */
 @Composable
 internal fun DisplayModeSelector(
     currentListMode: ListMode,
     onListModeSelected: (ListMode) -> Unit,
 ) {
     val labels = androidx.compose.ui.platform.LocalContext.current.resources.getStringArray(R.array.list_modes)
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        ListMode.entries.chunked(2).forEach { modes ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                modes.forEach { mode ->
-                    DisplayModeChip(
-                        iconRes = when {
-                            mode == ListMode.LIST -> R.drawable.ic_list
-                            mode == ListMode.DETAILED_LIST -> R.drawable.ic_list_detailed
-                            mode.isMovieGrid -> R.drawable.ic_content_video
-                            else -> R.drawable.ic_grid
-                        },
-                        label = labels[mode.ordinal],
-                        selected = currentListMode == mode,
-                        onClick = { onListModeSelected(mode) },
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-internal fun DisplayModeChip(
-    iconRes: Int,
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    AssistChip(
-        onClick = onClick,
-        label = { Text(label, maxLines = 1) },
-        leadingIcon = {
-            Icon(
-                painter = painterResource(if (selected) R.drawable.ic_check else iconRes),
-                contentDescription = null,
+    DisplayModeOptions(
+        currentListMode = currentListMode,
+        onListModeSelected = onListModeSelected,
+        label = { labels[it.ordinal] },
+        icon = { mode ->
+            painterResource(
+                when {
+                    mode == ListMode.LIST -> R.drawable.ic_list
+                    mode == ListMode.DETAILED_LIST -> R.drawable.ic_list_detailed
+                    mode.isMovieGrid -> R.drawable.ic_content_video
+                    else -> R.drawable.ic_grid
+                },
             )
         },
-        modifier = modifier,
-        colors = AssistChipDefaults.assistChipColors(
-            containerColor = if (selected) {
-                MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.72f)
-            } else {
-                Color.Transparent
-            },
-            labelColor = if (selected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurface,
-            leadingIconContentColor = if (selected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-        ),
+        checkIcon = painterResource(R.drawable.ic_check),
+        chipModifier = Modifier.tvFocusable(shape = CircleShape, addFocusTarget = false),
     )
 }
 
+/** Android's D-pad handling around the shared slider (core-ui GridSizeOption). */
 @Composable
 internal fun GridSizeSlider(
     title: String,
@@ -384,48 +358,15 @@ internal fun GridSizeSlider(
     onValueChange: (Int) -> Unit,
     columnsHint: String? = null,
 ) {
-    var sliderValue by remember(value) { mutableFloatStateOf(value.toFloat()) }
-    val currentValue = sliderValue.toInt().coerceIn(50, 150)
-
-    Column(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    text = "$currentValue%",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                if (columnsHint != null) {
-                    Text(
-                        text = columnsHint,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
-                    )
-                }
-            }
-        }
-        KototoroSlider(
-            value = sliderValue,
-            onValueChange = {
-                sliderValue = it
-                onValueChange(it.toInt().coerceIn(50, 150))
-            },
-            valueRange = 50f..150f,
-            steps = 19,
-        )
-    }
+    GridSizeOption(
+        title = title,
+        value = value,
+        onValueChange = onValueChange,
+        columnsHint = columnsHint,
+        sliderModifier = { current, commit ->
+            Modifier.tvSliderDpad(value = current, valueRange = 50f..150f, onValueChange = commit, steps = 19)
+        },
+    )
 }
 
 /**

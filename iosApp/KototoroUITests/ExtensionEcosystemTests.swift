@@ -302,6 +302,34 @@ final class ExtensionEcosystemTests: XCTestCase {
         }
     }
 
+    /// Exercise the real parser through the embedded JVM, including its wrapper and the packaged host JAR.
+    @MainActor
+    func testPicacgSettingsExposeCredentialLogin() throws {
+        app.terminate()
+        app.launchArguments += ["-sources.showAdult", "YES", "-space.kind", ""]
+        app.launch()
+        app.mainTab("浏览").tap()
+        let field = searchField()
+        field.tap()
+        field.typeText("PICACG")
+        let source = app.buttons["source.PICACG"]
+        XCTAssertTrue(source.waitForExistence(timeout: 90), app.debugDescription)
+        source.tap()
+        let settings = app.buttons["browse.settings"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 30), app.debugDescription)
+        settings.tap()
+        let username = app.buttons["sourceSettings.node.auth:username"]
+        for _ in 0..<4 where !username.waitForExistence(timeout: 3) {
+            app.collectionViews.firstMatch.swipeUp(velocity: .slow)
+        }
+        XCTAssertTrue(username.exists, app.debugDescription)
+        XCTAssertTrue(app.buttons["sourceSettings.node.auth:password"].exists, app.debugDescription)
+        XCTAssertTrue(app.buttons["sourceSettings.node.auth:login"].exists, app.debugDescription)
+        attach("PICACG credential settings")
+        app.buttons["sourceSettings.node.auth:password"].tap()
+        XCTAssertTrue(app.secureTextFields["sourceSettings.text"].waitForExistence(timeout: 5), app.debugDescription)
+    }
+
     /// Each source's settings open from its browse toolbar: the extension's own rows plus the host's User-Agent row
     /// with presets, and the site in the in-app browser.
     @MainActor
@@ -602,12 +630,117 @@ final class ExtensionEcosystemTests: XCTestCase {
         }
     }
 
+    @MainActor
+    func testWenku8VerificationNeverClaimsCompletionForAnUnresolvedChallenge() throws {
+        try verifyWenku8(requireListing: false)
+    }
+
+    @MainActor
+    func testWenku8LoggedInBrowserSessionLoadsTheSourceListing() throws {
+        try verifyWenku8(requireListing: true)
+    }
+
+    @MainActor
+    private func verifyWenku8(requireListing: Bool) throws {
+        app.terminate()
+        app.launchEnvironment["KOTOTORO_SOURCE_DIAGNOSTICS"] = "1"
+        app.launch()
+        app.mainTab("浏览").tap()
+        let field = searchField()
+        field.tap()
+        field.typeText("轻小说文库")
+        let source = app.buttons["source.WENKU8"]
+        XCTAssertTrue(source.waitForExistence(timeout: 30), app.debugDescription)
+        source.tap()
+        let first = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier BEGINSWITH %@", "source.content.")).firstMatch
+        let verify = app.buttons["source.verify"]
+        _ = XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            first.exists || (verify.exists && !self.element("source.solving").exists)
+                || self.app.staticTexts["没有内容"].exists
+        }, object: nil)], timeout: 100)
+        if !first.exists && verify.exists {
+            verify.tap()
+            XCTAssertTrue(app.buttons["browser.done"].waitForExistence(timeout: 15))
+            sleep(10)
+            attach("Wenku8 browser before returning")
+            if !app.buttons["browser.done"].isEnabled {
+                XCTAssertFalse(element("browser.status").label.contains("已通过验证"))
+                app.buttons["browser.close"].tap()
+                XCTAssertFalse(requireListing, "The site still has an interactive challenge")
+                return
+            }
+            app.buttons["browser.done"].tap()
+        }
+        _ = XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            first.exists || verify.exists
+        }, object: nil)], timeout: 60)
+        XCTAssertTrue(first.exists || verify.exists, "A failed verification must retain the challenge: \(app.debugDescription)")
+        XCTAssertFalse(app.staticTexts["没有内容"].exists, "Cancelling the error view must not discard the retry")
+        if requireListing { XCTAssertTrue(first.exists, "The logged-in browser session must load actual source content") }
+        attach(first.exists ? "Wenku8 readable listing" : "Wenku8 unresolved challenge")
+    }
+
+    /// A pending Comix browse must settle and must not leave its source preferences waiting indefinitely.
+    @MainActor
+    func testComixBrowseAndPreferencesSettle() throws {
+        app.terminate()
+        app.launchArguments += ["-sources.showAdult", "YES", "-space.kind", "", "-sources.hiddenEcosystems", "",
+                                "-sources.hiddenKinds", "", "-sources.newOnly", "NO"]
+        app.launchEnvironment["KOTOTORO_SOURCE_DIAGNOSTICS"] = "1"
+        app.launch()
+        app.mainTab("浏览").tap()
+        let field = searchField()
+        field.tap()
+        field.typeText("Comix")
+        let source = app.buttons["source.MIHON_7537715367149829912"]
+        XCTAssertTrue(source.waitForExistence(timeout: 30), app.debugDescription)
+        source.tap()
+        let content = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier BEGINSWITH %@", "source.content.")).firstMatch
+        let error = element("sources.error")
+        let settled = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            content.exists || error.exists || self.element("source.solving").exists
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [settled], timeout: 45), .completed,
+                       "Comix browse kept spinning without content or an error")
+        XCTAssertTrue(content.exists, "Comix listing failed: \(app.debugDescription)")
+        app.buttons["browse.settings"].tap()
+        let preference = app.descendants(matching: .any)["sourceSettings.node.pref:0"]
+        XCTAssertTrue(preference.waitForExistence(timeout: 15), "Comix preferences kept loading: \(app.debugDescription)")
+        attach("Comix browse and preferences")
+    }
+
+    /// Verifies fresh details even when a saved directory is displayed during the source refresh.
+    @MainActor
+    func testComixDetailsAndChaptersLoad() throws {
+        app.terminate()
+        app.launchArguments += ["-sources.showAdult", "YES", "-space.kind", "", "-sources.hiddenEcosystems", "",
+                                "-sources.hiddenKinds", "", "-sources.newOnly", "NO"]
+        app.launchEnvironment["KOTOTORO_SOURCE_DIAGNOSTICS"] = "1"
+        app.launch()
+        app.mainTab("浏览").tap()
+        openFirstItem(source: "MIHON_7537715367149829912", search: "Comix")
+        let chapter = revealChapter(in: app, timeout: 240)
+        let error = element("details.error")
+        let settled = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            error.exists || (chapter.exists && !self.element("details.loading").exists &&
+                !self.element("details.updating").exists)
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [settled], timeout: 240), .completed)
+        XCTAssertFalse(error.exists, app.debugDescription)
+        XCTAssertTrue(chapter.exists, app.debugDescription)
+        attach("Comix fresh details and chapters")
+    }
+
     /// A real Cloudflare-protected site (Comix, comix.to): a challenge on the listing is shown as such and cleared by
     /// the automatic hidden-browser pass, after which the listing, details and a chapter's pages load. Needs network.
     @MainActor
     func testCloudflareProtectedSourceLoads() throws {
         // Host stack traces of failed calls go to <data>/source-failures.log for this run.
         app.terminate()
+        app.launchArguments += ["-sources.showAdult", "YES", "-space.kind", "", "-sources.hiddenEcosystems", "",
+                                "-sources.hiddenKinds", "", "-sources.newOnly", "NO"]
         app.launchEnvironment["KOTOTORO_SOURCE_DIAGNOSTICS"] = "1"
         app.launch()
         app.mainTab("浏览").tap()
@@ -645,11 +778,48 @@ final class ExtensionEcosystemTests: XCTestCase {
         sleep(3)
         attach("Comix browse")
         first.tap()
-        openFirstChapter()
-        let image = app.images["reader.image"].firstMatch
-        waitForEither(image, element("reader.error"), timeout: 120)
-        if !image.exists { attach("Comix reader error") }
-        XCTAssertTrue(image.exists, "Comix pages failed: \(app.debugDescription)")
+        // Comix harvests the entire paginated directory through its browser before returning details.
+        openFirstChapter(timeout: 240)
+        let normalReading = app.buttons["正常阅读"]
+        if normalReading.waitForExistence(timeout: 5) { normalReading.tap() }
+        let readerError = element("reader.error"), pageError = element("reader.pageError.0")
+        func visiblePage(_ number: Int) -> XCUIElement? {
+            let images = app.images.matching(NSPredicate(format: "identifier == %@ AND label CONTAINS %@",
+                                                         "reader.image", "第 \(number) 页"))
+            let window = app.windows.firstMatch.frame
+            return images.allElementsBoundByIndex.first {
+                $0.isHittable && $0.frame.intersection(window).height > 40
+            }
+        }
+        let loaded = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            visiblePage(1) != nil || readerError.exists || pageError.exists
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [loaded], timeout: 240), .completed)
+        XCTAssertFalse(readerError.exists, app.debugDescription)
+        XCTAssertFalse(pageError.exists, app.debugDescription)
+        XCTAssertNotNil(visiblePage(1), "The current page must display an image, not only preload a neighbour")
+        // This chapter starts with a genuinely black spacer image. Verify another page before taking the screenshot.
+        let progress = app.sliders["reader.progress"]
+        if !progress.isHittable {
+            app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        }
+        XCTAssertTrue(progress.waitForExistence(timeout: 5))
+        progress.adjust(toNormalizedSliderPosition: 0.5)
+        let currentPage = app.staticTexts["reader.currentPage"]
+        let moved = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            (Int(currentPage.value as? String ?? "0") ?? 0) > 1
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [moved], timeout: 10), .completed, app.debugDescription)
+        let number = Int(currentPage.value as? String ?? "0") ?? 0
+        let targetError = element("reader.pageError.\(number - 1)")
+        let nextLoaded = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            visiblePage(number) != nil || readerError.exists || targetError.exists
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [nextLoaded], timeout: 120), .completed)
+        XCTAssertFalse(readerError.exists, app.debugDescription)
+        XCTAssertFalse(targetError.exists, app.debugDescription)
+        XCTAssertNotNil(visiblePage(number))
+        sleep(1) // Let the visible image reach the compositor before capturing it.
         attach("Comix reader")
     }
 
@@ -698,7 +868,7 @@ final class ExtensionEcosystemTests: XCTestCase {
         sleep(1)
         attach("Panorama back at top")
         XCTAssertTrue(app.staticTexts["details.title"].isHittable)
-        app.tabBars.buttons["设置"].tap()
+        app.openSettings("settings.details")
         XCTAssertTrue(app.switches["settings.panorama"].waitForExistence(timeout: 10))
         attach("Panorama settings")
     }
@@ -869,8 +1039,8 @@ final class ExtensionEcosystemTests: XCTestCase {
         first.tap()
     }
 
-    private func openFirstChapter() {
-        let chapter = revealChapter(in: app, timeout: 90)
+    private func openFirstChapter(timeout: TimeInterval = 90) {
+        let chapter = revealChapter(in: app, timeout: timeout)
         XCTAssertTrue(chapter.exists, "Details failed: \(app.debugDescription)")
         attach("details")
         chapter.tap()

@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.desktop.app
 
+import org.skepsun.kototoro.core.db.DATABASE_VERSION
 import androidx.compose.ui.graphics.asSkiaBitmap
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
@@ -24,6 +25,110 @@ object DesktopAppProbe {
             }
             if (args[0].startsWith("bookmarks-")) {
                 DesktopBookmarksProbe.run(args)
+                return
+            }
+            if (args[0] == "updates") {
+                DesktopUpdatesProbe.run(args)
+                return
+            }
+            if (args[0] == "suggestions") {
+                DesktopSuggestionsProbe.run(args)
+                return
+            }
+            if (args[0] == "browsePaging") {
+                DesktopBrowsePagingProbe.run(args)
+                return
+            }
+            if (args[0] == "incognito") {
+                DesktopIncognitoProbe.run(args)
+                return
+            }
+            if (args[0] == "stats") {
+                DesktopStatsProbe.run(args)
+                return
+            }
+            if (args[0] == "storage") {
+                DesktopStorageProbe.run(args)
+                return
+            }
+            if (args[0] == "cleanup") {
+                DesktopCleanupProbe.run(args)
+                return
+            }
+            if (args[0] == "changelog") {
+                DesktopChangelogProbe.run(args)
+                return
+            }
+            if (args[0] == "about") {
+                DesktopAboutProbe.run(args)
+                return
+            }
+            if (args[0] == "crashlogs") {
+                DesktopCrashLogsProbe.run(args)
+                return
+            }
+            if (args[0] == "replacerules") {
+                DesktopReplaceRulesProbe.run(args)
+                return
+            }
+            if (args[0] == "dictionaryrules") {
+                DesktopDictionaryRulesProbe.run(args)
+                return
+            }
+            if (args[0] == "downloadsettings") {
+                DesktopDownloadSettingsProbe.run(args)
+                return
+            }
+            if (args[0].startsWith("reader-settings-")) {
+                DesktopReaderSettingsProbe.run(args)
+                return
+            }
+            if (args[0].startsWith("novel-settings-")) {
+                DesktopNovelSettingsProbe.run(args)
+                return
+            }
+            if (args[0].startsWith("sources-settings-")) {
+                DesktopSourcesSettingsProbe.run(args)
+                return
+            }
+            if (args[0].startsWith("jarpriority-")) {
+                DesktopJarPriorityProbe.run(args)
+                return
+            }
+            if (args[0] == "wizard") {
+            DesktopWizardProbe.run(args)
+            return
+        }
+        if (args[0].startsWith("sourceorder-")) {
+                DesktopSourceOrderProbe.run(args)
+                return
+            }
+            if (args[0].startsWith("brokensource-")) {
+                DesktopBrokenSourcesProbe.run(args)
+                return
+            }
+            if (args[0].startsWith("installpolicy-")) {
+                DesktopInstallPolicyProbe.run(args)
+                return
+            }
+            if (args[0].startsWith("suggestionpolicy-")) {
+                DesktopSuggestionPolicyProbe.run(args)
+                return
+            }
+            if (args[0].startsWith("services-")) {
+                DesktopServicesProbe.run(args)
+                return
+            }
+            if (args[0] == "navconfig") {
+                DesktopNavigationConfigProbe.run(args)
+                return
+            }
+            if (args[0] == "playback") {
+                DesktopPlaybackProbe.run(args)
+                return
+            }
+            if (args[0] == "proxy") {
+                DesktopProxyProbe.run(args)
                 return
             }
             if (args[0] == "upscale") {
@@ -60,6 +165,14 @@ object DesktopAppProbe {
             }
             if (args[0].startsWith("tablet")) {
                 DesktopTabletProbe.run(args)
+                return
+            }
+            if (args[0] == "json-sources" || args[0] == "json-sources-narrow") {
+                DesktopJsonSourcesProbe.run(args)
+                return
+            }
+            if (args[0] == "sourcetest") {
+                DesktopSourceTestProbe.run(args)
                 return
             }
             if (args[0].startsWith("repositories-")) {
@@ -100,6 +213,26 @@ object DesktopAppProbe {
             }
             if (args[0].startsWith("reader-gestures-")) {
                 DesktopReaderGestureProbe.run(args)
+                return
+            }
+            if (args[0] == "reader-webtoon-gaps") {
+                DesktopWebtoonGapsProbe.run(args)
+                return
+            }
+            if (args[0] == "reader-horizontal-strip") {
+                DesktopHorizontalStripProbe.run(args)
+                return
+            }
+            if (args[0] == "reader-title-bottom") {
+                DesktopReaderTitleBottomProbe.run(args)
+                return
+            }
+            if (args[0] == "preload-reduction") {
+                DesktopPreloadReductionProbe.run(args)
+                return
+            }
+            if (args[0] == "reader-mode-detect") {
+                DesktopModeDetectProbe.run(args)
                 return
             }
             if (args[0].startsWith("reader-camera-")) {
@@ -157,7 +290,8 @@ object DesktopAppProbe {
                     settled()
                     check(controller.state.value.items.single().title == "search 离线")
                     snapshot("search")
-                    onNodeWithText("热门").performClick()
+                    onNodeWithTag("source-sort").performClick(); waitForIdle()
+                    onNodeWithTag("source-listing:popular").performClick()
                     waitUntil(timeoutMillis = 15_000) { controller.state.value.query.isEmpty() }
                     settled()
                     val content = controller.state.value.items.single()
@@ -193,18 +327,29 @@ object DesktopAppProbe {
                     onNodeWithTag("source:MIHON_9007199254740993").performClick()
                     waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.EXPLORE }
                     settled()
-                    onNodeWithText("源设置").performClick()
+                    onNodeWithTag("source-settings").performClick()
                     waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.PREFERENCES }
                     settled()
                     val preferenceNodes = requireNotNull(controller.state.value.preferences).nodes
                     // Kototoro's User-Agent row accompanies every HTTP source's own controls.
                     check(preferenceNodes.any { it.id == "host:user_agent" }) { "$preferenceNodes" }
                     val node = preferenceNodes.single { !it.id.startsWith("host:") }
+                    // Android's titled sections and value rows replace the flat cards: the domain row keeps its title
+                    // as a row, and a choice lives in a dialog instead of a column of radio buttons.
+                    onNodeWithText("域名设置").assertExists()
+                    onNodeWithTag("preference:${node.id}").assertExists()
                     if (mode == "write") {
+                        onNodeWithTag("preference:${node.id}").performClick()
+                        settled()
+                        onNodeWithTag("preference-dialog:${node.id}").assertExists()
                         onNodeWithTag("preference:${node.id}:rejected").performClick()
                         waitUntil(timeoutMillis = 15_000) { controller.state.value.message == "来源拒绝了这项设置" }
                         settled()
                         check(controller.state.value.message == "来源拒绝了这项设置")
+                        // Choosing a value closes the dialog, so the next pick starts from the row again.
+                        onNodeWithTag("preference-dialog:${node.id}").assertDoesNotExist()
+                        onNodeWithTag("preference:${node.id}").performClick()
+                        settled()
                         onNodeWithTag("preference:${node.id}:saved").performClick()
                         waitUntil(timeoutMillis = 15_000) {
                             controller.state.value.preferences?.nodes?.single { !it.id.startsWith("host:") }?.value == SourcePreferenceValue.Text("saved")
@@ -219,7 +364,7 @@ object DesktopAppProbe {
                     }
                 }
             } finally { runBlocking { controller.shutdown() } }
-            runBlocking { DesktopRuntime.open(root).use { check(it.storageInfo().schemaVersion == 84) } }
+            runBlocking { DesktopRuntime.open(root).use { check(it.storageInfo().schemaVersion == DATABASE_VERSION) } }
             val moved = root.resolveSibling("closed-$mode")
             val deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(10)
             while (true) {

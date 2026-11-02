@@ -47,6 +47,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 
 @Composable
@@ -121,14 +122,17 @@ internal fun ProtectScreen(
             },
             trailingIcon = {
                 if (canUseBiometric && password.isEmpty()) {
-                    IconButton(onClick = onUseBiometric) {
+                    IconButton(onClick = onUseBiometric, modifier = Modifier.tvIconButtonRing()) {
                         Icon(
                             painter = painterResource(androidx.biometric.R.drawable.fingerprint_dialog_fp_icon),
                             contentDescription = stringResource(androidx.biometric.R.string.use_biometric_label),
                         )
                     }
                 } else {
-                    IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                    IconButton(
+                        onClick = { passwordVisible = !passwordVisible },
+                        modifier = Modifier.tvIconButtonRing(),
+                    ) {
                         Icon(
                             imageVector = if (passwordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
                             contentDescription = null,

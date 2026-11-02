@@ -23,11 +23,11 @@ import org.skepsun.kototoro.core.github.AppUpdateRepository
 import org.skepsun.kototoro.core.github.AppUpdateSource
 import org.skepsun.kototoro.core.github.AppUpdateSourceProbe
 import org.skepsun.kototoro.core.github.GitHubMirrorCatalogRepository
-import org.skepsun.kototoro.core.github.GitHubMirrorProbeResult
-import org.skepsun.kototoro.core.github.GitHubMirrorProbeState
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.GitHubMirrorCatalog
 import org.skepsun.kototoro.core.prefs.GitHubMirrorEntry
+import org.skepsun.kototoro.core.prefs.GitHubMirrorProbeResult
+import org.skepsun.kototoro.core.prefs.GitHubMirrorProbeState
 import org.skepsun.kototoro.core.prefs.displayName
 import org.skepsun.kototoro.core.ui.BaseViewModel
 import org.skepsun.kototoro.core.util.ext.MutableEventFlow

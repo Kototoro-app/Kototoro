@@ -17,7 +17,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -32,6 +31,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
+import org.skepsun.kototoro.core.ui.adaptive.tvChipRing
 import org.skepsun.kototoro.core.ui.compose.KototoroLinearProgressIndicator
 import org.skepsun.kototoro.core.util.FileSize
 import org.skepsun.kototoro.core.util.ext.getQuantityStringSafe
@@ -163,11 +164,12 @@ private fun LocalInfoDialog(
                     label = {
                         Text(text = stringResource(R.string.delete_read_chapters))
                     },
+                    modifier = Modifier.tvChipRing(),
                 )
             }
         },
         confirmButton = {
-            TextButton(
+            TvTextButton(
                 enabled = !isCleaningUp,
                 onClick = onDismissRequest,
             ) {

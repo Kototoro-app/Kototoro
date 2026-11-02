@@ -62,6 +62,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.BlendMode
@@ -95,6 +97,8 @@ import org.skepsun.kototoro.core.ui.compose.CompactTopBarItemSpacing
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarPillHeight
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarPillShape
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
+import org.skepsun.kototoro.core.ui.adaptive.tvDownFocusLink
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.ui.topbar.EnsureRailItemFullyVisible
 import org.skepsun.kototoro.core.ui.topbar.RailSurface
@@ -102,6 +106,7 @@ import org.skepsun.kototoro.core.ui.topbar.TopBarFilterRail
 import org.skepsun.kototoro.core.ui.topbar.TopBarSearchPillContent
 import org.skepsun.kototoro.core.ui.topbar.TopBarTabsRail
 import org.skepsun.kototoro.core.ui.topbar.TopBarTitleBlock
+import org.skepsun.kototoro.core.ui.topbar.TopBarIconAction
 import org.skepsun.kototoro.core.ui.topbar.compactRailEdgeFade
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
@@ -126,6 +131,11 @@ import kotlin.math.floor
 
 /** Rails, title and search pill content are shared with the Windows host; this file adds glass and menus. */
 private val glassRailSurface: RailSurface = { modifier -> TopBarControlSurface(modifier = modifier) {} }
+
+/** A phone title needs a hard cap; a TV has room to spare, so the label must not be clipped to a stub. */
+private val TopBarTitleMaxWidth = 120.dp
+private val TopBarTitleCompactMaxWidth = 160.dp
+private val TopBarTitleTvMaxWidth = 360.dp
 
 data class KototoroTopBarMenuAction(
     val titleRes: Int,
@@ -210,6 +220,10 @@ fun KototoroTopBar(
     var isMoreMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var isLanguagePresetMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var topBarMenuAnchorBounds by remember { mutableStateOf<Rect?>(null) }
+    // The menus render in the root overlay, so when one closes nothing brings the ring back to the
+    // button that opened it; on a remote the user then has to walk from the rail again.
+    val moreMenuAnchorFocus = remember { FocusRequester() }
+    val languagePresetAnchorFocus = remember { FocusRequester() }
     var showDisplayOptionsSheet by rememberSaveable { mutableStateOf(false) }
     var pendingListMode by remember(showDisplayOptionsSheet) { mutableStateOf(currentListMode) }
     var pendingGridSize by remember(showDisplayOptionsSheet) { mutableIntStateOf(gridSize) }
@@ -229,6 +243,10 @@ fun KototoroTopBar(
     )
     val showMoreActions = true
     val topBarTitle = titleText ?: titleRes?.let { stringResource(it) }
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
+    // TV: the page under the bar publishes its first stop, so DOWN on a search control can leave the
+    // chrome overlay instead of jumping out to the navigation rail (null off TV or before registration).
+    val contentDownFocus = LocalMainContentFocusAnchor.current?.requester
     var areCompactTabsExpanded by rememberSaveable { mutableStateOf(false) }
     val isInlineTabs = compactTabsState != null && favoritesTabsPosition == FavoritesTabsPosition.INLINE_RAIL
     val hidePrimaryControlsForTabs = isInlineTabs && areCompactTabsExpanded
@@ -266,7 +284,8 @@ fun KototoroTopBar(
                             onClick = onSearchClick,
                             modifier = Modifier
                                 .fillMaxSize()
-                                .tvFocusable(shape = Capsule(), addFocusTarget = false),
+                                .tvFocusable(shape = Capsule(), addFocusTarget = false)
+                                .tvDownFocusLink(contentDownFocus),
                             colors = IconButtonDefaults.iconButtonColors(
                                 containerColor = Color.Transparent,
                                 contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -283,7 +302,9 @@ fun KototoroTopBar(
                 if (!topBarTitle.isNullOrBlank() && !hidePrimaryControlsForTabs) {
                     Text(
                         text = topBarTitle,
-                        modifier = Modifier.widthIn(max = 72.dp),
+                        // A television has room for the whole name next to the tabs; 72 dp clipped
+                        // "Favorites" into "Favo…" while the row had hundreds of pixels to spare.
+                        modifier = Modifier.widthIn(max = if (isTvPresentation) 200.dp else 72.dp),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface,
@@ -306,7 +327,8 @@ fun KototoroTopBar(
                         onClick = onSearchClick,
                         modifier = Modifier
                             .fillMaxSize()
-                            .tvFocusable(shape = Capsule(), addFocusTarget = false),
+                            .tvFocusable(shape = Capsule(), addFocusTarget = false)
+                            .tvDownFocusLink(contentDownFocus),
                         colors = IconButtonDefaults.iconButtonColors(
                             containerColor = Color.Transparent,
                             contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -327,13 +349,17 @@ fun KototoroTopBar(
                             modifier = Modifier.widthIn(max = 140.dp),
                         )
                     } else {
-                        TopBarTitleBlock(topBarTitle, subtitle = subtitleText, maxWidth = 160.dp)
+                        TopBarTitleBlock(
+                            topBarTitle,
+                            subtitle = subtitleText,
+                            maxWidth = if (isTvPresentation) TopBarTitleTvMaxWidth else TopBarTitleCompactMaxWidth,
+                        )
                     }
                 }
                 Spacer(modifier = Modifier.weight(1f))
             } else {
                 if (!topBarTitle.isNullOrBlank()) {
-                    val maxWidth = 120.dp
+                    val maxWidth = if (isTvPresentation) TopBarTitleTvMaxWidth else TopBarTitleMaxWidth
                     if (compactTabsState != null && favoritesTabsPosition == FavoritesTabsPosition.TITLE_DROPDOWN) {
                         CompactCategoryTitle(
                             title = topBarTitle,
@@ -354,7 +380,9 @@ fun KototoroTopBar(
                         placeholder = stringResource(R.string.search_bar_placeholder),
                         searchIcon = rememberVectorPainter(Icons.Filled.Search),
                         onClick = onSearchClick,
-                        modifier = Modifier.tvFocusable(shape = Capsule(), addFocusTarget = false),
+                        modifier = Modifier
+                            .tvFocusable(shape = Capsule(), addFocusTarget = false)
+                            .tvDownFocusLink(contentDownFocus),
                         iconSize = topBarIconSize,
                         searchLabel = stringResource(R.string.search),
                     )
@@ -390,6 +418,7 @@ fun KototoroTopBar(
                                     controlSize = topBarControlHeight,
                                     iconSize = topBarIconSize,
                                     modifier = Modifier.zIndex(1f),
+                                    downFocusLink = contentDownFocus,
                                 )
                             }
                             if (isSourceTagFilterVisible) {
@@ -401,6 +430,7 @@ fun KototoroTopBar(
                                     onTagSelected = onSourceTagSelected,
                                     buttonSize = topBarControlHeight,
                                     iconSize = topBarIconSize,
+                                    downFocusLink = contentDownFocus,
                                     customMenuContent = sourceTagCustomMenuContent,
                                 )
                             }
@@ -410,7 +440,9 @@ fun KototoroTopBar(
                                         topBarMenuAnchorBounds = it.boundsInRoot()
                                     },
                                 ) {
-                                    IconButton(
+                                    TopBarIconAction(
+                                        icon = painterResource(R.drawable.ic_more_vert),
+                                        contentDescription = stringResource(R.string.more),
                                         onClick = {
                                             // The dismiss layer above leaves a hole
                                             // over this anchor, so a tap lands here
@@ -424,28 +456,13 @@ fun KototoroTopBar(
                                             }
                                         },
                                         modifier = Modifier
-                                            .size(topBarControlHeight)
-                                            .tvFocusable(shape = RoundedCornerShape(12.dp), addFocusTarget = false),
-                                        colors = IconButtonDefaults.iconButtonColors(
-                                            containerColor = Color.Transparent,
-                                            contentColor = MaterialTheme.colorScheme.onSurface,
-                                        ),
-                                    ) {
-                                        Box {
-                                            Icon(
-                                                painterResource(R.drawable.ic_more_vert),
-                                                contentDescription = stringResource(R.string.more),
-                                                modifier = Modifier.size(topBarIconSize),
-                                            )
-                                            if (isAppUpdateAvailable) {
-                                                UpdateBadgeDot(
-                                                    modifier = Modifier
-                                                        .align(Alignment.TopEnd)
-                                                        .size(8.dp),
-                                                )
-                                            }
-                                        }
-                                    }
+                                            .focusRequester(moreMenuAnchorFocus)
+                                            .tvDownFocusLink(contentDownFocus),
+                                        badge = isAppUpdateAvailable,
+                                        size = topBarControlHeight,
+                                        iconSize = topBarIconSize,
+                                        inactiveTint = MaterialTheme.colorScheme.onSurface,
+                                    )
                                     GlassDropdownMenu(
                                         expanded = isMoreMenuExpanded,
                                         onDismissRequest = { isMoreMenuExpanded = false },
@@ -456,6 +473,7 @@ fun KototoroTopBar(
                                         // menu is dismissed by tapping it again.
                                         anchorTapThrough = true,
                                         anchorBounds = topBarMenuAnchorBounds,
+                                        anchorFocusRequester = moreMenuAnchorFocus,
                                         shape = CompactTopBarPillShape,
                                         style = GlassDefaults.subtleStyle(),
                                     ) {
@@ -621,6 +639,8 @@ fun KototoroTopBar(
                                     // menu is dismissed by tapping it again.
                                     anchorTapThrough = true,
                                     anchorBounds = topBarMenuAnchorBounds,
+                                    // The language presets hang off the same ⋮ button.
+                                    anchorFocusRequester = moreMenuAnchorFocus,
                                     shape = CompactTopBarPillShape,
                                     style = GlassDefaults.subtleStyle(),
                                 ) {
@@ -834,6 +854,7 @@ fun CompactTopBarTabsRail(
     modifier = modifier,
     horizontalPadding = CompactTopBarHorizontalPadding,
     pagePosition = state.pagePosition,
+    downFocusRequester = state.downFocusRequester,
 )
 
 @Composable
@@ -845,11 +866,13 @@ private fun CompactCategoryTitle(
     val selectedTitle = state.items.firstOrNull { it.id == state.selectedItemId }?.title.orEmpty()
     var expanded by rememberSaveable { mutableStateOf(false) }
     var anchorBounds by remember { mutableStateOf<Rect?>(null) }
+    val categoryMenuAnchorFocus = remember { FocusRequester() }
 
     Box(modifier = modifier.onGloballyPositioned { anchorBounds = it.boundsInRoot() }) {
         Column(
             modifier = Modifier
                 .clip(RoundedCornerShape(8.dp))
+                .focusRequester(categoryMenuAnchorFocus)
                 .clickable { expanded = !expanded }
                 .padding(vertical = 2.dp),
         ) {
@@ -885,6 +908,7 @@ private fun CompactCategoryTitle(
             useRootOverlay = LocalInterfaceStyle.current == InterfaceStyle.IOS,
             anchorTapThrough = true,
             anchorBounds = anchorBounds,
+            anchorFocusRequester = categoryMenuAnchorFocus,
             style = GlassDefaults.subtleStyle(),
         ) {
             state.items.forEach { item ->
@@ -990,6 +1014,11 @@ private fun InlineCompactTopBarTabsRail(
                 Box(
                     modifier = Modifier
                         .height(tokens.minimumTouchTarget)
+                        // A remote stops on the click below anyway, and the only feedback was the state
+                        // layer Material draws for it, which from a sofa is no change at all. Same
+                        // treatment as the shared TopBarTabsRail: ring on this node, before the click.
+                        .tvFocusable(shape = RoundedCornerShape(8.dp), addFocusTarget = false)
+                        .tvDownFocusLink(state.downFocusRequester)
                         .clickable {
                             restoreRequest += 1
                             state.onItemSelected(item.id)

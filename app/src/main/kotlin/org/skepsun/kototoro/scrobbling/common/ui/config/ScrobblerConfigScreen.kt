@@ -45,11 +45,13 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.compose.KototoroPullToRefreshBox
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.list.ui.model.EmptyState
 import org.skepsun.kototoro.list.ui.model.ListModel
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
+import org.skepsun.kototoro.scrobbling.common.ui.scrobblerIconTint
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerUser
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingInfo
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingStatus
@@ -73,7 +75,7 @@ internal fun ScrobblerConfigScreen(
             MediumTopAppBar(
                 title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateUp) {
+                    IconButton(onClick = onNavigateUp, modifier = Modifier.tvIconButtonRing()) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = stringResource(R.string.back),
@@ -136,7 +138,7 @@ internal fun ScrobblerConfigScreen(
 @Composable
 private fun UserAvatar(user: ScrobblerUser?, onClick: () -> Unit) {
     val fallback = user?.service?.iconResId ?: androidx.appcompat.R.drawable.abc_ic_menu_overflow_material
-    IconButton(onClick = onClick) {
+    IconButton(onClick = onClick, modifier = Modifier.tvIconButtonRing()) {
         Box(
             modifier = Modifier
                 .size(28.dp)
@@ -148,6 +150,7 @@ private fun UserAvatar(user: ScrobblerUser?, onClick: () -> Unit) {
                 Icon(
                     painter = rememberSafePainter(fallback),
                     contentDescription = null,
+                    tint = scrobblerIconTint(fallback),
                     modifier = Modifier.size(22.dp),
                 )
             } else {

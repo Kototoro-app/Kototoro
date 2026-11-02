@@ -1,22 +1,27 @@
 package org.skepsun.kototoro.favourites.ui.categories.edit.compose
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -32,12 +37,21 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.dimensionResource
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import coil3.compose.AsyncImage
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
+import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
+import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.list.domain.ListSortOrder
 import org.skepsun.kototoro.list.domain.titleResId
@@ -59,6 +73,10 @@ internal fun FavouritesCategoryEditScreen(
     onShelfChanged: (Boolean) -> Unit,
     onSave: () -> Unit,
     onBack: () -> Unit,
+    coverModel: Any? = null,
+    canRemoveCover: Boolean = false,
+    onPickCover: () -> Unit = {},
+    onRemoveCover: () -> Unit = {},
 ) {
     var sortMenuExpanded by remember { mutableStateOf(false) }
     val sortOrders = remember { ListSortOrder.FAVORITES.sortedBy { it.ordinal } }
@@ -70,7 +88,7 @@ internal fun FavouritesCategoryEditScreen(
                 modifier = Modifier.statusBarsPadding(),
                 title = { Text(stringResource(if (isEditing) R.string.edit_category else R.string.create_category)) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = onBack, modifier = Modifier.tvIconButtonRing()) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back))
                     }
                 },
@@ -102,7 +120,14 @@ internal fun FavouritesCategoryEditScreen(
                 enabled = !isLoading,
                 singleLine = true,
                 label = { Text(stringResource(R.string.name)) },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().tvTextInputFocusEscape(),
+            )
+            CoverEditor(
+                coverModel = coverModel,
+                canRemoveCover = canRemoveCover,
+                enabled = !isLoading,
+                onPickCover = onPickCover,
+                onRemoveCover = onRemoveCover,
             )
             Column {
                 OutlinedTextField(
@@ -114,14 +139,14 @@ internal fun FavouritesCategoryEditScreen(
                     label = { Text(stringResource(R.string.sort_order)) },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable(enabled = !isLoading) { sortMenuExpanded = true },
+                        .clickable(enabled = !isLoading) { sortMenuExpanded = true }.tvTextInputFocusEscape(),
                 )
                 DropdownMenu(
                     expanded = sortMenuExpanded,
                     onDismissRequest = { sortMenuExpanded = false },
                 ) {
                     sortOrders.forEach { order ->
-                        DropdownMenuItem(
+                        TvDropdownMenuItem(
                             text = { Text(stringResource(order.titleResId)) },
                             onClick = {
                                 sortMenuExpanded = false
@@ -160,6 +185,65 @@ internal fun FavouritesCategoryEditScreen(
             }
             if (isLoading) {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            }
+        }
+    }
+}
+
+@Composable
+private fun CoverEditor(
+    coverModel: Any?,
+    canRemoveCover: Boolean,
+    enabled: Boolean,
+    onPickCover: () -> Unit,
+    onRemoveCover: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .height(dimensionResource(R.dimen.category_covers_height))
+                .aspectRatio(13f / 18f)
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.secondaryContainer),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (coverModel == null) {
+                // No custom artwork: the category falls back to its automatic cover stack.
+                Icon(
+                    painter = painterResource(R.drawable.ic_images),
+                    contentDescription = null,
+                    modifier = Modifier.size(24.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                AsyncImage(
+                    model = coverModel,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        }
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(stringResource(R.string.custom_cover), style = MaterialTheme.typography.bodyLarge)
+            Text(
+                text = stringResource(R.string.custom_cover_summary),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row {
+                TvTextButton(onClick = onPickCover, enabled = enabled) {
+                    Text(stringResource(R.string.choose_cover))
+                }
+                if (canRemoveCover) {
+                    TvTextButton(onClick = onRemoveCover, enabled = enabled) {
+                        Text(stringResource(R.string.remove_custom_cover))
+                    }
+                }
             }
         }
     }

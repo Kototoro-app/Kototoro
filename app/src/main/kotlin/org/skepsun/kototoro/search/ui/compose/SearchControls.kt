@@ -42,6 +42,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
+import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 
 /**
  * @param filterSummary names of the active filters, trailing the filter chip so the row says what is
@@ -188,7 +189,9 @@ fun SearchAdvancedFields(
                 value = title,
                 onValueChange = onTitleChange,
                 label = { Text(stringResource(R.string.title)) },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .tvTextInputFocusEscape(),
                 shape = RoundedCornerShape(12.dp),
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
@@ -198,7 +201,9 @@ fun SearchAdvancedFields(
                 value = tags,
                 onValueChange = onTagsChange,
                 label = { Text(stringResource(R.string.tags)) },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .tvTextInputFocusEscape(),
                 shape = RoundedCornerShape(12.dp),
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
@@ -208,7 +213,9 @@ fun SearchAdvancedFields(
                 value = author,
                 onValueChange = onAuthorChange,
                 label = { Text(stringResource(R.string.author)) },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .tvTextInputFocusEscape(),
                 shape = RoundedCornerShape(12.dp),
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),

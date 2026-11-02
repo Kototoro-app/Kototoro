@@ -7,7 +7,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
@@ -44,7 +47,12 @@ internal fun SearchPreviewCard(
     onOpenChapter: (ContentChapter) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val groups = remember(content.chapters) { content.resolvePreviewChapters() }
+    // The branch picked in this preview; null follows the first chapter's.
+    var branch by remember(content.id) { mutableStateOf<String?>(null) }
+    val branches = remember(content.chapters) {
+        org.skepsun.kototoro.core.ui.preview.tabletPreviewBranches(content.chapters.orEmpty()) { it.branch }
+    }
+    val groups = remember(content.chapters, branch) { content.resolvePreviewChapters(branch) }
     val count = content.chapters?.size ?: 0
     val firstSection = TabletPreviewSection(
         title = stringResource(if (groups.isSingleGroup) R.string.chapters else R.string.preview_latest_chapters),
@@ -69,6 +77,8 @@ internal fun SearchPreviewCard(
         chapterCountText = if (count > 0) stringResource(R.string.chapters_count_info, count) else null,
         statusLabel = content.state?.let { stringResource(it.titleResId) },
         chapterSections = sections,
+        branches = branches,
+        selectedBranch = groups.firstChapter?.branch,
     )
     val labels = TabletPreviewLabels(
         close = stringResource(R.string.close), read = stringResource(R.string.read),
@@ -89,6 +99,7 @@ internal fun SearchPreviewCard(
             onClose = onClose, onRead = onRead, onOpenDetails = onOpenDetails, onAddToFavorites = onAddToFavorites,
             onOpenChapter = { id -> content.chapters?.firstOrNull { it.id == id }?.let(onOpenChapter) },
             isLoading = isLoading, hasLoadError = hasLoadError, onRetry = onRetry,
+            onSelectBranch = { branch = it },
         )
     }
     if (LocalInterfaceStyle.current == InterfaceStyle.IOS) {

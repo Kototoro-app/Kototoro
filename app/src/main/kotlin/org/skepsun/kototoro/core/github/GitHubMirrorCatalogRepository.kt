@@ -34,6 +34,8 @@ import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.GitHubMirrorCatalog
 import org.skepsun.kototoro.core.prefs.GitHubMirrorEntry
 import org.skepsun.kototoro.core.prefs.GitHubMirrorManifest
+import org.skepsun.kototoro.core.prefs.GitHubMirrorProbeResult
+import org.skepsun.kototoro.core.prefs.GitHubMirrorProbeState
 import org.skepsun.kototoro.core.prefs.displayName
 
 /** Suffix shown next to a mirror label once a probe result exists, e.g. " · 213 ms" / " · timeout". */
@@ -93,28 +95,6 @@ sealed interface GitHubMirrorSyncState {
         val error: String?,
         val timestamp: Long,
     ) : GitHubMirrorSyncState
-}
-
-/** Result of a single-mirror connectivity test. */
-data class GitHubMirrorProbeResult(
-    val latencyMillis: Long?,
-    val isAvailable: Boolean,
-)
-
-sealed interface GitHubMirrorProbeState {
-    data object Idle : GitHubMirrorProbeState
-
-    data class Running(
-        val completed: Int,
-        val total: Int,
-    ) : GitHubMirrorProbeState
-
-    data class Finished(
-        val available: Int,
-        val total: Int,
-        val fastestId: String?,
-        val fastestMillis: Long?,
-    ) : GitHubMirrorProbeState
 }
 
 data class GitHubMirrorCatalogMeta(
@@ -304,7 +284,7 @@ class GitHubMirrorCatalogRepository @Inject constructor(
     }
 
     private suspend fun probe(entry: GitHubMirrorEntry): GitHubMirrorProbeResult = withContext(Dispatchers.IO) {
-        val url = GitHubMirrorCatalog.apply(PROBE_URL, entry)
+        val url = GitHubMirrorCatalog.apply(GitHubMirrorCatalog.PROBE_URL, entry)
         val startedAt = System.nanoTime()
         try {
             withTimeout(PROBE_TIMEOUT_MS) {
@@ -380,8 +360,5 @@ class GitHubMirrorCatalogRepository @Inject constructor(
 
         /** Mirror ids are slug-like tokens, e.g. "ghproxy" / "gh-proxy-cf". */
         val ID_PATTERN = Regex("^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
-
-        /** Tiny always-present GitHub file used to test mirror reachability. */
-        const val PROBE_URL = "https://raw.githubusercontent.com/skepsun/kototoro-parsers/repo/index.min.json"
     }
 }

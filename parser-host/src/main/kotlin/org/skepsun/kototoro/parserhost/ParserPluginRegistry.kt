@@ -20,6 +20,7 @@ import java.lang.reflect.Method
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
+import java.util.jar.JarFile
 import kotlin.coroutines.AbstractCoroutineContextElement
 import kotlin.coroutines.CoroutineContext
 
@@ -29,6 +30,8 @@ data class ParserSourceInfo(
     val title: String,
     val pluginId: String,
     val architecture: ParserPluginArchitecture,
+    /** The plugin marks this parser `@Broken`; Android keeps it installed and lets the user show it on demand. */
+    val broken: Boolean = false,
 )
 
 data class LoadedParserPlugin(
@@ -178,7 +181,7 @@ class ParserPluginRegistry(
     private fun open(path: Path, metadata: ParserPluginMetadata): Pair<Classes, List<ParserSourceInfo>> {
         val loader = ParserPluginClassLoader(path.toAbsolutePath().toUri().toURL(), hostLoader)
         return try {
-            withContextLoader(loader) { build(metadata, loader) }
+            withContextLoader(loader) { build(metadata, path, loader) }
         } catch (error: Throwable) {
             try { loader.close() } catch (cleanup: Exception) { error.addSuppressed(cleanup) }
             val cause = if (error is InvocationTargetException) error.targetException else error
@@ -209,7 +212,7 @@ class ParserPluginRegistry(
         }
     }
 
-    private fun build(metadata: ParserPluginMetadata, loader: ParserPluginClassLoader): Pair<Classes, List<ParserSourceInfo>> {
+    private fun build(metadata: ParserPluginMetadata, path: Path, loader: ParserPluginClassLoader): Pair<Classes, List<ParserSourceInfo>> {
         val architecture = metadata.architecture
         val factoryClass = loader.loadClass(architecture.factoryClass)
         val contextClass = loader.loadClass(architecture.contextClass)
@@ -221,11 +224,54 @@ class ParserPluginRegistry(
         if (!enumClass.isEnum) throw ParserPluginException(ParserPluginFailure.NO_SOURCES)
         val constants = enumClass.enumConstants.orEmpty().associateBy { (it as Enum<*>).name }
         if (constants.isEmpty()) throw ParserPluginException(ParserPluginFailure.NO_SOURCES)
+        val broken = brokenSourceNames(path, loader)
         val sources = constants.values.map { constant ->
             val source = contentSource(architecture, constant)
-            ParserSourceInfo(SourceRef(source.name, source.locale, source.contentType.name), titleOf(source, constant), "", architecture)
+            ParserSourceInfo(SourceRef(source.name, source.locale, source.contentType.name), titleOf(source, constant), "",
+                architecture, broken = source.name in broken)
         }
         return Classes(loader, factory, constants) to sources
+    }
+
+    /**
+     * Android's `@Broken` markers, read from the plugin's own classes instead of a DEX scan.
+     *
+     * Android loads every class of the extension and caches the annotated source names per file; here the JAR entries
+     * are searched for the annotation descriptor first, so only the handful of annotated parsers are class-loaded.
+     * The annotation itself is the host's copy (the shared ABI is parent-first), so the comparison is by identity.
+     */
+    private fun brokenSourceNames(path: Path, loader: ParserPluginClassLoader): Set<String> {
+        val names = mutableSetOf<String>()
+        try {
+            JarFile(path.toFile()).use { jar ->
+                for (entry in jar.entries()) {
+                    if (entry.isDirectory || !entry.name.endsWith(".class")) continue
+                    val bytes = jar.getInputStream(entry).use { it.readBytes() }
+                    if (!bytes.containsBytes(BROKEN_DESCRIPTOR) && !bytes.containsBytes(KOTATSU_BROKEN_DESCRIPTOR)) {
+                        continue
+                    }
+                    val type = try {
+                        loader.loadClass(entry.name.removeSuffix(".class").replace('/', '.'))
+                    } catch (_: Throwable) {
+                        continue // A class that cannot load is its own problem; the scan keeps going.
+                    }
+                    val name = try {
+                        val kototoro = type.getAnnotation(org.skepsun.kototoro.parsers.Broken::class.java) != null
+                        val kotatsu = type.getAnnotation(org.koitharu.kotatsu.parsers.Broken::class.java) != null
+                        if (!kototoro && !kotatsu) null else {
+                            type.getAnnotation(org.skepsun.kototoro.parsers.ContentSourceParser::class.java)?.name
+                                ?: type.getAnnotation(org.koitharu.kotatsu.parsers.MangaSourceParser::class.java)?.name
+                        }
+                    } catch (_: Throwable) {
+                        null
+                    }
+                    if (name != null) names += name
+                }
+            }
+        } catch (_: Exception) {
+            // A jar that cannot be enumerated has no broken markers to report; the load itself already failed elsewhere.
+        }
+        return names
     }
 
     // Catalog: a header line, then one tab-separated line per source (name, locale, content type, title).
@@ -243,8 +289,9 @@ class ParserPluginRegistry(
             val metadata = ParserPluginMetadata(architecture, header[3], header[4].toInt(), header[5].toInt())
             val sources = lines.drop(1).filter { it.isNotEmpty() }.map { line ->
                 val fields = line.split('\t').map(::unescape)
-                require(fields.size == 4)
-                ParserSourceInfo(SourceRef(fields[0], fields[1], fields[2]), fields[3], "", architecture)
+                require(fields.size == 5)
+                ParserSourceInfo(SourceRef(fields[0], fields[1], fields[2]), fields[3], "", architecture,
+                    broken = fields[4] == "1")
             }
             if (sources.isEmpty()) null else metadata to sources
         } catch (_: Exception) {
@@ -261,8 +308,8 @@ class ParserPluginRegistry(
                 append(listOf(CATALOG_MAGIC, CATALOG_VERSION, metadata.architecture.name, metadata.sha256,
                     metadata.classCount, metadata.maximumClassVersion).joinToString("\t")).append('\n')
                 for (info in plugin.sources) {
-                    append(listOf(info.source.name, info.source.locale, info.source.contentType, info.title)
-                        .joinToString("\t", transform = ::escape)).append('\n')
+                    append(listOf(info.source.name, info.source.locale, info.source.contentType, info.title,
+                        if (info.broken) "1" else "0").joinToString("\t", transform = ::escape)).append('\n')
                 }
             }
             val temporary = Files.createTempFile(file.parent, "catalog-", ".tmp")
@@ -290,6 +337,18 @@ class ParserPluginRegistry(
                 else -> append(next)
             }
         }
+    }
+
+    /** True when [marker] appears anywhere in the class file bytes; a cheap pre-filter before class loading. */
+    private fun ByteArray.containsBytes(marker: ByteArray): Boolean {
+        if (marker.isEmpty() || size < marker.size) return false
+        outer@ for (start in 0..size - marker.size) {
+            for (index in marker.indices) {
+                if (this[start + index] != marker[index]) continue@outer
+            }
+            return true
+        }
+        return false
     }
 
     private fun contentSource(architecture: ParserPluginArchitecture, constant: Any): ContentSource = when (architecture) {
@@ -435,6 +494,9 @@ class ParserPluginRegistry(
         )
         private val ID_PATTERN = Regex("[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
         private const val CATALOG_MAGIC = "kototoro-parser-catalog"
-        private const val CATALOG_VERSION = "1"
+        /** 2 adds the per-source `broken` column; a v1 catalog is rewritten by the next full load. */
+        private const val CATALOG_VERSION = "2"
+        private val BROKEN_DESCRIPTOR = "Lorg/skepsun/kototoro/parsers/Broken;".toByteArray()
+        private val KOTATSU_BROKEN_DESCRIPTOR = "Lorg/koitharu/kotatsu/parsers/Broken;".toByteArray()
     }
 }

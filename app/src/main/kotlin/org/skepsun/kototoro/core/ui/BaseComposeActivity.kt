@@ -11,7 +11,6 @@ import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -32,6 +31,7 @@ import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.adaptive.PresentationModeExitButton
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.rememberUiPresentationConfig
+import org.skepsun.kototoro.core.ui.compose.KototoroSnackbarHost
 import org.skepsun.kototoro.core.ui.glass.LocalGlassTuning
 import org.skepsun.kototoro.core.ui.glass.rememberGlassTuning
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
@@ -110,7 +110,7 @@ abstract class BaseComposeActivity :
                             settings = kototoroAppSettings,
                             modifier = Modifier.align(Alignment.TopEnd),
                         )
-                        SnackbarHost(
+                        KototoroSnackbarHost(
                             hostState = snackbarHostState,
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)

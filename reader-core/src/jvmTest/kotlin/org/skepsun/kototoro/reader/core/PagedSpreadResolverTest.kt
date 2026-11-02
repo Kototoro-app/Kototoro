@@ -8,6 +8,26 @@ import org.junit.jupiter.api.Test
 class PagedSpreadResolverTest {
 
     @Test
+    fun `unequal portrait pages form one centered spread in either reading direction`() {
+        val specs = listOf(
+            PagedPageSpec(PageId(1L), PageGeometryHint.Exact(600, 1200), 1L, 0),
+            PagedPageSpec(PageId(2L), PageGeometryHint.Exact(900, 1200), 1L, 1),
+        )
+        for (direction in listOf(SceneReadingDirection.LEFT_TO_RIGHT, SceneReadingDirection.RIGHT_TO_LEFT)) {
+            val slot = PagedSpreadResolver.resolveSlots(specs, 1600, 800,
+                PagedSpreadConfig(isDoublePage = true, readingDirection = direction)).single()
+            val left = slot.placements.minOf { it.boundsInSlot.left }
+            val right = slot.placements.maxOf { it.boundsInSlot.right }
+            assertEquals(1600f, left + right, 0.01f, "The entire spread must be centered")
+            val sorted = slot.placements.sortedBy { it.boundsInSlot.left }
+            assertEquals(sorted[0].boundsInSlot.right, sorted[1].boundsInSlot.left, 0.01f)
+            assertEquals(PageId(1L), slot.progressAnchorPageId)
+            assertEquals(direction == SceneReadingDirection.RIGHT_TO_LEFT,
+                slot.placements[0].boundsInSlot.left > slot.placements[1].boundsInSlot.left)
+        }
+    }
+
+    @Test
     fun `single page mode allocates one slot per page`() {
         val specs = listOf(
             PagedPageSpec(PageId(1L), PageGeometryHint.Exact(1000, 1500), chapterId = 1L, chapterPageIndex = 0),

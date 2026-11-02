@@ -471,6 +471,7 @@ class SyncTrackLog(
     @SerialName("chapters") val chapters: String,
     @SerialName("created_at") val createdAt: Long,
     @SerialName("unread") val isUnread: Boolean,
+    @SerialName("chapter_metadata") val chapterMetadata: String = "",
 ) {
 
     constructor(entity: TrackLogEntity) : this(
@@ -480,6 +481,7 @@ class SyncTrackLog(
         chapters = entity.chapters,
         createdAt = entity.createdAt,
         isUnread = entity.isUnread,
+        chapterMetadata = entity.chapterMetadata,
     )
 
     fun toEntity(targetMangaId: Long = mangaId): TrackLogEntity {
@@ -488,6 +490,7 @@ class SyncTrackLog(
             chapters = chapters,
             createdAt = createdAt.coerceAtLeast(0L),
             isUnread = isUnread,
+            chapterMetadata = chapterMetadata,
         )
     }
 }

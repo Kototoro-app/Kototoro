@@ -30,7 +30,9 @@ object ApkExtensionConverter {
         } catch (error: ApkManifestException) {
             throw DexConversionException(DexConversionFailure.NOT_AN_ARCHIVE, error)
         }
-        val report = DexJarConverter.convert(apk, target, mapOf("AndroidManifest.xml" to manifest.withLabel().toText().toByteArray(Charsets.UTF_8)))
+        val resources = mutableMapOf("AndroidManifest.xml" to manifest.withLabel().toText().toByteArray(Charsets.UTF_8))
+        ZipFile(apk.toFile()).use { zip -> ApkIcon.read(zip, manifest.icon)?.let { resources[ApkIcon.ENTRY] = it } }
+        val report = DexJarConverter.convert(apk, target, resources)
         return ApkConversion(manifest, report)
     }
 

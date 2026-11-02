@@ -2,6 +2,7 @@
 
 package org.skepsun.kototoro.extensions.repo
 
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.*
 import kotlinx.serialization.protobuf.ProtoBuf
 import okio.Buffer
@@ -24,7 +25,13 @@ fun gunzipExtensionStoreBytes(bytes: ByteArray): ByteArray {
 fun decodeExtensionStoreIndex(bytes: ByteArray, protobuf: Boolean): ExtensionStoreIndex {
     val payload = gunzipExtensionStoreBytes(bytes)
     return if (protobuf) {
-        ProtoBuf.decodeFromByteArray(ExtensionStoreIndex.serializer(), payload)
+        decodeStoreProtobuf(
+            primary = { ProtoBuf.decodeFromByteArray(ExtensionStoreIndex.serializer(), payload) },
+            aniyomi = {
+                ProtoBuf.decodeFromByteArray(AniyomiExtensionStoreIndex.serializer(), payload).toStoreIndex()
+            },
+            hasSources = { index -> index.extensionList?.extensions.orEmpty().any { it.sources.isNotEmpty() } },
+        )
     } else {
         val root = StoreJson.parseToJsonElement(payload.decodeToString()).jsonObject
         val meta = root["meta"]?.takeUnless { it is JsonNull }?.jsonObject
@@ -52,11 +59,37 @@ fun decodeExtensionStoreIndex(bytes: ByteArray, protobuf: Boolean): ExtensionSto
 fun decodeExtensionStoreList(bytes: ByteArray, protobuf: Boolean): ExtensionStoreIndex.ExtensionList {
     val payload = gunzipExtensionStoreBytes(bytes)
     return if (protobuf) {
-        ProtoBuf.decodeFromByteArray(ExtensionStoreIndex.ExtensionList.serializer(), payload)
+        decodeStoreProtobuf(
+            primary = { ProtoBuf.decodeFromByteArray(ExtensionStoreIndex.ExtensionList.serializer(), payload) },
+            aniyomi = {
+                ProtoBuf.decodeFromByteArray(AniyomiExtensionStoreIndex.ExtensionList.serializer(), payload).toStoreList()
+            },
+            hasSources = { list -> list.extensions.any { it.sources.isNotEmpty() } },
+        )
     } else {
         StoreJson.decodeFromJsonElement(ExtensionStoreIndex.ExtensionList.serializer(),
             normalizeList(StoreJson.parseToJsonElement(payload.decodeToString()).jsonObject))
     }
+}
+
+/** Without a torrent flag, the field-8 decoder succeeds on Aniyomi but silently drops its field-9 sources. */
+private inline fun <T> decodeStoreProtobuf(
+    primary: () -> T,
+    aniyomi: () -> T,
+    hasSources: (T) -> Boolean,
+): T {
+    val original = try {
+        primary()
+    } catch (_: SerializationException) {
+        return aniyomi()
+    }
+    if (hasSources(original)) return original
+    val alternative = try {
+        aniyomi()
+    } catch (_: SerializationException) {
+        return original
+    }
+    return if (hasSources(alternative)) alternative else original
 }
 
 private fun normalizeList(list: JsonObject): JsonObject = JsonObject(list.toMutableMap().apply {

@@ -53,7 +53,7 @@ internal class DesktopReaderImages(
             openArtifact(page, artifact)?.let { return@withContext DesktopReaderFile(it, artifact) }
         }
         val artifact = fetch(page)
-        val image = requireNotNull(openArtifact(page, artifact)) { "页面缓存文件校验失败" }
+        val image = requireNotNull(openArtifact(page, artifact)) { desktopText("error.cacheFileChecksum") }
         currentCoroutineContext().ensureActive()
         DesktopReaderFile(image, artifact)
     }
@@ -79,10 +79,11 @@ internal class DesktopReaderImages(
                 }
                 val artifact = fetch(page)
                 require(artifact.pageId == page.id && artifact.source.name == page.source.name) {
-                    "来源返回的页面身份不匹配"
+                    desktopText("error.pageIdentityMismatch")
                 }
-                val path = requireNotNull(verifiedImagePath(directory, artifact.relativePath, artifact.sha256, artifact.byteSize)) {
-                    "页面缓存文件校验失败"
+                val path = requireNotNull(
+                    verifiedImagePath(directory, artifact.relativePath, artifact.sha256, artifact.byteSize)) {
+                    desktopText("error.cacheFileChecksum")
                 }
                 val image = header(path)
                 currentCoroutineContext().ensureActive()
@@ -99,6 +100,24 @@ internal class DesktopReaderImages(
                 DesktopReaderFile(image, artifact)
             }
         }
+
+    /**
+     * Android's "clear pages cache" on this data root: the index forgets which pages it once fetched, while the blobs
+     * stay where they are. An orphaned blob only costs disk space, and the budget sweeper already reclaims the ones no
+     * saved chapter holds, so dropping the directory here would break offline reading for nothing.
+     */
+    suspend fun clearIndex(): Int = withContext(Dispatchers.IO) {
+        gate.withLock {
+            val keys = preferences.snapshot().keys
+            if (keys.isNotEmpty()) {
+                preferences.edit(SourcePreferenceEdit(changes = keys.associateWith { null }))
+            }
+            keys.size
+        }
+    }
+
+    /** How many pages the index remembers; the cleanup page shows it next to the clear action. */
+    fun size(): Int = preferences.snapshot().size
 
     /** Geometry is only a hint; the visible artifact still passes load's full integrity check. */
     suspend fun geometry(pages: List<SourcePage>, extensionRevision: String): Map<Long, IntSize> = withContext(Dispatchers.IO) {

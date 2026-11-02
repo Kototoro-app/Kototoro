@@ -6,4 +6,5 @@ import androidx.annotation.Keep
 enum class ReaderInfoBarLayout {
     CENTERED,
     SPLIT,
+    SPLIT_LEADING_PROGRESS,
 }

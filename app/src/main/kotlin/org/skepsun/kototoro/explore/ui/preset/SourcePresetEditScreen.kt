@@ -32,6 +32,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.tvChipRing
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
@@ -51,8 +53,15 @@ fun SourcePresetEditScreen(
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.edit_preset)) },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null) } },
-                actions = { IconButton(enabled = !isLoading && title.isNotBlank(), onClick = onSave) { Icon(Icons.Default.Check, null) } },
+                navigationIcon = { IconButton(
+                    onClick = onBack,
+                    modifier = Modifier.tvIconButtonRing(),
+                ) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null) } },
+                actions = { IconButton(
+                    enabled = !isLoading && title.isNotBlank(),
+                    onClick = onSave,
+                    modifier = Modifier.tvIconButtonRing(),
+                ) { Icon(Icons.Default.Check, null) } },
             )
         },
     ) { padding ->
@@ -64,7 +73,12 @@ fun SourcePresetEditScreen(
             Text(stringResource(R.string.preset_languages))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 locales.forEach { locale ->
-                    FilterChip(selected = locale in selectedLocales, onClick = { onLocaleToggle(locale) }, label = { Text(locale) })
+                    FilterChip(
+                        selected = locale in selectedLocales,
+                        onClick = { onLocaleToggle(locale) },
+                        label = { Text(locale) },
+                        modifier = Modifier.tvChipRing(),
+                    )
                 }
             }
             error?.let { Text(it, color = androidx.compose.material3.MaterialTheme.colorScheme.error) }

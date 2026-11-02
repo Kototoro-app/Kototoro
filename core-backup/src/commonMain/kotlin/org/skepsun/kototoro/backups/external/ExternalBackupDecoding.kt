@@ -174,6 +174,7 @@ private fun MihonBackupManga.toRecord(
     if (!favorite && history == null) {
         return null
     }
+    val progress = resolveMangaHistory(history, chapters, favoriteTimestamp)
     return ExternalBackupContentRecord(
         app = app,
         sourceName = sourceName,
@@ -196,8 +197,9 @@ private fun MihonBackupManga.toRecord(
         chaptersCount = totalCount,
         readEntriesCount = completedCount,
         progressPercent = progressPercent,
-        historyChapterUrl = history?.url,
-        historyTimestamp = history?.lastRead?.takeIf { it > 0L },
+        historyChapterUrl = progress?.chapterUrl,
+        historyTimestamp = progress?.timestamp,
+        historyPage = progress?.page ?: 0,
     )
 }
 
@@ -218,6 +220,7 @@ private fun AniyomiBackupManga.toRecord(
     if (!favorite && history == null) {
         return null
     }
+    val progress = resolveMangaHistory(history, chapters, favoriteTimestamp)
     return ExternalBackupContentRecord(
         app = app,
         sourceName = sourceName,
@@ -240,9 +243,60 @@ private fun AniyomiBackupManga.toRecord(
         chaptersCount = totalCount,
         readEntriesCount = completedCount,
         progressPercent = progressPercent,
-        historyChapterUrl = history?.url,
-        historyTimestamp = history?.lastRead?.takeIf { it > 0L },
+        historyChapterUrl = progress?.chapterUrl,
+        historyTimestamp = progress?.timestamp,
+        historyPage = progress?.page ?: 0,
     )
+}
+
+/**
+ * The chapter URL and timestamp to restore as reading history. Mihon's history points at the chapter opened last,
+ * while chapters can be marked read without being opened (by hand, on another device, by a tracker), and Kototoro
+ * keeps one stopping point that counts everything before it as read. So a dated history entry wins only while its
+ * chapter is still unread, a resume point with a saved page; once that chapter is read (or missing from the
+ * backup), a later chapter marked read moves the stopping point there, keeping the real last-read time. Titles
+ * with no history at all fall back to the furthest read chapter, dated when the title was added to the library so
+ * they sort below real history.
+ */
+private class MangaHistory(val chapterUrl: String, val timestamp: Long, val page: Int)
+
+private fun resolveMangaHistory(
+    history: MihonBackupHistory?,
+    chapters: List<MihonBackupChapter>,
+    favoriteTimestamp: Long?,
+): MangaHistory? {
+    val furthest = chapters.furthestReadChapter()
+    if (history != null && history.lastRead > 0L) {
+        val opened = chapters.firstOrNull { it.url == history.url }
+        if (furthest != null && (opened == null || opened.read && furthest.isAfter(opened))) {
+            return MangaHistory(furthest.url, history.lastRead, furthest.resumePage())
+        }
+        return MangaHistory(history.url, history.lastRead, opened?.resumePage() ?: 0)
+    }
+    val chapter = furthest ?: return null
+    return MangaHistory(chapter.url, favoriteTimestamp ?: 1L, chapter.resumePage())
+}
+
+// Same zero-based index as the reader's page list; an out-of-range page opens the chapter from its start.
+private fun MihonBackupChapter.resumePage(): Int = lastPageRead.coerceIn(0L, Int.MAX_VALUE.toLong()).toInt()
+
+// Chapter numbers decide when both chapters have one; otherwise Mihon's source order, which counts from the newest.
+private fun MihonBackupChapter.isAfter(other: MihonBackupChapter): Boolean =
+    if (chapterNumber > 0f && other.chapterNumber > 0f && chapterNumber != other.chapterNumber) {
+        chapterNumber > other.chapterNumber
+    } else {
+        sourceOrder < other.sourceOrder
+    }
+
+private fun List<MihonBackupChapter>.furthestReadChapter(): MihonBackupChapter? {
+    val read = filter { it.read }
+    val numbered = read.filter { it.chapterNumber > 0f }
+    return if (numbered.isNotEmpty()) {
+        // Mihon's source order counts from the newest chapter, so ties go to the lower order.
+        numbered.maxWithOrNull(compareBy<MihonBackupChapter> { it.chapterNumber }.thenByDescending { it.sourceOrder })
+    } else {
+        read.minByOrNull { it.sourceOrder }
+    }
 }
 
 private fun List<MihonBackupCategory>.toFavoriteCategoryRecords(): List<ExternalBackupFavoriteCategoryRecord> {

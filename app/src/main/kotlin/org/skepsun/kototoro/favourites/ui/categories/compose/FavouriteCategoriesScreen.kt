@@ -6,6 +6,9 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
+import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 import androidx.compose.foundation.layout.Arrangement
@@ -52,7 +55,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -307,14 +309,14 @@ internal fun FavouriteCategoriesScreen(
             title = { Text(stringResource(R.string.remove_category)) },
             text = { Text(stringResource(R.string.categories_delete_confirm)) },
             confirmButton = {
-                TextButton(onClick = {
+                TvTextButton(onClick = {
                     pendingDelete = false
                     onDelete(selectedIds)
                     onSelectionChanged(emptySet())
                 }) { Text(stringResource(R.string.remove)) }
             },
             dismissButton = {
-                TextButton(onClick = { pendingDelete = false }) {
+                TvTextButton(onClick = { pendingDelete = false }) {
                     Text(stringResource(android.R.string.cancel))
                 }
             },
@@ -410,7 +412,7 @@ private fun FavouriteCategoriesTopBar(
                                 modifier = Modifier
                                     .weight(1f)
                                     .focusRequester(focusRequester)
-                                    .padding(horizontal = 8.dp),
+                                    .padding(horizontal = 8.dp).tvTextInputFocusEscape(),
                                 singleLine = true,
                                 textStyle = MaterialTheme.typography.bodyLarge.merge(
                                     TextStyle(color = MaterialTheme.colorScheme.onSurface),
@@ -595,7 +597,10 @@ private fun CategoryRow(
         shadowElevation = elevation,
     ) {
         Row(modifier = rowModifier, verticalAlignment = Alignment.CenterVertically) {
-            CoverStack(item.covers, Modifier.height(dimensionResource(R.dimen.category_covers_height)).aspectRatio(13f / 18f))
+            CategoryCover(
+                item = item,
+                modifier = Modifier.height(dimensionResource(R.dimen.category_covers_height)).aspectRatio(13f / 18f),
+            )
             Column(
                 modifier = Modifier.weight(1f).padding(start = dimensionResource(R.dimen.margin_normal), end = 4.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -613,7 +618,10 @@ private fun CategoryRow(
                 }
             }
             if (actionsEnabled) {
-                IconButton(onClick = onEdit) { Icon(painterResource(R.drawable.ic_edit), stringResource(R.string.edit)) }
+                IconButton(
+                    onClick = onEdit,
+                    modifier = Modifier.tvIconButtonRing(),
+                ) { Icon(painterResource(R.drawable.ic_edit), stringResource(R.string.edit)) }
                 Box(
                     modifier = Modifier
                         .size(48.dp)
@@ -651,10 +659,29 @@ private fun AllCategoriesRow(
             )
         }
         if (item.isActionsEnabled) {
-            IconButton(onClick = onVisibilityChanged) {
+            IconButton(onClick = onVisibilityChanged, modifier = Modifier.tvIconButtonRing()) {
                 Icon(painterResource(if (item.isVisible) R.drawable.ic_eye else R.drawable.ic_eye_off), stringResource(R.string.show_all))
             }
         }
+    }
+}
+
+@Composable
+private fun CategoryCover(item: CategoryListModel, modifier: Modifier) {
+    val customCover = item.customCover
+    if (customCover == null) {
+        // No artwork picked (or the file is gone): the automatic stack still says something
+        // about the category's contents.
+        CoverStack(item.covers, modifier)
+    } else {
+        AsyncImage(
+            model = customCover,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = modifier
+                .clip(RoundedCornerShape(4.dp))
+                .background(MaterialTheme.colorScheme.secondaryContainer),
+        )
     }
 }
 

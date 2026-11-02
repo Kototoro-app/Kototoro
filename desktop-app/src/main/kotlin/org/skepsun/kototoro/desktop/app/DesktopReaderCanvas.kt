@@ -13,7 +13,7 @@ import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.*
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
@@ -279,18 +279,24 @@ internal fun DesktopReaderCanvas(controller: DesktopController, state: DesktopAp
                         }
                     }
                 }) {
+                // LaunchedEffect(slotIndex) snaps the turn back only after this frame is drawn: until then a key, tap
+                // or button turn would show the new page in place for one frame and then jump back to slide in from
+                // the old one, a flash on every page. Draw that starting offset here already.
+                val pendingTurn = slotIndex - settledSlot
+                val shownTravel = if (animated && !committedByDrag && abs(pendingTurn) == 1 &&
+                    !travel.isRunning && travel.value == 0f) -pendingTurn.toFloat() else travel.value
                 val snapshot = PagedMotionSnapshot(currentSlot = slotIndex, settledSlot = settledSlot,
-                    targetSlot = slotIndex, offsetFraction = travel.value,
+                    targetSlot = slotIndex, offsetFraction = shownTravel,
                     isScrollInProgress = dragging || travel.isRunning)
-                val travelFraction = slotIndex - settledSlot + travel.value
+                val travelFraction = slotIndex - settledSlot + shownTravel
                 val inFlight = abs(travelFraction) > ScenePageTransitionRenderer.COVER_PROGRESS_EPSILON || snapshot.isScrollInProgress
                 val neighbours = (-1..1).mapNotNull { step -> layout.scene.allSlots.getOrNull(slotIndex + step) }
                 for (strip in neighbours) {
                     val input = PagedTransitionResolver.resolve(snapshot, strip.slotIndex, direction,
-                        isCurlUnfolding = travel.value < 0f)
+                        isCurlUnfolding = shownTravel < 0f)
                     val transform = ScenePageTransitionRenderer.transformFor(transition, input, vertical, rightToLeft)
                     // Base strip position: forward slots lie in the reading direction (below, in vertical mode).
-                    val base = (strip.slotIndex - slotIndex - travel.value) * extent * physicalSign
+                    val base = (strip.slotIndex - slotIndex - shownTravel) * extent * physicalSign
                     if (abs(base) >= extent * 1.5f && transition == ScenePageTransition.SLIDE) continue
                     val shift = when (transition) {
                         ScenePageTransition.SLIDE -> 0f
@@ -392,8 +398,8 @@ private fun DesktopReaderSlot(state: DesktopAppState, slot: PagedSlot, camera: P
 private const val TURN_MILLIS = 280
 
 internal fun fitTitle(mode: ZoomMode): String = when (mode) {
-    ZoomMode.FIT_CENTER -> "适应整页"
-    ZoomMode.FIT_WIDTH -> "适应宽度"
-    ZoomMode.FIT_HEIGHT -> "适应高度"
-    ZoomMode.KEEP_START -> "原始尺寸"
+    ZoomMode.FIT_CENTER -> desktopText("reader.zoom.fitCenter")
+    ZoomMode.FIT_WIDTH -> desktopText("reader.zoom.fitWidth")
+    ZoomMode.FIT_HEIGHT -> desktopText("reader.zoom.fitHeight")
+    ZoomMode.KEEP_START -> desktopText("reader.zoom.original")
 }

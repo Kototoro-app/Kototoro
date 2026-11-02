@@ -97,6 +97,7 @@ import org.skepsun.kototoro.core.util.ext.writeAllCancellable
 import org.skepsun.kototoro.core.util.progress.RealtimeEtaEstimator
 import org.skepsun.kototoro.core.model.unwrap
 import org.skepsun.kototoro.download.domain.DownloadProgress
+import org.skepsun.kototoro.download.domain.DownloadByteProgress
 import org.skepsun.kototoro.download.domain.DownloadState
 import org.skepsun.kototoro.download.domain.FailedChapterImage
 import org.skepsun.kototoro.download.domain.NovelFailedImageStore
@@ -139,6 +140,10 @@ import org.skepsun.kototoro.reader.novel.NovelParagraphType
 import org.skepsun.kototoro.reader.novel.NovelReaderSettings
 import org.skepsun.kototoro.reader.novel.NovelTranslationProcessor
 import org.skepsun.kototoro.reader.novel.applyRetryResults
+import org.skepsun.kototoro.core.model.getLocale
+import org.skepsun.kototoro.reader.translate.data.ChapterTranslationStore
+import org.skepsun.kototoro.reader.translate.data.resolveChapterTranslationKey
+import org.skepsun.kototoro.reader.translate.data.resolveChapterTranslationLanguagePair
 import org.skepsun.kototoro.reader.translate.domain.ReaderPageTranslationProcessor
 import org.skepsun.kototoro.core.util.ext.asLegacyEbookFormat
 import org.skepsun.kototoro.core.util.ext.isEbookChapter
@@ -185,6 +190,7 @@ class DownloadWorker @AssistedInject constructor(
     private val novelTranslationProcessor: NovelTranslationProcessor,
     private val novelContentLoader: NovelContentLoader,
     private val superResolutionManager: ReaderSuperResolutionManager,
+    private val chapterTranslationStore: ChapterTranslationStore,
 ) : CoroutineWorker(appContext, params) {
 
     private data class DownloadExecutionContext(
@@ -320,6 +326,18 @@ class DownloadWorker @AssistedInject constructor(
                             excludedIds = downloadedIds,
                         )
                         Log.i("DownloadWorker", "doWork after downloadContentImpl: workId=$id mangaId=${executionContext.executionManga.id}")
+                    }
+
+                    DownloadTaskKind.TRANSLATE -> {
+                        Log.i(
+                            "DownloadWorker",
+                            "doWork before translateContentImpl: workId=$id mangaId=${executionContext.executionManga.id}",
+                        )
+                        translateContentImpl(executionContext, task)
+                        Log.i(
+                            "DownloadWorker",
+                            "doWork after translateContentImpl: workId=$id mangaId=${executionContext.executionManga.id}",
+                        )
                     }
 
                     DownloadTaskKind.PREPARE_TRANSLATION,
@@ -534,6 +552,226 @@ class DownloadWorker @AssistedInject constructor(
         }
     }
 
+    /**
+     * Background "translate chapter" job.
+     *
+     * Unlike [prepareContentImpl] it does not assume the chapters are already on disk: when the user taps
+     * translate on a remote chapter it downloads it first, then translates the chapter as a whole so the
+     * bubble texts of all pages go out in a few requests instead of one batch per page.
+     */
+    private suspend fun translateContentImpl(
+        context: DownloadExecutionContext,
+        task: DownloadTask,
+    ) {
+        val subject = context.executionManga
+        val contentType = subject.source.getContentType()
+        check(contentType != ContentType.VIDEO && contentType != ContentType.HENTAI_VIDEO) {
+            "Video content does not support translation"
+        }
+        ensureChapterSourcesDownloaded(subject, task)
+        val storedContent = checkNotNull(mangaDataRepository.findContentById(task.executionMangaId, withChapters = true)) {
+            "Cannot load content ${task.executionMangaId}"
+        }
+        val chapters = getChapters(storedContent, task).filter { isPreparationChapterEligible(it.value) }
+        check(chapters.isNotEmpty()) { "No downloaded chapter to translate for ${storedContent.title}" }
+        val forceRetranslation = task.isRetranslation
+        val languagePair = resolveChapterTranslationLanguagePair(
+            preferredSourceLanguage = settings.readerTranslationSourceLanguage,
+            contentLanguage = storedContent.source.getLocale()?.language,
+            targetLanguage = settings.readerTranslationTargetLanguage,
+        )
+        Log.i(
+            "DownloadWorker",
+            "translateContentImpl start: mangaId=${context.displayMangaId} chapters=${chapters.size} " +
+                "pair=${languagePair.first}->${languagePair.second}",
+        )
+        mangaLock.withLock(storedContent) {
+            when (contentType) {
+                ContentType.NOVEL, ContentType.HENTAI_NOVEL -> {
+                    if (forceRetranslation) {
+                        // "Translate again" must not hand back the paragraphs cached by the previous run.
+                        novelTranslationProcessor.clearCache()
+                    }
+                    translateNovelChapters(context, storedContent, task, chapters, languagePair)
+                }
+
+                else -> {
+                    for ((chapterIndex, chapter) in chapters.withIndex()) {
+                        checkIsPaused()
+                        translateMangaChapter(
+                            context = context,
+                            chapter = chapter.value,
+                            chapterIndex = chapterIndex,
+                            totalChapters = chapters.size,
+                            languagePair = languagePair,
+                            forceRefresh = forceRetranslation,
+                        )
+                        publishTranslationChapterState(chapterIndex, chapters.size)
+                    }
+                }
+            }
+        }
+        publishState(
+            currentState.copy(
+                isIndeterminate = false,
+                eta = -1L,
+                isStuck = false,
+                isCompleted = true,
+            ),
+        )
+    }
+
+    /**
+     * Downloads the chapters of the translation request that are not on disk yet, so the translate action
+     * works as "download if needed, then translate".
+     */
+    private suspend fun ensureChapterSourcesDownloaded(
+        subject: Content,
+        task: DownloadTask,
+    ) {
+        val requestedChapterIds = task.executionChapterIds?.toSet().orEmpty()
+        if (requestedChapterIds.isEmpty()) return
+        val downloadedChapterIds = getDoneChapters(subject)
+        val missingChapterIds = requestedChapterIds - downloadedChapterIds
+        if (missingChapterIds.isEmpty()) return
+        Log.i(
+            "DownloadWorker",
+            "translateContentImpl downloading ${missingChapterIds.size} missing chapter(s) mangaId=${subject.id}",
+        )
+        val resolvedContent = resolveExecutionContent(subject)
+        val storedExecutionDetails = mangaDataRepository.storeContentAndReturn(
+            resolvedContent.executionDetails,
+            replaceExisting = true,
+        )
+        downloadContentImpl(
+            subject = resolvedContent.executionManga,
+            resolvedContent = resolvedContent.copy(executionDetails = storedExecutionDetails),
+            task = task,
+            excludedIds = downloadedChapterIds,
+        )
+    }
+
+    private suspend fun translateNovelChapters(
+        context: DownloadExecutionContext,
+        manga: Content,
+        task: DownloadTask,
+        chapters: List<IndexedValue<ContentChapter>>,
+        languagePair: Pair<String, String>,
+    ) {
+        prepareNovelTranslation(manga, task)
+        for ((chapterIndex, chapter) in chapters.withIndex()) {
+            checkIsPaused()
+            chapterTranslationStore.markPrepared(
+                mangaId = context.displayMangaId,
+                chapterId = chapter.value.id,
+                key = settings.resolveChapterTranslationKey(
+                    sourceLang = languagePair.first,
+                    targetLang = languagePair.second,
+                ),
+                pages = 0,
+            )
+            publishTranslationChapterState(chapterIndex, chapters.size)
+        }
+    }
+
+    private suspend fun translateMangaChapter(
+        context: DownloadExecutionContext,
+        chapter: ContentChapter,
+        chapterIndex: Int,
+        totalChapters: Int,
+        languagePair: Pair<String, String>,
+        forceRefresh: Boolean = false,
+    ) {
+        val pages = loadLocalPages(chapter)
+        if (pages.isEmpty()) {
+            Log.w("DownloadWorker", "translateContentImpl chapter without pages id=${chapter.id}")
+            return
+        }
+        val pageSources = ArrayList<ReaderPageTranslationProcessor.ChapterPageSource>(pages.size)
+        for (page in pages) {
+            val sourceUri = resolvePreparationPageUri(page)
+            if (sourceUri == null) {
+                Log.w("DownloadWorker", "translateContentImpl cannot resolve page uri=${page.url}")
+                continue
+            }
+            pageSources += ReaderPageTranslationProcessor.ChapterPageSource(
+                page = page,
+                sourceUri = prepareTranslationInputUri(sourceUri),
+            )
+        }
+        if (pageSources.isEmpty()) {
+            Log.w("DownloadWorker", "translateContentImpl no usable page for chapter id=${chapter.id}")
+            return
+        }
+        val translationKey = settings.resolveChapterTranslationKey(
+            sourceLang = languagePair.first,
+            targetLang = languagePair.second,
+        )
+        chapterTranslationStore.markProgress(
+            mangaId = context.displayMangaId,
+            chapterId = chapter.id,
+            key = translationKey,
+            donePages = 0,
+            totalPages = pageSources.size,
+        )
+        val outcome = translationProcessor.translateChapterPages(
+            pages = pageSources,
+            forceRefresh = forceRefresh,
+            onProgress = { phase, index, total ->
+                checkIsPaused()
+                if (phase == ReaderPageTranslationProcessor.ChapterTranslationPhase.RENDER) {
+                    chapterTranslationStore.markProgress(
+                        mangaId = context.displayMangaId,
+                        chapterId = chapter.id,
+                        key = translationKey,
+                        donePages = index + 1,
+                        totalPages = pageSources.size,
+                    )
+                }
+                publishState(
+                    currentState.copy(
+                        totalChapters = totalChapters,
+                        currentChapter = chapterIndex,
+                        totalPages = total,
+                        currentPage = index,
+                        isIndeterminate = phase == ReaderPageTranslationProcessor.ChapterTranslationPhase.TRANSLATE,
+                        eta = -1L,
+                        isStuck = false,
+                    ),
+                )
+            },
+        )
+        Log.i(
+            "DownloadWorker",
+            "translateContentImpl chapter id=${chapter.id} rendered=${outcome.renderedPageIds.size} " +
+                "cached=${outcome.cachedPageIds.size} textless=${outcome.textlessPageIds.size} " +
+                "failed=${outcome.failedPageIds.size} skipped=${outcome.skippedPageIds.size} " +
+                "texts=${outcome.requestedTextCount} translated=${outcome.translatedTextCount}",
+        )
+        if (outcome.pagesWithTranslation <= 0) return
+        chapterTranslationStore.markPrepared(
+            mangaId = context.displayMangaId,
+            chapterId = chapter.id,
+            key = translationKey,
+            pages = outcome.pagesTotal,
+        )
+    }
+
+    private suspend fun publishTranslationChapterState(chapterIndex: Int, totalChapters: Int) {
+        publishState(
+            currentState.copy(
+                totalChapters = totalChapters,
+                currentChapter = chapterIndex,
+                totalPages = 0,
+                currentPage = 0,
+                downloadedChapters = chapterIndex + 1,
+                isIndeterminate = false,
+                eta = -1L,
+                isStuck = false,
+            ),
+        )
+    }
+
     private suspend fun prepareContentImpl(
         subject: Content,
         task: DownloadTask,
@@ -603,7 +841,8 @@ class DownloadWorker @AssistedInject constructor(
                         )
                     }
 
-                    DownloadTaskKind.DOWNLOAD -> Unit
+                    DownloadTaskKind.DOWNLOAD,
+                    DownloadTaskKind.TRANSLATE -> Unit
                 }
             }
             publishState(
@@ -1899,12 +2138,14 @@ class DownloadWorker @AssistedInject constructor(
             }
             publishState(
                 currentState.copy(
-                    isIndeterminate = false,
+                    isIndeterminate = true,
                     totalChapters = totalChapters,
                     currentChapter = iterationIndex,
-                    totalPages = 1,
+                    totalPages = 0,
                     currentPage = 0,
                     downloadedChapters = downloaded,
+                    byteProgress = null,
+                    currentChapterTitle = chapter.value.title?.takeIf { totalChapters > 1 },
                 ),
             )
             val target = resolveVideoTarget(repo, chapter.value, task) ?: continue
@@ -1928,15 +2169,16 @@ class DownloadWorker @AssistedInject constructor(
                     downloaded += 1
                     continue
                 }
-                val progress: suspend (Int, Int) -> Unit = { cur, total ->
+                val progress: suspend (Int, Int, DownloadByteProgress) -> Unit = { cur, total, bytes ->
                     publishState(
                         currentState.copy(
-                            isIndeterminate = false,
+                            isIndeterminate = total <= 0,
                             totalChapters = totalChapters,
                             currentChapter = iterationIndex,
                             totalPages = total,
-                            currentPage = cur.coerceAtLeast(0),
+                            currentPage = cur - 1,
                             downloadedChapters = downloaded,
+                            byteProgress = bytes,
                         ),
                     )
                 }
@@ -2002,7 +2244,7 @@ class DownloadWorker @AssistedInject constructor(
                 torrentStream?.let { torrentStreamService.release(it.streamUrl) }
             }
         }
-        publishState(currentState.copy(isIndeterminate = true, eta = -1L, isStuck = false))
+        publishState(currentState.copy(isCompleted = true, isIndeterminate = false, eta = -1L, isStuck = false))
     }
 
     private suspend fun resolveVideoTarget(
@@ -2060,7 +2302,7 @@ class DownloadWorker @AssistedInject constructor(
         url: String,
         headers: Map<String, String>?,
         outputFile: UniFile,
-        onProgress: suspend (Int, Int) -> Unit,
+        onProgress: suspend (Int, Int, DownloadByteProgress) -> Unit,
     ) {
         val resumeAt = outputFile.length().coerceAtLeast(0L)
         val request = PageLoader.createPageRequest(url, source, headers)
@@ -2089,7 +2331,7 @@ class DownloadWorker @AssistedInject constructor(
             val append = resumeAt > 0L && resp.code == 206
             val totalBytes = body.contentLength().takeIf { it > 0 }?.let { length ->
                 if (append) length + resumeAt else length
-            } ?: -1L
+            }
             body.use {
                 if (resumeAt > 0L && !append) {
                     // The server ignored Range (200) or returned a full representation. Do not
@@ -2097,25 +2339,12 @@ class DownloadWorker @AssistedInject constructor(
                     outputFile.openOutputStream(false).use { it.flush() }
                 }
                 outputFile.openOutputStream(append).sink().buffer().use { sink ->
-                    val sourceStream = body.source()
-                    val buffer = okio.Buffer()
-                    var written = if (append) resumeAt else 0L
-                    var lastNotify = 0L
-                    while (true) {
-                        val read = sourceStream.read(buffer, 64 * 1024)
-                        if (read == -1L) break
-                        sink.write(buffer, read)
-                        written += read
-                        if (totalBytes > 0) {
-                            if (written - lastNotify >= 256 * 1024) {
-                                lastNotify = written
-                                val percent = ((written * 100) / totalBytes).toInt().coerceIn(0, 100)
-                                onProgress(percent, 100)
-                            }
-                        }
-                    }
-                    if (totalBytes > 0) {
-                        onProgress(100, 100)
+                    copyVideoWithProgress(body.source(), sink, if (append) resumeAt else 0L, totalBytes) { bytes ->
+                        val size = bytes.totalBytes?.takeIf { it > 0 }
+                        val percent = size?.let {
+                            (bytes.downloadedBytes.toDouble() * 100 / it).toInt().coerceIn(0, 100)
+                        } ?: 0
+                        onProgress(percent, if (size != null) 100 else 0, bytes)
                     }
                 }
             }
@@ -2162,7 +2391,7 @@ class DownloadWorker @AssistedInject constructor(
             android.util.Log.d("DownloadWorker", "Local track file not found or empty: $url")
         }
         // Normal HTTP URL — download via network
-        downloadDirectVideo(source, url, headers, outputFile) { _, _ -> }
+        downloadDirectVideo(source, url, headers, outputFile) { _, _, _ -> }
     }
 
     private suspend fun downloadHls(
@@ -2170,7 +2399,7 @@ class DownloadWorker @AssistedInject constructor(
         url: String,
         headers: Map<String, String>?,
         outputFile: UniFile,
-        onProgress: suspend (Int, Int) -> Unit,
+        onProgress: suspend (Int, Int, DownloadByteProgress) -> Unit,
     ) {
         val masterText = fetchText(source, url, headers)
         val mediaUrl = resolveHlsMediaPlaylist(url, masterText)
@@ -2210,6 +2439,7 @@ class DownloadWorker @AssistedInject constructor(
         var writtenTotal = if (resumeIndex > 0) outputFile.length().coerceAtLeast(0L) else 0L
         outputFile.openOutputStream(resumeIndex > 0).sink().buffer().use { sink ->
             val total = segments.size.coerceAtLeast(1)
+            onProgress(resumeIndex, total, DownloadByteProgress.forSegments(writtenTotal, resumeIndex, total))
             val remaining = segments.withIndex().drop(resumeIndex)
             remaining.chunked(DownloadPolicy.HLS_SEGMENT_CONCURRENCY).forEach { batch ->
                 val downloaded = coroutineScope {
@@ -2246,7 +2476,11 @@ class DownloadWorker @AssistedInject constructor(
                             "HLS progress[${indexed.index}/$total] written=$writtenTotal out=${outputFile.length()}",
                         )
                     }
-                    onProgress(indexed.index + 1, total)
+                    onProgress(
+                        indexed.index + 1,
+                        total,
+                        DownloadByteProgress.forSegments(writtenTotal, indexed.index + 1, total),
+                    )
                     sink.flush()
                     stateFile?.openOutputStream(false)?.bufferedWriter()?.use { state ->
                         state.write(mediaUrl)
@@ -2543,7 +2777,12 @@ class DownloadWorker @AssistedInject constructor(
             etaEstimator.onProgressChanged(state.progress, state.max)
         } else {
             etaEstimator.reset()
-            notificationThrottler.reset()
+            // Unknown-length videos still publish byte updates; keep those updates throttled.
+            if (previousState.byteProgress == null || state.byteProgress == null ||
+                previousState.isIndeterminate != state.isIndeterminate || previousState.isPaused != state.isPaused
+            ) {
+                notificationThrottler.reset()
+            }
         }
         val notification = notificationFactory.create(state)
         if (state.isFinalState) {
@@ -2737,8 +2976,20 @@ class DownloadWorker @AssistedInject constructor(
             workManager.cancelWorkById(id).await()
         }
 
+        /**
+         * Cancels every download job of this queue.
+         *
+         * Chapter translation jobs share the WorkManager tag but are a separate user action, so they are
+         * skipped here: stopping downloads must not silently drop a translation the user started (and
+         * [cancelTranslation] is the only place that stops those).
+         */
         suspend fun cancelAll() {
-            workManager.cancelAllWorkByTag(TAG).await()
+            for (work in workManager.awaitWorkInfosByTag(TAG)) {
+                if (work.state.isFinished) continue
+                val task = workManager.getWorkInputData(work.id)?.let { DownloadTask(it) } ?: continue
+                if (task.kind == DownloadTaskKind.TRANSLATE) continue
+                workManager.cancelWorkById(work.id).await()
+            }
         }
 
         fun pause(id: UUID) = context.sendBroadcast(
@@ -2787,6 +3038,30 @@ class DownloadWorker @AssistedInject constructor(
                     .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
                     .build()
                 workManager.awaitUpdateWork(request)
+            }
+        }
+
+        /** Chapter ids of translation jobs still running for [mangaId]. */
+        suspend fun activeTranslationChapterIds(mangaId: Long): Set<Long> {
+            val result = mutableSetOf<Long>()
+            for (work in workManager.awaitWorkInfosByTag(TAG)) {
+                if (work.state.isFinished) continue
+                val task = workManager.getWorkInputData(work.id)?.let { DownloadTask(it) } ?: continue
+                if (task.kind != DownloadTaskKind.TRANSLATE) continue
+                if (task.executionMangaId != mangaId && task.displayMangaId != mangaId) continue
+                result += task.executionChapterIds?.toList().orEmpty()
+            }
+            return result
+        }
+
+        /** Cancels every translation job of [mangaId]; downloads and other job kinds are untouched. */
+        suspend fun cancelTranslation(mangaId: Long) {
+            for (work in workManager.awaitWorkInfosByTag(TAG)) {
+                if (work.state.isFinished) continue
+                val task = workManager.getWorkInputData(work.id)?.let { DownloadTask(it) } ?: continue
+                if (task.kind != DownloadTaskKind.TRANSLATE) continue
+                if (task.executionMangaId != mangaId && task.displayMangaId != mangaId) continue
+                workManager.cancelWorkById(work.id).await()
             }
         }
 
@@ -2850,6 +3125,7 @@ class DownloadWorker @AssistedInject constructor(
                     allowMeteredNetwork = task.allowMeteredNetwork,
                     preferredQuality = task.preferredQuality,
                     kind = task.kind,
+                    isRetranslation = task.isRetranslation,
                 )
                 OneTimeWorkRequestBuilder<DownloadWorker>()
                     .setConstraints(createConstraints(task.allowMeteredNetwork))

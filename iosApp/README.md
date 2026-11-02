@@ -3,6 +3,12 @@
 接手开发先读 [iOS 阶段交接记录](../docs/architecture/ios-development-handoff-2026-10.md)，
 其中列出调用链、生命周期约束、验证证据与后续工作入口。
 当前产品实施与验收状态见 [主要功能实施记录](../docs/architecture/ios-product-implementation-2026-10.md)。
+2026-10-29 导航、阅读手势修改和各页面性能检查见
+[iOS 导航与性能记录](../docs/architecture/ios-navigation-performance-2026-10.md)：
+记录详情推入现有导航栈；主底栏滚动时保持展开，继续阅读保留独立附件；漫画“更多 → 控件”
+可关闭“边缘滑动返回”，按作品保存，也可设为全局默认。该轮尚未在 Xcode/真机完成验收。
+后续将下载队列的读取/编码/提交与 Widget 缩略图/快照写入移到后台 actor，
+缓存自动维护增加空闲合并与扫描间隔；对应并发、持久化和预算回归也需在 Mac 验收。
 逐项补全的当前清单见 [iOS / Android 关键功能差距](../docs/architecture/ios-android-feature-parity-2026-10.md)。
 
 本模块已打通 SwiftUI 作品库分类 → Kotlin/Native → 共享 Room v84 数据库，以及可选的
@@ -35,9 +41,71 @@ xcodebuild -project "iosApp/Kototoro.xcodeproj" -scheme "Kototoro" \
 ```
 
 默认应用支持 CMS 浏览／详情／播放、收藏分类、历史、播放进度恢复与手动更新检测。
+浏览页顶部只有一个可收起的紧凑推荐横条，保留现有四个主入口，通过右侧“更多”菜单选择内容：
+“为你推荐”展示最多 6 张精选卡片，“网站推荐”展示最多 10 部作品的小封面；卡片约 100 点高，
+点击标题进入各自的完整页面。收起后仅保留一行入口，推荐类型与展开状态会保存。
+“为你推荐”复用 Android 的标签评分、来源均衡和超时规则。
+首次需开启推荐；根据收藏／阅读记录或手动偏好标签生成，支持标签排除、来源优先／排除、成人过滤与内容空间。
+推荐保存在共享数据库，进入页面等时机先读缓存，超过六小时或偏好、可用来源变化时重新生成。
+推荐完整页支持下拉强制刷新，浏览页横条的“更多 → 刷新推荐”也会绕过缓存时效；全部来源失败或取消时保留缓存。
+浏览页本身的下拉刷新更新来源目录，不强制重新生成推荐；推荐收起时不自动抓取。
+推荐偏好中的“管理推荐来源”按来源类型分组，支持名称／标识搜索及内容类型、来源类型、语言、推荐状态筛选。
+筛选仅影响显示，全部修改在偏好页保存时统一生效，取消则丢弃草稿。
+此更新检查仅在前台页面执行，没有接入系统后台任务或推荐通知。
+网站内容流可选择追踪网站与分区（热门／高分；Bangumi、AniList、Shikimori、SIMKL 视频支持每日放送及星期选择），
+选择会带入完整发现页。首页预览使用十五分钟内存缓存，切换网站、分区或内容空间重新请求，菜单可强制刷新。
+两个内容流都按当前内容空间过滤；书籍空间不提供视频放送分区。
+Bangumi 使用站点的每周放送表；AniList、Shikimori、SIMKL 按本周所选日期的本地时区边界查询实际排期。
+AniList 会读取当日排期的全部分页并按作品去重；SIMKL 支持动画与剧集两个分区，使用官方 v2 月历并处理跨 UTC 月边界。
+接口依据：[AniList 排期](https://docs.anilist.co/reference/object/page)、
+[Shikimori 日历](https://github.com/shikimori/shikimori/blob/master/app/controllers/api/v1/calendars_controller.rb)、
+[SIMKL v2 日历](https://api.simkl.org/api-reference/calendar)。Kitsu、MAL 暂未提供每日放送入口；MangaUpdates 不属于视频放送站。
+横条不另设漫画／小说／视频选择，直接跟随顶栏 space；“全部”空间的普通榜单汇总网站支持的类型。
+网站作品详情展示封面、站点评分、作品信息、可展开简介、人物及关联作品，并提供“搜索作品并关联”。
+该入口直接复用全局搜索，预填网站标题、限定作品类型，保留搜索过滤及单来源“更多”入口；选中结果后返回确认绑定。
+关联查询保留临时关键词，不写入普通搜索的最近记录；浏览页持有网站预览，来源使用记录更新后仍保留详情导航。
+绑定后打开来源作品详情，可继续阅读／播放或加入收藏；账号进度同步仍单独开启。
+全局搜索的筛选按钮位于内容顶部，搜索激活时仍可操作；改变类型、置顶或成人来源筛选会立即更新当前搜索。
+“浏览 → 网站发现”与“设置 → 追踪网站”现提供 Bangumi、AniList、MyAnimeList、Kitsu、Shikimori、
+MangaUpdates、SIMKL 的目录和账号入口。作品详情的“追踪与资料”可更换展示资料、关联网站记录、编辑状态／评分／进度；
+账号页可单独启用阅读后自动同步，凭据保存在 Keychain。真实账号写入回读与完整站点能力仍需验收，
+具体范围见[追踪网站增量记录](../docs/architecture/ios-tracking-support-2026-10.md)。
+“设置 → Google Drive 同步”支持与 Android 共用的收藏、分类、进度、统计和更新记录协议；
+启用前需在 Android 同一 Google Cloud 项目中配置 iOS OAuth 客户端。
+配置、同步边界与真实账号验收步骤见 [Google Drive 同步](../docs/architecture/ios-google-drive-sync.md)。
 来源列表长按作品可收藏或进入多选（顶栏换为全选／收藏操作栏）；列表与详情页的收藏都弹出可多选的分类框，
 批量时显示部分选中，只写入改动的分类，取消不写入。作品库在作品区左右滑动切换分组，横滑不会打开作品。
 回归：`-only-testing:KototoroUITests/ProductFlowTests/testBrowseAndDetailsShareMultiCategoryFavouritesAndBulkSelection`（需 CMS fixture）。
+详情页头部显示开始／继续阅读按钮；头部阅读区滚出可视范围后，系统底部工具栏才显示章节与阅读入口，
+滚回头部即隐藏。显隐使用 SwiftUI 的 `onScrollVisibilityChange`，不依赖固定滚动距离。
+标题沿用 Android 头部规则：折叠三行，点标题展开最多六行、再点折回；需要更多行的超长标题两种状态都省略，
+不会把阅读按钮挤出屏幕。标题整行宽都可点（不启用 `textSelection`：它会吞掉这个点按，复制改由头部
+「复制标题」按钮提供）。附加标题固定两行，与 Android 一致。回归：
+`-only-testing:KototoroUITests/LocalImportTests/testLongDetailsTitleExpandsAndCollapsesWithinTheAndroidLineBudget`
+（需 `fixture_details_title.cbz`）。
+有续读章节时才显示“从第一章／集开始”的菜单；资料卡始终显示作者与状态行，来源未提供时以「佚名」
+「状态未知」次要色占位（对齐 Android 的 `unknown_author`／`unknown`），不因字段缺失隐藏整行。
+资料卡的「章节／剧集」行沿用 Android 头部的 `current + 1 / total` 读数：未读为 `0/N`，无章节显示 `-`，
+点击进入完整目录；漫画、小说与视频都显示该行，不因内容类型隐藏资料卡（视频按所选线路计数）。
+回归：`-only-testing:KototoroUITests/LocalImportTests/testDetailsChapterInfoRowShowsUnreadProgressAndOpensTheDirectory`、
+`LocalImportTests/testVideoPlaybackCollectsStatistics`（视频行，需 `fixture_video.mp4`）。
+资料、简介、章节预览和书签卡片使用系统 `regularMaterial`，正文不叠加 Liquid Glass。
+阅读、复制及收藏等操作使用原生玻璃按钮，同组控件置于 `GlassEffectContainer`；
+内容卡片在降低透明度时切换为不透明系统背景，边界随增强对比度设置调整。
+章节直接展示在详情正文中：漫画／小说显示当前章附近最多 5 条，视频显示最多 8 集；完整目录推入独立页面。
+完整章节页使用系统搜索和列表多选，排序／分支／线路／刷新／下载队列集中在菜单，多选下载使用底部工具栏。
+漫画章节行提供明确的页面预览按钮与长按入口，推入单章页面网格；返回保留目录状态。
+书签有内容时显示横向预览，全部书签使用独立页面；漫画恢复保存的页码与页内位置，小说按文本定位保存的段落。
+漫画书签保存独立的页面缩略图，重启与清理阅读缓存后仍可预览；旧书签通过原来源页上下文或离线文件补建图片，
+不直接请求保存的图片 URL。小说书签显示正文摘录，沿用共享文本规范解析 Android 备份中的 HTML／Base64 内容。
+详情预览、全部书签和阅读器内书签复用同一展示组件；移除漫画书签时清理对应快照，不改变共享数据库结构。
+详情主列表保留下拉刷新，目录列表的拖动只负责滚动；已移除自定义 dock 与章节面板手势联动。
+回归：`DetailsChapterPreviewTests` 与 `LocalImportTests` 的 `testDetailsShowsChapterPreviewAndPushesTheFullDirectory`、
+`testChapterPagePreviewOpensAnExactPageAndReturnsToTheDirectory`、`testFullChapterDirectorySearchAndScrollingDoNotOpenReader`、
+`testDetailsChapterSelectionDownloadsWithoutOpeningReader`、`testDetailsBookmarkRestoresPageInsteadOfTheLatestReadingPosition`、
+`testDetailsNovelBookmarkRestoresTheSavedParagraph`；
+UI 回归需先暂存 picker 夹具。
+`fixture_details_layout.cbz` 的长简介用于验证阅读入口随滚动切换、返回目录后的恢复，以及未知资料不占位。
 默认构建不包含第三方 JVM/兼容 JAR；下面的开发预览支持扩展仓库、安装、搜索与分页、漫画／小说阅读。
 数据库位于应用沙盒 `Library/Application Support/Kototoro/library.db`，不在缓存或临时目录。
 不使用破坏性 schema 回退；导入旧版本 SQLite 文件的迁移不属于当前切片。
@@ -82,6 +150,9 @@ Native 的 `IosProductTest` 覆盖 Retina 密度与相机缩放分离、晚到�
 新作品默认从左到右，旧横向设置保持原有从右到左方向。定向回归：`ReaderSettingsTests`、
 `LocalImportTests/testHorizontalContinuousDirectionZoomAndBookmarkRestore` 和
 `LocalImportTests/testHorizontalReverseAutoScrollAdvancesToTheNextChapter`，需先暂存上述 picker 夹具。
+条漫双击缩放按共享场景的页内锚点（`IosReader.progress`／`scrollOrigin`）重排，不按缩放比例换算场景偏移：
+跳转或恢复后上方仍未测量的页面保留一屏估值，比例换算会把阅读页带偏。
+`LocalImportTests/testContinuousDoubleTapZoomsAtTheTap` 与 `testContinuousDoubleTapKeepsThePageAfterAJump` 覆盖该契约。
 `IosProductTest` 另覆盖横向 LTR/RTL 定位、缩放无关的页内偏移、晚到尺寸补偿及物理视口分块。
 分页跨章复用 Android 提取到 `reader-core` 的章节窗口规则：前章末两页、本章、后章前两页。
 普通翻页直接进入邻章页，并按页面归属更新章节；进度条、书签和历史仍使用章内页码。
@@ -94,7 +165,7 @@ Native 的 `IosProductTest` 覆盖 Retina 密度与相机缩放分离、晚到�
 `LocalImportTests/testPreviousChapterButtonOpensTheChapterStart` 验证上一章按钮打开章首；
 向后翻页跨章进入上一章末页由三章窗口用例验证。两种导航契约与 Android 一致。
 连续模式的自然页面接续仍待实现，本轮分页跨章不依赖额外拉动。
-`testNewSourceBadgesFilterAndRestartPreserveBaseline` 使用两次独立导入验证基线、新标记、列表／网格及筛选重启恢复。
+`testNewSourceFilterAndRestartPreserveBaseline` 使用两次独立导入验证基线、新来源数量提示、列表／网格及筛选重启恢复。
 CMS fixture 的 `usage-sites.json?run=<标识>` 提供两个不同身份的测试站点，用于首次访问保持手动顺序和使用排序验收。
 修改服务脚本后需重启本地 fixture 服务，再运行相应用例。
 UI 测试每次创建唯一分类，测试数据留在测试设备沙盒中。
@@ -197,6 +268,14 @@ xcodebuild -project "iosApp/Kototoro.xcodeproj" -scheme Kototoro \
 测试覆盖源枚举、真实 Java fixture 调用、应用终止/重启、详情/章节、图片解码、前后翻页、换章与返回导航。
 仍不是生态兼容性验收。
 不同预览使用各自的 DerivedData 目录。普通构建若复用含 JVM 产物的目录会明确拒绝，避免残留的第三方产物进入默认包。
+含 parser-host 的预览及真机 Release 在 Xcode 嵌入 JVM 资源前运行 `:mihon-ios-compat:stageIosHost`，将当前源码的
+iOS 适配器、shims、宿主及项目依赖一起覆盖到应用包内，避免构造方法等 ABI 不匹配；第三方库保持原有版本。
+编译使用 `build/mihon-ios-api` 中已校验的 API，可通过 `KOTOTORO_IOS_COMPATIBILITY_DIRECTORY` 指定目录。
+修改解析器设置等宿主代码后，直接重新构建应用即可生效。
+构建后可运行 `python3 iosApp/Scripts/probe-jvm-preview.py --runtime <Kototoro.app/jvm> --startup-only`，
+使用最终包内的同一组 JAR 检查宿主启动与来源枚举，覆盖无预装扩展的 Release 配置。
+真实哔咔登录控件回归：`-only-testing:KototoroUITests/ExtensionEcosystemTests/testPicacgSettingsExposeCredentialLogin`，
+检查用户名、密码、登录按钮与安全密码输入框，不提交真实账号或发起登录。
 fixture 预览只包含自有测试 ABI，扩展管理会禁用真实扩展安装并说明原因。
 运行 fixture 测试后，继续真实扩展开发前务必重新安装并启动下节的 `RealApiPreview` 应用；
 否则 CopyManga、MH1234 等真实扩展会缺少 Mihon 接口而初始化失败。
@@ -254,6 +333,13 @@ APK 转换期间修复了 dex2jar 2.4.38 的 `java/util/Object` 公共父类型�
 或直接从系统文件选择器导入本地 APK／JAR 扩展包。
 支持 Mihon、Aniyomi、Tsundoku、JAR 仓库与 TVBox/CMS 地址，扩展转换与注册在当前移动 JVM 会话中执行。
 仓库、托管安装、收藏、历史、漫画／小说书签和阅读／播放进度会在重启后恢复；记录页支持手动检查收藏更新。
+记录页只保留统一时间轴，阅读、更新与下载通过日期右侧的独立按钮筛选，不再提供三个独立页面。
+阅读统计卡默认收起图表和详细统计，展开后可查看活动与阅读时段；下载筛选下的“下载列表”进入任务列表。
+顶部概览汇总阅读时长、更新章节和已完成下载；日期右侧的独立按钮可筛选阅读、更新或下载，概览随之切换。
+三类记录使用同一日期范围与内容空间／搜索条件；下载按各章完成时间统计，进行中的任务单独在下载队列管理。
+下载列表包含所有空间的任务；时间轴因内容空间筛选为空、但其他空间存在匹配下载时，会说明原因并提供“显示全部”。
+阅读事件显示当次章节／剧集进度；漫画、小说更新可直接加入现有下载队列，跳过离线完成及已排队章节。
+旧日志中的章节名称无法唯一匹配时提供目录选择入口，视频更新沿用详情与播放入口。
 
 扩展管理使用原生“扩展／仓库”分段列表。工具栏的“＋”添加仓库或从文件安装；
 支持名称／来源／语言搜索、生态与语言筛选、安装状态筛选与更新分区。
@@ -323,11 +409,13 @@ xcodebuild -project "iosApp/Kototoro.xcodeproj" -scheme Kototoro \
 
 ## 作品资料与追踪网站
 
-详情页标题下方的“资料 · 内容源 / 网站名”是常驻入口。点击后按当前作品名自动检索，
-可切换 Bangumi、AniList、Kitsu；结果右侧的“使用”直接应用资料，点击结果本身可先预览。
+详情页标题下方的“追踪与资料 / 追踪 · 网站名”是常驻入口。点击后按当前作品名自动检索，
+可按作品类型切换七个网站；结果右侧的“使用”直接应用资料，点击结果本身可先预览。
 应用后返回详情，标题、高清封面、简介、作者、标签和评分按网站资料展示，缺失字段保留源信息。
 “恢复源信息”一键恢复显示；已关联资料保留在菜单中，可再次切换或解除关联。
-设置 → 追踪网站提供独立的公开作品检索，默认网站会保留。
+浏览 → 网站发现与设置 → 追踪网站提供独立的公开作品检索，默认网站会保留。
+“我的账号”可连接网站、查看远端列表；作品关联后可编辑状态、评分、进度与支持的备注。
+自动同步默认关闭，在账号页开启后，仅同步明确开始追踪的作品。
 
 绑定沿用 Android 的 `tracking_site_items` / `tracking_site_links` 与 `preferences.metadata_source_*`，
 没有新增 schema。作品身份、源请求的 opaque 数据、章节、收藏和阅读进度仍归内容源；
@@ -336,8 +424,9 @@ xcodebuild -project "iosApp/Kototoro.xcodeproj" -scheme Kototoro \
 
 共享部分：`:core-net` 承载公开网站协议与解析，Android 的 Bangumi 搜索/详情也消费同一协议，
 保留原客户端与镜像设置；`:core-domain` 提供 Android/iOS 共用的手动关联规则；
-`:core-library` 提供事务性绑定、选择与展示投影。SwiftUI 负责轻量选择和交互。
-本阶段不提供其他四个网站的在线检索、追踪账号授权或远程阅读进度同步。
+`:core-library` 提供事务性绑定、选择与展示投影。账号协议与章节编号算法也由共享层承载，
+SwiftUI 负责选择、授权、进度编辑与同步反馈。具体能力及尚未验收范围见
+[追踪网站增量记录](../docs/architecture/ios-tracking-support-2026-10.md)。
 
 回归：`:core-net:jvmTest` 验证请求、分页、类型、解析与失败/取消；
 `:ios-shared:iosSimulatorArm64Test` 中的 `IosTrackingTest` 验证资料覆盖、数据库重开、

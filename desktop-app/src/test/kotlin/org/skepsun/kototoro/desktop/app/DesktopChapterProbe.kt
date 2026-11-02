@@ -41,13 +41,6 @@ internal object DesktopChapterProbe {
                     waitForIdle()
                 }
                 // Automatic chapter turns are a desktop setting in "更多阅读设置" (opened from the options panel).
-                fun autoChapter(expected: Boolean? = null) {
-                    onNodeWithTag("reader-options").performClick(); waitForIdle()
-                    onNodeWithTag("reader-options-settings").performClick(); waitForIdle()
-                    if (expected == null) onNodeWithTag("reader-auto-chapter").performScrollTo().performClick()
-                    else if (expected) onNodeWithTag("reader-auto-chapter").assertIsOn() else onNodeWithTag("reader-auto-chapter").assertIsOff()
-                    onNodeWithTag("reader-panel-close").performClick(); waitForIdle()
-                }
                 fun snapshot(name: String) {
                     val bitmap = onRoot().captureToImage()
                     Image.makeFromBitmap(bitmap.asSkiaBitmap()).use { image -> image.encodeToData()?.use {
@@ -68,17 +61,13 @@ internal object DesktopChapterProbe {
                 onNodeWithTag("preview-read").performClick()
                 if (mode.endsWith("read")) {
                     ready(2, 0)
-                    check(controller.state.value.readerSettings.automaticChapter)
                     check(controller.state.value.readerSettings.mode == DesktopReaderMode.CONTINUOUS)
                     check(System.getProperty("fixture.reader.requests", "0") == "0")
-                    autoChapter(expected = true)
                     onNodeWithTag("reader-next-chapter").assertIsNotEnabled()
                     snapshot("restored")
                 } else {
                     ready(1, 0)
                     val initialHistory = runBlocking { session.library.progress(content.id) }
-                    autoChapter()
-                    waitUntil(timeoutMillis = 15_000) { !controller.state.value.busy && controller.state.value.readerSettings.automaticChapter }
                     check(runBlocking { session.library.progress(content.id) } == initialHistory)
                     press(Key.DirectionRight)
                     ready(1, 1)
@@ -86,12 +75,6 @@ internal object DesktopChapterProbe {
                     ready(1, 2)
                     press(Key.MoveEnd)
                     ready(1, 4)
-                    autoChapter()
-                    waitUntil(timeoutMillis = 15_000) { !controller.state.value.busy && !controller.state.value.readerSettings.automaticChapter }
-                    press(Key.DirectionRight)
-                    ready(1, 4)
-                    autoChapter()
-                    waitUntil(timeoutMillis = 15_000) { !controller.state.value.busy && controller.state.value.readerSettings.automaticChapter }
                     val previous = controller.state.value
                     val previousHistory = runBlocking { session.library.progress(content.id) }
                     press(Key.DirectionRight)

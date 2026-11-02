@@ -8,11 +8,11 @@
 [![Translation Docs](https://img.shields.io/badge/docs-auto--translation-blue)](https://kototoro-app.github.io/Kototoro/automatic-translation)
 [![爱发电赞助我们](https://img.shields.io/badge/❤%20支持我们-爱发电-orange)](https://www.ifdian.net/a/kototoro)
 
-Kototoro is an open-source Android app that brings manga, novels, and video into one reader. It combines broad source compatibility with local OCR + translation, video super-resolution, and WebDAV-based multi-device sync.
+Kototoro is an open-source Android app that brings manga, novels, and video into one reader. It combines broad source compatibility with local OCR + translation, video super-resolution, and WebDAV-based multi-device sync. A shared Kotlin Multiplatform core also powers **Windows** and **iOS** preview builds.
 
 > **Compose-first, end to end**: Kototoro may be one of the first genuinely all-Compose manga, novel, and video reading apps. Compose is not just used for the surrounding screens: the comic/novel reader and the video player are Compose too. The former XML, Fragment, and hybrid transition layers have been reduced to the bare minimum, so the core reading and playback experience is now built around Jetpack Compose.
 >
-> **中文简介**：Kototoro 是一款开源的 Android 应用程序，将漫画、小说和视频整合到了一个阅读器中。它结合了极好的图源兼容性、本地 OCR + 机器翻译、视频超分辨率加载以及基于 WebDAV 的多设备同步功能。
+> **中文简介**：Kototoro 是一款开源的 Android 应用程序，将漫画、小说和视频整合到了一个阅读器中。它结合了极好的图源兼容性、本地 OCR + 机器翻译、视频超分辨率加载以及基于 WebDAV 的多设备同步功能。基于同一套 Kotlin Multiplatform 内核，Kototoro 也提供 **Windows** 与 **iOS** 预览版。
 >
 > **Compose 优先，端到端构建**：Kototoro 可能是最早一批真正意义上的全 Jetpack Compose 漫画、小说和视频阅读器之一。Compose 不只是用于外围页面，漫画/小说阅读器和视频播放器本身也全部采用 Compose 构建。旧的 XML、Fragment 以及混合过渡层已经基本清空，核心阅读与播放体验如今都围绕 Jetpack Compose 打造。
 >
@@ -49,10 +49,21 @@ Kototoro is an open-source Android app that brings manga, novels, and video into
 - Reading statistics, quick-access widget, and Telegram backup bot 
   *(阅读统计、快捷桌面挂件、Telegram 备份机器人)*
 
+## Platforms / 平台
+
+| Platform | Status | Package |
+| --- | --- | --- |
+| Android | Stable *(正式版)* | APK |
+| Windows x64 | Preview *(预览版)* | Portable ZIP, per-user MSI |
+| iOS / iPadOS 26+ | Preview *(预览版)* | Unsigned IPA for sideloading (AltStore / SideStore) |
+
+Windows and iOS share Android's database, backup format, source protocol and reader logic. Both run Mihon, Tsundoku and Aniyomi extensions plus kototoro / kotatsu / UMA parser plugins in a JVM — bundled with the Windows app and embedded (OpenJDK Mobile) in the iOS app; iOS also runs Apple CMS / TVBox sources natively and Windows adds CloudStream. Sync, OCR / translation and several Android features are not available on them yet; see [Windows & iOS](https://kototoro-app.github.io/Kototoro/platforms) for what works and how to install.
+*(Windows 与 iOS 复用 Android 的数据库、备份格式、源协议与阅读逻辑，可运行 Mihon / Tsundoku / Aniyomi 扩展及 kototoro / kotatsu / UMA 插件；同步、OCR 翻译等功能暂未提供，详见平台说明。)*
+
 ## Start Here / 开始使用
 
-- Download the latest APK from [Releases](https://github.com/Kototoro-app/Kototoro/releases) *(下载最新版本)*
-- Complete the in-app **Setup wizard** right after installation to configure GitHub mirrors, download core source plugins, and set up your content types. *(安装后请直接完成向导设置)*
+- Download the latest build from [Releases](https://github.com/Kototoro-app/Kototoro/releases) — Android APK, Windows ZIP/MSI and iOS IPA; daily builds are in [Kototoro-Nightly](https://github.com/Kototoro-app/Kototoro-Nightly/releases) *(下载最新版本；每日构建见 Nightly 仓库)*
+- On Android, complete the in-app **Setup wizard** right after installation to configure GitHub mirrors, download core source plugins, and set up your content types. *(安装后请直接完成向导设置)*
 - Read the [Documentation Website](https://kototoro-app.github.io/Kototoro/)
 - Follow [Getting Started](https://kototoro-app.github.io/Kototoro/getting-started) for detailed wizard instructions and next steps
 - Learn the core product surface in [Reader Features](https://kototoro-app.github.io/Kototoro/reader-features)
@@ -60,7 +71,8 @@ Kototoro is an open-source Android app that brings manga, novels, and video into
 - Set up [Source Integrations](https://kototoro-app.github.io/Kototoro/source-integrations)
 - Set up [WebDAV Sync](https://kototoro-app.github.io/Kototoro/webdav-sync)
 - Check [FAQ](https://kototoro-app.github.io/Kototoro/faq) and [Troubleshooting](https://kototoro-app.github.io/Kototoro/troubleshooting) if something does not work
-- See [Development](https://kototoro-app.github.io/Kototoro/development) and [Contributing](https://kototoro-app.github.io/Kototoro/contributing) if you want to work on the project
+- Using Windows or iOS? Read [Windows & iOS](https://kototoro-app.github.io/Kototoro/platforms) *(Windows / iOS 安装与功能说明)*
+- See [Development](https://kototoro-app.github.io/Kototoro/development) (including building the Windows and iOS apps) and [Contributing](https://kototoro-app.github.io/Kototoro/contributing) if you want to work on the project
 
 ## External Source Ecosystems
 

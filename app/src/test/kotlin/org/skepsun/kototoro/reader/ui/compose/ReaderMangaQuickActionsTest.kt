@@ -24,4 +24,44 @@ class ReaderMangaQuickActionsTest {
         assertEquals(true, actions.last().toggled)
         assertEquals(false, mangaQuickActions(true, translationActive = false).last().toggled)
     }
+
+    @Test
+    fun `a television has no rotation cell`() {
+        val actions = mangaQuickActions(
+            translationAvailable = false,
+            translationActive = false,
+            canRotate = false,
+        )
+        assertEquals(
+            listOf("CHAPTERS", "BOOKMARK", "SAVE_PAGE", "CROP_NOTE", "AUTO_SCROLL", "DOWNLOAD", "BROWSER"),
+            actions.map { it.id },
+        )
+    }
+
+    @Test
+    fun `a local chapter has no download cell`() {
+        val actions = mangaQuickActions(
+            translationAvailable = false,
+            translationActive = false,
+            canDownload = false,
+        )
+        assertEquals(
+            listOf("CHAPTERS", "BOOKMARK", "SAVE_PAGE", "CROP_NOTE", "AUTO_SCROLL", "ROTATE", "BROWSER"),
+            actions.map { it.id },
+        )
+    }
+
+    @Test
+    fun `a television reading a local chapter keeps the seven working cells`() {
+        val actions = mangaQuickActions(
+            translationAvailable = true,
+            translationActive = false,
+            canRotate = false,
+            canDownload = false,
+        )
+        assertEquals(
+            listOf("CHAPTERS", "BOOKMARK", "SAVE_PAGE", "CROP_NOTE", "AUTO_SCROLL", "BROWSER", "TRANSLATE"),
+            actions.map { it.id },
+        )
+    }
 }

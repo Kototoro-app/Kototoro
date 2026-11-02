@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.local.epub
 
 import io.kotest.core.spec.style.StringSpec
+import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldContain
@@ -25,7 +26,7 @@ class LoadFailureErrorMessagesPropertyTest : StringSpec({
     
     "all chapter load errors have non-empty user messages" {
         checkAll(100, arbChapterLoadError()) { error ->
-            error.userMessage.shouldNotBeBlank()
+            error.userMessageRes shouldNotBe 0
         }
     }
     
@@ -35,18 +36,10 @@ class LoadFailureErrorMessagesPropertyTest : StringSpec({
         }
     }
     
-    "chapter load error user messages are in Chinese" {
-        checkAll(100, arbChapterLoadError()) { error ->
-            // User messages should contain Chinese characters or be localized
-            val hasChinese = error.userMessage.any { it.code in 0x4E00..0x9FFF }
-            hasChinese shouldBe true
-        }
-    }
-    
-    "invalid chapter ID errors contain the chapter ID" {
+"invalid chapter ID errors contain the chapter ID" {
         checkAll(Arb.long(1L..1000000L)) { chapterId ->
             val error = EpubError.ChapterLoadError.InvalidChapterId(chapterId)
-            error.userMessage shouldContain chapterId.toString()
+            error.userMessageArgs shouldContain chapterId
             error.message shouldContain chapterId.toString()
         }
     }
@@ -54,7 +47,7 @@ class LoadFailureErrorMessagesPropertyTest : StringSpec({
     "chapter not found errors contain the chapter ID" {
         checkAll(Arb.long(1L..1000000L)) { chapterId ->
             val error = EpubError.ChapterLoadError.ChapterNotFound(chapterId)
-            error.userMessage shouldContain chapterId.toString()
+            error.userMessageArgs shouldContain chapterId
             error.message shouldContain chapterId.toString()
         }
     }
@@ -62,8 +55,8 @@ class LoadFailureErrorMessagesPropertyTest : StringSpec({
     "index out of bounds errors contain index and total" {
         checkAll(100, Arb.int(0..999), Arb.int(1..100)) { index, total ->
             val error = EpubError.ChapterLoadError.IndexOutOfBounds(index, total)
-            error.userMessage shouldContain index.toString()
-            error.userMessage shouldContain total.toString()
+            error.userMessageArgs shouldContain index
+            error.userMessageArgs shouldContain total
             error.message shouldContain index.toString()
             error.message shouldContain total.toString()
         }
@@ -72,7 +65,7 @@ class LoadFailureErrorMessagesPropertyTest : StringSpec({
     "invalid URL errors contain the URL" {
         checkAll(100, Arb.string(1..100)) { url ->
             val error = EpubError.ChapterLoadError.InvalidUrl(url)
-            error.userMessage shouldContain url
+            error.userMessageArgs shouldContain url
             error.message shouldContain url
         }
     }
@@ -80,7 +73,7 @@ class LoadFailureErrorMessagesPropertyTest : StringSpec({
     "load failed errors contain chapter ID" {
         checkAll(Arb.long(1L..1000000L)) { chapterId ->
             val error = EpubError.ChapterLoadError.LoadFailed(chapterId)
-            error.userMessage shouldContain chapterId.toString()
+            error.userMessageArgs shouldContain chapterId
             error.message shouldContain chapterId.toString()
         }
     }
@@ -93,22 +86,16 @@ class LoadFailureErrorMessagesPropertyTest : StringSpec({
         }
     }
     
-    "file system errors have descriptive user messages" {
+    "file system errors have localized user messages" {
         checkAll(100, arbFileSystemError()) { error ->
-            error.userMessage.shouldNotBeBlank()
-            // Should indicate the type of problem
-            val hasKeyword = error.userMessage.contains("未找到") ||
-                            error.userMessage.contains("空间不足") ||
-                            error.userMessage.contains("权限") ||
-                            error.userMessage.contains("失败")
-            hasKeyword shouldBe true
+            error.userMessageRes shouldNotBe 0
         }
     }
     
     "file not found errors contain filename" {
         checkAll(100, Arb.string(1..50)) { fileName ->
             val error = EpubError.FileSystemError.FileNotFound(fileName)
-            error.userMessage shouldContain fileName
+            error.userMessageArgs shouldContain fileName
             error.message shouldContain fileName
         }
     }
@@ -117,7 +104,7 @@ class LoadFailureErrorMessagesPropertyTest : StringSpec({
         checkAll(Arb.long(1L..1000000000L), Arb.long(1L..1000000000L)) { required, available ->
             val error = EpubError.FileSystemError.InsufficientStorage(required, available)
             // Should contain some indication of sizes
-            error.userMessage.shouldNotBeBlank()
+            error.userMessageRes shouldNotBe 0
             error.message shouldContain required.toString()
             error.message shouldContain available.toString()
         }

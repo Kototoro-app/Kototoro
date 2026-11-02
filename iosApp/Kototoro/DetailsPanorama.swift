@@ -8,9 +8,9 @@ enum PanoramaPreset: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .clear: "清晰"
-        case .balanced: "均衡"
-        case .soft: "柔和"
+        case .clear: String(localized: "清晰")
+        case .balanced: String(localized: "均衡")
+        case .soft: String(localized: "柔和")
         }
     }
 
@@ -30,7 +30,7 @@ enum PanoramaPreset: String, CaseIterable, Identifiable {
 enum PanoramaLayout: String, CaseIterable, Identifiable {
     case top, fullScreen
     var id: String { rawValue }
-    var title: String { self == .top ? "顶部横幅" : "全屏背景" }
+    var title: String { self == .top ? String(localized: "顶部横幅") : String(localized: "全屏背景") }
 }
 
 enum PanoramaKeys {
@@ -49,6 +49,44 @@ struct DetailsCoverBoundsKey: PreferenceKey {
     }
 }
 
+/// Per-frame scroll state belongs to the decoration, keeping chapter and metadata views out of its update path.
+struct DetailsBackdropModifier: ViewModifier {
+    let runtime: IosSources
+    let work: IosSourceContent
+    @AppStorage(PanoramaKeys.enabled) private var panorama = true
+    @State private var scrollOffset: CGFloat = 0
+
+    func body(content: Content) -> some View {
+        content
+            .onScrollGeometryChange(for: CGFloat.self, of: { $0.contentOffset.y + $0.contentInsets.top }) { _, offset in
+                scrollOffset = offset
+            }
+            .backgroundPreferenceValue(DetailsCoverBoundsKey.self) { bounds in
+                GeometryReader { geometry in
+                    backdrop(coverBottom: bounds.map { geometry[$0].maxY + scrollOffset })
+                }
+                .ignoresSafeArea()
+            }
+            .navigationTitle(panorama && scrollOffset < 170 ? "" : work.title)
+    }
+
+    private func backdrop(coverBottom: CGFloat?) -> some View {
+        ZStack(alignment: .top) {
+            Color(uiColor: .systemGroupedBackground)
+            if panorama {
+                DetailsPanorama(runtime: runtime, content: work, scrollOffset: scrollOffset, coverBottom: coverBottom)
+            } else {
+                CoverImage(runtime: runtime, content: work, plain: true)
+                    .frame(height: 420).frame(maxWidth: .infinity)
+                    .blur(radius: 50).opacity(0.5)
+                    .mask(LinearGradient(colors: [.black, .black.opacity(0.6), .clear], startPoint: .top, endPoint: .bottom))
+            }
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
 /// The cover as a wide panorama behind the details header. [scrollOffset] is the list's offset from its resting
 /// position: positive scrolls the banner away with the content, negative (pull to refresh) stretches it.
 struct DetailsPanorama: View {
@@ -64,6 +102,7 @@ struct DetailsPanorama: View {
     @State private var drifting = false
     @State private var lastCoverBottom: CGFloat?
     private static let fadeEnd = 0.96
+    private static let horizontalTravel: CGFloat = 14
 
     var body: some View {
         GeometryReader { geometry in
@@ -75,13 +114,17 @@ struct DetailsPanorama: View {
             let stretch = max(-scrollOffset, 0)
             let follows = layout == .top && scrollLinked
             let motion = animated && !reduceMotion
+            let blurRadius = CGFloat(values.blur / 100 * 18)
+            // Reserve the full travel plus the blur kernel before clipping, including at the smallest zoom.
+            let blurPadding = ceil(blurRadius * 3) + 1
             let fadeDistance: CGFloat = 200.0
             let scrollAlpha = max(0.0, min(1.0, 1.0 - (max(scrollOffset, 0) / fadeDistance)))
             CoverImage(runtime: runtime, content: content, plain: true)
-                .frame(width: geometry.size.width, height: base + stretch)
-                .scaleEffect(motion ? (drifting ? 1.16 : 1.1) : 1, anchor: .center) // the pan never shows an edge
-                .offset(x: motion ? (drifting ? 14 : -14) : 0)
-                .blur(radius: values.blur / 100 * 18, opaque: false)
+                .frame(width: geometry.size.width + 2 * (Self.horizontalTravel + blurPadding),
+                       height: base + stretch + 2 * blurPadding)
+                .scaleEffect(motion ? (drifting ? 1.06 : 1) : 1, anchor: .center)
+                .offset(x: motion ? (drifting ? Self.horizontalTravel : -Self.horizontalTravel) : 0)
+                .blur(radius: blurRadius, opaque: false)
                 .frame(width: geometry.size.width, height: base + stretch)
                 .clipped()
                 .opacity((values.opacity / 100) * scrollAlpha)
@@ -139,8 +182,6 @@ struct PanoramaSettingsSection: View {
                 Toggle("封面动画", isOn: $animated)
                 if layout == .top { Toggle("跟随滚动", isOn: $scrollLinked) }
             }
-        } header: {
-            Text("详情页")
         } footer: {
             Text(enabled ? "在详情页顶部标题后方显示横幅式的封面背景图；开启“减弱动态效果”时不播放动画。"
                  : "关闭后使用模糊封面作为页面背景。")

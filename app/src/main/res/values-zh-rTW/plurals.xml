@@ -27,4 +27,19 @@
     <plurals name="items">
         <item quantity="other">%1$d 個項目</item>
     </plurals>
+    <plurals name="feed_timeline_updates">
+        <item quantity="other">%1$d 條更新</item>
+    </plurals>
+    <plurals name="old_chapters_in_total">
+        <item quantity="other">共 %1$d 箇舊章節</item>
+    </plurals>
+    <plurals name="home_updates_new_chapters">
+        <item quantity="other">%1$d 個新章節</item>
+    </plurals>
+    <plurals name="home_enabled_sources">
+        <item quantity="other">已啟用 %1$d 個內容源</item>
+    </plurals>
+    <plurals name="history_grouped_sources">
+        <item quantity="other">%1$d 個來源</item>
+    </plurals>
 </resources>

@@ -67,7 +67,12 @@ class LocalStorageManager @Inject constructor(
 
     suspend fun computeCacheSize(cache: CacheDir) = withContext(Dispatchers.IO) {
         getCacheDirsFor(cache).sumOf { it.computeSize() } +
-            if (cache == CacheDir.PAGES) File(context.cacheDir, "local_saf").computeSize() else 0L
+            if (cache == CacheDir.PAGES) {
+                LocalSafArchiveCache.directory(context.cacheDir).computeSize() +
+                    LocalSafEpubCache.directory(context.cacheDir).computeSize()
+            } else {
+                0L
+            }
     }
 
     suspend fun computeStorageSize(kind: StorageContentKind) = withContext(Dispatchers.IO) {
@@ -113,12 +118,22 @@ class LocalStorageManager @Inject constructor(
     }
 
     suspend fun clearCache(cache: CacheDir) = runInterruptible(Dispatchers.IO) {
-        if (cache == CacheDir.PAGES) LocalSafArchiveCache.clearUnused(context.cacheDir)
+        if (cache == CacheDir.PAGES || cache == CacheDir.NOVELS) reclaimSafCopies()
         getCacheDirsFor(cache).forEach { it.deleteRecursively() }
     }
 
     suspend fun clearUnusedLocalArchiveCache() = runInterruptible(Dispatchers.IO) {
+        reclaimSafCopies()
+    }
+
+    /**
+     * Reclaims SAF archive and book copies that no parser owns any more. Runs on startup and when a
+     * storage directory is removed: before #575 an interrupted scan or an EPUB reader left full
+     * copies of library files behind, which the user saw as a cache as large as the whole library.
+     */
+    private fun reclaimSafCopies() {
         LocalSafArchiveCache.clearUnused(context.cacheDir)
+        LocalSafEpubCache.clearAll(context.cacheDir)
     }
 
     suspend fun getReadableDirs(): List<File> = runInterruptible(Dispatchers.IO) {

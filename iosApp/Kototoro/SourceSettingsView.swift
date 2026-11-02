@@ -74,7 +74,7 @@ struct SourceSettingsView: View {
             .sheet(item: $editing) { edit in
                 TextEditSheet(edit: edit) { value in
                     if await save(edit, value) { return nil }
-                    let message = notice ?? "设置未能保存，请重试。"
+                    let message = notice ?? String(localized: "设置未能保存，请重试。")
                     notice = nil
                     return message
                 }
@@ -224,12 +224,12 @@ struct SourceSettingsView: View {
 
     private func textSummary(_ node: IosPreferenceNode) -> String {
         if node.isSecret {
-            return node.text.isEmpty ? "未设置" : "••••••••"
+            return node.text.isEmpty ? String(localized: "未设置") : "••••••••"
         }
-        if node.id == "auth:username" { return node.text.isEmpty ? "未设置" : node.text }
+        if node.id == "auth:username" { return node.text.isEmpty ? String(localized: "未设置") : node.text }
         // Parser keys store their default as a value (a full User-Agent), extensions as an empty string.
-        if node.text.isEmpty || node.text == node.defaultText { return "默认" }
-        return node.isUserAgent ? (UserAgentPresets.title(for: node.text) ?? "自定义") : node.text
+        if node.text.isEmpty || node.text == node.defaultText { return String(localized: "默认") }
+        return node.isUserAgent ? (UserAgentPresets.title(for: node.text) ?? String(localized: "自定义")) : node.text
     }
 
     private var currentUserAgent: String? {
@@ -245,7 +245,7 @@ struct SourceSettingsView: View {
         if let site {
             Section {
                 Button {
-                    editing = TextEdit(id: "cms:api", title: "API 地址", summary: "站点的苹果 CMS 接口地址；更换域名时修改这里。",
+                    editing = TextEdit(id: "cms:api", title: String(localized: "API 地址"), summary: String(localized: "站点的苹果 CMS 接口地址；更换域名时修改这里。"),
                                        value: site.api, placeholder: "https://", isUserAgent: false)
                 } label: {
                     LabeledContent("API 地址") { Text(site.api).lineLimit(1).truncationMode(.middle) }
@@ -253,11 +253,11 @@ struct SourceSettingsView: View {
                 .foregroundStyle(.primary)
                 .accessibilityIdentifier("sourceSettings.cms.api")
                 Button {
-                    editing = TextEdit(id: "cms:ua", title: "User-Agent", summary: "留空使用默认值。",
+                    editing = TextEdit(id: "cms:ua", title: "User-Agent", summary: String(localized: "留空使用默认值。"),
                                        value: site.userAgent, placeholder: "", isUserAgent: true)
                 } label: {
                     LabeledContent("User-Agent") {
-                        Text(site.userAgent.isEmpty ? "默认" : (UserAgentPresets.title(for: site.userAgent) ?? "自定义"))
+                        Text(site.userAgent.isEmpty ? String(localized: "默认") : (UserAgentPresets.title(for: site.userAgent) ?? String(localized: "自定义")))
                     }
                 }
                 .foregroundStyle(.primary)
@@ -326,8 +326,8 @@ struct SourceSettingsView: View {
             homepage = try? await runtime.homepage(sourceName: source.name)
             switch result.status {
             case "ACCEPTED": return true
-            case "PERSISTENCE_FAILED": notice = "设置未能保存，请重试。"
-            default: notice = "“\(node.title)”的值不被此来源接受。"
+            case "PERSISTENCE_FAILED": notice = String(localized: "设置未能保存，请重试。")
+            default: notice = String(localized: "“\(node.title)”的值不被此来源接受。")
             }
         } catch {
             notice = SourceErrorText.describe(error)

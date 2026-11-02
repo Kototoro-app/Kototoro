@@ -13,7 +13,6 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -23,6 +22,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -31,8 +31,11 @@ import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.util.ext.mangaSourceExtra
+import org.skepsun.kototoro.core.ui.compose.SelectionActionBar
+import org.skepsun.kototoro.core.ui.compose.SelectionBarIconButton
 import org.skepsun.kototoro.core.ui.compose.VerticalScrollbar
 import org.skepsun.kototoro.core.ui.compose.performSelectionHapticFeedback
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.details.ui.compose.state.DetailsPaneState
 import org.skepsun.kototoro.details.ui.compose.state.rememberDetailsPaneNestedScrollConnection
 import org.skepsun.kototoro.details.ui.pager.pages.PageThumbnail
@@ -58,6 +61,15 @@ fun PageThumbnailCard(
         modifier = modifier
             .fillMaxWidth()
             .aspectRatio(aspectRatio)
+            // A thumbnail is arbitrary artwork, so the ring is white rather than the accent colour:
+            // it has to read on a light page and on a dark one, and there is no container colour to
+            // derive a contrast-aware ring from.
+            .tvFocusable(
+                shape = RoundedCornerShape(8.dp),
+                borderWidth = 3.dp,
+                addFocusTarget = false,
+                ringColor = Color.White,
+            )
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick,
@@ -330,32 +342,16 @@ fun PagesScreen(
             exit = androidx.compose.animation.slideOutVertically { it } + androidx.compose.animation.fadeOut(),
             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp),
         ) {
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.inverseSurface,
-                contentColor = MaterialTheme.colorScheme.inverseOnSurface,
+            SelectionActionBar(
+                selectedCount = selectedItemIds.size,
+                onClearSelection = onClearSelection,
                 modifier = Modifier.padding(16.dp).windowInsetsPadding(WindowInsets.safeDrawing),
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = onClearSelection) {
-                            Icon(imageVector = Icons.Default.Close, contentDescription = "Clear")
-                        }
-                        Text(
-                            text = "${selectedItemIds.size}",
-                            style = MaterialTheme.typography.titleMedium,
-                            modifier = Modifier.padding(start = 8.dp),
-                        )
-                    }
-                    Row {
-                        IconButton(onClick = { onSelectionActionClick(R.id.action_save) }) {
-                            Icon(painter = painterResource(id = R.drawable.ic_save_ok), contentDescription = "Save Page")
-                        }
-                    }
+                SelectionBarIconButton(onClick = { onSelectionActionClick(R.id.action_save) }) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_save_ok),
+                        contentDescription = stringResource(R.string.save_page),
+                    )
                 }
             }
         }

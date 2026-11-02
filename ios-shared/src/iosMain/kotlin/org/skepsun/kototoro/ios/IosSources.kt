@@ -1,6 +1,11 @@
 package org.skepsun.kototoro.ios
 
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -10,8 +15,10 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.skepsun.kototoro.core.source.RoutedSourceRuntime
+import org.skepsun.kototoro.core.library.SourceChapterPart
 import org.skepsun.kototoro.core.library.withTrackingMetadata
 import org.skepsun.kototoro.core.source.SourceChapter
+import org.skepsun.kototoro.core.source.isNsfw
 import org.skepsun.kototoro.core.source.SourceChapterContent
 import org.skepsun.kototoro.core.source.SourceChapterNavigation
 import org.skepsun.kototoro.core.source.SourceContent
@@ -38,6 +45,10 @@ import org.skepsun.kototoro.reader.novel.NovelReaderLimits
 import org.skepsun.kototoro.reader.novel.NovelReaderThemePreset
 import org.skepsun.kototoro.reader.novel.buildNovelPageSegments
 import org.skepsun.kototoro.reader.novel.buildNovelLineDocument
+import org.skepsun.kototoro.reader.novel.withNovelTranslations
+import org.skepsun.kototoro.reader.novel.relocateNovelMarking
+import org.skepsun.kototoro.reader.novel.resolveNovelMarkingLocalRange
+import org.skepsun.kototoro.reader.novel.NovelTranslationDisplayMode
 import org.skepsun.kototoro.reader.novel.novelBlockAtOffset
 import org.skepsun.kototoro.reader.novel.novelHtmlToStyledText
 import org.skepsun.kototoro.reader.novel.isNovelChapterTitleLine
@@ -102,20 +113,96 @@ class IosChapterText internal constructor(internal val value: SourceChapterConte
 
     /** The chapter as the reader shows it, one block per line; the shared HTML conversion Android's EPUB reader uses. */
     fun document(): IosNovelDocument = IosNovelDocument(novelHtmlToStyledText(value.html))
+
+    /** The titles of a whole book's own chapters (an EPUB download); empty for an ordinary chapter. */
+    val sections: List<String> get() = value.sections.map { it.title }
+
+    /** The book's chapter [index] alone, with the book's pictures; null when there is no such chapter. */
+    fun section(index: Int): IosChapterText? {
+        val section = value.sections.getOrNull(index) ?: return null
+        val end = value.sections.getOrNull(index + 1)?.start ?: value.html.length
+        if (section.start !in 0..end || end > value.html.length) return null
+        return IosChapterText(SourceChapterContent(value.html.substring(section.start, end), value.images))
+    }
 }
 
 /**
  * A converted novel chapter: its line blocks plus the position rules shared with Android. History stores the chapter
  * progress of the first visible line (see `novelOffsetScroll`), so either reader restores the other's position.
  */
-class IosNovelDocument internal constructor(internal val styled: NovelStyledText) {
+class IosNovelDocument internal constructor(
+    internal val styled: NovelStyledText,
+    internal val lines: List<NovelDocumentBlock> = buildNovelLineDocument(styled.text),
+) {
     internal val text: String get() = styled.text
-    internal val lines = buildNovelLineDocument(styled.text)
+
+    /**
+     * This chapter showing [translations] (by block index) alone or, when [bilingual], under each original line.
+     * Blocks keep their source ranges, so positions, history and bookmarks are the original chapter's.
+     */
+    fun translated(translations: Map<Int, String>, bilingual: Boolean): IosNovelDocument =
+        IosNovelDocument(styled, lines.withNovelTranslations(translations,
+            if (bilingual) NovelTranslationDisplayMode.BILINGUAL else NovelTranslationDisplayMode.TRANSLATION_ONLY))
+
+    /** The text of each block worth translating, by block index: lines with letters, not pictures or rules. */
+    val translatableTexts: Map<Int, String>
+        get() = lines.withIndex().mapNotNull { (index, block) ->
+            (block as? NovelDocumentBlock.Text)?.original?.takeIf { line -> line.any(Char::isLetter) }?.let { index to it }
+        }.toMap()
+
+    /** This chapter with the text of some lines replaced (replacement rules); positions stay the chapter's. */
+    internal fun withLines(replaced: Map<Int, String>): IosNovelDocument {
+        if (replaced.isEmpty()) return this
+        return IosNovelDocument(styled, lines.mapIndexed { index, block ->
+            val text = replaced[index]
+            if (block is NovelDocumentBlock.Text && text != null && text != block.original) block.copy(original = text)
+            else block
+        })
+    }
+
+    internal fun rewritten(index: Int): Boolean = isRewritten(index)
+
+    /** The chapter text `start until end`, or null outside it. */
+    fun text(start: Int, end: Int): String? = if (start in 0..end && end <= text.length) text.substring(start, end) else null
+
+    /** Where each highlight lies in this chapter's text, following its words when the text differs (shared rule). */
+    fun markingRanges(markings: List<IosNovelMarking>): List<IosTextRange> = markings.mapNotNull { marking ->
+        relocateNovelMarking(text, marking.text, marking.start, marking.end)
+            ?.let { IosTextRange(marking.id, it.first, it.last + 1) }
+    }
+
+    /** Highlights within line [index], in the line's own offsets (the scrolling reader). */
+    fun lineHighlights(index: Int, ranges: List<IosTextRange>): List<IosTextRange> {
+        val line = lines.getOrNull(index) as? NovelDocumentBlock.Text ?: return emptyList()
+        if (line.translation != null || isRewritten(index)) return emptyList()
+        return ranges.mapNotNull { range ->
+            resolveNovelMarkingLocalRange(line.sourceRange, range.start, range.end, line.original.length)
+                ?.let { IosTextRange(range.id, it.first, it.last + 1) }
+        }
+    }
+
+    /** The whole of line [index] as a highlight range, with its text; null for a picture or a rewritten line. */
+    fun lineRange(index: Int): IosTextRange? {
+        val line = lines.getOrNull(index) as? NovelDocumentBlock.Text ?: return null
+        val range = line.sourceRange ?: return null
+        return IosTextRange(0, range.first, range.last + 1).takeIf { !isRewritten(index) }
+    }
+
+    /** A line whose text is no longer the converted chapter's (a replacement rule changed it). */
+    private fun isRewritten(index: Int): Boolean {
+        val line = lines.getOrNull(index) as? NovelDocumentBlock.Text ?: return false
+        val range = line.sourceRange ?: return false
+        return range.last < text.length && text.substring(range.first, range.last + 1) != line.original
+    }
+
+    private fun translationOf(index: Int): NovelDocumentBlock.Text? =
+        (lines.getOrNull(index) as? NovelDocumentBlock.Text)?.takeIf { it.translation != null }
 
     val blocks: List<IosNovelBlock> = lines.map { block ->
         when (block) {
-            is NovelDocumentBlock.Text -> IosNovelBlock(block.original, null)
-            is NovelDocumentBlock.Image -> IosNovelBlock(null, block.path)
+            is NovelDocumentBlock.Text -> IosNovelBlock(block.original, null, block.translation,
+                block.translation != null && block.displayMode == NovelTranslationDisplayMode.BILINGUAL)
+            is NovelDocumentBlock.Image -> IosNovelBlock(null, block.path, null, false)
         }
     }
 
@@ -134,17 +221,11 @@ class IosNovelDocument internal constructor(internal val styled: NovelStyledText
      * separates repeats); bookmarks without an excerpt, or whose excerpt is gone, keep their stored line.
      */
     fun bookmarkIndex(bookmark: IosBookmark, content: IosSourceContent): Int {
-        val chapters = content.value.chapters.orEmpty()
-        val chapter = chapters.firstOrNull { it.id == bookmark.value.chapterId }
-        val branch = chapters.filter { it.branch == chapter?.branch }
-        val chapterIndex = branch.indexOfFirst { it.id == bookmark.value.chapterId }
-        val progress = if (chapterIndex >= 0) {
-            novelBookmarkChapterProgress(bookmark.value.percent, chapterIndex, branch.size)
-        } else {
-            0f
-        }
+        val progress = content.branchPlace(bookmark.value.chapterId)?.let { (chapterIndex, count) ->
+            novelBookmarkChapterProgress(bookmark.value.percent, chapterIndex, count)
+        } ?: 0f
         val segments = lines.map { (it as? NovelDocumentBlock.Text)?.original.orEmpty() }
-        val located = resolveNovelBookmarkPosition(segments, bookmark.preview, bookmark.index, progress) ?: bookmark.index
+        val located = resolveNovelBookmarkPosition(segments, bookmark.textPreview, bookmark.index, progress) ?: bookmark.index
         return located.coerceIn(0, (lines.size - 1).coerceAtLeast(0))
     }
 
@@ -160,11 +241,14 @@ class IosNovelDocument internal constructor(internal val styled: NovelStyledText
     /** The book's styles for line [index] alone, in its own character offsets (the scrolling reader). */
     fun lineStyles(index: Int): List<IosNovelStyleRun> {
         val range = lines.getOrNull(index)?.sourceRange ?: return emptyList()
+        // A translation or a rewritten line is the reader's own text; the book's styles belong to the original.
+        if (translationOf(index) != null || isRewritten(index)) return emptyList()
         return styleRuns(range.first, range.last + 1, -range.first)
     }
 
     fun lineParagraph(index: Int): IosNovelParagraphRun? {
         val range = lines.getOrNull(index)?.sourceRange ?: return null
+        if (translationOf(index) != null || isRewritten(index)) return null
         return paragraphRun(index, 0, range.last - range.first + 1)
     }
 
@@ -194,7 +278,9 @@ class IosNovelDocument internal constructor(internal val styled: NovelStyledText
 
 /** An inline style or, with [ruby], a reading over its characters. [vertical] is 1 for superscript, -1 for subscript. */
 data class IosNovelStyleRun(val start: Int, val end: Int, val bold: Boolean, val italic: Boolean,
-    val underline: Boolean, val strike: Boolean, val vertical: Int, val scale: Float, val ruby: String?)
+    val underline: Boolean, val strike: Boolean, val vertical: Int, val scale: Float, val ruby: String?,
+    /** Shown in the theme's secondary color: the original line above a bilingual translation. */
+    val secondary: Boolean = false)
 
 /**
  * Layout of one line: [align] is start, centre, end or justify (0–3), [scale] the largest font scale on it, so its
@@ -226,10 +312,20 @@ class IosNovelPages internal constructor(
     /** The book's inline styles and ruby readings in [segment]'s text; none without book styles. */
     fun styles(segment: Int): List<IosNovelStyleRun> {
         val value = segments.getOrNull(segment) as? NovelPageSegment.Text ?: return emptyList()
-        if (!bookStyles) return emptyList()
         return (value.firstBlock until value.firstBlock + value.blockCount).flatMap { block ->
             val range = lines.getOrNull(block)?.sourceRange ?: return@flatMap emptyList()
-            document.styleRuns(range.first, range.last + 1, value.contentStart(block) - range.first)
+            val line = lines[block] as? NovelDocumentBlock.Text
+            when {
+                // The original above its translation is dimmed, as Android shows bilingual text.
+                line?.translation != null -> if (line.displayMode == NovelTranslationDisplayMode.BILINGUAL) {
+                    val start = value.contentStart(block)
+                    listOf(IosNovelStyleRun(start, start + line.original.length, false, false, false, false, 0, 1f,
+                        null, secondary = true))
+                } else emptyList()
+                bookStyles && !document.rewritten(block) ->
+                    document.styleRuns(range.first, range.last + 1, value.contentStart(block) - range.first)
+                else -> emptyList()
+            }
         }
     }
 
@@ -239,6 +335,9 @@ class IosNovelPages internal constructor(
         if (!bookStyles) return emptyList()
         return (value.firstBlock until value.firstBlock + value.blockCount).mapNotNull { block ->
             val range = lines.getOrNull(block)?.sourceRange ?: return@mapNotNull null
+            if ((lines[block] as? NovelDocumentBlock.Text)?.translation != null || document.rewritten(block)) {
+                return@mapNotNull null
+            }
             document.paragraphRun(block, value.lineStart(block), value.contentStart(block) + range.last - range.first + 1)
         }
     }
@@ -248,6 +347,24 @@ class IosNovelPages internal constructor(
         is NovelPageSegment.Text -> value.blockAt(offset)
         is NovelPageSegment.Image -> value.block
         null -> 0
+    }
+
+    /** The chapter text offset shown at [offset] of [segment] (a selection's end maps the same way). */
+    fun sourceOffset(segment: Int, offset: Int): Int {
+        val block = block(segment, offset)
+        val range = lines.getOrNull(block)?.sourceRange ?: return 0
+        val inBlock = (segments.getOrNull(segment) as? NovelPageSegment.Text)?.offsetInBlock(offset) ?: 0
+        return range.first + minOf(inBlock, range.last - range.first + 1)
+    }
+
+    /** Highlights within [segment]'s text, in its offsets. */
+    fun highlights(segment: Int, ranges: List<IosTextRange>): List<IosTextRange> {
+        val value = segments.getOrNull(segment) as? NovelPageSegment.Text ?: return emptyList()
+        return (value.firstBlock until value.firstBlock + value.blockCount).flatMap { block ->
+            document.lineHighlights(block, ranges).map {
+                IosTextRange(it.id, value.contentStart(block) + it.start, value.contentStart(block) + it.end)
+            }
+        }
     }
 
     /** The history `scroll` value for a page starting at [offset] of [segment]. */
@@ -312,8 +429,12 @@ object IosNovelStyle {
 data class IosNovelColors(val background: Long, val text: Long, val secondaryText: Long, val chromeBackground: Long,
     val chromeText: Long, val highlight: Long)
 
-/** A paragraph line ([text]) or an illustration ([imageUrl]) of a novel chapter. */
-class IosNovelBlock internal constructor(val text: String?, val imageUrl: String?)
+/**
+ * A paragraph line ([text]) or an illustration ([imageUrl]) of a novel chapter; a translated line also has its
+ * [translation], shown alone or, when [bilingual], below the dimmed original.
+ */
+class IosNovelBlock internal constructor(val text: String?, val imageUrl: String?, val translation: String?,
+    val bilingual: Boolean)
 
 /** Native sources are always listed; an extension runtime failure is reported without hiding them. */
 data class IosSourceCatalog(val sources: List<IosSource>, val extensionError: String?)
@@ -327,6 +448,8 @@ class IosSourceTag internal constructor(internal val value: SourceTag) {
 class IosSourceContent internal constructor(
     internal val value: SourceContent,
     internal val metadata: org.skepsun.kototoro.core.db.entity.TrackingSiteItemEntity? = null,
+    /** Downloaded books listed by their own chapters: the download's chapter id → those chapters' titles. */
+    private val books: Map<Long, List<String>> = emptyMap(),
 ) {
     private val display = value.withTrackingMetadata(metadata)
     val usesTrackingCover: Boolean get() = !metadata?.coverUrl.isNullOrBlank()
@@ -335,6 +458,7 @@ class IosSourceContent internal constructor(
     val sourceName: String get() = value.source.name
     val contentType: String get() = value.source.contentType
     val mediaKind: String get() = mediaKindOf(value.source.contentType)
+    val isLocal: Boolean get() = LocalSourceRuntime.owns(sourceName)
     val title: String get() = display.title
     val url: String get() = value.url
     val publicUrl: String get() = value.publicUrl
@@ -345,21 +469,102 @@ class IosSourceContent internal constructor(
     /** ONGOING / FINISHED / ABANDONED / PAUSED / UPCOMING / RESTRICTED, when known. */
     val state: String? get() = value.state?.takeIf(String::isNotBlank)
     val contentRating: String? get() = value.contentRating?.takeIf(String::isNotBlank)
+    /** Android's adult-work rule (`Content.isNsfw()`): what the incognito prompt and the 18+ marks go by. */
+    val isNsfw: Boolean get() = value.isNsfw
     val tags: List<String> get() = display.tags.map { it.title }
     val summary: String? get() = display.description?.takeIf(String::isNotBlank)
     val coverUrl: String? get() = (display.largeCoverUrl ?: display.coverUrl)?.takeIf(String::isNotBlank)
     val hasCover: Boolean get() = coverUrl != null
-    val chapters: List<IosSourceChapter> get() = value.chapters.orEmpty().map(::IosSourceChapter)
+    val chapters: List<IosSourceChapter> get() = listed.map(::IosSourceChapter)
     /** Without building the chapter list (each [chapters] read maps and bridges every chapter). */
-    val chapterCount: Int get() = value.chapters?.size ?: 0
+    val chapterCount: Int get() = listed.size
 
     fun adjacentChapter(chapter: IosSourceChapter, forward: Boolean): IosSourceChapter? =
-        SourceChapterNavigation.adjacent(value.chapters.orEmpty(), chapter.value.id, forward)?.let(::IosSourceChapter)
+        SourceChapterNavigation.adjacent(listed, chapter.value.id, forward)?.let(::IosSourceChapter)
+
+    /**
+     * The source's chapters, with each downloaded book replaced by its own chapters as Android lists an EPUB download
+     * (the download names their group). Sources, history and downloads keep using [value]'s chapters.
+     */
+    internal val listed: List<SourceChapter> by lazy {
+        if (books.isEmpty()) value.chapters.orEmpty() else value.chapters.orEmpty().flatMap { chapter ->
+            books[chapter.id]?.takeIf { it.isNotEmpty() }?.let { titles ->
+                titles.mapIndexed { index, title -> bookChapter(chapter, index, titles.size, title) }
+            } ?: listOf(chapter)
+        }
+    }
+    private val parts: Map<Long, SourceChapterPart> by lazy {
+        val chapters = value.chapters.orEmpty().associateBy { it.id }
+        buildMap {
+            for ((id, titles) in books) {
+                val parent = chapters[id] ?: continue
+                titles.indices.forEach { put(bookChapterId(parent.id, it), SourceChapterPart(parent, it, titles.size)) }
+            }
+        }
+    }
+
+    /** This work's fields with [other]'s chapters: a source that answered without its chapters keeps the shown list. */
+    fun withChaptersOf(other: IosSourceContent): IosSourceContent =
+        IosSourceContent(value.copy(chapters = other.value.chapters), metadata)
+
+    /** This work without a chapter list, so its details screen lists the saved or fetched chapters. */
+    val withoutChapters: IosSourceContent get() = IosSourceContent(value.copy(chapters = null), metadata)
+
+    /** The source's own chapters, downloads of books included (what [chapters] lists by their chapters). */
+    val sourceChapters: List<IosSourceChapter> get() = value.chapters.orEmpty().map(::IosSourceChapter)
+
+    /** This work with the given downloaded books listed by their chapters: download chapter id → chapter titles. */
+    fun withBooks(books: Map<String, List<String>>): IosSourceContent {
+        val parsed = books.mapNotNull { (id, titles) -> id.toLongOrNull()?.let { it to titles } }.toMap()
+        return if (parsed == this.books) this else IosSourceContent(value, metadata, parsed)
+    }
+
+    /** Some downloaded book is listed by its chapters. */
+    val hasBooks: Boolean get() = parts.isNotEmpty()
+
+    /** The download a book's chapter is listed from; null for the source's own chapters. */
+    fun bookOf(chapter: IosSourceChapter): IosSourceChapter? = parts[chapter.value.id]?.parent?.let(::IosSourceChapter)
+
+    /** The chapter's place inside its book; -1 for the source's own chapters. */
+    fun bookIndex(chapter: IosSourceChapter): Int = parts[chapter.value.id]?.index ?: -1
+
+    /** The first chapter listed for a download shown by its chapters, or the chapter itself. */
+    fun listedChapter(chapter: IosSourceChapter): IosSourceChapter =
+        if (books[chapter.value.id].isNullOrEmpty()) chapter
+        else listed.firstOrNull { parts[it.id]?.parent?.id == chapter.value.id }?.let(::IosSourceChapter) ?: chapter
+
+    internal fun part(chapter: SourceChapter): SourceChapterPart? = parts[chapter.id]
+
+    /** The id the stored chapter list knows a chapter by: a book's chapter is stored as its download. */
+    internal fun storedChapterId(id: Long): Long = parts[id]?.parent?.id ?: id
+
+    /** The chapter's index and the chapter count of its branch, a book's chapters sharing the download's place. */
+    internal fun branchPlace(chapterId: Long): Pair<Int, Int>? {
+        val part = parts[chapterId]
+        val all = value.chapters.orEmpty()
+        val stored = all.firstOrNull { it.id == (part?.parent?.id ?: chapterId) } ?: return null
+        val branch = all.filter { it.branch == stored.branch }
+        val count = part?.count ?: 1
+        return branch.indexOfFirst { it.id == stored.id } * count + (part?.index ?: 0) to branch.size * count
+    }
 }
+
+/** Android's id for chapter [index] of an EPUB download (`EpubInternalChapterLoader`), so history matches. */
+private fun bookChapterId(parentId: Long, index: Int): Long = parentId + index * 1_000_000L + 1
+
+/** Chapter [index] of a downloaded book in place of its download [parent], numbered within the download's number. */
+private fun bookChapter(parent: SourceChapter, index: Int, count: Int, title: String) = parent.copy(
+    id = bookChapterId(parent.id, index),
+    title = title.takeIf(String::isNotBlank) ?: localized("第 %@ 章", index + 1),
+    number = parent.number + index.toFloat() / count,
+    url = "${parent.url}#chapter/$index",
+    sourceData = null,
+    ebookFormats = emptyList(),
+)
 
 class IosSourceChapter internal constructor(internal val value: SourceChapter) {
     val id: String get() = value.id.toString()
-    val title: String get() = value.title?.takeIf(String::isNotBlank) ?: "第 ${chapterNumber(value.number)} 话"
+    val title: String get() = value.title?.takeIf(String::isNotBlank) ?: localized("第 %@ 话", chapterNumber(value.number))
     val branch: String? get() = value.branch
     val number: Float get() = value.number
     val volume: Int get() = value.volume
@@ -385,6 +590,18 @@ data class IosSourceImage(val relativePath: String, val sha256: String, val byte
  * Apple CMS sites run natively through the shared [MacCmsSourceRuntime]; every other source goes through the optional
  * embedded-JVM transport. Both sit behind one routed runtime, so screens do not care where a source executes.
  */
+/** A cancellation Swift hands to a Kotlin call and triggers from its task's cancellation handler. */
+class IosCancellation {
+    internal val signal = CompletableDeferred<Unit>()
+
+    fun cancel() {
+        signal.complete(Unit)
+    }
+}
+
+/** Longer than any single image download a source completes, short enough that a stalled one frees its slot. */
+private const val IMAGE_TIMEOUT_MILLIS = 90_000L
+
 class IosSources(
     transport: IosSourceTransport?,
     private val videoSources: IosVideoSources?,
@@ -405,7 +622,7 @@ class IosSources(
     private val cms = videoSources?.let { store -> MacCmsSourceRuntime(store.http) { store.stored() } }
     private val local = if (localDirectory == null || imageDirectory == null) null else
         LocalSourceRuntime(localDirectory.toPath(), imageDirectory.toPath(), decodeLegacyText = ::decodeLegacyText)
-    private val runtime = RoutedSourceRuntime(
+    internal val runtime = RoutedSourceRuntime(
         listOfNotNull(
             local?.let { RoutedSourceRuntime.Route(LocalSourceRuntime::owns, it) },
             cms?.let { RoutedSourceRuntime.Route(MacCmsSourceRuntime::owns, it) },
@@ -422,7 +639,7 @@ class IosSources(
     /** Versioned host management is separate from the source invocation protocol. */
     @Throws(Exception::class)
     suspend fun manage(requestJson: String): String = withContext(Dispatchers.IO) {
-        checkNotNull(transport) { "此构建未包含扩展运行时" }.exchange(requestJson)
+        checkNotNull(transport) { localized("此构建未包含扩展运行时") }.exchange(requestJson)
     }
 
     @Throws(Exception::class)
@@ -440,14 +657,14 @@ class IosSources(
             } catch (error: kotlin.coroutines.cancellation.CancellationException) {
                 throw error
             } catch (error: Exception) {
-                extensionError = error.message ?: "扩展运行时调用失败"
+                extensionError = error.message ?: localized("扩展运行时调用失败")
                 emptyList()
             }
         }.orEmpty()
         val imported = if (local == null) emptyList() else listOf(
-            IosSource(LocalSourceRuntime.MANGA.name, "本地漫画", "", LocalSourceRuntime.MANGA.contentType, "local"),
-            IosSource(LocalSourceRuntime.NOVEL.name, "本地小说", "", LocalSourceRuntime.NOVEL.contentType, "local"),
-            IosSource(LocalSourceRuntime.VIDEO.name, "本地视频", "", LocalSourceRuntime.VIDEO.contentType, "local"),
+            IosSource(LocalSourceRuntime.MANGA.name, localized("本地漫画"), "", LocalSourceRuntime.MANGA.contentType, "local"),
+            IosSource(LocalSourceRuntime.NOVEL.name, localized("本地小说"), "", LocalSourceRuntime.NOVEL.contentType, "local"),
+            IosSource(LocalSourceRuntime.VIDEO.name, localized("本地视频"), "", LocalSourceRuntime.VIDEO.contentType, "local"),
         )
         return IosSourceCatalog(imported + video + external, extensionError)
     }
@@ -461,14 +678,20 @@ class IosSources(
     /** Imports a local file (copied into the app); [fileName] decides the format and default title. */
     @Throws(Exception::class)
     suspend fun importLocal(path: String, fileName: String): IosSourceContent =
-        IosSourceContent(checkNotNull(local) { "本地导入不可用" }.import(path.toPath(), fileName))
+        IosSourceContent(checkNotNull(local) { localized("本地导入不可用") }.import(path.toPath(), fileName))
+
+    /** A folder of video files as one work, an episode per file (paths and display names in the same order). */
+    @Throws(Exception::class)
+    suspend fun importVideoFolder(paths: List<String>, names: List<String>, title: String): IosSourceContent =
+        IosSourceContent(checkNotNull(local) { localized("本地导入不可用") }
+            .importVideoFolder(paths.map { it.toPath() }.zip(names), title))
 
     fun isLocal(content: IosSourceContent): Boolean = LocalSourceRuntime.owns(content.value.source.name)
 
     /** Deletes the imported file; favourites and history of the work stay like those of any removed source. */
     @Throws(Exception::class)
     suspend fun removeLocal(content: IosSourceContent) {
-        checkNotNull(local) { "本地导入不可用" }.remove(content.value.id)
+        checkNotNull(local) { localized("本地导入不可用") }.remove(content.value.id)
     }
 
     private class ManagementInfo(val titles: Map<String, String>, val groups: Map<String, Pair<String, Int>>)
@@ -493,7 +716,7 @@ class IosSources(
 
     /** Extension sources only (the embedded-JVM preview); kept for callers that predate native sources. */
     @Throws(Exception::class)
-    suspend fun sources(): List<IosSource> = checkNotNull(extensions) { "此构建未包含扩展运行时" }
+    suspend fun sources(): List<IosSource> = checkNotNull(extensions) { localized("此构建未包含扩展运行时") }
         .getSources().map { IosSource(it.name, it.name, it.locale, it.contentType, "extension") }
 
     /** Call after sites were imported or removed so cached detection is not reused. */
@@ -674,6 +897,27 @@ class IosSources(
             "Image identity mismatch"
         }
         return IosSourceImage(artifact.relativePath, artifact.sha256, artifact.byteSize)
+    }
+
+    /**
+     * [image] that Swift can cancel and that cannot hang: Kotlin/Native's async export does not forward Swift task
+     * cancellation, so a reader page scrolled away would otherwise keep its download (and its reader-thread slot)
+     * until the source answered. A source that never answers fails after [IMAGE_TIMEOUT_MILLIS] like any error.
+     */
+    @Throws(Exception::class)
+    suspend fun image(page: IosSourcePage, cancellation: IosCancellation): IosSourceImage = coroutineScope {
+        val work = async {
+            withTimeoutOrNull(IMAGE_TIMEOUT_MILLIS) { image(page) } ?: throw IllegalStateException(localized("页面加载超时"))
+        }
+        val watcher = launch {
+            cancellation.signal.await()
+            work.cancel()
+        }
+        try {
+            work.await()
+        } finally {
+            watcher.cancel()
+        }
     }
 
     @Throws(Exception::class)

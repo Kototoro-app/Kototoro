@@ -41,6 +41,20 @@ data class SourceContent(
     val sourceData: String? = null,
 )
 
+/** The content rating an adult work carries; sources above it also mark a whole source as adult. */
+const val CONTENT_RATING_ADULT = "ADULT"
+
+/** The content type prefix of a source that serves adult works only. */
+const val CONTENT_TYPE_HENTAI_PREFIX = "HENTAI_"
+
+/**
+ * The one adult-work rule the whole app shares: Android's `Content.isNsfw()`. The stored `manga.isNsfw` flag, the
+ * details page and the incognito prompt all classify a work the same way, so a feature that hides or forgets adult
+ * content cannot disagree with the one that stored the flag.
+ */
+val SourceContent.isNsfw: Boolean
+    get() = contentRating == CONTENT_RATING_ADULT || source.contentType.startsWith(CONTENT_TYPE_HENTAI_PREFIX)
+
 @Serializable
 data class SourceChapter(
     @Serializable(with = SourceLongSerializer::class) val id: Long,
@@ -63,9 +77,20 @@ data class SourceExternalTrack(val url: String, val lang: String, val headers: M
 @Serializable
 data class SourceContentImage(val url: String, val headers: Map<String, String> = emptyMap())
 
-/** The text of a novel chapter as HTML (images may keep their original URLs) plus the images it uses. */
+/**
+ * The text of a novel chapter as HTML (images may keep their original URLs) plus the images it uses. A whole book
+ * (an EPUB download) also lists its own chapters as [sections], in reading order.
+ */
 @Serializable
-data class SourceChapterContent(val html: String, val images: List<SourceContentImage> = emptyList())
+data class SourceChapterContent(
+    val html: String,
+    val images: List<SourceContentImage> = emptyList(),
+    val sections: List<SourceChapterSection> = emptyList(),
+)
+
+/** A chapter of a book inside [SourceChapterContent.html]: its text starts at character [start]. */
+@Serializable
+data class SourceChapterSection(val title: String, val start: Int)
 
 @Serializable
 data class SourcePage(

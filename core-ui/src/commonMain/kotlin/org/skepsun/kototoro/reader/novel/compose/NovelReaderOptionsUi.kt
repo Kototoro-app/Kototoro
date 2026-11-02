@@ -25,9 +25,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.kyant.shapes.Capsule
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
+import org.skepsun.kototoro.core.ui.text.uiString
+import org.skepsun.kototoro.reader.ui.compose.design.ReaderChoiceChips
 import org.skepsun.kototoro.reader.ui.compose.ReaderOptionsPageList
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderOptionDivider
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderOptionGroup
+import org.skepsun.kototoro.reader.ui.compose.design.ReaderOptionSection
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderStepperRow
 import org.skepsun.kototoro.reader.ui.compose.design.currentReaderPanelColors
 
@@ -129,12 +132,47 @@ fun NovelTypographyOptionsPage(
 ) = ReaderOptionsPageList {
     item {
         ReaderOptionGroup {
+            NovelTypographyControls(fontSize, lineSpacing, fontOption = fontOption,
+                additionalOptions = additionalOptions)
+        }
+    }
+}
+
+/** The same typography controls inside a reader panel or the main Android settings group. */
+@Composable
+fun NovelTypographyControls(
+    fontSize: NovelReaderValueOption,
+    lineSpacing: NovelReaderValueOption,
+    modifier: Modifier = Modifier,
+    fontOption: (@Composable () -> Unit)? = null,
+    additionalOptions: @Composable () -> Unit = {},
+) {
+    Column(modifier.fillMaxWidth()) {
+        if (fontOption != null) {
             fontOption()
             ReaderOptionDivider()
-            NovelReaderValueStepper(fontSize)
-            ReaderOptionDivider()
-            NovelReaderValueStepper(lineSpacing)
-            additionalOptions()
         }
+        NovelReaderValueStepper(fontSize)
+        ReaderOptionDivider()
+        NovelReaderValueStepper(lineSpacing)
+        additionalOptions()
+    }
+}
+
+/** Hosts map this two-way choice to their existing enum or boolean, without changing persistence. */
+@Composable
+fun NovelReadingModeOptions(
+    paged: Boolean,
+    onPagedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    icon: (@Composable (Int) -> Unit)? = null,
+) {
+    ReaderOptionSection(uiString("novel_reading_mode"), modifier = modifier) {
+        ReaderChoiceChips(
+            options = listOf(uiString("novel_mode_paged"), uiString("novel_mode_scroll")),
+            selectedIndex = if (paged) 0 else 1,
+            onSelected = { onPagedChange(it == 0) },
+            icon = icon,
+        )
     }
 }

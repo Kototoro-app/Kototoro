@@ -61,7 +61,7 @@ class IosSourceCacheTest {
     }
 
     @Test
-    fun searchingWithoutCombinedFiltersDoesNotRequireThePanel() = runBlocking {
+    fun searchingWithoutCombinedFiltersDoesNotRequireThePanel() = runBlocking<Unit> {
         val app = runtime { call ->
             when (call) {
                 is SourceCall.Describe -> SourceResult.Descriptor(descriptor(combined = false))
@@ -76,7 +76,7 @@ class IosSourceCacheTest {
     }
 
     @Test
-    fun anAdvertisedDynamicFilterFailureMustRemainRetryable() = runBlocking {
+    fun anAdvertisedDynamicFilterFailureMustRemainRetryable() = runBlocking<Unit> {
         val app = runtime { call ->
             when (call) {
                 is SourceCall.Describe -> SourceResult.Descriptor(descriptor(dynamic = true))

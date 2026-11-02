@@ -1,4 +1,6 @@
 import Foundation
+import MetricKit
+import KototoroShared
 import Network
 import SwiftUI
 import os
@@ -9,6 +11,11 @@ import os
 actor RequestGate {
     /// Android's Coil loader: `fetcherCoroutineContext(Dispatchers.IO.limitedParallelism(8))`.
     static let covers = RequestGate(limit: 8)
+    /// Dedicated gate for source and extension icons, isolated from covers so background favicons never stall content covers.
+    static let icons = RequestGate(limit: 4)
+    /// APK artwork read from installed JARs: local IO that must not queue behind site favicons, kept to a couple of
+    /// archives at a time so a fast scroll does not open every JAR at once.
+    static let extensionArtwork = RequestGate(limit: 2)
     /// Android's Coil loader: `decoderCoroutineContext(Dispatchers.IO.limitedParallelism(3))`.
     static let coverDecoding = RequestGate(limit: 3)
     /// Shared by reader overviews and tiled bases: network concurrency does not bound native decode memory.
@@ -42,6 +49,8 @@ actor RequestGate {
         let ticket = ticket ?? Self.makeTicket()
         let granted = await withTaskCancellationHandler {
             await withCheckedContinuation { continuation in
+                // A cancellation that arrived before this waiter was queued found nothing to drop.
+                if Task.isCancelled { continuation.resume(returning: false); return }
                 waiters.append(Waiter(ticket: ticket, priority: priority, continuation: continuation))
             }
         } onCancel: {
@@ -87,6 +96,20 @@ actor RequestGate {
     }
 }
 
+extension IosSources {
+    /// A page image whose download stops when the calling task is cancelled. Kotlin/Native's async export does not
+    /// forward Swift task cancellation, so the plain `image(page:)` keeps downloading (and holding its reader-thread
+    /// slot) after the reader has moved on; enough of those stalled and every page waited forever.
+    func cancellableImage(page: IosSourcePage) async throws -> IosSourceImage {
+        let cancellation = IosCancellation()
+        return try await withTaskCancellationHandler {
+            try await image(page: page, cancellation: cancellation)
+        } onCancel: {
+            cancellation.cancel()
+        }
+    }
+}
+
 /// Reader page loading settings under Android's preference keys and defaults (`AppSettings.readerThreads`,
 /// `readerPrefetchLimit`, `pagesPreloadPolicy`), with Android's prefetch rules.
 enum ReaderLoading {
@@ -99,6 +122,11 @@ enum ReaderLoading {
     static let visiblePriority = 1
     /// `ReaderViewModel.PREFETCH_LIMIT`: pages after the visible ones offered to the prefetch queue.
     static let prefetchWindow = 10
+    /// The bytes of decoded pages a continuous strip keeps: a sixteenth of the device's memory, 160–512 MB.
+    static let decodedImageBudget: Int = {
+        let share = Double(ProcessInfo.processInfo.physicalMemory) / 16
+        return Int(min(max(share, Double(160 << 20)), Double(512 << 20)))
+    }()
 
     static var threads: Int { (UserDefaults.standard.object(forKey: threadsKey) as? Int ?? 3).clamped(1...10) }
     static var prefetchLimit: Int { (UserDefaults.standard.object(forKey: prefetchLimitKey) as? Int ?? 6).clamped(1...20) }
@@ -108,9 +136,9 @@ enum ReaderLoading {
 
         var title: String {
             switch self {
-            case .always: "总是"
-            case .unmetered: "仅连接 Wi-Fi 时"
-            case .never: "从不"
+            case .always: String(localized: "总是")
+            case .unmetered: String(localized: "仅连接 Wi-Fi 时")
+            case .never: String(localized: "从不")
             }
         }
     }
@@ -150,6 +178,26 @@ final class NetworkState: Sendable {
     var current: Snapshot { state.withLock { $0 } }
 }
 
+/// Scroll hitches the system measured on this device (MetricKit's daily `MXAnimationMetric`): how smooth reading is
+/// away from development builds. The latest day's ratio is kept for the reader loading settings to show.
+final class ReaderHitchMetrics: NSObject, MXMetricManagerSubscriber, @unchecked Sendable {
+    static let shared = ReaderHitchMetrics()
+    /// Milliseconds of hitches per second of scrolling, and when that day ended.
+    static let ratioKey = "reader_scroll_hitch_ratio"
+    static let dateKey = "reader_scroll_hitch_date"
+
+    func start() { MXMetricManager.shared.add(self) }
+
+    func didReceive(_ payloads: [MXMetricPayload]) {
+        guard let latest = payloads
+            .filter({ $0.animationMetrics?.scrollHitchTimeRatio != nil })
+            .max(by: { $0.timeStampEnd < $1.timeStampEnd }),
+            let ratio = latest.animationMetrics?.scrollHitchTimeRatio else { return }
+        UserDefaults.standard.set(ratio.value, forKey: Self.ratioKey)
+        UserDefaults.standard.set(latest.timeStampEnd, forKey: Self.dateKey)
+    }
+}
+
 /// Android's reader settings group for page loading.
 struct ReaderLoadingSettingsSection: View {
     @AppStorage(ReaderLoading.preloadKey) private var preload = ReaderLoading.Preload.unmetered.rawValue
@@ -171,7 +219,7 @@ struct ReaderLoadingSettingsSection: View {
             }
             .accessibilityIdentifier("settings.prefetchLimit")
         } header: {
-            Text("阅读器加载")
+            Text("页面加载")
         } footer: {
             Text("线程数为阅读时同时加载的页面数量；预读页数为提前加载的页面数量。省电模式与低数据模式下不预加载。")
         }

@@ -30,16 +30,28 @@ enum SourceImageFile {
                                        byteSize: byteSize), maxPixelSize: maxPixelSize)
     }
 
+    static func createSource(data: Data) throws -> CGImageSource {
+        let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
+        guard let source = CGImageSourceCreateWithData(data as CFData, sourceOptions) else {
+            throw failure(String(localized: "无法解码此图片格式"))
+        }
+        return source
+    }
+
     /// Decodes bytes already returned by [validatedData].
     static func decode(data: Data, maxPixelSize: Int = 4096) throws -> UIImage {
-        let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
-        guard let source = CGImageSourceCreateWithData(data as CFData, sourceOptions),
-              let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
-                kCGImageSourceCreateThumbnailFromImageAlways: true,
-                kCGImageSourceCreateThumbnailWithTransform: true,
-                kCGImageSourceShouldCacheImmediately: true,
-                kCGImageSourceThumbnailMaxPixelSize: max(1, maxPixelSize),
-              ] as CFDictionary) else { throw failure("无法解码此图片格式") }
+        let source = try createSource(data: data)
+        return try decode(source: source, maxPixelSize: maxPixelSize)
+    }
+
+    /// Decodes a thumbnail directly from an existing [CGImageSource].
+    static func decode(source: CGImageSource, maxPixelSize: Int = 4096) throws -> UIImage {
+        guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: max(1, maxPixelSize),
+        ] as CFDictionary) else { throw failure(String(localized: "无法解码此图片格式")) }
         return UIImage(cgImage: image)
     }
 
@@ -51,10 +63,12 @@ enum SourceImageFile {
 
     /// Reads the size of bytes already returned by [validatedData].
     static func dimensions(data: Data) throws -> (width: Int, height: Int) {
-        let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
-        guard let source = CGImageSourceCreateWithData(data as CFData, sourceOptions) else {
-            throw failure("无法解码此图片格式")
-        }
+        let source = try createSource(data: data)
+        return try dimensions(source: source)
+    }
+
+    /// Reads dimensions directly from an existing [CGImageSource].
+    static func dimensions(source: CGImageSource) throws -> (width: Int, height: Int) {
         if let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
            let width = properties[kCGImagePropertyPixelWidth] as? Int,
            let height = properties[kCGImagePropertyPixelHeight] as? Int,
@@ -62,9 +76,10 @@ enum SourceImageFile {
             let orientation = (properties[kCGImagePropertyOrientation] as? Int) ?? 1
             return (5...8).contains(orientation) ? (height, width) : (width, height)
         }
+        let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
         guard let image = CGImageSourceCreateImageAtIndex(source, 0, sourceOptions),
               image.width > 0, image.height > 0 else {
-            throw failure("无法解码此图片格式")
+            throw failure(String(localized: "无法解码此图片格式"))
         }
         return (image.width, image.height)
     }
@@ -75,11 +90,11 @@ enum SourceImageFile {
         let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
         guard let source = CGImageSourceCreateWithData(data as CFData, sourceOptions),
               let full = CGImageSourceCreateImageAtIndex(source, 0, sourceOptions) else {
-            throw failure("无法解码此图片格式")
+            throw failure(String(localized: "无法解码此图片格式"))
         }
         let region = rect.integral.intersection(CGRect(x: 0, y: 0, width: full.width, height: full.height))
         guard !region.isEmpty, let cropped = full.cropping(to: region) else {
-            throw failure("页面区域越界")
+            throw failure(String(localized: "页面区域越界"))
         }
         let sample = max(1, sampleSize)
         if sample == 1 { return UIImage(cgImage: cropped) }
@@ -96,6 +111,17 @@ enum SourceImageFile {
         context.draw(cropped, in: CGRect(x: 0, y: 0, width: targetWidth, height: targetHeight))
         guard let scaled = context.makeImage() else { return UIImage(cgImage: cropped) }
         return UIImage(cgImage: scaled)
+    }
+
+    /// [image] in a bitmap of its own (native 32-bit layout), or [image] itself when that cannot be made.
+    static func ownBitmap(_ image: CGImage) -> CGImage {
+        let bitmapInfo = CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue
+        guard let context = CGContext(data: nil, width: image.width, height: image.height, bitsPerComponent: 8,
+                                      bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: bitmapInfo)
+        else { return image }
+        context.interpolationQuality = .none
+        context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+        return context.makeImage() ?? image
     }
 
     static func splitPage(_ image: UIImage, segment: Int) -> UIImage {
@@ -134,19 +160,41 @@ enum SourceImageFile {
         return UIImage(cgImage: cropped, scale: image.scale, orientation: image.imageOrientation)
     }
 
+    private static func isHex64(_ string: String) -> Bool {
+        guard string.utf8.count == 64 else { return false }
+        return string.utf8.allSatisfy { byte in
+            (byte >= 0x30 && byte <= 0x39) || // '0'-'9'
+            (byte >= 0x61 && byte <= 0x66)    // 'a'-'f'
+        }
+    }
+
+    private static func hexDigest(data: Data) -> String {
+        let digest = SHA256.hash(data: data)
+        let hexDigits: [UInt8] = Array("0123456789abcdef".utf8)
+        return String(unsafeUninitializedCapacity: 64) { buffer in
+            var offset = 0
+            for byte in digest {
+                buffer[offset] = hexDigits[Int(byte >> 4)]
+                buffer[offset + 1] = hexDigits[Int(byte & 0x0F)]
+                offset += 2
+            }
+            return 64
+        }
+    }
+
     static func validatedData(directory: URL, relativePath: String, sha256: String, byteSize: Int64) throws -> Data {
-        guard sha256.count == 64, sha256.allSatisfy({ "0123456789abcdef".contains($0) }),
+        guard sha256.utf8.count == 64, isHex64(sha256),
               relativePath == "\(sha256).img", byteSize > 0, byteSize <= 64 * 1024 * 1024 else {
-            throw failure("图片记录无效")
+            throw failure(String(localized: "图片记录无效"))
         }
         let file = directory.appendingPathComponent(relativePath)
         let attributes = try file.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey])
         guard attributes.isRegularFile == true, attributes.isSymbolicLink != true,
-              attributes.fileSize.map(Int64.init) == byteSize else { throw failure("图片文件缺失或长度不符") }
+              attributes.fileSize.map(Int64.init) == byteSize else { throw failure(String(localized: "图片文件缺失或长度不符")) }
         let data = try Data(contentsOf: file, options: .mappedIfSafe)
         guard Int64(data.count) == byteSize,
-              SHA256.hash(data: data).map({ String(format: "%02x", $0) }).joined() == sha256 else {
-            throw failure("图片文件校验失败")
+              hexDigest(data: data) == sha256 else {
+            throw failure(String(localized: "图片文件校验失败"))
         }
         return data
     }

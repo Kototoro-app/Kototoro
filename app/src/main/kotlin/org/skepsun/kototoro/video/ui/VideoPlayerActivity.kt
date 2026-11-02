@@ -24,10 +24,14 @@ import android.util.Log
 import org.skepsun.kototoro.R
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onStart
@@ -50,6 +54,8 @@ import org.skepsun.kototoro.core.parser.tvbox.TVBoxPlayback
 import org.skepsun.kototoro.core.ui.BaseComposeFullscreenActivity
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.resolveUiPresentationConfig
+import org.skepsun.kototoro.core.ui.compose.KototoroSnackbarHost
+import org.skepsun.kototoro.core.util.ext.getDisplayMessage
 import org.skepsun.kototoro.core.util.ext.getParcelableExtraCompat
 import org.skepsun.kototoro.core.model.parcelable.ParcelableContent
 import org.skepsun.kototoro.core.nav.ReaderIntent
@@ -61,6 +67,7 @@ import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentSource as ParsersContentSource
 import org.skepsun.kototoro.cloudstream.model.CloudstreamSource
 import org.skepsun.kototoro.cloudstream.runtime.CloudstreamContentRepository
+import org.skepsun.kototoro.cloudstream.runtime.CloudstreamMissingNewPipeException
 import org.skepsun.kototoro.cloudstream.runtime.CloudstreamPlaybackEvent
 import org.skepsun.kototoro.cloudstream.runtime.resolveCloudstreamEpisodeTitle
 import org.skepsun.kototoro.cloudstream.runtime.shouldResolveCloudstreamPlaybackLocator
@@ -100,6 +107,7 @@ import org.skepsun.kototoro.video.player.PlaybackMediaKind
 import org.skepsun.kototoro.video.player.PlaybackRequest
 import org.skepsun.kototoro.video.player.PlaybackRequestNormalizer
 import org.skepsun.kototoro.video.player.HlsManifestProbe
+import org.skepsun.kototoro.video.player.VideoStreamSizeProbe
 import org.skepsun.kototoro.video.player.isAniyomiLocalHlsProxyUrl
 import org.skepsun.kototoro.video.player.VideoPlayerEngine
 import org.skepsun.kototoro.video.data.VideoLocalCacheProxy
@@ -117,6 +125,8 @@ import org.skepsun.kototoro.video.performance.PlaybackFallbackReason
 import org.skepsun.kototoro.video.performance.PlaybackSessionDiagnostics
 import org.skepsun.kototoro.video.performance.VideoPlaybackPolicy
 import org.skepsun.kototoro.video.domain.resolveCloudstreamVideo
+import org.skepsun.kototoro.video.domain.formatVideoSize
+import org.skepsun.kototoro.video.domain.parseVideoSizeHint
 import org.skepsun.kototoro.video.domain.isSuspiciousCloudstreamPlaybackDuration
 import org.skepsun.kototoro.video.domain.isStalledCloudstreamPlayback
 import org.skepsun.kototoro.video.domain.shouldProbeCloudstreamAsHls
@@ -152,7 +162,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -161,16 +173,20 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.dp
 import androidx.compose.material3.SnackbarDuration
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.video.ui.compose.VideoPlayerAction
+import org.skepsun.kototoro.video.ui.compose.formatPlaybackTime
+import org.skepsun.kototoro.video.ui.compose.videoSeekFeedbackState
 import org.skepsun.kototoro.video.ui.compose.VideoPlayerControlState
+import org.skepsun.kototoro.video.ui.compose.SubtitleBackgroundStyle
+import org.skepsun.kototoro.video.ui.compose.SubtitleFontFamily
 import org.skepsun.kototoro.video.ui.compose.VideoGestureOverlayState
 import org.skepsun.kototoro.video.ui.compose.VideoGestureOverlays
 import org.skepsun.kototoro.video.ui.compose.VideoSubtitleOverlay
@@ -209,9 +225,14 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     companion object {
         private const val CLOUDSTREAM_PLAYBACK_HEALTH_CHECK_DELAY_MS = 5_000L
         private const val CLOUDSTREAM_HLS_PROBE_TIMEOUT_MS = 10_000L
+        private const val VIDEO_SIZE_PROBE_TIMEOUT_MS = 6_000L
+        private const val VIDEO_SIZE_PROBE_CONCURRENCY = 3
         private const val ENABLE_M3U8_PROXY_CACHE = false
         private const val TORRENT_VIDEO_MARKER = "kototoro:torrent"
         private const val HLS_VIDEO_MARKER = "kototoro:hls"
+
+        /** Frames spent re-asking for the player chrome focus after a dialog window closes. */
+        private const val TV_FOCUS_RESTORE_FRAME_ATTEMPTS = 6
     }
 
     private data class PlayerSettingsAction(
@@ -270,6 +291,11 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     private var initialScrubPositionStart: Long = 0L
     private var lastScrubPosition: Long = 0L
     private var availableVideos: List<Video> = emptyList()
+    // Best-effort stream sizes for the quality list: cached per url, probed once per session.
+    private val videoSizeCache = HashMap<String, Long>()
+    private val probedVideoSizeUrls = HashSet<String>()
+    private var videoSizeProbeJob: Job? = null
+    private var qualityDialogVideos: List<Video>? = null
     private var cloudstreamLinkJob: Job? = null
     private var cloudstreamFallbackJob: Job? = null
     private var isPlaybackKeepingScreenOn = false
@@ -314,8 +340,18 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     private var subtitleOverlayState by mutableStateOf(VideoSubtitleOverlayState())
     private var unlockButtonVisible by mutableStateOf(false)
     private var seekFeedbackState by mutableStateOf<VideoSeekFeedbackState?>(null)
+    private var seekFeedbackDismissJob: Job? = null
     private var actionDialogState by mutableStateOf<VideoActionDialogState?>(null)
     private var videoAnnotationState by mutableStateOf<VideoAnnotationState?>(null)
+
+    /**
+     * True between the moment the note action is chosen and the captured frame arrives.
+     *
+     * The note surface needs a bitmap, so the dialog state can only be set from the capture callback.
+     * Without this flag the options panel sees "the item opened nothing" in between and closes itself,
+     * which on TV throws the remote user back to the player chrome while the note dialog is opening.
+     */
+    private var videoAnnotationCapturePending by mutableStateOf(false)
     private var chapterDialogState by mutableStateOf<VideoChapterDialogState?>(null)
     private var subtitleSettingsDialogVisible by mutableStateOf(false)
     private var submenuAnchorBounds = IntRect.Zero
@@ -335,6 +371,8 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     @Inject
     @ContentHttpClient
     lateinit var contentHttpClient: OkHttpClient
+
+    private val videoSizeProbe: VideoStreamSizeProbe by lazy { VideoStreamSizeProbe(contentHttpClient) }
 
     @Inject
     lateinit var videoCache: VideoCache
@@ -399,6 +437,8 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                 updatePlaybackMenu()
                 syncComposeControlState()
                 danmakuController.onPlaybackStateChanged(isPlaying)
+                // Pausing parks the chrome on screen; resuming re-arms the auto-hide timer.
+                restartControlsAutoHide()
             }
         }
 
@@ -508,8 +548,9 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
 
     private val autoHideDelayMs = 3500
     private val hideUiRunnable = Runnable {
-        // Also check at execution time: a dialog can open before Compose cancels this callback.
-        if (!keepTvControlsVisibleForDialog) setUiIsVisible(false)
+        // Check again at execution time: a dialog can open, or playback can pause, before Compose
+        // cancels this callback.
+        if (!keepTvControlsVisibleForDialog && !chromeMustStayForRemote()) setUiIsVisible(false)
     }
     private val progressUpdateIntervalMs = 1000
     private val progressUpdateRunnable = object : Runnable {
@@ -682,6 +723,22 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                     if (keepControlsVisible) pauseControlsAutoHide() else restartControlsAutoHide()
                 }
             }
+            val noteButtonFocusRequester = remember { FocusRequester() }
+            val noteDialogOpen = videoAnnotationState != null
+            var noteDialogWasOpen by remember { mutableStateOf(false) }
+            LaunchedEffect(noteDialogOpen) {
+                // The dialog is its own window, so while it is open the player window does not own
+                // the remote. Hand focus back to the button that opened it for a few frames: without
+                // it the ring stays painted on a stale control and the first OK press after the
+                // dialog lands on whatever the focus tree fell back to.
+                if (!noteDialogOpen && noteDialogWasOpen) {
+                    repeat(TV_FOCUS_RESTORE_FRAME_ATTEMPTS) {
+                        withFrameNanos { }
+                        runCatching { noteButtonFocusRequester.requestFocus() }
+                    }
+                }
+                noteDialogWasOpen = noteDialogOpen
+            }
             KototoroTheme {
                 Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
                     VideoPlayerRenderLayer(
@@ -695,6 +752,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                         onAction = ::onComposePlayerAction,
                         onInteractionStart = ::pauseControlsAutoHide,
                         onInteractionEnd = ::restartControlsAutoHide,
+                        noteButtonFocusRequester = noteButtonFocusRequester,
                         modifier = if (presentationConfig.isTv) {
                             Modifier.padding(horizontal = 12.dp)
                         } else {
@@ -713,9 +771,10 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                     actionDialogState?.let { state ->
                         VideoActionDialog(
                             state = state,
+                            hidden = presentationConfig.isTv && tvPanelCoveredByWindow,
                             onDismissRequest = {
                                 actionDialogState = null
-                                selectionDialogState = null
+                                closeSelectionDialog()
                                 superResolutionDialogVisible = false
                             },
                             onItemSelected = { item, itemBounds ->
@@ -731,7 +790,10 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                                 if (
                                     actionDialogState === selectedDialog &&
                                     selectionDialogState == null &&
-                                    !superResolutionDialogVisible
+                                    !superResolutionDialogVisible &&
+                                    videoInfoDialogText == null &&
+                                    dlnaDialogState == null &&
+                                    !videoAnnotationCapturePending
                                 ) {
                                     actionDialogState = null
                                 }
@@ -747,10 +809,17 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                                 appSettings.videoSubtitleFontSize = newState.fontSizeSp
                                 appSettings.videoSubtitleBold = newState.bold
                                 appSettings.videoSubtitleItalic = newState.italic
+                                appSettings.videoSubtitleFontFamily = newState.fontFamily.prefValue
                                 appSettings.videoSubtitleTextColor = newState.textColor
                                 appSettings.videoSubtitleBorderColor = newState.borderColor
                                 appSettings.videoSubtitleBorderSize = newState.borderSize
                                 appSettings.videoSubtitleBgColor = newState.backgroundColor
+                                appSettings.videoSubtitleBackgroundStyle = newState.backgroundStyle.prefValue
+                                appSettings.videoSubtitleBackgroundCornerRadius = newState.backgroundCornerRadiusDp
+                                appSettings.videoSubtitleBackgroundPaddingHorizontal =
+                                    newState.backgroundPaddingHorizontalDp
+                                appSettings.videoSubtitleBackgroundPaddingVertical =
+                                    newState.backgroundPaddingVerticalDp
                                 appSettings.videoSubtitleAlignX = newState.alignX
                                 appSettings.videoSubtitlePosition = newState.position
                                 applySubtitleOverlayStyle()
@@ -777,9 +846,9 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                     selectionDialogState?.let { dialogState ->
                         VideoSelectionDialog(
                             state = dialogState,
-                            onDismissRequest = { selectionDialogState = null },
+                            onDismissRequest = { closeSelectionDialog() },
                             onSelect = { index ->
-                                selectionDialogState = null
+                                closeSelectionDialog()
                                 actionDialogState = null
                                 dialogState.onSelect(index)
                             },
@@ -821,7 +890,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                     spaceSwitcherDelegate.Fab(
                         modifier = Modifier.fillMaxSize(),
                     )
-                    SnackbarHost(
+                    KototoroSnackbarHost(
                         hostState = snackbarHostState,
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
@@ -917,6 +986,11 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         val target = (startPosition + deltaMs).coerceIn(0L, durationMs)
         player.seekTo(target)
         showSeekFeedback(target, durationMs, target - startPosition)
+        seekFeedbackDismissJob = lifecycleScope.launch {
+            kotlinx.coroutines.delay(1000L)
+            seekFeedbackState = null
+            seekFeedbackDismissJob = null
+        }
         setUiIsVisible(true)
     }
 
@@ -968,7 +1042,10 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             VideoPlayerAction.TogglePlayback -> videoPlayer?.let { player ->
                 if (player.isPlaying) player.pause() else player.play()
             }
-            is VideoPlayerAction.SeekTo -> videoPlayer?.seekTo(action.positionMs)
+            is VideoPlayerAction.SeekTo -> {
+                hideSeekFeedback()
+                videoPlayer?.seekTo(action.positionMs)
+            }
             VideoPlayerAction.PreviousChapter -> navigateChapter(-1)
             VideoPlayerAction.NextChapter -> navigateChapter(1)
             is VideoPlayerAction.OpenSubtitles -> {
@@ -1287,10 +1364,14 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                         val duration = videoPlayer?.durationMs ?: return true
                         if (duration <= 0) return true
 
-                        // Proportional Seek: One screen width equals the entire video duration
-                        // This makes the dot on the seek bar track the finger 1:1
+                        // One screen width covers the configured range (the whole video by default)
                         val deltaX = e2.x - initialTouchX
-                        val seekOffset = (deltaX / w * duration).toLong()
+                        val seekOffset = VideoSwipeSeek.offsetMs(
+                            deltaX = deltaX,
+                            widthPx = w,
+                            durationMs = duration,
+                            rangeSec = appSettings.videoSwipeSeekRangeSec,
+                        )
                         lastScrubPosition = (initialScrubPositionStart + seekOffset).coerceIn(0L, duration)
 
                         showSeekFeedback(lastScrubPosition, duration, seekOffset)
@@ -1394,7 +1475,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             return
         }
         when {
-            selectionDialogState != null -> selectionDialogState = null
+            selectionDialogState != null -> closeSelectionDialog()
             subtitleSettingsDialogVisible -> subtitleSettingsDialogVisible = false
             chapterDialogState != null -> chapterDialogState = null
             videoAnnotationState != null -> videoAnnotationState = null
@@ -1455,10 +1536,10 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         return getString(org.skepsun.kototoro.R.string.video_quality_line, index + 1)
     }
 
-    private fun Video.sourceDisplayLabel(index: Int): String {
+    private fun Video.sourceDisplayLabel(index: Int, sizeLabel: String? = null): String {
         val title = videoTitle.trim()
         val quality = resolution?.takeIf { it > 0 }?.let { "${it}p" }
-        return listOfNotNull(quality, currentTorrentSeederLabel(), title.takeIf { it.isNotEmpty() })
+        return listOfNotNull(quality, sizeLabel, currentTorrentSeederLabel(), title.takeIf { it.isNotEmpty() })
             .joinToString(" - ")
             .ifEmpty { qualityDisplayLabel(index) }
     }
@@ -1923,6 +2004,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         isTorrent: Boolean = url.isTorrentLocator(),
         forceHls: Boolean = false,
     ) {
+        hideSeekFeedback()
         externalTrackLoadingJob?.cancel()
         playbackHealthCheckGeneration++
         if (isTorrent) {
@@ -2408,6 +2490,10 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         }
     }
 
+    /**
+     * Collects the episode's Cloudstream links and starts the first one. True when playback started, or when the
+     * failure was already reported to the viewer, so callers do not cover it with a generic error.
+     */
     private suspend fun loadAndPlayCloudstreamChapter(
         repo: CloudstreamContentRepository,
         chapter: ContentChapter,
@@ -2424,7 +2510,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         }
         cloudstreamFallbackJob?.cancel()
         cloudstreamFallbackJob = null
-        selectionDialogState = null
+        closeSelectionDialog()
         actionDialogState = null
         currentVideoSource = source
         availableVideos = emptyList()
@@ -2480,14 +2566,16 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         // Some Cloudstream extensions host an AppCompat DialogFragment directly from loadLinks
         // (for example, a Turnstile challenge). Register this activity explicitly because the
         // plugin callback can outlive normal activity lifecycle callback ordering.
-        com.lagradost.cloudstream3.CommonActivity.setActivityInstance(this)
+        com.lagradost.cloudstream3.CommonActivity.INSTANCE.setActivityInstance(this)
         Log.d(
             "VideoPlayerActivity",
             "Cloudstream activity bridge registered chapter=${chapter.id} activity=${javaClass.simpleName}",
         )
+        var missingNewPipe: CloudstreamMissingNewPipeException? = null
         val playbackEvents = repo.getPlaybackEvents(chapter, clearCache)
             .onStart { setCloudstreamLinkResolutionActive(playbackInstance, true) }
             .onCompletion { setCloudstreamLinkResolutionActive(playbackInstance, false) }
+            .catch { error -> missingNewPipe = error as? CloudstreamMissingNewPipeException ?: throw error }
         playbackEvents.collect { event ->
             if (playbackInstance != cloudstreamPlaybackInstance) return@collect
             when (event) {
@@ -2549,6 +2637,11 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             }
         }
         if (playbackInstance != cloudstreamPlaybackInstance) return false
+        missingNewPipe?.let { error ->
+            Log.w("VideoPlayerActivity", "Cloudstream plugin needs NewPipe source=${source.name}", error)
+            showPlayerMessage(error.getDisplayMessage(resources), SnackbarDuration.Long)
+            return true
+        }
         refreshVideos()
         return startPlayerFromAvailableLink()
     }
@@ -2594,13 +2687,38 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                 videoAnnotationState != null || videoInfoDialogText != null || nativeInitErrorVisible
             )
 
+    /**
+     * On a television every menu is a focusable popup window of its own, so leaving the panel that
+     * opened a sub-surface composed paints two stacked cards: the sub-surface covers the center while
+     * the parent's other rows peek out around it. The panel state is kept, only its rendering is
+     * suppressed, so the panel comes back by itself when the sub-surface closes.
+     */
+    private val tvPanelCoveredByWindow: Boolean
+        get() = tvPresentationEnabled && (
+            selectionDialogState != null || chapterDialogState != null || subtitleSettingsDialogVisible ||
+                superResolutionDialogVisible || dlnaDialogState != null || videoAnnotationState != null ||
+                videoInfoDialogText != null || nativeInitErrorVisible
+            )
+
     private fun pauseControlsAutoHide() {
         playerRoot.removeCallbacks(hideUiRunnable)
     }
 
+    /**
+     * A paused player keeps the chrome on TV. The remote user parks on a control (a note, a track,
+     * the speed label) while reading it, and an auto-hide tick would delete that control from the
+     * tree under the focus ring: the next OK press would then only re-show the chrome with focus
+     * re-homed on play/pause, which reads as "the remote dropped my press".
+     */
+    private fun chromeMustStayForRemote(): Boolean = tvPresentationEnabled && videoPlayer?.isPlaying != true
+
     private fun restartControlsAutoHide() {
         playerRoot.removeCallbacks(hideUiRunnable)
-        if (playerUiState == PlayerUiState.ControlsVisible && !keepTvControlsVisibleForDialog) {
+        if (
+            playerUiState == PlayerUiState.ControlsVisible &&
+            !keepTvControlsVisibleForDialog &&
+            !chromeMustStayForRemote()
+        ) {
             playerRoot.postDelayed(hideUiRunnable, autoHideDelayMs.toLong())
         }
     }
@@ -2811,6 +2929,12 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                 },
             ),
             PlayerSettingsAction(
+                title = getString(R.string.video_swipe_seek_range),
+                subtitle = swipeSeekRangeLabel(appSettings.videoSwipeSeekRangeSec),
+                iconRes = org.skepsun.kototoro.R.drawable.ic_timelapse,
+                onClick = ::showSwipeSeekRangeDialog,
+            ),
+            PlayerSettingsAction(
                 title = getString(R.string.video_danmaku_enabled),
                 subtitle = if (appSettings.videoDanmakuEnabled) enabledText else disabledText,
                 iconRes = org.skepsun.kototoro.R.drawable.ic_danmaku,
@@ -2910,7 +3034,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             val pos = videoPlayer?.positionMs ?: return
             introEndMs = pos
             appSettings.setIntroEndMs(currentMangaId, pos)
-            showPlayerMessage(getString(R.string.video_skip_intro_set, formatTimeMs(pos)))
+            showPlayerMessage(getString(R.string.video_skip_intro_set, formatPlaybackTime(pos, padMinutes = true)))
         }
         updateIntroOutroButtonState()
     }
@@ -2925,24 +3049,13 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             val pos = videoPlayer?.positionMs ?: return
             outroStartMs = pos
             appSettings.setOutroStartMs(currentMangaId, pos)
-            showPlayerMessage(getString(R.string.video_skip_outro_set, formatTimeMs(pos)))
+            showPlayerMessage(getString(R.string.video_skip_outro_set, formatPlaybackTime(pos, padMinutes = true)))
         }
         updateIntroOutroButtonState()
     }
 
     private fun updatePlaybackMenu() {
         syncComposeControlState()
-    }
-
-    // 简单时间格式化（mm:ss ?hh:mm:ss?
-    // forceHours: 当总时长包含小时时，强制显示小时位保持格式一?
-    private fun formatTimeMs(ms: Long, forceHours: Boolean = false): String {
-        val totalSec = (ms / 1000).coerceAtLeast(0)
-        val hours = (totalSec / 3600)
-        val minutes = ((totalSec % 3600) / 60)
-        val seconds = (totalSec % 60)
-        return if (hours > 0 || forceHours) String.format("%02d:%02d:%02d", hours, minutes, seconds)
-        else String.format("%02d:%02d", minutes, seconds)
     }
 
     private fun applyPlaybackBackground() {
@@ -3097,10 +3210,15 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             fontSizeSp = settings.videoSubtitleFontSize,
             bold = settings.videoSubtitleBold,
             italic = settings.videoSubtitleItalic,
+            fontFamily = SubtitleFontFamily.fromPrefValue(settings.videoSubtitleFontFamily),
             textColor = settings.videoSubtitleTextColor,
             borderColor = settings.videoSubtitleBorderColor,
             borderSize = settings.videoSubtitleBorderSize,
             backgroundColor = settings.videoSubtitleBgColor,
+            backgroundStyle = SubtitleBackgroundStyle.fromPrefValue(settings.videoSubtitleBackgroundStyle),
+            backgroundCornerRadiusDp = settings.videoSubtitleBackgroundCornerRadius,
+            backgroundPaddingHorizontalDp = settings.videoSubtitleBackgroundPaddingHorizontal,
+            backgroundPaddingVerticalDp = settings.videoSubtitleBackgroundPaddingVertical,
             alignX = settings.videoSubtitleAlignX,
             bottomPositionDp = settings.videoSubtitlePosition,
         )
@@ -3503,10 +3621,15 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             fontSizeSp = appSettings.videoSubtitleFontSize,
             bold = appSettings.videoSubtitleBold,
             italic = appSettings.videoSubtitleItalic,
+            fontFamily = SubtitleFontFamily.fromPrefValue(appSettings.videoSubtitleFontFamily),
             textColor = appSettings.videoSubtitleTextColor,
             borderColor = appSettings.videoSubtitleBorderColor,
             borderSize = appSettings.videoSubtitleBorderSize,
             backgroundColor = appSettings.videoSubtitleBgColor,
+            backgroundStyle = SubtitleBackgroundStyle.fromPrefValue(appSettings.videoSubtitleBackgroundStyle),
+            backgroundCornerRadiusDp = appSettings.videoSubtitleBackgroundCornerRadius,
+            backgroundPaddingHorizontalDp = appSettings.videoSubtitleBackgroundPaddingHorizontal,
+            backgroundPaddingVerticalDp = appSettings.videoSubtitleBackgroundPaddingVertical,
             alignX = appSettings.videoSubtitleAlignX,
             position = appSettings.videoSubtitlePosition,
             subtitleTrackOptions = if (tracks.isEmpty()) emptyList() else trackOptions.toList(),
@@ -3548,8 +3671,8 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         } else {
             getString(R.string.video_subtitle_external)
         }
-        val language = track.languageTag?.takeIf { !it.equals(track.label, ignoreCase = true) }
-        return listOfNotNull(track.label.takeIf(String::isNotBlank), language, origin).joinToString(" · ")
+        // The label already carries the language/title; the raw language tag would only repeat it.
+        return listOfNotNull(track.label.takeIf(String::isNotBlank), origin).joinToString(" · ")
     }
 
     private fun showAudioTrackDialog() {
@@ -3573,14 +3696,88 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             showPlayerMessage(org.skepsun.kototoro.R.string.operation_not_supported)
             return
         }
-        val titles = videoSnapshot.mapIndexed { index, video ->
-            video.sourceDisplayLabel(index)
-        }.toTypedArray()
+        qualityDialogVideos = videoSnapshot
+        val titles = buildQualityDialogTitles(videoSnapshot).toTypedArray()
         val selected = currentVideoIndex.coerceIn(0, titles.lastIndex)
         showSelectionDialog(R.string.video_quality, titles.asList(), selected) { which ->
             val selectedVideo = videoSnapshot.getOrNull(which) ?: return@showSelectionDialog
             switchVideoQuality(selectedVideo)
         }
+        probeVideoSizes(videoSnapshot)
+    }
+
+    private fun buildQualityDialogTitles(videos: List<Video>): List<String> {
+        return videos.mapIndexed { index, video -> video.sourceDisplayLabel(index, videoSizeLabel(video)) }
+    }
+
+    /**
+     * Byte size is best-effort: title hints and one bounded probe per url. `null` simply means
+     * the size stays hidden for that quality.
+     */
+    private fun videoSizeLabel(video: Video): String? {
+        val url = video.videoUrl
+        val bytes = videoSizeCache[url]
+            ?: parseVideoSizeHint(video.videoTitle)?.also { videoSizeCache[url] = it }
+        return bytes?.let(::formatVideoSize)?.takeIf { it.isNotEmpty() }
+    }
+
+    private fun probeVideoSizes(videos: List<Video>) {
+        videoSizeProbeJob?.cancel()
+        videoSizeProbeJob = null
+        val pending = videos
+            .filter { video ->
+                val url = video.videoUrl
+                url.isNotBlank() &&
+                    url !in videoSizeCache &&
+                    url !in probedVideoSizeUrls &&
+                    video.internalData != HLS_VIDEO_MARKER &&
+                    video.internalData != TORRENT_VIDEO_MARKER
+            }
+            .distinctBy { it.videoUrl }
+        if (pending.isEmpty()) return
+        val isCloudstream = currentVideoSource is CloudstreamSource
+        videoSizeProbeJob = lifecycleScope.launch {
+            pending.chunked(VIDEO_SIZE_PROBE_CONCURRENCY).forEach { batch ->
+                val results = coroutineScope {
+                    batch.map { video ->
+                        async { video.videoUrl to probeVideoSize(video, isCloudstream) }
+                    }.awaitAll()
+                }
+                var updated = false
+                results.forEach { (url, bytes) ->
+                    probedVideoSizeUrls += url
+                    if (bytes != null && bytes > 0) {
+                        videoSizeCache[url] = bytes
+                        updated = true
+                    }
+                }
+                if (updated) refreshOpenQualityDialog()
+            }
+        }
+    }
+
+    private suspend fun probeVideoSize(video: Video, isCloudstream: Boolean): Long? {
+        val headers = PlaybackRequestNormalizer.normalize(
+            url = video.videoUrl,
+            originalHeaders = headersToMap(video.headers),
+            isCloudstream = isCloudstream,
+        ).headers
+        return withTimeoutOrNull(VIDEO_SIZE_PROBE_TIMEOUT_MS) {
+            videoSizeProbe.probe(video.videoUrl, headers)
+        }
+    }
+
+    private fun refreshOpenQualityDialog() {
+        val videos = qualityDialogVideos ?: return
+        val state = selectionDialogState ?: return
+        selectionDialogState = state.copy(options = buildQualityDialogTitles(videos))
+    }
+
+    private fun closeSelectionDialog() {
+        selectionDialogState = null
+        qualityDialogVideos = null
+        videoSizeProbeJob?.cancel()
+        videoSizeProbeJob = null
     }
 
     private fun showAspectRatioDialog() {
@@ -3636,6 +3833,20 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         showSelectionDialog(titleRes, labels.asList(), checked) { which ->
             onSelect(options[which] * 1000)
         }
+    }
+
+    private fun showSwipeSeekRangeDialog() {
+        val options = VideoSwipeSeek.RANGE_OPTIONS_SEC
+        val checked = options.indexOf(appSettings.videoSwipeSeekRangeSec).takeIf { it >= 0 } ?: 0
+        showSelectionDialog(R.string.video_swipe_seek_range, options.map(::swipeSeekRangeLabel), checked) { which ->
+            appSettings.videoSwipeSeekRangeSec = options[which]
+        }
+    }
+
+    private fun swipeSeekRangeLabel(rangeSec: Int): String = when {
+        rangeSec <= VideoSwipeSeek.FULL_LENGTH -> getString(R.string.video_swipe_seek_range_full)
+        rangeSec % 60 == 0 -> getString(R.string.video_swipe_seek_range_minutes, rangeSec / 60)
+        else -> "${rangeSec}s"
     }
 
     private fun showSelectionDialog(
@@ -3803,6 +4014,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     }
 
     override fun onPause() {
+        hideSeekFeedback()
         tvKeyDispatcher.reset()
         if (::enhancementView.isInitialized) enhancementView.pauseVideoSurface()
         super.onPause()
@@ -3827,6 +4039,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     }
 
     override fun onDestroy() {
+        hideSeekFeedback()
         clearCloudstreamLinkResolution()
         setPlaybackKeepScreenOn(false)
         cloudstreamPlaybackInstance++
@@ -3939,15 +4152,6 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
 
     private fun buildVideoDetailsText(): String {
         fun String?.orDash(): String = this?.takeIf { it.isNotBlank() } ?: "-"
-        fun formatBytes(bytes: Long): String {
-            if (bytes < 1024) return "${bytes} B"
-            val kb = bytes / 1024.0
-            if (kb < 1024) return String.format("%.1f KB", kb)
-            val mb = kb / 1024.0
-            if (mb < 1024) return String.format("%.1f MB", mb)
-            val gb = mb / 1024.0
-            return String.format("%.2f GB", gb)
-        }
 
         val (title, chapter) = extractChapterInfo()
         val decoderSetting = "MediaCodec (fallback enabled)"
@@ -3996,7 +4200,12 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             appendLine(getString(org.skepsun.kototoro.R.string.video_info_hits, proxyStats.hit))
             appendLine(getString(org.skepsun.kototoro.R.string.video_info_misses, proxyStats.miss))
             appendLine(getString(org.skepsun.kototoro.R.string.video_info_writes, proxyStats.writeCount))
-            appendLine(getString(org.skepsun.kototoro.R.string.video_info_write_bytes, formatBytes(proxyStats.writeBytes)))
+            appendLine(
+                getString(
+                    org.skepsun.kototoro.R.string.video_info_write_bytes,
+                    formatVideoSize(proxyStats.writeBytes),
+                ),
+            )
             appendLine()
             appendLine(getString(org.skepsun.kototoro.R.string.video_info_playback_diagnostics))
             appendLine(getString(org.skepsun.kototoro.R.string.video_info_device_tier, devicePerformanceInfo.tier.name))
@@ -4087,7 +4296,11 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
 
     fun openVideoAnnotation() {
         videoPlayer?.pause()
+        if (tvPresentationEnabled) {
+            videoAnnotationCapturePending = true
+        }
         captureCurrentFrame { bitmap ->
+            videoAnnotationCapturePending = false
             if (bitmap == null) {
                 showPlayerMessage(org.skepsun.kototoro.R.string.error_occurred)
                 return@captureCurrentFrame
@@ -4300,14 +4513,14 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         }
         val pos = if (completed && dur > 0L) dur else player.positionMs
         val result = runCatching {
-            check(
-                getSharedPreferences("video_progress", MODE_PRIVATE)
+            val editor = getSharedPreferences("video_progress", MODE_PRIVATE)
                 .edit()
                 .putLong(currentUrl, pos)
                 .putLong("${currentUrl}_duration", dur)
                 .putLong("${currentUrl}_timestamp", System.currentTimeMillis())
-                .commit(),
-            )
+            // The periodic saver runs on the main thread while video is decoding; only the callers
+            // that must observe a failure pay for a synchronous commit (StrictMode: diskWrite).
+            if (propagateFailure) check(editor.commit()) else editor.apply()
         }.onFailure { e ->
             android.util.Log.e("VideoPlayer", "Failed to save progress", e)
         }
@@ -4661,6 +4874,8 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         val manga = currentMangaContent()
             ?: return false
 
+        hideSeekFeedback()
+
         android.util.Log.d("VideoPlayer", "Chapter selected: ${chapter.title} (id=${chapter.id})")
         cloudstreamPlaybackInstance++
         cloudstreamLinkJob?.cancel()
@@ -4853,25 +5068,23 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     }
 
     private fun showSeekFeedback(posMs: Long, durationMs: Long, seekOffsetMs: Long) {
-        val showHours = durationMs >= 3600_000L
-        val timeStr = formatTimeMs(posMs, showHours) + " / " + formatTimeMs(durationMs, showHours)
-
+        seekFeedbackDismissJob?.cancel()
+        seekFeedbackDismissJob = null
         val offsetSec = (kotlin.math.abs(seekOffsetMs) / 1000).toInt()
-        val deltaStr = if (seekOffsetMs > 0) {
+        val delta = if (seekOffsetMs > 0) {
             getString(org.skepsun.kototoro.R.string.video_fast_forward_time, offsetSec.toString())
         } else if (seekOffsetMs < 0) {
             getString(org.skepsun.kototoro.R.string.video_rewind_time, offsetSec.toString())
         } else {
             ""
         }
-
-        seekFeedbackState = VideoSeekFeedbackState(
-            text = if (deltaStr.isNotEmpty()) "$deltaStr\n$timeStr" else timeStr,
-            progress = if (durationMs > 0) posMs.toFloat() / durationMs.toFloat() else 0f,
-        )
+        // The bubble's shape (jump sentence, padded clock, hour digits taken from the length) is shared with desktop.
+        seekFeedbackState = videoSeekFeedbackState(posMs, durationMs, delta)
     }
 
     private fun hideSeekFeedback() {
+        seekFeedbackDismissJob?.cancel()
+        seekFeedbackDismissJob = null
         seekFeedbackState = null
     }
 

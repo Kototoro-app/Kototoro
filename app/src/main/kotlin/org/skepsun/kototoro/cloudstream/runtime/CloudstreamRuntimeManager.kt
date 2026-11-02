@@ -12,6 +12,7 @@ import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.actions.VideoClickActionHolder
 import com.lagradost.cloudstream3.plugins.BasePlugin
 import com.lagradost.cloudstream3.plugins.Plugin
+import com.lagradost.cloudstream3.ui.settings.Globals
 import com.lagradost.cloudstream3.utils.ExtractorApi
 import com.lagradost.cloudstream3.utils.extractorApis
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -24,6 +25,7 @@ import org.json.JSONObject
 import org.skepsun.kototoro.cloudstream.model.CloudstreamSource
 import org.skepsun.kototoro.core.network.ContentHttpClient
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.ui.adaptive.resolveUiPresentationConfig
 import org.skepsun.kototoro.core.network.webview.CloudflareSolveCoordinator
 import org.skepsun.kototoro.core.network.webview.WebViewClearanceSolver
 import org.skepsun.kototoro.core.network.webview.WebViewExecutor
@@ -39,6 +41,7 @@ import java.util.zip.ZipFile
 import javax.inject.Inject
 import javax.inject.Singleton
 import okhttp3.OkHttpClient
+import org.schabi.newpipe.extractor.NewPipe
 
 @Singleton
 class CloudstreamRuntimeManager @Inject constructor(
@@ -143,6 +146,12 @@ class CloudstreamRuntimeManager @Inject constructor(
             }
             .build()
         app.defaultHeaders = mapOf("User-Agent" to cloudstreamUserAgent)
+        // As the official app does at start-up: the library's YouTube extractor and YouTube plugins need it (#608).
+        NewPipe.init(CloudstreamNewPipeDownloader(contentHttpClient))
+        // Plugins adapt their dialogs with `Globals.isLayout(TV)`; answer with the app's own presentation mode.
+        Globals.layoutProvider = {
+            if (resolveUiPresentationConfig(context, settings).isTv) Globals.TV else Globals.PHONE
+        }
         writeDiagnostic(
             "network:configured interceptors=${contentHttpClient.interceptors.joinToString(",") { it::class.java.simpleName }} " +
                 "networkInterceptors=${contentHttpClient.networkInterceptors.joinToString(",") { it::class.java.simpleName }} " +

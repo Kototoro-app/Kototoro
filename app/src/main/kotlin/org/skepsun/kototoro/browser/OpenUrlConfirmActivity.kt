@@ -6,12 +6,12 @@ import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 
 class OpenUrlConfirmActivity : BaseComposeActivity() {
 
@@ -53,12 +53,12 @@ class OpenUrlConfirmActivity : BaseComposeActivity() {
             title = { Text(text = stringResource(R.string.open_in_browser)) },
             text = { Text(text = message) },
             confirmButton = {
-                TextButton(onClick = onConfirm) {
+                TvTextButton(onClick = onConfirm) {
                     Text(text = stringResource(R.string.confirm))
                 }
             },
             dismissButton = {
-                TextButton(onClick = onDismissRequest) {
+                TvTextButton(onClick = onDismissRequest) {
                     Text(text = stringResource(android.R.string.cancel))
                 }
             },

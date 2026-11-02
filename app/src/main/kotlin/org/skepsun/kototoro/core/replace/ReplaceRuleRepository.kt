@@ -57,17 +57,7 @@ class ReplaceRuleRepository @Inject constructor(
         rules: List<ReplaceRule>,
         scopeName: String,
         origin: String,
-    ): List<ReplaceRule> {
-        val scopeValues = listOf(scopeName, origin)
-        return rules
-            .filter { rule ->
-                rule.isValid() && (
-                    rule.appliesTo(ReplaceRule.Scope.CONTENT, scopeValues) ||
-                        rule.appliesTo(ReplaceRule.Scope.TITLE, scopeValues)
-                    )
-            }
-            .sortedBy { it.order }
-    }
+    ): List<ReplaceRule> = filterReplaceRulesForBook(rules, scopeName, origin)
 
     fun observeAll(): Flow<List<ReplaceRule>> = flow {
         withContext(Dispatchers.IO) { ensureLegacyRulesMigrated() }
@@ -76,27 +66,16 @@ class ReplaceRuleRepository @Inject constructor(
 
     suspend fun saveAll(rules: List<ReplaceRule>) = withContext(Dispatchers.IO) {
         ensureLegacyRulesMigrated()
-        dao.replaceAll(normalizeIds(rules))
+        dao.replaceAll(normalizeReplaceRuleIds(rules, System.currentTimeMillis()))
     }
 
     suspend fun importFromJson(importJson: String): Int = withContext(Dispatchers.IO) {
         ensureLegacyRulesMigrated()
         val imported = runCatching { ReplaceRuleJsonCodec.decode(importJson) }.getOrNull()
             ?: return@withContext 0
-        val existing = dao.getAll().toMutableList()
-        val existingIndexById = existing.mapIndexed { index, rule -> rule.id to index }.toMap()
-        var importedCount = 0
-        normalizeIds(imported).filter { it.pattern.isNotBlank() }.forEach { importedRule ->
-            val existingIndex = existingIndexById[importedRule.id]
-            if (existingIndex != null) {
-                existing[existingIndex] = importedRule
-            } else {
-                existing += importedRule
-            }
-            importedCount++
-        }
-        dao.replaceAll(existing)
-        importedCount
+        val merge = mergeImportedReplaceRules(dao.getAll(), imported, System.currentTimeMillis())
+        dao.replaceAll(merge.rules)
+        merge.importedCount
     }
 
     suspend fun exportToJson(): String = withContext(Dispatchers.IO) {
@@ -114,25 +93,10 @@ class ReplaceRuleRepository @Inject constructor(
                     .filter { it.pattern.isNotBlank() }
                 if (legacyRules.isNotEmpty()) {
                     val current = dao.getAll()
-                    dao.replaceAll(normalizeIds(current + legacyRules))
+                    dao.replaceAll(normalizeReplaceRuleIds(current + legacyRules, System.currentTimeMillis()))
                 }
             }
             prefs.edit().putBoolean(KEY_MIGRATED, true).apply()
-        }
-    }
-
-    private fun normalizeIds(rules: List<ReplaceRule>): List<ReplaceRule> {
-        val usedIds = mutableSetOf<Long>()
-        var nextId = maxOf(System.currentTimeMillis(), rules.maxOfOrNull { it.id } ?: 0L) + 1L
-        return rules.map { rule ->
-            val id = if (rule.id > 0L && usedIds.add(rule.id)) {
-                rule.id
-            } else {
-                while (!usedIds.add(nextId)) nextId++
-                nextId++
-                nextId - 1L
-            }
-            rule.copy(id = id)
         }
     }
 

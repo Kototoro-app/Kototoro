@@ -18,7 +18,7 @@ actor ReaderDownloadStore {
 
     enum Failure: LocalizedError {
         case invalidManifest
-        var errorDescription: String? { "离线章节清单无法读取，可重新下载。" }
+        var errorDescription: String? { String(localized: "离线章节清单无法读取，可重新下载。") }
     }
 
     private struct Snapshot {

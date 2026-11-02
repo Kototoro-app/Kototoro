@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.ColorFilter
 import org.skepsun.kototoro.core.ui.theme.ArtworkBackdropPresets
+import org.skepsun.kototoro.core.ui.theme.forStyle
 import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
 import org.skepsun.kototoro.core.ui.theme.isDarkTheme
 import org.skepsun.kototoro.core.util.ext.mangaExtra

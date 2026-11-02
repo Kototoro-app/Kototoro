@@ -24,6 +24,11 @@
 - `unload`/`close` 注销后拒绝新调用，待已开始的调用/回调结束才关闭对应 JAR 句柄；
   取消向调用方传播，不返回伪造成功。未合作的扩展回调仍占用 lease，直到它完成。
   不删除产物，不销毁或重建 JVM。
+- APK 转换时按 manifest 的应用图标资源 ID 解析 `resources.arsc`，选择最高密度的位图，
+  保存在 JAR 的 `META-INF/kototoro/extension-icon`。管理请求
+  `{"managementVersion":1,"operation":"icon","packageName":"扩展包名"}` 返回 Base64 `icon`（缺失时为 null），
+  不构造源或访问站点。官方 JAR 若保留 APK 资源，则直接解析其文本 manifest 和资源表；
+  已丢弃资源的旧转换产物需要重新从 APK 安装后才带有图标。当前不渲染 Android XML 图标。
 
 检查器、注册表和 CLI 独立编写，不包含参考项目的 GPL host/shim 源码。
 兼容 API 通过反射调用；没有在默认依赖或发行目录中打包 Suwayomi/AndroidCompat/外部扩展。

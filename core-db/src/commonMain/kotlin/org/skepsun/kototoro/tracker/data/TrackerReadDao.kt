@@ -24,6 +24,7 @@ abstract class TrackerReadDao {
             tl.chapters AS chapters,
             tl.created_at AS created_at,
             tl.unread AS unread,
+            tl.chapter_metadata AS chapter_metadata,
             tl.manga_id AS preferred_local_manga_id,
             IFNULL(pinned.pinned, 0) AS entity_pinned,
             dm.manga_id AS display_manga_id,

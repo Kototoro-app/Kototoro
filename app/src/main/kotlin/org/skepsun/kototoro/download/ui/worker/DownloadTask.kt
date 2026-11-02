@@ -52,6 +52,12 @@ class DownloadTask(
     val allowMeteredNetwork: Boolean,
     val preferredQuality: String? = null,
     val kind: DownloadTaskKind = DownloadTaskKind.DOWNLOAD,
+    /**
+     * Set on [DownloadTaskKind.TRANSLATE] requests that were confirmed as "translate again": the
+     * worker throws the cached rendering away instead of returning pages translated with the old
+     * settings.
+     */
+    val isRetranslation: Boolean = false,
 ) : Parcelable {
 
     /**
@@ -67,6 +73,7 @@ class DownloadTask(
             includeNovelImages == other.includeNovelImages &&
             allowMeteredNetwork == other.allowMeteredNetwork &&
             preferredQuality == other.preferredQuality &&
+            isRetranslation == other.isRetranslation &&
             executionChapterIds.contentEqualsNullable(other.executionChapterIds)
     }
 
@@ -95,6 +102,7 @@ class DownloadTask(
         allowMeteredNetwork = data.getBoolean(ALLOW_METERED, true),
         preferredQuality = data.getString(PREFERRED_QUALITY),
         kind = data.getString(KIND)?.let { DownloadTaskKind.entries.find(it) } ?: DownloadTaskKind.DOWNLOAD,
+        isRetranslation = data.getBoolean(IS_RETRANSLATION, false),
     )
 
     fun toData(): Data {
@@ -136,6 +144,7 @@ class DownloadTask(
             .putBoolean(ALLOW_METERED, allowMeteredNetwork)
             .putString(PREFERRED_QUALITY, preferredQuality)
             .putString(KIND, kind.name)
+            .putBoolean(IS_RETRANSLATION, isRetranslation)
     }
 
     override fun equals(other: Any?): Boolean {
@@ -156,6 +165,7 @@ class DownloadTask(
         if (allowMeteredNetwork != other.allowMeteredNetwork) return false
         if (preferredQuality != other.preferredQuality) return false
         if (kind != other.kind) return false
+        if (isRetranslation != other.isRetranslation) return false
 
         return true
     }
@@ -173,6 +183,7 @@ class DownloadTask(
         result = 31 * result + allowMeteredNetwork.hashCode()
         result = 31 * result + (preferredQuality?.hashCode() ?: 0)
         result = 31 * result + kind.hashCode()
+        result = 31 * result + isRetranslation.hashCode()
         return result
     }
 
@@ -198,6 +209,7 @@ class DownloadTask(
             allowMeteredNetwork: Boolean,
             preferredQuality: String? = null,
             kind: DownloadTaskKind = DownloadTaskKind.DOWNLOAD,
+            isRetranslation: Boolean = false,
         ): DownloadTask = DownloadTask(
             mangaId = executionMangaId,
             displayMangaId = displayMangaId,
@@ -211,6 +223,7 @@ class DownloadTask(
             allowMeteredNetwork = allowMeteredNetwork,
             preferredQuality = preferredQuality,
             kind = kind,
+            isRetranslation = isRetranslation,
         )
 
         const val MANGA_ID = "manga_id"
@@ -225,6 +238,7 @@ class DownloadTask(
         const val ALLOW_METERED = "metered"
         const val PREFERRED_QUALITY = "preferred_quality"
         const val KIND = "kind"
+        const val IS_RETRANSLATION = "retranslation"
 
         private fun encodeChapterRefs(refs: List<ExecutionChapterRef>): ByteArray {
             val json = encodeChapterRefsJson(refs)

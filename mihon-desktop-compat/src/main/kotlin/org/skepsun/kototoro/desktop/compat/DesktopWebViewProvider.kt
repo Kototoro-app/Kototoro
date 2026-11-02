@@ -21,6 +21,7 @@ import android.webkit.WebBackForwardList
 import android.webkit.WebChromeClient
 import android.webkit.WebMessage
 import android.webkit.WebMessagePort
+import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -63,6 +64,7 @@ internal class DesktopWebViewProvider(
     private var webChromeClient: WebChromeClient? = null
     @Volatile private var currentUrl: String? = null
     @Volatile private var currentTitle: String? = null
+    @Volatile private var observingRequests = false
     private var lastNavigation: (() -> Unit)? = null
 
     private data class Operation(val navigation: Boolean, val execute: suspend () -> Unit)
@@ -183,6 +185,7 @@ internal class DesktopWebViewProvider(
         submit(true) {
             try {
                 bridge.applySettings(settings.javaScriptEnabled, settings.userAgentString)
+                observeRequestsForClient()
                 cookies?.push()
                 dispatchToMain { webViewClient?.onPageStarted(webView, url, null) }
                 check(block()) { "Navigation failed" }
@@ -199,6 +202,23 @@ internal class DesktopWebViewProvider(
                     error.message ?: "Browser request failed", url) }
             }
         }
+    }
+
+    /**
+     * Android reports every request a page makes to `WebViewClient.shouldInterceptRequest`, which resolvers use to
+     * find a stream or an API call (Cloudstream's WebViewResolver, extensions that sniff video URLs). The bridge can
+     * report requests but not answer them, so the client sees each one, off the main thread as on Android, and
+     * whatever it returns is ignored: the browser loads the request itself.
+     */
+    private suspend fun observeRequestsForClient() {
+        if (observingRequests || webViewClient == null) return
+        bridge.requestListener = { request ->
+            if (!destroyed.get()) scope.launch {
+                runCatching { webViewClient?.shouldInterceptRequest(webView, DesktopWebResourceRequest(request)) }
+            }
+        }
+        observingRequests = bridge.observeRequests(true)
+        if (!observingRequests) bridge.requestListener = null
     }
 
     private fun submit(navigation: Boolean, operation: suspend () -> Unit) {
@@ -330,4 +350,14 @@ internal class DesktopWebViewProvider(
     override fun getRendererRequestedPriority(): Int = 0
     override fun getRendererPriorityWaivedWhenNotVisible(): Boolean = false
     override fun notifyFindDialogDismissed() {}
+}
+
+/** A request the bridge reported, in the shape `WebViewClient.shouldInterceptRequest` receives on Android. */
+private class DesktopWebResourceRequest(private val request: DesktopWebRequest) : WebResourceRequest {
+    override fun getUrl(): Uri = Uri.parse(request.url)
+    override fun isForMainFrame(): Boolean = request.isForMainFrame
+    override fun isRedirect(): Boolean = false
+    override fun hasGesture(): Boolean = false
+    override fun getMethod(): String = request.method
+    override fun getRequestHeaders(): Map<String, String> = request.headers
 }

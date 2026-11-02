@@ -13,7 +13,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.google.android.material.snackbar.Snackbar
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.nav.AppRouter
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.util.ext.findActivity
+import org.skepsun.kototoro.core.util.ext.makeSnackbar
 import org.skepsun.kototoro.core.util.ext.observeEvent
 import org.skepsun.kototoro.details.ui.DetailsViewModel
 import org.skepsun.kototoro.details.ui.compose.state.DetailsPaneState
@@ -59,13 +61,9 @@ fun PagesScreenRoot(
         viewModel.onPageSaved.observeEvent(lifecycleOwner) { uris ->
             if (uris.isEmpty()) return@observeEvent
             if (uris.size == 1) {
-                Snackbar.make(viewForSnackbar, R.string.page_saved, Snackbar.LENGTH_LONG).show()
+                viewForSnackbar.makeSnackbar(R.string.page_saved, Snackbar.LENGTH_LONG).show()
             } else {
-                Snackbar.make(
-                    viewForSnackbar,
-                    context.getString(R.string.pages_saved),
-                    Snackbar.LENGTH_LONG,
-                ).show()
+                viewForSnackbar.makeSnackbar(context.getString(R.string.pages_saved), Snackbar.LENGTH_LONG).show()
             }
         }
         onDispose {}
@@ -73,7 +71,14 @@ fun PagesScreenRoot(
 
     PagesScreen(
         items = thumbnails,
-        gridColumns = pagePreviewGridColumns(gridScale),
+        // A television panel is shallower than a phone sheet: at the same preview scale a card is
+        // taller than the panel, so no card can ever be shown whole with its focus ring. More
+        // columns means shorter cards, and one full row fits.
+        gridColumns = if (LocalUiPresentationConfig.current.isTv) {
+            maxOf(TV_PANEL_MIN_PAGE_COLUMNS, pagePreviewGridColumns(gridScale))
+        } else {
+            pagePreviewGridColumns(gridScale)
+        },
         selectedItemIds = selectedIds,
         fitPreview = fitPreview,
         thumbnailAspectRatio = thumbnailAspectRatio,
@@ -133,3 +138,6 @@ fun PagesScreenRoot(
         onClearSelection = { selectedItemIds.clear() },
     )
 }
+
+/** Fewer columns render cards taller than the reader panel, where a focused card is cut in half. */
+private const val TV_PANEL_MIN_PAGE_COLUMNS = 5

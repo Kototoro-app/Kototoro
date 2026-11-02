@@ -55,11 +55,26 @@ class MihonFilterMapperCompatibilityTest {
     @Test
     fun `Android options retain persisted tag keys cleaned choices and grouping`() {
         val options = MihonFilterMapper.mapOptions(filters, protocolTestSource)
-        assertEquals(listOf("General", "Group"), options.tagGroups.map { it.title })
+        assertEquals(listOf("General", "Choice", "Order", "Author", "AuthorExtra", "Group"),
+            options.tagGroups.map { it.title })
+        assertTrue(options.tagGroups.single { it.title == "Choice" }.isExclusive)
+        assertTrue(options.tagGroups.single { it.title == "Order" }.isExclusive)
         assertEquals(setOf("top:Flag", "top:Genre", "top:Choice/爱情", "top:Choice/Second", "sort:top:Order/Name",
-            "sort:top:Order/Date", "text:top:Author", "text:top:AuthorExtra", "Group/Nested/NestedFlag"),
+            "sort:top:Order/Date", "sort-desc:top:Order/Name", "sort-desc:top:Order/Date",
+            "text:top:Author", "text:top:AuthorExtra", "Group/Nested/NestedFlag"),
             options.availableTags.map { it.key }.toSet())
         assertTrue(options.availableTags.all { it.source === protocolTestSource })
+    }
+
+    @Test
+    fun `Android adapter preserves explicit sort direction and manually entered fields`() {
+        val chapters = object : Filter.Text("Min chapters") {}
+        MihonFilterMapper.updateMihonFilters(FilterList(order, author, chapters), ContentListFilter(tags = setOf(
+            tag("sort-desc:top:Order/Date"), tag("text:top:Author=Writer"), tag("text:top:Min chapters=25"),
+        )))
+        assertEquals(Filter.Sort.Selection(1, false), order.state)
+        assertEquals("Writer", author.state)
+        assertEquals("25", chapters.state)
     }
 
     @Test

@@ -12,16 +12,15 @@ import androidx.exifinterface.media.ExifInterface
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.skepsun.kototoro.core.util.ContentZipArchive
 import org.skepsun.kototoro.core.util.ext.isContentZipUri
 import org.skepsun.kototoro.core.util.ext.isZipUri
-import org.skepsun.kototoro.core.util.ext.toUnderlyingZipUri
 import org.skepsun.kototoro.reader.core.IntRect
 import org.skepsun.kototoro.reader.core.IntSize
 import java.io.IOException
 import java.io.InputStream
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import java.util.zip.ZipFile
-import java.util.zip.ZipInputStream
 import kotlin.concurrent.read
 import kotlin.concurrent.write
 
@@ -82,17 +81,7 @@ class AndroidRegionDecoderFactory(
 
     private fun openStream(uri: Uri, block: (InputStream) -> Unit) {
         if (uri.isContentZipUri()) {
-            val entryName = uri.fragment ?: throw IOException("ZIP URI has no entry name: $uri")
-            appContext.contentResolver.openInputStream(uri.toUnderlyingZipUri())?.use { input ->
-                ZipInputStream(input.buffered()).use { zip ->
-                    var entry = zip.nextEntry
-                    while (entry != null && entry.name != entryName) {
-                        entry = zip.nextEntry
-                    }
-                    if (entry == null) throw IOException("ZIP entry not found: $entryName")
-                    block(zip)
-                }
-            } ?: throw IOException("Cannot open content zip: $uri")
+            ContentZipArchive.withEntry(appContext.contentResolver, uri, block)
         } else if (uri.isZipUri()) {
             ZipFile(uri.schemeSpecificPart).use { zip ->
                 val entryName = uri.fragment ?: throw IOException("ZIP URI has no entry name: $uri")

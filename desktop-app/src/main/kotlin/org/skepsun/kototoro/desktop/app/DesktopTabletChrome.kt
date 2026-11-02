@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.desktop.app
 
+import org.skepsun.kototoro.core.ui.compose.ExpandableDescriptionText
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
@@ -7,7 +8,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.*
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -16,56 +17,78 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.skepsun.kototoro.core.source.SourceChapter
 import org.skepsun.kototoro.core.ui.adaptive.*
 import org.skepsun.kototoro.core.ui.chapters.*
+import org.skepsun.kototoro.core.ui.settings.SettingsGroup
+import org.skepsun.kototoro.core.ui.settings.SettingsRowDivider
+import org.skepsun.kototoro.core.ui.settings.SettingsSectionHeader
+import org.skepsun.kototoro.core.ui.settings.SettingsValueRow
+import org.skepsun.kototoro.desktop.runtime.DesktopNavItem
 
 /** Windows supplies destination actions and artwork to the shared Android tablet rail. */
 @Composable
 internal fun DesktopNavigationRail(controller: DesktopController, state: DesktopAppState, enabled: Boolean) {
-    // Android's tablet order: home, favourites, browse, history, subscriptions (then Windows' "more").
-    val destinations = listOf(TabletNavigationDestination(4, "主页"), TabletNavigationDestination(0, "收藏"),
-        TabletNavigationDestination(1, "浏览"), TabletNavigationDestination(2, "历史"),
-        TabletNavigationDestination(5, "订阅"), TabletNavigationDestination(3, "更多"))
+    // The configured order from 更多 -> 导航配置, then Windows' "more" pinned last so the exit never disappears.
+    val navSettings by controller.navSettings.collectAsState()
+    val destinations = navSettings.items.map { TabletNavigationDestination(desktopNavItemId(it), desktopNavItemLabel(it)) } +
+        TabletNavigationDestination(DESKTOP_NAV_MORE_ID, desktopText("common.more"))
     val selected = when (state.screen) {
-        DesktopScreen.HOME -> 4
-        DesktopScreen.FEED -> 5
-        DesktopScreen.LIBRARY -> 0
-        DesktopScreen.EXPLORE, DesktopScreen.DETAILS, DesktopScreen.PREFERENCES -> 1
-        DesktopScreen.HISTORY -> 2
-        else -> 3
+        DesktopScreen.HOME -> desktopNavItemId(DesktopNavItem.HOME)
+        DesktopScreen.FEED -> desktopNavItemId(DesktopNavItem.SUBSCRIPTIONS)
+        DesktopScreen.LIBRARY -> desktopNavItemId(DesktopNavItem.FAVOURITES)
+        DesktopScreen.EXPLORE, DesktopScreen.DETAILS, DesktopScreen.PREFERENCES -> desktopNavItemId(DesktopNavItem.BROWSE)
+        DesktopScreen.HISTORY -> desktopNavItemId(DesktopNavItem.HISTORY)
+        DesktopScreen.BOOKMARKS -> desktopNavItemId(DesktopNavItem.BOOKMARKS)
+        DesktopScreen.UPDATED -> desktopNavItemId(DesktopNavItem.UPDATED)
+        DesktopScreen.SUGGESTIONS -> desktopNavItemId(DesktopNavItem.SUGGESTIONS)
+        else -> DESKTOP_NAV_MORE_ID
     }
     val updates = state.feed.updateRowsByOwnerId.size
     val navigate: (Int) -> Unit = { id -> when (id) {
-        4 -> controller.home()
-        5 -> controller.subscriptions()
-        0 -> controller.library()
-        1 -> controller.explore()
-        2 -> controller.library(true)
+        desktopNavItemId(DesktopNavItem.SUBSCRIPTIONS) -> controller.subscriptions()
+        desktopNavItemId(DesktopNavItem.FAVOURITES) -> controller.library()
+        desktopNavItemId(DesktopNavItem.BROWSE) -> controller.explore()
+        desktopNavItemId(DesktopNavItem.HISTORY) -> controller.library(true)
+        desktopNavItemId(DesktopNavItem.HOME) -> controller.home()
+        desktopNavItemId(DesktopNavItem.BOOKMARKS) -> controller.showBookmarks()
+        desktopNavItemId(DesktopNavItem.UPDATED) -> controller.showUpdates()
+        desktopNavItemId(DesktopNavItem.SUGGESTIONS) -> controller.showSuggestions()
         else -> controller.more()
     } }
     // Re-selecting "browse" inside a source goes back to the source grid, like Android's tab re-tap.
     val reselect: (Int) -> Unit = { id ->
-        if (id == 1 && state.screen == DesktopScreen.EXPLORE && state.selectedSource != null) controller.exitSource()
-        else navigate(id)
+        if (id == desktopNavItemId(DesktopNavItem.BROWSE) && state.screen == DesktopScreen.EXPLORE &&
+            state.selectedSource != null) {
+            controller.exitSource()
+        } else {
+            navigate(id)
+        }
     }
     androidx.compose.material3.Surface(Modifier.width(80.dp).fillMaxHeight().testTag("tablet-navigation"),
         color = androidx.compose.material3.NavigationRailDefaults.ContainerColor, tonalElevation = 3.dp) {
         TabletNavigationRail(destinations, selected, navigate, reselect,
             icon = { id, isSelected ->
                 val resource = when (id) {
-                    4 -> "ic_home"
-                    5 -> "ic_feed"
-                    0 -> if (isSelected) "ic_heart" else "ic_heart_outline"
-                    1 -> "ic_explore_normal"
-                    2 -> "ic_history"
+                    desktopNavItemId(DesktopNavItem.HOME) -> "ic_home"
+                    desktopNavItemId(DesktopNavItem.SUBSCRIPTIONS) -> "ic_feed"
+                    desktopNavItemId(DesktopNavItem.FAVOURITES) ->
+                        if (isSelected) "ic_heart" else "ic_heart_outline"
+                    desktopNavItemId(DesktopNavItem.BROWSE) -> "ic_explore_normal"
+                    desktopNavItemId(DesktopNavItem.HISTORY) -> "ic_history"
+                    desktopNavItemId(DesktopNavItem.BOOKMARKS) -> "ic_bookmark"
+                    desktopNavItemId(DesktopNavItem.UPDATED) -> "ic_updated"
+                    desktopNavItemId(DesktopNavItem.SUGGESTIONS) -> "ic_suggestion"
                     else -> "ic_more_vert"
                 }
                 androidx.compose.material3.BadgedBox(badge = {
-                    if (id == 5 && updates > 0) androidx.compose.material3.Badge(Modifier.testTag("nav-feed-badge")) {
-                        androidx.compose.material3.Text(if (updates > 99) "99+" else updates.toString())
+                    if (id == desktopNavItemId(DesktopNavItem.SUBSCRIPTIONS) && updates > 0) {
+                        androidx.compose.material3.Badge(Modifier.testTag("nav-feed-badge")) {
+                            androidx.compose.material3.Text(if (updates > 99) "99+" else updates.toString())
+                        }
                     }
                 }) {
                     androidx.compose.material3.Icon(painterResource("icons/$resource.svg"), null,
@@ -79,60 +102,173 @@ internal fun DesktopNavigationRail(controller: DesktopController, state: Desktop
     }
 }
 
+/** The rail id of "更多"; the configured destinations use their own stable ids so navigation never re-maps. */
+internal const val DESKTOP_NAV_MORE_ID = 3
+
+/** Stable ids for the configurable destinations, kept equal to the ids the rail has always used. */
+internal fun desktopNavItemId(item: DesktopNavItem): Int = when (item) {
+    DesktopNavItem.HOME -> 4
+    DesktopNavItem.FAVOURITES -> 0
+    DesktopNavItem.BROWSE -> 1
+    DesktopNavItem.HISTORY -> 2
+    DesktopNavItem.SUBSCRIPTIONS -> 5
+    DesktopNavItem.BOOKMARKS -> 6
+    DesktopNavItem.UPDATED -> 7
+    DesktopNavItem.SUGGESTIONS -> 8
+}
+
+/** The label the rail and the configuration page both draw; the same words the desktop catalog gave each tab. */
+internal fun desktopNavItemLabel(item: DesktopNavItem): String = when (item) {
+    DesktopNavItem.HOME -> desktopText("nav.home")
+    DesktopNavItem.FAVOURITES -> desktopText("nav.favourites")
+    DesktopNavItem.BROWSE -> desktopText("nav.browse")
+    DesktopNavItem.HISTORY -> desktopText("nav.history")
+    DesktopNavItem.SUBSCRIPTIONS -> desktopText("nav.subscriptions")
+    // Android's `NavItem.BOOKMARKS` takes `R.string.notes` for the same destination.
+    DesktopNavItem.BOOKMARKS -> AndroidStrings["notes"]
+    // Android's `NavItem.UPDATED` label is `R.string.updated`.
+    DesktopNavItem.UPDATED -> AndroidStrings["updated"]
+    // Android's `NavItem.SUGGESTIONS` label is `R.string.suggestions`.
+    DesktopNavItem.SUGGESTIONS -> AndroidStrings["suggestions"]
+}
+
+/**
+ * Android's "更多" tab is a settings page: titled sections, one card each, and every entry a row. The Windows host keeps
+ * its own entry points (recommendations, extensions, downloads, backups, browser) but draws them the same way, with a
+ * leading icon and the current value in front of the chevron; the language/appearance/style chips become choice dialogs.
+ */
 @Composable
-internal fun DesktopMorePanel(controller: DesktopController, enabled: Boolean) {
+internal fun DesktopMorePanel(controller: DesktopController, enabled: Boolean, onExitRequest: () -> Unit = {}) {
     val state by controller.state.collectAsState()
+    var dialog by remember { mutableStateOf<DesktopMoreDialog?>(null) }
     Column(Modifier.widthIn(max = 720.dp).fillMaxWidth().verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        MoreDestination("扩展与仓库", "ic_extension", "管理来源、添加仓库与导入本地扩展", enabled) {
-            controller.showExtensions()
+        verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        SettingsSectionHeader(desktopText("more.features"))
+        SettingsGroup {
+            SettingsValueRow(desktopText("screens.readerSettings"), desktopText("reader.settingsSummary"), null, enabled,
+                { controller.showReaderSettings() }, testTag = "reader-settings-open",
+                leadingIcon = painterResource("icons/ic_read.svg"))
+            SettingsRowDivider()
+            // Android's playback settings: the player's backdrop, decoder and overlay opacities.
+            SettingsValueRow(AndroidStrings["playback_settings"], desktopText("playback.moreSummary"), null, enabled,
+                { controller.showPlaybackSettings() }, testTag = "playback-settings-open",
+                leadingIcon = painterResource("icons/ic_content_video.svg"))
+            SettingsRowDivider()
+            SettingsValueRow(desktopText("screens.sourceSettings"), desktopText("sources.sortSummary"), null, enabled,
+                { controller.showSourceSettings() }, testTag = "source-settings-open",
+                leadingIcon = painterResource("icons/ic_source_builtin.svg"))
+            SettingsRowDivider()
+            // Android's storage and network hub: the storage figures and the proxy that routes every request.
+            SettingsValueRow(AndroidStrings["storage_and_network"], desktopText("storage.moreSummary"), null, enabled,
+                { controller.showStorage() }, testTag = "storage-settings-open",
+                leadingIcon = painterResource("icons/ic_storage.svg"))
+            SettingsRowDivider()
+            // Android groups recommendations, statistics and their switches under one 服务 page.
+            SettingsValueRow(AndroidStrings["services"], desktopText("more.servicesSummary"), null,
+                enabled, { controller.showServices() }, testTag = "services-open",
+                leadingIcon = painterResource("icons/ic_suggestion.svg"))
+            SettingsRowDivider()
+            SettingsValueRow(desktopText("more.extensions"), desktopText("more.extensionsSummary"), null, enabled,
+                { controller.showExtensions() }, testTag = "nav:${desktopText("more.extensions")}",
+                leadingIcon = painterResource("icons/ic_extension.svg"))
+            SettingsRowDivider()
+            SettingsValueRow(desktopText("more.downloads"), desktopText("more.downloadsSummary"), null, enabled,
+                { controller.showDownloads() }, testTag = "nav:${desktopText("more.downloads")}",
+                leadingIcon = painterResource("icons/ic_download.svg"))
+            SettingsRowDivider()
+            // Android's download settings; the Windows queue reads the same numbers, so this is not a dead page.
+            SettingsValueRow(desktopText("downloadsSettings.title"), desktopText("downloadsSettings.moreSummary"), null,
+                enabled, { controller.showDownloadSettings() }, testTag = "download-settings-open",
+                leadingIcon = painterResource("icons/ic_download.svg"))
+            SettingsRowDivider()
+            SettingsValueRow(desktopText("more.backups"), desktopText("more.backupsSummary"), null, enabled,
+                { controller.showBackups() }, testTag = "nav:${desktopText("more.backups")}",
+                leadingIcon = painterResource("icons/ic_backup_restore.svg"))
+            SettingsRowDivider()
+            // Android's nav configuration lives under appearance; here it edits the rail the window shows.
+            SettingsValueRow(AndroidStrings["main_screen_sections"], desktopText("navSettings.moreSummary"), null,
+                enabled, { controller.showNavigationConfig() }, testTag = "nav-config-open",
+                leadingIcon = painterResource("icons/ic_settings.svg"))
         }
-        MoreDestination("下载", "ic_download", "查看离线章节与下载任务", enabled) { controller.showDownloads() }
-        MoreDestination("备份与恢复", "ic_backup_restore", "导出书库，或预览并合并备份", enabled) { controller.showBackups() }
-        Surface(shape = RoundedCornerShape(20.dp)) {
-            Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("外观", style = MaterialTheme.typography.subtitle1)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    DesktopAppearance.entries.forEach { appearance ->
-                        OutlinedButton({ controller.appearance(appearance) }, enabled = enabled,
-                            colors = ButtonDefaults.outlinedButtonColors(backgroundColor =
-                                if (state.appearance == appearance) Accent.copy(alpha = .12f) else Color.Transparent),
-                            modifier = Modifier.testTag("appearance:${appearance.name}")) { Text(appearance.title) }
-                    }
-                }
-                Text("界面风格", style = MaterialTheme.typography.subtitle1)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    DesktopInterfaceStyle.entries.forEach { style ->
-                        OutlinedButton({ controller.interfaceStyle(style) }, enabled = enabled,
-                            colors = ButtonDefaults.outlinedButtonColors(backgroundColor =
-                                if (state.interfaceStyle == style) Accent.copy(alpha = .12f) else Color.Transparent),
-                            modifier = Modifier.testTag("interface-style:${style.name}")) { Text(style.title) }
-                    }
-                }
+        SettingsSectionHeader(desktopText("more.appearance"))
+        SettingsGroup {
+            SettingsValueRow(desktopText("more.theme"), null, state.appearance.title, enabled,
+                { dialog = DesktopMoreDialog.THEME }, testTag = "appearance")
+            SettingsRowDivider()
+            SettingsValueRow(desktopText("more.interfaceStyle"), null, state.interfaceStyle.title, enabled,
+                { dialog = DesktopMoreDialog.INTERFACE_STYLE }, testTag = "interface-style")
+            SettingsRowDivider()
+            SettingsValueRow(desktopText("more.language"), desktopText("more.languageDetail"),
+                state.language?.let { tag -> DesktopLanguages.bundled.firstOrNull { it.tag == tag }?.nativeName ?: tag }
+                    ?: desktopText("more.languageSystem"),
+                enabled, { dialog = DesktopMoreDialog.LANGUAGE }, testTag = "language")
+        }
+        DesktopTrackerSettings(controller, state, enabled)
+        DesktopAppUpdateSection(controller, state, enabled, onExitRequest)
+        // Android keeps "crash logs" on the about screen itself, between the update card and the support links.
+        SettingsGroup {
+            SettingsValueRow(AndroidStrings["crash_logs"], AndroidStrings["crash_logs_summary"], null, enabled,
+                { controller.showCrashLogs() }, testTag = "app-crash-logs")
+        }
+        // Android's about screen keeps its links in a "support" group; on Windows they sit under the update card.
+        SettingsSectionHeader(AndroidStrings["about_group_support"])
+        SettingsGroup {
+            val links = remember { desktopAboutLinks() }
+            links.forEachIndexed { index, link ->
+                if (index > 0) SettingsRowDivider()
+                SettingsValueRow(link.title, link.url, null, enabled && link.openable,
+                    { controller.openExternalUrl(link.title, link.url) },
+                    testTag = "about-link:${link.key}")
             }
         }
-        DesktopBackgroundSettings(controller, state, enabled)
-        Divider(Modifier.padding(vertical = 12.dp))
-        Text("高级工具", fontWeight = FontWeight.SemiBold, color = Muted)
-        MoreDestination("浏览器调试", "ic_web", "打开网页，检查来源的网页验证", enabled) { controller.browser() }
+        SettingsSectionHeader(desktopText("more.advancedTools"))
+        SettingsGroup {
+            SettingsValueRow(desktopText("more.browser"), desktopText("more.browserSummary"), null, enabled,
+                { controller.browser() }, testTag = "nav:${desktopText("more.browser")}",
+                leadingIcon = painterResource("icons/ic_web.svg"))
+        }
+    }
+    when (dialog) {
+        DesktopMoreDialog.THEME -> DesktopChoiceSettingsDialog(
+            title = desktopText("more.theme"),
+            summary = null,
+            bodyTag = "appearance-dialog",
+            optionTagPrefix = "appearance",
+            options = DesktopAppearance.entries.map { it.title to it.name },
+            selected = state.appearance.name,
+            enabled = enabled,
+            onPick = { name -> controller.appearance(DesktopAppearance.valueOf(name)); dialog = null },
+            onDismiss = { dialog = null },
+        )
+        DesktopMoreDialog.INTERFACE_STYLE -> DesktopChoiceSettingsDialog(
+            title = desktopText("more.interfaceStyle"),
+            summary = null,
+            bodyTag = "interface-style-dialog",
+            optionTagPrefix = "interface-style",
+            options = DesktopInterfaceStyle.entries.map { it.title to it.name },
+            selected = state.interfaceStyle.name,
+            enabled = enabled,
+            onPick = { name -> controller.interfaceStyle(DesktopInterfaceStyle.valueOf(name)); dialog = null },
+            onDismiss = { dialog = null },
+        )
+        DesktopMoreDialog.LANGUAGE -> DesktopChoiceSettingsDialog(
+            title = desktopText("more.language"),
+            summary = desktopText("more.languageDetail"),
+            bodyTag = "language-dialog",
+            optionTagPrefix = "language",
+            options = listOf(desktopText("more.languageSystem") to "system") +
+                DesktopLanguages.bundled.map { it.nativeName to it.tag },
+            selected = state.language ?: "system",
+            enabled = enabled,
+            onPick = { tag -> controller.language(tag.takeUnless { it == "system" }); dialog = null },
+            onDismiss = { dialog = null },
+        )
+        null -> Unit
     }
 }
 
-@Composable
-private fun MoreDestination(title: String, icon: String, description: String, enabled: Boolean, onClick: () -> Unit) {
-    Surface(shape = RoundedCornerShape(16.dp)) {
-        Row(Modifier.fillMaxWidth().testTag("nav:$title").clickable(enabled = enabled, onClick = onClick)
-            .padding(20.dp),
-            horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(painterResource("icons/$icon.svg"), null, tint = Accent, modifier = Modifier.size(24.dp))
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(title, fontWeight = FontWeight.SemiBold)
-                Text(description, color = Muted, fontSize = 13.sp)
-            }
-            Text("›", fontSize = 24.sp, color = Muted)
-        }
-    }
-}
+private enum class DesktopMoreDialog { THEME, INTERFACE_STYLE, LANGUAGE }
+
 
 /** Android tablet details keep artwork/metadata separate from the independently scrolling chapter list. */
 @Composable
@@ -144,16 +280,23 @@ internal fun DesktopTabletDetails(controller: DesktopController, state: DesktopA
         val expanded = tabletLayoutClass(LocalDesktopWindowWidth.current.value.toInt(), true) == TabletLayoutClass.EXPANDED
         val summary: @Composable (Modifier) -> Unit = { modifier ->
             Column(modifier, verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text(content.title, style = if (expanded) MaterialTheme.typography.h4 else MaterialTheme.typography.h6)
-                Text(content.authors.joinToString(" · ").ifBlank { "作者信息未提供" }, color = Muted)
+                Text(content.title, style = if (expanded) MaterialTheme.typography.headlineLarge else MaterialTheme.typography.titleLarge)
+                Text(content.authors.joinToString(" · ").ifBlank { desktopText("details.authorsUnknown") }, color = Muted)
                 Text(state.sources.firstOrNull { it.source.name == content.source.name }?.displayName ?: content.source.name,
                     color = Accent, fontSize = 12.sp)
                 Button({ controller.read() }, enabled = !state.busy && !content.chapters.isNullOrEmpty(),
                     modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("preview-read")) {
-                    Text(if (DesktopReaderKind.of(content) == DesktopReaderKind.VIDEO) "开始 / 继续播放" else "开始 / 继续阅读")
+                    Text(if (DesktopReaderKind.of(content) == DesktopReaderKind.VIDEO) desktopText("details.startWatching") else desktopText("details.startReading"))
                 }
-                OutlinedButton({ controller.addFavourite() }, enabled = !state.busy && !state.isFavourite,
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("preview-favourite")) { Text(if (state.isFavourite) "已收藏" else "加入收藏") }
+                OutlinedButton({ controller.toggleFavourite() }, enabled = !state.busy,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("preview-favourite")) {
+                    Text(if (state.isFavourite) desktopText("details.unfavourite") else desktopText("details.favourite"))
+                }
+                // Android's dock item is present for every work and only hidden while the reader is already incognito.
+                if (!state.readerIncognito) {
+                    DesktopIncognitoReadingButton(!state.busy && !content.chapters.isNullOrEmpty(),
+                        { controller.readIncognito() }, Modifier.fillMaxWidth().heightIn(min = 48.dp))
+                }
             }
         }
         val metadata: @Composable (Modifier) -> Unit = { modifier ->
@@ -171,11 +314,35 @@ internal fun DesktopTabletDetails(controller: DesktopController, state: DesktopA
                     summary(Modifier.weight(1f))
                 }
                 content.description?.takeIf(String::isNotBlank)?.let {
-                    Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colors.surface) {
+                    Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surface) {
                         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("简介", style = MaterialTheme.typography.subtitle1)
-                            Text(it.replace(Regex("<[^>]*>"), ""), color = Muted, style = MaterialTheme.typography.body2)
+                            Text(desktopText("details.synopsis"), style = MaterialTheme.typography.titleMedium)
+                            // Android's description: three lines fading out, a click on the text unfolds it all.
+                            var expanded by remember(content.id) { mutableStateOf(false) }
+                            ExpandableDescriptionText(it.replace(Regex("<[^>]*>"), ""), expanded, { expanded = it },
+                                modifier = Modifier.testTag("details-description"))
                         }
+                    }
+                }
+                DesktopDetailsInfo(content, enabled = !state.busy, warnings = state.sourceSettings,
+                    readingTime = state.detailsReadingTime)
+                DesktopDetailsRelated(controller, state)
+            }
+        }
+        var tab by remember(content.id) { mutableStateOf(DesktopDetailsTab.CHAPTERS) }
+        val bookmarks = remember(state.bookmarks, content.id) { state.bookmarks.count { it.contentId == content.id } }
+        val tabs: @Composable (Modifier) -> Unit = { tabsModifier ->
+            Row(tabsModifier, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                DesktopDetailsTab.entries.forEach { candidate ->
+                    val label = when (candidate) {
+                        DesktopDetailsTab.CHAPTERS -> desktopText("details.chapters", content.chapters?.size ?: 0)
+                        DesktopDetailsTab.BOOKMARKS -> desktopText("details.tabBookmarks", bookmarks)
+                    }
+                    OutlinedButton({ tab = candidate }, enabled = !state.busy,
+                        colors = ButtonDefaults.outlinedButtonColors(containerColor =
+                            if (tab == candidate) Accent.copy(alpha = .12f) else Color.Transparent),
+                        modifier = Modifier.weight(1f, fill = false).testTag("details-tab:${candidate.name}")) {
+                        Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
             }
@@ -184,16 +351,35 @@ internal fun DesktopTabletDetails(controller: DesktopController, state: DesktopA
             TabletDetailsPanes(Modifier.fillMaxSize().testTag("details-two-pane"),
                 summary = { paneModifier ->
                     Surface(paneModifier, shape = RoundedCornerShape(20.dp),
-                        color = MaterialTheme.colors.surface.copy(alpha = .92f)) { metadata(Modifier.fillMaxSize()) }
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = .92f)) { metadata(Modifier.fillMaxSize()) }
                 },
-                chapters = { paneModifier -> DesktopDetailsChapters(controller, state, directory, paneModifier) },
+                chapters = { paneModifier ->
+                    Column(paneModifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        tabs(Modifier.fillMaxWidth())
+                        when (tab) {
+                            DesktopDetailsTab.CHAPTERS -> DesktopDetailsChapters(controller, state, directory,
+                                Modifier.weight(1f))
+                            DesktopDetailsTab.BOOKMARKS -> DesktopDetailsBookmarks(controller, state,
+                                Modifier.weight(1f))
+                        }
+                    }
+                },
             )
         } else {
-            DesktopDetailsChapters(controller, state, directory, Modifier.fillMaxSize().testTag("details-stacked"),
-                leadingContent = { metadata(Modifier.fillMaxWidth()) })
+            Column(Modifier.fillMaxSize().testTag("details-stacked"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                tabs(Modifier.fillMaxWidth())
+                when (tab) {
+                    DesktopDetailsTab.CHAPTERS -> DesktopDetailsChapters(controller, state, directory,
+                        Modifier.weight(1f), leadingContent = { metadata(Modifier.fillMaxWidth()) })
+                    DesktopDetailsTab.BOOKMARKS -> DesktopDetailsBookmarks(controller, state, Modifier.weight(1f))
+                }
+            }
         }
     }
 }
+
+/** Android's details tabs; the Windows panes switch between the same two lists instead of scrolling past both. */
+internal enum class DesktopDetailsTab { CHAPTERS, BOOKMARKS }
 
 /** Android's chapter list pipeline: one branch, then order and search, then volume headers on what remains. */
 internal data class DesktopChapterList(

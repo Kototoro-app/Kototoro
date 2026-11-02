@@ -22,6 +22,31 @@ import java.text.StringCharacterIterator
 import java.util.Locale
 
 class PlatformShimsTest {
+    @Test fun `WebView base exposes display resources and dispatches extension generated touches`() {
+        val resources = android.content.res.Resources.getSystem()
+        val context = object : android.content.ContextWrapper(null) {
+            override fun getResources() = resources
+        }
+        var received: android.view.MotionEvent? = null
+        val view = object : android.widget.AbsoluteLayout(context) {
+            override fun onTouchEvent(event: android.view.MotionEvent): Boolean {
+                received = event
+                return true
+            }
+        }
+        assertSame(resources, view.resources)
+        assertTrue(view.resources.displayMetrics.density > 0f)
+        val coordinates = android.view.MotionEvent.PointerCoords().apply { x = 120f; y = 240f }
+        val event = android.view.MotionEvent.obtain(1L, 2L, 1, 1,
+            arrayOf(android.view.MotionEvent.PointerProperties().apply { id = 0; toolType = 1 }),
+            arrayOf(coordinates), 0, 0, 1f, 1f, 0, 0, 4098, 0)
+        coordinates.x = 999f
+        assertEquals(120f, event.x)
+        assertTrue(view.dispatchTouchEvent(event))
+        assertSame(event, received)
+        event.recycle()
+    }
+
     @Test fun `cropping copies pixels and preserves immutable ownership`() {
         val original = Bitmap.createBitmap(intArrayOf(1, 2, 3, 4, 5, 6), 3, 2, Bitmap.Config.ARGB_8888)
         val crop = Bitmap.createBitmap(original, 1, 0, 2, 2)

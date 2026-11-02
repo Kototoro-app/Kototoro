@@ -6,10 +6,14 @@ import android.util.Log
 import com.github.tvbox.osc.base.App
 import com.hippo.unifile.UniFile
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runInterruptible
 import org.skepsun.kototoro.core.model.LocalNovelSource
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.local.data.LocalStorageManager
 import org.skepsun.kototoro.local.data.importer.LocalImportSupport
+import org.skepsun.kototoro.local.data.importer.LocalImportKind
+import org.skepsun.kototoro.local.data.hasZipExtension
 import org.skepsun.kototoro.local.data.input.LocalContentParser
 import org.skepsun.kototoro.local.epub.parseEpubChapterReference
 import org.skepsun.kototoro.local.domain.model.LocalContent
@@ -20,6 +24,8 @@ import org.skepsun.kototoro.parsers.model.ContentListFilterCapabilities
 import org.skepsun.kototoro.parsers.model.ContentListFilterOptions
 import org.skepsun.kototoro.parsers.model.ContentPage
 import org.skepsun.kototoro.parsers.model.SortOrder
+import org.skepsun.kototoro.parsers.model.NovelChapterContent
+import org.skepsun.kototoro.reader.novel.NovelHtmlNormalizer
 import java.io.File
 import java.util.EnumSet
 import javax.inject.Inject
@@ -47,7 +53,8 @@ class LocalNovelRepository @Inject constructor(
             root.file.listFiles().orEmpty().filter { child ->
                 val name = child.name.orEmpty()
                 !name.startsWith(LocalImportSupport.IMPORT_STAGING_PREFIX) &&
-                    (child.isDirectory || name.substringAfterLast('.', "").lowercase() in NOVEL_FILE_EXTENSIONS)
+                    (child.isDirectory || hasZipExtension(name) ||
+                        LocalImportSupport.classifyFileName(name) == LocalImportKind.NOVEL)
             }
         }
     }
@@ -56,7 +63,7 @@ class LocalNovelRepository @Inject constructor(
         if (offset > 0) return emptyList()
         val items = mutableListOf<Content>()
         findNovelEntries().forEach { entry ->
-            parseIndex(entry)?.let { items.add(it.first) }
+            parseIndex(entry, withDetails = false)?.let { items.add(it.first) }
         }
         val query = filter?.query?.trim().orEmpty()
         return if (query.isNotEmpty()) {
@@ -109,6 +116,17 @@ class LocalNovelRepository @Inject constructor(
 
     override suspend fun getPageUrl(page: ContentPage): String = page.url
 
+    override suspend fun getChapterContent(chapter: ContentChapter, nextChapterUrl: String?): NovelChapterContent? {
+        val uri = chapter.url.toUri()
+        if (uri.scheme !in setOf("file", "content")) return null
+        return runInterruptible(Dispatchers.IO) {
+            val file = UniFile.fromUri(App.getInstance(), uri) ?: return@runInterruptible null
+            if (file.name?.endsWith(".txt", ignoreCase = true) != true) return@runInterruptible null
+            val text = file.openInputStream().bufferedReader().use { it.readText() }.removePrefix("\uFEFF")
+            NovelChapterContent(NovelHtmlNormalizer.fromPlainText(text))
+        }
+    }
+
     override suspend fun getRelated(seed: Content): List<Content> = emptyList()
 
     /**
@@ -126,7 +144,7 @@ class LocalNovelRepository @Inject constructor(
      * 从目录读取小说并包装为 LocalContent；若目录不合法返回 null。
      */
     fun getLocalNovel(dir: File, withDetails: Boolean): LocalContent? {
-        val parsed = parseIndex(dir) ?: return null
+        val parsed = parseIndex(dir, withDetails) ?: return null
         val manga = if (withDetails) {
             parsed.first
         } else {
@@ -136,10 +154,10 @@ class LocalNovelRepository @Inject constructor(
     }
 
     @WorkerThread
-    internal fun parseIndex(dir: File): Pair<Content, List<ContentChapter>>? {
+    internal fun parseIndex(dir: File, withDetails: Boolean = true): Pair<Content, List<ContentChapter>>? {
         return runCatching {
             val parser = org.skepsun.kototoro.local.data.input.LocalContentParser(dir)
-            val localContent = runBlocking { parser.getContent(withDetails = true) }
+            val localContent = runBlocking { parser.getContent(withDetails = withDetails) }
 
             // Map chapters to ensure they have the correct local source when applicable
             val transformedContent = localContent.manga.withLocalNovelSource()
@@ -150,8 +168,11 @@ class LocalNovelRepository @Inject constructor(
         }.getOrNull()
     }
 
-    private suspend fun parseIndex(entry: UniFile): Pair<Content, List<ContentChapter>>? = runCatching {
-        val localContent = LocalContentParser(entry, App.getInstance().cacheDir).getContent(withDetails = true)
+    private suspend fun parseIndex(
+        entry: UniFile,
+        withDetails: Boolean = true,
+    ): Pair<Content, List<ContentChapter>>? = runCatching {
+        val localContent = LocalContentParser(entry, App.getInstance().cacheDir).getContent(withDetails)
         val transformedContent = localContent.manga.withLocalNovelSource()
         transformedContent to transformedContent.chapters.orEmpty()
     }.onFailure {
@@ -169,7 +190,4 @@ class LocalNovelRepository @Inject constructor(
         return copy(chapters = transformedChapters, source = this@LocalNovelRepository.source)
     }
 
-    private companion object {
-        val NOVEL_FILE_EXTENSIONS = setOf("cbz", "epub", "zip")
-    }
 }

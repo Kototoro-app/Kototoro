@@ -3,6 +3,7 @@ package org.skepsun.kototoro.list.ui.compose
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
@@ -14,6 +15,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 
 /** Bounds of the home rail rows-per-page setting (shared by rail and its config UIs). */
 internal const val HOME_LIST_RAIL_ROWS_MIN = 1
@@ -58,7 +60,9 @@ internal fun RailRowsSelector(
                             },
                         )
                     },
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .tvFocusable(shape = CircleShape, addFocusTarget = false),
                     colors = AssistChipDefaults.assistChipColors(
                         containerColor = if (selected) {
                             MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.72f)

@@ -30,14 +30,14 @@ jobs:
 
     steps:
       - name: Checkout ${{ env.BUILD_REF }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ env.BUILD_REF }}
           submodules: recursive
           fetch-depth: 0
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
@@ -94,7 +94,7 @@ jobs:
       # Branch builds are for device testing: ship the arm64-v8a APK only, not every ABI.
       - name: Upload branch build
         if: env.PUBLISH_NIGHTLY != 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ steps.assets.outputs.artifact_name }}
           path: release/*-arm64-v8a-nightly.apk
@@ -135,6 +135,8 @@ jobs:
     permissions:
       contents: read
     uses: ./.github/workflows/windows-build.yml
+    secrets:
+      GOOGLE_DRIVE_DESKTOP_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_DESKTOP_CLIENT_SECRET }}
     with:
       ref: ${{ needs.build.outputs.built-sha }}
       channel: nightly
@@ -149,7 +151,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: ${{ needs.windows.outputs.artifact-name }}
           path: release-windows
@@ -162,3 +164,77 @@ jobs:
           test -n "$GH_TOKEN"
           gh release view "$TAG_NAME" --repo "$NIGHTLY_REPOSITORY" >/dev/null
           gh release upload "$TAG_NAME" release-windows/* --repo "$NIGHTLY_REPOSITORY" --clobber
+
+  macos:
+    needs: [build, windows]
+    permissions:
+      contents: read
+    uses: ./.github/workflows/macos-build.yml
+    secrets:
+      GOOGLE_DRIVE_DESKTOP_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_DESKTOP_CLIENT_SECRET }}
+    with:
+      ref: ${{ needs.build.outputs.built-sha }}
+      channel: nightly
+      version-name: ${{ needs.build.outputs.version-name }}
+      compatibility-artifact: ${{ needs.windows.outputs.artifact-name }}
+
+  publish-macos:
+    needs: [build, macos]
+    if: github.event_name != 'workflow_dispatch' || github.ref_name == 'devel'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: ${{ needs.macos.outputs.artifact-pattern }}
+          path: release-macos
+          merge-multiple: true
+      - name: Attach macOS packages to Nightly Release
+        env:
+          GH_TOKEN: ${{ secrets.NIGHTLY_RELEASE_TOKEN }}
+          TAG_NAME: ${{ needs.build.outputs.tag }}
+        run: |
+          set -euo pipefail
+          test -n "$GH_TOKEN"
+          gh release view "$TAG_NAME" --repo "$NIGHTLY_REPOSITORY" >/dev/null
+          gh release upload "$TAG_NAME" release-macos/* --repo "$NIGHTLY_REPOSITORY" --clobber
+
+  ios:
+    needs: build
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ios-build.yml
+    with:
+      ref: ${{ needs.build.outputs.built-sha }}
+      channel: nightly
+      version-name: ${{ needs.build.outputs.version-name }}
+
+  publish-ios:
+    needs: [build, ios]
+    if: github.event_name != 'workflow_dispatch' || github.ref_name == 'devel'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: ${{ needs.ios.outputs.artifact-name }}
+          path: release-ios
+      - name: Attach iOS package to Nightly Release
+        env:
+          GH_TOKEN: ${{ secrets.NIGHTLY_RELEASE_TOKEN }}
+          TAG_NAME: ${{ needs.build.outputs.tag }}
+        run: |
+          set -euo pipefail
+          test -n "$GH_TOKEN"
+          gh release view "$TAG_NAME" --repo "$NIGHTLY_REPOSITORY" >/dev/null
+          gh release upload "$TAG_NAME" release-ios/* --repo "$NIGHTLY_REPOSITORY" --clobber
+      # The docs site rebuilds the AltStore sources from the releases, so the new IPA appears in them.
+      - name: Refresh AltStore sources
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run docs-pages.yml --repo "${{ github.repository }}" --ref devel

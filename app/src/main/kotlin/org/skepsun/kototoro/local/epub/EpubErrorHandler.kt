@@ -72,7 +72,7 @@ object EpubErrorHandler {
      */
     fun <T> createFailure(error: EpubError, context: String = ""): Result<T> {
         handleError(error, context)
-        return Result.failure(Exception(error.userMessage, error.cause))
+        return Result.failure(EpubException(error))
     }
 
     /**
@@ -90,7 +90,7 @@ object EpubErrorHandler {
             Result.success(block())
         } catch (e: Exception) {
             val error = handleException(e, context)
-            Result.failure(Exception(error.userMessage, e))
+            Result.failure(EpubException(error))
         }
     }
 
@@ -109,7 +109,7 @@ object EpubErrorHandler {
             Result.success(block())
         } catch (e: Exception) {
             val error = handleException(e, context)
-            Result.failure(Exception(error.userMessage, e))
+            Result.failure(EpubException(error))
         }
     }
 }

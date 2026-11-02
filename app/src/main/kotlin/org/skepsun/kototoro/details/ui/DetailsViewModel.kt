@@ -104,7 +104,9 @@ import org.skepsun.kototoro.local.data.LocalStorageChanges
 import org.skepsun.kototoro.local.domain.DeleteLocalContentUseCase
 import org.skepsun.kototoro.local.domain.model.LocalContent
 import org.skepsun.kototoro.local.domain.model.computeStoredSize
+import org.skepsun.kototoro.favourites.data.FavouriteCategoryDisplayPreferences
 import org.skepsun.kototoro.favourites.domain.FavouritesRepository
+import org.skepsun.kototoro.favourites.domain.filterCategoriesForSpace
 import org.skepsun.kototoro.core.model.FavouriteCategory
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentChapter
@@ -145,6 +147,7 @@ import org.skepsun.kototoro.search.domain.SearchContentKind
 import org.skepsun.kototoro.search.domain.matches
 import org.skepsun.kototoro.space.domain.SpaceContentPolicy
 import org.skepsun.kototoro.space.domain.SpaceId
+import org.skepsun.kototoro.space.ui.SpaceBrowseScope
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.plus
 import java.io.File
@@ -373,6 +376,9 @@ class DetailsViewModel @Inject constructor(
     private val sourceTypeIdentifier: SourceTypeIdentifier,
     private val trackingRepository: TrackingRepository,
     private val spaceContentPolicy: SpaceContentPolicy,
+    private val spaceBrowseScope: SpaceBrowseScope,
+    private val categoryDisplayPreferences: FavouriteCategoryDisplayPreferences,
+    chapterTranslationStore: org.skepsun.kototoro.reader.translate.data.ChapterTranslationStore,
 ) : ChaptersPagesViewModel(
     settings = settings,
     interactor = interactor,
@@ -382,6 +388,7 @@ class DetailsViewModel @Inject constructor(
     deleteLocalContentUseCase = deleteLocalContentUseCase,
     mangaRepositoryFactory = mangaRepositoryFactory,
     localStorageChanges = localStorageChanges,
+    chapterTranslationStore = chapterTranslationStore,
 ) {
 
     private val intent = ContentIntent(savedStateHandle)
@@ -533,7 +540,11 @@ class DetailsViewModel @Inject constructor(
     val readingSearchHasSearched = MutableStateFlow(false)
     val readingSearchState = MutableStateFlow<LocalSearchState?>(null)
     private val readingSearchFilterState = MutableStateFlow(ReadingSearchFilterState())
-    private val readingSearchScopeFilters = MutableStateFlow(ReadingSearchScopeFilterUiState())
+    private val readingSearchScopeFilters = MutableStateFlow(
+        // Shares the remembered choice with the search screen, so "hide empty sources" does not have to be
+        // ticked again in every source search.
+        ReadingSearchScopeFilterUiState(hideEmpty = settings.isSearchHideEmptySourcesEnabled),
+    )
     private val readingSearchPrimaryUiState = combine(
         readingSearchSources,
         selectedReadingSearchSource,
@@ -577,6 +588,13 @@ class DetailsViewModel @Inject constructor(
         scope = viewModelScope + Dispatchers.IO,
         key = AppSettings.KEY_ACTIVE_SOURCE_PRESET_ID,
         valueProducer = { settings.activeSourcePresetId },
+    )
+    // The reading-source filter panel shows the global tag blacklist row; a count of zero reads as
+    // "not enabled", so the row has to be fed the real number instead of the panel's default.
+    val globalTagBlacklistCount: StateFlow<Int> = settings.observeAsStateFlow(
+        scope = viewModelScope + Dispatchers.IO,
+        key = AppSettings.KEY_GLOBAL_TAG_BLACKLIST,
+        valueProducer = { settings.globalTagBlacklist.size },
     )
     val chaptersPaneControlsUiState: StateFlow<ChaptersPaneControlsUiState> = extCombine(
         isChaptersReversed,
@@ -1467,7 +1485,7 @@ class DetailsViewModel @Inject constructor(
             -> entityType == EntityType.PERSON || entityType == EntityType.CHARACTER
 
             ScrobblerService.MANGAUPDATES -> entityType == EntityType.PERSON
-            ScrobblerService.SIMKL -> false
+            ScrobblerService.SIMKL, ScrobblerService.MANGABAKA -> false
         }
     }
 
@@ -3053,6 +3071,9 @@ class DetailsViewModel @Inject constructor(
 
     fun setReadingSearchHideEmpty(enabled: Boolean) {
         readingSearchScopeFilters.update { it.copy(hideEmpty = enabled) }
+        if (settings.isSearchHideEmptySourcesEnabled != enabled) {
+            settings.isSearchHideEmptySourcesEnabled = enabled
+        }
     }
 
     fun setActiveLanguagePreset(presetId: Long) {
@@ -3722,9 +3743,43 @@ class DetailsViewModel @Inject constructor(
 
     // --- Favorite Category Management (for Compose dialog) ---
 
-    val allCategories: StateFlow<List<FavouriteCategory>> = favouritesRepository.observeCategories()
-        .withErrorHandling()
-        .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Lazily, emptyList())
+    /**
+     * Category picker of the details page follows the same per-Space display rule as the
+     * favourites tab strip: the active Space hides some categories from its lists, and the
+     * page was opened from that Space. Categories this content already belongs to stay
+     * listed, otherwise they could not be unchecked here.
+     */
+    private val pickerSpaceId = spaceBrowseScope.currentSpaceId
+    private val showAllPickerCategories = MutableStateFlow(false)
+    private val pickerHiddenCategoryIds: Flow<Set<Long>> = pickerSpaceId?.let {
+        categoryDisplayPreferences.observeHiddenCategoryIds(it)
+    } ?: flowOf(emptySet())
+
+    val allCategories: StateFlow<List<FavouriteCategory>> = combine(
+        favouritesRepository.observeCategories(),
+        pickerHiddenCategoryIds,
+        showAllPickerCategories,
+        favouriteCategories,
+    ) { categories, hiddenIds, showAll, members ->
+        filterCategoriesForSpace(
+            categories = categories,
+            hiddenIds = if (showAll) emptySet() else hiddenIds,
+            keepIds = members.mapTo(mutableSetOf()) { it.id },
+        )
+    }.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Lazily, emptyList())
+
+    /** Whether the picker leaves categories out, i.e. whether "show all" is worth offering. */
+    val hasHiddenCategories: StateFlow<Boolean> = combine(
+        favouritesRepository.observeCategories(),
+        pickerHiddenCategoryIds,
+        showAllPickerCategories,
+    ) { categories, hiddenIds, showAll ->
+        !showAll && categories.any { it.id in hiddenIds }
+    }.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Lazily, false)
+
+    fun setShowAllCategories(showAll: Boolean) {
+        showAllPickerCategories.value = showAll
+    }
 
     fun setFavouriteCategory(categoryId: Long, isChecked: Boolean) {
         launchJob(Dispatchers.Default) {
@@ -3964,6 +4019,7 @@ class DetailsViewModel @Inject constructor(
             "Scrobbling info for manga $mangaId not found after linking target ${item.remoteId} " +
                 "(${item.service.name}, mediaType=${contentType.toScrobblerMediaType()})"
         }
+        if (scrobbler.preservesRemoteStateOnBinding) return
         val history = historyRepository.getOne(manga)
         scrobbler.updateScrobblingInfo(
             mangaId = mangaId,

@@ -14,12 +14,10 @@ import okio.Path.Companion.toPath
 import okio.Buffer
 import okio.FileSystem
 import okio.openZip
+import org.skepsun.kototoro.core.util.ContentZipArchive
 import org.skepsun.kototoro.core.util.MimeTypes
 import org.skepsun.kototoro.core.util.ext.isZipUri
 import org.skepsun.kototoro.core.util.ext.isContentZipUri
-import org.skepsun.kototoro.core.util.ext.toUnderlyingZipUri
-import java.io.IOException
-import java.util.zip.ZipInputStream
 import coil3.Uri as CoilUri
 
 class CbzFetcher(
@@ -32,17 +30,7 @@ class CbzFetcher(
         val entryName = requireNotNull(uri.fragment)
         if (uri.isContentZipUri()) {
             val source = Buffer()
-            val input = checkNotNull(contentResolver.openInputStream(uri.toUnderlyingZipUri())) {
-                "Cannot open $uri"
-            }
-            ZipInputStream(input.buffered()).use { zip ->
-                var entry = zip.nextEntry
-                while (entry != null && entry.name != entryName) {
-                    entry = zip.nextEntry
-                }
-                if (entry == null) throw IOException("ZIP entry not found: $entryName")
-                source.write(zip.readBytes())
-            }
+            ContentZipArchive.withEntry(contentResolver, uri) { input -> source.readFrom(input) }
             return@runInterruptible SourceFetchResult(
                 source = ImageSource(source, FileSystem.SYSTEM),
                 mimeType = MimeTypes.getMimeTypeFromExtension(entryName)?.toString(),

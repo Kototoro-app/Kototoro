@@ -6,7 +6,8 @@ import androidx.annotation.Keep
 import androidx.annotation.StringRes
 import org.skepsun.kototoro.R
 
-const val MAX_MAIN_NAV_ITEM_COUNT = 5
+/** Mirrors the shared [MainNavigationRules.MAX_ITEMS]; the rail and the bottom bar must agree on the cap. */
+const val MAX_MAIN_NAV_ITEM_COUNT = MainNavigationRules.MAX_ITEMS
 
 /**
  * Default main navigation buttons: Home, History, Favourites, Browse and
@@ -31,8 +32,7 @@ internal val migratedLegacyThreeNavItems = listOf(
     NavItem.EXPLORE,
 )
 
-internal fun Iterable<NavItem>.limitMainNavigationItems(): List<NavItem> =
-    distinct().take(MAX_MAIN_NAV_ITEM_COUNT)
+internal fun Iterable<NavItem>.limitMainNavigationItems(): List<NavItem> = MainNavigationRules.limit(this)
 
 @Keep
 enum class NavItem(

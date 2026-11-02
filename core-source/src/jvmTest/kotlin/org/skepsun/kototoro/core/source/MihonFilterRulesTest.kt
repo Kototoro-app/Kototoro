@@ -4,6 +4,36 @@ import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 
 class MihonFilterRulesTest {
+    @Test
+    fun `MangaK style controls retain separate exclusive choices and visible text inputs`() {
+        val choices = listOf("Sort by", "Content rating", "Status", "Type", "Demographics").map { name ->
+            SourceFilterNode(name, name, SourceFilterKind.SELECT, SourceFilterValue.Choice(0),
+                listOf("Any", "First", "Second"))
+        }
+        val inputs = listOf("Author", "Min chapters").map { name ->
+            SourceFilterNode(name, name, SourceFilterKind.TEXT, SourceFilterValue.Text(""))
+        }
+        val genres = SourceFilterNode("genres", "Genres", SourceFilterKind.GROUP, children = (1..30).map {
+            SourceFilterNode("genre$it", "Genre $it", SourceFilterKind.TRISTATE,
+                SourceFilterValue.TriState(SourceTriState.IGNORE))
+        })
+        val options = MihonFilterRules.options(choices + inputs + genres, source)
+        assertEquals(choices.map { it.name } + inputs.map { it.name } + "Genres", options.tagGroups.map { it.title })
+        assertTrue(options.tagGroups.take(choices.size).all { it.isExclusive })
+        assertTrue(options.tagGroups.drop(choices.size).none { it.isExclusive })
+        assertEquals(setOf("text:top:Author", "text:top:Min chapters"),
+            options.tagGroups.filter { it.title in inputs.map { input -> input.name } }
+                .flatMap { it.tags }.map { it.key }.toSet())
+        val selected = setOf("top:Status/Second", "top:Type/First", "text:top:Author=Writer",
+            "text:top:Min chapters=25", "Genres/Genre 1")
+        val applied = MihonFilterRules.changes(choices + inputs + genres, selected, emptySet(), strict = true)
+            .associate { it.id to it.value }
+        assertEquals(SourceFilterValue.Choice(2), applied["Status"])
+        assertEquals(SourceFilterValue.Choice(1), applied["Type"])
+        assertEquals(SourceFilterValue.Text("Writer"), applied["Author"])
+        assertEquals(SourceFilterValue.Text("25"), applied["Min chapters"])
+    }
+
     private val source = SourceRef("MIHON_42", "zh", "MANGA")
     private val toggle = SourceFilterNode("toggle", "Flag", SourceFilterKind.CHECKBOX, SourceFilterValue.Toggle(true))
     private val tri = SourceFilterNode("tri", "Genre", SourceFilterKind.TRISTATE,
@@ -32,10 +62,29 @@ class MihonFilterRulesTest {
             SourceFilterNode("h2", "General", SourceFilterKind.HEADER), text,
             SourceFilterNode("sep", "", SourceFilterKind.SEPARATOR))
         val options = MihonFilterRules.options(tree, source)
-        assertEquals(listOf("General", "Group - Choice", "Group - Order", "Group"), options.tagGroups.map { it.title })
+        assertEquals(listOf("General", "Group - Choice", "Group - Order", "Group", "Author"),
+            options.tagGroups.map { it.title })
         assertEquals(setOf("top:Flag", "Group/Choice/爱情", "Group/Choice/Second", "sort:Group/Order/Name",
-            "sort:Group/Order/Date", "Group/Genre", "text:top:Author"), options.availableTags.map { it.key }.toSet())
+            "sort:Group/Order/Date", "sort-desc:Group/Order/Name", "sort-desc:Group/Order/Date",
+            "Group/Genre", "text:top:Author"), options.availableTags.map { it.key }.toSet())
         assertFalse(options.availableTags.any { it.title == "key=fragment)" })
+    }
+
+    @Test
+    fun `projected sort choices round trip both directions without changing legacy keys`() {
+        for (initial in listOf(null, SourceFilterValue.Sort(0, true), SourceFilterValue.Sort(0, false))) {
+            val node = sort.copy(state = initial)
+            val group = MihonFilterRules.options(listOf(node), source).tagGroups.single()
+            assertTrue(group.isExclusive)
+            assertEquals(4, group.tags.size)
+            assertTrue(group.tags.any { it.key == "sort:top:Order/Date" })
+            for (tag in group.tags) {
+                val applied = MihonFilterRules.changes(listOf(node), setOf(tag.key), emptySet(), strict = true)
+                    .single().value as SourceFilterValue.Sort
+                assertEquals(if (tag.title.startsWith("Name")) 0 else 1, applied.index)
+                assertEquals(tag.title.endsWith("↑"), applied.ascending)
+            }
+        }
     }
 
     @Test

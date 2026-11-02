@@ -12,6 +12,9 @@ data class TabletPreviewData(
     val chapterCountText: String?,
     val statusLabel: String?,
     val chapterSections: List<TabletPreviewSection>,
+    /** More than one shows Android's branch switch above the chapters (see [tabletPreviewBranches]). */
+    val branches: List<String> = emptyList(),
+    val selectedBranch: String? = null,
 )
 
 data class TabletPreviewSection(
@@ -29,6 +32,8 @@ data class TabletPreviewLabels(
     val addToFavorites: String,
     val unavailable: String,
     val retry: String,
+    /** Android's incognito entry: hosts that offer the session-only read pass a label, the others leave it null. */
+    val incognito: String? = null,
 )
 
 enum class TabletPreviewIcon { CLOSE, PLAY, FAVOURITE, RATING }

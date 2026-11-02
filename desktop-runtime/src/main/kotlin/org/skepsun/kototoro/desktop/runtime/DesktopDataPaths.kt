@@ -10,6 +10,15 @@ class DesktopDataPaths private constructor(val root: Path) {
     val images: Path = root.resolve("images")
     val preferences: Path = root.resolve("preferences")
 
+    /** The bounded source diagnostics; the storage page counts it as its own slice. */
+    val logs: Path = root.resolve("logs")
+
+    /** Android's `getAppBackupDir`: the periodical local backups, named like the phone writes them. */
+    val backups: Path = root.resolve("backups")
+
+    /** Source site icons, fetched once per source the way Android's `favicon_cache` does. */
+    val favicons: Path = root.resolve("favicons")
+
     companion object {
         /** Pure selection, with injectable environment/home for tests; does not create directories. */
         fun defaultRoot(
@@ -19,7 +28,11 @@ class DesktopDataPaths private constructor(val root: Path) {
         ): Path {
             val home = Path.of(userHome)
             require(home.isAbsolute) { "User home must be absolute" }
-            if (!osName.startsWith("Windows", ignoreCase = true)) return home.resolve(".kototoro")
+            when (DesktopPlatform.detect(osName)) {
+                DesktopPlatform.MACOS -> return home.resolve("Library/Application Support/Kototoro")
+                DesktopPlatform.WINDOWS -> Unit
+                else -> return home.resolve(".kototoro")
+            }
             val configured = environment["LOCALAPPDATA"]?.takeIf(String::isNotBlank)
             val local = configured?.let(Path::of) ?: home.resolve("AppData").resolve("Local")
             require(local.isAbsolute) { "LOCALAPPDATA must be absolute" }

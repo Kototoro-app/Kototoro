@@ -28,7 +28,7 @@ internal object DesktopTileDecoder {
         require(spec.estimatedBytes <= 2L * 1024 * 1024) { "Tile exceeds decode budget" }
         FileImageInputStream(path.toFile()).use { input ->
             val reader = ImageIO.getImageReaders(input).asSequence().firstOrNull()
-                ?: error("图片格式暂不支持区域解码")
+                ?: error(desktopText("error.tileDecodeUnsupported"))
             var result: BufferedImage? = null
             try {
                 reader.input = input

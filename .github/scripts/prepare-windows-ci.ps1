@@ -19,8 +19,12 @@ function Get-Download([string] $Url, [string] $Destination, [string] $Sha256 = "
     if (!(Test-Path -LiteralPath "$Destination") -or !$Sha256 -or
         (Get-FileHash -LiteralPath "$Destination" -Algorithm SHA256).Hash -ne $Sha256) {
         if (([uri] $Url).Scheme -ne "https") { throw "Build input downloads require HTTPS." }
+        # Anonymous API calls share the runner IP's 60/hour limit and fail with 403; the job token lifts it.
+        $taskAuth = if (([uri] $Url).Host -eq "api.github.com" -and $env:GITHUB_TOKEN) {
+            @("--header", "Authorization: Bearer $env:GITHUB_TOKEN")
+        } else { @() }
         & curl.exe --fail --location --retry 3 --connect-timeout 20 --max-time 300 --silent --show-error `
-            --output "$Destination" "$Url"
+            @taskAuth --output "$Destination" "$Url"
         if ($LASTEXITCODE -ne 0) { throw "Build input download failed." }
     }
     if ($Sha256 -and (Get-FileHash -LiteralPath "$Destination" -Algorithm SHA256).Hash -ne $Sha256) {
@@ -78,6 +82,17 @@ if ($PSCmdlet.ParameterSetName -eq "Source") {
         throw "Upstream build timestamp expression changed."
     }
     [IO.File]::WriteAllText($taskServerBuildFile, $taskServerBuild.Replace($taskTimeExpression, '"1790898154"'),
+        [Text.UTF8Encoding]::new($false))
+    # The android-jar stubs are served from a moving branch that republishes 1.0.0 in place (6830765 removed
+    # android.net.Network*, which the pinned source still needs); this revision holds the pinned android-jar-1.0.0.jar.
+    $taskRootBuildFile = Join-Path "$taskSourceRoot" "build.gradle.kts"
+    $taskRootBuild = [IO.File]::ReadAllText($taskRootBuildFile)
+    $taskStubsRepository = 'https://github.com/Suwayomi/Suwayomi-Server/raw/android-jar/"'
+    if ($taskRootBuild.Split(@($taskStubsRepository), [StringSplitOptions]::None).Count -ne 2) {
+        throw "Upstream android-jar repository changed."
+    }
+    [IO.File]::WriteAllText($taskRootBuildFile, $taskRootBuild.Replace($taskStubsRepository,
+        'https://github.com/Suwayomi/Suwayomi-Server/raw/3983289d9481a8ba99c0b16350b27f41364906a2/"'),
         [Text.UTF8Encoding]::new($false))
     $taskRuntimeRoot = Join-Path "$taskSourceRoot" "runtime-output"
     $taskPreviousJavaHome = $env:JAVA_HOME

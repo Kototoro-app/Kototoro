@@ -37,6 +37,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.tooling.preview.Preview
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 
 /** Maps the XML toolbar and full-width MaterialSwitch to the Compose configuration surface. */
@@ -60,7 +61,7 @@ internal fun RecentWidgetConfigScreen(
                 ),
                 title = { Text(stringResource(R.string.recent_manga)) },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateUp) {
+                    IconButton(onClick = onNavigateUp, modifier = Modifier.tvIconButtonRing()) {
                         Icon(
                             imageVector = Icons.Default.Close,
                             contentDescription = stringResource(R.string.close),

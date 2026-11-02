@@ -56,8 +56,10 @@ import org.skepsun.kototoro.bookmarks.domain.extractNovelBookmarkPreview
 import org.skepsun.kototoro.core.model.getContentType
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.nav.ReaderIntent
+import org.skepsun.kototoro.core.ui.adaptive.tvChipRing
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.util.ext.findActivity
-import org.skepsun.kototoro.core.util.ext.toFileNameSafe
+import org.skepsun.kototoro.core.util.ext.toExportFileName
 import org.skepsun.kototoro.details.ui.DetailsViewModel
 import org.skepsun.kototoro.details.ui.compose.state.DetailsPaneState
 import org.skepsun.kototoro.details.ui.compose.state.rememberDetailsPaneNestedScrollConnection
@@ -260,6 +262,7 @@ private fun NovelNotesTabContent(
                     label = { Text(stringResource(R.string.book_notes_filter_all, notes.size), fontSize = 12.sp) },
                     shape = RoundedCornerShape(8.dp),
                     colors = FilterChipDefaults.filterChipColors(),
+                    modifier = Modifier.tvChipRing(RoundedCornerShape(8.dp)),
                 )
                 FilterChip(
                     selected = selectedFilter == NoteType.HIGHLIGHT,
@@ -269,6 +272,7 @@ private fun NovelNotesTabContent(
                     },
                     shape = RoundedCornerShape(8.dp),
                     colors = FilterChipDefaults.filterChipColors(),
+                    modifier = Modifier.tvChipRing(RoundedCornerShape(8.dp)),
                 )
                 FilterChip(
                     selected = selectedFilter == NoteType.THOUGHT,
@@ -278,6 +282,7 @@ private fun NovelNotesTabContent(
                     },
                     shape = RoundedCornerShape(8.dp),
                     colors = FilterChipDefaults.filterChipColors(),
+                    modifier = Modifier.tvChipRing(RoundedCornerShape(8.dp)),
                 )
                 FilterChip(
                     selected = selectedFilter == NoteType.BOOKMARK,
@@ -287,6 +292,7 @@ private fun NovelNotesTabContent(
                     },
                     shape = RoundedCornerShape(8.dp),
                     colors = FilterChipDefaults.filterChipColors(),
+                    modifier = Modifier.tvChipRing(RoundedCornerShape(8.dp)),
                 )
             }
 
@@ -295,7 +301,7 @@ private fun NovelNotesTabContent(
                     searchVisible = !searchVisible
                     if (!searchVisible) searchQuery = ""
                 },
-                modifier = Modifier.size(32.dp),
+                modifier = Modifier.size(32.dp).tvIconButtonRing(),
             ) {
                 Icon(
                     imageVector = Icons.Default.Search,
@@ -308,7 +314,7 @@ private fun NovelNotesTabContent(
             if (notes.isNotEmpty()) {
                 IconButton(
                     onClick = { exportSheetVisible = true },
-                    modifier = Modifier.size(32.dp),
+                    modifier = Modifier.size(32.dp).tvIconButtonRing(),
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.ic_share),
@@ -334,7 +340,7 @@ private fun NovelNotesTabContent(
                 shape = RoundedCornerShape(12.dp),
                 trailingIcon = {
                     if (searchQuery.isNotEmpty()) {
-                        IconButton(onClick = { searchQuery = "" }) {
+                        IconButton(onClick = { searchQuery = "" }, modifier = Modifier.tvIconButtonRing()) {
                             Icon(
                                 imageVector = Icons.Default.Close,
                                 contentDescription = stringResource(R.string.clear),
@@ -482,7 +488,7 @@ private fun NovelNotesTabContent(
                                         item.page + 1,
                                     )
                                     is BookNoteItem.VideoNote -> {
-                                        val time = org.skepsun.kototoro.video.ui.compose.formatDuration(item.positionMs)
+                                        val time = org.skepsun.kototoro.video.ui.compose.formatPlaybackTime(item.positionMs)
                                         val quote = item.quoteText?.let { "\n${context.getString(R.string.book_notes_quote_prefix, it)}" }.orEmpty()
                                         val note = item.note?.let { "$it\n" }.orEmpty()
                                         "${note}${item.chapterTitle} $time$quote"
@@ -525,7 +531,7 @@ private fun NovelNotesTabContent(
                 BookNotesExportHelper.shareMarkdownFile(context, manga, notes)
             },
             onSaveMarkdown = {
-                val safeTitle = manga.title.toFileNameSafe().ifBlank { "book" }.take(50)
+                val safeTitle = manga.title.toExportFileName(maxLength = 50)
                 createDocumentLauncher.launch(
                     context.getString(R.string.book_notes_export_filename, safeTitle),
                 )

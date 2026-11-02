@@ -3,6 +3,7 @@ package org.skepsun.kototoro.readingrecord.data
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.Query
+import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
 data class ReadingChapterAggregateEntity(
@@ -29,6 +30,15 @@ abstract class ReadingRecordDao {
 
     @Query("SELECT * FROM reading_sessions WHERE end_at >= :fromDate ORDER BY start_at")
     abstract suspend fun findSessionsSince(fromDate: Long): List<ReadingRecordEntity>
+
+    @Query("SELECT * FROM reading_sessions WHERE start_at < :until AND end_at > :from ORDER BY start_at")
+    abstract suspend fun findOverlapping(from: Long, until: Long): List<ReadingRecordEntity>
+
+    @Query("SELECT * FROM reading_sessions WHERE manga_id = :mangaId AND start_at = :startAt LIMIT 1")
+    abstract suspend fun findAtStart(mangaId: Long, startAt: Long): ReadingRecordEntity?
+
+    @Update
+    abstract suspend fun updateSession(entity: ReadingRecordEntity)
 
     @Query(
         """

@@ -7,6 +7,7 @@ import com.google.android.material.snackbar.Snackbar
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
 import org.skepsun.kototoro.core.util.ext.isSerializable
+import org.skepsun.kototoro.core.util.ext.makeSnackbar
 import org.skepsun.kototoro.main.ui.owners.BottomSheetOwner
 import org.skepsun.kototoro.parsers.exception.ParseException
 
@@ -23,7 +24,7 @@ class SnackbarErrorObserver(
     override suspend fun emit(value: Throwable) {
         val message = value.getDisplayMessage(host.context.resources)
         val snackbar = try {
-            Snackbar.make(host, message, Snackbar.LENGTH_SHORT)
+            host.makeSnackbar(message, Snackbar.LENGTH_SHORT)
         } catch (_: RuntimeException) {
             Toast.makeText(host.context, message, Toast.LENGTH_SHORT).show()
             return

@@ -26,12 +26,15 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
@@ -39,6 +42,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.compose.ImmersiveEdgeGradient
 import org.skepsun.kototoro.core.ui.compose.toTransparentImmersiveColor
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderChapterTitleChip
@@ -108,6 +112,9 @@ fun novelChromeColorScheme(base: ColorScheme, colors: NovelReaderChromeColors): 
     onPrimary = colors.background,
 )
 
+/** Frames to wait for the sliding chrome to be placed before the remote focus gives up. */
+private const val ChromeFocusAttempts = 20
+
 fun shouldShowNovelTopChapterTitle(controlsVisible: Boolean, chapterTitleAtBottom: Boolean): Boolean =
     controlsVisible && !chapterTitleAtBottom
 
@@ -121,6 +128,17 @@ fun NovelReaderTopChromeContent(
     animationsEnabled: Boolean = true,
 ) {
     val topHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + NovelReaderChromeLayout.TopHeight
+    val isTv = LocalUiPresentationConfig.current.isTv
+    val backFocusRequester = remember { FocusRequester() }
+    LaunchedEffect(state.controlsVisible, isTv) {
+        if (!isTv || !state.controlsVisible) return@LaunchedEffect
+        // The bar slides in, so the remote can only land on it once it is placed; retry briefly
+        // instead of dropping the key presses into dead space.
+        repeat(ChromeFocusAttempts) {
+            if (runCatching { backFocusRequester.requestFocus() }.isSuccess) return@LaunchedEffect
+            withFrameNanos { }
+        }
+    }
     AnimatedVisibility(
         visible = state.controlsVisible,
         enter = slideInVertically { -it }.withReaderChromeAnimations(animationsEnabled),
@@ -149,6 +167,7 @@ fun NovelReaderTopChromeContent(
                 onNavigateBack = actions.onBack,
                 onChapters = actions.onChapters,
                 onOptions = actions.onOptions,
+                backFocusRequester = backFocusRequester.takeIf { isTv },
                 contentColor = colors.content,
             )
         }

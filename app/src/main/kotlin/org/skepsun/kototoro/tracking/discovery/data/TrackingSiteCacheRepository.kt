@@ -20,6 +20,7 @@ import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteItem
 import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteItemDetails
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.math.roundToInt
 
 @Singleton
 class TrackingSiteCacheRepository @Inject constructor(
@@ -96,10 +97,14 @@ class TrackingSiteCacheRepository @Inject constructor(
     }
 
     suspend fun readDetails(service: ScrobblerService, remoteId: Long): TrackingSiteItemDetails? = withContext(Dispatchers.Default) {
+        val payload = readPersistedDetailsPayload(service, remoteId)
+        // Older MangaBaka details used a 0–1 score. Refetch instead of guessing from its magnitude:
+        // legitimate low ratings can also be below 1 on the current 0–10 scale.
+        if (!isCurrentDetailsScore(service, payload)) return@withContext null
         db.getTrackingSiteDao()
             .findItem(service.id, remoteId)
             ?.toTrackingDetails()
-            ?.mergeRichPayload(readPersistedDetailsPayload(service, remoteId))
+            ?.mergeRichPayload(payload)
     }
 
     suspend fun readDetailsSummaries(
@@ -113,7 +118,11 @@ class TrackingSiteCacheRepository @Inject constructor(
             .groupBy(keySelector = Pair<Int, Long>::first, valueTransform = Pair<Int, Long>::second)
             .flatMap { (serviceId, remoteIds) ->
                 if (servicesById[serviceId] == null) return@flatMap emptyList()
-                db.getTrackingSiteDao().findItems(serviceId, remoteIds).map { entity ->
+                db.getTrackingSiteDao().findItems(serviceId, remoteIds).mapNotNull { entity ->
+                    val service = servicesById.getValue(serviceId)
+                    if (!isCurrentDetailsScore(service, readPersistedDetailsPayload(service, entity.remoteId))) {
+                        return@mapNotNull null
+                    }
                     (serviceId to entity.remoteId) to entity.toTrackingDetails()
                 }
             }
@@ -208,7 +217,9 @@ class TrackingSiteCacheRepository @Inject constructor(
             primaryTitle = existing?.primaryTitle,
             secondaryTitle = existing?.secondaryTitle,
             rating = details.score ?: existing?.rating,
-            scoreMax = existing?.scoreMax,
+            scoreMax = if (details.service == ScrobblerService.MANGABAKA && details.score != null) {
+                10f
+            } else existing?.scoreMax,
             rank = details.rank ?: existing?.rank,
             summary = details.description ?: existing?.summary,
             progressText = existing?.progressText,
@@ -266,7 +277,9 @@ class TrackingSiteCacheRepository @Inject constructor(
             altTitle = decodeStringList(altTitles).firstOrNull(),
             coverUrl = coverUrl,
             description = summary,
-            score = rating,
+            score = if (service == ScrobblerService.MANGABAKA.id) {
+                rating?.let { value -> (value * 100f / (scoreMax?.takeIf { it > 0f } ?: 10f)).roundToInt() / 10f }
+            } else rating,
             rank = rank,
             tags = decodeStringList(tags),
             authors = decodeStringList(authors),
@@ -357,6 +370,10 @@ class TrackingSiteCacheRepository @Inject constructor(
         val raw = prefs.getString(detailsPayloadKey(service, remoteId), null)?.takeIf { it.isNotBlank() } ?: return null
         return runCatching { JSONObject(raw) }.getOrNull()
     }
+
+    private fun isCurrentDetailsScore(service: ScrobblerService, payload: JSONObject?): Boolean =
+        service != ScrobblerService.MANGABAKA ||
+            (payload?.optInt("scoreScale") == 10 && payload.optInt("scoreVersion") == 1)
 
     private fun persistEntityDetailsPayload(
         service: ScrobblerService,
@@ -718,6 +735,10 @@ class TrackingSiteCacheRepository @Inject constructor(
 
     private fun TrackingSiteItemDetails.toPersistedPayload(): JSONObject {
         return JSONObject().apply {
+            if (service == ScrobblerService.MANGABAKA) {
+                put("scoreScale", 10)
+                put("scoreVersion", 1)
+            }
             put("service", service.id)
             put("remoteId", remoteId)
             put("title", title)

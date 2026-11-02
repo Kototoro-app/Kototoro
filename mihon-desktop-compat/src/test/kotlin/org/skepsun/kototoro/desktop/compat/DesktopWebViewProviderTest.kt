@@ -14,7 +14,7 @@ class DesktopWebViewProviderTest {
     @Test
     fun `actual platform WebView preserves requests cookies main callbacks ordering errors and stop recovery`() {
         val log = Files.createDirectories(Path.of("build/reports/browser-provider")).resolve("provider.log")
-        val process = ProcessBuilder(Path.of(System.getProperty("java.home"), "bin/java.exe").toString(),
+        val process = ProcessBuilder(currentJavaExecutable(),
             "-Dstdout.encoding=UTF-8", "-Dstderr.encoding=UTF-8", "-cp", System.getProperty("kototoro.compat.test.classpath"),
             DesktopWebViewProviderProbe::class.java.name, directory.resolve("中文 provider space").toString(),
             System.getProperty("kototoro.compat.bridge.exe"))

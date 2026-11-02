@@ -3,6 +3,8 @@ package org.skepsun.kototoro.core.util.ext
 import android.content.res.Resources
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.model.DateTimeAgo
+import org.skepsun.kototoro.history.domain.HistoryDateGroup
+import org.skepsun.kototoro.history.domain.historyDateGroup
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -13,51 +15,24 @@ import java.util.concurrent.TimeUnit
 fun calculateTimeAgo(instant: Instant, showMonths: Boolean = false): DateTimeAgo? {
     val localDate = LocalDateTime.ofInstant(instant, ZoneId.systemDefault()).toLocalDate()
     val now = LocalDate.now()
-    val diffDays = localDate.until(now, ChronoUnit.DAYS)
-
-    return when {
-        diffDays < 0 -> null // in future, probably a bug, not supported
-        diffDays == 0L -> {
-            if (instant.until(Instant.now(), ChronoUnit.MINUTES) < 3) DateTimeAgo.JustNow
-            else DateTimeAgo.Today
-        }
-
-        diffDays == 1L -> DateTimeAgo.Yesterday
-        diffDays < 6 -> DateTimeAgo.DaysAgo(diffDays.toInt())
-        else -> {
+    // The day buckets are shared with the desktop history (core-domain); only the month buckets stay here.
+    val group = historyDateGroup(localDate.toEpochDay(), now.toEpochDay(),
+        instant.until(Instant.now(), ChronoUnit.MINUTES)) ?: return null
+    return when (group) {
+        HistoryDateGroup.JustNow -> DateTimeAgo.JustNow
+        HistoryDateGroup.Today -> DateTimeAgo.Today
+        HistoryDateGroup.Yesterday -> DateTimeAgo.Yesterday
+        is HistoryDateGroup.DaysAgo -> DateTimeAgo.DaysAgo(group.days)
+        is HistoryDateGroup.Absolute -> {
             val diffMonths = localDate.until(now, ChronoUnit.MONTHS)
-            if (showMonths && diffMonths <= 6) {
-                DateTimeAgo.MonthsAgo(diffMonths.toInt())
-            } else {
-                DateTimeAgo.Absolute(localDate)
-            }
+            if (showMonths && diffMonths <= 6) DateTimeAgo.MonthsAgo(diffMonths.toInt())
+            else DateTimeAgo.Absolute(localDate)
         }
     }
 }
 
-fun calculateDateGroup(instant: Instant, showMonths: Boolean = false): DateTimeAgo? {
-    val localDate = LocalDateTime.ofInstant(instant, ZoneId.systemDefault()).toLocalDate()
-    val now = LocalDate.now()
-    val diffDays = localDate.until(now, ChronoUnit.DAYS)
-
-    return when {
-        diffDays < 0 -> null
-        diffDays == 0L -> {
-            if (instant.until(Instant.now(), ChronoUnit.MINUTES) < 3) DateTimeAgo.JustNow
-            else DateTimeAgo.Today
-        }
-        diffDays == 1L -> DateTimeAgo.Yesterday
-        diffDays < 6 -> DateTimeAgo.DaysAgo(diffDays.toInt())
-        else -> {
-            val diffMonths = localDate.until(now, ChronoUnit.MONTHS)
-            if (showMonths && diffMonths <= 6) {
-                DateTimeAgo.MonthsAgo(diffMonths.toInt())
-            } else {
-                DateTimeAgo.Absolute(localDate)
-            }
-        }
-    }
-}
+fun calculateDateGroup(instant: Instant, showMonths: Boolean = false): DateTimeAgo? =
+    calculateTimeAgo(instant, showMonths)
 
 fun <T> List<T>.groupByDateBucket(
     instantOf: (T) -> Instant?,

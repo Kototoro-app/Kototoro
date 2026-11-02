@@ -3,6 +3,17 @@ import XCTest
 
 @MainActor
 final class ReaderStorageTests: XCTestCase {
+    func testAutomaticCacheScanWaitsForItsIntervalAndHonorsBudgetChanges() {
+        var schedule = ReaderCacheTrimSchedule()
+        let now = ContinuousClock().now
+        XCTAssertFalse(schedule.isDue(at: now, budget: 0))
+        XCTAssertTrue(schedule.isDue(at: now, budget: 512))
+        schedule.recordAttempt(at: now, budget: 512)
+        XCTAssertFalse(schedule.isDue(at: now.advanced(by: .seconds(59)), budget: 512))
+        XCTAssertTrue(schedule.isDue(at: now.advanced(by: .seconds(60)), budget: 512))
+        XCTAssertTrue(schedule.isDue(at: now.advanced(by: .seconds(1)), budget: 256))
+    }
+
     private struct Fixture {
         let root: URL
         let downloads: URL
@@ -153,7 +164,7 @@ final class ReaderStorageTests: XCTestCase {
         let chapter = try await completed(fixture, request: request)
         let location = fixture.root.appendingPathComponent("queue.json")
         let queue = ReaderDownloadQueue(file: location)
-        try queue.enqueue([request])
+        try await queue.enqueue([request])
         try FileManager.default.removeItem(at: location)
         try FileManager.default.createDirectory(at: location, withIntermediateDirectories: true)
         let token = try await fixture.store.stageRemoval(request.storageMetadata.directoryID)
@@ -180,7 +191,7 @@ final class ReaderStorageTests: XCTestCase {
         let other = try await completed(fixture, request: second)
         let location = fixture.root.appendingPathComponent("queue.json")
         let queue = ReaderDownloadQueue(file: location)
-        try queue.enqueue([first, second])
+        try await queue.enqueue([first, second])
         try await queue.withStorageMaintenance {
             let token = try await fixture.store.stageRemoval(first.storageMetadata.directoryID)
             let staged = try XCTUnwrap(token)
@@ -188,7 +199,9 @@ final class ReaderStorageTests: XCTestCase {
                 try await fixture.store.commitRemoval(staged)
             }
         }
-        XCTAssertEqual(ReaderDownloadQueue(file: location).entries.map(\.request), [second])
+        let reopened = ReaderDownloadQueue(file: location)
+        await reopened.prepare()
+        XCTAssertEqual(reopened.entries.map(\.request), [second])
         XCTAssertFalse(FileManager.default.fileExists(atPath: chapter.path))
         XCTAssertTrue(FileManager.default.fileExists(atPath: other.appendingPathComponent("page.img").path))
     }
@@ -221,10 +234,10 @@ final class ReaderStorageTests: XCTestCase {
         let request = request()
         var unfinished: CheckedContinuation<Void, Never>?
         queue.attach { _, _ in await withCheckedContinuation { unfinished = $0 } }
-        try queue.enqueue([request])
+        try await queue.enqueue([request])
         for _ in 0..<200 where unfinished == nil { try await Task.sleep(for: .milliseconds(10)) }
         XCTAssertNotNil(unfinished)
-        try queue.remove(request.id)
+        try await queue.remove(request.id)
         XCTAssertTrue(queue.entries.isEmpty)
         do {
             try await queue.withStorageMaintenance { try await fixture.store.clearCaches() }
@@ -252,7 +265,7 @@ final class ReaderStorageTests: XCTestCase {
                                           chapterID: "9223372036854775807", title: "小说", chapterTitle: "正文",
                                           payload: "opaque novel context", mediaKind: "NOVEL")
         let queue = ReaderDownloadQueue(file: fixture.root.appendingPathComponent("queue.json"))
-        try queue.enqueue([novel])
+        try await queue.enqueue([novel])
         try await fixture.store.record(novel.storageMetadata)
         let folder = fixture.downloads.appendingPathComponent(novel.storageMetadata.directoryID)
         try Data("chapter text".utf8).write(to: folder.appendingPathComponent("text.json"))
@@ -260,7 +273,7 @@ final class ReaderStorageTests: XCTestCase {
             .write(to: folder.appendingPathComponent("novel.json"))
         let illustration = Data("offline illustration".utf8)
         try illustration.write(to: folder.appendingPathComponent("image-fixture"))
-        try queue.remove(novel.id)
+        try await queue.remove(novel.id)
         try await fixture.store.clearCaches()
         let reopened = ReaderStorageStore(downloads: fixture.downloads, caches: [])
         let snapshot = try await reopened.snapshot(known: [])

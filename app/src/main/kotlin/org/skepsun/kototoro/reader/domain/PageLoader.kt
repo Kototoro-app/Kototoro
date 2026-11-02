@@ -32,6 +32,7 @@ import okhttp3.Request
 import okio.source
 import okio.use
 import org.jetbrains.annotations.Blocking
+import org.skepsun.kototoro.core.util.ContentZipArchive
 import org.skepsun.kototoro.core.LocalizedAppContext
 import org.skepsun.kototoro.core.image.BitmapDecoderCompat
 import org.skepsun.kototoro.core.network.CommonHeaders
@@ -61,7 +62,6 @@ import org.skepsun.kototoro.core.util.ext.ramAvailable
 import org.skepsun.kototoro.core.util.ext.toBitmapOrNull
 import org.skepsun.kototoro.core.util.ext.toMimeType
 import org.skepsun.kototoro.core.util.ext.toMimeTypeOrNull
-import org.skepsun.kototoro.core.util.ext.toUnderlyingZipUri
 import org.skepsun.kototoro.core.util.ext.use
 import org.skepsun.kototoro.core.util.ext.withProgress
 import org.skepsun.kototoro.core.util.progress.ProgressDeferred
@@ -80,7 +80,6 @@ import java.io.IOException
 import java.util.LinkedList
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.zip.ZipFile
-import java.util.zip.ZipInputStream
 import javax.inject.Inject
 import kotlin.coroutines.AbstractCoroutineContextElement
 import kotlin.coroutines.CoroutineContext
@@ -240,17 +239,7 @@ class PageLoader @Inject constructor(
         if (uri.isContentZipUri()) {
             val entryName = checkNotNull(uri.fragment) { "ZIP URI has no entry name: $uri" }
             val bytes = runInterruptible(Dispatchers.IO) {
-                val input = checkNotNull(context.contentResolver.openInputStream(uri.toUnderlyingZipUri())) {
-                    "Cannot open $uri"
-                }
-                ZipInputStream(input.buffered()).use { zip ->
-                    var entry = zip.nextEntry
-                    while (entry != null && entry.name != entryName) {
-                        entry = zip.nextEntry
-                    }
-                    checkNotNull(entry) { "ZIP entry not found: $entryName" }
-                    zip.readBytes()
-                }
+                ContentZipArchive.withEntry(context.contentResolver, uri) { it.readBytes() }
             }
             val mimeType = MimeTypes.getMimeTypeFromExtension(entryName)
             if (mimeType?.subtype == "svg+xml") {
@@ -587,15 +576,7 @@ class PageLoader @Inject constructor(
 
     @Blocking
     private fun Uri.findContentZipEntrySize(): Long? = runCatching {
-        val entryName = fragment ?: return@runCatching null
-        val input = context.contentResolver.openInputStream(toUnderlyingZipUri()) ?: return@runCatching null
-        ZipInputStream(input.buffered()).use { zip ->
-            var entry = zip.nextEntry
-            while (entry != null && entry.name != entryName) {
-                entry = zip.nextEntry
-            }
-            entry?.size
-        }
+        ContentZipArchive.entrySize(context.contentResolver, this)
     }.getOrNull()
 
     private class InternalErrorHandler : AbstractCoroutineContextElement(CoroutineExceptionHandler),

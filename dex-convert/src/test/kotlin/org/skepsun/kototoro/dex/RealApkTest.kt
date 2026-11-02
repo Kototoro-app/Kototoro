@@ -16,6 +16,32 @@ import java.util.zip.ZipFile
 class RealApkTest {
     @TempDir lateinit var root: Path
 
+    @Test
+    fun `repository JAR resolves its symbolic launcher resource without APK conversion`() {
+        ZipFile(apk("tachiyomi-en.comix-v1.6.59.jar").toFile()).use { zip ->
+            org.junit.jupiter.api.Assertions.assertArrayEquals(
+                zip.getInputStream(zip.getEntry("res/o-.png")).readAllBytes(), ApkIcon.read(zip),
+            )
+        }
+    }
+
+    @Test
+    fun `converted Comix preserves its APK launcher icon`() {
+        val input = apk("tachiyomi-en.comix-v1.6.59.apk")
+        val converted = root.resolve("comix.jar")
+        ApkExtensionConverter.convert(input, converted)
+        ZipFile(converted.toFile()).use { output ->
+            val icon = output.getEntry("META-INF/kototoro/extension-icon")
+            assertTrue(icon != null, "The converted APK must carry its launcher icon for offline source rows")
+            ZipFile(input.toFile()).use { source ->
+                org.junit.jupiter.api.Assertions.assertArrayEquals(
+                    source.getInputStream(source.getEntry("res/o-.png")).readAllBytes(),
+                    output.getInputStream(icon).readAllBytes(),
+                )
+            }
+        }
+    }
+
     /** Keeps the converted jar for manual inspection (javap) under the module's ignored build directory. */
     private fun keep(converted: Path) {
         val target = Path.of("build/reports/real-apk").also { Files.createDirectories(it) }

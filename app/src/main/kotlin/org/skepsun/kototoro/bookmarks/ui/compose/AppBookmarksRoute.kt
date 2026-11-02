@@ -2,7 +2,6 @@ package org.skepsun.kototoro.bookmarks.ui.compose
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.Icons
 import android.content.Context
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.lazy.grid.*
@@ -28,16 +27,15 @@ import org.skepsun.kototoro.bookmarks.domain.Bookmark
 import org.skepsun.kototoro.bookmarks.ui.AllBookmarksViewModel
 import org.skepsun.kototoro.core.exceptions.resolve.SnackbarErrorObserver
 import org.skepsun.kototoro.core.model.unwrap
-import org.skepsun.kototoro.core.model.getContentType
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.nav.ReaderIntent
 import org.skepsun.kototoro.list.ui.compose.SelectionAction
 import org.skepsun.kototoro.list.ui.model.EmptyState
+import org.skepsun.kototoro.list.ui.compose.ContentCollectionHeader
 import org.skepsun.kototoro.list.ui.model.ListHeader
 import org.skepsun.kototoro.list.ui.model.LoadingState
 import org.skepsun.kototoro.main.ui.compose.ContentSelectionTopBarOverrideState
 import org.skepsun.kototoro.main.ui.compose.TopBarOverrideState
-import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.core.ui.util.ReversibleActionObserver
 import org.skepsun.kototoro.core.ui.compose.compactPosterCardStyle
@@ -141,91 +139,70 @@ fun AppBookmarksRoute(
                     ) { listModel ->
                         when (listModel) {
                             is ListHeader -> {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            val manga = listModel.payload as? Content
-                                            if (manga != null) {
-                                                appRouter.openResolvedDetails(manga, rootView)
-                                            }
+                                // The shared section heading; Android ends it with the chevron into the details.
+                                val manga = listModel.payload as? Content
+                                ContentCollectionHeader(
+                                    title = listModel.getText(LocalContext.current)?.toString().orEmpty(),
+                                    onClick = if (manga != null) {
+                                        { appRouter.openResolvedDetails(manga, rootView) }
+                                    } else {
+                                        null
+                                    },
+                                    verticalPadding = 24.dp,
+                                    trailing = if (listModel.buttonTextRes != 0) {
+                                        {
+                                            Icon(
+                                                imageVector = Icons.Filled.KeyboardArrowRight,
+                                                contentDescription = stringResource(R.string.more),
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            )
                                         }
-                                        .padding(horizontal = 16.dp, vertical = 24.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    val text = listModel.getText(LocalContext.current)
-                                    Text(
-                                        text = text?.toString() ?: "",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        color = MaterialTheme.colorScheme.onBackground
-                                    )
-                                    if (listModel.buttonTextRes != 0) {
-                                        Icon(
-                                            imageVector = androidx.compose.material.icons.Icons.Default.KeyboardArrowRight,
-                                            contentDescription = "More",
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                }
+                                    } else {
+                                        null
+                                    },
+                                )
                             }
                             is Bookmark -> {
                                 val isSelected = listModel.pageId in composeSelectionIds
-                                val source = listModel.manga.source.unwrap()
-                                val contentType = source.getContentType()
-                                val isNovel = contentType == ContentType.NOVEL || contentType == ContentType.HENTAI_NOVEL
-
+                                val toggleSelection: () -> Unit = {
+                                    hapticFeedback.performSelectionHapticFeedback()
+                                    composeSelectionIds = if (isSelected) {
+                                        composeSelectionIds - listModel.pageId
+                                    } else {
+                                        composeSelectionIds + listModel.pageId
+                                    }
+                                }
                                 Box(
                                     modifier = Modifier.fillMaxWidth(),
                                     contentAlignment = Alignment.TopCenter,
                                 ) {
-                                    if (isNovel) {
-                                        KototoroBookmarkCardNovel(
-                                            item = listModel,
-                                            cardStyle = posterStyle,
-                                            isSelected = isSelected,
-                                            onClick = {
-                                                if (composeSelectionIds.isNotEmpty()) {
-                                                    hapticFeedback.performSelectionHapticFeedback()
-                                                    composeSelectionIds = if (isSelected) composeSelectionIds - listModel.pageId else composeSelectionIds + listModel.pageId
-                                                } else {
-                                                    val intent = ReaderIntent.Builder(activity as Context)
-                                                        .bookmark(listModel)
-                                                        .incognito()
-                                                        .build()
-                                                    appRouter.openReader(intent)
-                                                    android.widget.Toast.makeText(activity, R.string.incognito_mode, android.widget.Toast.LENGTH_SHORT).show()
-                                                }
-                                            },
-                                            onLongClick = {
-                                                composeSelectionIds = if (isSelected) composeSelectionIds - listModel.pageId else composeSelectionIds + listModel.pageId
-                                            },
-                                            modifier = Modifier.width(posterStyle.itemWidth),
-                                        )
-                                    } else {
-                                        KototoroBookmarkCardThumb(
-                                            item = listModel,
-                                            cardStyle = posterStyle,
-                                            isSelected = isSelected,
-                                            onClick = {
-                                                if (composeSelectionIds.isNotEmpty()) {
-                                                    hapticFeedback.performSelectionHapticFeedback()
-                                                    composeSelectionIds = if (isSelected) composeSelectionIds - listModel.pageId else composeSelectionIds + listModel.pageId
-                                                } else {
-                                                    val intent = ReaderIntent.Builder(activity as Context)
-                                                        .bookmark(listModel)
-                                                        .incognito()
-                                                        .build()
-                                                    appRouter.openReader(intent)
-                                                    android.widget.Toast.makeText(activity, R.string.incognito_mode, android.widget.Toast.LENGTH_SHORT).show()
-                                                }
-                                            },
-                                            onLongClick = {
-                                                composeSelectionIds = if (isSelected) composeSelectionIds - listModel.pageId else composeSelectionIds + listModel.pageId
-                                            },
-                                            modifier = Modifier.width(posterStyle.itemWidth),
-                                        )
-                                    }
+                                    // The same card the details tab draws: the corner label carries the chapter here,
+                                    // because this page's sections are only grouped per work.
+                                    BookmarkCard(
+                                        bookmark = listModel,
+                                        isSelected = isSelected,
+                                        onClick = {
+                                            if (composeSelectionIds.isNotEmpty()) {
+                                                toggleSelection()
+                                            } else {
+                                                val intent = ReaderIntent.Builder(activity as Context)
+                                                    .bookmark(listModel)
+                                                    .incognito()
+                                                    .build()
+                                                appRouter.openReader(intent)
+                                                android.widget.Toast.makeText(
+                                                    activity,
+                                                    R.string.incognito_mode,
+                                                    android.widget.Toast.LENGTH_SHORT,
+                                                ).show()
+                                            }
+                                        },
+                                        onLongClick = toggleSelection,
+                                        modifier = Modifier.width(posterStyle.itemWidth),
+                                        pageLabel = listModel.chapterTitle.orEmpty().ifBlank {
+                                            stringResource(R.string.bookmark_position, listModel.page + 1)
+                                        },
+                                    )
                                 }
                             }
                             is EmptyState -> {

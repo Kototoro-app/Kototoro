@@ -5,6 +5,9 @@ This is the best entry point for new users. The goal is simple: get the app inst
 > [!IMPORTANT]
 > **Kototoro does not come with any built-in content or media.** It is a reader and player framework only. Users must install third-party extensions, import local files, or configure external source endpoints themselves. The developers are not affiliated with any content providers and assume no responsibility for user-sourced content.
 
+This guide follows the Android app. On Windows or iOS, start with [Windows & iOS](./platforms.md): those preview
+builds install differently and do not have the setup wizard yet.
+
 ## What Kototoro Is Good At
 
 Kototoro is built around these practical strengths:

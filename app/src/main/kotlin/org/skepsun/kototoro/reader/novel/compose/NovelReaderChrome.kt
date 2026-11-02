@@ -13,16 +13,21 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsIgnoringVisibility
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -30,6 +35,9 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.prefs.ReaderControl
 import org.skepsun.kototoro.core.replace.ReplaceRule
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
+import org.skepsun.kototoro.core.ui.compose.TvModalBottomSheet
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.reader.novel.NovelReaderSettings
 import org.skepsun.kototoro.reader.novel.NovelReaderThemePreset
@@ -70,6 +78,7 @@ internal data class NovelReaderChromeCallbacks(
     val onTtsPrevious: () -> Unit = {},
     val onTtsPlayPause: () -> Unit = {},
     val onTtsNext: () -> Unit = {},
+    val onTtsSpeedChange: (Float) -> Unit = {},
     val onTtsVoice: () -> Unit = {},
     val onTtsClose: () -> Unit = {},
 )
@@ -100,17 +109,24 @@ private fun NovelFloatingControlButton(
             R.drawable.ic_bookmark_added
         } else R.drawable.ic_bookmark
         ReaderControl.TRANSLATE -> R.drawable.ic_translate
+        ReaderControl.TTS -> R.drawable.ic_voice_input
         else -> return
     }
     val label = when (control) {
         ReaderControl.BOOKMARK -> if (state.isCurrentPageBookmarked) R.string.bookmark_remove else R.string.bookmark_add
         ReaderControl.TRANSLATE -> R.string.novel_translate
+        ReaderControl.TTS -> R.string.novel_read_aloud
     }
     val onClick = when (control) {
         ReaderControl.BOOKMARK -> callbacks.onBookmark
         ReaderControl.TRANSLATE -> callbacks.onToggleTranslation
+        ReaderControl.TTS -> callbacks.onTts
     }
-    val active = control == ReaderControl.TRANSLATE && state.settings?.isTranslationEnabled == true
+    val active = when (control) {
+        ReaderControl.TRANSLATE -> state.settings?.isTranslationEnabled == true
+        ReaderControl.TTS -> state.ttsState != TtsState.IDLE
+        else -> false
+    }
     ReaderFloatingControlButton(
         icon = painterResource(icon),
         contentDescription = stringResource(label),
@@ -200,7 +216,7 @@ internal fun NovelReaderBottomChrome(
         )
     }
     if (toolsPanelVisible) {
-        ModalBottomSheet(onDismissRequest = callbacks.onDismissTools) {
+        TvModalBottomSheet(onDismissRequest = callbacks.onDismissTools) {
             NovelToolsPanel(state, callbacks)
         }
     }
@@ -266,15 +282,34 @@ private fun NovelToolsPanel(
         }
         if (state.ttsControlsVisible) {
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.42f))
+            // 朗读开始时这个弹层是刚打开的，里面没有任何节点持有焦点：遥控器一按就"没反应"。
+            // 电视上把焦点直接交给播放/暂停键，逐帧重试到节点真正挂上。
+            val isTv = LocalUiPresentationConfig.current.isTv
+            val playPauseFocus = remember { FocusRequester() }
+            LaunchedEffect(isTv) {
+                if (!isTv) return@LaunchedEffect
+                repeat(TtsRowFocusAttempts) {
+                    withFrameNanos { }
+                    if (runCatching { playPauseFocus.requestFocus() }.isSuccess) return@LaunchedEffect
+                }
+            }
             Row(
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                IconButton(onClick = callbacks.onTtsPrevious) {
+                IconButton(
+                    onClick = callbacks.onTtsPrevious,
+                    modifier = Modifier.tvFocusable(shape = CircleShape, addFocusTarget = false),
+                ) {
                     Icon(painterResource(R.drawable.ic_prev), stringResource(R.string.prev_page))
                 }
-                IconButton(onClick = callbacks.onTtsPlayPause) {
+                IconButton(
+                    onClick = callbacks.onTtsPlayPause,
+                    modifier = Modifier
+                        .then(if (isTv) Modifier.focusRequester(playPauseFocus) else Modifier)
+                        .tvFocusable(shape = CircleShape, addFocusTarget = false),
+                ) {
                     Icon(
                         painterResource(
                             if (state.ttsState == TtsState.PLAYING) R.drawable.ic_pause else R.drawable.ic_play,
@@ -282,13 +317,23 @@ private fun NovelToolsPanel(
                         stringResource(if (state.ttsState == TtsState.PLAYING) R.string.pause else R.string.play),
                     )
                 }
-                IconButton(onClick = callbacks.onTtsNext) {
+                IconButton(
+                    onClick = callbacks.onTtsNext,
+                    modifier = Modifier.tvFocusable(shape = CircleShape, addFocusTarget = false),
+                ) {
                     Icon(painterResource(R.drawable.ic_next), stringResource(R.string.next))
                 }
-                IconButton(onClick = callbacks.onTtsVoice) {
+                TtsSpeedButton(state.ttsSpeed, callbacks.onTtsSpeedChange)
+                IconButton(
+                    onClick = callbacks.onTtsVoice,
+                    modifier = Modifier.tvFocusable(shape = CircleShape, addFocusTarget = false),
+                ) {
                     Icon(painterResource(R.drawable.ic_voice_input), stringResource(R.string.tts_settings_title))
                 }
-                IconButton(onClick = callbacks.onTtsClose) {
+                IconButton(
+                    onClick = callbacks.onTtsClose,
+                    modifier = Modifier.tvFocusable(shape = CircleShape, addFocusTarget = false),
+                ) {
                     Icon(painterResource(R.drawable.ic_tts_close), stringResource(R.string.close))
                 }
             }
@@ -306,3 +351,5 @@ private fun RowScope.NovelToolButton(icon: Int, label: Int, onClick: () -> Unit)
         Icon(painterResource(icon), contentDescription = stringResource(label), modifier = Modifier.size(18.dp))
     }
 }
+
+private const val TtsRowFocusAttempts = 20

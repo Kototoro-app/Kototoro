@@ -3,8 +3,8 @@ layout: home
 
 hero:
   name: Kototoro Docs
-  text: One Android app for manga, novels, and video
-  tagline: Setup guides, source integration references, OCR translation notes, sync workflows, and contributor documentation for Kototoro.
+  text: One app for manga, novels, and video
+  tagline: Android first, with Windows and iOS previews. Setup guides, source integration references, OCR translation notes, sync workflows, and contributor documentation for Kototoro.
   image:
     src: /icon.png
     alt: Kototoro
@@ -12,6 +12,9 @@ hero:
     - theme: brand
       text: Get Started
       link: /getting-started
+    - theme: alt
+      text: Windows & iOS
+      link: /platforms
     - theme: alt
       text: Set Up Sources
       link: /source-integrations
@@ -34,6 +37,8 @@ features:
     details: Built-in player with DLNA casting, subtitle and audio track selection, Anime4K / NCNN super-resolution, and seek gestures.
   - title: Reliable WebDAV Sync
     details: Set up free or self-hosted WebDAV storage for multi-device backup and synchronization.
+  - title: Windows & iOS Previews
+    details: A shared Kotlin Multiplatform core runs the same library, backup format, and Mihon / Aniyomi / Tsundoku extensions on Windows and iOS.
   - title: Fast OTA Updates
     details: Save bandwidth with pure-Kotlin bspatch incremental delta updates direct from GitHub Releases.
 ---
@@ -44,6 +49,7 @@ features:
 > **Disclaimer:** Kototoro does not bundle, host, or distribute any content sources, media, or copyrighted material. The application is a generic reader and player framework. All content sources are user-provided through third-party extensions, local file imports, or self-configured endpoints. The developers assume no responsibility for content accessed through user-installed sources.
 
 - Start with [Getting Started](./getting-started.md) if you are new to the project.
+- Read [Windows & iOS](./platforms.md) to install the Windows or iOS preview and see what they support.
 - Read [Source Integrations](./source-integrations.md) if you need Mihon, Aniyomi, IReader, Legado, or TVBox ecosystems.
 - Read [TVBox Runtime Compatibility](./reference/tvbox-runtime.md) if you need the current TVBox support matrix for direct media, CMS, JavaScript, ordinary JAR, and Guard-native sources.
 - Read [Local Import Guide](./local-import.md) to learn how to import CBZ, EPUB, video files and structured folders.
@@ -60,7 +66,7 @@ features:
 
 ## What Makes Kototoro Different
 
-- One Android app for manga, novels, and video
+- One Android app for manga, novels, and video, with Windows and iOS previews on a shared Kotlin Multiplatform core
 - An independent project originally derived from Kotatsu, now a Compose-first multi-format reading/player platform rather than a Kotatsu fork
 - Local OCR + translation directly in the reader
 - Video super-resolution (Anime4K / NCNN), DLNA casting, subtitle and audio track selection

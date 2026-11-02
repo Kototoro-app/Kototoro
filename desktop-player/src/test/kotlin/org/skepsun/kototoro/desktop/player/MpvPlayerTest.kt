@@ -4,6 +4,7 @@ import com.sun.net.httpserver.HttpServer
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assumptions.assumeFalse
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -14,8 +15,9 @@ import java.nio.file.Path
 import java.util.concurrent.CopyOnWriteArrayList
 
 /**
- * Real libmpv without any window or sound device (opt-in: `-PlibmpvDirectory=<dir with libmpv-2.dll>`). Media is made
- * on the spot from ffmpeg's lavfi test source, so nothing binary is committed and no network is used.
+ * Real libmpv without any window (opt-in: `-PlibmpvDirectory=<dir with libmpv>`). Media is written on the spot, so
+ * nothing binary is committed, no network is used and no FFmpeg encoder is needed. Playback is paced by audio
+ * (a video-only file has no clock without a window) and the Anime4K case needs a display for mpv's gpu filter.
  */
 class MpvPlayerTest {
     @TempDir lateinit var directory: Path
@@ -34,29 +36,38 @@ class MpvPlayerTest {
         }
     }
 
-    /** A short MJPEG clip encoded by libmpv itself. */
-    private fun clip(library: Path, seconds: Int): Path {
-        val output = directory.resolve("clip.mkv")
-        MpvPlayer(library, options = mapOf("o" to output.toString(), "ovc" to "mjpeg", "of" to "matroska",
-            "keep-open" to "no", "ao" to "null")).use { encoder ->
-            encoder.load(MpvStream("av://lavfi:testsrc=duration=$seconds:size=160x120:rate=10"))
-            waitFor(message = { "encoding did not finish: ${encoder.state.value}" }) {
-                Files.isRegularFile(output) && encoder.property("idle-active") == "yes"
-            }
-        }
-        assertTrue(Files.size(output) > 1000)
-        return output
+    /**
+     * A short 440 Hz WAV written here rather than by libmpv, whose bundled macOS build has no encoders. The player has
+     * no window and no sound device, so a video-only file has no clock to pace against and mpv sits at 0:00 — audio
+     * (played into a null device) is what keeps playback moving.
+     */
+    private fun audioClip(seconds: Int): Path {
+        val rate = 8000
+        val samples = rate * seconds
+        val buffer = java.nio.ByteBuffer.allocate(44 + samples * 2).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+        buffer.put("RIFF".toByteArray()).putInt(36 + samples * 2).put("WAVEfmt ".toByteArray())
+            .putInt(16).putShort(1).putShort(1).putInt(rate).putInt(rate * 2).putShort(2).putShort(16)
+            .put("data".toByteArray()).putInt(samples * 2)
+        repeat(samples) { buffer.putShort((Math.sin(2 * Math.PI * 440 * it / rate) * 8000).toInt().toShort()) }
+        return Files.write(directory.resolve("clip.wav"), buffer.array())
     }
 
     @Test
     fun `a generated stream loads plays pauses and seeks`() {
-        MpvPlayer(library()).use { player ->
-            player.load(MpvStream("av://lavfi:testsrc=duration=30:size=160x120:rate=25", title = "测试"))
+        val library = library()
+        // Played from a file, not a live lavfi source: that is not seekable, and libmpv 0.37 answers a seek on it by
+        // restarting the demuxer, which lands at the end of the stream.
+        val clip = audioClip(30)
+        MpvPlayer(library).use { player ->
+            player.load(MpvStream(clip.toString(), title = "测试"))
             waitFor(message = { "not loaded: ${player.state.value}" }) { player.state.value.loaded }
             waitFor(message = { "no duration: ${player.state.value}" }) { player.state.value.duration > 29 }
             waitFor(message = { "not playing: ${player.state.value}" }) { player.state.value.position > 0.3 }
             player.setPaused(true)
             waitFor(message = { "not paused" }) { player.state.value.paused }
+            val held = player.state.value.position
+            Thread.sleep(400)
+            assertEquals(held, player.state.value.position, .05, "paused playback kept moving")
             player.seek(20.0)
             waitFor(message = { "seek ignored: ${player.state.value}" }) { player.state.value.position in 19.5..21.0 }
             player.setSpeed(1.5)
@@ -71,16 +82,16 @@ class MpvPlayerTest {
     @Test
     fun `headers reach the server and a start position is honoured`() {
         val library = library()
-        val clip = Files.readAllBytes(clip(library, 6))
+        val clip = Files.readAllBytes(audioClip(6))
         val seen = CopyOnWriteArrayList<String>()
         val server = HttpServer.create(InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0).apply {
-            createContext("/video.mkv") { exchange ->
+            createContext("/clip.wav") { exchange ->
                 seen += "${exchange.requestHeaders.getFirst("Referer")}|${exchange.requestHeaders.getFirst("User-Agent")}"
                 if (exchange.requestHeaders.getFirst("Referer") != "https://site.invalid/") {
                     exchange.sendResponseHeaders(403, -1); exchange.close(); return@createContext
                 }
                 // Range requests are answered with the whole body; mpv copes.
-                exchange.responseHeaders.add("Content-Type", "video/x-matroska")
+                exchange.responseHeaders.add("Content-Type", "audio/wav")
                 exchange.sendResponseHeaders(200, clip.size.toLong())
                 exchange.responseBody.use { it.write(clip) }
             }
@@ -88,7 +99,7 @@ class MpvPlayerTest {
         }
         try {
             MpvPlayer(library).use { player ->
-                val url = "http://127.0.0.1:${server.address.port}/video.mkv"
+                val url = "http://127.0.0.1:${server.address.port}/clip.wav"
                 player.load(MpvStream(url, mapOf("Referer" to "https://site.invalid/", "User-Agent" to "KototoroTest/1"),
                     startSeconds = 3.0))
                 waitFor(message = { "not loaded: ${player.state.value} $seen" }) { player.state.value.loaded }
@@ -119,14 +130,19 @@ class MpvPlayerTest {
         MpvPlayer(library()).use { player ->
             val quality = shaders.files(MpvEnhancement(MpvEnhancementMode.ANIME4K_QUALITY))
             player.setShaders(quality)
-            assertEquals(quality.map { it.toAbsolutePath().toString() },
-                player.property("glsl-shaders").orEmpty().split(java.io.File.pathSeparator))
+            // A path list is written with the platform separator and read back comma separated.
+            val readBack = player.property("glsl-shaders").orEmpty()
+                .split(",", java.io.File.pathSeparator).filter(String::isNotEmpty)
+            assertEquals(quality.map { it.toAbsolutePath().toString() }, readBack)
             player.setShaders(emptyList())
             assertEquals("", player.property("glsl-shaders"))
         }
     }
     @Test
     fun `Anime4K image presets render offscreen at their scale and change the picture`() {
+        // The preset encodes through mpv's gpu filter, which creates a real GL/Vulkan context: a display is required
+        // (Xvfb is enough), and without one mpv writes no frame at all.
+        assumeFalse(java.awt.GraphicsEnvironment.isHeadless(), "no display for mpv's gpu filter")
         val library = library()
         val input = directory.resolve("page.png")
         val source = java.awt.image.BufferedImage(120, 180, java.awt.image.BufferedImage.TYPE_INT_RGB)
@@ -138,18 +154,16 @@ class MpvPlayerTest {
         val enhancer = MpvImageEnhancer(library, MpvShaderLibrary(directory.resolve("shaders")))
         val plain = directory.resolve("plain.png")
         // Reference: the same offscreen path without shaders (bilinear-ish scaling only).
-        MpvPlayer(library, options = mapOf("o" to plain.toString(), "of" to "image2", "ovc" to "png", "frames" to "1",
-            "vf" to "gpu=w=240:h=360", "keep-open" to "no")).use { player ->
-            player.load(MpvStream(input.toString()))
-            val deadline = System.currentTimeMillis() + 30_000
-            while (player.property("idle-active") != "yes" && System.currentTimeMillis() < deadline) Thread.sleep(25)
-        }
+        enhancer.enhance(input, plain, 240, 360, emptyList())
         val reference = javax.imageio.ImageIO.read(plain.toFile())
+        // The white page itself, not an empty frame read back before the picture reached the output.
+        assertTrue((reference.getRGB(120, 40) and 0xFF) > 200, "reference ${describe(reference)}")
         for (preset in Anime4KImagePreset.entries) {
             val output = directory.resolve("${preset.name}.png")
             val started = System.nanoTime()
             enhancer.enhance(input, output, 120, 180, preset)
             val image = javax.imageio.ImageIO.read(output.toFile())
+            println("${preset.name} ${describe(image)}")
             assertEquals(120 * preset.scale, image.width, preset.name)
             assertEquals(180 * preset.scale, image.height, preset.name)
             if (preset.scale == 2) {
@@ -159,5 +173,16 @@ class MpvPlayerTest {
             }
             println("${preset.name} ${(System.nanoTime() - started) / 1_000_000} ms")
         }
+    }
+
+    /** Enough to tell an empty, upside-down or misplaced frame apart from the white page with its black strokes. */
+    private fun describe(image: java.awt.image.BufferedImage): String {
+        var sum = 0L
+        for (x in 0 until image.width) for (y in 0 until image.height) sum += image.getRGB(x, y) and 0xFF
+        val mean = sum / (image.width.toLong() * image.height)
+        val x = image.width / 2
+        val top = image.height / 9
+        return "${image.width}x${image.height} type=${image.type} mean=$mean " +
+            "top=${Integer.toHexString(image.getRGB(x, top))} mirrored=${Integer.toHexString(image.getRGB(x, image.height - 1 - top))}"
     }
 }

@@ -64,14 +64,34 @@ cmp build/cloudstream-runtime/library-jvm-1.0.1.jar \
 升级到新提交时，需要同步更新 `app/build.gradle` 中的文件名、来源提交注释和
 `cloudstreamSourceSha256`。不要只替换 JAR，否则 `prepareCloudstreamRuntimeJar` 应当因哈希不一致而失败。
 
-Kototoro 的 `prepareCloudstreamRuntimeJar` 仍有两项宿主职责：
-
-1. 排除 `Youtube*.class`，使用 Kototoro 的 Android 版 YouTube 实现。
-2. 验证最终 JAR 没有宿主依赖副本，并检查必要运行时类仍然存在。
+Kototoro 的 `prepareCloudstreamRuntimeJar` 仍有一项宿主职责：验证最终 JAR 没有宿主依赖副本，并检查必要运行时类
+仍然存在。官方库的 `Youtube*` 提取器保留：Android 与官方应用一样打包 NewPipeExtractor（版本同官方，见
+`newpipeExtractor`），由 `CloudstreamRuntimeManager` 调用 `NewPipe.init`，YouTube 插件直接链接的 NewPipe 类也由此提供
+（issue #608）。Windows 不带 NewPipe，`cloudstream-desktop` 仍排除这些类并用自带的空实现。
+Windows 的 `CloudflareKiller` 也是 `cloudstream-desktop` 自带的版本：共享平台客户端（`DesktopChallengeInterceptor`）
+已经在 WebView2 中解决挑战并把放行 Cookie 存进 Cookie 库，所以它只放行请求，`getCookieHeaders`/`savedCookies`
+从该 Cookie 库读取；社区仓库 517 个插件中有 49 个创建它，没有它时这些插件在 Windows 上会被兼容性检查拒绝。
+桌面的 `WebViewResolver` 同样是模块自带的版本（官方 JVM 库那份什么都不解析，已排除）：它在平台浏览器中打开页面，
+通过桥的请求观察（`observeRequests`，经 `shouldInterceptRequest`）取第一条匹配 `interceptUrl` 的请求；浏览器只能
+观察不能应答，所以不像 Android 那样经 OkHttp 重放（`useOkhttp` 被忽略）。没有浏览器桥（Linux）时立即返回空结果。
+桌面另外依赖官方库所用的 `com.fleeksoft.ksoup:ksoup` 0.2.6（Android 端经 IReader 获得同包名的 fork）。
 
 纯 JVM 库不包含部分 Android 插件 ABI。Kototoro 在
 `app/src/main/kotlin/com/lagradost/cloudstream3/` 下提供最小宿主兼容层，包括 `Plugin`、`VideoClickAction`、
 `DataStore` 和 `TextUtil`。兼容层只实现插件实际需要的 Android 行为，不复制 Cloudstream 应用壳。
+
+`CommonActivity` 位于 `app/src/main/java/com/lagradost/cloudstream3/CommonActivity.java`：Cloudstream 把它声明为
+Kotlin `object`，插件省略可选参数调用 `showToast("…")` 时实际引用的是编译器生成的默认参数桥
+`showToast$default(CommonActivity, String, Integer, int, Object)`。Kotlin 无法声明含 `$` 的方法名，因此这个兼容层
+只能用 Java 编写，并同时保留上游的 `INSTANCE` 字段与实例方法形态，让插件的 DEX 引用和宿主兼容性检查都能解析。
+
+插件在安装前会经过 `CloudstreamPluginCompatibilityChecker` 的 DEX 检查：引用了宿主缺失的类或方法时直接判定为
+不兼容并给出完整签名，而不是等到激活后才抛 `NoSuchMethodError`。新增兼容层成员时应同时补一条该检查的测试。
+
+插件可以把 provider 直接编译进宿主命名空间（例如 `com.lagradost.cloudstream3.ar.youtube.YoutubeProvider`，见 #608），
+这类类和它们的 `$$ExternalSyntheticLambda`、`$load$1` 内部类都在插件自己的 DEX 里。检查器因此先读 `class_defs`
+取出插件声明的类：只有插件**没有**声明的 `com.lagradost.cloudstream3.**` 类才算宿主 API，否则自引用会被误报成
+「缺少宿主类」而整包被隔离。宿主仍然按 `loadClass` 判定可用性，所以插件自带的类不会被当成宿主实现。
 
 ## R8 与验证清单
 

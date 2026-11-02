@@ -43,6 +43,8 @@
 -keep class org.skepsun.kototoro.core.prefs.ScreenshotsPolicy { *; }
 # Shared progress preference enum replaces its former Android @Keep annotation.
 -keep class org.skepsun.kototoro.core.prefs.ProgressIndicatorMode { *; }
+# Shared list display mode enum (core-ui), stored by name in the preferences.
+-keep class org.skepsun.kototoro.core.prefs.ListMode { *; }
 -keep class org.skepsun.kototoro.backups.ui.periodical.PeriodicalBackupSettingsFragment { *; }
 -keep class org.jsoup.parser.Tag
 -keep class org.jsoup.internal.StringUtil
@@ -302,6 +304,15 @@
     public protected *;
 }
 -dontwarn io.ktor.**
+
+# NewPipeExtractor (issue #608)
+# YouTube cs3 plugins link straight against it, as the official Cloudstream app bundles it, and subclass its
+# extractors (`object : YoutubeStreamExtractor(...)`), so its whole API stays as published. nanojson is its JSON layer.
+-keep class org.schabi.newpipe.extractor.** { *; }
+-keep interface org.schabi.newpipe.extractor.** { *; }
+-keep class com.grack.nanojson.** { *; }
+-dontwarn org.schabi.newpipe.extractor.**
+-dontwarn com.grack.nanojson.**
 
 # Cloudstream runtime API
 # Cloudstream cs3 plugins are loaded dynamically via DexClassLoader and depend on

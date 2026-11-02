@@ -99,10 +99,7 @@ object LibArchiveUtils {
                     ArchiveEntry.pathnameUtf8(entry),
                     ArchiveEntry.pathname(entry),
                 ) ?: continue
-                val entryFile = File(destDir, entryName)
-                if (!entryFile.canonicalPath.startsWith(destDir.canonicalPath)) {
-                    throw SecurityException("压缩文件只能解压到指定路径")
-                }
+                val entryFile = archiveEntryFile(destDir, entryName)
                 val stat = ArchiveEntry.stat(entry)
                 if (stat.isDir()) {
                     if (!entryFile.exists()) entryFile.mkdirs()

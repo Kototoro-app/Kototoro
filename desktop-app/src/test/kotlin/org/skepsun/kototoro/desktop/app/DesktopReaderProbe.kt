@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.desktop.app
 
+import org.skepsun.kototoro.core.db.DATABASE_VERSION
 import androidx.compose.ui.graphics.asSkiaBitmap
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.*
@@ -160,7 +161,13 @@ internal object DesktopReaderProbe {
                     }
                     settled()
                     check(runBlocking { session.library.progress(content.id) } == beforeModified)
+                    // As on Android, a turn past the last spread reads on into the next chapter and a turn back
+                    // from its start returns to this chapter's last spread.
                     press(Key.PageDown)
+                    waitUntil(timeoutMillis = 15_000) { controller.state.value.chapter?.id == chapters[1].id }
+                    ready(0, 2)
+                    press(Key.PageUp)
+                    waitUntil(timeoutMillis = 15_000) { controller.state.value.chapter?.id == chapters[0].id }
                     ready(3, 2)
                     press(Key.PageUp)
                     ready(2, 1)
@@ -203,7 +210,7 @@ internal object DesktopReaderProbe {
                 "requests=${System.getProperty("fixture.reader.requests")}")
             throw error
         } finally { runBlocking { controller.shutdown() } }
-        runBlocking { DesktopRuntime.open(root).use { check(it.storageInfo().schemaVersion == 84) } }
+        runBlocking { DesktopRuntime.open(root).use { check(it.storageInfo().schemaVersion == DATABASE_VERSION) } }
         println("DESKTOP_UI_OK=$mode")
         println("NETWORK_REQUESTS=0")
     }

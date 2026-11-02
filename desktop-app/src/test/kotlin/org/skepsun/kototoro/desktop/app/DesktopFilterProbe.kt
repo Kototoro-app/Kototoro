@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.desktop.app
 
+import org.skepsun.kototoro.core.db.DATABASE_VERSION
 import androidx.compose.ui.graphics.asSkiaBitmap
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
@@ -53,9 +54,14 @@ internal object DesktopFilterProbe {
                         .single { it.name == name }
                     return onNodeWithTag("filter:${node.id}$suffix")
                 }
+                // Popular and latest are the first rows of the results bar's sort menu, as in Android's sort list.
+                fun listing(which: String) {
+                    onNodeWithTag("source-sort").performClick(); waitForIdle()
+                    onNodeWithTag("source-listing:$which").performClick()
+                }
                 fun choice(name: String, index: Int) {
-                    control(name).performScrollTo().performClick()
-                    control(name, ":option:$index").performClick()
+                    // A short option set is chips on both hosts, so the option itself is the button.
+                    control(name, ":option:$index").performScrollTo().performClick()
                 }
                 fun edit() {
                     control("已完结").performScrollTo().performClick()
@@ -70,15 +76,44 @@ internal object DesktopFilterProbe {
                 onNodeWithTag("source-list").performScrollToNode(hasTestTag("source:MIHON_9007199254740997"))
                 onNodeWithTag("source:MIHON_9007199254740997").performClick()
                 received("popular:1")
+                // Android's tag header: the source's tags (here its tri-state genre) sit above the list, a pick lists
+                // again through the source's search with that tag, and the catalogue in the sort menu clears it.
+                if (mode == "filters") {
+                    waitUntil(timeoutMillis = 15_000) { !controller.state.value.browseTagGroups.isNullOrEmpty() }
+                    settled()
+                    val tag = controller.state.value.browseTagGroups!!.flatMap { it.tags }.first { it.title == "冒险" }
+                    onNodeWithTag("browse-tag:${tag.key}").assertIsNotSelected().performClick()
+                    // page 1 of the search path with no query, and the genre control included: the source got the tag.
+                    try {
+                        waitUntil(timeoutMillis = 15_000) {
+                            !controller.state.value.busy && System.getProperty("fixture.filters.last").orEmpty()
+                                .split('|').let { it.size > 3 && it[0] == "1" && it[1].isEmpty() && it[3] == "1" }
+                        }
+                    } catch (error: Throwable) {
+                        throw AssertionError("tag pick: last=${System.getProperty("fixture.filters.last")} " +
+                            "error=${controller.state.value.error} tags=${controller.state.value.browseTags} " +
+                            "tag=$tag", error)
+                    }
+                    settled()
+                    check(controller.state.value.browseTags == setOf(tag))
+                    onNodeWithTag("browse-tag:${tag.key}").assertIsSelected()
+                    onNodeWithTag("source-sort").performClick(); waitForIdle()
+                    onNodeWithTag("source-tags").performClick(); waitForIdle()
+                    onNodeWithTag("browse-catalog-tag:${tag.key}").assertIsSelected()
+                    onNodeWithTag("browse-tags-clear").performClick()
+                    received("popular:1")
+                    check(controller.state.value.browseTags.isEmpty())
+                    onNodeWithText(desktopText("common.close")).performClick(); waitForIdle()
+                }
                 onNodeWithTag("source-query").performTextReplacement("未应用查询")
-                onNodeWithText("热门").performClick()
+                listing("popular")
                 received("popular:1")
                 check(onNodeWithTag("source-query").fetchSemanticsNode().config[SemanticsProperties.EditableText].text.isEmpty())
                 open()
                 control("已完结").assertIsOn()
                 control("冒险").assertTextEquals("包含")
                 control("作者").performScrollTo().assertTextContains("默认作者")
-                control("排序").performScrollTo().assertTextEquals("未选择")
+                control("排序", ":option:0").performScrollTo().assertIsNotSelected()
                 onNodeWithText("自定义控件：暂不支持此控件").performScrollTo().assertIsDisplayed()
                 edit()
                 val bitmap = onNodeWithTag("filter-dialog").captureToImage()
@@ -113,23 +148,23 @@ internal object DesktopFilterProbe {
                 control("排序", ":clear").performScrollTo().performClick()
                 onNodeWithTag("filter-apply").performClick()
                 received("1|新查询|false|2|alternate|中文作者|null")
-                onNodeWithText("最新").performClick()
+                listing("latest")
                 received("latest:1")
                 check(controller.state.value.appliedFilters.isEmpty() && controller.state.value.query.isEmpty())
                 check(onNodeWithTag("source-query").fetchSemanticsNode().config[SemanticsProperties.EditableText].text.isEmpty())
                 onNodeWithText("下一批").performClick()
                 received("latest:2")
-                onNodeWithText("热门").performClick()
+                listing("popular")
                 received("popular:1")
                 // A slow source keeps the window usable: navigation is enabled and replaces the pending request.
                 System.setProperty("fixture.filters.slow", "true")
-                onNodeWithText("最新").performClick()
+                listing("latest")
                 waitUntil(timeoutMillis = 15_000) {
                     controller.state.value.busy && System.getProperty("fixture.filters.last") == "latest:1"
                 }
                 waitForIdle()
                 onNodeWithTag("nav:收藏").assertIsEnabled()
-                onNodeWithText("热门").assertIsEnabled()
+                onNodeWithTag("source-sort").assertIsEnabled()
                 val slowStarted = System.nanoTime()
                 onNodeWithTag("nav:收藏").performClick()
                 waitUntil(timeoutMillis = 15_000) { !controller.state.value.busy }
@@ -144,7 +179,7 @@ internal object DesktopFilterProbe {
                 }
                 settled()
                 check(controller.state.value.browseOrder != "UPDATED") { "The cancelled request was committed" }
-                onNodeWithText("热门").performClick()
+                listing("popular")
                 received("popular:1")
                 open()
                 edit()
@@ -152,7 +187,7 @@ internal object DesktopFilterProbe {
                 control("已完结").performScrollTo().assertIsOn()
                 control("冒险").assertTextEquals("包含")
                 control("作者").performScrollTo().assertTextContains("默认作者")
-                control("排序").performScrollTo().assertTextEquals("未选择")
+                control("排序", ":option:0").performScrollTo().assertIsNotSelected()
                 onNodeWithTag("filter-apply").performClick()
                 received("1||true|1|original|默认作者|null")
                 val before = controller.state.value
@@ -176,7 +211,7 @@ internal object DesktopFilterProbe {
                 onNodeWithTag("filter-apply").performClick()
                 received("1||false|2|alternate|中文作者|1:true")
                 // Success and failure must both restore the extension's cached FilterList defaults.
-                onNodeWithText("热门").performClick()
+                listing("popular")
                 received("popular:1")
                 open()
                 val definitions = MihonFilterRules.flatten(controller.state.value.dynamicFilters!!.nodes)
@@ -193,7 +228,7 @@ internal object DesktopFilterProbe {
                 settled()
                 check(controller.state.value.dynamicFilters == null && controller.state.value.appliedFilters.isEmpty() &&
                     controller.state.value.query.isEmpty() && controller.state.value.browseOrder == null)
-                onNodeWithText("最新").assertDoesNotExist()
+                check("UPDATED" !in controller.state.value.descriptor?.sortOrders.orEmpty()) { "latest is offered" }
                 onNodeWithTag("source-list").performScrollToNode(hasTestTag("source:MIHON_9007199254740997"))
                 onNodeWithTag("source:MIHON_9007199254740997").performClick()
                 received("popular:1")
@@ -204,7 +239,7 @@ internal object DesktopFilterProbe {
             System.clearProperty("fixture.filters.slow")
             runBlocking { controller.shutdown() }
         }
-        runBlocking { DesktopRuntime.open(root).use { check(it.storageInfo().schemaVersion == 84) } }
+        runBlocking { DesktopRuntime.open(root).use { check(it.storageInfo().schemaVersion == DATABASE_VERSION) } }
         println("DESKTOP_UI_OK=$mode")
         println("NETWORK_REQUESTS=0")
     }

@@ -9,6 +9,8 @@ import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
@@ -22,6 +24,7 @@ import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsFlow
 import org.skepsun.kototoro.core.ui.BaseViewModel
 import org.skepsun.kototoro.core.util.ext.requireValue
+import org.skepsun.kototoro.favourites.data.FavouriteCategoryCoverStore
 import org.skepsun.kototoro.favourites.domain.FavouritesRepository
 import org.skepsun.kototoro.favourites.domain.model.Cover
 import org.skepsun.kototoro.favourites.ui.categories.adapter.AllCategoriesListModel
@@ -31,6 +34,7 @@ import org.skepsun.kototoro.list.ui.model.ListModel
 import org.skepsun.kototoro.list.ui.model.LoadingState
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
 import org.skepsun.kototoro.tracking.discovery.data.TrackingSiteCacheRepository
+import java.io.File
 import javax.inject.Inject
 
 @HiltViewModel
@@ -39,6 +43,7 @@ class FavouritesCategoriesViewModel @Inject constructor(
     private val settings: AppSettings,
     private val dataRepository: ContentDataRepository,
     private val trackingSiteCacheRepository: TrackingSiteCacheRepository,
+    private val coverStore: FavouriteCategoryCoverStore,
 ) : BaseViewModel() {
 
     private var commitJob: Job? = null
@@ -48,24 +53,41 @@ class FavouritesCategoriesViewModel @Inject constructor(
         trackingSiteCacheRepository.observeDetailsUpdates().map { Unit },
     )
 
+    init {
+        // Custom covers live outside the database, so a cleared file or a deleted category
+        // must not leave a dead path (or an orphaned image) behind. Cleanup is best-effort
+        // and never interrupts the category list itself.
+        launchJob(Dispatchers.IO) {
+            repository.observeCategories()
+                .catch { /* keep every cover when the category list cannot be read */ }
+                .collect { categories ->
+                    runCatching {
+                        coverStore.pruneCoverFiles(categories.mapTo(HashSet(categories.size)) { it.id })
+                    }
+                }
+        }
+    }
+
     val content = combine(
         repository.observeCategoriesWithCovers(),
         observeAllCategories(),
         settings.observeAsFlow(AppSettings.KEY_ALL_FAVOURITES_VISIBLE) { isAllFavouritesVisible },
         isActionsEnabled,
-        displayChanges,
-    ) { cats, all, showAll, hasActions, _ ->
+        combine(displayChanges, coverStore.observeCoverFiles(), ::Pair),
+    ) { cats, all, showAll, hasActions, (_, customCovers) ->
         CategoriesUiPayload(
             categories = cats,
             allFavorites = all,
             showAll = showAll,
             hasActions = hasActions,
+            customCovers = customCovers,
         )
     }.mapLatest { payload ->
         payload.categories.toUiList(
             allFavorites = payload.allFavorites,
             showAll = payload.showAll,
             hasActions = payload.hasActions,
+            customCovers = payload.customCovers,
         )
     }.withErrorHandling()
         .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, listOf(LoadingState))
@@ -118,6 +140,7 @@ class FavouritesCategoriesViewModel @Inject constructor(
         allFavorites: Pair<Int, List<Cover>>,
         showAll: Boolean,
         hasActions: Boolean,
+        customCovers: Map<Long, File>,
     ): List<ListModel> {
         if (isEmpty()) {
             return listOf(
@@ -146,6 +169,7 @@ class FavouritesCategoriesViewModel @Inject constructor(
                 category = category,
                 isActionsEnabled = hasActions,
                 isTrackerEnabled = settings.isTrackerEnabled && AppSettings.TRACK_FAVOURITES in settings.trackSources,
+                customCover = customCovers[category.id],
             )
         }
         return result
@@ -195,5 +219,6 @@ class FavouritesCategoriesViewModel @Inject constructor(
         val allFavorites: Pair<Int, List<Cover>>,
         val showAll: Boolean,
         val hasActions: Boolean,
+        val customCovers: Map<Long, File>,
     )
 }

@@ -34,9 +34,9 @@ class IosVideoSources internal constructor(private val library: IosLibrary, inte
             // than surfacing whichever child repository happened to fail.
             val reason = when {
                 result.skippedSpiderSites > 0 ->
-                    "该配置的 ${result.skippedSpiderSites} 个站点都需要爬虫运行时（type 3/4），iOS 暂不支持"
+                    localized("该配置的 %@ 个站点都需要爬虫运行时（type 3/4），iOS 暂不支持", result.skippedSpiderSites)
                 result.errors.isNotEmpty() -> result.errors.first()
-                else -> "没有找到可用的苹果 CMS 站点"
+                else -> localized("没有找到可用的苹果 CMS 站点")
             }
             throw IllegalArgumentException(reason)
         }
@@ -64,7 +64,7 @@ class IosVideoSources internal constructor(private val library: IosLibrary, inte
 
     @Throws(Exception::class)
     suspend fun settings(id: String): IosVideoSiteSettings {
-        val stored = requireNotNull(dao.getById(id)) { "站点已不存在" }
+        val stored = requireNotNull(dao.getById(id)) { localized("站点已不存在") }
         val config = TvBoxSource(stored.id, stored.name, stored.config).stored
         val userAgent = config.staticHeaders.entries.firstOrNull { it.key.equals(USER_AGENT, true) }?.value.orEmpty()
         return IosVideoSiteSettings(config.api, userAgent)
@@ -78,12 +78,12 @@ class IosVideoSources internal constructor(private val library: IosLibrary, inte
     suspend fun updateSettings(id: String, api: String, userAgent: String) {
         val address = api.trim()
         require(address.startsWith("http://", true) || address.startsWith("https://", true)) {
-            "API 地址需要以 http:// 或 https:// 开头"
+            localized("API 地址需要以 http:// 或 https:// 开头")
         }
         val agent = userAgent.trim()
-        require(agent.none { it == '\r' || it == '\n' }) { "User-Agent 不能包含换行" }
-        val stored = requireNotNull(dao.getById(id)) { "站点已不存在" }
-        val root = SiteJson.parseToJsonElement(stored.config) as? JsonObject ?: throw IllegalStateException("站点配置无效")
+        require(agent.none { it == '\r' || it == '\n' }) { localized("User-Agent 不能包含换行") }
+        val stored = requireNotNull(dao.getById(id)) { localized("站点已不存在") }
+        val root = SiteJson.parseToJsonElement(stored.config) as? JsonObject ?: throw IllegalStateException(localized("站点配置无效"))
         val site = root["site"] as? JsonObject ?: JsonObject(emptyMap())
         val headerKey = if (site["headers"] is JsonObject || site["header"] !is JsonObject) "headers" else "header"
         val headers = (site[headerKey] as? JsonObject).orEmpty().filterKeys { !it.equals(USER_AGENT, true) }

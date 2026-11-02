@@ -32,14 +32,14 @@ internal object DesktopImageDecoder {
                         reader.input = input
                         val width = reader.getWidth(0)
                         val height = reader.getHeight(0)
-                        require(width > 0 && height > 0) { "页面尺寸无效" }
+                        require(width > 0 && height > 0) { desktopText("error.imageSizeInvalid") }
                         return DesktopReaderImage(path, width, height, true)
                     }
                 } finally { reader.dispose() }
             }
         }
         return Image.makeFromEncoded(Files.readAllBytes(path)).use {
-            require(it.width > 0 && it.height > 0) { "页面尺寸无效" }
+            require(it.width > 0 && it.height > 0) { desktopText("error.imageSizeInvalid") }
             DesktopReaderImage(path, it.width, it.height)
         }
     }
@@ -73,18 +73,23 @@ internal object DesktopImageDecoder {
     }
 
     /** Caller owns the returned bitmap; Compose may adopt it without another full-size pixel copy. */
-    suspend fun decode(path: Path): Bitmap = permits.withPermit {
+    suspend fun decode(path: Path, maximumPixels: Long = MAXIMUM_PIXELS,
+        maximumDimension: Int = MAXIMUM_DIMENSION): Bitmap = permits.withPermit {
         val context = currentCoroutineContext()
         context.ensureActive()
         Image.makeFromEncoded(Files.readAllBytes(path)).use { image ->
             context.ensureActive()
-            val size = ImageDecodeSize.resolve(IntSize(image.width, image.height), MAXIMUM_PIXELS, MAXIMUM_DIMENSION)
+            val size = ImageDecodeSize.resolve(IntSize(image.width, image.height), maximumPixels, maximumDimension)
             val bitmap = Bitmap()
             try {
                 check(bitmap.allocPixels(image.imageInfo.withWidthHeight(size.width, size.height)
-                    .withColorType(ColorType.N32).withColorAlphaType(ColorAlphaType.PREMUL))) { "页面像素分配失败" }
+                    .withColorType(ColorType.N32).withColorAlphaType(ColorAlphaType.PREMUL))) {
+                    desktopText("error.imageAllocationFailed")
+                }
                 requireNotNull(bitmap.peekPixels()).use { pixels ->
-                    check(image.scalePixels(pixels, SamplingMode.LINEAR, false)) { "页面解码失败" }
+                    check(image.scalePixels(pixels, SamplingMode.LINEAR, false)) {
+                        desktopText("error.imageDecodeFailed")
+                    }
                 }
                 context.ensureActive()
                 bitmap.setImmutable()

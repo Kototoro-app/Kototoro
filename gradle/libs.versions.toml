@@ -76,6 +76,10 @@ jsonpath = "2.8.0"
 commonsCompress = "1.28.0"
 rhino = "1.8.1"
 jsoup = "1.22.1"
+# What the official Cloudstream library parses HTML with besides jsoup; plugins call it through the host.
+ksoupCloudstream = "0.2.6"
+# Cloudstream plugins (YouTube ones) link against the copy the official app bundles; keep the same tag.
+newpipeExtractor = "v0.26.3"
 ktor = "3.5.0"
 kotlinxDatetime = "0.8.0"
 kotlinxIo = "0.9.1"
@@ -113,6 +117,10 @@ androidx-compose-material3 = { group = "androidx.compose.material3", name = "mat
 # so this override pulls the newer library; revert the override once a BOM pins 1.5.x.
 androidx-compose-material3-expressive = { group = "androidx.compose.material3", name = "material3", version = "1.5.0-alpha26" }
 androidx-compose-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
+# Shared (core-ui) Material3 for Android/desktop. CMP decoupled Material3 from the plugin after 1.9.0; 1.12.0-alpha03
+# builds on CMP foundation/runtime 1.12.0-beta01 (same line as the 1.12.x plugin) and tracks androidx material3
+# 1.5.0-alpha22, close to the 1.5.0-alpha26 the app pins above.
+jetbrains-compose-material3 = { group = "org.jetbrains.compose.material3", name = "material3", version = "1.12.0-alpha03" }
 androidx-glance-appwidget = { module = "androidx.glance:glance-appwidget", version.ref = "glance" }
 androidx-navigation3-runtime = { group = "androidx.navigation3", name = "navigation3-runtime", version.ref = "navigation3" }
 androidx-navigation3-ui = { group = "androidx.navigation3", name = "navigation3-ui", version.ref = "navigation3" }
@@ -225,9 +233,12 @@ xsoup = { module = "us.codecraft:xsoup", version.ref = "xsoup" }
 jsonpath = { module = "com.jayway.jsonpath:json-path", version.ref = "jsonpath" }
 commons-compress = { module = "org.apache.commons:commons-compress", version.ref = "commonsCompress" }
 jsoup = { module = "org.jsoup:jsoup", version.ref = "jsoup" }
+ksoup-cloudstream = { module = "com.fleeksoft.ksoup:ksoup", version.ref = "ksoupCloudstream" }
+newpipe-extractor = { module = "com.github.teamnewpipe:NewPipeExtractor", version.ref = "newpipeExtractor" }
 ktor-http = { module = "io.ktor:ktor-http", version.ref = "ktor" }
 ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
 ktor-client-okhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "ktor" }
+ktor-client-java = { module = "io.ktor:ktor-client-java", version.ref = "ktor" }
 ktor-client-darwin = { module = "io.ktor:ktor-client-darwin", version.ref = "ktor" }
 ktor-client-mock = { module = "io.ktor:ktor-client-mock", version.ref = "ktor" }
 rhino = { module = "org.mozilla:rhino", version.ref = "rhino" }

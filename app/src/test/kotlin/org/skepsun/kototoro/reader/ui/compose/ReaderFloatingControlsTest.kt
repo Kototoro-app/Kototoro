@@ -84,6 +84,13 @@ class ReaderFloatingControlsTest {
 	fun `novel floating controls only keep implemented actions`() {
 		val controls = ReaderControl.limitNovelFloatingControls(ReaderControl.entries.toSet())
 
-		assertEquals(setOf(ReaderControl.BOOKMARK, ReaderControl.TRANSLATE), controls)
+		assertEquals(setOf(ReaderControl.BOOKMARK, ReaderControl.TRANSLATE, ReaderControl.TTS), controls)
+	}
+
+	@Test
+	fun `read aloud is a novel-only floating control`() {
+		val controls = ReaderControl.limitFloatingControls(setOf(ReaderControl.TTS, ReaderControl.BOOKMARK))
+
+		assertEquals(setOf(ReaderControl.BOOKMARK), controls)
 	}
 }

@@ -29,7 +29,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -51,6 +50,9 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
+import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -76,7 +78,7 @@ internal fun OverrideConfigScreen(
             TopAppBar(
                 title = { Text(text = stringResource(R.string.change_cover)) },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateUp) {
+                    IconButton(onClick = onNavigateUp, modifier = Modifier.tvIconButtonRing()) {
                         Icon(
                             imageVector = Icons.Default.Close,
                             contentDescription = stringResource(R.string.close),
@@ -84,7 +86,7 @@ internal fun OverrideConfigScreen(
                     }
                 },
                 actions = {
-                    TextButton(
+                    TvTextButton(
                         enabled = isDataReady && !isLoading,
                         onClick = { onSave(name.trim()) },
                     ) {
@@ -158,13 +160,14 @@ internal fun OverrideConfigScreen(
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it.take(120) },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().tvTextInputFocusEscape(),
                     label = { Text(text = stringResource(R.string.name)) },
                     placeholder = { Text(text = mangaTitle) },
                     trailingIcon = {
                         IconButton(
                             enabled = isDataReady && !isLoading,
                             onClick = { name = "" },
+                            modifier = Modifier.tvIconButtonRing(),
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Clear,
@@ -210,7 +213,7 @@ private fun CoverAction(
     enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
-    TextButton(
+    TvTextButton(
         enabled = enabled,
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),

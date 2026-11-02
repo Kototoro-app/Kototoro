@@ -63,7 +63,20 @@ class DesktopBrowserCookies internal constructor(
     }
 
     private fun key(value: Cookie) = Key(value.name, value.domain, value.path)
-    private fun browserDomain(value: Cookie) = if (value.hostOnly) value.domain else ".${value.domain}"
+
+    /**
+     * The domain the browser stores [value] under. An IP address has no subdomains, so a cookie for one is only ever
+     * the host's: Chromium treats `.127.0.0.1` as the host cookie, while WebKit keeps it beside the page's own host
+     * cookie, and deleting one then leaves the other to come back on the next pull.
+     */
+    private fun browserDomain(value: Cookie) =
+        if (value.hostOnly || value.domain.isIpAddress()) value.domain else ".${value.domain}"
+
+    private fun String.isIpAddress() = contains(':') || matches(IPV4)
     private fun url(value: Cookie): HttpUrl = HttpUrl.Builder().scheme(if (value.secure) "https" else "http")
         .host(value.domain).encodedPath(value.path).build()
+
+    private companion object {
+        val IPV4 = Regex("""\d{1,3}(\.\d{1,3}){3}""")
+    }
 }

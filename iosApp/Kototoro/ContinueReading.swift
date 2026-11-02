@@ -1,9 +1,7 @@
 import KototoroShared
 import SwiftUI
 
-/// Android's "continue reading" button, as the tab bar's bottom accessory (the system place for an ongoing activity,
-/// like Music's now playing): the latest work of the active space from the history, opened straight at the chapter
-/// being read.
+/// Current space and ongoing reading share the tab accessory, with separate, stable tap targets.
 struct ContinueReadingAccessory: View {
     @EnvironmentObject private var library: LibraryModel
     @EnvironmentObject private var sources: SourcesModel
@@ -16,42 +14,70 @@ struct ContinueReadingAccessory: View {
         ContentSpace.latest(in: library.history, enabled: spacesEnabled, space: space)
     }
 
+    private var compact: Bool { placement == .inline && spacesEnabled }
     var body: some View {
-        Button {
-            if let latest { open(CategoryContent(content: latest.content)) }
-        } label: {
-            HStack(spacing: 10) {
-                if let latest, sources.runtime != nil {
-                    // Loaded by the tab container: the system-hosted accessory does not run its views' tasks.
-                    Group {
-                        if let cover = ContinueReadingCover.shared.image { Image(uiImage: cover).renderingMode(.original).resizable().scaledToFill() }
-                        else { Rectangle().fill(.quaternary) }
-                    }
-                    .frame(width: 24, height: 34)
-                    .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
-                    .accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(latest.content.title).font(.subheadline.weight(.semibold)).lineLimit(1)
-                        if placement != .inline {
-                            Text(ContinueReadingDetail.text(latest))
-                                .font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                        }
-                    }
-                    Spacer(minLength: 4)
-                    Image(systemName: latest.content.mediaKind == "VIDEO" ? "play.fill" : "book.fill")
-                        .font(.body.weight(.semibold))
-                } else {
-                    Image(systemName: "book")
-                    Text("开始阅读后可在这里继续").font(.subheadline).foregroundStyle(.secondary)
-                    Spacer(minLength: 0)
+        HStack(spacing: 0) {
+            if spacesEnabled {
+                SpaceMenu(accessibilityID: "continueReading.space", compact: true)
+                    .fixedSize(horizontal: true, vertical: false)
+                if latest != nil || !compact {
+                    Divider().frame(height: compact ? 18 : 28).accessibilityHidden(true)
                 }
             }
-            .padding(.horizontal, 14)
+            if let latest {
+                resumeButton(latest)
+            } else {
+                Text("开始阅读后可在这里继续")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    .padding(.horizontal, 12)
+                    .accessibilityIdentifier("continueReading.empty")
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .buttonStyle(.plain)
+    }
+
+    private func resumeButton(_ latest: IosLibraryEntry) -> some View {
+        let video = latest.content.mediaKind == "VIDEO"
+        return Button {
+            open(CategoryContent(content: latest.content))
+        } label: {
+            HStack(spacing: compact ? 6 : 10) {
+                // The tab container loads covers; system-hosted accessory views do not run their tasks.
+                Group {
+                    if let cover = ContinueReadingCover.shared.image {
+                        Image(uiImage: cover).renderingMode(.original).resizable().scaledToFill()
+                    } else {
+                        Rectangle().fill(.quaternary)
+                    }
+                }
+                .frame(width: 24, height: 34)
+                .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(latest.content.title).font(.subheadline.weight(.semibold)).lineLimit(1)
+                    if placement != .inline {
+                        Text(ContinueReadingDetail.text(latest))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+                Spacer(minLength: 4)
+                Image(systemName: video ? "play.fill" : "book.fill")
+                    .font(.body.weight(.semibold))
+            }
+            .padding(.horizontal, compact ? 8 : 12)
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .disabled(latest == nil || sources.runtime == nil)
-        .accessibilityLabel(latest.map { "继续阅读：\($0.content.title)" } ?? "继续阅读")
+        .disabled(sources.runtime == nil)
+        .accessibilityLabel(
+            "\(video ? String(localized: "继续播放") : String(localized: "继续阅读"))：\(latest.content.title)"
+        )
         .accessibilityIdentifier("continueReading")
     }
 }
@@ -59,7 +85,7 @@ struct ContinueReadingAccessory: View {
 enum ContinueReadingDetail {
     /// "继续阅读 · 第 12 话 · 35%": the chapter read last, then the overall progress when known.
     static func text(_ entry: IosLibraryEntry) -> String {
-        let action = entry.content.mediaKind == "VIDEO" ? "继续播放" : "继续阅读"
+        let action = entry.content.mediaKind == "VIDEO" ? String(localized: "继续播放") : String(localized: "继续阅读")
         var parts = [action]
         if let chapter = entry.lastChapterTitle { parts.append(chapter) }
         if entry.hasProgress && entry.progress >= 0.01 { parts.append("\(Int(entry.progress * 100))%") }
@@ -78,6 +104,7 @@ private struct ContinueReadingPresentation: ViewModifier {
             if let runtime = sources.runtime {
                 NavigationStack {
                     SourceDetailsView(runtime: runtime, content: item.content, autoResume: true)
+                        .background(ContinueReadingEdgeDismiss { opened = nil })
                         .toolbar {
                             ToolbarItem(placement: .topBarLeading) {
                                 Button("关闭", systemImage: "xmark") { opened = nil }
@@ -89,6 +116,54 @@ private struct ContinueReadingPresentation: ViewModifier {
                 .environmentObject(library)
                 .environmentObject(sources)
                 .environmentObject(downloads)
+                .environmentObject(downloads.downloaded)
+            }
+        }
+    }
+}
+
+/// The resumed details are the cover's navigation root, so UIKit has no previous page to pop to.
+private struct ContinueReadingEdgeDismiss: UIViewControllerRepresentable {
+    let dismiss: () -> Void
+
+    func makeUIViewController(context: Context) -> Controller { Controller(dismiss: dismiss) }
+    func updateUIViewController(_ controller: Controller, context: Context) { controller.dismissCover = dismiss }
+
+    final class Controller: UIViewController, UIGestureRecognizerDelegate {
+        var dismissCover: () -> Void
+        private weak var installedView: UIView?
+        private lazy var edge = UIScreenEdgePanGestureRecognizer(target: self, action: #selector(swiped(_:)))
+
+        init(dismiss: @escaping () -> Void) {
+            dismissCover = dismiss
+            super.init(nibName: nil, bundle: nil)
+        }
+
+        required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+        override func viewDidAppear(_ animated: Bool) {
+            super.viewDidAppear(animated)
+            guard let navigationView = navigationController?.view else { return }
+            edge.edges = .left
+            edge.delegate = self
+            navigationView.addGestureRecognizer(edge)
+            installedView = navigationView
+        }
+
+        override func viewWillDisappear(_ animated: Bool) {
+            super.viewWillDisappear(animated)
+            installedView?.removeGestureRecognizer(edge)
+        }
+
+        func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+            navigationController?.viewControllers.count == 1
+        }
+
+        @objc private func swiped(_ gesture: UIScreenEdgePanGestureRecognizer) {
+            guard gesture.state == .ended, let view = gesture.view else { return }
+            let distance = gesture.translation(in: view).x
+            if distance > view.bounds.width * 0.25 || (distance > 0 && gesture.velocity(in: view).x > 500) {
+                dismissCover()
             }
         }
     }
@@ -102,7 +177,11 @@ final class ReaderPresence {
     private(set) var visibleDetails = 0
     private var protectedDirectories: [UUID: Set<String>] = [:]
     var isReading: Bool { visibleReaders > 0 }
-    var shouldSuppressAccessory: Bool { visibleReaders > 0 || visibleDetails > 0 }
+    /// Pages in batch selection: their actions take the bottom bar, where the accessory would cover them.
+    private(set) var activeSelections = 0
+    var shouldSuppressAccessory: Bool { visibleReaders > 0 || visibleDetails > 0 || activeSelections > 0 }
+    func selectionBegan() { activeSelections += 1 }
+    func selectionEnded() { activeSelections = max(0, activeSelections - 1) }
     func appear() { visibleReaders += 1 }
     func disappear() {
         visibleReaders = max(0, visibleReaders - 1)
@@ -126,7 +205,41 @@ private struct ReaderPresenceModifier: ViewModifier {
     }
 }
 
+private struct SelectionPresenceModifier: ViewModifier {
+    let active: Bool
+    @State private var counted = false
+    private func set(_ value: Bool) {
+        guard value != counted else { return }
+        counted = value
+        if value { ReaderPresence.shared.selectionBegan() } else { ReaderPresence.shared.selectionEnded() }
+    }
+    func body(content: Content) -> some View {
+        content
+            .onChange(of: active, initial: true) { _, value in set(value) }
+            .onDisappear { set(false) }
+    }
+}
+
+private struct DetailsPresenceModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .onAppear { ReaderPresence.shared.detailAppear() }
+            .onDisappear { ReaderPresence.shared.detailDisappear() }
+    }
+}
+
 extension View {
+    /// Details and their pushed directories replace the tab container's global resume controls.
+    func detailsPresence() -> some View {
+        modifier(DetailsPresenceModifier())
+    }
+
+    /// Hides the tab bar and the resume accessory while [active], so a bottom-bar of batch actions is reachable.
+    func batchSelectionChrome(_ active: Bool) -> some View {
+        modifier(SelectionPresenceModifier(active: active))
+            .toolbar(active ? .hidden : .automatic, for: .tabBar)
+    }
+
     /// Marks a full-screen reading surface (manga, novel or video) while it is on screen.
     func readerPresence(directories: Set<String> = []) -> some View {
         modifier(ReaderPresenceModifier(directories: directories))

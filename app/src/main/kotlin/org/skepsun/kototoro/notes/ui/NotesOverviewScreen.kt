@@ -1,6 +1,8 @@
 package org.skepsun.kototoro.notes.ui
 
 import org.skepsun.kototoro.core.ui.compose.AppLayoutTokens
+import org.skepsun.kototoro.core.ui.page.PageSummaryAction
+import org.skepsun.kototoro.core.ui.page.PageSummaryHeader
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -72,8 +74,8 @@ fun NotesOverviewScreen(
             .padding(contentPadding),
     ) {
         // Top Header: the shared summary header of the top-level list pages.
-        org.skepsun.kototoro.core.ui.compose.PageSummaryHeader(
-            iconRes = R.drawable.ic_bookmark,
+        PageSummaryHeader(
+            icon = painterResource(R.drawable.ic_bookmark),
             title = stringResource(R.string.notes),
             subtitle = stringResource(
                 R.string.book_notes_overview_summary,
@@ -82,16 +84,16 @@ fun NotesOverviewScreen(
             ),
         ) {
             if (!uiState.isGlobalNsfwDisabled && onToggleNsfwFilter != null) {
-                org.skepsun.kototoro.core.ui.compose.PageSummaryAction(
+                PageSummaryAction(
                     text = stringResource(R.string.nsfw),
-                    icon = if (uiState.isNsfwFiltered) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                    imageVector = if (uiState.isNsfwFiltered) Icons.Default.VisibilityOff else Icons.Default.Visibility,
                     onClick = onToggleNsfwFilter,
                     emphasized = uiState.isNsfwFiltered,
                 )
             }
-            org.skepsun.kototoro.core.ui.compose.PageSummaryAction(
+            PageSummaryAction(
                 text = null,
-                icon = if (searchBarVisible) Icons.Default.Close else Icons.Default.Search,
+                imageVector = if (searchBarVisible) Icons.Default.Close else Icons.Default.Search,
                 contentDescription = stringResource(R.string.search),
                 onClick = { searchBarVisible = !searchBarVisible },
             )

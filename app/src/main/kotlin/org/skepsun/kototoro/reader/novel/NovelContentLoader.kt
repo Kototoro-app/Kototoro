@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.withContext
 import okio.buffer
 import okio.source
+import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.local.data.LocalStorageCache
@@ -354,7 +355,7 @@ class NovelContentLoader @Inject constructor(
             val file = java.io.File(uri)
             if (!file.exists()) {
                 android.util.Log.d("NovelContentLoader", "Local chapter file not found: ${chapter.url}")
-                "本地章节文件不存在：${chapter.url}"
+                appContext.getString(R.string.novel_local_chapter_not_found, chapter.url)
             } else {
                 val html = readTextFromFile(file)
                 val baseDir = file.parentFile
@@ -365,7 +366,7 @@ class NovelContentLoader @Inject constructor(
             }
         } catch (e: Exception) {
             android.util.Log.e("NovelContentLoader", "Failed to load local chapter ${chapter.url}", e)
-            "加载本地章节失败：${e.message}"
+            appContext.getString(R.string.error_loading_file, e.message.orEmpty())
         }
     }
 

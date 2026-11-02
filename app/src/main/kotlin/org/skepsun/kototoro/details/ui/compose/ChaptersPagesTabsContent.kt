@@ -50,9 +50,13 @@ import org.skepsun.kototoro.core.model.getContentType
 import org.skepsun.kototoro.core.nav.router
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.ui.adaptive.rememberTvTextFieldReadOnlyState
+import org.skepsun.kototoro.core.ui.adaptive.tvChipRing
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
 import org.skepsun.kototoro.core.ui.compose.rememberResolvedSourceTitle
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
+import org.skepsun.kototoro.core.ui.adaptive.tvTabRing
+import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import org.skepsun.kototoro.details.ui.model.DetailsChapterSourceTab
 import org.skepsun.kototoro.details.ui.compose.state.DetailsPaneState
 import org.skepsun.kototoro.details.ui.model.toListItem
@@ -69,6 +73,7 @@ import org.skepsun.kototoro.list.ui.model.ListModel
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.reader.ui.PageSaveHelper
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
+import org.skepsun.kototoro.scrobbling.common.ui.scrobblerIconTint
 
 const val DETAILS_TAB_CHAPTERS = 0
 const val DETAILS_TAB_PAGES = 1
@@ -379,6 +384,7 @@ private fun DetailsTabsRow(
     ) {
         tabs.forEachIndexed { index, tab ->
             Tab(
+                modifier = Modifier.tvTabRing(),
                 selected = selectedTabIndex == index,
                 onClick = { onTabClick(index) },
                 icon = {
@@ -411,6 +417,7 @@ private fun ChapterModeTabsRow(
     ) {
         availableModes.forEachIndexed { index, mode ->
             Tab(
+                modifier = Modifier.tvTabRing(),
                 selected = mode == selectedMode,
                 onClick = { onSelectMode(mode) },
                 text = {
@@ -557,6 +564,8 @@ private fun ChapterSourceTabsRow(
                             Icon(
                                 painter = painterResource(tab.trackingService.iconResId),
                                 contentDescription = null,
+                                tint = scrobblerIconTint(tab.trackingService.iconResId),
+                                modifier = Modifier.size(24.dp),
                             )
                         }
 
@@ -569,6 +578,7 @@ private fun ChapterSourceTabsRow(
                         }
                     }
                 },
+                modifier = Modifier.tvChipRing(RoundedCornerShape(if (expressive) 18.dp else 8.dp)),
             )
         }
     }
@@ -648,12 +658,23 @@ private fun ChaptersPagesToolbar(
 ) {
     Column(modifier = dragModifier.fillMaxWidth()) {
         if (currentTabId == DETAILS_TAB_CHAPTERS && isSearchVisible && isChapterSearchVisible) {
+            // A focused editable field raises the keyboard by itself, and while the IME is open it owns
+            // the D-pad: the escape below never ran, so down did nothing and the filtered list stayed
+            // out of reach. Hold the field read-only until the centre key asks to type - up/down then
+            // always move (to the toolbar above, to the chapters below) and the keyboard becomes
+            // something the viewer asked for instead of something that greeted them.
+            val tvEditing = rememberTvTextFieldReadOnlyState()
             OutlinedTextField(
                 value = chapterQuery,
                 onValueChange = onChapterQueryChange,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                    .then(tvEditing.fieldModifier)
+                    // A text field keeps the arrow keys for the caret, so on a TV the list below was
+                    // only reachable by pressing back out of the whole panel.
+                    .tvTextInputFocusEscape(),
+                readOnly = tvEditing.isReadOnly,
                 singleLine = true,
                 label = { Text(stringResource(R.string.search_chapters)) },
             )

@@ -16,6 +16,36 @@ class MihonJarRegistryTest {
     lateinit var directory: Path
 
     @Test
+    fun `APK icon is available from a catalogued extension without constructing it`() {
+        val fixtures = JarFixture(directory)
+        val counter = "fixture.icon.constructed." + System.nanoTime()
+        val path = fixtures.sourceJar(body = "public Single() { System.setProperty(\"$counter\", " +
+            "String.valueOf(Integer.getInteger(\"$counter\", 0) + 1)); }")
+        val artwork = byteArrayOf(1, 2, 3, 4)
+        fixtures.jar(path, JarFixture.manifest("fixture.extension", ".Single"), directory.resolve("Single-classes"),
+            mapOf("META-INF/kototoro/extension-icon" to artwork))
+        val identity = fixtures.identity(path)
+        val catalogs = directory.resolve("icon-catalogs")
+        fixtures.compatibilityLoader().use { compatibility ->
+            MihonJarRegistry(compatibility, catalogDirectory = catalogs).use { it.load(path, identity) }
+            assertEquals(1, Integer.getInteger(counter, 0))
+            MihonJarRegistry(compatibility, catalogDirectory = catalogs).use { registry ->
+                registry.load(path, identity)
+                org.junit.jupiter.api.Assertions.assertArrayEquals(artwork, registry.icon("fixture.extension"))
+                org.junit.jupiter.api.Assertions.assertNull(registry.icon("missing.extension"))
+                val management = SourceHostManagement(directory, SourceHostConfig(""), registry,
+                    installPlugins = { _, _ -> error("Icon lookup must not install plugins") })
+                val reply = SourceProtocolJson.decodeFromString<HostManagementResult>(management.exchange(
+                    """{"managementVersion":1,"operation":"icon","packageName":"fixture.extension"}""",
+                ))
+                assertEquals(java.util.Base64.getEncoder().encodeToString(artwork), reply.icon)
+                assertEquals(1, Integer.getInteger(counter, 0), "Reading an icon must not initialize the source")
+            }
+        }
+        System.clearProperty(counter)
+    }
+
+    @Test
     fun `replacement failure retains old sources and publication happens only after persistence`() {
         val fixtures = JarFixture(directory)
         val first = fixtures.sourceJar()

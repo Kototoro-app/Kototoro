@@ -8,7 +8,7 @@ import org.skepsun.kototoro.core.db.entity.MangaWithTags
 @Serializable
 class BookmarkBackup(
     @SerialName("manga") val manga: ContentBackup,
-    @SerialName("tags") val tags: Set<TagBackup>,
+    @SerialName("tags") val tags: Set<TagBackup> = emptySet(),
     @SerialName("bookmarks") val bookmarks: List<Bookmark>,
 ) {
     // Bookmarks belong directly to manga_id; the embedded content preserves legacy ZIP compatibility.
@@ -20,9 +20,11 @@ class BookmarkBackup(
         @SerialName("chapter_id") val chapterId: Long,
         @SerialName("page") val page: Int,
         @SerialName("scroll") val scroll: Int,
-        @SerialName("image_url") val imageUrl: String,
+        // The snapshot image and the progress percentage arrived later than the rest of the row, so an older writer
+        // (or a Kotatsu-era file) may leave them out; the bookmark itself is still restorable.
+        @SerialName("image_url") val imageUrl: String = "",
         @SerialName("created_at") val createdAt: Long,
-        @SerialName("percent") val percent: Float,
+        @SerialName("percent") val percent: Float = BACKUP_PROGRESS_NONE,
     ) {
 
         fun toEntity() = BookmarkEntity(

@@ -8,6 +8,52 @@ import org.junit.jupiter.api.Test
 
 class ExtensionStoreDecodingTest {
     @Test
+    fun `Aniyomi protobuf index and external list retain source metadata and skip torrent flags`() {
+        val indexBytes = fixture("aniyomi-index.protobuf")
+        val listBytes = fixture("aniyomi-extensions.protobuf")
+        val index = decodeExtensionStoreIndex(indexBytes, true)
+        val extensions = requireNotNull(index.extensionList).extensions
+        assertEquals("Yūzōnō", index.name)
+        assertEquals(2, extensions.size)
+        assertEquals(8542735178285060053L, extensions[0].sources.single().id)
+        assertEquals("AnimeOnsen", extensions[0].sources.single().name)
+        assertEquals("all", extensions[0].sources.single().language)
+        assertEquals(5093529078954574163L, extensions[1].sources.single().id)
+        assertEquals(extensions, decodeExtensionStoreList(listBytes, true).extensions)
+        assertEquals(index, decodeExtensionStoreIndex(gzip(indexBytes), true))
+        assertEquals(extensions, decodeExtensionStoreList(gzip(listBytes), true).extensions)
+    }
+
+    @Test
+    fun `Aniyomi protobuf without torrent entries still retains field nine sources`() {
+        // Independent wire fixture: Index.extensionList=101, ExtensionList.extensions=1,
+        // Extension.sources=9, Source.id=1. No isTorrent field is present.
+        val bytes = byteArrayOf(0xaa.toByte(), 6, 8, 10, 6, 74, 4, 8, 42, 18, 0)
+        val extension = requireNotNull(decodeExtensionStoreIndex(bytes, true).extensionList).extensions.single()
+        assertEquals(42L, extension.sources.single().id)
+        assertEquals(listOf(extension), decodeExtensionStoreList(bytes.copyOfRange(3, bytes.size), true).extensions)
+    }
+
+    @Test
+    fun `schema detection rejects corrupted source messages instead of returning an empty catalog`() {
+        val bytes = byteArrayOf(0xaa.toByte(), 6, 7, 10, 5, 66, 3, 8, 0x80.toByte(), 0x80.toByte())
+        assertThrows(kotlinx.serialization.SerializationException::class.java) {
+            decodeExtensionStoreIndex(bytes, true)
+        }
+        assertThrows(kotlinx.serialization.SerializationException::class.java) {
+            decodeExtensionStoreList(bytes.copyOfRange(3, bytes.size), true)
+        }
+    }
+
+    private fun fixture(name: String): ByteArray = requireNotNull(
+        javaClass.getResourceAsStream("/fixtures/$name"),
+    ).use { it.readBytes() }
+
+    private fun gzip(bytes: ByteArray): ByteArray = java.io.ByteArrayOutputStream().also { output ->
+        java.util.zip.GZIPOutputStream(output).use { it.write(bytes) }
+    }.toByteArray()
+
+    @Test
     fun `legacy index arrays become APK-only rows with the library taken from the version name`() {
         val data = """[{"name":"Aniyomi: AnimeGG","pkg":"eu.kanade.tachiyomi.animeextension.en.animegg",
           "apk":"aniyomi-en.animegg-v14.2.apk","lang":"en","code":2,"version":"14.2","nsfw":0,

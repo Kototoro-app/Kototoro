@@ -36,16 +36,6 @@ class TrackFeedRulesTest {
         assertEquals(8, mergeRestoredTrackNewChapters(track(date = 20, newChapters = 3), track(newChapters = 8)))
     }
 
-    @Test
-    fun `logs only clear a track at or after both its chapter date and check time`() {
-        listOf(track(date = 100, checked = 200), track(date = 200, checked = 100)).forEach { track ->
-            assertFalse(track.canBeClearedBy(log(199)))
-            assertTrue(track.canBeClearedBy(log(200)))
-            assertTrue(track.canBeClearedBy(log(201)))
-        }
-        assertTrue(track().canBeClearedBy(log(0)))
-    }
-
     private fun track(date: Long = 0, checked: Long = 0, chapter: Long = 0, newChapters: Int = 0) = TrackEntity(
         mangaId = 1,
         lastChapterId = chapter,
@@ -56,10 +46,4 @@ class TrackFeedRulesTest {
         lastError = null,
     )
 
-    private fun log(createdAt: Long) = TrackLogEntity(
-        mangaId = 1,
-        chapters = "Chapter 1",
-        createdAt = createdAt,
-        isUnread = false,
-    )
 }

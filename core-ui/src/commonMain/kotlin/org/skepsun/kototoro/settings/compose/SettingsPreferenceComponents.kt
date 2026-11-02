@@ -1,0 +1,1300 @@
+package org.skepsun.kototoro.settings.compose
+
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.unit.sp
+import org.skepsun.kototoro.core.ui.settings.PreferenceDialogContent
+import org.skepsun.kototoro.core.ui.settings.PreferenceDialog
+import org.skepsun.kototoro.core.ui.settings.PreferenceChoice
+import org.skepsun.kototoro.core.ui.settings.PreferenceMultiChoiceDialog
+import androidx.compose.runtime.staticCompositionLocalOf
+import org.skepsun.kototoro.core.ui.theme.LocalIsIosInterfaceStyle
+import org.skepsun.kototoro.core.ui.theme.LocalArtworkBackdrop
+import org.skepsun.kototoro.core.ui.theme.ArtworkBackdrop
+import org.skepsun.kototoro.core.ui.text.uiString
+import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import org.skepsun.kototoro.reader.ui.compose.design.ReaderPanelIcons
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchColors
+import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
+import org.skepsun.kototoro.core.ui.adaptive.rememberTvFieldExit
+import org.skepsun.kototoro.core.ui.adaptive.rememberTvTextFieldReadOnlyState
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
+import org.skepsun.kototoro.core.ui.adaptive.tvSliderDpad
+import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
+import org.skepsun.kototoro.core.ui.compose.KototoroSlider
+import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
+import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
+
+/**
+ * Resolves the `iconRes` a settings row was given into a painter. Android hands its drawable resolver in at the theme
+ * root, so its many call sites keep passing `R.drawable` ids; a host without resource ids passes `icon` instead and
+ * leaves this resolving nothing.
+ */
+val LocalSettingsIconResolver = staticCompositionLocalOf<@Composable (Int) -> Painter?> { { null } }
+
+data class SettingsChoiceOption<T>(
+    val value: T,
+    val label: String,
+)
+
+enum class SettingsIconTone(val iosColor: Color) {
+    PRIMARY(Color(0xFF007AFF)),
+    SECONDARY(Color(0xFF34C759)),
+    TERTIARY(Color(0xFFFF9500)),
+    PRIMARY_VARIANT(Color(0xFF5856D6)),
+    SECONDARY_VARIANT(Color(0xFF32ADE6)),
+    TERTIARY_VARIANT(Color(0xFFAF52DE)),
+}
+
+@Composable
+fun SettingsIconTone.containerColor(isIosStyle: Boolean): Color {
+    if (isIosStyle) return iosColor
+    val scheme = MaterialTheme.colorScheme
+    return when (this) {
+        SettingsIconTone.PRIMARY -> scheme.primaryContainer
+        SettingsIconTone.PRIMARY_VARIANT -> lerp(scheme.primaryContainer, scheme.tertiaryContainer, 0.35f)
+        SettingsIconTone.SECONDARY -> scheme.secondaryContainer
+        SettingsIconTone.SECONDARY_VARIANT -> lerp(scheme.secondaryContainer, scheme.primaryContainer, 0.35f)
+        SettingsIconTone.TERTIARY -> scheme.tertiaryContainer
+        SettingsIconTone.TERTIARY_VARIANT -> lerp(scheme.tertiaryContainer, scheme.secondaryContainer, 0.35f)
+    }
+}
+
+@Composable
+fun SettingsIconTone.contentColor(isIosStyle: Boolean): Color {
+    if (isIosStyle) return Color.White
+    val scheme = MaterialTheme.colorScheme
+    return when (this) {
+        SettingsIconTone.PRIMARY -> scheme.onPrimaryContainer
+        SettingsIconTone.PRIMARY_VARIANT -> lerp(scheme.onPrimaryContainer, scheme.onTertiaryContainer, 0.35f)
+        SettingsIconTone.SECONDARY -> scheme.onSecondaryContainer
+        SettingsIconTone.SECONDARY_VARIANT -> lerp(scheme.onSecondaryContainer, scheme.onPrimaryContainer, 0.35f)
+        SettingsIconTone.TERTIARY -> scheme.onTertiaryContainer
+        SettingsIconTone.TERTIARY_VARIANT -> lerp(scheme.onTertiaryContainer, scheme.onSecondaryContainer, 0.35f)
+    }
+}
+
+@Composable
+fun SettingsLeadingIcon(
+    imageVector: ImageVector,
+    iconRes: Int? = null,
+    icon: Painter? = null,
+    tone: SettingsIconTone,
+) {
+    val isIosStyle = LocalIsIosInterfaceStyle.current
+    val tokens = LocalInterfaceStyleTokens.current
+    val contentColor = tone.contentColor(isIosStyle)
+    Box(
+        modifier = Modifier
+            .size(tokens.settingsItemIconContainerSize)
+            .settingsIconBackground(
+                baseColor = tone.containerColor(isIosStyle),
+                shape = RoundedCornerShape(if (isIosStyle) 9.dp else 12.dp),
+                isIosStyle = isIosStyle,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        val painter = icon ?: iconRes?.let { LocalSettingsIconResolver.current(it) }
+        if (painter != null) {
+            Icon(
+                painter = painter,
+                contentDescription = null,
+                tint = contentColor,
+                modifier = Modifier.size(if (isIosStyle) 18.dp else 20.dp),
+            )
+        } else {
+            Icon(
+                imageVector = imageVector,
+                contentDescription = null,
+                tint = contentColor,
+                modifier = Modifier.size(if (isIosStyle) 18.dp else 20.dp),
+            )
+        }
+    }
+    Spacer(modifier = Modifier.width(14.dp))
+}
+
+@Composable
+fun settingsSwitchColors(): SwitchColors {
+    return if (LocalIsIosInterfaceStyle.current) {
+        SwitchDefaults.colors(
+            checkedThumbColor = Color.White,
+            checkedTrackColor = MaterialTheme.colorScheme.primary,
+            checkedBorderColor = Color.Transparent,
+            uncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            uncheckedTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+            uncheckedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+        )
+    } else {
+        SwitchDefaults.colors()
+    }
+}
+
+@Composable
+fun SettingsGroupLabel(
+    text: String,
+    modifier: Modifier = Modifier,
+) {
+    val expressive = LocalMaterialExpressiveComponentsEnabled.current
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = modifier.padding(
+            horizontal = if (expressive) 16.dp else 20.dp,
+            vertical = 10.dp,
+        ),
+    )
+}
+
+@Composable
+fun SettingsUpdateBadge(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .size(8.dp)
+            .background(MaterialTheme.colorScheme.error, CircleShape),
+    )
+}
+
+@Composable
+fun SettingsActionPreference(
+    title: String,
+    summary: String? = null,
+    iconRes: Int? = null,
+    icon: Painter? = null,
+    enabled: Boolean = true,
+    showChevron: Boolean = true,
+    showUpdateBadge: Boolean = false,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .tvFocusable(enabled = enabled, shape = RoundedCornerShape(12.dp), addFocusTarget = false)
+            .clickable(enabled = enabled, onClick = onClick)
+            .settingsPreferenceLayout(enabled),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        SettingsLeadingIcon(
+            imageVector = SettingsMaterialIcons.Settings,
+            iconRes = iconRes,
+            icon = icon,
+            tone = SettingsIconTone.PRIMARY,
+        )
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            if (summary != null) {
+                Text(
+                    text = summary,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        if (showUpdateBadge) {
+            Spacer(modifier = Modifier.width(8.dp))
+            SettingsUpdateBadge()
+        }
+        if (showChevron) {
+            Spacer(modifier = Modifier.width(8.dp))
+            Icon(
+                imageVector = SettingsMaterialIcons.KeyboardArrowRight,
+                contentDescription = null,
+                tint = settingsChevronColor(),
+            )
+        }
+    }
+}
+
+@Composable
+fun SettingsSplitSwitchPreference(
+    title: String,
+    checked: Boolean,
+    summary: String? = null,
+    iconRes: Int? = null,
+    icon: Painter? = null,
+    enabled: Boolean = true,
+    modifier: Modifier = Modifier,
+    switchModifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = modifier
+            .settingsPreferenceLayout(enabled),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .then(
+                    if (onClick != null && enabled) {
+                        Modifier.clickable(onClick = onClick)
+                    } else {
+                        Modifier
+                    }
+                ),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            SettingsLeadingIcon(
+                imageVector = SettingsMaterialIcons.Tune,
+                iconRes = iconRes,
+                icon = icon,
+                tone = SettingsIconTone.SECONDARY,
+            )
+            Column(
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                if (summary != null) {
+                    Text(
+                        text = summary,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+        Spacer(modifier = Modifier.width(16.dp))
+        Switch(
+            checked = checked,
+            enabled = enabled,
+            onCheckedChange = onCheckedChange,
+            colors = settingsSwitchColors(),
+            modifier = switchModifier,
+        )
+    }
+}
+
+@Composable
+fun SettingsInfoPreference(
+    title: String,
+    summary: String,
+    iconRes: Int? = null,
+    icon: Painter? = null,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .settingsPreferenceLayout(enabled = true),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        SettingsLeadingIcon(
+            imageVector = SettingsMaterialIcons.Info,
+            iconRes = iconRes,
+            icon = icon,
+            tone = SettingsIconTone.TERTIARY,
+        )
+        Column(
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = summary,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+fun SettingsSwitchPreference(
+    title: String,
+    checked: Boolean,
+    summary: String? = null,
+    styleHint: String? = null,
+    iconRes: Int? = null,
+    icon: Painter? = null,
+    enabled: Boolean = true,
+    locked: Boolean = false,
+    onLockClick: (() -> Unit)? = null,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
+    Row(
+        modifier = Modifier
+            .then(if (isTvPresentation) Modifier.fillMaxWidth() else Modifier)
+            .then(
+                if (isTvPresentation) {
+                    // 与 SettingsChoicePreference 同理：整行既当焦点目标又装着行尾的锁按钮时，方向键
+                    // 永远走不进自己矩形里的孩子，锁图标就成了够不着的死键。电视上把开关让给正文。
+                    Modifier
+                } else {
+                    Modifier
+                        .tvFocusable(enabled = enabled, shape = RoundedCornerShape(12.dp), addFocusTarget = false)
+                        .toggleable(
+                            value = checked,
+                            enabled = enabled,
+                            role = Role.Switch,
+                            onValueChange = onCheckedChange,
+                        )
+                },
+            )
+            .settingsPreferenceLayout(enabled),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        SettingsLeadingIcon(
+            imageVector = SettingsMaterialIcons.ToggleOn,
+            iconRes = iconRes,
+            icon = icon,
+            tone = SettingsIconTone.SECONDARY_VARIANT,
+        )
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .then(
+                    if (isTvPresentation) {
+                        Modifier
+                            .tvFocusable(enabled = enabled, shape = RoundedCornerShape(12.dp), addFocusTarget = false)
+                            .toggleable(
+                                value = checked,
+                                enabled = enabled,
+                                role = Role.Switch,
+                                onValueChange = onCheckedChange,
+                            )
+                    } else {
+                        Modifier
+                    },
+                ),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            if (summary != null) {
+                Text(
+                    text = summary,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (styleHint != null) {
+                Text(
+                    text = styleHint,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+        }
+        if (onLockClick != null) {
+            IconButton(onClick = onLockClick, modifier = Modifier.tvIconButtonRing()) {
+                Icon(
+                    painter = rememberVectorPainter(if (locked) ReaderPanelIcons.Lock else ReaderPanelIcons.LockOpen),
+                    contentDescription = uiString(if (locked) "source_lock_locked" else "source_lock_unlocked"),
+                    tint = if (locked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        Spacer(modifier = Modifier.width(8.dp))
+        Switch(
+            checked = checked,
+            enabled = enabled,
+            onCheckedChange = null,
+            colors = settingsSwitchColors(),
+        )
+    }
+}
+
+@Composable
+fun <T> SettingsChoicePreference(
+    title: String,
+    value: T,
+    options: List<SettingsChoiceOption<T>>,
+    summary: String? = null,
+    styleHint: String? = null,
+    iconRes: Int? = null,
+    icon: Painter? = null,
+    enabled: Boolean = true,
+    onSettingsClick: (() -> Unit)? = null,
+    settingsContentDescription: String? = null,
+    settingsIcon: ImageVector = SettingsMaterialIcons.Settings,
+    onSecondarySettingsClick: (() -> Unit)? = null,
+    secondarySettingsContentDescription: String? = null,
+    secondarySettingsIcon: ImageVector = SettingsMaterialIcons.Tune,
+    dialogFooter: (@Composable () -> Unit)? = null,
+    onValueChange: (T) -> Unit,
+) {
+    var isDialogVisible by remember { mutableStateOf(false) }
+    var currentValue by remember(value) { mutableStateOf(value) }
+    val selectedLabel = options.firstOrNull { it.value == currentValue }?.label.orEmpty()
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(
+                if (isTvPresentation) {
+                    // 电视上整行不能既当焦点目标又装着行尾的图标按钮：方向性焦点搜索只认"严格位于
+                    // 当前节点矩形之外"的候选，孩子永远在父矩形内部，于是行尾那两个快捷入口成了
+                    // 够不着的死键。这里把可点区域让给正文，图标各成一个兄弟焦点目标。
+                    Modifier
+                } else {
+                    Modifier
+                        .tvFocusable(enabled = enabled, shape = RoundedCornerShape(12.dp), addFocusTarget = false)
+                        .clickable(enabled = enabled) { isDialogVisible = true }
+                },
+            )
+            .settingsPreferenceLayout(enabled),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        SettingsLeadingIcon(
+            imageVector = SettingsMaterialIcons.ListAlt,
+            iconRes = iconRes,
+            icon = icon,
+            tone = SettingsIconTone.PRIMARY_VARIANT,
+        )
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .then(
+                    if (isTvPresentation) {
+                        Modifier
+                            .tvFocusable(enabled = enabled, shape = RoundedCornerShape(12.dp), addFocusTarget = false)
+                            .clickable(enabled = enabled) { isDialogVisible = true }
+                    } else {
+                        Modifier
+                    },
+                ),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = selectedLabel,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (summary != null) {
+                Text(
+                    text = summary,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (styleHint != null) {
+                Text(
+                    text = styleHint,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+        }
+        Spacer(modifier = Modifier.width(8.dp))
+        if (onSettingsClick != null) {
+            IconButton(onClick = onSettingsClick, enabled = enabled, modifier = Modifier.tvIconButtonRing()) {
+                Icon(
+                    imageVector = settingsIcon,
+                    contentDescription = settingsContentDescription,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        if (onSecondarySettingsClick != null) {
+            IconButton(onClick = onSecondarySettingsClick, enabled = enabled, modifier = Modifier.tvIconButtonRing()) {
+                Icon(
+                    imageVector = secondarySettingsIcon,
+                    contentDescription = secondarySettingsContentDescription,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        Icon(
+            imageVector = SettingsMaterialIcons.KeyboardArrowRight,
+            contentDescription = null,
+            tint = settingsChevronColor(),
+        )
+    }
+
+    if (isDialogVisible) {
+        SettingsChoiceDialog(
+            title = title,
+            value = currentValue,
+            options = options,
+            footer = dialogFooter,
+            onDismissRequest = { isDialogVisible = false },
+            onValueChange = {
+                currentValue = it
+                onValueChange(it)
+                isDialogVisible = false
+            },
+        )
+    }
+}
+
+@Composable
+fun <T> SettingsChoiceDialog(
+    title: String,
+    value: T,
+    options: List<SettingsChoiceOption<T>>,
+    footer: (@Composable () -> Unit)? = null,
+    onDismissRequest: () -> Unit,
+    onValueChange: (T) -> Unit,
+) {
+    val isIosStyle = LocalIsIosInterfaceStyle.current
+    SettingsAlertDialog(
+        title = title,
+        onDismissRequest = onDismissRequest,
+        text = {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 320.dp),
+            ) {
+                itemsIndexed(options, contentType = { _, _ -> "radio_option" }) { index, option ->
+                    val selected = option.value == value
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = if (isIosStyle) 48.dp else 0.dp)
+                            .tvFocusable(shape = RoundedCornerShape(10.dp), addFocusTarget = false)
+                            .selectable(selected = selected, onClick = { onValueChange(option.value) })
+                            .padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        if (!isIosStyle) {
+                            RadioButton(selected = selected, onClick = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                        }
+                        Text(
+                            text = option.label,
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        if (isIosStyle && selected) {
+                            Icon(
+                                imageVector = SettingsMaterialIcons.Check,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    }
+                    if (isIosStyle && index != options.lastIndex) {
+                        SettingsGroupDivider(startPadding = 0.dp, endPadding = 0.dp)
+                    }
+                }
+                if (footer != null) {
+                    item(contentType = "dialog_footer") {
+                        SettingsGroupDivider(startPadding = 0.dp, endPadding = 0.dp)
+                        footer()
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            SettingsDialogActionButton(
+                text = uiString("ok"),
+                onClick = onDismissRequest,
+            )
+        },
+    )
+}
+
+@Composable
+fun <T> SettingsMultiChoicePreference(
+    title: String,
+    values: Set<T>,
+    options: List<SettingsChoiceOption<T>>,
+    emptySelectionText: String,
+    summary: String? = null,
+    iconRes: Int? = null,
+    icon: Painter? = null,
+    maxSelections: Int? = null,
+    enabled: Boolean = true,
+    onValueChange: (Set<T>) -> Unit,
+) {
+    var isDialogVisible by remember { mutableStateOf(false) }
+    val selectedLabel = options
+        .filter { it.value in values }
+        .joinToString { it.label }
+        .ifBlank { emptySelectionText }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .tvFocusable(enabled = enabled, shape = RoundedCornerShape(12.dp), addFocusTarget = false)
+            .clickable(enabled = enabled) {
+                isDialogVisible = true
+            }
+            .settingsPreferenceLayout(enabled),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        SettingsLeadingIcon(
+            imageVector = SettingsMaterialIcons.Checklist,
+            iconRes = iconRes,
+            icon = icon,
+            tone = SettingsIconTone.TERTIARY_VARIANT,
+        )
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = selectedLabel,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (summary != null) {
+                Text(
+                    text = summary,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        Spacer(modifier = Modifier.width(8.dp))
+        Icon(
+            imageVector = SettingsMaterialIcons.KeyboardArrowRight,
+            contentDescription = null,
+            tint = settingsChevronColor(),
+        )
+    }
+
+    if (isDialogVisible) {
+        PreferenceMultiChoiceDialog(
+            title = title,
+            selected = values,
+            options = options.map { PreferenceChoice(it.value, it.label) },
+            onValueChange = onValueChange,
+            onDismiss = { isDialogVisible = false },
+            enabled = enabled,
+            maxSelections = maxSelections,
+            renderDialog = LocalSettingsDialogRenderer.current,
+        )
+    }
+}
+
+@Composable
+fun SettingsSliderPreference(
+    title: String,
+    value: Int,
+    valueRange: IntRange,
+    step: Int,
+    summary: String? = null,
+    iconRes: Int? = null,
+    icon: Painter? = null,
+    enabled: Boolean = true,
+    valueText: (Int) -> String,
+    onValueChange: (Int) -> Unit,
+) {
+    var sliderValue by remember(value) { mutableStateOf(value.toFloat()) }
+    var committedValue by remember(value) { mutableStateOf(value.coerceIn(valueRange.first, valueRange.last)) }
+    val steps = ((valueRange.last - valueRange.first) / step - 1).coerceAtLeast(0)
+    val currentValue = sliderValue.roundToInt().coerceIn(valueRange.first, valueRange.last)
+    val applyValue: (Float) -> Unit = { newValue ->
+        sliderValue = newValue
+        val nextValue = newValue.roundToInt().coerceIn(valueRange.first, valueRange.last)
+        if (nextValue != committedValue) {
+            committedValue = nextValue
+            onValueChange(nextValue)
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .settingsPreferenceLayout(enabled),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            SettingsLeadingIcon(
+                imageVector = SettingsMaterialIcons.Tune,
+                iconRes = iconRes,
+                icon = icon,
+                tone = SettingsIconTone.SECONDARY_VARIANT,
+            )
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                if (summary != null) {
+                    Text(
+                        text = summary,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.75f),
+                modifier = Modifier.padding(start = 8.dp),
+            ) {
+                Text(
+                    text = valueText(currentValue),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                )
+            }
+        }
+        KototoroSlider(
+            value = sliderValue,
+            onValueChange = applyValue,
+            valueRange = valueRange.first.toFloat()..valueRange.last.toFloat(),
+            steps = steps,
+            enabled = enabled,
+            compactThumb = true,
+            // 电视上没有这里的遥控器接线，滑杆就是一个“焦点进去、什么都看不出、只能靠上下键逃出”的死胡同：
+            // 环与左右键按步进都由 tvSliderDpad 提供（手机上是 no-op）。
+            modifier = Modifier.tvSliderDpad(
+                value = sliderValue,
+                valueRange = valueRange.first.toFloat()..valueRange.last.toFloat(),
+                onValueChange = applyValue,
+                steps = steps,
+                enabled = enabled,
+            ),
+            onValueChangeFinished = {
+                if (currentValue != committedValue) {
+                    committedValue = currentValue
+                    onValueChange(currentValue)
+                }
+            },
+        )
+    }
+}
+
+@Composable
+fun SettingsTextInputPreference(
+    title: String,
+    value: String,
+    summary: String? = null,
+    placeholder: String? = null,
+    isPassword: Boolean = false,
+    iconRes: Int? = null,
+    icon: Painter? = null,
+    enabled: Boolean = true,
+    onValueChange: (String) -> Unit,
+) {
+    // An inline field is a dead end for a remote: while it holds the focus the D-pad belongs to the
+    // caret, and the focus escape cannot always find a neighbour inside a scrolling settings pane, so
+    // every row below the field becomes unreachable (found on Settings > Storage and network, where
+    // the mirror URL field hid the whole rest of the page). On TV the same value is edited in a
+    // dialog instead, where the field hands the focus back to OK through a FocusRequester
+    // (`rememberTvFieldExit`). Phones and tablets keep the inline field exactly as before.
+    if (LocalUiPresentationConfig.current.isTv) {
+        SettingsDialogTextPreference(
+            title = title,
+            value = value,
+            summary = summary,
+            placeholder = placeholder,
+            isPassword = isPassword,
+            iconRes = iconRes,
+            icon = icon,
+            enabled = enabled,
+            onValueChange = onValueChange,
+        )
+        return
+    }
+
+    var currentValue by remember(value) { mutableStateOf(value) }
+
+    Column(
+        modifier = Modifier
+            .settingsPreferenceLayout(enabled),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            SettingsLeadingIcon(
+                imageVector = SettingsMaterialIcons.Edit,
+                iconRes = iconRes,
+                icon = icon,
+                tone = SettingsIconTone.TERTIARY_VARIANT,
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                if (summary != null) {
+                    Text(
+                        text = summary,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+        OutlinedTextField(
+            value = currentValue,
+            onValueChange = {
+                currentValue = it
+                onValueChange(it)
+            },
+            enabled = enabled,
+            modifier = Modifier.fillMaxWidth().tvTextInputFocusEscape(),
+            placeholder = placeholder?.let {
+                { Text(text = it) }
+            },
+            visualTransformation = if (isPassword) {
+                PasswordVisualTransformation()
+            } else {
+                VisualTransformation.None
+            },
+        )
+    }
+}
+
+@Composable
+fun SettingsDialogTextPreference(
+    title: String,
+    value: String,
+    summary: String? = null,
+    placeholder: String? = null,
+    suggestions: List<SettingsChoiceOption<String>> = emptyList(),
+    isPassword: Boolean = false,
+    iconRes: Int? = null,
+    icon: Painter? = null,
+    enabled: Boolean = true,
+    onValueChange: (String) -> Unit,
+) {
+    var isDialogVisible by remember { mutableStateOf(false) }
+    var pendingValue by remember(value) { mutableStateOf(value) }
+    var isSuggestionsExpanded by remember { mutableStateOf(false) }
+    val displayValue = when {
+        isPassword && value.isNotEmpty() -> "\u2022".repeat(value.length.coerceAtMost(8))
+        value.isNotBlank() -> value
+        !placeholder.isNullOrBlank() -> placeholder
+        else -> uiString("not_specified")
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .tvFocusable(enabled = enabled, shape = RoundedCornerShape(12.dp), addFocusTarget = false)
+            .clickable(enabled = enabled) {
+                pendingValue = value
+                isDialogVisible = true
+            }
+            .settingsPreferenceLayout(enabled),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        SettingsLeadingIcon(
+            imageVector = SettingsMaterialIcons.Edit,
+            iconRes = iconRes,
+            icon = icon,
+            tone = SettingsIconTone.TERTIARY,
+        )
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = displayValue,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (summary != null) {
+                Text(
+                    text = summary,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        Spacer(modifier = Modifier.width(8.dp))
+        Icon(
+            imageVector = SettingsMaterialIcons.KeyboardArrowRight,
+            contentDescription = null,
+            tint = settingsChevronColor(),
+        )
+    }
+
+    if (isDialogVisible) {
+        val isIosStyle = LocalIsIosInterfaceStyle.current
+        val isTvPresentation = LocalUiPresentationConfig.current.isTv
+        val fieldExit = rememberTvFieldExit()
+        // TV keeps the dialog's field read-only until the centre key asks for editing: an editable
+        // field opens the software keyboard the moment it takes the focus, and on a 1080p set that
+        // keyboard covers the OK/Cancel row below it. Read-only first means the dialog opens with the
+        // ring on the field and every button visible; centre starts the keyboard on purpose.
+        val readOnlyState = rememberTvTextFieldReadOnlyState()
+        SettingsAlertDialog(
+            title = title,
+            onDismissRequest = {
+                isSuggestionsExpanded = false
+                isDialogVisible = false
+            },
+            bodyEditing = readOnlyState.isEditing,
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = pendingValue,
+                        onValueChange = {
+                            pendingValue = it
+                        },
+                        readOnly = readOnlyState.isReadOnly,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .then(readOnlyState.fieldModifier)
+                            .then(fieldExit.fieldModifier),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(onDone = { fieldExit.onDone() }),
+                        placeholder = placeholder?.let { { Text(text = it) } },
+                        trailingIcon = if (suggestions.isNotEmpty() && !isTvPresentation) {
+                            {
+                                IconButton(
+                                    onClick = { isSuggestionsExpanded = !isSuggestionsExpanded },
+                                    modifier = Modifier.tvIconButtonRing(),
+                                ) {
+                                    Icon(
+                                        imageVector = if (isSuggestionsExpanded) {
+                                            SettingsMaterialIcons.KeyboardArrowUp
+                                        } else {
+                                            SettingsMaterialIcons.KeyboardArrowDown
+                                        },
+                                        contentDescription = null,
+                                    )
+                                }
+                            }
+                        } else {
+                            null
+                        },
+                        visualTransformation = if (isPassword) {
+                            PasswordVisualTransformation()
+                        } else {
+                            VisualTransformation.None
+                        },
+                    )
+                    if (suggestions.isNotEmpty() && isTvPresentation) {
+                        SettingsDialogActionButton(
+                            text = uiString("options"),
+                            onClick = { isSuggestionsExpanded = !isSuggestionsExpanded },
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = isSuggestionsExpanded && suggestions.isNotEmpty(),
+                        onDismissRequest = { isSuggestionsExpanded = false },
+                        shape = if (isIosStyle) RoundedCornerShape(14.dp) else MaterialTheme.shapes.large,
+                    ) {
+                        suggestions.forEach { suggestion ->
+                            DropdownMenuItem(
+                                text = { Text(text = suggestion.label) },
+                                modifier = Modifier.tvFocusable(
+                                    shape = RoundedCornerShape(10.dp),
+                                    addFocusTarget = false,
+                                ),
+                                onClick = {
+                                    pendingValue = suggestion.value
+                                    isSuggestionsExpanded = false
+                                },
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                SettingsDialogActionButton(
+                    modifier = fieldExit.targetModifier,
+                    text = uiString("ok"),
+                    onClick = {
+                        onValueChange(pendingValue)
+                        isSuggestionsExpanded = false
+                        isDialogVisible = false
+                    },
+                )
+            },
+            dismissButton = {
+                val cancel = @Composable {
+                    SettingsDialogActionButton(
+                        text = uiString("cancel"),
+                        onClick = {
+                            isSuggestionsExpanded = false
+                            isDialogVisible = false
+                        },
+                    )
+                }
+                if (isTvPresentation) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        cancel()
+                        // A remote cannot select all and delete, and the TV keyboard only offers one
+                        // backspace at a time, so emptying a stored value - a mirror URL, an API key,
+                        // "1080p, 720p, 480p" - meant seventeen deletes through a keyboard that covers
+                        // this very button row. Clear sits between Cancel and OK because that is the
+                        // row the remote already walks: the field's exit lands on OK and the rest are
+                        // one LEFT away. It stays enabled even on an empty value on purpose; disabling
+                        // it would remove the focus target from under the ring mid-dialog.
+                        SettingsDialogActionButton(
+                            text = uiString("clear"),
+                            onClick = { pendingValue = "" },
+                        )
+                    }
+                } else {
+                    cancel()
+                }
+            },
+        )
+    }
+}
+
+@Composable
+fun SettingsReorderPreference(
+    title: String,
+    value: List<String>,
+    summary: String? = null,
+    emptyValueText: String,
+    iconRes: Int? = null,
+    icon: Painter? = null,
+    enabled: Boolean = true,
+    onValueChange: (List<String>) -> Unit,
+) {
+    var isDialogVisible by remember { mutableStateOf(false) }
+    val displayValue = value.joinToString(", ").ifBlank { emptyValueText }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .tvFocusable(enabled = enabled, shape = RoundedCornerShape(12.dp), addFocusTarget = false)
+            .clickable(enabled = enabled) {
+                isDialogVisible = true
+            }
+            .settingsPreferenceLayout(enabled),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        SettingsLeadingIcon(
+            imageVector = SettingsMaterialIcons.Reorder,
+            iconRes = iconRes,
+            icon = icon,
+            tone = SettingsIconTone.PRIMARY_VARIANT,
+        )
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = displayValue,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (summary != null) {
+                Text(
+                    text = summary,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        Spacer(modifier = Modifier.width(8.dp))
+        Icon(
+            imageVector = SettingsMaterialIcons.KeyboardArrowRight,
+            contentDescription = null,
+            tint = settingsChevronColor(),
+        )
+    }
+
+    if (isDialogVisible) {
+        org.skepsun.kototoro.core.ui.compose.ReorderEditorDialog(
+            items = value.map {
+                org.skepsun.kototoro.core.ui.compose.ReorderItem(it, it.removeSuffix(".jar"))
+            },
+            onDismissRequest = { isDialogVisible = false },
+            onSave = { onValueChange(it) },
+            enabled = enabled,
+            allowEmptySave = true,
+            showMoveButtons = true,
+            title = title,
+            summary = summary.orEmpty(),
+            emptyText = emptyValueText,
+        )
+    }
+}
+
+@Composable
+fun SettingsSectionDivider(
+    modifier: Modifier = Modifier,
+) {
+    SettingsGroupDivider(modifier = modifier)
+}
+
+@Composable
+fun SettingsGroupDivider(
+    modifier: Modifier = Modifier,
+    startPadding: Dp = 20.dp,
+    endPadding: Dp = 20.dp,
+) {
+    HorizontalDivider(
+        modifier = modifier.padding(start = startPadding, end = endPadding),
+        color = settingsSeparatorColor(),
+    )
+}
+
+@Composable
+fun Modifier.settingsPreferenceLayout(enabled: Boolean): Modifier {
+    val isIosStyle = LocalIsIosInterfaceStyle.current
+    val tokens = LocalInterfaceStyleTokens.current
+    // Legacy MATERIAL_3 was normalized to MATERIAL_3_EXPRESSIVE, so the branch below always
+    // applies; keep the iOS vs Material split via tokens only.
+    return fillMaxWidth()
+        .alpha(if (enabled) 1f else 0.5f)
+        .heightIn(min = if (isIosStyle) 56.dp else tokens.controlHeight)
+        .padding(horizontal = 16.dp, vertical = if (isIosStyle) 8.dp else 10.dp)
+}
+
+/**
+ * How the settings components show their dialogs. Android renders [PreferenceDialogContent] through its own
+ * settings dialog (window blur, TV card, back handling) at the theme root; a host that sets nothing gets the shared
+ * Material dialog.
+ */
+val LocalSettingsDialogRenderer = staticCompositionLocalOf<@Composable (PreferenceDialogContent) -> Unit> {
+    { content -> PreferenceDialog(content) }
+}
+
+/** The settings components' dialog call, routed to the host's renderer. */
+@Composable
+internal fun SettingsAlertDialog(
+    title: String,
+    onDismissRequest: () -> Unit,
+    confirmButton: @Composable () -> Unit,
+    dismissButton: (@Composable () -> Unit)? = null,
+    bodyEditing: Boolean = false,
+    text: @Composable () -> Unit,
+) {
+    LocalSettingsDialogRenderer.current(
+        PreferenceDialogContent(
+            title = title,
+            onDismiss = onDismissRequest,
+            bodyEditing = bodyEditing,
+            text = text,
+            confirmButton = confirmButton,
+            dismissButton = dismissButton,
+        ),
+    )
+}
+
+@Composable
+fun SettingsDialogActionButton(
+    text: String,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+    modifier: Modifier = Modifier,
+) {
+    TextButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier.tvFocusable(
+            enabled = enabled,
+            shape = RoundedCornerShape(10.dp),
+            addFocusTarget = false,
+        ),
+    ) {
+        // A television is watched from across the room, so the action labels take the size the rest
+        // of the TV settings list already uses instead of the phone's 14 sp.
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelLarge.copy(
+                fontWeight = FontWeight.SemiBold,
+                fontSize = if (LocalUiPresentationConfig.current.isTv) 16.sp else 14.sp,
+            ),
+        )
+    }
+}
+

@@ -38,7 +38,16 @@ data class DesktopRepositoryCatalog(
 data class DesktopManagedJar(val path: Path, val identity: MihonJarIdentity)
 
 /** Repository metadata and immutable app-owned artifacts; construction/execution remains in source-host. */
-class DesktopRepositories(root: Path, private val preferences: SourcePreferences) : Closeable {
+class DesktopRepositories(
+    root: Path,
+    private val preferences: SourcePreferences,
+    /**
+     * Android's GitHub download mirror, applied to the artifacts and Cloudstream lists a repository points at. The
+     * repository's own index address is never rewritten: it is what the user typed, what gets saved, and what relative
+     * package URLs resolve against.
+     */
+    private val mirror: (String) -> String = { it },
+) : Closeable {
     private val http = DesktopRepositoryHttp()
     private val artifacts = root.toAbsolutePath().normalize().resolve("extensions")
     private val inspector = MihonJarInspector()
@@ -51,11 +60,25 @@ class DesktopRepositories(root: Path, private val preferences: SourcePreferences
             it.forEach { repository -> repositoryUri(repository.indexUrl) }
         }
     } catch (error: Exception) {
-        errors += "仓库记录读取失败：${error.message}"
+        errors += DesktopRuntimeStrings.text("runtime.repository.recordReadFailed", "could not read the saved repositories: %s", error.message ?: "")
         emptyList()
     }
 
     fun saved(): List<DesktopRepository> = repositories.toList()
+
+    /**
+     * Forgets a saved repository. Installed extensions stay installed (Android keeps them too and only marks
+     * them as not coming from a known repository), and no artifact is deleted here; this only drops the index
+     * entry so the repository stops appearing in the list. False means the address was not saved.
+     */
+    fun remove(indexUrl: String): Boolean {
+        val remaining = repositories.filterNot { it.indexUrl == indexUrl }
+        if (remaining.size == repositories.size) return false
+        persistRepositoryPreference(preferences, "repositories",
+            SourcePreferenceValue.Text(SourceProtocolJson.encodeToString(remaining)))
+        repositories = remaining
+        return true
+    }
 
     suspend fun fetch(address: String): DesktopRepositoryCatalog = withContext(Dispatchers.IO) {
         val input = repositoryUri(address)
@@ -72,7 +95,7 @@ class DesktopRepositories(root: Path, private val preferences: SourcePreferences
         val candidates = when {
             name.endsWith(".pb") || name.endsWith(".json") && name != "repo.json" -> listOf(input)
             else -> {
-                require(input.query == null) { "带查询参数的仓库请提供完整 index.pb、index.json 或 index.min.json 地址" }
+                require(input.query == null) { DesktopRuntimeStrings.text("runtime.repository.fullIndex", "a repository URL with a query must point at a full index.pb, index.json or index.min.json") }
                 val base = if (name == "repo.json") input.resolve(".") else {
                     URI(input.toString().trimEnd('/') + "/")
                 }
@@ -96,23 +119,23 @@ class DesktopRepositories(root: Path, private val preferences: SourcePreferences
         val legacy = !uri.path.endsWith(".pb", ignoreCase = true) && bytes.decodeToString().trimStart().startsWith("[")
         val index = if (legacy) decodeLegacyExtensionIndex(bytes, legacyRepositoryName(actual))
             else decodeExtensionStoreIndex(bytes, uri.path.endsWith(".pb", ignoreCase = true))
-        require(index.name.isNotBlank()) { "仓库名称为空" }
+        require(index.name.isNotBlank()) { DesktopRuntimeStrings.text("runtime.repository.emptyName", "the repository has no name") }
         val previous = repositories.firstOrNull { it.indexUrl == actual.toString() }
-        require(previous == null || previous.signingKey == index.signingKey) { "仓库签名信息已变化，请核对地址" }
+        require(previous == null || previous.signingKey == index.signingKey) { DesktopRuntimeStrings.text("runtime.repository.signingChanged", "the repository's signing information changed; check the address") }
         val external = index.extensionListUrl?.takeIf(String::isNotBlank)
         val inline = index.extensionList
         val (resourceBase, rows) = if (inline != null) actual to inline.extensions else {
-            val target = repositoryUri(actual.resolve(requireNotNull(external) { "仓库没有扩展列表" }).toString())
+            val target = repositoryUri(actual.resolve(requireNotNull(external) { DesktopRuntimeStrings.text("runtime.repository.noExtensions", "the repository has no extension list") }).toString())
             val (listActual, data) = bytes(target)
             listActual to decodeExtensionStoreList(data, target.path.endsWith(".pb", ignoreCase = true)).extensions
         }
-        require(rows.size <= 20_000 && rows.map { it.packageName }.distinct().size == rows.size) { "仓库扩展列表无效" }
+        require(rows.size <= 20_000 && rows.map { it.packageName }.distinct().size == rows.size) { DesktopRuntimeStrings.text("runtime.repository.invalidExtensions", "the repository's extension list is invalid") }
         val parserPluginPackages = if (legacy) rows.filter(::isLegacyParserPlugin).mapTo(linkedSetOf()) {
             it.packageName
         } else emptySet()
         val extensions = rows.map { row ->
             require(row.packageName.matches(Regex("[A-Za-z0-9_]+(?:\\.[A-Za-z0-9_]+)+")) && row.versionCode > 0) {
-                "仓库扩展身份无效"
+                DesktopRuntimeStrings.text("runtime.repository.invalidIdentity", "the repository extension's identity is invalid")
             }
             fun resolved(address: String) = address.takeIf(String::isNotBlank)?.let {
                 repositoryUri(resourceBase.resolve(it).toString()).toString()
@@ -131,7 +154,7 @@ class DesktopRepositories(root: Path, private val preferences: SourcePreferences
      * as an extension catalog: one entry per `.cs3`, versioned by the plugin version. Null for any other document.
      */
     private suspend fun fetchCloudstream(address: String): DesktopRepositoryCatalog? {
-        val (_, bytes) = try { bytes(repositoryUri(cloudstreamMirror(address))) } catch (error: RepositoryHttpException) {
+        val (_, bytes) = try { bytes(mirrored(cloudstreamMirror(address))) } catch (error: RepositoryHttpException) {
             if (error.status == 404) return null else throw error
         }
         val document = runCatching { kotlinx.serialization.json.Json.parseToJsonElement(bytes.decodeToString()) }.getOrNull()
@@ -139,16 +162,16 @@ class DesktopRepositories(root: Path, private val preferences: SourcePreferences
         val (name, lists) = when (document) {
             is kotlinx.serialization.json.JsonObject -> {
                 val lists = (document["pluginLists"] as? kotlinx.serialization.json.JsonArray) ?: return null
-                (document.text("name") ?: "Cloudstream 仓库") to lists.mapNotNull { (it as? kotlinx.serialization.json.JsonPrimitive)?.content }
+                (document.text("name") ?: DesktopRuntimeStrings.text("runtime.repository.cloudstreamDefault", "Cloudstream repository")) to lists.mapNotNull { (it as? kotlinx.serialization.json.JsonPrimitive)?.content }
             }
             is kotlinx.serialization.json.JsonArray -> {
                 if ((document.firstOrNull() as? kotlinx.serialization.json.JsonObject)?.text("internalName") == null) return null
-                "Cloudstream 插件列表" to listOf(address)
+                DesktopRuntimeStrings.text("runtime.repository.cloudstreamPlugins", "Cloudstream plugin list") to listOf(address)
             }
             else -> return null
         }
         val plugins = lists.flatMap { list ->
-            val (listActual, data) = bytes(repositoryUri(cloudstreamMirror(list)))
+            val (listActual, data) = bytes(mirrored(cloudstreamMirror(list)))
             (kotlinx.serialization.json.Json.parseToJsonElement(data.decodeToString()) as? kotlinx.serialization.json.JsonArray)
                 .orEmpty().mapNotNull { it as? kotlinx.serialization.json.JsonObject }.mapNotNull { plugin ->
                     val id = plugin.text("internalName") ?: return@mapNotNull null
@@ -172,7 +195,7 @@ class DesktopRepositories(root: Path, private val preferences: SourcePreferences
                     )
                 }
         }.distinctBy { it.packageName }
-        require(plugins.isNotEmpty()) { "Cloudstream 仓库没有可用插件" }
+        require(plugins.isNotEmpty()) { DesktopRuntimeStrings.text("runtime.repository.cloudstreamEmpty", "the Cloudstream repository has no usable plugins") }
         val repository = DesktopRepository(address, name, CLOUDSTREAM_SIGNING_KEY)
         val updated = repositories.filterNot { it.indexUrl == repository.indexUrl } + repository
         persistRepositoryPreference(preferences, "repositories", SourcePreferenceValue.Text(SourceProtocolJson.encodeToString(updated)))
@@ -188,7 +211,7 @@ class DesktopRepositories(root: Path, private val preferences: SourcePreferences
         val parts = uri.path.split('/').filter(String::isNotBlank).dropLast(1)
         // raw hosts: /owner/name/branch/…; jsDelivr: /gh/owner/name@branch/…
         val tail = parts.dropWhile { it == "gh" }.take(2).map { it.substringBefore('@') }
-        return (listOf(uri.host.orEmpty()) + tail).filter(String::isNotBlank).joinToString("/").ifBlank { "扩展仓库" }
+        return (listOf(uri.host.orEmpty()) + tail).filter(String::isNotBlank).joinToString("/").ifBlank { DesktopRuntimeStrings.text("runtime.repository.defaultName", "Extension repository") }
     }
 
     private suspend fun bytes(uri: URI): Pair<URI, ByteArray> = http.read(uri, INDEX_LIMIT) { actual, input ->
@@ -197,13 +220,16 @@ class DesktopRepositories(root: Path, private val preferences: SourcePreferences
         actual to output.toByteArray()
     }
 
+    /** A download address through the user's GitHub mirror; the direct connection leaves it untouched. */
+    private fun mirrored(url: String): URI = repositoryUri(mirror(url))
+
     suspend fun download(catalog: DesktopRepositoryCatalog, extension: ExtensionStoreIndex.Extension): DesktopManagedJar {
-        require(catalog.repository in repositories && extension in catalog.extensions) { "请先刷新仓库列表" }
-        require(!catalog.isParserPlugin(extension)) { "解析器插件必须使用解析器安装流程" }
+        require(catalog.repository in repositories && extension in catalog.extensions) { DesktopRuntimeStrings.text("runtime.extension.refreshFirst", "refresh the repositories first") }
+        require(!catalog.isParserPlugin(extension)) { DesktopRuntimeStrings.text("runtime.extension.parserInstall", "parser plugins must be installed with the parser flow") }
         // Prefer the repository's own JVM jar; an APK-only entry is downloaded and converted locally.
         val address = extension.resources.jarUrl.ifBlank { extension.resources.apkUrl }
-        require(address.isNotBlank()) { "此扩展没有可下载的安装包" }
-        return http.read(repositoryUri(address), JAR_LIMIT) { _, input ->
+        require(address.isNotBlank()) { DesktopRuntimeStrings.text("runtime.extension.noDownload", "this extension has no downloadable package") }
+        return http.read(mirrored(address), JAR_LIMIT) { _, input ->
             stage(input, extension)
         }
     }
@@ -212,11 +238,11 @@ class DesktopRepositories(root: Path, private val preferences: SourcePreferences
         catalog: DesktopRepositoryCatalog,
         extension: ExtensionStoreIndex.Extension,
     ): DesktopManagedParserPlugin {
-        require(catalog.repository in repositories && extension in catalog.extensions) { "请先刷新仓库列表" }
-        require(catalog.isParserPlugin(extension)) { "仓库项目不是解析器插件" }
+        require(catalog.repository in repositories && extension in catalog.extensions) { DesktopRuntimeStrings.text("runtime.extension.refreshFirst", "refresh the repositories first") }
+        require(catalog.isParserPlugin(extension)) { DesktopRuntimeStrings.text("runtime.extension.notParser", "the repository item is not a parser plugin") }
         val address = extension.resources.jarUrl.ifBlank { extension.resources.apkUrl }
-        require(address.isNotBlank()) { "此解析器插件没有可下载的安装包" }
-        return http.read(repositoryUri(address), JAR_LIMIT) { _, input ->
+        require(address.isNotBlank()) { DesktopRuntimeStrings.text("runtime.extension.parserNoDownload", "this parser plugin has no downloadable package") }
+        return http.read(mirrored(address), JAR_LIMIT) { _, input ->
             stageParserPlugin(input, extension.packageName)
         }
     }
@@ -224,6 +250,13 @@ class DesktopRepositories(root: Path, private val preferences: SourcePreferences
     suspend fun import(path: Path): DesktopManagedJar = withContext(Dispatchers.IO) {
         Files.newInputStream(path).use { stage(it, null) }
     }
+
+    /**
+     * The launcher icon an installed extension APK shipped ([DesktopExtensionIcons]); null for a jar built without
+     * resources, which is what a Keiyoushi-style jar is.
+     */
+    fun packagedIcon(sha256: String): Path? =
+        DesktopExtensionIcons.pathOf(artifacts.resolve("$sha256.jar")).takeIf { Files.isRegularFile(it) }
 
     /** A Cloudstream `.cs3`, kept as published (its DEX is converted when loaded); [id] defaults to the file name. */
     suspend fun importCloudstreamPlugin(path: Path, id: String = DesktopExtensionFiles.cloudstreamPluginId(path.fileName.toString())):
@@ -233,11 +266,11 @@ class DesktopRepositories(root: Path, private val preferences: SourcePreferences
 
     /** Downloads a Cloudstream plugin from its repository URL (GitHub raw links are served through jsDelivr). */
     suspend fun downloadCloudstreamPlugin(url: String, id: String): DesktopManagedCloudstreamPlugin =
-        http.read(repositoryUri(cloudstreamMirror(url)), JAR_LIMIT) { _, input -> stageCloudstreamPlugin(input, id) }
+        http.read(mirrored(cloudstreamMirror(url)), JAR_LIMIT) { _, input -> stageCloudstreamPlugin(input, id) }
 
     private suspend fun stageCloudstreamPlugin(input: InputStream, id: String): DesktopManagedCloudstreamPlugin =
         staged(input) { temporary ->
-            require(DesktopExtensionFiles.isCloudstreamPlugin(temporary)) { "不是有效的 Cloudstream 插件（.cs3）" }
+            require(DesktopExtensionFiles.isCloudstreamPlugin(temporary)) { DesktopRuntimeStrings.text("runtime.extension.invalidCloudstream", "not a valid Cloudstream plugin (.cs3)") }
             val sha256 = java.security.MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(temporary))
                 .joinToString("") { "%02x".format(it) }
             DesktopManagedCloudstreamPlugin(publish(temporary, sha256, "cs3"), id, sha256)
@@ -267,7 +300,7 @@ class DesktopRepositories(root: Path, private val preferences: SourcePreferences
                     conversion = try {
                         DexJarConverter.convert(temporary, converted)
                     } catch (failure: DexConversionException) {
-                        throw IOException("无法把 Android DEX 插件转换为 JVM 类文件：${failure.failure}", failure)
+                        throw IOException(DesktopRuntimeStrings.text("runtime.extension.dexConvertFailed", "could not convert the Android DEX plugin to JVM class files: %s", failure.failure), failure)
                     }
                     converted
                 }
@@ -286,20 +319,23 @@ class DesktopRepositories(root: Path, private val preferences: SourcePreferences
         staged(input) { temporary ->
             val converted = Files.createTempFile(artifacts, ".converted-", ".tmp")
             try {
-                val ready = if (ApkExtensionConverter.isApk(temporary)) {
+                val apk = ApkExtensionConverter.isApk(temporary)
+                val ready = if (apk) {
                     try { ApkExtensionConverter.convert(temporary, converted) } catch (failure: DexConversionException) {
-                        throw IOException("无法把 Android APK 转换为 JVM 类文件：${failure.failure}", failure)
+                        throw IOException(DesktopRuntimeStrings.text("runtime.extension.apkConvertFailed", "could not convert the Android APK to JVM class files: %s", failure.failure), failure)
                     }
                     converted
                 } else temporary
                 val metadata = inspector.inspect(ready)
                 require(expected == null || metadata.packageName == expected.packageName &&
                     metadata.versionCode == expected.versionCode && metadata.extensionLib == expected.extensionLib) {
-                    "下载的扩展包名、版本或扩展 API 与仓库不一致"
+                    DesktopRuntimeStrings.text("runtime.extension.mismatch", "the downloaded extension's package, version or API does not match the repository")
                 }
                 val identity = MihonJarIdentity(metadata.packageName, metadata.versionCode, metadata.sha256)
                 val target = publish(ready, metadata.sha256)
                 inspector.verify(inspector.inspect(target), identity)
+                // Android shows the source with the launcher icon of its APK; the conversion drops the resources.
+                if (apk) DesktopExtensionIcons.store(temporary, target)
                 DesktopManagedJar(target, identity)
             } finally { Files.deleteIfExists(converted) }
         }
@@ -307,7 +343,7 @@ class DesktopRepositories(root: Path, private val preferences: SourcePreferences
     /** Copies [input] into an app-owned temporary file within the size limit; [inspect] publishes or throws. */
     private suspend fun <T> staged(input: InputStream, inspect: (Path) -> T): T {
         Files.createDirectories(artifacts)
-        require(Files.isDirectory(artifacts, LinkOption.NOFOLLOW_LINKS)) { "扩展目录必须是真实目录" }
+        require(Files.isDirectory(artifacts, LinkOption.NOFOLLOW_LINKS)) { DesktopRuntimeStrings.text("runtime.extension.notDirectory", "the extension directory must be a real directory") }
         val temporary = Files.createTempFile(artifacts, ".download-", ".tmp")
         try {
             Files.newOutputStream(temporary).use { output -> copy(input, output, JAR_LIMIT) }
@@ -320,7 +356,7 @@ class DesktopRepositories(root: Path, private val preferences: SourcePreferences
     private fun publish(temporary: Path, sha256: String, extension: String = "jar"): Path {
         val target = artifacts.resolve("$sha256.$extension")
         if (!Files.exists(target, LinkOption.NOFOLLOW_LINKS)) Files.move(temporary, target)
-        require(Files.isRegularFile(target, LinkOption.NOFOLLOW_LINKS)) { "扩展文件不是普通文件" }
+        require(Files.isRegularFile(target, LinkOption.NOFOLLOW_LINKS)) { DesktopRuntimeStrings.text("runtime.extension.notRegularFile", "the extension file must be a regular file") }
         return target
     }
 
@@ -332,7 +368,7 @@ class DesktopRepositories(root: Path, private val preferences: SourcePreferences
             val count = input.read(buffer)
             if (count < 0) break
             copied += count
-            require(copied <= limit) { "仓库数据超过大小限制" }
+            require(copied <= limit) { DesktopRuntimeStrings.text("runtime.repository.tooLarge", "the repository data exceeds the size limit") }
             output.write(buffer, 0, count)
         }
     }
@@ -386,6 +422,6 @@ fun persistRepositoryPreference(preferences: SourcePreferences, key: String, val
     val previous = preferences.snapshot()[key]
     if (!preferences.edit(SourcePreferenceEdit(changes = mapOf(key to value)))) {
         preferences.edit(SourcePreferenceEdit(changes = mapOf(key to previous)))
-        throw IOException("保存仓库或扩展记录失败，未提交安装")
+        throw IOException(DesktopRuntimeStrings.text("runtime.extension.recordSaveFailed", "could not save the repository or extension record; nothing was installed"))
     }
 }

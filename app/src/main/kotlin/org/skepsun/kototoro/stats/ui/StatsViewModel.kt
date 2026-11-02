@@ -34,9 +34,8 @@ class StatsViewModel @Inject constructor(
                 selectedKind,
             ) { selectedPeriod, kind -> selectedPeriod to kind }
                 .collectLatest { (selectedPeriod, kind) ->
-                    dashboard.value = withLoading {
-                        repository.getDashboard(selectedPeriod, emptySet(), kind)
-                    }
+                    repository.observeDashboard(selectedPeriod, emptySet(), kind)
+                        .collectLatest { dashboard.value = it }
                 }
         }
     }

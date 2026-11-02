@@ -3,6 +3,7 @@ package org.skepsun.kototoro.reader.ui.compose
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
+import org.skepsun.kototoro.reader.core.ReaderChapterRatioEstimator
 
 /**
  * Chapter-wide aspect ratio estimation for pages that are still loading.

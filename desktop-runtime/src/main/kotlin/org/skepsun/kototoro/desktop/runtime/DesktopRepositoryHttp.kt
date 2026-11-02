@@ -15,7 +15,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.zip.GZIPInputStream
 import kotlin.coroutines.resumeWithException
 
-internal class RepositoryHttpException(val status: Int) : IOException("仓库请求失败：HTTP $status")
+internal class RepositoryHttpException(val status: Int) : IOException(DesktopRuntimeStrings.text("runtime.repository.requestFailed", "repository request failed: HTTP %d", status))
 
 /** Owned HTTP responses; cancellation closes a streaming body as well as cancelling the header future. */
 internal class DesktopRepositoryHttp : Closeable {
@@ -34,7 +34,7 @@ internal class DesktopRepositoryHttp : Closeable {
         limit: Long,
         consume: suspend (URI, InputStream) -> T,
     ): T = withContext(Dispatchers.IO) {
-        check(!closed.get()) { "仓库连接已经关闭" }
+        check(!closed.get()) { DesktopRuntimeStrings.text("runtime.repository.closed", "the repository connection is closed") }
         val request = HttpRequest.newBuilder(repositoryUri(uri.toString())).timeout(Duration.ofSeconds(30))
             .header("Accept-Encoding", "gzip").GET().build()
         val future = requireNotNull(client).sendAsync(request, HttpResponse.BodyHandlers.ofInputStream())
@@ -55,12 +55,12 @@ internal class DesktopRepositoryHttp : Closeable {
             if (it != null) runCatching { body.close() }
         }
         try {
-            check(!closed.get()) { "仓库连接已经关闭" }
+            check(!closed.get()) { DesktopRuntimeStrings.text("runtime.repository.closed", "the repository connection is closed") }
             currentCoroutineContext().ensureActive()
-            require(response.uri().scheme == uri.scheme || response.uri().scheme == "https") { "拒绝不安全的仓库重定向" }
+            require(response.uri().scheme == uri.scheme || response.uri().scheme == "https") { DesktopRuntimeStrings.text("runtime.repository.insecureRedirect", "refused an insecure repository redirect") }
             if (response.statusCode() !in 200..299) throw RepositoryHttpException(response.statusCode())
             response.headers().firstValueAsLong("Content-Length").ifPresent {
-                require(it <= limit) { "仓库数据超过大小限制" }
+                require(it <= limit) { DesktopRuntimeStrings.text("runtime.repository.tooLarge", "the repository data exceeds the size limit") }
             }
             val input = PushbackInputStream(LimitedRepositoryInput(body, limit), 2)
             val prefix = ByteArray(2)
@@ -87,17 +87,17 @@ internal class DesktopRepositoryHttp : Closeable {
 internal fun repositoryUri(value: String): URI {
     val uri = URI(value.trim()).normalize()
     require(uri.isAbsolute && uri.scheme in setOf("https", "http") && !uri.host.isNullOrBlank() &&
-        uri.userInfo == null && uri.fragment == null) { "请输入 HTTP(S) 仓库地址，不包含账号或片段" }
+        uri.userInfo == null && uri.fragment == null) { DesktopRuntimeStrings.text("runtime.repository.invalidUrl", "enter an HTTP(S) repository URL without credentials or a fragment") }
     return uri
 }
 
 private class LimitedRepositoryInput(private val input: InputStream, private val limit: Long) : InputStream() {
     private var count = 0L
     override fun read(): Int = input.read().also {
-        if (it >= 0) { count++; require(count <= limit) { "仓库数据超过大小限制" } }
+        if (it >= 0) { count++; require(count <= limit) { DesktopRuntimeStrings.text("runtime.repository.tooLarge", "the repository data exceeds the size limit") } }
     }
     override fun read(bytes: ByteArray, offset: Int, length: Int): Int = input.read(bytes, offset, length).also {
-        if (it > 0) { count += it; require(count <= limit) { "仓库数据超过大小限制" } }
+        if (it > 0) { count += it; require(count <= limit) { DesktopRuntimeStrings.text("runtime.repository.tooLarge", "the repository data exceeds the size limit") } }
     }
     override fun close() = input.close()
 }

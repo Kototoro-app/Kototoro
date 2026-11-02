@@ -1,5 +1,7 @@
 package org.skepsun.kototoro.discover.ui.details
 
+import org.skepsun.kototoro.scrobbling.common.ui.scrobblerIconTint
+
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -83,6 +85,7 @@ fun TrackingAlternativeTrackersPanel(
                                 Icon(
                                     painter = rememberSafePainter(mapping.service.iconResId),
                                     contentDescription = null,
+                                    tint = scrobblerIconTint(mapping.service.iconResId),
                                     modifier = Modifier.size(14.dp),
                                 )
                                 Text(

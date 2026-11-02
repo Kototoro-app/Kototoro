@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Shape
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
@@ -20,6 +21,7 @@ internal fun rememberReaderPanelSurfaceMode(eInk: Boolean): ReaderPanelSurfaceMo
     isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS,
     eInk = eInk,
     hasBackdrop = LocalLiquidGlassBackdrop.current != null,
+    isTv = LocalUiPresentationConfig.current.isTv,
 )
 
 /** Android's liquid glass sheet, provided to the shared reader panels by `KototoroTheme`. */

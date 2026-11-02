@@ -1,0 +1,175 @@
+package org.skepsun.kototoro.desktop.app
+
+import androidx.compose.ui.test.*
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.test.v2.runDesktopComposeUiTest
+import androidx.compose.ui.graphics.asSkiaBitmap
+import kotlinx.coroutines.runBlocking
+import org.jetbrains.skia.Image
+import org.skepsun.kototoro.stats.domain.ReadingStatsPeriod
+import org.skepsun.kototoro.stats.domain.StatsContentKind
+import java.nio.file.Files
+import java.nio.file.Path
+
+/**
+ * Android's statistics screen over the real UI: a chapter is opened so the reader records a stop, leaving it closes the
+ * stop, and "更多 → 阅读统计" shows that stop with Android's period switch. Clearing asks first and leaves the history
+ * alone, which is the difference between the two tables.
+ */
+internal object DesktopStatsProbe {
+    @OptIn(ExperimentalTestApi::class)
+    fun run(args: Array<String>) {
+        val session = runBlocking { DesktopSession.open(Path.of(args[1])) }
+        val controller = DesktopController(session)
+        try {
+            runBlocking { controller.importJar(Path.of(args[2])).join() }
+            runDesktopComposeUiTest(width = 1260, height = 850) {
+                setContent { DesktopApp(controller) }
+                fun snapshot(label: String) {
+                    Image.makeFromBitmap(onRoot().captureToImage().asSkiaBitmap()).use { image ->
+                        image.encodeToData()?.use {
+                            val output = Files.createDirectories(Path.of(args[3])).resolve("${args[0]}-$label.png")
+                            Files.write(output, it.bytes)
+                        }
+                    }
+                }
+                // A dialog is a second root, so the work sheet is captured from the newest root instead of onRoot().
+                fun snapshotDialog(label: String) {
+                    Image.makeFromBitmap(onAllNodes(isRoot()).onLast().captureToImage().asSkiaBitmap()).use { image ->
+                        image.encodeToData()?.use {
+                            val output = Files.createDirectories(Path.of(args[3])).resolve("${args[0]}-$label.png")
+                            Files.write(output, it.bytes)
+                        }
+                    }
+                }
+                fun idle() {
+                    waitUntil(timeoutMillis = 15_000) { !controller.state.value.busy }
+                    waitForIdle()
+                    check(controller.state.value.error == null) { controller.state.value.error.orEmpty() }
+                }
+                waitUntil(timeoutMillis = 15_000) { controller.state.value.sources.size == 1 }
+                idle()
+                onNodeWithTag("source:${controller.state.value.sources.single().source.name}").performClick()
+                waitUntil(timeoutMillis = 15_000) { controller.state.value.items.isNotEmpty() }
+                idle()
+                val content = controller.state.value.items.single()
+                onNodeWithTag("content:${content.id}").performClick()
+                waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.DETAILS }
+                idle()
+                // A real read: opening the chapter is the first recorded page, leaving the reader closes the stop.
+                onNodeWithTag("preview-read").performClick()
+                waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.READER }
+                idle()
+                Thread.sleep(1_200)
+                idle()
+                runBlocking { controller.backToDetails().join() }
+                idle()
+                check(runBlocking { session.library.history() }.isNotEmpty()) { "the read recorded the history" }
+
+                onNodeWithTag("nav:更多").performClick()
+                waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.MORE }
+                idle()
+                // Android keeps the statistics entry on its 服务 page, behind the 更多 list.
+                onNodeWithTag("services-open").performScrollTo().performClick()
+                waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.SERVICES }
+                idle()
+                onNodeWithTag("services-stats-open").performScrollTo().performClick()
+                waitUntil(timeoutMillis = 15_000) {
+                    controller.state.value.screen == DesktopScreen.READING_STATS && controller.state.value.readingStats != null
+                }
+                idle()
+                val stats = requireNotNull(controller.state.value.readingStats)
+                check(stats.works.any { it.content.id == content.id }) { "the stop is listed under its work" }
+                check(stats.totalDuration > 0) { "the stop has a duration, not an empty dashboard" }
+                onNodeWithTag("stats-total").assertExists()
+                snapshot("stats-dashboard")
+                // The activity, hour and kind cards are the ones Android draws, from the shared module: the day count
+                // and the streak pill come from the shared header, and the breakdown names its kind.
+                onNodeWithTag("stats-activity-days").performScrollTo().assertExists()
+                onNodeWithTag("stats-activity-streak").assertExists()
+                snapshot("stats-activity")
+                if (stats.hourlyActivity.any { it > 0L }) {
+                    onNodeWithTag("stats-hours").performScrollTo().assertExists()
+                    onNodeWithTag("stats-hour:0").assertExists()
+                }
+                if (stats.works.map { it.kind }.distinct().size > 1) {
+                    onNodeWithTag("stats-kinds").performScrollTo().assertExists()
+                    snapshot("stats-kinds")
+                }
+                onNodeWithTag("stats-work:${content.id}").performScrollTo().assertExists()
+
+                // Android's period switch asks the library for another window, not another row.
+                onNodeWithTag("stats-period:DAY").performScrollTo().performClick()
+
+                idle()
+                check(controller.state.value.readingStatsPeriod == ReadingStatsPeriod.DAY)
+                check(requireNotNull(controller.state.value.readingStats).dailyActivity.size == 1) {
+                    "a day of activity for the day period"
+                }
+
+                // Android's kind selector sits next to it: the stop was a manga page, so the novel view is empty.
+                onNodeWithTag("stats-kind-option:NOVEL").performScrollTo().performClick()
+                waitUntil(timeoutMillis = 15_000) { controller.state.value.readingStatsKind == StatsContentKind.NOVEL }
+                idle()
+                check(requireNotNull(controller.state.value.readingStats).works.isEmpty()) {
+                    "a novel view without novels"
+                }
+                onNodeWithTag("stats-empty").performScrollTo().assertExists()
+                onNodeWithTag("stats-kind-option:MANGA").performScrollTo().performClick()
+                waitUntil(timeoutMillis = 15_000) { controller.state.value.readingStatsKind == StatsContentKind.MANGA }
+                waitUntil(timeoutMillis = 15_000) {
+                    controller.state.value.readingStats?.works?.any { it.content.id == content.id } == true
+                }
+                idle()
+
+                // Android's per-work sheet: picking a work opens its own statistics, and the sheet stays over the
+                // statistics screen; only its "details" button navigates.
+                onNodeWithTag("stats-work:${content.id}").performScrollTo().performClick()
+                waitUntil(timeoutMillis = 15_000) { controller.state.value.contentStats != null }
+                waitUntil(timeoutMillis = 15_000) {
+                    (controller.state.value.contentStats?.stats?.totalDuration ?: 0L) > 0L
+                }
+                idle()
+                check(controller.state.value.screen == DesktopScreen.READING_STATS) {
+                    "the work sheet is an overlay of the statistics screen"
+                }
+                onNodeWithTag("content-stats-chart").assertExists()
+                onNodeWithTag("content-stats-chart").assertWidthIsAtLeast(200.dp)
+                onNodeWithTag("content-stats-chart").assertHeightIsAtLeast(150.dp)
+                onNodeWithTag("content-stats-first").assertExists()
+                // The chart is now the shared one, so this frame is the same drawing Android's sheet makes.
+                snapshotDialog("stats-work")
+                onNodeWithTag("content-stats-total").assertExists()
+                onNodeWithTag("content-stats-sessions").assertExists()
+                onNodeWithTag("content-stats-units").assertExists()
+                onNodeWithTag("content-stats-close").performClick()
+                idle()
+                check(controller.state.value.contentStats == null) { "closing the sheet leaves the statistics screen" }
+                check(controller.state.value.screen == DesktopScreen.READING_STATS)
+
+                // Clearing asks first, then empties both tables but keeps the history above.
+                onNodeWithTag("stats-clear").performScrollTo().performClick()
+                idle()
+                onNodeWithTag("stats-clear-dialog").assertExists()
+                onNodeWithTag("stats-clear-cancel").performClick()
+                idle()
+                check(requireNotNull(controller.state.value.readingStats).works.isNotEmpty()) {
+                    "cancelling keeps the statistics"
+                }
+                onNodeWithTag("stats-clear").performScrollTo().performClick()
+                onNodeWithTag("stats-clear-accept").performClick()
+                waitUntil(timeoutMillis = 15_000) { controller.state.value.readingStats?.works?.isEmpty() == true }
+                idle()
+                onNodeWithTag("stats-empty").performScrollTo().assertExists()
+                snapshot("stats-cleared")
+                check(runBlocking { session.library.history() }.isNotEmpty()) { "clearing statistics keeps the history" }
+
+                onNodeWithTag("stats-back").performClick()
+                idle()
+                // The statistics entry lives on the 服务 page, so its back button returns there.
+                check(controller.state.value.screen == DesktopScreen.SERVICES)
+            }
+        } finally { runBlocking { controller.shutdown() } }
+        println("DESKTOP_UI_OK=${args[0]}")
+    }
+}

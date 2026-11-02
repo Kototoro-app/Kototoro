@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.google.android.material.checkbox.MaterialCheckBox
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
@@ -25,12 +26,15 @@ import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsFlow
 import org.skepsun.kototoro.core.ui.BaseViewModel
 import org.skepsun.kototoro.core.LocalizedAppContext
+import org.skepsun.kototoro.favourites.data.FavouriteCategoryDisplayPreferences
 import org.skepsun.kototoro.favourites.domain.FavouritesRepository
+import org.skepsun.kototoro.favourites.domain.filterCategoriesForSpace
 import org.skepsun.kototoro.favourites.ui.categories.select.model.ContentCategoryItem
 import org.skepsun.kototoro.list.ui.model.EmptyState
 import org.skepsun.kototoro.list.ui.model.ListModel
 import org.skepsun.kototoro.list.ui.model.LoadingState
 import org.skepsun.kototoro.parsers.model.Content
+import org.skepsun.kototoro.space.ui.SpaceBrowseScope
 import javax.inject.Inject
 
 @HiltViewModel
@@ -39,6 +43,8 @@ class FavoriteDialogViewModel @Inject constructor(
     private val favouritesRepository: FavouritesRepository,
     private val contentDataRepository: ContentDataRepository,
     settings: AppSettings,
+    categoryDisplayPreferences: FavouriteCategoryDisplayPreferences,
+    spaceBrowseScope: SpaceBrowseScope,
     @LocalizedAppContext private val context: Context,
 ) : BaseViewModel() {
 
@@ -48,24 +54,44 @@ class FavoriteDialogViewModel @Inject constructor(
         initialManga,
     )
 
+    /** Categories hidden by the Space the dialog was opened from; empty outside a Space. */
+    private val hiddenCategoryIds: Flow<Set<Long>> = spaceBrowseScope.currentSpaceId?.let {
+        categoryDisplayPreferences.observeHiddenCategoryIds(it)
+    } ?: flowOf(emptySet())
+
+    private val showAllCategories = MutableStateFlow(false)
+
     val manga: List<Content>
         get() = mangaState.value
+
+    data class FavoriteDialogContent(
+        val items: List<ListModel> = listOf(LoadingState),
+        val hasHiddenCategories: Boolean = false,
+    )
 
     private val refreshTrigger = MutableStateFlow(Any())
     val content = mangaState.flatMapLatest { currentManga ->
         if (currentManga.isEmpty()) {
-            flowOf(listOf(LoadingState))
+            flowOf(FavoriteDialogContent())
         } else {
             combine(
                 favouritesRepository.observeCategories(),
                 refreshTrigger,
+                hiddenCategoryIds,
+                showAllCategories,
                 settings.observeAsFlow(AppSettings.KEY_TRACKER_ENABLED) { isTrackerEnabled },
-            ) { categories, _, tracker ->
-                mapList(currentManga, categories, tracker)
+            ) { categories, _, hidden, showAll, tracker ->
+                mapList(
+                    manga = currentManga,
+                    categories = categories,
+                    tracker = tracker,
+                    hiddenIds = if (showAll) emptySet() else hidden,
+                    showAll = showAll,
+                )
             }
         }
     }.withErrorHandling()
-        .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, listOf(LoadingState))
+        .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, FavoriteDialogContent())
 
     init {
         launchJob(Dispatchers.Default) {
@@ -88,6 +114,11 @@ class FavoriteDialogViewModel @Inject constructor(
         mangaState.value = manga.toList()
     }
 
+    /** Reveals the categories this Space hides, without changing the Space preference. */
+    fun setShowAllCategories(value: Boolean) {
+        showAllCategories.value = value
+    }
+
     fun setChecked(categoryId: Long, isChecked: Boolean) {
         val snapshot = mangaState.value
         if (snapshot.isEmpty()) {
@@ -107,14 +138,18 @@ class FavoriteDialogViewModel @Inject constructor(
         manga: List<Content>,
         categories: List<FavouriteCategory>,
         tracker: Boolean,
-    ): List<ListModel> {
+        hiddenIds: Set<Long>,
+        showAll: Boolean,
+    ): FavoriteDialogContent {
         if (categories.isEmpty()) {
-            return listOf(
-                EmptyState(
-                    icon = 0,
-                    textPrimary = R.string.empty_favourite_categories,
-                    textSecondary = 0,
-                    actionStringRes = 0,
+            return FavoriteDialogContent(
+                items = listOf(
+                    EmptyState(
+                        icon = 0,
+                        textPrimary = R.string.empty_favourite_categories,
+                        textSecondary = 0,
+                        actionStringRes = 0,
+                    ),
                 ),
             )
         }
@@ -124,16 +159,27 @@ class FavoriteDialogViewModel @Inject constructor(
             val ids = favouritesRepository.getCategoriesIds(m.id)
             ids.forEach { id -> cats[id]?.add(m.id) }
         }
-        return categories.map { cat ->
-            ContentCategoryItem(
-                category = cat,
-                checkedState = when (cats[cat.id]?.size ?: 0) {
-                    0 -> MaterialCheckBox.STATE_UNCHECKED
-                    manga.size -> MaterialCheckBox.STATE_CHECKED
-                    else -> MaterialCheckBox.STATE_INDETERMINATE
-                },
-                isTrackerEnabled = tracker,
-            )
+        // Categories this content already belongs to stay listed so they can be unchecked.
+        val memberCategoryIds = buildSet(categories.size) {
+            for (category in categories) {
+                if ((cats[category.id]?.size ?: 0) > 0) {
+                    add(category.id)
+                }
+            }
         }
+        return FavoriteDialogContent(
+            items = filterCategoriesForSpace(categories, hiddenIds, memberCategoryIds).map { cat ->
+                ContentCategoryItem(
+                    category = cat,
+                    checkedState = when (cats[cat.id]?.size ?: 0) {
+                        0 -> MaterialCheckBox.STATE_UNCHECKED
+                        manga.size -> MaterialCheckBox.STATE_CHECKED
+                        else -> MaterialCheckBox.STATE_INDETERMINATE
+                    },
+                    isTrackerEnabled = tracker,
+                )
+            },
+            hasHiddenCategories = !showAll && categories.any { it.id in hiddenIds },
+        )
     }
 }

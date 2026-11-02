@@ -2,7 +2,7 @@ import KototoroShared
 import SwiftUI
 
 /// Android's multi-source search: every enabled source (pinned first, then the manual order) is queried with at most
-/// four requests in flight; each source keeps its own row, state and retry, and the library and history are searched
+/// bounded requests in flight; each source keeps its own row, state and retry, and the library and history are searched
 /// locally first.
 @MainActor
 final class GlobalSearchModel: ObservableObject {
@@ -19,16 +19,22 @@ final class GlobalSearchModel: ObservableObject {
     }
 
     @Published private(set) var rows: [Row] = []
+    /// Sources that answered with works, in the order they answered. Results are shown in this order so a source
+    /// finishing later only adds below what is on screen; rows never move or collapse under the reader.
+    @Published private(set) var arrived: [Row] = []
     @Published private(set) var completed = 0
     @Published private(set) var isSearching = false
     @Published private(set) var submitted = ""
     private var task: Task<Void, Never>?
     private static let parallelism = 6
+    private var rowIndex: [String: Int] = [:]
 
     func search(_ query: String, sources: [IosSource], runtime: IosSources) {
         task?.cancel()
         submitted = query
         rows = sources.map { Row(source: $0, status: .loading) }
+        arrived = []
+        rowIndex = Dictionary(uniqueKeysWithValues: sources.enumerated().map { ($0.element.name, $0.offset) })
         completed = 0
         isSearching = !sources.isEmpty
         task = Task { await run(query, sources: sources, runtime: runtime) }
@@ -49,6 +55,8 @@ final class GlobalSearchModel: ObservableObject {
         task = nil
         submitted = ""
         rows = []
+        arrived = []
+        rowIndex = [:]
         completed = 0
         isSearching = false
     }
@@ -69,19 +77,45 @@ final class GlobalSearchModel: ObservableObject {
                     }
                 }
             }
-            for _ in 0..<Self.parallelism { startNext() }
+            for _ in 0..<min(Self.parallelism, sources.count) {
+                startNext()
+            }
+            var buffer: [(String, Status)] = []
+            var lastFlush = Date()
             for await (name, status) in group {
                 guard !Task.isCancelled else { break }
-                update(name, status)
-                completed += 1
+                buffer.append((name, status))
+                let now = Date()
+                if buffer.count >= 4 || now.timeIntervalSince(lastFlush) >= 0.15 {
+                    applyBatch(buffer)
+                    buffer.removeAll(keepingCapacity: true)
+                    lastFlush = now
+                }
                 startNext()
+            }
+            if !Task.isCancelled && !buffer.isEmpty {
+                applyBatch(buffer)
+                buffer.removeAll()
             }
         }
         if !Task.isCancelled { isSearching = false }
     }
 
+    private func applyBatch(_ batch: [(String, Status)]) {
+        var found: [(index: Int, row: Row)] = []
+        for (name, status) in batch {
+            if let index = rowIndex[name] {
+                rows[index].status = status
+                if case .done(let works) = status, !works.isEmpty { found.append((index, rows[index])) }
+            }
+        }
+        // One batch keeps the browse order (pinned first) among the sources that arrived together.
+        arrived.append(contentsOf: found.sorted { $0.index < $1.index }.map(\.row))
+        completed += batch.count
+    }
+
     private func update(_ name: String, _ status: Status) {
-        guard let index = rows.firstIndex(where: { $0.id == name }) else { return }
+        guard let index = rowIndex[name] else { return }
         rows[index].status = status
     }
 }
@@ -91,6 +125,11 @@ struct GlobalSearchView: View {
     @EnvironmentObject private var sources: SourcesModel
     @StateObject private var model = GlobalSearchModel()
     @Binding var query: String
+    var selectionMediaKind: String? = nil
+    var onSelect: ((IosSourceContent) -> Void)? = nil
+    @Environment(\.dismiss) private var dismiss
+    @State private var libraryMatches: [IosSourceContent] = []
+    @State private var historyMatches: [IosSourceContent] = []
     @AppStorage("search.recent") private var storedRecent = ""
     @AppStorage("search.kinds") private var hiddenKinds = ""
     @AppStorage("search.pinnedOnly") private var pinnedOnly = false
@@ -99,32 +138,71 @@ struct GlobalSearchView: View {
     private var recent: [String] { storedRecent.split(separator: "\n").map(String.init) }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 18) {
-                    if model.submitted.isEmpty { suggestions } else { results }
-                }
-                .padding(.vertical, 12)
-            }
-            .background(Color(uiColor: .systemGroupedBackground))
-            .navigationTitle("搜索")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) { filterMenu }
+        Group {
+            if onSelect == nil { NavigationStack { page } }
+            else { page }
+        }
+        .onSubmit(of: .search) { submit(query) }
+        .task(id: "\(sources.isLoading)|\(sources.catalogRevision)|\(sources.runtime != nil)") {
+            if onSelect != nil, !sources.isLoading, model.submitted.isEmpty { submit(query) }
+        }
+        .onChange(of: [hiddenKinds, String(pinnedOnly), String(showAdult)] + targets.map(\.name)) { _, _ in
+            if !model.submitted.isEmpty { submit(model.submitted) }
+        }
+        .onDisappear { if onSelect != nil { model.cancel() } }
+        .onChange(of: query) { _, value in
+            if value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                model.cancel()
+                libraryMatches = []
+                historyMatches = []
             }
         }
-        .searchable(text: $query, prompt: "搜索全部来源中的作品")
-        .onSubmit(of: .search) { submit(query) }
-        .onChange(of: query) { _, value in
-            if value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { model.cancel() }
+    }
+
+    private var page: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 18) {
+                HStack {
+                    Text(selectionMediaKind.map(ContentSpace.title) ?? String(localized: "搜索范围"))
+                        .font(.subheadline).foregroundStyle(.secondary)
+                    Spacer()
+                    filterMenu
+                }.padding(.horizontal, 20)
+                if model.submitted.isEmpty { suggestions } else { results }
+            }
+            .padding(.vertical, 12)
+        }
+        .background(Color(uiColor: .systemGroupedBackground))
+        .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always),
+                    prompt: "搜索全部来源中的作品")
+        // While typing, earlier searches that start the same way are offered, as in Music and App Store; one tap searches.
+        .searchSuggestions {
+            let typed = query.trimmingCharacters(in: .whitespaces)
+            if !typed.isEmpty, model.submitted != typed {
+                ForEach(recent.filter { $0 != typed && $0.localizedStandardRange(of: typed)?.lowerBound == $0.startIndex }
+                    .prefix(5), id: \.self) { text in
+                    Button { submit(text) } label: { Label(text, systemImage: "clock.arrow.circlepath") }
+                        .accessibilityIdentifier("search.suggestion.\(text)")
+                }
+            }
+        }
+        .navigationTitle(onSelect == nil ? "搜索" : "搜索并选择作品")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if onSelect != nil {
+                ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
+            }
         }
     }
 
     /// Enabled sources in browse order (pinned first, then manual order), after the search filters.
     private var targets: [IosSource] {
         let kinds = SourceFilterOption.decode(hiddenKinds)
+        let custom = ContentSpace.activeCustom()
         let enabled = sources.sources.filter { source in
-            sources.isEnabled(source) && (showAdult || !source.isAdult) && !kinds.contains(source.mediaKind) &&
-                (!pinnedOnly || sources.isPinned(source))
+            sources.isEnabled(source) && (showAdult || !source.isAdult) &&
+                (selectionMediaKind.map { source.mediaKind == $0 } ?? !kinds.contains(source.mediaKind)) &&
+                (!pinnedOnly || sources.isPinned(source)) && (custom?.admits(source: source) ?? true)
         }
         let ordered = sources.ordered(enabled)
         return ordered.filter(sources.isPinned) + ordered.filter { !sources.isPinned($0) }
@@ -134,7 +212,25 @@ struct GlobalSearchView: View {
         let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty, let runtime = sources.runtime else { return }
         query = value
-        storedRecent = ([value] + recent.filter { $0 != value }).prefix(12).joined(separator: "\n")
+        // Association searches are transient: broadcasting recent-search defaults can recreate the sheet host.
+        if onSelect == nil {
+            storedRecent = ([value] + recent.filter { $0 != value }).prefix(12).joined(separator: "\n")
+        }
+        let kinds = SourceFilterOption.decode(hiddenKinds)
+        let pinned = Set(sources.sources.filter(sources.isPinned).map(\.name))
+        func matches(_ item: IosSourceContent) -> Bool {
+            (selectionMediaKind.map { item.mediaKind == $0 } ?? !kinds.contains(item.mediaKind)) &&
+                (showAdult || !item.isNsfw) &&
+                (!pinnedOnly || pinned.contains(item.sourceName)) &&
+                (item.title.localizedCaseInsensitiveContains(value) ||
+                    item.altTitles.contains { $0.localizedCaseInsensitiveContains(value) })
+        }
+        libraryMatches = library.favourites.map(\.content).filter {
+            matches($0)
+        }
+        historyMatches = library.history.map(\.content).filter {
+            matches($0)
+        }
         model.search(value, sources: targets, runtime: runtime)
     }
 
@@ -169,7 +265,6 @@ struct GlobalSearchView: View {
 
     @ViewBuilder
     private var results: some View {
-        let text = model.submitted
         HStack(spacing: 8) {
             if model.isSearching { ProgressView().controlSize(.small) }
             Text(model.isSearching ? "正在搜索 \(model.completed)/\(model.rows.count) 个来源"
@@ -185,23 +280,24 @@ struct GlobalSearchView: View {
         }
         .padding(.horizontal, 20)
         if let runtime = sources.runtime {
-            localSection("作品库", identifier: "search.library", entries: library.favourites, text: text, runtime: runtime)
-            localSection("历史", identifier: "search.history", entries: library.history, text: text, runtime: runtime)
+            localSection(String(localized: "作品库"), identifier: "search.library", matches: libraryMatches, runtime: runtime)
+            localSection(String(localized: "历史"), identifier: "search.history", matches: historyMatches, runtime: runtime)
+            // Sources still searching are counted in the progress line only; results append in arrival order.
+            ForEach(model.arrived) { row in
+                if case .done(let found) = row.status {
+                    sourceHeader(row.source, count: found.count, runtime: runtime)
+                    carousel(found, runtime: runtime)
+                }
+            }
+            if model.isSearching && model.arrived.isEmpty && libraryMatches.isEmpty && historyMatches.isEmpty {
+                ProgressView().frame(maxWidth: .infinity, minHeight: 60)
+            }
             ForEach(model.rows) { row in
-                switch row.status {
-                case .loading:
-                    sourceHeader(row.source, count: nil, runtime: runtime)
-                    ProgressView().frame(maxWidth: .infinity, minHeight: 60)
-                case .failed(let message):
+                if case .failed(let message) = row.status {
                     sourceHeader(row.source, count: nil, runtime: runtime)
                     Label(message, systemImage: "exclamationmark.triangle")
                         .font(.footnote).foregroundStyle(.orange).lineLimit(2)
                         .padding(.horizontal, 20)
-                case .done(let found) where !found.isEmpty:
-                    sourceHeader(row.source, count: found.count, runtime: runtime)
-                    carousel(found, runtime: runtime)
-                case .done:
-                    EmptyView()
                 }
             }
             let empty = model.rows.filter { if case .done(let found) = $0.status { found.isEmpty } else { false } }
@@ -214,11 +310,8 @@ struct GlobalSearchView: View {
     }
 
     @ViewBuilder
-    private func localSection(_ title: String, identifier: String, entries: [IosLibraryEntry], text: String,
+    private func localSection(_ title: String, identifier: String, matches: [IosSourceContent],
                               runtime: IosSources) -> some View {
-        let matches = entries.map(\.content).filter {
-            $0.title.localizedCaseInsensitiveContains(text) || $0.altTitles.contains { $0.localizedCaseInsensitiveContains(text) }
-        }
         if !matches.isEmpty {
             HStack(spacing: 8) {
                 Image(systemName: identifier == "search.library" ? "books.vertical" : "clock")
@@ -240,7 +333,7 @@ struct GlobalSearchView: View {
             if let count { Text("\(count)").font(.subheadline.monospacedDigit()).foregroundStyle(.secondary) }
             Spacer()
             NavigationLink {
-                SourceBrowseView(runtime: runtime, source: source, initialQuery: model.submitted)
+                SourceBrowseView(runtime: runtime, source: source, initialQuery: model.submitted, onPick: onSelect)
                     .submitScope()
             } label: {
                 Text("更多").font(.subheadline)
@@ -253,36 +346,45 @@ struct GlobalSearchView: View {
     private func carousel(_ items: [IosSourceContent], runtime: IosSources) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
             LazyHStack(alignment: .top, spacing: 12) {
-                ForEach(items.map { ContentItem(content: $0) }, id: \.identity) { entry in
-                    let item = entry.content
-                    NavigationLink {
-                        SourceDetailsView(runtime: runtime, content: item)
-                    } label: {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Color.clear.frame(width: 100, height: 150)
-                                .overlay { CoverImage(runtime: runtime, content: item) }
-                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                            Text(item.title).font(.caption.weight(.medium)).lineLimit(2, reservesSpace: true)
-                                .frame(width: 100, alignment: .leading)
+                ForEach(items, id: \.contentKey) { item in
+                    Group {
+                        if let onSelect {
+                            Button { onSelect(item) } label: { resultCard(item, runtime: runtime) }
+                        } else {
+                            NavigationLink {
+                                SourceDetailsView(runtime: runtime, content: item)
+                            } label: { resultCard(item, runtime: runtime) }
                         }
                     }
                     .buttonStyle(.plain)
-                    .accessibilityIdentifier("search.result.\(item.id)")
+                    .accessibilityIdentifier("search.result.\(item.sourceName).\(item.id)")
                 }
             }
             .padding(.horizontal, 20)
         }
     }
 
+    private func resultCard(_ item: IosSourceContent, runtime: IosSources) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Color.clear.frame(width: 100, height: 150)
+                .overlay { CoverImage(runtime: runtime, content: item) }
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            Text(item.title).font(.caption.weight(.medium)).lineLimit(2, reservesSpace: true)
+                .fontDesign(.default).foregroundStyle(.primary)
+        }.frame(width: 100)
+    }
+
     private var filterMenu: some View {
         Menu {
-            Section("内容类型") {
-                ForEach(SourceFilterOption.kinds, id: \.id) { kind in
-                    Toggle(isOn: Binding(get: { !SourceFilterOption.decode(hiddenKinds).contains(kind.id) }, set: { visible in
-                        var hidden = SourceFilterOption.decode(hiddenKinds)
-                        if visible { hidden.remove(kind.id) } else { hidden.insert(kind.id) }
-                        hiddenKinds = SourceFilterOption.encode(hidden)
-                    })) { Label(kind.title, systemImage: kind.icon) }
+            if selectionMediaKind == nil {
+                Section("内容类型") {
+                    ForEach(SourceFilterOption.kinds, id: \.id) { kind in
+                        Toggle(isOn: Binding(get: { !SourceFilterOption.decode(hiddenKinds).contains(kind.id) }, set: { visible in
+                            var hidden = SourceFilterOption.decode(hiddenKinds)
+                            if visible { hidden.remove(kind.id) } else { hidden.insert(kind.id) }
+                            hiddenKinds = SourceFilterOption.encode(hidden)
+                        })) { Label(kind.title, systemImage: kind.icon) }
+                    }
                 }
             }
             Toggle("仅搜索置顶来源", systemImage: "pin", isOn: $pinnedOnly)

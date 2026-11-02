@@ -20,6 +20,7 @@ import org.skepsun.kototoro.core.model.getTitle
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.parser.ParserContentRepository
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
+import org.skepsun.kototoro.core.util.ext.makeSnackbar
 import org.skepsun.kototoro.parsers.exception.AuthRequiredException
 import org.skepsun.kototoro.parsers.ContentParserAuthProvider
 import org.skepsun.kototoro.parsers.model.ContentSource
@@ -52,7 +53,7 @@ class SourceAuthActivity : BaseBrowserActivity(), BrowserCallback {
             try {
                 proxyProvider.applyWebViewConfig()
             } catch (e: Exception) {
-                Snackbar.make(browserWebView, e.getDisplayMessage(resources), Snackbar.LENGTH_LONG).show()
+                browserWebView.makeSnackbar(e.getDisplayMessage(resources), Snackbar.LENGTH_LONG).show()
             }
             if (savedInstanceState == null) {
                 val url = authProvider.authUrl

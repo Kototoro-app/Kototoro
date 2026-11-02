@@ -7,13 +7,20 @@ plugins {
     id 'org.jetbrains.compose' version '1.12.0'
 }
 
-// Android's own vector drawables, generated into shared ImageVectors so both hosts draw the same reader-panel icons.
+// Android's own vector drawables, generated into shared ImageVectors so both hosts draw the same reader-panel and
+// settings-row icons.
 def readerPanelIcons = ['ic_arrow_forward', 'ic_settings', 'ic_reader_ltr', 'ic_reader_rtl', 'ic_reader_vertical',
     'ic_gesture_vertical', 'ic_move_horizontal', 'ic_fullscreen', 'ic_swap_vert', 'ic_size_large', 'ic_grid',
     'ic_bookmark', 'ic_save', 'ic_crop', 'ic_timer', 'ic_screen_rotation', 'ic_download', 'ic_web', 'ic_translate',
     'ic_tap', 'ic_prev', 'ic_next', 'ic_more_vert', 'ic_zoom_in', 'ic_zoom_out', 'ic_timer_run', 'ic_bookmark_added',
     'ic_screen_rotation_lock', 'ic_current_chapter', 'ic_sort_desc', 'ic_search', 'ic_tts_close', 'ic_delete',
-    'ic_storage', 'ic_save_ok', 'ic_new']
+    'ic_storage', 'ic_save_ok', 'ic_new', 'ic_check', 'ic_notification', 'ic_eye_off', 'ic_lock', 'ic_lock_open',
+    // The replace-rule page's action and rule rows.
+    'ic_book_page', 'ic_disable', 'ic_import', 'ic_cloud_upload', 'ic_reorder_handle',
+    // The setup wizard's page header and its two jumps on the done page.
+    'ic_welcome', 'ic_backup_restore', 'ic_palette',
+    // The Google Drive controls are shared by Android and desktop.
+    'ic_bolt', 'ic_delete_all', 'ic_schedule', 'ic_sync', 'ic_user', 'ic_wifi']
 def generatedIconSources = layout.buildDirectory.dir('generated/reader-panel-icons/kotlin')
 def generateReaderPanelIcons = tasks.register('generateReaderPanelIcons') {
     def vectors = readerPanelIcons.collect { rootProject.file("app/src/main/res/drawable/${it}.xml") }
@@ -67,15 +74,25 @@ kotlin {
         commonMain.dependencies {
             api compose.runtime
             api compose.foundation
-            api compose.material3
+            api libs.jetbrains.compose.material3
+            // The wizard header slides its title when a host turns the page, as Android's AnimatedContent does.
+            api compose.animation
+            implementation libs.reorderable
             api project(':backdrop')
             // Paged transition semantics (slot motion inputs) shared with the reader scenes.
             api project(':reader-core')
+            // The source protocol's preference tree: the shared per-source settings page draws it, so the DTOs (and
+            // the folding rules next to them) are the only protocol shape a shared page may see.
+            api project(':core-source')
             implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:${libs.versions.serialization.get()}"
         }
         // System back for shared sheets (the Windows host handles Esc itself).
         androidMain.dependencies {
             implementation "androidx.activity:activity-compose:${libs.versions.activity.get()}"
+            // Compile Android against the material3 the app ships (1.5.0-alpha26), not the alpha22 that the CMP
+            // artifact brings: alpha26 reordered Slider's parameters, and the alpha22 call landed on the kept
+            // overload, which dropped valueRange so every shared slider snapped to its minimum.
+            api libs.androidx.compose.material3.expressive
         }
         jvmTest.dependencies {
             implementation 'org.junit.jupiter:junit-jupiter:5.8.2'
@@ -85,3 +102,109 @@ kotlin {
 }
 
 tasks.withType(Test).configureEach { useJUnitPlatform() }
+
+/**
+ * Guards the shared text layer: a screen both hosts render names one of Android's own string resources (`uiString`),
+ * because Android answers the name from `R.string` while Windows answers it from the catalog
+ * `:desktop-app:prepareDesktopStrings` exports. A key that is not one of Android's resources would show raw text on
+ * both hosts, so it fails here instead — together with a name only one host's catalog could answer.
+ */
+def verifyUiStrings = tasks.register('verifyUiStrings') {
+    group = 'verification'
+    description = 'Checks that every shared UI string names an existing Android string resource.'
+    def sources = files(
+        fileTree('src/commonMain/kotlin') { include '**/*.kt' },
+        fileTree(rootProject.file('app/src/main/kotlin')) { include '**/*.kt' },
+        fileTree(rootProject.file('desktop-app/src/main/kotlin')) { include '**/*.kt' },
+    )
+    def catalogs = fileTree(rootProject.file('app/src/main/res')) { include 'values*/strings*.xml', 'values*/arrays.xml' }
+    // The parser's own content types, each of which the shared title table derives a resource name from.
+    def contentTypes = rootProject.file('parser-api/src/commonMain/kotlin/org/skepsun/kototoro/parsers/model/ContentType.kt')
+    inputs.files(sources)
+    inputs.files(catalogs)
+    inputs.file(contentTypes)
+    outputs.upToDateWhen { false }
+    doLast {
+        // Android framework strings (android.R.string) that hosts resolve themselves: Android from the system,
+        // Windows from its own catalog (DesktopUiStrings).
+        def frameworkStrings = ['ok'] as Set
+        def declared = new HashSet<String>()
+        catalogs.files.each { file ->
+            def root = new groovy.xml.XmlParser(false, false).parse(file)
+            root.children().each { node ->
+                if (node.name() in ['string', 'string-array']) declared << node.attribute('name')
+            }
+        }
+        if (declared.size() < 1000) throw new GradleException("Read only ${declared.size()} Android strings: " +
+            "the catalogs under app/src/main/res were not scanned as expected.") 
+        // `uiString(...)`, `uiStringArray(...)`, and direct `UiStrings` calls (including multi-line and `if`/`when`).
+        def callLookup = ~/\b(?:uiStringArray|uiString|strings\.string|strings\.format|strings\.array)\s*\(/
+        def literalLookup = ~/"([a-z][a-z0-9_]*)"/
+        def missing = new TreeSet<String>()
+        def found = new TreeSet<String>()
+        sources.files.findAll { it.isFile() }.each { file ->
+            def text = file.getText('UTF-8')
+            if (!text.contains('core.ui.text') && !text.contains('DesktopUiStrings')) return
+            def matcher = callLookup.matcher(text)
+            while (matcher.find()) {
+                int i = matcher.end()
+                int start = i
+                int depth = 1
+                boolean inStr = false
+                boolean esc = false
+                Integer firstEnd = null
+                while (i < text.length() && depth > 0) {
+                    char ch = text.charAt(i)
+                    if (inStr) {
+                        if (esc) esc = false
+                        else if (ch == (char) '\\') esc = true
+                        else if (ch == (char) '"') inStr = false
+                    } else {
+                        if (ch == (char) '"') inStr = true
+                        else if (ch == (char) '(') depth++
+                        else if (ch == (char) ')') {
+                            depth--
+                            if (depth == 0 && firstEnd == null) firstEnd = i
+                        } else if (ch == (char) ',' && depth == 1 && firstEnd == null) {
+                            firstEnd = i
+                        }
+                    }
+                    i++
+                }
+                if (firstEnd != null) {
+                    literalLookup.matcher(text.substring(start, firstEnd)).each { lit ->
+                        def name = lit[1]
+                        found << name
+                        if (!(name in declared) && !(name in frameworkStrings)) missing << "${file.name}: ${name}".toString()
+                    }
+                }
+            }
+        }
+        // Every content type the protocol carries must have a title, because the shared table derives its name from
+        // the type: a new type without `content_type_<name>` would show its raw identifier on both hosts.
+        def inEnum = false
+        def types = []
+        contentTypes.eachLine('UTF-8') { line ->
+            if (line.contains('enum class ContentType')) inEnum = true
+            else if (inEnum) {
+                def entry = line =~ /^\s*([A-Z][A-Z_]+)\s*[,(]/
+                if (entry.find()) types << entry.group(1)
+            }
+        }
+        if (types.size() < 10) throw new GradleException("Read only ${types.size()} content types from " +
+            "${contentTypes.name}: the enum was not scanned as expected.")
+        types.each { type ->
+            def name = 'content_type_' + type.toLowerCase(java.util.Locale.ROOT)
+            if (!(name in declared)) missing << "ContentType.$type: $name".toString()
+        }
+        if (!missing.isEmpty()) {
+            throw new GradleException("Shared UI strings that are not Android string resources:\n  " +
+                missing.join('\n  '))
+        }
+        logger.lifecycle("Shared UI strings: ${found.size()} lookups and ${types.size()} content types, " +
+            "all declared by app/src/main/res.")
+    }
+}
+
+tasks.named('check').configure { dependsOn verifyUiStrings }
+

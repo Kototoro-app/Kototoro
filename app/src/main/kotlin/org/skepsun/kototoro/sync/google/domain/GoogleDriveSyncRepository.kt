@@ -22,6 +22,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.library.GoogleDriveSyncCoordinator
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.db.entity.ExternalExtensionRepoEntity
 import org.skepsun.kototoro.core.db.entity.JsonSourceEntity
@@ -55,10 +56,9 @@ import org.skepsun.kototoro.history.data.HistoryEntity
 import org.skepsun.kototoro.history.data.HistoryRepository
 import org.skepsun.kototoro.stats.data.StatsEntity
 import org.skepsun.kototoro.tracker.data.TrackEntity
+import org.skepsun.kototoro.tracker.data.mergeRestoredTrack
+import org.skepsun.kototoro.tracker.data.mergeRestoredTrackLog
 import org.skepsun.kototoro.tracker.data.TrackLogEntity
-import org.skepsun.kototoro.tracker.data.canBeClearedBy
-import org.skepsun.kototoro.tracker.data.isNewerThan
-import org.skepsun.kototoro.tracker.data.mergeRestoredTrackNewChapters
 import org.skepsun.kototoro.tracker.data.normalizeTrackFeedState
 import org.skepsun.kototoro.tracker.domain.TrackingRepository
 import java.io.File
@@ -96,6 +96,15 @@ class GoogleDriveSyncRepository @Inject constructor(
     val isSyncing = MutableStateFlow(false)
     val syncStage = MutableStateFlow<String?>(null)
     private val syncMutex = Mutex()
+    private var unrestoredDuringSync: List<String> = emptyList()
+    private val coordinator = GoogleDriveSyncCoordinator({ remote, _, _ ->
+        repairAfterSync()
+        val merged = GoogleDriveSyncMerger.mergeSnapshots(buildLocalSnapshot(), remote)
+        unrestoredDuringSync = applyToDatabase(merged)
+        repairAfterSync()
+        GoogleDriveSyncMerger.buildUploadSnapshot(buildLocalSnapshot(), merged)
+            .copyForUpload(syncedAt = System.currentTimeMillis())
+    })
     private val json = Json {
         encodeDefaults = true
         ignoreUnknownKeys = true
@@ -135,6 +144,9 @@ class GoogleDriveSyncRepository @Inject constructor(
         } catch (e: GoogleDriveSyncAuthorizationException) {
             settings.lastSyncError = e.message
             GoogleDriveSyncResult.AuthorizationRequired(e)
+        } catch (e: DriveSyncProtocolException) {
+            settings.lastSyncError = e.message
+            GoogleDriveSyncResult.Error(e.message, retryable = false)
         } catch (e: GoogleDriveSyncSchemaException) {
             settings.lastSyncError = e.message
             Log.e(TAG, "sync failed: schema", e)
@@ -214,6 +226,9 @@ class GoogleDriveSyncRepository @Inject constructor(
         } catch (e: GoogleDriveSyncAuthorizationException) {
             settings.lastSyncError = e.message
             GoogleDriveSyncResult.AuthorizationRequired(e)
+        } catch (e: DriveSyncProtocolException) {
+            settings.lastSyncError = e.message
+            GoogleDriveSyncResult.Error(e.message, retryable = false)
         } catch (e: GoogleDriveSyncSchemaException) {
             settings.lastSyncError = e.message
             Log.e(TAG, "legacy sync import failed: schema", e)
@@ -257,83 +272,13 @@ class GoogleDriveSyncRepository @Inject constructor(
     }
 
     private suspend fun performSync(token: String): List<String> {
-        repairAfterSync()
-        var attempt = 0
-        while (true) {
-            val files = runSyncStep("list drive files") {
-                api.findCurrentSyncFiles(token)
-            }
-            // Without a current snapshot, seed from pre-2.2.0 work v2 files but never write back to them.
-            val seedFiles = if (files.isEmpty()) {
-                runSyncStep("list work v2 drive files") {
-                    api.findWorkV2SyncFiles(token)
-                }
-            } else {
-                emptyList()
-            }
-            val canonical = files.firstOrNull()
-            val baseVersion = canonical?.version
-            val decoded = ArrayList<GoogleDriveSyncSnapshot>(files.size + seedFiles.size)
-            val decodedIds = HashSet<String>(files.size)
-            for (file in seedFiles) {
-                runSyncStep("download work v2 ${file.id}") {
-                    decodeCurrentSnapshot(api.download(token, file.id))
-                }?.let { decoded += it }
-            }
-            for (file in files) {
-                val snapshot = runSyncStep("download ${file.id}") {
-                    decodeCurrentSnapshot(api.download(token, file.id))
-                }
-                if (snapshot != null) {
-                    decoded += snapshot
-                    decodedIds += file.id
-                }
-            }
-            val remote = runSyncStep("merge remote snapshots") {
-                GoogleDriveSyncMerger.combine(decoded)
-            }
-            val local = runSyncStep("build local snapshot") {
-                buildLocalSnapshot()
-            }
-            Log.d(TAG, "sync local=${local.debugSummary()} remote=${remote?.debugSummary()} files=${files.size}")
-            val merged = runSyncStep("merge local remote") {
-                GoogleDriveSyncMerger.mergeSnapshots(local, remote)
-            }
-            Log.d(TAG, "sync merged=${merged.debugSummary()}")
-            val unrestoredExtensions = runSyncStep("apply database") {
-                applyToDatabase(merged)
-            }
-            runSyncStep("repair after sync") {
-                repairAfterSync()
-            }
-            val applied = runSyncStep("build upload snapshot") {
-                buildLocalSnapshot()
-            }
-            Log.d(TAG, "sync applied=${applied.debugSummary()} ${database.localDatabaseSummary()}")
-            val compactedUpload = runSyncStep("compact upload snapshot") {
-                GoogleDriveSyncMerger.buildUploadSnapshot(applied, merged)
-            }
-            Log.d(TAG, "sync upload=${compactedUpload.debugSummary()}")
-            val upload = compactedUpload.copyForUpload(syncedAt = System.currentTimeMillis())
-            if (canonical != null && baseVersion != null && attempt < MAX_CONFLICT_RETRIES) {
-                val currentVersion = runSyncStep("check drive version") {
-                    api.getFileVersion(token, canonical.id)
-                }
-                if (currentVersion != null && currentVersion != baseVersion) {
-                    attempt++
-                    continue
-                }
-            }
-            val payload = json.encodeToString(GoogleDriveSyncSnapshot.serializer(), upload).encodeToByteArray()
-            val fileId = runSyncStep("upload snapshot") {
-                api.upload(token, payload, canonical?.id)
-            }
-            files.filter { it.id != fileId && it.id in decodedIds }.forEach { duplicate ->
-                deleteRemoteFileBestEffort(token, duplicate.id)
-            }
-            syncSettings(token)
-            return unrestoredExtensions
+        unrestoredDuringSync = emptyList()
+        val uploaded = coordinator.sync(api, token, settings.deviceId) { stage ->
+            syncStage.value = stage.name.lowercase()
         }
+        uploaded.duplicateFileIds.forEach { deleteRemoteFileBestEffort(token, it) }
+        syncSettings(token)
+        return unrestoredDuringSync
     }
 
     private suspend fun syncSettings(token: String) {
@@ -612,69 +557,16 @@ class GoogleDriveSyncRepository @Inject constructor(
     }
 
     private suspend fun MangaDatabase.mergeTrack(remote: TrackEntity) {
-        if (!getMangaDao().contains(remote.mangaId)) {
-            return
-        }
-        val dao = getTracksDao()
-        val local = dao.find(remote.mangaId)
-        if (local == null) {
-            dao.upsert(remote)
-            return
-        }
-        dao.upsert(local.mergeWith(remote))
-    }
-
-    private fun TrackEntity.mergeWith(remote: TrackEntity): TrackEntity {
-        val newer = if (remote.isNewerThan(this)) remote else this
-        val mergedLastError = when {
-            newer.lastResult == TrackEntity.RESULT_FAILED -> newer.lastError
-            lastResult == TrackEntity.RESULT_FAILED && remote.lastResult != TrackEntity.RESULT_FAILED -> remote.lastError
-            else -> null
-        }
-        return TrackEntity(
-            mangaId = mangaId,
-            lastChapterId = newer.lastChapterId,
-            newChapters = mergeRestoredTrackNewChapters(this, remote),
-            lastCheckTime = maxOf(lastCheckTime, remote.lastCheckTime),
-            lastChapterDate = maxOf(lastChapterDate, remote.lastChapterDate),
-            lastResult = newer.lastResult,
-            lastError = mergedLastError,
-        )
+        if (getMangaDao().contains(remote.mangaId)) mergeRestoredTrack(remote)
     }
 
     private suspend fun MangaDatabase.mergeTrackLog(remote: TrackLogEntity) {
-        if (!getMangaDao().contains(remote.mangaId)) {
-            return
+        if (getMangaDao().contains(remote.mangaId)) {
+            mergeRestoredTrackLog(remote)
         }
-        val dao = getTrackLogsDao()
-        val existing = dao.findDuplicate(
-            mangaId = remote.mangaId,
-            chapters = remote.chapters,
-            createdAt = remote.createdAt,
-        )
-        if (existing == null) {
-            dao.insert(remote)
-        } else if (existing.isUnread && !remote.isUnread) {
-            dao.markAsRead(existing.id)
-            getTracksDao().find(existing.mangaId)
-                ?.takeIf { it.canBeClearedBy(remote) }
-                ?.let { getTracksDao().clearCounter(existing.mangaId) }
-        } else if (!existing.isUnread) {
-            getTracksDao().find(existing.mangaId)
-                ?.takeIf { it.canBeClearedBy(existing) }
-                ?.let { getTracksDao().clearCounter(existing.mangaId) }
-        }
-    }
-
-    private fun decodeCurrentSnapshot(bytes: ByteArray): GoogleDriveSyncSnapshot? {
-        return decodeSnapshot(bytes, requireCurrentProtocol = true)
     }
 
     private fun decodeLegacySnapshot(bytes: ByteArray): GoogleDriveSyncSnapshot? {
-        return decodeSnapshot(bytes, requireCurrentProtocol = false)
-    }
-
-    private fun decodeSnapshot(bytes: ByteArray, requireCurrentProtocol: Boolean): GoogleDriveSyncSnapshot? {
         val text = bytes.decodeToString()
         if (text.isBlank()) {
             return null
@@ -683,16 +575,8 @@ class GoogleDriveSyncRepository @Inject constructor(
             json.decodeFromString(SchemaProbe.serializer(), text)
         }.getOrNull()
         val version = probe?.schemaVersion
-        val namespace = probe?.namespace
-        val semanticSchemaVersion = probe?.semanticSchemaVersion
-        when {
-            version != null && version > GoogleDriveSyncSnapshot.SCHEMA_VERSION -> {
-                throw GoogleDriveSyncSchemaException(version)
-            }
-            requireCurrentProtocol &&
-                !GoogleDriveSyncSnapshot.isSupportedProtocol(version, namespace, semanticSchemaVersion) -> {
-                throw GoogleDriveSyncProtocolException()
-            }
+        if (version != null && version > GoogleDriveSyncSnapshot.SCHEMA_VERSION) {
+            throw GoogleDriveSyncSchemaException(version)
         }
         return runCatching {
             json.decodeFromString(GoogleDriveSyncSnapshot.serializer(), text)
@@ -1001,6 +885,9 @@ class GoogleDriveSyncRepository @Inject constructor(
                                 .apply()
                             hasJarUpdated = true
                         }
+                        deleteStaleExtensionFiles(pluginsDir, targetFile, ext.packageId).forEach { stale ->
+                            Log.i(TAG, "Removed stale jar ${stale.name} of ${ext.packageId}")
+                        }
                     }.onFailure {
                         if (it is CancellationException) throw it
                         unrestored += ext.name
@@ -1140,7 +1027,6 @@ class GoogleDriveSyncRepository @Inject constructor(
     )
 
     private companion object {
-        const val MAX_CONFLICT_RETRIES = 3
         const val TAG = "GoogleDriveSync"
         const val SETTINGS_FILE_NAME = "kototoro_sync_settings_v1.json"
         private const val SqliteBindParameterChunkSize = 500

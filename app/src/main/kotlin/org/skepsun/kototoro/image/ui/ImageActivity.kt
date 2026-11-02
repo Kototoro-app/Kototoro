@@ -29,6 +29,7 @@ import org.skepsun.kototoro.core.util.ShareHelper
 import org.skepsun.kototoro.core.util.ext.getDisplayIcon
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
 import org.skepsun.kototoro.core.util.ext.getParcelableExtraCompat
+import org.skepsun.kototoro.core.util.ext.makeSnackbar
 import org.skepsun.kototoro.core.util.ext.mangaSourceExtra
 import org.skepsun.kototoro.core.util.ext.observe
 import org.skepsun.kototoro.core.util.ext.observeEvent
@@ -149,7 +150,7 @@ class ImageActivity : BaseComposeActivity(), ImageRequest.Listener {
     }
 
     private fun onImageSaved(uri: Uri) {
-        Snackbar.make(window.decorView, R.string.page_saved, Snackbar.LENGTH_LONG)
+        window.decorView.makeSnackbar(R.string.page_saved, Snackbar.LENGTH_LONG)
             .setAction(R.string.share) {
                 ShareHelper(this).shareImage(uri)
             }.show()

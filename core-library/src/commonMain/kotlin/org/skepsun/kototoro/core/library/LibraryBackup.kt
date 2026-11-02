@@ -9,6 +9,8 @@ import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.SerializationStrategy
 import kotlinx.serialization.json.Json
 import org.skepsun.kototoro.backups.data.model.*
+import org.skepsun.kototoro.backups.data.dumpReadingStatistics
+import org.skepsun.kototoro.backups.data.restoreReadingStatistic
 import org.skepsun.kototoro.backups.domain.BackupSection
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.favourites.data.FavouriteEntity
@@ -17,8 +19,19 @@ import org.skepsun.kototoro.stats.data.StatsEntity
 import org.skepsun.kototoro.tracker.data.mergeRestoredTrack
 import org.skepsun.kototoro.tracker.data.mergeRestoredTrackLog
 
-/** Same decoding rules as Android: newer writers may add fields, older ones may omit them. */
-val LibraryBackupJson = Json { ignoreUnknownKeys = true; coerceInputValues = true }
+/**
+ * Same decoding rules as Android: newer writers may add fields, older ones may omit them.
+ *
+ * [Json.allowSpecialFloatingPointValues] mirrors the Android writer, which opens it because a reading progress can be
+ * `NaN`/`Infinity` (a novel offset divided by an unknown page count, a row written before the progress was computed).
+ * Without it a single such row makes the whole archive unreadable here, which is exactly the "Android backup will not
+ * restore on Windows" report. The values are normalized on the way into the tables, see [normalizeBackupPercent].
+ */
+val LibraryBackupJson = Json {
+    ignoreUnknownKeys = true
+    coerceInputValues = true
+    allowSpecialFloatingPointValues = true
+}
 
 /** Platform archive reader; each section is one JSON array, as in Android/Kotatsu backups. */
 interface LibraryBackupInput {
@@ -54,9 +67,9 @@ class LibraryBackup(private val database: MangaDatabase) {
                 ids += manga.manga.id
                 BookmarkBackup(manga, bookmarks)
             }, BookmarkBackup.serializer())
-            write(output, BackupSection.STATS, database.getStatsDao().dump().map {
+            write(output, BackupSection.STATS, database.dumpReadingStatistics().map {
                 ids += it.mangaId
-                StatisticBackup(it)
+                it
             }, StatisticBackup.serializer())
             write(output, BackupSection.SOURCE_ORIGINS,
                 database.getSourceOriginsDao().findAll().asFlow().map(SourceOriginBackup::fromEntity),
@@ -124,11 +137,12 @@ class LibraryBackup(private val database: MangaDatabase) {
             }
             suspend fun history(row: HistoryEntity) {
                 require(row.mangaId in database.getMangaDao()) { "备份历史缺少对应作品" }
-                require(row.page >= 0 && row.scroll.isFinite() && row.scroll >= 0 && row.chaptersCount >= 0) {
-                    "备份阅读进度无效"
-                }
-                // Android writers never validated percent: float overshoot (1.0000001) and novel offsets leak in.
-                val remote = row.copy(percent = normalizeBackupPercent(row.percent))
+                require(row.page >= 0 && row.chaptersCount >= 0) { "备份阅读进度无效" }
+                // Android writers never validated the progress floats: overshoot (1.0000001), novel offsets and NaN or
+                // Infinity for a session whose percentage was never computed all leak into the file. Normalize instead
+                // of refusing the archive — a bad float is one unreadable row, not a broken library.
+                val remote = row.copy(scroll = normalizeBackupScroll(row.scroll),
+                    percent = normalizeBackupPercent(row.percent))
                 val local = database.getHistoryDao().findIncludingDeleted(remote.mangaId)
                 if (local == null || remote.updatedAt >= local.updatedAt) database.getHistoryDao().upsertSync(remote)
                 restored++
@@ -177,7 +191,10 @@ class LibraryBackup(private val database: MangaDatabase) {
                     pages = maxOf(remote.pages, local?.pages ?: 0)))
                 restored++
             }
-            archive.rows(BackupSection.STATS, StatisticBackup.serializer()) { statistic(it.toEntity()) }
+            archive.rows(BackupSection.STATS, StatisticBackup.serializer()) {
+                database.restoreReadingStatistic(it)
+                restored++
+            }
             archive.rows(BackupSection.WORK_STATS, WorkStatisticBackup.serializer()) {
                 // Removed work ownership is read only as a legacy projection anchor.
                 if (it.anchorMangaId in anchors) statistic(it.toStatsEntity())
@@ -212,6 +229,9 @@ class LibraryBackup(private val database: MangaDatabase) {
         percent > 1f && percent <= 1f + PERCENT_OVERSHOOT -> 1f
         else -> BACKUP_PROGRESS_NONE
     }
+
+    /** A scroll offset the reader can restore: Android may write `NaN`/`Infinity` for a session it never measured. */
+    private fun normalizeBackupScroll(scroll: Float): Float = if (scroll.isFinite() && scroll >= 0f) scroll else 0f
 
     private suspend fun saveContent(backup: ContentBackup, tagBackups: Set<TagBackup> = backup.tags) {
         val candidate = backup.toEntity()

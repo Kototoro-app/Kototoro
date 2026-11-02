@@ -49,6 +49,10 @@ data class LocalItem(
      * its scheme and its history and bookmarks stay on the right chapters.
      */
     val chapterScheme: Int = 1,
+    /** A video folder: the original names of its episode files, stored as `episodes/<index>.<ext>`; empty otherwise. */
+    val episodes: List<String> = emptyList(),
+    /** A video folder's identity: SHA-256 over its episodes' names, sizes and hashes. */
+    val contentHash: String? = null,
 )
 
 /**
@@ -105,6 +109,13 @@ class LocalSourceRuntime(
 
     override suspend fun getPages(chapter: SourceChapter, nextChapterUrl: String?): List<SourcePage> {
         val (item, index) = chapterOf(chapter.url)
+        if (item.format == LocalFormat.VIDEO && item.episodes.isNotEmpty()) {
+            val name = item.episodes.getOrNull(index)
+            require(name != null && chapter.source == VIDEO) { "视频章节无效" }
+            val path = episodeFile(item, index)
+            require(fileSystem.exists(path)) { "本地视频已被删除" }
+            return listOf(SourcePage(stableId(chapter.url), fileUrl(path), null, VIDEO))
+        }
         if (item.format == LocalFormat.VIDEO) {
             require(index == 0 && chapter.source == VIDEO) { "视频章节无效" }
             val path = file(item)
@@ -190,6 +201,53 @@ class LocalSourceRuntime(
         }
     }
 
+    /**
+     * Imports a folder of video files as one work with an episode per file, in natural name order (Android imports a
+     * video directory the same way). Files that are not videos are skipped; importing the same files again keeps the
+     * work, its episodes, favourites and playback positions.
+     */
+    suspend fun importVideoFolder(files: List<Pair<Path, String>>, title: String): SourceContent = withContext(Dispatchers.IO) {
+        importMutex.withLock {
+            val videos = files.filter { (path, name) ->
+                LocalFormat.of(name) == LocalFormat.VIDEO && fileSystem.metadata(path).isRegularFile
+            }.sortedWith { a, b -> NaturalOrder.compare(a.second, b.second) }
+            require(videos.isNotEmpty()) { "文件夹里没有可导入的视频文件" }
+            val id = Random.nextLong(1, Long.MAX_VALUE)
+            val directory = root / ITEMS / id.toString()
+            val episodes = directory / EPISODES
+            fileSystem.createDirectories(episodes)
+            try {
+                var size = 0L
+                val identity = StringBuilder()
+                videos.forEachIndexed { index, (path, name) ->
+                    val target = episodes / "$index.${LocalFiles.extension(name)}"
+                    val input = HashingSource.sha256(fileSystem.source(path))
+                    val written = input.use { fileSystem.sink(target).buffer().use { output -> output.writeAll(it) } }
+                    require(written > 0) { "视频文件是空的：$name" }
+                    size += written
+                    identity.append(name).append(':').append(written).append(':').append(input.hash.hex()).append('\n')
+                }
+                val hash = identity.toString().encodeToByteArray().toByteString().sha256().hex()
+                val fileName = "$title/"
+                items().firstOrNull { it.fileName == fileName && it.contentHash == hash }?.let { existing ->
+                    fileSystem.deleteRecursively(directory)
+                    return@withLock content(existing, book(existing))
+                }
+                val item = LocalItem(id, title, fileName, LocalFormat.VIDEO, size, now(), CHAPTER_SCHEME,
+                    episodes = videos.map { it.second }, contentHash = hash)
+                fileSystem.write(directory / META) { writeUtf8(json.encodeToString(LocalItem.serializer(), item)) }
+                val book = book(item)
+                content(item, book)
+            } catch (error: Throwable) {
+                runCatching { fileSystem.deleteRecursively(directory) }
+                throw error
+            }
+        }
+    }
+
+    private fun episodeFile(item: LocalItem, index: Int): Path =
+        root / ITEMS / item.id.toString() / EPISODES / "$index.${LocalFiles.extension(item.episodes[index])}"
+
     private fun fileHash(path: Path): String = HashingSource.sha256(fileSystem.source(path)).use { input ->
         val buffered = input.buffer()
         while (!buffered.exhausted()) buffered.skip(minOf(8192L, buffered.buffer.size))
@@ -223,6 +281,13 @@ class LocalSourceRuntime(
 
     private suspend fun book(item: LocalItem): LocalBook {
         mutex.withLock { books[item.id] }?.let { return it }
+        if (item.episodes.isNotEmpty()) {
+            val folder = LocalBook(item.title, emptyList(), null, emptyList(), null, item.episodes.mapIndexed { index, name ->
+                LocalChapter(name.substringBeforeLast('.'), index + 1f)
+            })
+            mutex.withLock { books[item.id] = folder }
+            return folder
+        }
         val book = withContext(Dispatchers.IO) {
             reader.read(file(item), item.format, item.title, splitSections = item.chapterScheme >= 2)
         }
@@ -323,6 +388,7 @@ class LocalSourceRuntime(
         private const val ITEMS = "items"
         private const val META = "meta.json"
         private const val ASSETS = "assets"
+        private const val EPISODES = "episodes"
         private const val PAGE_SIZE = 60
 
         fun owns(sourceName: String): Boolean =

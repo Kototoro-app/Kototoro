@@ -49,6 +49,8 @@ internal class FixtureParser(context: ContentLoaderContext, source: ContentSourc
 
     override suspend fun getDetails(manga: Content): Content = manga.copy(
         description = "Fixture details for ${manga.title}",
+        altTitles = setOf("Fixture Alias"),
+        tags = setOf(ContentTag("Action", "action", source), ContentTag("Drama", "drama", source)),
         chapters = (1..2).map { number ->
             ContentChapter(
                 id = manga.id * 10 + number, title = "Chapter $number", number = number.toFloat(), volume = 0,

@@ -26,7 +26,7 @@ struct BackupView: View {
                     .fileExporter(isPresented: $exporting, document: exportFile, contentType: .zip,
                                   defaultFilename: exportFile?.url.deletingPathExtension().lastPathComponent) { result in
                         switch result {
-                        case .success: message = "备份已保存"
+                        case .success: message = String(localized: "备份已保存")
                         case .failure(let failure as CocoaError) where failure.code == .userCancelled: break
                         case .failure(let failure): error = failure.localizedDescription
                         }
@@ -43,9 +43,11 @@ struct BackupView: View {
                         case .failure(let failure): error = failure.localizedDescription
                         }
                     }
+            } header: {
+                Text("本地备份")
             } footer: {
-                Text("包含收藏分类、收藏、历史与阅读进度、书签、阅读统计和来源排序，与 Android 版的备份文件互通。"
-                     + "也可以导入 Mihon/Tachiyomi、Aniyomi（.tachibk）和 Venera 的备份。恢复为合并方式，不会清空现有记录。")
+                Text(String(localized: "包含收藏分类、收藏、历史与阅读进度、书签、阅读统计和来源排序，与 Android 版的备份文件互通。")
+                     + String(localized: "也可以导入 Mihon/Tachiyomi、Aniyomi（.tachibk）和 Venera 的备份。恢复为合并方式，不会清空现有记录。"))
             }
             if let message { Text(message).accessibilityIdentifier("backup.message") }
             if let error { Text(error).foregroundStyle(.red).accessibilityIdentifier("backup.error") }
@@ -74,8 +76,21 @@ struct BackupView: View {
             if let external { externalSection(external) }
             if let report { reportSection(report) }
             if busy { ProgressView().frame(maxWidth: .infinity) }
+            // Below a backup being previewed or imported, which belongs to the buttons above.
+            Section {
+                NavigationLink { GoogleDriveSyncView(model: library.googleDrive) } label: {
+                    Label("Google Drive 同步", systemImage: "arrow.triangle.2.circlepath.icloud")
+                }
+                .accessibilityIdentifier("settings.googleDrive")
+                NavigationLink { WebDavSyncView() } label: {
+                    Label("WebDAV 备份", systemImage: "externaldrive.connected.to.line.below")
+                }
+                .accessibilityIdentifier("settings.webdav")
+            } header: {
+                Text("云同步")
+            }
         }
-        .navigationTitle("备份与恢复")
+        .navigationTitle("备份与同步")
     }
 
     private func export() async {
@@ -119,7 +134,7 @@ struct BackupView: View {
         do {
             let restored = try await database.restoreBackup(preview: archive)
             preview = nil
-            message = "已合并 \(restored) 条记录"
+            message = String(localized: "已合并 \(restored) 条记录")
             await library.refresh()
         } catch { self.error = error.localizedDescription }
     }
@@ -182,28 +197,28 @@ struct BackupView: View {
         do {
             report = try await database.importExternalBackup(preview: backup, sources: sources.sources)
             external = nil
-            message = "已导入 \(backup.app) 备份"
+            message = String(localized: "已导入 \(backup.app) 备份")
             await library.refresh()
         } catch { self.error = error.localizedDescription }
     }
 
     static func title(_ section: String) -> String {
         switch section {
-        case "categories": "收藏分类"
-        case "favourites", "work_favourites": "收藏"
-        case "history", "work_history": "历史"
-        case "bookmarks": "书签"
-        case "statistics", "work_stats": "阅读统计"
-        case "sources": "来源排序"
-        case "projections": "作品"
-        case "settings": "设置"
-        case "reader_grid": "阅读器点击区域"
-        case "scrobbling": "追踪账号"
-        case "tracks", "track_logs": "更新检测"
-        case "saved_filters": "保存的筛选"
-        case "source_origins": "来源分组"
-        case "extension_repos": "扩展仓库"
-        case "auth": "登录信息"
+        case "categories": String(localized: "收藏分类")
+        case "favourites", "work_favourites": String(localized: "收藏")
+        case "history", "work_history": String(localized: "历史")
+        case "bookmarks": String(localized: "书签")
+        case "statistics", "work_stats": String(localized: "阅读统计")
+        case "sources": String(localized: "来源排序")
+        case "projections": String(localized: "作品")
+        case "settings": String(localized: "设置")
+        case "reader_grid": String(localized: "阅读器点击区域")
+        case "scrobbling": String(localized: "追踪账号")
+        case "tracks", "track_logs": String(localized: "更新检测")
+        case "saved_filters": String(localized: "保存的筛选")
+        case "source_origins": String(localized: "来源分组")
+        case "extension_repos": String(localized: "扩展仓库")
+        case "auth": String(localized: "登录信息")
         default: section
         }
     }

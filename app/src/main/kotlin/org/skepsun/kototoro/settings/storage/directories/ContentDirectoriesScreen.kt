@@ -59,6 +59,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.withStyle
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
+import org.skepsun.kototoro.core.ui.adaptive.tvTabRing
 import org.skepsun.kototoro.core.util.FileSize
 import org.skepsun.kototoro.local.data.LocalStorageRoot
 import org.skepsun.kototoro.local.data.StorageContentKind
@@ -78,10 +80,11 @@ internal fun ContentDirectoriesScreen(
     onAddDirectory: (StorageContentKind) -> Unit,
     onRemoveDirectory: (LocalStorageRoot, StorageContentKind) -> Unit,
     onDefaultDirectory: (LocalStorageRoot, StorageContentKind) -> Unit,
+    initialKind: StorageContentKind = StorageContentKind.MANGA,
 ) {
     val listSpacing = dimensionResource(R.dimen.list_spacing_large)
     val kinds = StorageContentKind.entries
-    val pagerState = rememberPagerState(pageCount = kinds::size)
+    val pagerState = rememberPagerState(initialPage = kinds.indexOf(initialKind), pageCount = kinds::size)
     val coroutineScope = rememberCoroutineScope()
     val selectedKind = kinds[pagerState.currentPage]
     Scaffold(
@@ -96,7 +99,7 @@ internal fun ContentDirectoriesScreen(
                     ),
                     title = { Text(stringResource(R.string.local_content_directories)) },
                     navigationIcon = {
-                        IconButton(onClick = onBack) {
+                        IconButton(onClick = onBack, modifier = Modifier.tvIconButtonRing()) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = stringResource(R.string.back),
@@ -114,6 +117,7 @@ internal fun ContentDirectoriesScreen(
                 ) {
                     kinds.forEachIndexed { index, kind ->
                         Tab(
+                            modifier = Modifier.tvTabRing(),
                             selected = pagerState.currentPage == index,
                             onClick = { coroutineScope.launch { pagerState.animateScrollToPage(index) } },
                             text = {
@@ -340,7 +344,7 @@ private fun DirectoryConfigCard(
                         Box(modifier = Modifier.weight(1f))
                     }
                     if (!item.isAppPrivate) {
-                        IconButton(onClick = onRemove, modifier = Modifier.size(40.dp)) {
+                        IconButton(onClick = onRemove, modifier = Modifier.size(40.dp).tvIconButtonRing()) {
                             Icon(
                                 imageVector = Icons.Default.Delete,
                                 contentDescription = stringResource(R.string.remove),

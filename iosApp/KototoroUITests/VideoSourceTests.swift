@@ -5,6 +5,136 @@ final class VideoSourceTests: XCTestCase {
     private let api = "http://127.0.0.1:8765/api.php/provide/vod/"
 
     @MainActor
+    func testRelatedRecommendationsAlignAndOpenDetails() throws {
+        try requireFixture()
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["-space.enabled", "YES", "-space.kind", "VIDEO"]
+        app.launch()
+        app.mainTab("浏览").tap()
+        func searchForSite() {
+            let field = app.pageSearchField()
+            field.tap(); field.typeText("相关推荐裁剪验证")
+        }
+        searchForSite()
+        let source = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@",
+                                                      "source.JSON_TVBOX_", "相关推荐裁剪验证")).firstMatch
+        if !source.waitForExistence(timeout: 5) {
+            app.terminate(); app.launch()
+            importVideoSite(app, url: "http://127.0.0.1:8765/related/api.php/provide/vod/", title: "相关推荐裁剪验证")
+            searchForSite()
+        }
+        XCTAssertTrue(source.waitForExistence(timeout: 30), app.debugDescription)
+        source.tap()
+        let work = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@",
+                                                    "source.content.", "测试动画")).firstMatch
+        XCTAssertTrue(work.waitForExistence(timeout: 30), app.debugDescription)
+        work.tap()
+        XCTAssertTrue(app.staticTexts["details.title"].waitForExistence(timeout: 30), app.debugDescription)
+        let title = app.staticTexts["相关推荐"]
+        for _ in 0..<4 where !title.exists || !title.isHittable {
+            app.collectionViews.firstMatch.swipeUp(velocity: .slow)
+        }
+        XCTAssertTrue(title.isHittable, app.debugDescription)
+        let recommendation = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "测试电影")).firstMatch
+        for _ in 0..<4 where !recommendation.isHittable || recommendation.frame.maxY > app.frame.maxY - 110 {
+            app.collectionViews.firstMatch.swipeUp(velocity: .slow)
+        }
+        XCTAssertEqual(title.frame.minX, 16, accuracy: 1)
+        XCTAssertEqual(recommendation.frame.minX, title.frame.minX, accuracy: 1)
+        attach(app, "相关推荐标题与首张卡片")
+        XCTAssertTrue(recommendation.isHittable, app.debugDescription)
+        recommendation.tap()
+        XCTAssertTrue(app.staticTexts["details.title"].waitForExistence(timeout: 10))
+        XCTAssertEqual(app.staticTexts["details.title"].label, "测试电影")
+    }
+
+    /// A saved filter loads back into the sheet, applies itself on opening once marked so, and can be deleted.
+    @MainActor
+    func testSavedFilterRestoresAndAutoApplies() throws {
+        try requireFixture()
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        // The CMS site is a video source: browse in the video space whatever an earlier test left selected.
+        app.launchArguments = ["-space.enabled", "YES", "-space.kind", "VIDEO"]
+        app.launch()
+        importVideoSite(app, url: api, title: "本地测试影视")
+        func openSource() -> String {
+            app.mainTab("浏览").tap()
+            resetBrowseFilters(app)
+            let field = app.pageSearchField()
+            XCTAssertTrue(field.waitForExistence(timeout: 10))
+            field.tap()
+            // A search left from an earlier run stays in the field.
+            if let text = field.value as? String, text != field.placeholderValue, !text.isEmpty {
+                field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: text.count + 2))
+            }
+            field.typeText("本地测试影视")
+            let source = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@",
+                                                          "source.JSON_TVBOX_", "本地测试影视")).firstMatch
+            XCTAssertTrue(source.waitForExistence(timeout: 10), app.debugDescription)
+            let name = String(source.identifier.dropFirst("source.".count))
+            source.tap()
+            return name
+        }
+        let sourceName = openSource()
+        let first = element(app, "source.content.\(contentId(101, sourceName))")
+        let movie = element(app, "source.content.\(contentId(102, sourceName))")
+        XCTAssertTrue(first.waitForExistence(timeout: 30), app.debugDescription)
+        XCTAssertTrue(movie.exists)
+        let filter = app.buttons["browse.filterChip"]
+        filter.tap()
+        // A saved filter left by an earlier run would sit above the tags; remove it first.
+        let leftover = app.buttons["filter.saved.只看动画"]
+        if leftover.waitForExistence(timeout: 3) {
+            leftover.press(forDuration: 1)
+            app.buttons["删除"].tap()
+            XCTAssertTrue(leftover.waitForNonExistence(timeout: 5))
+        }
+        let animation = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label == %@",
+                                                         "filter.tag.", "动画")).firstMatch
+        for _ in 0..<4 where !animation.exists { app.collectionViews.firstMatch.swipeUp() }
+        XCTAssertTrue(animation.waitForExistence(timeout: 10), app.debugDescription)
+        animation.tap()
+        let saveCurrent = app.buttons["filter.saveCurrent"]
+        for _ in 0..<4 where !saveCurrent.isHittable { app.collectionViews.firstMatch.swipeDown() }
+        saveCurrent.tap()
+        let nameField = app.alerts.firstMatch.textFields.firstMatch
+        XCTAssertTrue(nameField.waitForExistence(timeout: 5), app.debugDescription)
+        nameField.typeText("只看动画")
+        app.buttons["保存"].tap()
+        let saved = app.buttons["filter.saved.只看动画"]
+        XCTAssertTrue(saved.waitForExistence(timeout: 5), app.debugDescription)
+        attach(app, "已保存的筛选")
+        XCTAssertEqual(saved.value as? String, "已应用", "The sheet's selection is the saved filter")
+        app.buttons["filter.reset"].tap()
+        XCTAssertNotEqual(saved.value as? String, "已应用")
+        saved.tap()
+        XCTAssertEqual(saved.value as? String, "已应用", "Choosing the saved filter loads it back into the sheet")
+        saved.press(forDuration: 1)
+        app.buttons["打开来源时自动应用"].tap()
+        app.buttons["filter.reset"].tap()
+        app.buttons["filter.apply"].tap()
+        XCTAssertTrue(movie.waitForExistence(timeout: 15), app.debugDescription)
+
+        app.terminate()
+        app.launch()
+        _ = openSource()
+        XCTAssertTrue(first.waitForExistence(timeout: 30), app.debugDescription)
+        expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: movie)
+        waitForExpectations(timeout: 15)
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "筛选 1")).firstMatch.exists,
+                      app.debugDescription)
+        filter.tap()
+        XCTAssertTrue(saved.waitForExistence(timeout: 10))
+        saved.press(forDuration: 1)
+        app.buttons["删除"].tap()
+        XCTAssertTrue(saved.waitForNonExistence(timeout: 5), app.debugDescription)
+        app.buttons["filter.reset"].tap()
+        app.buttons["filter.apply"].tap()
+    }
+
+    @MainActor
     func testAppleCmsSourceImportsBrowsesAndPlaysNatively() throws {
         try requireFixture()
         let app = XCUIApplication()
@@ -43,7 +173,7 @@ final class VideoSourceTests: XCTestCase {
         waitForExpectations(timeout: 15)
         attach(app, "Apple CMS browse grid")
         // The filter sheet mirrors the quick category, and resetting it restores the full listing.
-        let filter = app.buttons["browse.filter"]
+        let filter = app.buttons["browse.filterChip"]
         XCTAssertTrue(filter.waitForExistence(timeout: 10), app.debugDescription)
         filter.tap()
         let included = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND value == %@",
@@ -148,7 +278,6 @@ final class VideoSourceTests: XCTestCase {
         let first = element(app, "source.content.\(contentId(101, name))")
         let movie = element(app, "source.content.\(contentId(102, name))")
         XCTAssertTrue(first.waitForExistence(timeout: 30))
-        app.navigationBars.buttons["搜索"].tap()
         let search = app.pageSearchField()
         XCTAssertTrue(search.waitForExistence(timeout: 10))
         search.tap(); search.typeText("测试动画\n")
@@ -187,7 +316,7 @@ final class VideoSourceTests: XCTestCase {
 
     /// The first catalog is a baseline; later additions get version badges in list and grid layouts.
     @MainActor
-    func testNewSourceBadgesFilterAndRestartPreserveBaseline() throws {
+    func testNewSourceFilterAndRestartPreserveBaseline() throws {
         continueAfterFailure = false
         try requireFixture()
         let app = XCUIApplication()
@@ -208,7 +337,6 @@ final class VideoSourceTests: XCTestCase {
         baselineSearch.tap(); baselineSearch.typeText("\(prefix)\n")
         let old = source(oldTitle)
         XCTAssertTrue(old.waitForExistence(timeout: 30))
-        XCTAssertFalse(old.label.contains("本版本新来源"), "The initial catalog is a baseline")
         app.terminate()
         app.launchArguments = ["-sources.grouping", "none",
                                "-sources.hiddenKinds", "", "-sources.hiddenEcosystems", ""]
@@ -228,21 +356,18 @@ final class VideoSourceTests: XCTestCase {
         searchSources()
         let fresh = source("\(prefix)甲")
         XCTAssertTrue(fresh.waitForExistence(timeout: 30))
-        XCTAssertTrue(fresh.label.contains("本版本新来源"), app.debugDescription)
         XCTAssertTrue(old.exists)
-        XCTAssertFalse(old.label.contains("本版本新来源"))
         let notice = app.buttons["sources.newNotice"]
         XCTAssertTrue(notice.waitForExistence(timeout: 10))
         XCTAssertTrue(notice.label.contains("2 个来源"), app.debugDescription)
         notice.tap()
         XCTAssertTrue(old.waitForNonExistence(timeout: 10))
         XCTAssertTrue(fresh.exists)
-        attach(app, "New source badges and filtered list")
+        attach(app, "New-only filtered list")
         app.terminate(); app.launch()
         app.tabBars.buttons["浏览"].tap()
         searchSources()
         XCTAssertTrue(fresh.waitForExistence(timeout: 30))
-        XCTAssertTrue(fresh.label.contains("本版本新来源"))
         XCTAssertFalse(old.exists, "The new-only filter must persist")
         let close = app.navigationBars.buttons["关闭"].firstMatch
         if close.exists { close.tap() }
@@ -251,9 +376,8 @@ final class VideoSourceTests: XCTestCase {
         dismissMenu(app)
         searchSources()
         XCTAssertTrue(fresh.waitForExistence(timeout: 10))
-        XCTAssertTrue(fresh.label.contains("本版本新来源"), app.debugDescription)
         XCTAssertLessThan(fresh.frame.width, app.frame.width / 2, "The source must be a grid tile")
-        attach(app, "New source badges in grid")
+        attach(app, "New-only filter in grid")
         let field = app.pageSearchField()
         field.tap(); field.buttons.firstMatch.tap(); field.typeText("\(oldTitle)\n")
         let reset = app.buttons["sources.showAll"]
@@ -262,7 +386,6 @@ final class VideoSourceTests: XCTestCase {
         attach(app, "Empty new-only search can show existing sources")
         reset.tap()
         XCTAssertTrue(old.waitForExistence(timeout: 10))
-        XCTAssertFalse(old.label.contains("本版本新来源"))
     }
 
     /// Shared source usage metrics drive recent and popularity ordering while keeping the pinned section first.
@@ -524,7 +647,12 @@ func importVideoSite(_ app: XCUIApplication, url: String, title: String?, timeou
         for _ in 0..<3 where (field.value(forKey: "hasKeyboardFocus") as? Bool) != true { sleep(1); field.tap() }
         field.typeText(title)
     }
-    app.buttons["repository.import"].tap()
+    let importButton = app.buttons["repository.import"]
+    importButton.tap()
+    // Retry a missed toolbar tap only while the import has not started.
+    if !address.waitForNonExistence(timeout: 3), importButton.exists, importButton.isEnabled {
+        importButton.tap()
+    }
     XCTAssertTrue(address.waitForNonExistence(timeout: timeout), "Import failed: \(app.debugDescription)")
     let status = app.staticTexts["repository.status"]
     XCTAssertTrue(status.waitForExistence(timeout: 5) && status.label.contains("已导入"), app.debugDescription)

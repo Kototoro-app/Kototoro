@@ -4,9 +4,23 @@ package org.skepsun.kototoro.ios
 import kotlinx.coroutines.runBlocking
 import org.skepsun.kototoro.core.source.*
 import platform.Foundation.*
+import kotlin.math.abs
 import kotlin.test.*
 
 class IosProductTest {
+    @Test
+    fun bookmarkTextPreviewUsesTheSharedPlainTextPolicy() {
+        fun bookmark(preview: String) = IosBookmark(org.skepsun.kototoro.core.library.SourceBookmark(
+            1, 2, 3, 4, 0, 5, 0.5f, preview,
+        ))
+        assertEquals("晨光 正文", bookmark("<p>晨光</p><p>正文</p>").textPreview)
+        assertEquals("hello", bookmark("data:text/plain;base64,aGVsbG8=").textPreview)
+        assertEquals("", bookmark("https://example.invalid/page.jpg").textPreview)
+        assertEquals("", bookmark("file:///private/page.jpg").textPreview)
+        assertEquals(5L, bookmark("摘录").createdAt)
+        assertEquals(0.5f, bookmark("摘录").percent)
+    }
+
     private val source = SourceRef("MIHON_9007199254740993", "zh", "MANGA")
     private val chapter = SourceChapter(Long.MAX_VALUE, "第一话", 1f, 1, "/chapter/1", null, 1, "中文", source,
         sourceData = """{"chapterToken":"opaque"}""")
@@ -36,7 +50,8 @@ class IosProductTest {
                 // Source metadata comes from the installed catalog, as on the desktop/Android hosts.
                 second.updateSources(listOf(IosSource(source.name, "漫画源", source.locale, source.contentType, "extension")))
                 val saved = second.favourites().single().content
-                assertEquals(content, saved.value)
+                assertEquals(content.copy(chapters = null), saved.value)
+                assertEquals(content, second.storedDetails(saved)?.value)
                 assertEquals(IosReadingPosition(chapter.id.toString(), 2, 12f, 0.75f), second.position(saved))
                 assertEquals(2, second.bookmarks(saved).single().index)
                 assertEquals(content.id.toString(), second.history().single().content.id)
@@ -74,7 +89,7 @@ class IosProductTest {
     }
 
     @Test
-    fun updateChecksUseReadBranchAndClearUnreadCounter() = runBlocking {
+    fun updateChecksUseReadBranchAndKeepSeenSeparateFromReading() = runBlocking {
         withDatabase { path ->
             val library = IosLibrary(path)
             var fresh = content
@@ -92,13 +107,40 @@ class IosProductTest {
                 library.setFavourite(item, true)
                 library.recordPosition(item, IosSourceChapter(chapter), 0, 4, 0f)
                 assertEquals(0, library.checkUpdates(runtime).newChapters)
-                fresh = content.copy(chapters = listOf(chapter, otherBranch, chapter.copy(id = 333, number = 2f),
-                    otherBranch.copy(id = 444, number = 2f)))
+                fresh = content.copy(chapters = listOf(chapter, otherBranch, chapter.copy(id = 333, number = 2f, url = "/chapter/333"),
+                    otherBranch.copy(id = 444, number = 2f, url = "/chapter/444")))
                 assertEquals(1, library.checkUpdates(runtime).newChapters)
                 assertEquals(1, library.updates().single().newChapters)
-                library.markUpdateRead(item)
+                library.markUpdatesSeen(item)
+                assertEquals(1, library.updates().single().newChapters)
+                val updated = IosSourceContent(fresh)
+                library.recordPosition(updated, updated.chapters.single { it.id == "333" }, 3, 4, 0f)
                 assertTrue(library.updates().isEmpty())
             } finally { runtime.close(); library.close() }
+        }
+    }
+
+    @Test
+    fun aBadgeFromBeforeChaptersCarriedIdentitiesClearsWhenTheNewestChapterIsRead() = runBlocking {
+        withDatabase { path ->
+            val library = IosLibrary(path)
+            try {
+                val item = IosSourceContent(content)
+                library.setFavourite(item, true)
+                library.saveDetails(item)
+                // Rows migrated from v85: the count is the whole badge, and the log has no chapters to complete.
+                library.database.getTracksDao().upsert(org.skepsun.kototoro.tracker.data.TrackEntity(
+                    mangaId = content.id, lastChapterId = 0, newChapters = 1, lastCheckTime = 1,
+                    lastChapterDate = 1, lastResult = org.skepsun.kototoro.tracker.data.TrackEntity.RESULT_HAS_UPDATE,
+                    lastError = null))
+                library.database.getTrackLogsDao().insert(org.skepsun.kototoro.tracker.data.TrackLogEntity(
+                    mangaId = content.id, chapters = "第一话", createdAt = 1, isUnread = true))
+                assertEquals(1, library.updates().single().newChapters)
+
+                library.recordPosition(item, IosSourceChapter(chapter), 3, 4, 0f)
+
+                assertTrue(library.updates().isEmpty(), "the badge outlived the chapter it counted")
+            } finally { library.close() }
         }
     }
 
@@ -167,6 +209,107 @@ class IosProductTest {
     }
 
     @Test
+    fun continuousWindowPrependsAndTrimsChaptersWithoutMovingTheReadPage() {
+        val previous = (0..2).map { IosReaderPage("previous", it) }
+        val current = (0..3).map { IosReaderPage("current", it) }
+        val next = (0..1).map { IosReaderPage("next", it) }
+        for ((mode, reversed) in listOf(3 to false, 4 to false, 4 to true)) {
+            val reader = IosReader()
+            val initial = reader.chapterWindow(emptyList(), current, emptyList(), Int.MAX_VALUE)
+            reader.setPages(initial)
+            reader.configure(initial.size, 600, 800, mode, false, false, 0, false, reversed)
+            repeat(initial.size) { reader.setImageSize(it, 600, 800) }
+            fun point(origin: Float) = if (mode == 3) 0f to origin else origin to 0f
+            val (x, y) = point(reader.scrollOrigin(2, 120f))
+            val measured = reader.slots()[2].placements.single()
+            // The previous chapter joins before the page being read: the strip moves by exactly its extent.
+            val prepended = reader.chapterWindow(previous, current, emptyList(), Int.MAX_VALUE)
+            val moved = assertNotNull(reader.setPages(prepended, x, y))
+            assertEquals(IosReaderProgress(5, 120f), reader.progress(moved.x, moved.y))
+            assertEquals(reader.scrollOrigin(5, 120f), if (mode == 3) moved.y else moved.x)
+            // Measured sizes follow the page, and a window that drops the previous chapter moves the strip back.
+            reader.slots()[5].placements.single().let {
+                assertEquals(measured.width to measured.height, it.width to it.height)
+            }
+            val trimmed = reader.chapterWindow(emptyList(), current, next, Int.MAX_VALUE)
+            val back = assertNotNull(reader.setPages(trimmed, moved.x, moved.y))
+            assertEquals(IosReaderProgress(2, 120f), reader.progress(back.x, back.y))
+        }
+    }
+
+    @Test
+    fun continuousResourceWindowCoversTheScreenFirstAndOnlyReplansOnChange() {
+        val reader = IosReader()
+        val pages = (0..19).map { IosReaderPage("chapter", it) }
+        reader.setPages(pages)
+        reader.configure(pages.size, 600, 800, 3, false, false, 0)
+        repeat(pages.size) { reader.setImageSize(it, 600, 800) }
+        val origin = reader.scrollOrigin(5, 400f)
+        val window = assertNotNull(reader.resourceWindow(0f, origin, 0f, 0f, false, false))
+        assertEquals(listOf(5, 6), window.filter { it.priority == 0 }.map { it.index })
+        assertTrue(window.all { it.priority > 0 || it.decode })
+        assertTrue(window.any { it.index < 5 } && window.any { it.index > 8 })
+        assertEquals(window.map { it.index }.toSet().size, window.size)
+        assertNull(reader.resourceWindow(0f, origin + 10f, 0f, 0f, false, false))
+        assertNotNull(reader.resourceWindow(0f, origin + 10f, 0f, 0f, false, true))
+        // A fling forward reaches further ahead than the idle window.
+        val fling = assertNotNull(reader.resourceWindow(0f, origin, 0f, 6000f, false, true))
+        assertTrue(fling.maxOf { it.index } > window.maxOf { it.index })
+        reader.configure(pages.size, 600, 800, 0, false, false, 0)
+        assertNull(reader.resourceWindow(0f, 0f, 0f, 0f, false, true))
+    }
+
+    @Test
+    fun continuousUnknownPagesTakeTheChapterRatioWithoutMovingTheReadPage() {
+        val reader = IosReader()
+        val pages = (0..9).map { IosReaderPage("chapter", it) }
+        reader.setPages(pages)
+        reader.configure(pages.size, 600, 800, 3, false, false, 0)
+        fun height(index: Int) = reader.slots()[index].placements.single().height
+        // Unknown pages are a screen tall, and one decoded page is not a chapter ratio yet.
+        assertEquals(800f, height(5))
+        reader.setImageSize(0, 600, 1800)
+        assertEquals(800f, height(5))
+        // Two pages agree on 1:3: every unknown page takes it, while the page being read stays where it is.
+        val origin = reader.scrollOrigin(1, 100f)
+        val moved = assertNotNull(reader.setImageSize(1, 600, 1800, 0f, origin))
+        assertTrue(abs(height(5) - 1800f) <= 1f, "unknown page height ${height(5)}")
+        assertEquals(IosReaderProgress(1, 100f), reader.progress(moved.x, moved.y))
+        // A new scene starts the ratio over.
+        reader.reset()
+        reader.setPages(pages)
+        reader.configure(pages.size, 600, 800, 3, false, false, 0)
+        assertEquals(800f, height(5))
+    }
+
+    @Test
+    fun continuousPagesDecodeWholeUnlessAndroidsPlannerWouldTileThem() {
+        val reader = IosReader()
+        // A common long strip page: one 17 MB bitmap within the 8192 px edge.
+        assertFalse(reader.plansTiled(720, 6000, 720, 6000))
+        // Past the 8192 px edge it is tiled.
+        assertTrue(reader.plansTiled(1290, 12000, 1290, 12000))
+        assertFalse(reader.plansTiled(0, 100, 1, 1))
+    }
+
+    @Test
+    fun lowPowerModePlansAndroidsReducedContinuousWindow() {
+        val reader = IosReader()
+        val pages = (0..39).map { IosReaderPage("chapter", it) }
+        reader.setPages(pages)
+        reader.configure(pages.size, 600, 800, 3, false, false, 0)
+        repeat(pages.size) { reader.setImageSize(it, 600, 800) }
+        val origin = reader.scrollOrigin(10, 0f)
+        val full = assertNotNull(reader.resourceWindow(0f, origin, 0f, 0f, false, true))
+        assertTrue(reader.setPreloadReduction(true))
+        assertFalse(reader.setPreloadReduction(true))
+        val reduced = assertNotNull(reader.resourceWindow(0f, origin, 0f, 0f, false, true))
+        assertTrue(reduced.size < full.size, "reduced ${reduced.size} vs full ${full.size}")
+        assertTrue(reader.setPreloadReduction(false))
+        assertEquals(full.size, assertNotNull(reader.resourceWindow(0f, origin, 0f, 0f, false, true)).size)
+    }
+
+    @Test
     fun continuousWindowAppendsTheNextChapterWithoutMovingTheStripAndReportsItsShortTail() {
         val first = (0..1).map { IosReaderPage("first", it) }
         val second = listOf(IosReaderPage("second", 0))
@@ -219,6 +362,23 @@ class IosProductTest {
     }
 
     @Test
+    fun continuousStripCanZoomBelowFitAndKeepSemanticProgress() {
+        val reader = IosReader()
+        reader.configure(6, 800, 600, 3, false, false, 0)
+        repeat(6) { reader.setImageSize(it, 800, 1200) }
+        reader.setZoom(0.5f)
+        assertEquals(400f, reader.slots()[0].placements.single().width)
+        assertEquals(600f, reader.slots()[1].placements.single().y)
+        assertEquals(IosReaderProgress(1, 200f), reader.progress(0f, 700f))
+        assertEquals(700f, reader.scrollOrigin(1, 200f))
+        reader.setZoom(0.1f)
+        assertEquals(400f, reader.slots()[0].placements.single().width)
+        reader.setZoom(1f)
+        assertEquals(800f, reader.slots()[0].placements.single().width)
+        assertEquals(1400f, reader.scrollOrigin(1, 200f))
+    }
+
+    @Test
     fun horizontalContinuousStartsInAndroidsDefaultReadingDirection() {
         val reader = IosReader()
         reader.configure(3, 400, 600, 4, false, false, 0, false)
@@ -234,7 +394,7 @@ class IosProductTest {
         for (reversed in listOf(false, true)) {
             reader.configure(3, 400, 600, 4, false, false, 0, false, reversed)
             repeat(3) { reader.setImageSize(it, 1200, 600) }
-            for (zoom in listOf(1f, 2f, 4f)) {
+            for (zoom in listOf(0.5f, 1f, 2f, 4f)) {
                 reader.setZoom(zoom)
                 repeat(3) { index ->
                     val origin = reader.scrollOrigin(index, 150f)
@@ -380,7 +540,48 @@ class IosProductTest {
                 assertEquals("index.min.json", headerCatalog.externalList)
                 val fullCatalog = repositories.external(headerCatalog, bytes, false, "https://fixture.invalid/repo/index.min.json")
                 assertEquals(1, fullCatalog.extensions.size)
-                assertEquals("https://fixture.invalid/repo/index.min.json", fullCatalog.resourceBaseUrl)
+                assertEquals("https://fixture.invalid/repo/", fullCatalog.resourceBaseUrl)
+            } finally { library.close() }
+        }
+    }
+
+    @Test
+    fun legacyRepositoryRefreshCanUpgradeUrlIdentityToSigningFingerprint() = runBlocking {
+        withDatabase { path ->
+            val library = IosLibrary(path)
+            try {
+                val repositories = IosRepositories(library)
+                val baseUrl = "https://raw.githubusercontent.com/yuzono/anime-repo/repo"
+                val indexUrl = "$baseUrl/index.min.json"
+                val bytes = """
+                    [{"name":"Aniyomi: Anime1","pkg":"test.anime1","version":"14.4",
+                      "code":4,"apk":"anime1.apk","sources":[]}]
+                """.trimIndent().encodeToByteArray()
+                val legacy = repositories.decode(bytes, false, indexUrl, "ANIYOMI")
+                // Swift hashes the normalized URL when a legacy array has no signing metadata.
+                val urlFingerprint = IosRepositories.sha256Hex(legacy.url)
+                repositories.save(legacy, urlFingerprint)
+                repositories.save(legacy, urlFingerprint)
+
+                val signingKey = "cbec121aa82ebb02aaa73806992e0368a97d47b5451ed6524816d03084c45905"
+                val header = """{"meta":{"name":"Yūzōnō","signingKeyFingerprint":"$signingKey"}}"""
+                val catalog = repositories.external(
+                    repositories.decode(header.encodeToByteArray(), false, "$baseUrl/repo.json", "ANIYOMI"),
+                    bytes, false, indexUrl,
+                )
+                // Refresh probes repo.json after the original index URL was normalized for storage.
+                repositories.save(catalog, signingKey)
+                repositories.save(catalog, signingKey)
+                assertEquals(signingKey, repositories.saved().single().fingerprint)
+                assertEquals(baseUrl, repositories.saved().single().url)
+
+                val changed = repositories.decode(
+                    header.replace(signingKey, "d".repeat(64)).encodeToByteArray(),
+                    false, "$baseUrl/repo.json", "ANIYOMI",
+                )
+                assertFailsWith<IllegalArgumentException> { repositories.save(changed, "d".repeat(64)) }
+                assertFailsWith<IllegalArgumentException> { repositories.save(legacy, urlFingerprint) }
+                assertEquals(signingKey, repositories.saved().single().fingerprint)
             } finally { library.close() }
         }
     }
@@ -459,6 +660,77 @@ class IosProductTest {
                 assertEquals("第二段正文内容", bookmark.preview)
                 library.toggleNovelBookmark(novelItem, IosSourceChapter(novelChapter), index = 1, count = 3, preview = "第二段正文内容")
                 assertTrue(library.bookmarks(novelItem).isEmpty())
+            } finally { library.close() }
+        }
+    }
+
+    @Test
+    fun downloadedBooksListTheirChaptersAndRecordThemWithTheDownload() = runBlocking {
+        val text = IosChapterText(SourceChapterContent("<p>序章</p>\n<p>第一章</p>\n",
+            sections = listOf(SourceChapterSection("序章", 0), SourceChapterSection("第一章", 10))))
+        val archive = IosChapterTextArchive()
+        val restored = archive.decode(archive.encode(text))
+        assertEquals(listOf("序章", "第一章"), restored.sections)
+        assertEquals("<p>序章</p>\n", restored.section(0)?.html)
+        assertEquals("<p>第一章</p>\n", restored.section(1)?.html)
+        assertNull(restored.section(2))
+
+        val novelSource = SourceRef("TSUNDOKU_NOVEL", "zh", "NOVEL")
+        val book = chapter.copy(id = 1000, title = "第一卷", number = 1f, url = "/book/1", source = novelSource)
+        val after = chapter.copy(id = 2000, title = "第二卷", number = 2f, url = "/book/2", source = novelSource)
+        val plain = IosSourceContent(content.copy(id = 78L, source = novelSource, chapters = listOf(book, after)))
+        val item = plain.withBooks(mapOf(book.id.toString() to restored.sections))
+        assertEquals(listOf("序章", "第一章", "第二卷"), item.chapters.map { it.title })
+        // Android's internal chapter ids, so history written on either side matches.
+        assertEquals(listOf("1001", "1001001", "2000"), item.chapters.map { it.id })
+        val second = item.chapters[1]
+        assertEquals("第一卷", item.bookOf(second)?.title)
+        assertEquals(1, item.bookIndex(second))
+        assertNull(item.bookOf(item.chapters[2]))
+        assertEquals("第二卷", item.adjacentChapter(second, forward = true)?.title)
+        assertEquals("序章", item.listedChapter(IosSourceChapter(book)).title)
+        // Reading statistics place a book's chapter instead of failing on it (a crash when opened from Swift).
+        IosReadingTracker(item).update(second, index = 0, count = 2, lastVisible = 0, scroll = 0f, active = true)
+
+        withDatabase { path ->
+            val library = IosLibrary(path)
+            try {
+                library.recordPosition(item, second, index = 0, count = 2, scroll = 0f)
+                val position = assertNotNull(library.position(item))
+                assertEquals(second.id, position.chapterId)
+                // The second of two chapters in the first of two downloads, half read.
+                assertEquals(0.375f, position.progress)
+                // Without the book listed, reading resumes at its download.
+                assertEquals(book.id.toString(), library.position(plain)?.chapterId)
+                library.toggleNovelBookmark(item, second, index = 1, count = 2, preview = "第一章")
+                assertEquals(second.id, library.bookmarks(item).single().chapterId)
+            } finally { library.close() }
+        }
+    }
+
+    @Test
+    fun downloadsListAWorkOfflineAndAnEmptyAnswerKeepsTheSavedChapters() = runBlocking {
+        val novelSource = SourceRef("TSUNDOKU_NOVEL", "zh", "NOVEL")
+        val first = chapter.copy(id = 10, title = "第一卷", number = 1f, url = "/v/1", source = novelSource)
+        val second = chapter.copy(id = 20, title = "第二卷", number = 2f, url = "/v/2", source = novelSource)
+        val work = content.copy(id = 79L, source = novelSource, chapters = listOf(first, second))
+        val codec = IosDownloadArchive()
+        val item = IosSourceContent(work)
+        val offline = assertNotNull(codec.offlineContent(listOf(
+            codec.encode(item, IosSourceChapter(second)), codec.encode(item, IosSourceChapter(first)), "broken",
+        )))
+        assertEquals(work.id.toString(), offline.id)
+        assertEquals(listOf("第一卷", "第二卷"), offline.chapters.map { it.title })
+        assertNull(codec.offlineContent(listOf("broken")))
+
+        val empty = IosSourceContent(work.copy(chapters = emptyList()))
+        assertEquals(listOf("第一卷", "第二卷"), empty.withChaptersOf(item).chapters.map { it.title })
+        withDatabase { path ->
+            val library = IosLibrary(path)
+            try {
+                library.saveDetails(item)
+                library.saveDetails(empty)
+                assertEquals(2, library.storedDetails(item)?.chapterCount)
             } finally { library.close() }
         }
     }

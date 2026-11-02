@@ -164,27 +164,24 @@ class TrackingRepository @Inject constructor(
         val prev = getOrCreateTrack(manga.id)
         val entity = prev.mergeWith(updates, manga.id)
         db.getTracksDao().upsert(entity)
-        if (updates is MangaUpdates.Success && updates.isNotEmpty()) {
-            val chapters = trackLogChapters(updates.newChapters.map { it.name })
-            val now = System.currentTimeMillis()
-            val duplicate = db.getTrackLogsDao().findDuplicate(
-                mangaId = manga.id,
-                chapters = chapters,
-                createdAt = now,
-            )
-            if (duplicate == null) {
-                db.getTrackLogsDao().insert(
-                    TrackLogEntity(
-                        mangaId = manga.id,
-                        chapters = chapters,
-                        createdAt = now,
-                        isUnread = true,
-                    ),
-                )
-                db.getTrackLogsDao().trim(TRACK_LOG_RETAINED_SIZE)
-            }
+        if (updates is MangaUpdates.Success) {
+            db.recordUpdateBatch(manga.id, updates.newChapters.mapTo(HashSet()) { it.id }, System.currentTimeMillis())
         }
         entity
+    }
+
+    /** Returns false only for legacy logs that have no reliable chapter identities. */
+    suspend fun updateReadChapter(mangaId: Long, chapterId: Long, percent: Float? = null): Boolean = db.withTransaction {
+        if (db.getTrackLogsDao().findByOwner(mangaId).none { it.chapterMetadata.isNotBlank() }) return@withTransaction false
+        val chapters = db.getChaptersDao().findAll(mangaId)
+        val current = chapters.firstOrNull { it.chapterId == chapterId } ?: return@withTransaction true
+        val branch = chapters.filter { it.branch == current.branch }
+        val index = branch.indexOfFirst { it.chapterId == chapterId }
+        val progress = percent ?: db.getHistoryDao().find(mangaId)?.percent ?: return@withTransaction true
+        if (progress * branch.size + 0.0001f >= index + 1) {
+            db.completeUpdateChapter(mangaId, chapterId, System.currentTimeMillis())
+        }
+        true
     }
 
     suspend fun markAsRead(id: Long) {
@@ -200,14 +197,12 @@ class TrackingRepository @Inject constructor(
     }
 
     suspend fun markAllUpdatesAsRead() = db.withTransaction {
-        db.getTracksDao().clearCounters()
-        db.getTrackLogsDao().clear()
+        for (id in db.getTracksDao().findAllIds()) db.completePendingUpdates(id, System.currentTimeMillis())
     }
 
     suspend fun markUpdateAsRead(mangaId: Long) {
         db.withTransaction {
-            db.getTracksDao().clearCounter(mangaId)
-            db.getTrackLogsDao().markUnreadAsReadByOwner(mangaId)
+            db.completePendingUpdates(mangaId, System.currentTimeMillis())
         }
     }
 
@@ -243,14 +238,12 @@ class TrackingRepository @Inject constructor(
     }
 
     private suspend fun clearTrackUpdates(mangaId: Long) {
-        db.getTracksDao().clearCounter(mangaId)
-        db.getTrackLogsDao().markUnreadAsReadByOwner(mangaId)
+        db.completePendingUpdates(mangaId, System.currentTimeMillis())
     }
 
     suspend fun gc() = db.withTransaction {
         db.getTracksDao().gc()
         db.getTrackLogsDao().deleteOrphans()
-        db.getTrackLogsDao().gc()
     }
 
     suspend fun mergeWith(tracking: ContentTracking) {

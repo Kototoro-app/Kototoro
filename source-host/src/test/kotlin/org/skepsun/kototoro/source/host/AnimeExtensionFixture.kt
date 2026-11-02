@@ -42,6 +42,7 @@ internal object AnimeExtensionFixture {
                 SEpisodeImpl episode = new SEpisodeImpl();
                 episode.setUrl(url); episode.setName(name); episode.setEpisode_number(number);
                 episode.setDate_upload(1720000000000L); episode.setScanlator("Fansub");
+                episode.setPreview_url("/episode-preview.jpg");
                 return episode;
             }
             public Object getEpisodeList(SAnimeImpl anime, Continuation<Object> continuation) {

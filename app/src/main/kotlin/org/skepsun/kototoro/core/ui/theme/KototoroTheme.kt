@@ -29,6 +29,8 @@ import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.util.ext.getThemeColor
 import org.skepsun.kototoro.core.ui.BaseActivityEntryPoint
 import org.skepsun.kototoro.core.ui.compose.ContentSourceResolutionProvider
+import org.skepsun.kototoro.core.ui.text.rememberAndroidUiStrings
+import org.skepsun.kototoro.core.ui.text.LocalUiStrings
 
 import androidx.compose.ui.unit.dp
 
@@ -36,7 +38,6 @@ import org.skepsun.kototoro.core.prefs.BackgroundStyle
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.prefs.normalized
 
-val LocalMaterialExpressiveComponentsEnabled = staticCompositionLocalOf { false }
 val LocalInterfaceStyle = staticCompositionLocalOf { InterfaceStyle.MATERIAL_3_EXPRESSIVE }
 val LocalBackgroundStyle = staticCompositionLocalOf { BackgroundStyle.DEFAULT }
 val LocalAmoledTheme = staticCompositionLocalOf { false }
@@ -63,6 +64,8 @@ fun KototoroTheme(
     val context = LocalContext.current
     val appContext = context.applicationContext
     val settings = remember(appContext) { AppSettings(appContext) }
+    // Android's catalog for the screens both hosts share (see core.ui.text.UiStrings).
+    val uiStrings = rememberAndroidUiStrings()
     val interfaceStyle by settings.observeAsState(AppSettings.KEY_INTERFACE_STYLE) {
         interfaceStyle
     }
@@ -138,12 +141,21 @@ fun KototoroTheme(
 
     CompositionLocalProvider(
         LocalMaterialExpressiveComponentsEnabled provides expressiveComponents,
+        LocalUiStrings provides uiStrings,
         LocalInterfaceStyle provides effectiveInterfaceStyle,
         LocalInterfaceStyleTokens provides styleTokens,
         LocalInterfaceStylePolicy provides stylePolicy,
         LocalMotionStyle provides stylePolicy.motionStyle,
         LocalSurfaceStyle provides stylePolicy.surfaceStyle,
         LocalBackgroundStyle provides backgroundStyle,
+        LocalIsIosInterfaceStyle provides (effectiveInterfaceStyle == InterfaceStyle.IOS),
+        LocalArtworkBackdrop provides backgroundStyle.artworkBackdrop,
+        org.skepsun.kototoro.settings.compose.LocalSettingsDialogRenderer provides { content ->
+            org.skepsun.kototoro.settings.compose.AndroidPreferenceDialog(content)
+        },
+        org.skepsun.kototoro.settings.compose.LocalSettingsIconResolver provides { id ->
+            org.skepsun.kototoro.core.ui.compose.rememberSafePainter(id)
+        },
         LocalAmoledTheme provides effectiveAmoledTheme,
         org.skepsun.kototoro.reader.ui.compose.panel.LocalReaderPanelGlass provides
             org.skepsun.kototoro.reader.ui.compose.panel.AndroidReaderPanelGlass,

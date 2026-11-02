@@ -13,7 +13,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -31,7 +30,10 @@ import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.nav.ReaderIntent
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsState
+import org.skepsun.kototoro.core.prefs.rememberChapterRowActionPrefs
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.util.ext.findActivity
+import org.skepsun.kototoro.core.util.ext.makeSnackbar
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
 import org.skepsun.kototoro.core.util.ext.observeEvent
 import org.skepsun.kototoro.details.ui.DetailsViewModel
@@ -64,11 +66,18 @@ fun ChaptersScreenRoot(
     val emptyReason by viewModel.emptyReason.collectAsStateWithLifecycle(initialValue = null)
     val chapters by viewModel.chapters.collectAsStateWithLifecycle(initialValue = emptyList())
     val selectedBranch by viewModel.selectedBranch.collectAsStateWithLifecycle(initialValue = null)
+    val contentDetails by viewModel.mangaDetails.collectAsStateWithLifecycle(initialValue = null)
+    val contentType = contentDetails?.toContent()?.source?.getContentType()
+    val canTranslateChapters = contentType != ContentType.VIDEO && contentType != ContentType.HENTAI_VIDEO
+    val activeTranslationChapterIds by viewModel.activeTranslationChapterIds.collectAsStateWithLifecycle(
+        initialValue = emptySet(),
+    )
     var qualityProbeResult by remember { mutableStateOf<ChaptersPagesViewModel.QualityProbeResult?>(null) }
 
     val appContext = context.applicationContext
     val settings = remember(appContext) { AppSettings(appContext) }
-    val gridSize by settings.observeAsState(AppSettings.KEY_GRID_SIZE_PAGES) { gridSizePages }
+    val rowActions = rememberChapterRowActionPrefs()
+    val gridSize by settings.observeAsState(AppSettings.KEY_GRID_SIZE_CHAPTERS) { gridSizeChapters }
 
     val gridScale = (gridSize / 100f)
 
@@ -126,6 +135,9 @@ fun ChaptersScreenRoot(
         viewModel.onShowVideoQualityDialog.observeEvent(lifecycleOwner) { result ->
             qualityProbeResult = result
         }
+        viewModel.onShowMessage.observeEvent(lifecycleOwner) { messageResId ->
+            viewForSnackbar.makeSnackbar(messageResId, Snackbar.LENGTH_LONG).show()
+        }
         onDispose {
             onSelectionStateChange(null)
         }
@@ -149,11 +161,7 @@ fun ChaptersScreenRoot(
         if (selectedIds.isNotEmpty() && !hasShownSelectionHint) {
             hasShownSelectionHint = true
             try {
-                Snackbar.make(
-                    viewForSnackbar,
-                    R.string.chapter_range_selection_hint,
-                    Snackbar.LENGTH_LONG,
-                ).show()
+                viewForSnackbar.makeSnackbar(R.string.chapter_range_selection_hint, Snackbar.LENGTH_LONG).show()
             } catch (e: IllegalArgumentException) {
                 e.printStackTraceDebug()
                 Toast.makeText(
@@ -164,7 +172,28 @@ fun ChaptersScreenRoot(
             }
         }
     }
+    // Videos ask for a quality first; other content asks about metered networks.
+    val startDownload: (Set<Long>) -> Unit = remember(router, viewModel) {
+        { chapterIds ->
+            val manga = viewModel.mangaDetails.value?.toContent()
+            if (manga?.source?.getContentType() == ContentType.VIDEO) {
+                viewModel.probeAndDownload(chapterIds)
+            } else {
+                router.askForDownloadOverMeteredNetwork { allow ->
+                    viewModel.download(chapterIds, allow)
+                }
+            }
+        }
+    }
+    val startTranslation: (Set<Long>, Boolean) -> Unit = remember(router, viewModel) {
+        { chapterIds, isRetranslation ->
+            router.askForDownloadOverMeteredNetwork { allow ->
+                viewModel.translate(chapterIds, allow, isRetranslation)
+            }
+        }
+    }
     val handleSelectionAction: (Int) -> Unit = remember(
+        startDownload,
         context,
         deletableChapterIds,
         downloadableChapterIds,
@@ -181,16 +210,7 @@ fun ChaptersScreenRoot(
             } else {
                 val removeBookmarks = selectedItems.isNotEmpty() && selectedItems.all { it.isBookmarked }
                 when (actionId) {
-                    R.id.action_save -> {
-                        val manga = viewModel.mangaDetails.value?.toContent()
-                        if (manga?.source?.getContentType() == ContentType.VIDEO) {
-                            viewModel.probeAndDownload(downloadableChapterIds)
-                        } else {
-                            router.askForDownloadOverMeteredNetwork { allow ->
-                                viewModel.download(downloadableChapterIds, allow)
-                            }
-                        }
-                    }
+                    R.id.action_save -> startDownload(downloadableChapterIds)
 
                     R.id.action_mark_current -> {
                         if (selectedIds.size == 1) {
@@ -207,8 +227,7 @@ fun ChaptersScreenRoot(
                         if (manga != null) {
                             LocalChaptersRemoveService.start(context, manga, deletableChapterIds)
                             try {
-                                Snackbar.make(
-                                    viewForSnackbar,
+                                viewForSnackbar.makeSnackbar(
                                     R.string.chapters_will_removed_background,
                                     Snackbar.LENGTH_LONG,
                                 ).show()
@@ -228,11 +247,15 @@ fun ChaptersScreenRoot(
         }
     }
     val selectionState = remember(
+        activeTranslationChapterIds,
+        canTranslateChapters,
         deletableChapterIds,
         downloadableChapterIds,
         handleSelectionAction,
         selectedIds,
         selectedItems,
+        startTranslation,
+        viewModel,
         visibleSelectableIds,
     ) {
         if (selectedIds.isEmpty()) {
@@ -246,6 +269,8 @@ fun ChaptersScreenRoot(
                 canMarkCurrent = selectedItems.size == 1 && !selectedItems.first().isCurrent,
                 canBookmark = selectedItems.isNotEmpty(),
                 isBookmarkRemoveAction = selectedItems.isNotEmpty() && selectedItems.all { it.isBookmarked },
+                canTranslate = canTranslateChapters && selectedItems.isNotEmpty(),
+                canCancelTranslation = activeTranslationChapterIds.isNotEmpty(),
                 onClearSelection = { selectedItemIds.clear() },
                 onSelectAll = {
                     selectedItemIds.clear()
@@ -255,6 +280,8 @@ fun ChaptersScreenRoot(
                 onDelete = { handleSelectionAction(R.id.action_delete) },
                 onMarkCurrent = { handleSelectionAction(R.id.action_mark_current) },
                 onBookmark = { handleSelectionAction(R.id.action_bookmark) },
+                onTranslate = { startTranslation(selectedIds, false) },
+                onCancelTranslation = { viewModel.cancelTranslation() },
             )
         }
     }
@@ -288,6 +315,16 @@ fun ChaptersScreenRoot(
             isLoading = isLoading,
         emptyMessageResId = emptyReason?.msgResId,
         initialChapterId = initialCurrentChapterId,
+        onItemDownload = if (rowActions.showDownload) {
+            { item -> startDownload(setOf(item.chapter.id)) }
+        } else {
+            null
+        },
+        onItemTranslate = if (canTranslateChapters && rowActions.showTranslate) {
+            { item, isRetranslation -> startTranslation(setOf(item.chapter.id), isRetranslation) }
+        } else {
+            null
+        },
         onItemClick = { item ->
             if (selectedIds.isNotEmpty()) {
                 if (selectedIds.contains(item.chapter.id)) {
@@ -412,7 +449,7 @@ private fun VideoQualityDialog(
             }
         },
         confirmButton = {
-            TextButton(
+            TvTextButton(
                 onClick = {
                     onConfirm(options[selectedIndex])
                 },
@@ -421,7 +458,7 @@ private fun VideoQualityDialog(
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismissRequest) {
+            TvTextButton(onClick = onDismissRequest) {
                 Text(text = stringResource(android.R.string.cancel))
             }
         },

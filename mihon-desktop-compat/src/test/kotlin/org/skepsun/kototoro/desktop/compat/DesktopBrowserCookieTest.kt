@@ -14,7 +14,7 @@ class DesktopBrowserCookieTest {
     fun `actual SDK Android CookieManager browser and OkHttp share attributes deletions and persisted tokens`() {
         for (mode in listOf("write", "read", "sdk-clear", "empty", "write", "clear", "empty")) {
             val output = Files.createDirectories(Path.of("build/reports/browser-cookies")).resolve("$mode.log")
-            val process = ProcessBuilder(Path.of(System.getProperty("java.home"), "bin/java.exe").toString(),
+            val process = ProcessBuilder(currentJavaExecutable(),
                 "-Dstdout.encoding=UTF-8", "-Dstderr.encoding=UTF-8", "-cp", System.getProperty("kototoro.compat.test.classpath"),
                 DesktopBrowserCookieProbe::class.java.name, mode, directory.resolve("中文 Cookie space").toString(),
                 System.getProperty("kototoro.compat.bridge.exe"))

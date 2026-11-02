@@ -58,7 +58,7 @@ internal fun previewChapterData(chapter: ContentChapter): TabletPreviewChapter {
 
 internal typealias PreviewChapterGroups = org.skepsun.kototoro.core.ui.preview.TabletPreviewChapterGroups<ContentChapter>
 
-internal fun Content.resolvePreviewChapters(): PreviewChapterGroups =
+internal fun Content.resolvePreviewChapters(selectedBranch: String? = null): PreviewChapterGroups =
     org.skepsun.kototoro.core.ui.preview.resolveTabletPreviewChapters(
-        chapters.orEmpty(), { it.branch }, { it.number }, { it.uploadDate },
+        chapters.orEmpty(), { it.branch }, { it.number }, { it.uploadDate }, selectedBranch,
     )

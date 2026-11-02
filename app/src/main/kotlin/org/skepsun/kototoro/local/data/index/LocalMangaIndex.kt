@@ -147,6 +147,6 @@ private suspend fun updateIndex(rootKeys: Set<String>) {
         private const val PREF_NAME = "_local_index"
         private const val KEY_VERSION = "ver"
         private const val KEY_ROOTS = "readable_roots"
-        private const val VERSION = 4
+        private const val VERSION = 5
     }
 }

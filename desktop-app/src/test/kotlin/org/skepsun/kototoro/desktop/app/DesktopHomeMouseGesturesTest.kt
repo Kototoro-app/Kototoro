@@ -30,7 +30,7 @@ class DesktopHomeMouseGesturesTest {
     fun `home history and recommendations move under mouse dragging without opening a work`() {
         // The SDK's process-global Android runtime uses the same isolated JVM/classpath as the other UI probes.
         val log = directory.resolve("home-mouse.log")
-        val process = ProcessBuilder(Path.of(System.getProperty("java.home"), "bin/java.exe").toString(),
+        val process = ProcessBuilder(DesktopProbes.javaExecutable,
             "-Xmx768m", "-Dfile.encoding=UTF-8", "-cp", System.getProperty("kototoro.desktop.test.classpath"),
             DesktopHomeMouseGesturesTest::class.java.name, directory.resolve("data").toString())
             .redirectErrorStream(true).redirectOutput(log.toFile()).start()

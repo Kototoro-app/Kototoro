@@ -14,7 +14,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -30,6 +29,7 @@ import org.skepsun.kototoro.backups.external.ExternalBackupApp
 import org.skepsun.kototoro.backups.ui.periodical.BackupFileInfo
 import org.skepsun.kototoro.backups.ui.periodical.ManualWebDavRestoreMode
 import org.skepsun.kototoro.backups.ui.periodical.WebDavRemoteBackupRestoreStatus
+import org.skepsun.kototoro.core.ui.compose.KototoroSnackbarHost
 
 data class BackupsSettingsUiState(
     val backupOutputSummary: String,
@@ -98,7 +98,7 @@ fun BackupsSettingsScreen(
 ) {
     Scaffold(
         snackbarHost = {
-            SnackbarHost(hostState = snackbarHostState)
+            KototoroSnackbarHost(hostState = snackbarHostState)
         },
         containerColor = MaterialTheme.colorScheme.background,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),

@@ -25,19 +25,30 @@ object CloudstreamPluginCompatibilityChecker {
                     }
                     .toList()
             }
-            val referencedHostClasses = references.flatMap { it.types }.mapNotNull(::cloudstreamClassName).toSortedSet()
-            val missingClasses = referencedHostClasses.filterNot { className ->
+            // Providers may legitimately be compiled into the host namespace (`com.lagradost.cloudstream3.<lang>.<site>`);
+            // those classes ship inside the plugin's own DEX, so only what the plugin does not declare is host API.
+            val declaredHostClasses = references.asSequence()
+                .flatMap { it.declaredTypes.asSequence() }
+                .mapNotNull(::cloudstreamClassName)
+                .toHashSet()
+            val referencedHostClasses = references.flatMap { it.types }
+                .mapNotNull(::cloudstreamClassName)
+                .filterNot { it in declaredHostClasses }
+                .toSortedSet()
+            val availableHostClasses = referencedHostClasses.filterTo(HashSet(referencedHostClasses.size)) { className ->
                 runCatching { hostClassLoader.loadClass(className) }.isSuccess
             }
+            val missingClasses = referencedHostClasses.filterNot { it in availableHostClasses }
             if (missingClasses.isNotEmpty()) {
                 CloudstreamPluginCompatibility.Incompatible(
                     reason = "Requires unsupported Cloudstream host classes: ${missingClasses.joinToString()}",
                     missingHostClasses = missingClasses,
                 )
             } else {
-                val missingMethods = references.flatMap { it.methods }.distinct()
-                    .filter { it.owner.startsWith(CLOUDSTREAM_DESCRIPTOR_PREFIX) }
+                val missingMethods = references.asSequence().flatMap { it.methods.asSequence() }.distinct()
+                    .filter { it.ownerName() in availableHostClasses }
                     .filterNot { it.isAvailable(hostClassLoader) }
+                    .toList()
                 if (missingMethods.isEmpty()) {
                     CloudstreamPluginCompatibility.Compatible
                 } else {
@@ -79,6 +90,8 @@ sealed interface CloudstreamPluginCompatibility {
 internal data class DexExecutableReferences(
     val types: Set<String>,
     val methods: Set<DexMethodReference>,
+    /** Type descriptors this DEX defines itself (its `class_defs` table), as opposed to host API it links against. */
+    val declaredTypes: Set<String>,
 )
 
 internal data class DexMethodReference(
@@ -87,8 +100,10 @@ internal data class DexMethodReference(
     val parameters: List<String>,
     val returnType: String,
 ) {
+    fun ownerName(): String = owner.removePrefix("L").removeSuffix(";").replace('/', '.')
+
     fun isAvailable(loader: ClassLoader): Boolean = runCatching {
-        val type = loader.loadClass(owner.removePrefix("L").removeSuffix(";").replace('/', '.'))
+        val type = loader.loadClass(ownerName())
         if (name == "<init>") {
             type.declaredConstructors.any { it.parameterTypes.map(Class<*>::dexDescriptor) == parameters }
         } else {
@@ -145,8 +160,13 @@ object DexExecutableTypeDescriptorReader {
         }
         val referencedTypes = mutableSetOf<String>()
         val referencedMethods = mutableSetOf<DexMethodReference>()
+        val declaredTypes = mutableSetOf<String>()
         for (classIndex in 0 until classes.size) {
-            val classDataOffset = data.uint(classes.itemOffset(classIndex) + CLASS_DATA_OFFSET)
+            val classDefinitionOffset = classes.itemOffset(classIndex)
+            val declaredTypeIndex = data.uint(classDefinitionOffset)
+            require(declaredTypeIndex in typeDescriptors.indices) { "Invalid DEX class index" }
+            declaredTypes += typeDescriptors[declaredTypeIndex]
+            val classDataOffset = data.uint(classDefinitionOffset + CLASS_DATA_OFFSET)
             if (classDataOffset != 0) {
                 data.readClassData(
                     classDataOffset, fields, methods, typeDescriptors, referencedTypes,
@@ -173,7 +193,7 @@ object DexExecutableTypeDescriptorReader {
                 )
             }
         }
-        return DexExecutableReferences(referencedTypes, referencedMethods)
+        return DexExecutableReferences(referencedTypes, referencedMethods, declaredTypes)
     }
 
     private fun ByteArray.readClassData(

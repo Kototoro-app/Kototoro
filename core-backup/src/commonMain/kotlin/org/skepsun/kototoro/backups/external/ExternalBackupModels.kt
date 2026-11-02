@@ -36,6 +36,8 @@ data class ExternalBackupContentRecord(
     val progressPercent: Float?,
     val historyChapterUrl: String?,
     val historyTimestamp: Long?,
+    /** Zero-based page within [historyChapterUrl] to resume at. */
+    val historyPage: Int = 0,
     val sourceCandidates: List<String> = emptyList(),
     /**
      * Human-readable source name taken from the backup's own source registry

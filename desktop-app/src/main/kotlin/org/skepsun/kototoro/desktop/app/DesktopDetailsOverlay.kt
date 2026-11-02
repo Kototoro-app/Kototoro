@@ -5,10 +5,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.MaterialTheme
-import androidx.compose.material.Surface
-import androidx.compose.material.Text
-import androidx.compose.material.TextButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -47,13 +47,13 @@ internal fun DesktopDetailsOverlay(controller: DesktopController, state: Desktop
             DesktopTabletPreview(controller, state, enabled)
         }
         else Surface(panel.testTag("details-full"),
-            shape = RoundedCornerShape(28.dp), elevation = 8.dp, color = MaterialTheme.colors.background) {
+            shape = RoundedCornerShape(28.dp), shadowElevation = 8.dp, color = MaterialTheme.colorScheme.background) {
             Column(Modifier.fillMaxSize().padding(12.dp)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("作品详情", fontWeight = FontWeight.SemiBold,
+                    Text(desktopText("screens.details"), fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.weight(1f))
                     TextButton({ controller.dismissDetails() }, enabled = enabled,
-                        modifier = Modifier.testTag("details-close")) { Text("关闭") }
+                        modifier = Modifier.testTag("details-close")) { Text(desktopText("common.close")) }
                 }
                 Box(Modifier.weight(1f).fillMaxWidth()) { DesktopTabletDetails(controller, state) }
             }

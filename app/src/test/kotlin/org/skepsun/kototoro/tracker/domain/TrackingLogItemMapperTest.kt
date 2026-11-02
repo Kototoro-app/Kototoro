@@ -30,7 +30,7 @@ class TrackingLogItemMapperTest {
 		result.single().chapters shouldContainExactly (12 downTo 3).map { "Chapter $it" }
 		result.single().count shouldBe 12
 		result.single().isNew shouldBe true
-		result.single().createdAt shouldBe Instant.parse("2026-07-01T10:00:00Z")
+		result.single().createdAt shouldBe Instant.parse("2026-07-01T08:00:00Z")
 	}
 
 	@Test

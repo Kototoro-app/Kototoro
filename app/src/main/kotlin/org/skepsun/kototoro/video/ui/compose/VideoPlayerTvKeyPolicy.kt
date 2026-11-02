@@ -31,6 +31,13 @@ internal fun resolveVideoPlayerTvKeyAction(
         KeyEvent.KEYCODE_DPAD_CENTER,
         KeyEvent.KEYCODE_ENTER,
         KeyEvent.KEYCODE_NUMPAD_ENTER,
+        // While locked the overlay's unlock target is the only focusable, and it owns OK.
+        -> if (screenLocked || controlsVisible) {
+            VideoPlayerTvKeyAction.PASS_TO_FOCUS
+        } else {
+            VideoPlayerTvKeyAction.SHOW_CONTROLS
+        }
+
         KeyEvent.KEYCODE_DPAD_UP,
         KeyEvent.KEYCODE_DPAD_DOWN,
         -> if (controlsVisible && !screenLocked) {
@@ -64,7 +71,8 @@ internal fun resolveVideoPlayerTvKeyAction(
 
         else -> VideoPlayerTvKeyAction.PASS_TO_FOCUS
     }
-    // Lock only player commands; Back must reach the unlock handler and volume belongs to the system.
+    // Lock only player commands; Back and the overlay's unlock target must stay reachable,
+    // and volume belongs to the system.
     return if (screenLocked && action != VideoPlayerTvKeyAction.PASS_TO_FOCUS) {
         VideoPlayerTvKeyAction.CONSUME
     } else {

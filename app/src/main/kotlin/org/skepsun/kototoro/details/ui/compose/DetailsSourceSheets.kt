@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Search
@@ -28,15 +29,18 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.boundsInRoot
@@ -51,6 +55,9 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.getTitle
 import org.skepsun.kototoro.core.model.titleResId
 import org.skepsun.kototoro.core.model.ContentSourceInfo
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.main.ui.compose.GlassDropdownMenu
 import org.skepsun.kototoro.main.ui.compose.CompactDropdownMenuItem
 import org.skepsun.kototoro.explore.data.SourcePreset
@@ -100,6 +107,20 @@ fun MetadataSourceSheet(
         }
     }
     val context = LocalContext.current
+    // The sheet's first focusable is its search field, so opening it with the D-pad would land on the
+    // text field and pull up the soft keyboard, which then owns every key. Start on the first option
+    // tile instead - that card is the reason the sheet was opened.
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
+    val initialFocusRequester = remember { FocusRequester() }
+    LaunchedEffect(isTvPresentation, currentOptions.size) {
+        if (!isTvPresentation || currentOptions.isEmpty()) return@LaunchedEffect
+        repeat(10) {
+            withFrameNanos { }
+            if (runCatching { initialFocusRequester.requestFocus() }.isSuccess) {
+                return@LaunchedEffect
+            }
+        }
+    }
         DetailsSourceOverlayDialog(
             onDismissRequest = onDismissRequest,
         ) { panelDragModifier ->
@@ -128,7 +149,7 @@ fun MetadataSourceSheet(
                         itemsIndexed(
                             items = currentOptions,
                             key = { index, option -> "${option.key}:$index" },
-                        ) { _, option ->
+                        ) { index, option ->
                                 val linked = option.trackingService?.let { svc ->
                                     linkedTrackingItems.firstOrNull { it.service == svc && it.remoteId == option.remoteId }
                                 }
@@ -138,6 +159,11 @@ fun MetadataSourceSheet(
                                 modifier = Modifier.onGloballyPositioned { menuAnchorBounds = it.boundsInRoot() },
                             ) {
                                 SourceOptionCard(
+                                    modifier = if (index == 0 && isTvPresentation) {
+                                        Modifier.focusRequester(initialFocusRequester)
+                                    } else {
+                                        Modifier
+                                    },
                                     displayModel = option.resolveDisplayModel(
                                         role = DetailsSourceRole.METADATA,
                                         currentContent = currentContent,
@@ -258,7 +284,7 @@ fun MetadataSourceSheet(
                 )
             },
             confirmButton = {
-                TextButton(
+                TvTextButton(
                     onClick = {
                         pendingBindTarget = null
                         onDismissRequest()
@@ -269,7 +295,7 @@ fun MetadataSourceSheet(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { pendingBindTarget = null }) {
+                TvTextButton(onClick = { pendingBindTarget = null }) {
                     Text(stringResource(android.R.string.cancel))
                 }
             },
@@ -292,6 +318,8 @@ fun ReadingSourceSheet(
     currentContent: Content?,
     unavailableText: String,
     label: String,
+    blacklistedTagCount: Int = 0,
+    onOpenGlobalTagBlacklist: (() -> Unit)? = null,
     onDismissRequest: () -> Unit,
     onSearchQueryChange: (String) -> Unit,
     onSearch: () -> Unit,
@@ -410,6 +438,10 @@ fun ReadingSourceSheet(
                         )
                         FilledTonalButton(
                             onClick = onSearch,
+                            modifier = Modifier.tvFocusable(
+                                shape = RoundedCornerShape(999.dp),
+                                addFocusTarget = false,
+                            ),
                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
                         ) {
                             Icon(
@@ -420,6 +452,10 @@ fun ReadingSourceSheet(
                         }
                         FilledTonalButton(
                             onClick = { showFilterSheet = true },
+                            modifier = Modifier.tvFocusable(
+                                shape = RoundedCornerShape(999.dp),
+                                addFocusTarget = false,
+                            ),
                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
                         ) {
                             Icon(
@@ -596,7 +632,7 @@ fun ReadingSourceSheet(
                 )
             },
             confirmButton = {
-                TextButton(
+                TvTextButton(
                     onClick = {
                         pendingMigrationTarget = null
                         onDismissRequest()
@@ -607,7 +643,7 @@ fun ReadingSourceSheet(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { pendingMigrationTarget = null }) {
+                TvTextButton(onClick = { pendingMigrationTarget = null }) {
                     Text(stringResource(android.R.string.cancel))
                 }
             },
@@ -622,6 +658,7 @@ fun ReadingSourceSheet(
             hideEmpty = scopeFilterUiState.hideEmpty,
             languagePresets = languagePresets,
             activeLanguagePresetId = activeLanguagePresetId,
+            blacklistedTagCount = blacklistedTagCount,
             onApply = { filters ->
                 (filters.sourceTypes - scopeFilterUiState.sourceTypes).forEach(onSourceTypeToggle)
                 (scopeFilterUiState.sourceTypes - filters.sourceTypes).forEach(onSourceTypeToggle)
@@ -632,6 +669,7 @@ fun ReadingSourceSheet(
                 onLanguagePresetSelected(filters.languagePresetId)
             },
             onManageLanguagePresets = onManageLanguagePresets,
+            onOpenGlobalTagBlacklist = onOpenGlobalTagBlacklist,
             onDismissRequest = { showFilterSheet = false },
         )
     }

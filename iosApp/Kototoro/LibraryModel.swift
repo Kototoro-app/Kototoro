@@ -4,17 +4,80 @@ import KototoroShared
 
 @MainActor
 final class LibraryModel: ObservableObject {
+    let trackingAccounts = TrackingAccountsModel()
+    let googleDrive = GoogleDriveSyncModel()
     @Published private(set) var categories: [IosCategory] = []
     @Published private(set) var isLoading = true
     @Published private(set) var error: String?
     @Published private(set) var schemaVersion: Int32?
     /// Shared with the browse tab once the database is open; nil until then.
     @Published private(set) var library: IosLibrary?
-    @Published private(set) var favourites: [IosLibraryEntry] = []
+    @Published private(set) var favourites: [IosLibraryEntry] = [] {
+        didSet {
+            favouriteIndex = LibraryCollectionIndex(entries: favourites, mediaKind: { $0.content.mediaKind },
+                                                     categoryIDs: { $0.categoryIds.map(\.int32Value) })
+            favouriteKeys = Set(favourites.map { ContentMarks.key($0.content) })
+        }
+    }
+    /// Rebuilt only when favourites are replaced, not when a view, progress indicator or toolbar updates.
+    private(set) var favouriteIndex = LibraryCollectionIndex<IosLibraryEntry>(
+        mediaKind: { $0.content.mediaKind }, categoryIDs: { $0.categoryIds.map(\.int32Value) }
+    )
+    private(set) var favouriteKeys: Set<String> = []
     @Published private(set) var history: [IosLibraryEntry] = []
-    @Published private(set) var updates: [IosUpdate] = []
+    /// Last opened details per space, independent of the work offered for continued reading.
+    @Published private(set) var spaceArtwork: [String: IosSourceContent] = [:]
+    private static let spaceArtworkKey = "space.artwork.ids"
+
+    func recordSpaceVisit(_ content: IosSourceContent) {
+        let content = content.withoutChapters
+        spaceArtwork[content.mediaKind] = content
+        spaceArtwork[""] = content
+        var ids = UserDefaults.standard.dictionary(forKey: Self.spaceArtworkKey) as? [String: String] ?? [:]
+        ids[content.mediaKind] = content.id
+        ids[""] = content.id
+        UserDefaults.standard.set(ids, forKey: Self.spaceArtworkKey)
+    }
+
+    private func restoreSpaceArtwork() async {
+        guard let library else { return }
+        let ids = UserDefaults.standard.dictionary(forKey: Self.spaceArtworkKey) as? [String: String] ?? [:]
+        for (kind, id) in ids where spaceArtwork[kind] == nil {
+            if let content = try? await library.storedContent(id: id), spaceArtwork[kind] == nil {
+                spaceArtwork[kind] = content
+            }
+        }
+    }
+
+    @Published private(set) var updates: [IosUpdate] = [] {
+        didSet {
+            var counts: [String: Int] = [:]
+            for update in updates { counts[ContentMarks.key(update.content)] = Int(update.newChapters) }
+            updateChapterCounts = counts
+        }
+    }
+    private(set) var updateChapterCounts: [String: Int] = [:]
+    /// New chapters not read yet, for the records tab's badge; works the updates feed hides are not counted.
+    var unreadUpdateChapters: Int {
+        updates.reduce(0) { total, update in
+            AdultContentFilter.hides(update.content, in: .feed) ? total : total + max(Int(update.newChapters), 0)
+        }
+    }
     @Published private(set) var isCheckingUpdates = false
     @Published private(set) var updateSummary: String?
+    @Published private(set) var recordsRevision = 0
+    @Published private(set) var missingSources: [IosMissingSource] = []
+
+    func refreshMissingSources(installed: [String]) async {
+        guard let library else { return }
+        do {
+            let result = try await library.recovery.missing(installedSources: installed)
+            if missingSources != result {
+                missingSources = result
+            }
+        }
+        catch { self.error = error.localizedDescription }
+    }
 
     func load() async {
         isLoading = true
@@ -35,6 +98,7 @@ final class LibraryModel: ObservableObject {
             categories = try await library.categories()
             schemaVersion = library.schemaVersion
             try await refreshRecords()
+            await restoreSpaceArtwork()
         } catch {
             self.error = error.localizedDescription
         }
@@ -61,6 +125,16 @@ final class LibraryModel: ObservableObject {
 
     func removeCategory(_ id: Int32) async -> Bool {
         await editCategories { try await $0.removeCategory(id: id) }
+    }
+
+    /// Deletes the category and unfavourites its works everywhere, including their other categories.
+    func removeCategoryWithWorks(_ id: Int32) async -> Bool {
+        await editCategories { try await $0.removeCategoryWithWorks(id: id) }
+    }
+
+    func removeFavourites(_ contents: [IosSourceContent]) async -> Bool {
+        guard !contents.isEmpty else { return true }
+        return await editCategories { try await $0.removeFavourites(contents: contents) }
     }
 
     func saveCategoryLayout(_ ordered: [IosCategory], visible: Set<Int32>) async -> Bool {
@@ -94,6 +168,7 @@ final class LibraryModel: ObservableObject {
         history = try await library.history()
         updates = try await library.updates()
         categories = try await library.categories()
+        recordsRevision += 1
     }
 
     func setFavourite(_ content: IosSourceContent, favourite: Bool) async throws {
@@ -116,13 +191,19 @@ final class LibraryModel: ObservableObject {
     }
 
     func checkUpdates(_ sources: IosSources) async {
-        guard let library, !isCheckingUpdates else { return }
+        _ = await checkUpdatesReport(sources)
+    }
+
+    /// The check with its report, for the background refresh's notification; nil while one runs or on failure.
+    func checkUpdatesReport(_ sources: IosSources) async -> IosUpdateReport? {
+        guard let library, !isCheckingUpdates else { return nil }
         isCheckingUpdates = true
         defer { isCheckingUpdates = false }
         do {
             let report = try await library.checkUpdates(sources: sources)
-            updateSummary = "已检查 \(report.checked) 部，\(report.withUpdates) 部有更新，\(report.failed) 部失败"
+            updateSummary = String(localized: "已检查 \(report.checked) 部，\(report.withUpdates) 部有更新，\(report.failed) 部失败")
             try await refreshRecords()
-        } catch { self.error = error.localizedDescription }
+            return report
+        } catch { self.error = error.localizedDescription; return nil }
     }
 }

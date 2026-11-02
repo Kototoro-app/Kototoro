@@ -1,6 +1,5 @@
 package org.skepsun.kototoro.desktop.app
 
-import kotlin.system.exitProcess
 import kotlinx.coroutines.runBlocking
 import java.nio.file.Path
 
@@ -23,8 +22,15 @@ object DesktopDistributionWindowProbe {
                 }
                 println("DESKTOP_SOURCE_BROWSE_OK=controller-streaming-json")
             } else DesktopWindowProbe.run(args)
-            exitProcess(0)
+        } catch (error: Throwable) {
+            error.printStackTrace()
+            System.err.flush()
+            // Skip this probe's shutdown hooks on failure; the process must still report its exit code.
+            Runtime.getRuntime().halt(1)
         }
-        catch (error: Throwable) { error.printStackTrace(); exitProcess(1) }
+        System.out.flush()
+        // The window-close callback and database release ran above. AWT/Skiko shutdown hooks can intermittently
+        // deadlock on a software-rendered Xvfb, so the probe leaves through halt() instead of exitProcess().
+        Runtime.getRuntime().halt(0)
     }
 }

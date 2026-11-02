@@ -3,7 +3,7 @@ import Combine
 import SwiftUI
 
 struct ReaderPreferences: Codable, Equatable {
-    var mode = 0
+    var mode = 1
     var fit = 0
     var doublePage = false
     var cover = true
@@ -22,6 +22,7 @@ struct ReaderPreferences: Codable, Equatable {
     var floatingActions = ["bookmark"]
     var tapZones = true
     var reverseTaps = false
+    var edgeSwipeBack = true
     var keepScreenOn = true
     var horizontalReversed = false
 
@@ -29,7 +30,7 @@ struct ReaderPreferences: Codable, Equatable {
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        mode = try container.decodeIfPresent(Int.self, forKey: .mode) ?? 0
+        mode = try container.decodeIfPresent(Int.self, forKey: .mode) ?? 1
         fit = try container.decodeIfPresent(Int.self, forKey: .fit) ?? 0
         doublePage = try container.decodeIfPresent(Bool.self, forKey: .doublePage) ?? false
         cover = try container.decodeIfPresent(Bool.self, forKey: .cover) ?? true
@@ -48,6 +49,7 @@ struct ReaderPreferences: Codable, Equatable {
         floatingActions = try container.decodeIfPresent([String].self, forKey: .floatingActions) ?? ["bookmark"]
         tapZones = try container.decodeIfPresent(Bool.self, forKey: .tapZones) ?? true
         reverseTaps = try container.decodeIfPresent(Bool.self, forKey: .reverseTaps) ?? false
+        edgeSwipeBack = try container.decodeIfPresent(Bool.self, forKey: .edgeSwipeBack) ?? true
         keepScreenOn = try container.decodeIfPresent(Bool.self, forKey: .keepScreenOn) ?? true
         // Existing horizontal works used RTL before the independent direction setting was introduced.
         horizontalReversed = try container.decodeIfPresent(Bool.self, forKey: .horizontalReversed) ?? (mode == 4)
@@ -60,7 +62,20 @@ struct ReaderPreferences: Codable, Equatable {
     }
 
     var readsRightToLeft: Bool { mode == 1 || mode == 4 && horizontalReversed }
+
+    /// The page view adjusts the image's colours (the UIKit page view then hosts the SwiftUI one, which applies them;
+    /// the book shadow alone it draws itself).
+    var hasColorAdjustments: Bool {
+        inverted || grayscale || brightness != 0 || contrast != 1
+    }
     var continuousForwardSign: CGFloat { mode == 4 && horizontalReversed ? -1 : 1 }
+
+    /// A regular-width window covers expanded displays, including iPhone Duo; compact portrait stays single-page.
+    func layout(for size: CGSize, wideWindow: Bool) -> Self {
+        var result = self
+        result.doublePage = doublePage && mode < 3 && (wideWindow || size.width > size.height)
+        return result
+    }
 }
 
 /// Work-specific settings override a user-controlled global default.

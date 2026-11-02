@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
@@ -19,6 +18,7 @@ import org.skepsun.kototoro.core.github.AppUpdateRepository
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.nav.router
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.util.ext.copyToClipboard
 import org.skepsun.kototoro.core.util.ext.getCauseUrl
 import org.skepsun.kototoro.core.util.ext.isHttpUrl
@@ -42,7 +42,7 @@ class ErrorDetailsActivity : BaseComposeActivity() {
                     Column {
                         exception.message?.let { Text(it) }
                         if (causeUrl != null) {
-                            TextButton(onClick = { router.openBrowser(causeUrl, null, null) }) {
+                            TvTextButton(onClick = { router.openBrowser(causeUrl, null, null) }) {
                                 Icon(
                                     painter = painterResource(R.drawable.ic_open_external),
                                     contentDescription = null,
@@ -62,18 +62,18 @@ class ErrorDetailsActivity : BaseComposeActivity() {
                 },
                 confirmButton = {
                     when {
-                        appUpdateRepository.isUpdateAvailable -> TextButton(onClick = {
+                        appUpdateRepository.isUpdateAvailable -> TvTextButton(onClick = {
                             router.openAppUpdate()
                             finishAfterTransition()
                         }) { Text(getString(R.string.update)) }
-                        exception.isReportable() -> TextButton(onClick = {
+                        exception.isReportable() -> TvTextButton(onClick = {
                             copyToClipboard(getString(R.string.error), exception.stackTraceToString())
                             finishAfterTransition()
                         }) { Text(getString(R.string.copy)) }
                     }
                 },
                 dismissButton = {
-                    TextButton(onClick = {
+                    TvTextButton(onClick = {
                         copyToClipboard(getString(R.string.error), exception.stackTraceToString())
                     }) { Text(getString(androidx.preference.R.string.copy)) }
                 },

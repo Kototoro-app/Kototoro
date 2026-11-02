@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -50,6 +51,7 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -64,19 +66,24 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
-import androidx.compose.ui.graphics.Color
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
+import org.skepsun.kototoro.core.ui.adaptive.tvSliderDpad
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
+import org.skepsun.kototoro.core.prefs.rememberChapterRowActionPrefs
 import org.skepsun.kototoro.core.ui.compose.KototoroMotion
 import org.skepsun.kototoro.core.ui.compose.KototoroSlider
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
@@ -98,6 +105,8 @@ import org.skepsun.kototoro.main.ui.compose.GlassDropdownMenu
 import org.skepsun.kototoro.main.ui.compose.CompactDropdownMenuItem
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
 
+private val DockActionButtonSize = 42.dp
+
 @Composable
 internal fun DetailsPaneActionsRow(
     modifier: Modifier = Modifier,
@@ -116,6 +125,7 @@ internal fun DetailsPaneActionsRow(
     isDownloadedOnly: Boolean,
     isDownloadedFilterVisible: Boolean,
     pageGridSizeValue: Float,
+    chapterGridSizeValue: Float,
     pageThumbnailAspectRatio: Float,
     isPageThumbnailsFitPreview: Boolean,
     onChapterSearchToggle: () -> Unit,
@@ -125,6 +135,7 @@ internal fun DetailsPaneActionsRow(
     onToggleMergeRepeatedChapters: () -> Unit,
     onToggleDownloadedOnly: () -> Unit,
     onPageGridSizeChange: (Float) -> Unit,
+    onChapterGridSizeChange: (Float) -> Unit,
     onPageThumbnailAspectRatioChange: (Float) -> Unit,
     onTogglePageThumbnailsFitPreview: () -> Unit,
     showCollapsedHandle: Boolean,
@@ -288,10 +299,13 @@ internal fun DetailsPaneActionsRow(
             }
 
             DetailsPaneTopBarMode.GridSizeControls -> {
+                // The chapter grid has its own size and no thumbnail shape; pages keep both.
+                val isChaptersTab = selectedTabId == DETAILS_TAB_CHAPTERS
                 PageGridSizeControlsRow(
-                    sizeValue = pageGridSizeValue,
+                    sizeValue = if (isChaptersTab) chapterGridSizeValue else pageGridSizeValue,
                     aspectRatio = pageThumbnailAspectRatio,
-                    onSizeValueChange = onPageGridSizeChange,
+                    showAspectRatio = !isChaptersTab,
+                    onSizeValueChange = if (isChaptersTab) onChapterGridSizeChange else onPageGridSizeChange,
                     onAspectRatioChange = onPageThumbnailAspectRatioChange,
                     onBackClick = detailsPaneState::hideGridSizeControls,
                     modifier = Modifier.fillMaxWidth(),
@@ -382,7 +396,8 @@ internal fun DetailsPaneActionsRow(
                     else -> 0
                 }
                 val tabScrollStepPx = with(LocalDensity.current) {
-                    (tabButtonWidth + tabSpacing).roundToPx()
+                    // Collapsed tabs have no spacing, so scrolling must use the same button step.
+                    (tabButtonWidth + if (showAllDockTabs) tabSpacing else 0.dp).roundToPx()
                 }
                 LaunchedEffect(selectedDockTabIndex, tabsScrollState.maxValue, tabScrollStepPx) {
                     tabsScrollState.animateScrollTo(
@@ -579,7 +594,10 @@ internal fun DetailsPaneActionsRow(
                                         modernStyle = isModernDockEnabled,
                                     ) {
                                         Row(
-                                            modifier = Modifier.padding(horizontal = 4.dp),
+                                            // Same chrome height as the tab switcher and the chapter tools.
+                                            modifier = Modifier
+                                                .height(ModernDetailsDockChromeHeight)
+                                                .padding(horizontal = 4.dp),
                                             verticalAlignment = Alignment.CenterVertically,
                                         ) {
                                             DetailsChromeButton(
@@ -678,7 +696,10 @@ private fun ChapterSelectionTopBar(
             DetailsDockContainer(modernStyle = modernStyle) {
                 IconButton(
                     onClick = state.onClearSelection,
-                    modifier = Modifier.size(ModernDetailsDockChromeHeight),
+                    modifier = Modifier
+                        .size(ModernDetailsDockChromeHeight)
+                        // The selection bar is pure icons; a bare IconButton stops without a ring.
+                        .tvFocusable(shape = RoundedCornerShape(12.dp), addFocusTarget = false),
                 ) {
                     Icon(
                         imageVector = Icons.Default.Close,
@@ -710,6 +731,22 @@ private fun ChapterSelectionTopBar(
                         Icon(
                             painter = rememberSafePainter(R.drawable.ic_download),
                             contentDescription = stringResource(R.string.download),
+                        )
+                    }
+                }
+                if (state.canTranslate) {
+                    ChapterSelectionActionButton(onClick = state.onTranslate) {
+                        Icon(
+                            painter = rememberSafePainter(R.drawable.ic_translate),
+                            contentDescription = stringResource(R.string.translate_chapter),
+                        )
+                    }
+                }
+                if (state.canCancelTranslation) {
+                    ChapterSelectionActionButton(onClick = state.onCancelTranslation) {
+                        Icon(
+                            painter = rememberSafePainter(R.drawable.ic_cancel_multiple),
+                            contentDescription = stringResource(R.string.cancel_translation),
                         )
                     }
                 }
@@ -798,7 +835,11 @@ private fun ChapterSelectionActionButton(
 ) {
     IconButton(
         onClick = onClick,
-        modifier = Modifier.size(42.dp),
+        modifier = Modifier
+            .size(42.dp)
+            // Bare IconButtons keep the stop but draw no outline, which leaves the whole
+            // selection bar invisible to a remote.
+            .tvFocusable(shape = RoundedCornerShape(12.dp), addFocusTarget = false),
     ) {
         content()
     }
@@ -811,6 +852,7 @@ private fun PageGridSizeControlsRow(
     onSizeValueChange: (Float) -> Unit,
     onAspectRatioChange: (Float) -> Unit,
     onBackClick: () -> Unit,
+    showAspectRatio: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     val heightRatio = 1f / aspectRatio.coerceIn(PageThumbnailAspectRatioMin, PageThumbnailAspectRatioMax)
@@ -828,7 +870,7 @@ private fun PageGridSizeControlsRow(
                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.42f),
             ),
         ) {
-            IconButton(onClick = onBackClick) {
+            IconButton(onClick = onBackClick, modifier = Modifier.tvIconButtonRing(RoundedCornerShape(12.dp))) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = stringResource(R.string.back),
@@ -848,7 +890,7 @@ private fun PageGridSizeControlsRow(
                 onValueChange = onSizeValueChange,
                 valueRange = 50f..150f,
             )
-            LabeledGridSlider(
+            if (showAspectRatio) LabeledGridSlider(
                 label = stringResource(R.string.grid_aspect_ratio),
                 value = heightRatio,
                 onValueChange = { heightRatioValue ->
@@ -884,7 +926,14 @@ private fun LabeledGridSlider(
             value = value,
             onValueChange = onValueChange,
             valueRange = valueRange,
-            modifier = Modifier.weight(1f),
+            modifier = Modifier
+                .weight(1f)
+                // 遥控器上滑杆自己不带环也不会响应左右键，见 tvSliderDpad（手机上是 no-op）。
+                .tvSliderDpad(
+                    value = value,
+                    valueRange = valueRange,
+                    onValueChange = onValueChange,
+                ),
         )
     }
 }
@@ -930,7 +979,7 @@ private fun ExpandedPaneUtilityDock(
                 enabled = isSearchEnabled,
                 modifier = Modifier
                     .width(42.dp)
-                    .height(42.dp),
+                    .height(42.dp).tvIconButtonRing(RoundedCornerShape(12.dp)),
             ) {
                 Icon(
                     imageVector = Icons.Default.Search,
@@ -947,7 +996,7 @@ private fun ExpandedPaneUtilityDock(
                     onClick = { expanded = true },
                     modifier = Modifier
                         .width(42.dp)
-                        .height(42.dp),
+                        .height(42.dp).tvIconButtonRing(RoundedCornerShape(12.dp)),
                 ) {
                     Icon(
                         imageVector = Icons.Default.MoreVert,
@@ -1041,6 +1090,33 @@ private fun ExpandedPaneUtilityDock(
                             },
                         )
                     }
+                    val rowActions = rememberChapterRowActionPrefs()
+                    CompactDropdownMenuItem(
+                        text = { Text(stringResource(R.string.chapter_show_download_button)) },
+                        leadingIcon = {
+                            DetailsMenuIcon(R.drawable.ic_download)
+                        },
+                        trailingIcon = {
+                            MenuSelectionIndicator(selected = rowActions.showDownload)
+                        },
+                        onClick = {
+                            expanded = false
+                            rowActions.setShowDownload(!rowActions.showDownload)
+                        },
+                    )
+                    CompactDropdownMenuItem(
+                        text = { Text(stringResource(R.string.chapter_show_translate_button)) },
+                        leadingIcon = {
+                            DetailsMenuIcon(R.drawable.ic_translate)
+                        },
+                        trailingIcon = {
+                            MenuSelectionIndicator(selected = rowActions.showTranslate)
+                        },
+                        onClick = {
+                            expanded = false
+                            rowActions.setShowTranslate(!rowActions.showTranslate)
+                        },
+                    )
                 }
             }
         }
@@ -1098,11 +1174,6 @@ internal fun DetailsDockActionButton(
     spacingAfter: androidx.compose.ui.unit.Dp = if (modernStyle) 0.dp else 4.dp,
     onClick: () -> Unit,
 ) {
-    val containerColor by animateColorAsState(
-        targetValue = Color.Transparent,
-        animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
-        label = "detailsDockSelectionColor",
-    )
     val contentColor by animateColorAsState(
         targetValue = when {
             modernStyle && isSelected -> MaterialTheme.colorScheme.primary
@@ -1113,18 +1184,20 @@ internal fun DetailsDockActionButton(
         animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
         label = "detailsDockSelectionContentColor",
     )
-    Surface(
-        modifier = Modifier.padding(end = spacingAfter),
-        shape = RoundedCornerShape(if (modernStyle) 18.dp else 16.dp),
-        color = containerColor,
-        tonalElevation = 0.dp,
-    ) {
+    val shape = RoundedCornerShape(if (modernStyle) 18.dp else 16.dp)
+    // A tab only gets a 42 dp slot in the dock, but Material3 pulls every icon button out to its
+    // 48 dp touch target, so the button overflowed its slot and the dock clipped it back: the focus
+    // outline is drawn on the button's own edge and therefore fell entirely outside that clip, which
+    // is why these three tabs never showed a ring on the remote. Capping the minimum keeps the
+    // button - and its ring - exactly on the slot the dock lays out.
+    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides DockActionButtonSize) {
         IconButton(
             onClick = onClick,
             modifier = Modifier
-                .width(42.dp)
-                .height(42.dp)
-                .tvFocusable(shape = RoundedCornerShape(16.dp), addFocusTarget = false),
+                .padding(end = spacingAfter)
+                .width(DockActionButtonSize)
+                .height(DockActionButtonSize)
+                .tvIconButtonRing(shape),
         ) {
             Icon(
                 painter = rememberSafePainter(iconRes),
@@ -1258,12 +1331,30 @@ private fun ReadDock(
     var isReadButtonFocused by remember { mutableStateOf(false) }
     var isMoreButtonFocused by remember { mutableStateOf(false) }
     val isTvPresentation = LocalUiPresentationConfig.current.isTv
+    val view = LocalView.current
     val readButtonFocusRequester = remember { FocusRequester() }
+    val moreMenuAnchorFocus = remember { FocusRequester() }
     var hasRequestedInitialFocus by remember { mutableStateOf(false) }
     LaunchedEffect(isTvPresentation, isEnabled) {
         if (isTvPresentation && isEnabled && !hasRequestedInitialFocus) {
             withFrameNanos { }
             hasRequestedInitialFocus = runCatching { readButtonFocusRequester.requestFocus() }.getOrDefault(false)
+        }
+    }
+    // Coming back from the reader (a different activity) restores nothing: the window ends up with
+    // no focused node at all, so the first remote press looks like it did nothing. Park focus back
+    // on the primary action instead of waiting for the user to discover that.
+    var resumeTick by remember { mutableStateOf(0) }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        if (isTvPresentation && isEnabled && view.findFocus() == null) {
+            resumeTick++
+        }
+    }
+    LaunchedEffect(resumeTick) {
+        if (resumeTick > 0) {
+            view.requestFocusFromTouch()
+            withFrameNanos { }
+            runCatching { readButtonFocusRequester.requestFocus() }
         }
     }
     val hasBranchOptions = branches.size > 1
@@ -1423,6 +1514,7 @@ private fun ReadDock(
             ) {
                 Box(
                     modifier = Modifier
+                        .focusRequester(moreMenuAnchorFocus)
                         .fillMaxSize()
                         .clip(trailingButtonShape)
                         .onFocusChanged { isMoreButtonFocused = it.isFocused }
@@ -1455,6 +1547,8 @@ private fun ReadDock(
                 useRootOverlay = LocalInterfaceStyle.current == InterfaceStyle.IOS,
                 anchorBounds = menuAnchorBounds,
                 openAboveAnchor = true,
+                // The root overlay has no focus restore of its own.
+                anchorFocusRequester = moreMenuAnchorFocus,
             ) {
                 if (canOpenIncognito) {
                     CompactDropdownMenuItem(

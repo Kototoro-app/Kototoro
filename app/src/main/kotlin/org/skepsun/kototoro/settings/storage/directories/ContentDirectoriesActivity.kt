@@ -41,6 +41,9 @@ class ContentDirectoriesActivity : BaseComposeActivity() {
             val isInitialLoading = viewModel.isInitialLoading.collectAsStateWithLifecycle().value
             val isLoading = viewModel.isLoading.collectAsStateWithLifecycle().value
             ContentDirectoriesScreen(
+                initialKind = StorageContentKind.entries.firstOrNull {
+                    it.name == intent.getStringExtra(EXTRA_CONTENT_KIND)
+                } ?: StorageContentKind.MANGA,
                 mangaItems = viewModel.mangaItems.collectAsStateWithLifecycle().value,
                 novelItems = viewModel.novelItems.collectAsStateWithLifecycle().value,
                 videoItems = viewModel.videoItems.collectAsStateWithLifecycle().value,
@@ -58,5 +61,9 @@ class ContentDirectoriesActivity : BaseComposeActivity() {
                 onDefaultDirectory = viewModel::onDefaultClick,
             )
         }
+    }
+
+    companion object {
+        const val EXTRA_CONTENT_KIND = "content_kind"
     }
 }

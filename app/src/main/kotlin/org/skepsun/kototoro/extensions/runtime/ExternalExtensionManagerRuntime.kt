@@ -1,6 +1,8 @@
 package org.skepsun.kototoro.extensions.runtime
 
 import android.content.Context
+import android.os.SystemClock
+import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -12,6 +14,7 @@ import kotlinx.coroutines.sync.withLock
 class ExternalExtensionManagerRuntime<ResultT, SuccessT, ErrorT, SourceT, WrappedSourceT>(
     private val context: Context,
     private val scope: CoroutineScope,
+    private val ecosystem: String = "external",
 ) {
 
     private val _installedExtensions = MutableStateFlow<List<SuccessT>>(emptyList())
@@ -46,7 +49,10 @@ class ExternalExtensionManagerRuntime<ResultT, SuccessT, ErrorT, SourceT, Wrappe
         loadMutex.withLock {
             _isLoading.value = true
             try {
-                val processed = processResults(loadResults(context))
+                val loadStartedAt = SystemClock.elapsedRealtime()
+                val results = loadResults(context)
+                val loadMs = SystemClock.elapsedRealtime() - loadStartedAt
+                val processed = processResults(results)
                 sourceSnapshot = SourceSnapshot(
                     sourceById = processed.sourceById,
                     wrappedSourceById = processed.wrappedSourceById,
@@ -54,6 +60,11 @@ class ExternalExtensionManagerRuntime<ResultT, SuccessT, ErrorT, SourceT, Wrappe
                 _installedExtensions.value = processed.successful
                 _failedExtensions.value = processed.failed
                 _changes.value++
+                Log.i(
+                    "ExtensionRuntime",
+                    "$ecosystem results=${results.size} load_ms=$loadMs " +
+                        "total_ms=${SystemClock.elapsedRealtime() - loadStartedAt}",
+                )
             } finally {
                 _isLoading.value = false
             }

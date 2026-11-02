@@ -12,6 +12,7 @@ import android.util.Base64
 import android.view.KeyEvent
 import android.view.View
 import androidx.activity.viewModels
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ComposeFoundationFlags
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
@@ -33,11 +34,9 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.material3.SnackbarDuration
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.Text
 import androidx.compose.ui.Alignment
@@ -48,6 +47,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.core.graphics.ColorUtils
 import androidx.core.content.FileProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kyant.backdrop.backdrops.layerBackdrop
@@ -62,6 +62,9 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
+import org.skepsun.kototoro.core.ui.adaptive.tvChipRing
+import org.skepsun.kototoro.core.ui.compose.KototoroSnackbarHost
 import org.skepsun.kototoro.core.util.ext.isPageEbookChapter
 import org.skepsun.kototoro.bookmarks.domain.novelBookmarkProgress
 import org.skepsun.kototoro.core.util.ext.isTextEbookChapter
@@ -73,6 +76,15 @@ import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.nav.ContentIntent
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
+import kotlinx.coroutines.flow.MutableStateFlow
+import org.skepsun.kototoro.core.model.getLocale
+import org.skepsun.kototoro.download.ui.worker.DownloadTask
+import org.skepsun.kototoro.download.ui.worker.DownloadTaskKind
+import org.skepsun.kototoro.download.ui.worker.DownloadWorker
+import org.skepsun.kototoro.download.ui.worker.ExecutionChapterRef
+import org.skepsun.kototoro.reader.translate.data.ChapterTranslationStore
+import org.skepsun.kototoro.reader.translate.data.resolveChapterTranslationKey
+import org.skepsun.kototoro.reader.translate.data.resolveChapterTranslationLanguagePair
 import org.skepsun.kototoro.core.prefs.ReaderMode
 import org.skepsun.kototoro.core.prefs.observeAsFlow
 import org.skepsun.kototoro.core.prefs.observeAsState
@@ -84,6 +96,8 @@ import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.resolveUiPresentationConfig
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassLayerBackdrop
+import org.skepsun.kototoro.local.epub.EpubError
+import org.skepsun.kototoro.local.epub.EpubException
 import org.skepsun.kototoro.local.epub.buildEpubChapterUrl
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
@@ -184,6 +198,12 @@ class NovelReaderActivity :
     lateinit var settings: AppSettings
 
     @Inject
+    lateinit var chapterTranslationStore: ChapterTranslationStore
+
+    @Inject
+    lateinit var downloadScheduler: DownloadWorker.Scheduler
+
+    @Inject
     lateinit var tapGridSettings: org.skepsun.kototoro.reader.data.TapGridSettings
 
     @Inject
@@ -235,6 +255,97 @@ class NovelReaderActivity :
     lateinit var spaceSwitcherDelegate: SpaceSwitcherDelegate
 
     private lateinit var manga: Content
+
+    /** Chapters whose translation is stored for the current settings; drives the chapter panel badge. */
+    private val translatedChapterIds = MutableStateFlow<Set<Long>>(emptySet())
+
+    /** Fraction of the chapter already translated, for chapters a job left unfinished. */
+    private val chapterTranslationProgress = MutableStateFlow<Map<Long, Float>>(emptyMap())
+
+    /** Chapters stored offline already; their row shows a downloaded marker instead of the download button. */
+    private val downloadedChapterIds = MutableStateFlow<Set<Long>>(emptySet())
+
+    private suspend fun refreshChapterTranslationStates() {
+        val content = if (::manga.isInitialized) manga else return
+        val languagePair = resolveChapterTranslationLanguagePair(
+            preferredSourceLanguage = settings.readerTranslationSourceLanguage,
+            contentLanguage = content.source.getLocale()?.language,
+            targetLanguage = settings.readerTranslationTargetLanguage,
+        )
+        val key = settings.resolveChapterTranslationKey(
+            sourceLang = languagePair.first,
+            targetLang = languagePair.second,
+        )
+        val states = chapterTranslationStore.chapterStates(mangaId = content.id, key = key)
+        translatedChapterIds.value = states.filterValues { it.isPrepared }.keys
+        chapterTranslationProgress.value = buildMap {
+            for ((chapterId, state) in states) {
+                val progress = state.progress ?: continue
+                if (state.isPartial) put(chapterId, progress)
+            }
+        }
+    }
+
+    /**
+     * Chapter panel translate action: downloads the chapter when needed, then translates it as a whole.
+     * [isRetranslation] is set only after the user confirmed replacing an existing translation.
+     */
+    private fun translateChapterFromSheet(chapter: ContentChapter, isRetranslation: Boolean) {
+        val content = if (::manga.isInitialized) manga else return
+        lifecycleScope.launch {
+            val task = DownloadTask.createExecutionTask(
+                executionMangaId = content.id,
+                displayMangaId = content.id,
+                isPaused = false,
+                isSilent = true,
+                executionChapterIds = longArrayOf(chapter.id),
+                executionChapterRefs = listOf(ExecutionChapterRef.fromChapter(chapter)),
+                destination = null,
+                format = null,
+                allowMeteredNetwork = true,
+                kind = DownloadTaskKind.TRANSLATE,
+                isRetranslation = isRetranslation,
+            )
+            downloadScheduler.schedule(setOf(content to task))
+        }
+    }
+
+    /** Chapter panel download action: queues this chapter into the normal download queue. */
+    private fun downloadChapterFromSheet(chapter: ContentChapter) {
+        val content = if (::manga.isInitialized) manga else return
+        lifecycleScope.launch {
+            val task = DownloadTask.createExecutionTask(
+                executionMangaId = content.id,
+                displayMangaId = content.id,
+                isPaused = false,
+                isSilent = false,
+                executionChapterIds = longArrayOf(chapter.id),
+                executionChapterRefs = listOf(ExecutionChapterRef.fromChapter(chapter)),
+                destination = null,
+                format = null,
+                allowMeteredNetwork = true,
+                kind = DownloadTaskKind.DOWNLOAD,
+            )
+            downloadScheduler.schedule(setOf(content to task))
+            // Hide the row button right away; the finished work triggers a refresh of the marker.
+            downloadedChapterIds.value = downloadedChapterIds.value + chapter.id
+            showReaderMessage(R.string.download_started)
+        }
+    }
+
+    /** Re-reads the chapters already stored offline for the current content. */
+    private suspend fun refreshDownloadedChapterIds() {
+        val content = if (::manga.isInitialized) manga else return
+        val ids = withContext(Dispatchers.IO) {
+            runCatching {
+                localContentRepository.getDetails(content).chapters
+                    .orEmpty()
+                    .filter { it.source.isLocal }
+                    .mapTo(LinkedHashSet()) { it.id }
+            }.getOrNull()
+        } ?: return
+        downloadedChapterIds.value = ids
+    }
     private lateinit var repository: ContentRepository
     private var originalContent: Content? = null  // Store original for online fallback
     private lateinit var readerSettings: NovelReaderSettings
@@ -394,6 +505,10 @@ class NovelReaderActivity :
                 composeReaderViewModel.publishSettings(readerSettings)
             }
         }.launchIn(lifecycleScope)
+        settings.observeAsFlow(org.skepsun.kototoro.reader.novel.tts.TtsPlaybackSpeed.KEY) {
+            org.skepsun.kototoro.reader.novel.tts.TtsPlaybackSpeed.read(prefs)
+        }.onEach(composeReaderViewModel::publishTtsSpeed)
+            .launchIn(lifecycleScope)
         isEInkModeEnabled = settings.isEInkModeEnabled
         settings.observeAsFlow(AppSettings.KEY_EINK_MODE) { isEInkModeEnabled }
             .onEach { enabled ->
@@ -608,6 +723,18 @@ class NovelReaderActivity :
         }
     }
 
+    /**
+     * Closes a reader panel. On TV every panel is opened from the chrome, and leaving the chrome up
+     * would keep the D-pad in the top bar: the first LEFT/RIGHT after closing the panel would move
+     * between chrome controls instead of turning the page. Chrome comes back with BACK.
+     */
+    private fun dismissReaderPanel(dismiss: () -> Unit) {
+        dismiss()
+        if (isTvPresentation) {
+            setUiVisible(false)
+        }
+    }
+
     private fun setupComposeContent() {
         val callbacks = NovelReaderChromeCallbacks(
             onNavigateBack = onBackPressedDispatcher::onBackPressed,
@@ -623,9 +750,9 @@ class NovelReaderActivity :
                 onChapterSelected(index)
             },
             onSearchResultSelected = ::jumpToNovelSearchResult,
-            onDismissSettings = composeReaderViewModel::dismissSettings,
-            onDismissChapters = composeReaderViewModel::dismissChapters,
-            onDismissTools = composeReaderViewModel::dismissTools,
+            onDismissSettings = { dismissReaderPanel(composeReaderViewModel::dismissSettings) },
+            onDismissChapters = { dismissReaderPanel(composeReaderViewModel::dismissChapters) },
+            onDismissTools = ::onToolsPanelDismissed,
             onShowSettings = { composeReaderViewModel.showSettings(readerSettings) },
             onShowChapters = ::showChaptersSheet,
             onShowReplaceRules = composeReaderViewModel::showReplaceRules,
@@ -633,7 +760,7 @@ class NovelReaderActivity :
             onToggleTranslation = ::toggleTranslation,
             onToggleReplaceRules = ::toggleReplaceRules,
             onDismissReplaceRules = composeReaderViewModel::dismissReplaceRules,
-            onDismissMarkings = composeReaderViewModel::dismissMarkings,
+            onDismissMarkings = { dismissReaderPanel(composeReaderViewModel::dismissMarkings) },
             onReplaceRuleToggle = ::toggleReplaceRule,
             onEditMarkingNote = ::editNovelMarkingNote,
             onDeleteMarking = ::deleteNovelMarking,
@@ -646,6 +773,7 @@ class NovelReaderActivity :
             onTtsPrevious = { ttsService?.seekPrev() },
             onTtsPlayPause = ::onTtsPlayPauseClicked,
             onTtsNext = { ttsService?.seekNext() },
+            onTtsSpeedChange = ::onTtsSpeedChange,
             onTtsVoice = ::showVoiceSelectionDialog,
             onTtsClose = {
                 onTtsStopClicked()
@@ -660,6 +788,15 @@ class NovelReaderActivity :
             KototoroTheme {
                 val presentationConfig = LocalUiPresentationConfig.current
                 val state by composeReaderViewModel.uiState.collectAsStateWithLifecycle()
+                BackHandler(
+                    enabled = shouldInterceptNovelReaderTvBack(
+                        presentationConfig.isTv,
+                        state.controlsVisible,
+                        hasReaderSubOverlay(),
+                    ),
+                ) {
+                    setUiVisible(false)
+                }
                 val floatingControls by settings.observeAsState(AppSettings.KEY_NOVEL_READER_CONTROLS) {
                     novelReaderControls
                 }
@@ -705,6 +842,7 @@ class NovelReaderActivity :
                             onTtsPrevious = { ttsService?.seekPrev() },
                             onTtsPlayPause = ::onTtsPlayPauseClicked,
                             onTtsNext = { ttsService?.seekNext() },
+                            onTtsSpeedChange = ::onTtsSpeedChange,
                             onTtsVoice = ::showVoiceSelectionDialog,
                             onTtsClose = {
                                 onTtsStopClicked()
@@ -828,8 +966,31 @@ class NovelReaderActivity :
                         }
 
                         if (state.chaptersSheetVisible) {
+                            val translatedIds by translatedChapterIds.collectAsStateWithLifecycle()
+                            val progress by chapterTranslationProgress.collectAsStateWithLifecycle()
+                            val downloadedIds by downloadedChapterIds.collectAsStateWithLifecycle()
+                            LaunchedEffect(Unit) {
+                                refreshChapterTranslationStates()
+                                launch {
+                                    refreshDownloadedChapterIds()
+                                    downloadScheduler.observeWorks()
+                                        .map { works -> works.count { it.state.isFinished } }
+                                        .distinctUntilChanged()
+                                        .collect { refreshDownloadedChapterIds() }
+                                }
+                                chapterTranslationStore.changes.collect {
+                                    refreshChapterTranslationStates()
+                                }
+                            }
                             ComposeNovelChaptersSheet(
                                 chapters = state.chapters,
+                                translatedChapterIds = translatedIds,
+                                translationProgress = progress,
+                                downloadedChapterIds = downloadedIds,
+                                onTranslateChapter = { chapter, isRetranslation ->
+                                    translateChapterFromSheet(chapter, isRetranslation)
+                                },
+                                onDownloadChapter = { chapter -> downloadChapterFromSheet(chapter) },
                                 currentIndex = state.currentChapterIndex,
                                 searchDocuments = state.continuousChapters,
                                 markings = state.novelMarkings,
@@ -956,6 +1117,7 @@ class NovelReaderActivity :
                                                     },
                                                     enabled = !novelAiAskLoading,
                                                     label = { Text(getString(preset.questionRes)) },
+                                                    modifier = Modifier.tvChipRing(),
                                                 )
                                             }
                                         }
@@ -985,7 +1147,7 @@ class NovelReaderActivity :
                                     }
                                 },
                                 confirmButton = {
-                                    TextButton(
+                                    TvTextButton(
                                         enabled = novelAiQuestion.isNotBlank() && !novelAiAskLoading,
                                         onClick = { askNovelAi(target) },
                                     ) {
@@ -993,13 +1155,13 @@ class NovelReaderActivity :
                                     }
                                 },
                                 dismissButton = {
-                                    TextButton(onClick = ::dismissNovelAiAsk) {
+                                    TvTextButton(onClick = ::dismissNovelAiAsk) {
                                         Text(getString(R.string.cancel))
                                     }
                                 },
                             )
                         }
-                        SnackbarHost(
+                        KototoroSnackbarHost(
                             hostState = snackbarHostState,
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
@@ -1085,20 +1247,34 @@ class NovelReaderActivity :
         }
     }
 
+    /**
+     * 关闭工具/朗读弹层。朗读控制就挂在这个弹层里，如果只清可见标记而不停引擎，
+     * 弹层关掉之后仍然在念，遥控器（以及手机上）就再也没有停下来的入口了。
+     */
+    private fun onToolsPanelDismissed() {
+        if (composeReaderViewModel.uiState.value.ttsControlsVisible) {
+            onTtsStopClicked()
+        }
+        dismissReaderPanel(composeReaderViewModel::dismissTools)
+    }
+
+    private fun hasReaderSubOverlay(): Boolean {
+        val uiState = composeReaderViewModel.uiState.value
+        return uiState.settingsSheetVisible ||
+            uiState.replaceRulesSheetVisible ||
+            uiState.markingsSheetVisible ||
+            uiState.chaptersSheetVisible ||
+            uiState.toolsSheetVisible ||
+            uiState.ttsControlsVisible ||
+            ttsVoiceDialogState != null ||
+            noteSelection != null ||
+            noteMarking != null ||
+            noteDetailMarking != null
+    }
+
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (event.keyCode == KeyEvent.KEYCODE_BACK) {
-            val uiState = composeReaderViewModel.uiState.value
-            val hasSubOverlay = uiState.settingsSheetVisible ||
-                uiState.replaceRulesSheetVisible ||
-                uiState.markingsSheetVisible ||
-                uiState.chaptersSheetVisible ||
-                uiState.toolsSheetVisible ||
-                uiState.ttsControlsVisible ||
-                ttsVoiceDialogState != null ||
-                noteSelection != null ||
-                noteMarking != null ||
-                noteDetailMarking != null
-            if (shouldInterceptNovelReaderTvBack(isTvPresentation, isUiVisible, hasSubOverlay)) {
+            if (shouldInterceptNovelReaderTvBack(isTvPresentation, isUiVisible, hasReaderSubOverlay())) {
                 if (event.action == KeyEvent.ACTION_UP) {
                     setUiVisible(false)
                 }
@@ -1106,12 +1282,22 @@ class NovelReaderActivity :
             }
         }
 
+        if (shouldShowNovelReaderTvChrome(isTvPresentation, isUiVisible, hasReaderSubOverlay(), event.keyCode)) {
+            if (event.action == KeyEvent.ACTION_UP) {
+                setUiVisible(true)
+            }
+            return true
+        }
+
         when (
             tvKeyDispatcher.dispatch(
                 keyCode = event.keyCode,
                 action = event.action,
                 isTvPresentation = isTvPresentation,
-                controlsVisible = isReaderControlsVisible,
+                // 朗读条是独立可见层：它可见时必须让方向键进 Compose 焦点遍历，
+                // 否则会被下面的翻页分支全部吃掉，六个按钮永远拿不到焦点。
+                controlsVisible = isReaderControlsVisible ||
+                    composeReaderViewModel.uiState.value.ttsControlsVisible,
                 repeatCount = event.repeatCount,
             )
         ) {
@@ -1180,6 +1366,14 @@ class NovelReaderActivity :
 
     private fun toggleTranslation() {
         val enabled = !readerSettings.isTranslationEnabled
+        if (enabled && !hasTranslationConfig()) {
+            // 没配引擎时不要先把开关翻成"开"：否则状态说在翻译、屏幕上却什么都没变。
+            showReaderMessage(
+                getString(R.string.novel_reader_translation_not_configured),
+                3000L,
+            )
+            return
+        }
         readerSettings = readerSettings.copy(isTranslationEnabled = enabled)
         readerSettings.save(this)
         composeReaderViewModel.publishSettings(readerSettings)
@@ -1233,6 +1427,13 @@ class NovelReaderActivity :
         }
     }
 
+    /** 翻译需要本地模型或 API 端点二者之一，否则开关只会变成空转。 */
+    private fun hasTranslationConfig(): Boolean {
+        val hasOnnx = settings.readerTranslationOnnxModelId.isNotBlank()
+        val hasApi = settings.readerTranslationApiEndpoint.isNotBlank()
+        return hasOnnx || hasApi || settings.readerTranslationMode.name == "LOCAL_ONLY"
+    }
+
     private fun startTranslation() {
         translationJob?.cancel()
         val content = getCurrentChapterContent()
@@ -1242,13 +1443,7 @@ class NovelReaderActivity :
             return
         }
 
-        // 检查是否有可用的翻译配置
-        val mode = settings.readerTranslationMode
-        val onnxModelId = settings.readerTranslationOnnxModelId
-        val hasOnnx = onnxModelId.isNotBlank()
-        val hasApi = settings.readerTranslationApiEndpoint.isNotBlank()
-        android.util.Log.d("NovelReaderActivity", "Translation config: mode=$mode, onnxModelId='$onnxModelId', hasOnnx=$hasOnnx, hasApi=$hasApi")
-        if (!hasOnnx && !hasApi && mode.name != "LOCAL_ONLY") {
+        if (!hasTranslationConfig()) {
             showReaderMessage(
                 getString(R.string.novel_reader_translation_not_configured),
                 3000L,
@@ -2143,6 +2338,11 @@ class NovelReaderActivity :
         ttsService?.stopTts()
     }
 
+    private fun onTtsSpeedChange(speed: Float) {
+        // The running service picks the new value up from preferences.
+        org.skepsun.kototoro.reader.novel.tts.TtsPlaybackSpeed.write(settings.prefs, speed)
+    }
+
     /**
      * 当前页朗读完成后自动翻页并继续朗读
      */
@@ -2573,12 +2773,15 @@ class NovelReaderActivity :
                         android.util.Log.e("NovelReaderActivity", "Failed to load EPUB internal chapter", error)
                         showLoading(false)  // Dismiss loading indicator even on error
                         // Display user-friendly error message (Requirement 6.7)
-                        val errorMessage = when {
-                            error.message?.contains("not found") == true -> getString(R.string.novel_epub_not_found)
-                            error.message?.contains("out of bounds") == true -> getString(R.string.novel_epub_index_invalid)
-                            error.message?.contains("Invalid chapter URL") == true -> getString(R.string.novel_epub_url_invalid)
-                            error.message?.contains("Failed to parse") == true -> getString(R.string.novel_epub_parse_failed)
-                            else -> getString(R.string.novel_epub_load_failed, error.message ?: "")
+                        val errorMessage = when (val epubError = (error as? EpubException)?.error) {
+                            is EpubError.FileSystemError.FileNotFound,
+                            is EpubError.ChapterLoadError.ChapterNotFound,
+                            -> getString(R.string.novel_epub_not_found)
+                            is EpubError.ChapterLoadError.IndexOutOfBounds -> getString(R.string.novel_epub_index_invalid)
+                            is EpubError.ChapterLoadError.InvalidUrl -> getString(R.string.novel_epub_url_invalid)
+                            is EpubError.ParseError -> getString(R.string.novel_epub_parse_failed)
+                            null -> getString(R.string.novel_epub_load_failed, error.message.orEmpty())
+                            else -> getString(R.string.novel_epub_load_failed, epubError.userMessage(resources))
                         }
                         showReaderMessage(errorMessage, 3000L)
                     }
@@ -2808,7 +3011,7 @@ class NovelReaderActivity :
                 // 合并所有章节内容
                 val fullContent = buildString {
                     append("《${epubContent.title}》\n")
-                    append("作者：${epubContent.author}\n")
+                    append(getString(R.string.novel_epub_author_line, epubContent.author)).append('\n')
                     append("\n")
                     append("=".repeat(40))
                     append("\n\n")

@@ -33,6 +33,8 @@ import org.skepsun.kototoro.core.jsonsource.SourceType
 import org.skepsun.kototoro.core.model.titleResId
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsState
+import org.skepsun.kototoro.core.ui.adaptive.tvChipRing
+import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import org.skepsun.kototoro.parsers.model.ContentType
 
 data class SuggestionSourceOption(
@@ -267,7 +269,7 @@ private fun SuggestionSourcesDialog(
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().tvTextInputFocusEscape(),
                 singleLine = true,
                 placeholder = { Text(stringResource(R.string.search)) },
             )
@@ -349,6 +351,7 @@ private fun <T> SuggestionSourceFilterRow(
                 selected = selectedOptions.isEmpty(),
                 onClick = onAllClick,
                 label = { Text(allLabel) },
+                modifier = Modifier.tvChipRing(),
             )
         }
         items(options, key = optionKey) { option ->
@@ -356,6 +359,7 @@ private fun <T> SuggestionSourceFilterRow(
                 selected = option in selectedOptions,
                 onClick = { onOptionClick(option) },
                 label = { Text(optionLabel(option)) },
+                modifier = Modifier.tvChipRing(),
             )
         }
     }

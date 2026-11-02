@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.network.PersistentCookieStore
 import org.koin.core.KoinApplication
 import org.koin.core.context.GlobalContext
 import org.koin.dsl.module
+import okhttp3.Authenticator
 import okhttp3.OkHttpClient
 import org.skepsun.kototoro.core.source.SourcePreferenceStore
 import org.skepsun.kototoro.source.host.FileSourcePreferenceStore
@@ -16,6 +17,7 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.InjektScope
 import uy.kohesive.injekt.api.KoinRegistrar
 import java.net.CookieHandler
+import java.net.ProxySelector
 import java.nio.file.Files
 import java.nio.file.LinkOption.NOFOLLOW_LINKS
 import java.nio.file.Path
@@ -28,6 +30,12 @@ class MihonDesktopPlatform(
     private val dataDirectory: Path? = null,
     private val bridgeExecutable: File? = null,
     private val enableBrowserChallenges: Boolean = false,
+    /**
+     * Android's proxy settings reach the SDK client here: the selector and credentials are consulted per request, so the
+     * settings page changes the proxy of an already running session.
+     */
+    private val proxySelector: ProxySelector? = null,
+    private val proxyAuthenticator: Authenticator? = null,
 ) : SourceHostPreferenceUiPlatform {
     private var application: DesktopCompatibilityApplication? = null
     private var preferences: MihonPreferenceBridge? = null
@@ -103,6 +111,9 @@ class MihonDesktopPlatform(
             restoreDesktopCookies(helper.cookieStore, savedCookies)
             // Force owned client creation so shutdown can close known dispatcher/cache resources.
             client = helper.client
+            if (proxySelector != null || proxyAuthenticator != null) {
+                client = installDesktopProxyClient(helper, proxySelector, proxyAuthenticator)
+            }
             if (enableBrowserChallenges && targetBridge != null && targetBridge.isFile) {
                 val challenges = DesktopBrowserChallenges(targetBridge, absolute.resolve("browser-challenges"), ::cookieBridge)
                     .also { browserChallenges = it }
@@ -184,17 +195,23 @@ class MihonDesktopPlatform(
         private val processOwner = Any()
         private var claimed = false
         private fun disableBrowser() {
-            WebView.setProviderFactory { throw UnsupportedOperationException("Windows browser bridge is unavailable") }
+            WebView.setProviderFactory { throw UnsupportedOperationException("Desktop browser bridge is unavailable") }
         }
 
-        fun defaultBridgeExecutable(): File? {
+        fun defaultBridgeExecutable(osName: String = System.getProperty("os.name", "")): File? {
             val prop = System.getProperty("kototoro.compat.bridge.exe")
             if (!prop.isNullOrBlank()) {
                 val f = File(prop)
                 return f.takeIf { it.isFile }
             }
+            val name = when {
+                osName.startsWith("Windows", ignoreCase = true) -> "kototoro-webview-bridge.exe"
+                osName.startsWith("Mac", ignoreCase = true) || osName.equals("Darwin", ignoreCase = true) ->
+                    "kototoro-webview-bridge"
+                else -> return null
+            }
             return System.getProperty("compose.application.resources.dir")?.takeIf { it.isNotBlank() }
-                ?.let { File(it, "browser/kototoro-webview-bridge.exe") }?.takeIf { it.isFile }
+                ?.let { File(it, "browser/$name") }?.takeIf { it.isFile }
         }
     }
 }

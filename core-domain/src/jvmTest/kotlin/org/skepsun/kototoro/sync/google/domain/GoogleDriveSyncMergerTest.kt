@@ -18,6 +18,55 @@ import org.skepsun.kototoro.sync.google.data.model.SyncWorkState
 
 class GoogleDriveSyncMergerTest {
 
+    @Test
+    fun `feed sync merges seen and reading state independently in either direction`() {
+        val chapter = org.skepsun.kototoro.tracker.domain.UpdateChapter("key", 7, "Chapter", null, 1, 100)
+        fun snapshot(seen: Boolean, read: Long) = GoogleDriveSyncSnapshot(
+            feed = SyncFeedState(logs = listOf(SyncTrackLog(mangaId = 1, chapters = "Chapter", createdAt = 100,
+                isUnread = !seen, chapterMetadata = org.skepsun.kototoro.tracker.domain.encodeUpdateChapters(
+                    listOf(chapter.copy(readAt = read)))))),
+        )
+        val seen = snapshot(true, 0)
+        val read = snapshot(false, 200)
+        listOf(GoogleDriveSyncMerger.mergeSnapshots(seen, read), GoogleDriveSyncMerger.mergeSnapshots(read, seen))
+            .forEach { merged ->
+                val log = merged.feed.logs.single()
+                assertEquals(false, log.isUnread)
+                assertEquals(100, log.createdAt)
+                assertEquals(200, org.skepsun.kototoro.tracker.domain.decodeUpdateChapters(log.chapterMetadata).single().readAt)
+                val repeated = GoogleDriveSyncMerger.mergeSnapshots(merged, snapshot(false, 0))
+                assertEquals(log.chapterMetadata, repeated.feed.logs.single().chapterMetadata)
+                assertEquals(false, repeated.feed.logs.single().isUnread)
+            }
+    }
+
+    @Test
+    fun `same millisecond history and favourite deletion wins in either merge order`() {
+        val active = GoogleDriveSyncSnapshot(
+            history = listOf(SyncHistory(1, 10, 100)),
+            favourites = listOf(SyncFavourite(1, 4, updatedAt = 100)),
+        )
+        val deleted = GoogleDriveSyncSnapshot(
+            history = listOf(SyncHistory(1, 10, 100, deletedAt = 100)),
+            favourites = listOf(SyncFavourite(1, 4, updatedAt = 100, deletedAt = 100)),
+        )
+        for ((local, remote) in listOf(active to deleted, deleted to active)) {
+            val result = GoogleDriveSyncMerger.mergeSnapshots(local, remote)
+            assertEquals(100L, result.history.single().deletedAt)
+            assertEquals(100L, result.favourites.single().deletedAt)
+        }
+    }
+
+    @Test
+    fun `category deletion survives stale snapshots in either merge order`() {
+        val active = SyncFavouriteCategory(4, 10, 0, "Shelf", "NEWEST", true, true)
+        val deleted = SyncFavouriteCategory(4, 10, 0, "Shelf", "NEWEST", true, true, deletedAt = 100)
+        val first = GoogleDriveSyncSnapshot(categories = listOf(active))
+        val second = GoogleDriveSyncSnapshot(categories = listOf(deleted))
+        assertEquals(100L, GoogleDriveSyncMerger.mergeSnapshots(first, second).categories.single().deletedAt)
+        assertEquals(100L, GoogleDriveSyncMerger.mergeSnapshots(second, first).categories.single().deletedAt)
+    }
+
 	@Test
 	fun `compact writes the content v3 protocol marker for legacy work snapshots`() {
 		val snapshot = GoogleDriveSyncSnapshot(

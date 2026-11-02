@@ -22,24 +22,63 @@ java {
 
 // Android classes (Context, SharedPreferences, Log, ...) come from the caller-supplied compatibility runtime, as for
 // :mihon-desktop-compat; plugins and the host shims below link against the same classes at runtime.
-def compatibilityRoot = providers.gradleProperty('mihonCompatibilityDirectory').map { new File(it) }.getOrNull()
+def compatibilityRoot = providers.gradleProperty('mihonCompatibilityDirectory').map { rootProject.file(it) }.getOrNull()
 def compatibilityApi = compatibilityRoot == null ? files() :
 	files(new File(compatibilityRoot, 'AndroidCompat-1.0.jar'), new File(compatibilityRoot, 'android-jar-1.0.0.jar'))
+// Without the directory the shims fail with unresolved `android.*`; check (and pin) it first, as that module does.
+tasks.named('compileKotlin') { dependsOn ':mihon-desktop-compat:verifyMihonCompatibility' }
+// The shims are javac-compiled too (Cloudstream's Java activity bridge), and the supplied compatibility runtime is
+// Java 21 bytecode: a Java 17 compiler rejects it, so compile with the same toolchain that module uses and keep the
+// host's own bytecode at 11 like the rest of this module.
+def compatibilityJavaVersion = providers.gradleProperty('mihonCompatibilityJavaVersion')
+	.map { it.toInteger() }.getOrElse(21)
+def compatibilityCompiler = javaToolchains.compilerFor {
+	languageVersion = JavaLanguageVersion.of(compatibilityJavaVersion)
+}
+tasks.named('compileJava') {
+	dependsOn ':mihon-desktop-compat:verifyMihonCompatibility'
+	javaCompiler = compatibilityCompiler
+	options.release = 11
+	options.encoding = 'UTF-8'
+}
 
 // The host shims plugins link against that only need APIs the compatibility runtime has: one source with Android.
-def sharedShims = [
+def sharedKotlinShims = [
 	'com/lagradost/api/ContextHelper.kt',
 	'com/lagradost/cloudstream3/AcraApplication.kt',
-	'com/lagradost/cloudstream3/CommonActivity.kt',
 	'com/lagradost/cloudstream3/plugins/Plugin.kt',
 	'com/lagradost/cloudstream3/actions/VideoClickAction.kt',
 	'com/lagradost/cloudstream3/actions/VideoClickActionHolder.kt',
 	'com/lagradost/cloudstream3/utils/TextUtil.kt',
 	'com/lagradost/cloudstream3/utils/DataStore.kt',
+	// App-shell stand-ins plugins link against (plugin events and manager, sync providers, layout flags); plain
+	// Kotlin, so Windows takes the Android files as they are. AppContextUtils stays Android-only (AppCompat dialogs).
+	'com/lagradost/cloudstream3/MainActivity.kt',
+	'com/lagradost/cloudstream3/utils/Event.kt',
+	'com/lagradost/cloudstream3/utils/DataStoreHelper.kt',
+	'com/lagradost/cloudstream3/plugins/PluginManager.kt',
+	'com/lagradost/cloudstream3/syncproviders/AccountManager.kt',
+	'com/lagradost/cloudstream3/syncproviders/SyncCompatibility.kt',
+	'com/lagradost/cloudstream3/syncproviders/providers/AniListApi.kt',
+	'com/lagradost/cloudstream3/syncproviders/providers/SimklApi.kt',
+	'com/lagradost/cloudstream3/syncproviders/providers/OpenSubtitlesApi.kt',
+	'com/lagradost/cloudstream3/ui/settings/Globals.kt',
+	'com/lagradost/cloudstream3/ui/settings/extensions/RepositoryData.kt',
+]
+// Kotlin cannot declare `showToast$default`, so Cloudstream's activity bridge is Java and lives in `app/src/main/java`.
+// Copying it from its own source set keeps Windows at parity with Android, where plugins calling `showToast("…")` load.
+def sharedJavaShims = [
+	'com/lagradost/cloudstream3/CommonActivity.java',
 ]
 def sharedShimDirectory = layout.buildDirectory.dir('generated/cloudstream-shims')
+// A `from` block with an empty include list copies the whole source tree, so each list is applied only when it is
+// non-empty (a shim silently dropped from a list must not drag the rest of `app` into this module).
+def includeShims = { files, List<String> patterns ->
+	if (!patterns.isEmpty()) patterns.each { files.include it }
+}
 def copySharedShims = tasks.register('copySharedCloudstreamShims', Sync) {
-	from(rootProject.file('app/src/main/kotlin')) { sharedShims.each { include it } }
+	from(rootProject.file('app/src/main/kotlin')) { includeShims(delegate, sharedKotlinShims) }
+	from(rootProject.file('app/src/main/java')) { includeShims(delegate, sharedJavaShims) }
 	into sharedShimDirectory
 	// The runtime has no androidx.core / androidx.preference: `edit {}` comes from DesktopSharedPreferences.kt in the
 	// same package, and the default preferences are a named store.
@@ -52,6 +91,7 @@ def copySharedShims = tasks.register('copySharedCloudstreamShims', Sync) {
 	}
 }
 sourceSets.main.kotlin.srcDir(copySharedShims)
+sourceSets.main.java.srcDir(copySharedShims)
 
 // The official library:jvmJar without the classes the host supplies (as :app's prepareCloudstreamRuntimeJar).
 def cloudstreamLibrary = rootProject.file('app/libs/cloudstream3-library-jvm-1.0.1.jar')
@@ -61,8 +101,10 @@ def cloudstreamDesktopJar = tasks.register('prepareCloudstreamDesktopJar', Jar) 
 	preserveFileTimestamps = false
 	reproducibleFileOrder = true
 	from(zipTree(cloudstreamLibrary)) {
-		// A compatibility stub ships in :cloudstream-shared; the host has no NewPipe.
+		// The Windows host has no NewPipe; a compatibility stub in this module's sources takes their place.
 		exclude 'com/lagradost/cloudstream3/extractors/Youtube*.class'
+		// The JVM resolver resolves nothing; this module's one drives the platform browser.
+		exclude 'com/lagradost/cloudstream3/network/WebViewResolver*.class'
 		// The JVM context helper always answers null; the host's returns the compatibility Context.
 		exclude 'com/lagradost/api/ContextHelper_jvmKt.class'
 	}
@@ -96,6 +138,8 @@ dependencies {
 	implementation 'com.fasterxml.jackson.core:jackson-databind:2.15.2'
 	implementation 'com.fasterxml.jackson.module:jackson-module-kotlin:2.15.2'
 	implementation libs.jsoup
+	// Android gets ksoup through IReader; plugins (StreamPlay, AnimePahe, …) need the official library's release here.
+	implementation libs.ksoup.cloudstream
 	implementation libs.rhino
 	implementation libs.gson
 	implementation libs.ktor.http
@@ -181,4 +225,11 @@ tasks.withType(Test).configureEach {
 	// Optional real plugins (not committed): a directory of `.cs3` files, e.g. from the official repository.
 	providers.gradleProperty('cloudstreamPlugins').orNull?.with { systemProperty 'kototoro.cloudstream.real', it }
 	if (providers.gradleProperty('cloudstreamOnline').isPresent()) systemProperty 'kototoro.cloudstream.online', 'true'
+	// The platform browser for WebViewResolver: the bridge :mihon-desktop-compat builds for this OS (macOS compiles it
+	// here; Windows needs the WebView2 SDK), passed only when it exists so the other tests run without one.
+	def compat = project(':mihon-desktop-compat')
+	def macOs = System.getProperty('os.name', '').startsWith('Mac')
+	def bridge = compat.layout.buildDirectory.file(macOs ? 'bridge/kototoro-webview-bridge' : 'bridge/kototoro-webview-bridge.exe')
+	if (macOs) dependsOn ':mihon-desktop-compat:compileMacosWebViewBridge'
+	doFirst { if (bridge.get().asFile.isFile()) systemProperty 'kototoro.compat.bridge.exe', bridge.get().asFile.absolutePath }
 }

@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.core.util.ext
 
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -36,5 +37,30 @@ class FileNameSafeTest {
         // issue #511 用户的实际场景：标题几乎全是符号，只剩数字
         val name = "〔自定义〕 123 3179".toFileNameSafe()
         assertTrue(name.contains("123"), "digits were dropped: $name")
+    }
+
+    @Test
+    fun `export name keeps japanese and full width text`() {
+        // issue #523：存图文件名此前只剩 "_green_TEA_C"
+        val title = "[green TEA。] いもうとコンフィデンシャル (COMIC 失楽天 2026年2月号) [DL版]"
+        assertEquals(title, title.toExportFileName())
+        assertEquals("한국어 제목", "한국어 제목".toExportFileName())
+    }
+
+    @Test
+    fun `export name removes characters file systems reject`() {
+        assertEquals("a b c d", "a/b:c?d".toExportFileName())
+        assertEquals("title", "..title.".toExportFileName())
+        assertEquals("a b", "a\n\tb".toExportFileName())
+        for (title in listOf("", "///", "...", "  ")) {
+            assertFalse(title.toExportFileName().isBlank(), "blank export name for \"$title\"")
+        }
+    }
+
+    @Test
+    fun `export name truncates by code point`() {
+        assertEquals("いもうと", "いもうとコンフィデンシャル".toExportFileName(maxLength = 4))
+        // Never leave half of a surrogate pair at the cut.
+        assertEquals("ab😀", "ab😀😀".toExportFileName(maxLength = 3))
     }
 }

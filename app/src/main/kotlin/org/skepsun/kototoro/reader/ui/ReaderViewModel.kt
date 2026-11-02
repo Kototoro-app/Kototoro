@@ -89,6 +89,7 @@ import org.skepsun.kototoro.reader.domain.TranslationLayerState
 import org.skepsun.kototoro.reader.translate.domain.normalizeReaderTranslationLanguageTag
 import org.skepsun.kototoro.reader.translate.domain.resolveReaderTranslationSourceLanguage
 import org.skepsun.kototoro.reader.ui.config.ReaderSettings
+import org.skepsun.kototoro.reader.ui.pager.ReaderPage
 import org.skepsun.kototoro.reader.ui.pager.ReaderUiState
 import org.skepsun.kototoro.scrobbling.discord.ui.DiscordRpc
 import org.skepsun.kototoro.stats.domain.StatsCollector
@@ -126,6 +127,7 @@ class ReaderViewModel @Inject constructor(
     downloadScheduler: DownloadWorker.Scheduler,
     mangaRepositoryFactory: org.skepsun.kototoro.core.parser.ContentRepository.Factory,
     readerSettingsProducerFactory: ReaderSettings.Producer.Factory,
+    chapterTranslationStore: org.skepsun.kototoro.reader.translate.data.ChapterTranslationStore,
 ) : ChaptersPagesViewModel(
     settings = settings,
     interactor = interactor,
@@ -135,6 +137,7 @@ class ReaderViewModel @Inject constructor(
     deleteLocalContentUseCase = deleteLocalContentUseCase,
     mangaRepositoryFactory = mangaRepositoryFactory,
     localStorageChanges = localStorageChanges,
+    chapterTranslationStore = chapterTranslationStore,
 ) {
     data class TranslationPageTaskSnapshot(
         val pageId: Long,
@@ -181,6 +184,10 @@ class ReaderViewModel @Inject constructor(
     private val completedReaderAdjacentLoads = mutableSetOf<ReaderAdjacentLoadRequest>()
 
     val readerMode = MutableStateFlow<ReaderMode?>(null)
+    val isChapterOrderReversed = MutableStateFlow(false)
+
+    @Volatile
+    private var visibleSpreadPages: List<ReaderPage> = emptyList()
     val onPageSaved = MutableEventFlow<Collection<Uri>>()
     val onLoadingError = MutableEventFlow<Throwable>()
     val onShowToast = MutableEventFlow<Int>()
@@ -625,53 +632,51 @@ class ReaderViewModel @Inject constructor(
         Log.d(LOG_TAG, "clearTransientCrossChapterSuppression")
     }
 
+    /**
+     * The distinct pages of the spread on screen, in reading order (lower first). Two halves of one split
+     * wide page count once. Only the double-page readers report a spread; other readers leave one page.
+     */
+    fun getVisibleSpreadPages(): List<ReaderPage> = visibleSpreadPages
+
+    /** Saves [page], or the page chosen by a long press / the current page when it is null. */
     fun saveCurrentPage(
-        pageSaveHelper: PageSaveHelper
+        pageSaveHelper: PageSaveHelper,
+        page: ReaderPage? = null,
     ) {
         val prevJob = pageSaveJob
         pageSaveJob = launchLoadingJob(Dispatchers.Default) {
             prevJob?.cancelAndJoin()
-            val state = checkNotNull(getCurrentState())
-            val targetPage = targetPagePosition.value ?: state.page
-            val currentContent = manga.requireValue()
-            val pages = content.value.pages
-            val page = pages.find { it.chapterId == state.chapterId && it.index == targetPage }
-                ?: pages.find { it.chapterId == state.chapterId && it.index == state.page }
-                ?: throw IllegalStateException("Cannot find current page")
-
-            val task = PageSaveHelper.Task(
-                manga = currentContent,
-                chapterId = state.chapterId,
-                pageNumber = targetPage + 1,
-                page = page.toContentPage(),
-            )
-            val dest = pageSaveHelper.save(setOf(task))
+            val dest = pageSaveHelper.save(setOf(createPageSaveTask(page)))
             onPageSaved.call(dest)
         }
     }
 
     fun cropAndAnnotateCurrentPage(
-        pageSaveHelper: PageSaveHelper
+        pageSaveHelper: PageSaveHelper,
+        page: ReaderPage? = null,
     ) {
         val prevJob = pageSaveJob
         pageSaveJob = launchLoadingJob(Dispatchers.Default) {
             prevJob?.cancelAndJoin()
+            pageSaveHelper.cropAndAnnotate(createPageSaveTask(page))
+        }
+    }
+
+    private fun createPageSaveTask(explicitPage: ReaderPage?): PageSaveHelper.Task {
+        val page = explicitPage ?: run {
             val state = checkNotNull(getCurrentState())
             val targetPage = targetPagePosition.value ?: state.page
-            val currentContent = manga.requireValue()
             val pages = content.value.pages
-            val page = pages.find { it.chapterId == state.chapterId && it.index == targetPage }
+            pages.find { it.chapterId == state.chapterId && it.index == targetPage }
                 ?: pages.find { it.chapterId == state.chapterId && it.index == state.page }
                 ?: throw IllegalStateException("Cannot find current page")
-
-            val task = PageSaveHelper.Task(
-                manga = currentContent,
-                chapterId = state.chapterId,
-                pageNumber = targetPage + 1,
-                page = page.toContentPage(),
-            )
-            pageSaveHelper.cropAndAnnotate(task)
         }
+        return PageSaveHelper.Task(
+            manga = manga.requireValue(),
+            chapterId = page.chapterId,
+            pageNumber = page.index + 1,
+            page = page.toContentPage(),
+        )
     }
 
     fun getCurrentPage(): ContentPage? {
@@ -699,6 +704,17 @@ class ReaderViewModel @Inject constructor(
                 "switchChapter: loaded targetChapterId=$id, pages=${content.value.pages.size}, newState=$newState",
             )
             saveCurrentState(newState)
+        }
+    }
+
+    fun setChapterOrderReversed(reversed: Boolean) {
+        launchJob {
+            val manga = checkNotNull(getContentOrNull())
+            dataRepository.saveChaptersReversed(manga, reversed)
+            chaptersLoader.isChaptersReversed = reversed
+            isChapterOrderReversed.value = reversed
+            // Adjacent chapters already in the window were loaded in the old order; rebuild it around the page.
+            switchChapterBy(0)
         }
     }
 
@@ -754,7 +770,13 @@ class ReaderViewModel @Inject constructor(
 
     @MainThread
     fun onCurrentPageChanged(lowerPos: Int, upperPos: Int, activePageKey: Long? = null) {
-        onCurrentPageChanged(content.value.pages, lowerPos, upperPos, selectedPageKey = activePageKey)
+        val pages = content.value.pages
+        visibleSpreadPages = if (lowerPos in pages.indices && upperPos in lowerPos..pages.lastIndex) {
+            pages.subList(lowerPos, upperPos + 1).distinctBy { it.id }
+        } else {
+            emptyList()
+        }
+        onCurrentPageChanged(pages, lowerPos, upperPos, selectedPageKey = activePageKey)
     }
 
     @MainThread
@@ -997,10 +1019,15 @@ class ReaderViewModel @Inject constructor(
             val isRtl = mode == ReaderMode.REVERSED
             val isRightSide = rawX > width / 2f
 
-            // In LTR: left is page, right is page + 1
-            // In RTL: right is page, left is page + 1
+            // In LTR: left is the spread's first page, right its second; RTL mirrors that.
             val isSecondPage = if (isRtl) !isRightSide else isRightSide
-            targetPagePosition.value = if (isSecondPage) state.page + 1 else state.page
+            val spread = visibleSpreadPages
+            targetPagePosition.value = if (spread.size == 2) {
+                spread[if (isSecondPage) 1 else 0].index
+            } else {
+                // A single page (cover, wide or split page) fills the spread: either side means that page.
+                spread.singleOrNull()?.index ?: state.page
+            }
         } else {
             targetPagePosition.value = null
         }
@@ -1034,6 +1061,9 @@ class ReaderViewModel @Inject constructor(
                         }
                         chaptersLoader.init(details)
                         val manga = details.toContent()
+                        val reversed = dataRepository.isChaptersReversed(manga.id)
+                        chaptersLoader.isChaptersReversed = reversed
+                        isChapterOrderReversed.value = reversed
                         val contentType = if (manga.looksLikeLocalVideoContent()) {
                             ContentType.VIDEO
                         } else {
@@ -1217,6 +1247,7 @@ class ReaderViewModel @Inject constructor(
                 translationStateUpdatedAtByPageId[event.pageId] = System.currentTimeMillis()
                 translationTaskPanelVersion.update { it + 1 }
                 updateCurrentChapterTranslationProgress()
+                persistChapterTranslationProgress()
                 if (event.state == TranslationLayerState.READY) {
                     markPageForReload(event.pageId)
                     rebuildPages()
@@ -1270,6 +1301,21 @@ class ReaderViewModel @Inject constructor(
             totalCount = pages.size,
         )
         chapterTranslationProgress.value = progress.takeIf { it.hasStarted }
+    }
+
+    /**
+     * Mirrors the reader's own page progress into [ChapterTranslationStore] so the chapter list shows a
+     * "translated" badge (or a partial ring) for chapters translated interactively, not only by a job.
+     */
+    private suspend fun persistChapterTranslationProgress() {
+        val progress = chapterTranslationProgress.value ?: return
+        val content = mangaDetails.value?.toContent() ?: return
+        recordChapterTranslationProgress(
+            mangaId = content.id,
+            chapterId = progress.chapterId,
+            donePages = progress.readyCount,
+            totalPages = progress.totalCount,
+        )
     }
 
     @WorkerThread
@@ -1524,7 +1570,7 @@ class ReaderViewModel @Inject constructor(
         val details = mangaDetails.value ?: return emptyList()
         val contentType = details.toContent().source.getContentType()
         val useMerge = isMergeRepeatedChapters.value && contentType.isManga()
-        return if (useMerge) {
+        val chapters = if (useMerge) {
             val allBranches = details.chapters.keys.toList()
             val rawChapters = allBranches.flatMap { details.chapters[it].orEmpty() }
             rawChapters.mergeRepeated()
@@ -1536,5 +1582,6 @@ class ReaderViewModel @Inject constructor(
                 details.allChapters
             }
         }
+        return if (isChapterOrderReversed.value) chapters.asReversed() else chapters
     }
 }

@@ -19,6 +19,8 @@ internal object Fixtures {
     val kototoro: Path = directory.resolve("fixture-kototoro.jar")
     val kotatsu: Path = directory.resolve("fixture-kotatsu.jar")
     val tsuki: Path = directory.resolve("fixture-tsuki.jar")
+    /** Its only parser carries Android's `@Broken`. */
+    val broken: Path = directory.resolve("fixture-broken.jar")
 
     /** A valid 1x1 PNG, enough for the image store's signature check. */
     val png: ByteArray = Base64.getDecoder().decode(

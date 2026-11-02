@@ -34,6 +34,15 @@ class DesktopDataPathsTest {
     }
 
     @Test
+    fun `macOS uses Application Support and ignores Windows environment`() {
+        for (os in listOf("Mac OS X", "macOS", "Darwin")) {
+            assertEquals(directory.resolve("Library/Application Support/Kototoro"),
+                DesktopDataPaths.defaultRoot(mapOf("LOCALAPPDATA" to "relative"), directory.toString(), os))
+        }
+        assertFalse(Files.exists(directory.resolve("Library")))
+    }
+
+    @Test
     fun `explicit Unicode space directory is canonical and existing file is not overwritten`() {
         val root = directory.resolve("桌面 data/../桌面 data")
         val paths = DesktopDataPaths.create(root)

@@ -38,7 +38,7 @@ The official Agent workflow consists of three related pieces:
 - **`app/build.gradle` uses Groovy DSL**, not Kotlin DSL — do not write `.kts` syntax in it.
 - **Nightly variant** auto-generates `versionCode`/`versionName` from the date via the AGP Variant API (`androidComponents.onVariants` in `app/build.gradle`; AGP 9 removed the legacy `applicationVariants` API). `versionCode` = `yyMMdd`, `versionName` = `N` + `yyyyMMdd`. Do not manually set those for nightly.
 - **Hilt `enableAggregatingTask = true`** is set; removing it can break release builds with generic assisted factory validation errors.
-- **Cloudstream runtime jar** (`libs/cloudstream3-library-jvm-1.0.1.jar`) is sanitized by the `prepareCloudstreamRuntimeJar` task: it strips duplicate classes (Coil3, AndroidX, Material, coroutines, the JVM-only `Youtube*` extractors and no-op `WebViewResolver`, etc.) and verifies the input jar against a pinned SHA-256 before generating the runtime jar. If you touch the jar, the exclude list, or the expected checksum, verify the sanitization task still passes.
+- **Cloudstream runtime jar** (`libs/cloudstream3-library-jvm-1.0.1.jar`) is sanitized by the `prepareCloudstreamRuntimeJar` task: it strips duplicate classes (Coil3, AndroidX, Material, coroutines, no-op `WebViewResolver`, etc.) and verifies the input jar against a pinned SHA-256 before generating the runtime jar. If you touch the jar, the exclude list, or the expected checksum, verify the sanitization task still passes.
 - **Tsuki runtime jar** is likewise sanitized by `prepareTsukiRuntimeJar` (drops the duplicate `CSSBackground*` classes owned by `parser-api` and asserts `tsuki/MangaParser.class` remains).
 - **kotlinx.serialization** (json, protobuf, and json-okio) is unified at a single `1.11.0` version via the `serialization` key in `gradle/libs.versions.toml` — the old json/json-okio version divergence is gone.
 - **`decoroutinator` plugin is commented out** in root `build.gradle` and `app/build.gradle`. Do not uncomment unless you have a specific reason.
@@ -55,6 +55,15 @@ The main code uses `org.skepsun.kototoro`. Some test classes and the Hilt test r
 
 ## Coding Style & Naming Conventions
 Follow `.editorconfig`: UTF-8, LF, 4-space indentation, 120-character line width. Kotlin official style with trailing commas enabled. Name classes and tests in `PascalCase`, methods and properties in `camelCase`, Android resources in lowercase underscore style. Prefer extending existing feature modules over creating parallel implementations.
+
+## Shared UI Direction (CMP)
+
+- 所有 UI 的新增与修改都先评估共享；Android 与桌面端默认向 Compose Multiplatform 共享页面演进。
+- 实现前查找 Android 页面及 `core-ui` 中的现有呈现；优先提取到 `core-ui/commonMain`，再让 Android 和桌面实际调用同一实现。参考外观后复制一份页面不算共享。
+- Windows 与 macOS 共用 `desktop-app`；页面结构、状态派生和交互规则尽量共用，平台层只装配系统服务、运行时和确有差异的交互。
+- 手机、平板与桌面的尺寸、鼠标和键盘差异通过共享组件的自适应布局、能力参数和回调表达。
+- 修改现有分叉页面时，在本次功能范围内逐步收敛，保留现有行为；不借此无边界重写整应用，也不把尚未迁移的页面称为已经共享。
+- **涉及页面新增、桌面 UI 改版、跨端行为修复或共享组件提取时，必须先读 [CMP 共享 UI 指导](docs/architecture/shared-ui-guidelines.md)**，按其中的边界和验收要求实现。
 
 ## Testing Guidelines
 Uses JUnit5, Kotest, MockK, and MockWebServer for unit tests, plus AndroidX Test, Hilt, and Room testing. Test files typically named `*Test.kt`, `*IntegrationTest.kt`, or `*PropertyTest.kt`. Unit tests use JUnit Platform (`useJUnitPlatform()`). Changes to parser flows, networking, database, downloads, or reader behavior should include coverage or at least pass a compile/test check.

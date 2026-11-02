@@ -35,17 +35,25 @@ class SourceHealthClassifierTest {
     }
 
     @Test
-    fun `a single failure is not enough`() {
-        assertEquals(SourceHealthStatus.HEALTHY, SourceHealthClassifier.classify(ok, listOf(failed(1)), now).status)
+    fun `a single failure only makes the source suspicious`() {
+        val verdict = SourceHealthClassifier.classify(ok, listOf(failed(1)), now)
+        assertEquals(SourceHealthStatus.SUSPICIOUS, verdict.status)
+        assertEquals(false, verdict.status.needsAttention)
     }
 
     @Test
-    fun `a recent success clears failing`() {
+    fun `mixed results only make the source suspicious`() {
+        // One entry failed, another one checked fine: that is a network hiccup, not a broken source.
         val success = TrackSignal(TrackEntity.RESULT_NO_UPDATE, now - day, null)
-        assertEquals(
-            SourceHealthStatus.HEALTHY,
-            SourceHealthClassifier.classify(ok, listOf(failed(1), failed(2), success), now).status,
-        )
+        val verdict = SourceHealthClassifier.classify(ok, listOf(failed(1), failed(2), success), now)
+        assertEquals(SourceHealthStatus.SUSPICIOUS, verdict.status)
+        assertEquals(false, verdict.status.needsAttention)
+    }
+
+    @Test
+    fun `a recent success without failures stays healthy`() {
+        val success = TrackSignal(TrackEntity.RESULT_NO_UPDATE, now - day, null)
+        assertEquals(SourceHealthStatus.HEALTHY, SourceHealthClassifier.classify(ok, listOf(success), now).status)
     }
 
     @Test
@@ -65,8 +73,25 @@ class SourceHealthClassifierTest {
     }
 
     @Test
-    fun `disabled sources still work so they need no attention`() {
+    fun `suspicious wins over disabled but needs no attention`() {
+        val verdict = SourceHealthClassifier.classify(ok.copy(isDisabled = true), listOf(failed(1)), now)
+        assertEquals(SourceHealthStatus.SUSPICIOUS, verdict.status)
+    }
+
+    @Test
+    fun `only uninstalled broken and failing sources need attention`() {
         assertEquals(false, SourceHealthStatus.DISABLED.needsAttention)
+        assertEquals(false, SourceHealthStatus.SUSPICIOUS.needsAttention)
+        assertEquals(false, SourceHealthStatus.HEALTHY.needsAttention)
         assertEquals(true, SourceHealthStatus.FAILING.needsAttention)
+        assertEquals(true, SourceHealthStatus.BROKEN.needsAttention)
+        assertEquals(true, SourceHealthStatus.UNINSTALLED.needsAttention)
+    }
+
+    @Test
+    fun `groups are ordered attention first then suspicious then disabled then healthy`() {
+        assertEquals(true, SourceHealthStatus.FAILING.sectionRank < SourceHealthStatus.SUSPICIOUS.sectionRank)
+        assertEquals(true, SourceHealthStatus.SUSPICIOUS.sectionRank < SourceHealthStatus.DISABLED.sectionRank)
+        assertEquals(true, SourceHealthStatus.DISABLED.sectionRank < SourceHealthStatus.HEALTHY.sectionRank)
     }
 }

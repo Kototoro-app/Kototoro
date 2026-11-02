@@ -22,7 +22,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -53,6 +52,7 @@ import org.skepsun.kototoro.core.exceptions.resolve.ExceptionResolver
 import org.skepsun.kototoro.core.exceptions.resolve.SnackbarErrorObserver
 import kotlinx.coroutines.runBlocking
 import org.skepsun.kototoro.core.model.getContentType
+import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.core.model.unwrap
 import org.skepsun.kototoro.core.model.looksLikeLocalVideoContent
 import org.skepsun.kototoro.core.model.parcelable.ParcelableContent
@@ -60,6 +60,7 @@ import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.nav.ContentIntent
 import org.skepsun.kototoro.core.nav.ReaderIntent
 import org.skepsun.kototoro.core.parser.ContentDataRepository
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.util.ext.getParcelableExtraCompat
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentType
@@ -167,6 +168,17 @@ class ReaderActivity :
 
     override val isReaderControlsVisible: Boolean
         get() = if (::composeReaderController.isInitialized) composeReaderController.isChromeVisible else areControlsVisible
+
+    /**
+     * Whether the chrome is on screen right now. The Compose reader starts with its chrome hidden while
+     * [areControlsVisible] starts true, so toggling off the legacy flag swallowed the first remote press.
+     */
+    private val isChromeOnScreen: Boolean
+        get() = if (::composeReaderController.isInitialized) {
+            composeReaderController.isChromeControlsVisible
+        } else {
+            areControlsVisible
+        }
 
     private lateinit var scrollTimer: ScrollTimer
     private lateinit var pageSaveHelper: PageSaveHelper
@@ -386,6 +398,10 @@ class ReaderActivity :
                     onContinuousHorizontalReversedChanged = { reversed ->
                         settings.isContinuousHorizontalReversed = reversed
                         composeReaderController.updateOptions { copy(continuousHorizontalReversed = reversed) }
+                    },
+                    onChaptersReversedChanged = { reversed ->
+                        viewModel.setChapterOrderReversed(reversed)
+                        composeReaderController.updateOptions { copy(chaptersReversed = reversed) }
                     },
                     onWebtoonSceneReaderChanged = { enabled ->
                         settings.isExperimentalSceneReaderEnabled = enabled
@@ -788,6 +804,20 @@ class ReaderActivity :
             updateTranslationToggleButton()
             viewModel.refreshTranslationDisplay()
         }.launchIn(lifecycleScope)
+        // Chapters that the chapter list translated in the background open translated: the layers are
+        // already on disk, so demanding a tap on the translate button only hid a finished result.
+        combine(
+            viewModel.uiState.map { it?.chapter?.id },
+            viewModel.translatedChapterIds,
+        ) { chapterId, translatedIds -> chapterId != null && chapterId in translatedIds }
+            .distinctUntilChanged()
+            .onEach { isTranslatedChapter ->
+                if (isTranslatedChapter && !settings.isReaderTranslationEnabled) {
+                    settings.isReaderTranslationShowTranslated = true
+                    settings.isReaderTranslationEnabled = true
+                }
+            }
+            .launchIn(lifecycleScope)
         settings.observeAsFlow(AppSettings.KEY_EINK_MODE) { isEInkModeEnabled }
             .onEach { enabled ->
                 if (!enabled) eInkRefreshPolicy.reset()
@@ -1159,6 +1189,9 @@ class ReaderActivity :
             ComposeReaderOptionsState(
                 mode = composeReaderController.readerMode,
                 continuousHorizontalReversed = settings.isContinuousHorizontalReversed,
+                chaptersReversed = viewModel.isChapterOrderReversed.value,
+                // A local chapter is already on the device, so its download cell has nothing to fetch.
+                canDownloadChapter = viewModel.getContentOrNull()?.isLocal == false,
                 webtoonSceneReader = settings.isExperimentalSceneReaderEnabled,
                 pagedSceneReader = settings.isExperimentalPagedSceneReaderEnabled,
                 animation = settings.readerAnimation,
@@ -1225,7 +1258,16 @@ class ReaderActivity :
         }.getOrNull()
         val url = chapterUrl?.takeIf { it.startsWith("http", ignoreCase = true) }
             ?: manga.publicUrl.takeIf { it.startsWith("http", ignoreCase = true) }
-        if (url != null) router.openBrowser(url, manga.source, chapter.title) else router.openBrowser(manga)
+        when {
+            url != null -> router.openBrowser(url, manga.source, chapter.title)
+            manga.url.startsWith("http", ignoreCase = true) -> router.openBrowser(manga)
+            // Local files and other non-http content have no page to show: the in-app browser would
+            // only render net::ERR_ACCESS_DENIED for a file:// path.
+            else -> composeReaderController.showMessage(
+                getString(R.string.open_in_browser_unavailable),
+                TOAST_DURATION,
+            )
+        }
     }
 
     override fun scrollBy(delta: Int, smooth: Boolean): Boolean {
@@ -1233,14 +1275,15 @@ class ReaderActivity :
     }
 
     override fun toggleUiVisibility() {
-        if (!areControlsVisible) {
+        val isVisible = isChromeOnScreen
+        if (!isVisible) {
             if (scrollTimer.isActive.value && settings.isReaderAutoscrollPauseOnUi && !scrollTimer.isManuallyPaused.value) {
                 scrollTimer.setManuallyPaused(true)
                 composeReaderController.updateAutoScroll { copy(visible = true) }
                 return
             }
         }
-        setUiIsVisible(!areControlsVisible)
+        setUiIsVisible(!isVisible)
     }
 
     override fun isReaderResumed(): Boolean {
@@ -1256,11 +1299,33 @@ class ReaderActivity :
     }
 
     override fun onSavePageClick() {
-        viewModel.saveCurrentPage(pageSaveHelper)
+        withSpreadPageChoice { page -> viewModel.saveCurrentPage(pageSaveHelper, page) }
     }
 
     override fun onCropNoteClick() {
-        viewModel.cropAndAnnotateCurrentPage(pageSaveHelper)
+        withSpreadPageChoice { page -> viewModel.cropAndAnnotateCurrentPage(pageSaveHelper, page) }
+    }
+
+    /**
+     * On a two-page spread, asks which page to use unless a long press already picked a side. Left and
+     * right are as shown on screen, so right-to-left reading mirrors the spread's reading order.
+     */
+    private fun withSpreadPageChoice(action: (ReaderPage?) -> Unit) {
+        val spread = viewModel.getVisibleSpreadPages()
+        if (!isDoubleReaderMode || spread.size != 2 || viewModel.targetPagePosition.value != null) {
+            action(null)
+            return
+        }
+        val reversed = composeReaderController.readerMode == ReaderMode.REVERSED
+        val left = if (reversed) spread[1] else spread[0]
+        val right = if (reversed) spread[0] else spread[1]
+        composeReaderController.showSelectionDialog(
+            title = getString(R.string.reader_spread_page_choice),
+            entries = listOf(
+                getString(R.string.reader_spread_left_page, left.index + 1),
+                getString(R.string.reader_spread_right_page, right.index + 1),
+            ),
+        ) { which -> action(if (which == 0) left else right) }
     }
 
     override fun onScrollTimerClick(isLongClick: Boolean) {
@@ -1625,13 +1690,13 @@ private fun ReaderLoadingErrorDialog(
         text = { Text(message) },
         confirmButton = {
             if (resolveActionStringId != 0) {
-                TextButton(onClick = onResolve) {
+                TvTextButton(onClick = onResolve) {
                     Text(stringResource(resolveActionStringId))
                 }
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            TvTextButton(onClick = onDismiss) {
                 Text(stringResource(R.string.close))
             }
         },
@@ -1675,13 +1740,13 @@ private fun IncognitoModeDialog(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
             ) {
-                TextButton(onClick = onDisabledSelected) {
+                TvTextButton(onClick = onDisabledSelected) {
                     Text(stringResource(R.string.disable))
                 }
-                TextButton(onClick = onDismissRequest) {
+                TvTextButton(onClick = onDismissRequest) {
                     Text(stringResource(android.R.string.cancel))
                 }
-                TextButton(onClick = onIncognitoModeSelected) {
+                TvTextButton(onClick = onIncognitoModeSelected) {
                     Text(stringResource(R.string.incognito))
                 }
             }

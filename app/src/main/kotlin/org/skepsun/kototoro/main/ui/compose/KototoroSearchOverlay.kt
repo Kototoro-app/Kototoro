@@ -108,6 +108,7 @@ import org.skepsun.kototoro.core.ui.compose.rememberResolvedSourceTitle
 import org.skepsun.kototoro.core.ui.compose.performSelectionHapticFeedback
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
+import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.core.util.ext.mangaExtra
@@ -136,6 +137,17 @@ private const val SearchOverlayAnimationDurationMillis = 260
 private val SearchOverlayCollapsedHeight = 56.dp
 private val SearchOverlayCollapsedHorizontalPadding = 10.dp
 private val SearchSuggestionCardWidth = 108.dp
+
+// TV suggestion shelves match the results screen: five 174dp posters per 1920px row instead of
+// phone-sized thumbnails that read as stamps from the couch.
+private val TvSearchSuggestionCardWidth = 174.dp
+
+@Composable
+private fun searchSuggestionCardWidth(): Dp = if (LocalUiPresentationConfig.current.isTv) {
+    TvSearchSuggestionCardWidth
+} else {
+    SearchSuggestionCardWidth
+}
 
 private data class SearchOverlayStyle(
     val collapsedCornerRadius: Dp,
@@ -241,6 +253,10 @@ fun KototoroSearchOverlay(
 ) {
     val keyboardController = LocalSoftwareKeyboardController.current
     val hapticFeedback = LocalHapticFeedback.current
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val appSettings = remember(context.applicationContext) {
+        org.skepsun.kototoro.core.prefs.AppSettings(context.applicationContext)
+    }
     val isTvPresentation = LocalUiPresentationConfig.current.isTv
     val navigationBarPadding = WindowInsets.navigationBars.asPaddingValues()
     val statusBarPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
@@ -251,7 +267,7 @@ fun KototoroSearchOverlay(
     var selectedSourceTypes by remember(initialSourceTypes) { mutableStateOf(initialSourceTypes.ifEmpty { ALL_SOURCE_TYPES }) }
     var selectedContentKinds by remember(initialContentKinds) { mutableStateOf(initialContentKinds.ifEmpty { ALL_SEARCH_CONTENT_KINDS }) }
     var pinnedOnly by remember { mutableStateOf(false) }
-    var hideEmpty by remember { mutableStateOf(false) }
+    var hideEmpty by remember { mutableStateOf(appSettings.isSearchHideEmptySourcesEnabled) }
     var advancedTitle by remember { mutableStateOf("") }
     var advancedTags by remember { mutableStateOf("") }
     var advancedAuthor by remember { mutableStateOf("") }
@@ -320,6 +336,11 @@ fun KototoroSearchOverlay(
             author = advancedAuthor.trim(),
         ).takeIf {
             kind == SearchKind.ADVANCED && (it.title.isNotBlank() || it.tags.isNotBlank() || it.author.isNotBlank())
+        }
+        // The choice is remembered for the next search screen; store it here too, so turning it off in this
+        // sheet wins over the remembered value instead of being re-enabled when the results screen opens.
+        if (appSettings.isSearchHideEmptySourcesEnabled != hideEmpty) {
+            appSettings.isSearchHideEmptySourcesEnabled = hideEmpty
         }
         onSearchWithOptions(
             searchQuery,
@@ -454,7 +475,8 @@ fun KototoroSearchOverlay(
                                 color = style.inputContainerColor,
                                 shape = RoundedCornerShape(style.inputCornerRadius),
                             )
-                            .focusRequester(focusRequester),
+                            .focusRequester(focusRequester)
+                            .tvTextInputFocusEscape(horizontalWhenIdle = true),
                         placeholder = {
                             Text(
                                 text = if (activeLibraryScope != null) {
@@ -1119,8 +1141,8 @@ private fun SearchSuggestionRow(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .tvFocusable(shape = RoundedCornerShape(style.rowCornerRadius), addFocusTarget = false),
+            .tvFocusable(shape = RoundedCornerShape(style.rowCornerRadius), addFocusTarget = false)
+            .clickable(onClick = onClick),
         shape = RoundedCornerShape(style.rowCornerRadius),
         color = containerColor,
     ) {
@@ -1170,8 +1192,8 @@ private fun SourceSuggestionRow(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(style.rowCornerRadius))
-            .clickable(onClick = onClick)
             .tvFocusable(shape = RoundedCornerShape(style.rowCornerRadius), addFocusTarget = false)
+            .clickable(onClick = onClick)
             .background(style.rowContainerColor)
             .padding(start = 14.dp, top = 6.dp, end = 8.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -1247,8 +1269,8 @@ private fun LibraryMatchRow(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(style.rowCornerRadius))
-            .clickable(onClick = onClick)
             .tvFocusable(shape = RoundedCornerShape(style.rowCornerRadius), addFocusTarget = false)
+            .clickable(onClick = onClick)
             .background(style.rowContainerColor)
             .padding(horizontal = 10.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -1304,9 +1326,9 @@ private fun TrackingEntitySuggestionCard(
     val typeTitle = stringResource(entity.entityType.titleResId())
     Surface(
         modifier = Modifier
-            .width(SearchSuggestionCardWidth)
-            .clickable(onClick = onClick)
-            .tvFocusable(shape = RoundedCornerShape(style.cardCornerRadius), addFocusTarget = false),
+            .width(searchSuggestionCardWidth())
+            .tvFocusable(shape = RoundedCornerShape(style.cardCornerRadius), addFocusTarget = false)
+            .clickable(onClick = onClick),
         shape = RoundedCornerShape(style.cardCornerRadius),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.36f)),
@@ -1388,9 +1410,9 @@ private fun ContentSuggestionCard(
 
     Surface(
         modifier = Modifier
-            .width(SearchSuggestionCardWidth)
-            .clickable(onClick = onClick)
-            .tvFocusable(shape = RoundedCornerShape(style.cardCornerRadius), addFocusTarget = false),
+            .width(searchSuggestionCardWidth())
+            .tvFocusable(shape = RoundedCornerShape(style.cardCornerRadius), addFocusTarget = false)
+            .clickable(onClick = onClick),
         shape = RoundedCornerShape(style.cardCornerRadius),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
         border = BorderStroke(
@@ -1449,9 +1471,9 @@ private fun LocalEntitySuggestionCard(
 
     Surface(
         modifier = Modifier
-            .width(SearchSuggestionCardWidth)
-            .clickable(onClick = onClick)
-            .tvFocusable(shape = RoundedCornerShape(style.cardCornerRadius), addFocusTarget = false),
+            .width(searchSuggestionCardWidth())
+            .tvFocusable(shape = RoundedCornerShape(style.cardCornerRadius), addFocusTarget = false)
+            .clickable(onClick = onClick),
         shape = RoundedCornerShape(style.cardCornerRadius),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
         border = BorderStroke(

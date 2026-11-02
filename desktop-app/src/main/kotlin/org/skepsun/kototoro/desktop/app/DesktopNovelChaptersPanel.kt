@@ -25,12 +25,13 @@ internal fun DesktopNovelChaptersPanel(
     onDismiss: () -> Unit,
 ) {
     val chapters = state.content?.chapters.orEmpty()
-    val currentIndex = chapters.indexOfFirst { it.id == state.novel?.chapter?.id }
-    val directory = remember(chapters) {
+    val novel = state.novel
+    val currentIndex = chapters.indexOfFirst { it.id == novel?.chapter?.id }
+    val directory = remember(chapters, novel?.chapterTitles) {
         chapters.map {
             NovelChapterDirectoryEntry(
                 id = it.id,
-                title = it.title,
+                title = novel?.titleOf(it),
                 volume = it.volume,
                 groupTitle = it.branch?.takeIf(String::isNotBlank).orEmpty(),
                 searchAliases = listOfNotNull(it.branch, it.scanlator),
@@ -46,13 +47,13 @@ internal fun DesktopNovelChaptersPanel(
     val theme = state.novelSettings.theme
     val base = MaterialTheme.colorScheme
     val colors = remember(theme) {
-        NovelReaderChromeColors(Color(theme.background), Color(theme.text), Color(theme.muted))
+        NovelReaderChromeColors(Color(theme.palette.background), Color(theme.palette.text), Color(theme.palette.secondaryText))
     }
     val scheme = remember(base, colors) { novelChromeColorScheme(base, colors) }
     MaterialTheme(colorScheme = scheme) {
         ReaderPanelHost(
             colors = readerPanelColors(colors.background, colors.content, colors.secondary, colors.content,
-                isDark = theme == DesktopNovelTheme.DARK),
+                isDark = theme.palette.isDark),
             surfaceMode = ReaderPanelSurfaceMode.Opaque,
             onDismissRequest = onDismiss,
             openExpanded = true,
@@ -61,7 +62,7 @@ internal fun DesktopNovelChaptersPanel(
                 ReaderChapterPanelHeader(
                     title = state.content?.title.orEmpty(),
                     subtitle = readerChapterPanelSubtitleText(listOf(
-                        chapters.getOrNull(currentIndex)?.title,
+                        chapters.getOrNull(currentIndex)?.let { novel?.titleOf(it) ?: it.title },
                         if (currentIndex >= 0) "${currentIndex + 1}/${chapters.size}" else null,
                     )),
                     actions = {

@@ -10,23 +10,40 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
+import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
+import org.skepsun.kototoro.reader.novel.tts.TtsPlaybackSpeed
+import org.skepsun.kototoro.reader.novel.tts.TtsPlaybackPitch
+import androidx.compose.ui.platform.LocalContext
+import androidx.preference.PreferenceManager
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import kotlinx.coroutines.delay
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.compose.KototoroLoadingIndicator
@@ -42,9 +59,11 @@ internal fun NovelReaderOverlay(
     onMessageExpired: (Long) -> Unit,
     ttsVisible: Boolean,
     ttsState: TtsState,
+    ttsSpeed: Float,
     onTtsPrevious: () -> Unit,
     onTtsPlayPause: () -> Unit,
     onTtsNext: () -> Unit,
+    onTtsSpeedChange: (Float) -> Unit,
     onTtsVoice: () -> Unit,
     onTtsClose: () -> Unit,
 ) {
@@ -52,7 +71,20 @@ internal fun NovelReaderOverlay(
     LaunchedEffect(message) {
         if (message != null) displayedMessage = message
     }
-    Box(modifier = Modifier.fillMaxSize()) {
+    // 朗读条出现时没有任何节点持有焦点：顶栏是收起的，方向键也不会走到这里。
+    // 主动把焦点交给播放/暂停键，并逐帧重试，直到节点真正挂上（淡入要先完成放置）。
+    val isTv = LocalUiPresentationConfig.current.isTv
+    val ttsPlayPauseFocus = remember { FocusRequester() }
+    LaunchedEffect(ttsVisible, isTv) {
+        if (!isTv || !ttsVisible) return@LaunchedEffect
+        repeat(TtsFocusAttempts) {
+            withFrameNanos { }
+            if (runCatching { ttsPlayPauseFocus.requestFocus() }.isSuccess) return@LaunchedEffect
+        }
+    }
+    // 选项面板是同一层里的兄弟节点、且后组合，会盖住贴底的提示条；提示必须浮在它上面，
+    // 否则"按了快捷动作却什么都没发生"在电视上完全无法诊断。
+    Box(modifier = Modifier.fillMaxSize().zIndex(1f)) {
         AnimatedVisibility(
             visible = loading,
             enter = fadeIn().whenReaderAnimationsEnabled(animationsEnabled),
@@ -110,8 +142,10 @@ internal fun NovelReaderOverlay(
                         if (ttsState == TtsState.PLAYING) R.drawable.ic_pause else R.drawable.ic_play,
                         stringResource(if (ttsState == TtsState.PLAYING) R.string.pause else R.string.play),
                         onTtsPlayPause,
+                        focusRequester = ttsPlayPauseFocus.takeIf { isTv },
                     )
                     TtsButton(R.drawable.ic_next, stringResource(R.string.next), onTtsNext)
+                    TtsSpeedButton(ttsSpeed, onTtsSpeedChange)
                     TtsButton(R.drawable.ic_voice_input, stringResource(R.string.tts_settings_title), onTtsVoice)
                     TtsButton(R.drawable.ic_tts_close, stringResource(R.string.close), onTtsClose)
                 }
@@ -121,8 +155,97 @@ internal fun NovelReaderOverlay(
 }
 
 @Composable
-private fun TtsButton(icon: Int, description: String, onClick: () -> Unit) {
-    IconButton(onClick = onClick) {
+private fun TtsButton(
+    icon: Int,
+    description: String,
+    onClick: () -> Unit,
+    focusRequester: FocusRequester? = null,
+) {
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier
+            .then(focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier)
+            .tvFocusable(shape = CircleShape, addFocusTarget = false),
+    ) {
         Icon(painterResource(icon), contentDescription = description)
     }
 }
+
+/** Current speed plus independent speed and pitch presets for the running TTS playback. */
+@Composable
+internal fun TtsSpeedButton(speed: Float, onSpeedChange: (Float) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    val title = stringResource(R.string.tts_speed)
+    val context = LocalContext.current
+    val prefs = remember(context) { PreferenceManager.getDefaultSharedPreferences(context) }
+    val isTv = LocalUiPresentationConfig.current.isTv
+    // 遥控器只能靠方向键移动焦点，菜单若从第一项起步，用户每次都得从头数到当前倍速。
+    // 电视上给每项挂一个 FocusRequester，展开时把焦点直接放到当前值上。
+    val optionFocus = remember {
+        TtsPlaybackSpeed.OPTIONS.associateWith { FocusRequester() }
+    }
+    Box {
+        TextButton(
+            onClick = { expanded = true },
+            modifier = Modifier
+                .tvFocusable(shape = MaterialTheme.shapes.small, addFocusTarget = false)
+                .semantics { contentDescription = "$title ${TtsPlaybackSpeed.label(speed)}" },
+        ) {
+            Text(TtsPlaybackSpeed.label(speed), style = MaterialTheme.typography.labelLarge)
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            Text(title, style = MaterialTheme.typography.labelMedium,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+            TtsPlaybackSpeed.OPTIONS.forEach { option ->
+                TvDropdownMenuItem(
+                    text = {
+                        Text(
+                            TtsPlaybackSpeed.label(option),
+                            color = if (option == speed) MaterialTheme.colorScheme.primary else Color.Unspecified,
+                        )
+                    },
+                    onClick = {
+                        expanded = false
+                        onSpeedChange(option)
+                    },
+                    modifier = if (isTv) {
+                        Modifier.focusRequester(optionFocus.getValue(option))
+                    } else {
+                        Modifier
+                    },
+                )
+            }
+            HorizontalDivider()
+            Text(stringResource(R.string.tts_pitch), style = MaterialTheme.typography.labelMedium,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+            val currentPitch = TtsPlaybackPitch.read(prefs)
+            TtsPlaybackPitch.OPTIONS.forEach { option ->
+                TvDropdownMenuItem(
+                    text = {
+                        Text(TtsPlaybackPitch.label(option),
+                            color = if (option == currentPitch) MaterialTheme.colorScheme.primary else Color.Unspecified,
+                        )
+                    },
+                    onClick = {
+                        TtsPlaybackPitch.write(prefs, option)
+                        expanded = false
+                    },
+                )
+            }
+        }
+        if (isTv) {
+            val currentFocus = optionFocus.getValue(
+                TtsPlaybackSpeed.OPTIONS.firstOrNull { it == speed } ?: TtsPlaybackSpeed.OPTIONS.first(),
+            )
+            LaunchedEffect(expanded) {
+                if (!expanded) return@LaunchedEffect
+                repeat(TtsFocusAttempts) {
+                    withFrameNanos { }
+                    if (runCatching { currentFocus.requestFocus() }.isSuccess) return@LaunchedEffect
+                }
+            }
+        }
+    }
+}
+
+private const val TtsFocusAttempts = 20

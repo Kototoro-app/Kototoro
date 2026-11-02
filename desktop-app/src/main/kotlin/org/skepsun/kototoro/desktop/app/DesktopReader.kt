@@ -4,7 +4,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.*
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,7 +41,8 @@ internal fun DesktopReader(controller: DesktopController, state: DesktopAppState
         controller.backToDetails()
     }
     val settings = state.readerSettings
-    val continuous = settings.mode == DesktopReaderMode.CONTINUOUS
+    val continuous = settings.mode.isContinuous
+    val horizontalStrip = settings.mode == DesktopReaderMode.CONTINUOUS_HORIZONTAL
     val layout = remember(state.pages, state.chapter, state.readerImages, state.readerGeometry, settings,
         state.pageIndex) {
         DesktopReaderLayout(state.pages, state.chapter?.id ?: 0L, state.readerImages, settings, state.pageIndex,
@@ -100,7 +101,8 @@ internal fun DesktopReader(controller: DesktopController, state: DesktopAppState
             // Android's "show menu" action opens the reader options with the controls.
             val showMenu = { controlsVisible = true; panel = DesktopReaderPanel.OPTIONS }
             if (continuous) DesktopScrollReader(controller, state, focus, closing, Modifier.fillMaxSize(),
-                onToggleControls = onToggleControls, autoScroll, showMenu)
+                onToggleControls = onToggleControls, autoScroll, showMenu, horizontal = horizontalStrip,
+                reversed = settings.continuousHorizontalReversed)
             else DesktopReaderCanvas(controller, state, focus, enabled, Modifier.fillMaxSize(), controlsVisible,
                 onToggleControls = onToggleControls, autoScroll, showMenu)
             DesktopReaderChrome(controller, state, controlsVisible, enabled, continuous, layout, autoScroll,
@@ -180,20 +182,23 @@ internal val LocalDesktopReaderPageStyle = staticCompositionLocalOf {
     DesktopReaderPageStyle(Color(0xFF15191F), null, Color.White)
 }
 
+/** Background colours of Android's reader backgrounds; the player's backdrop offers the same five as its video choice. */
+internal fun DesktopReaderBackground.color(appDark: Boolean): Color = when (this) {
+    DesktopReaderBackground.DEFAULT -> Color(0xFF15191F)
+    DesktopReaderBackground.AUTO -> if (appDark) Color(0xFF15191F) else Color(0xFFF4F2EE)
+    DesktopReaderBackground.LIGHT -> Color(0xFFF4F2EE)
+    DesktopReaderBackground.DARK -> Color(0xFF1F1F23)
+    DesktopReaderBackground.WHITE -> Color.White
+    DesktopReaderBackground.BLACK -> Color.Black
+}
+
 /** Background colours of Android's reader backgrounds; the book effect tints light ones as Android's tint does. */
 @Composable
 internal fun rememberReaderPageStyle(settings: DesktopReaderSettings, appearance: DesktopAppearance): DesktopReaderPageStyle {
     val systemDark = androidx.compose.foundation.isSystemInDarkTheme()
     val appDark = when (appearance) { DesktopAppearance.LIGHT -> false; DesktopAppearance.DARK -> true; else -> systemDark }
     return remember(settings.background, settings.colorFilter, appDark) {
-        val base = when (settings.background) {
-            DesktopReaderBackground.DEFAULT -> Color(0xFF15191F)
-            DesktopReaderBackground.AUTO -> if (appDark) Color(0xFF15191F) else Color(0xFFF4F2EE)
-            DesktopReaderBackground.LIGHT -> Color(0xFFF4F2EE)
-            DesktopReaderBackground.DARK -> Color(0xFF1F1F23)
-            DesktopReaderBackground.WHITE -> Color.White
-            DesktopReaderBackground.BLACK -> Color.Black
-        }
+        val base = settings.background.color(appDark)
         val light = base.luminance() > .5f
         val background = if (settings.colorFilter.book && light) Color(base.red, base.green,
             base.blue * org.skepsun.kototoro.reader.domain.ReaderColorMatrix.BOOK_BLUE_FACTOR) else base
@@ -206,10 +211,12 @@ internal fun rememberReaderPageStyle(settings: DesktopReaderSettings, appearance
 @Composable
 private fun ReaderTheme(content: @Composable () -> Unit) {
     val accent = Color(0xFFA9C7FF)
-    MaterialTheme(colors = darkColors(primary = accent, secondary = accent,
-        onPrimary = Color(0xFF003062), onSecondary = Color(0xFF003062),
-        background = Color(0xFF15191F), surface = Color(0xFF232933))) {
-        CompositionLocalProvider(LocalContentColor provides MaterialTheme.colors.onSurface, content = content)
+    MaterialTheme(colorScheme = darkColorScheme(primary = accent, onPrimary = Color(0xFF003062),
+        secondary = accent, onSecondary = Color(0xFF003062),
+        background = Color(0xFF15191F), onBackground = Color.White,
+        surface = Color(0xFF232933), onSurface = Color.White),
+        typography = MaterialTheme.typography, shapes = MaterialTheme.shapes) {
+        CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface, content = content)
     }
 }
 
@@ -221,20 +228,20 @@ internal fun ReaderImage(page: DesktopReaderImage?, pageIndex: Int, modifier: Mo
         value = null
         var unpublished: Bitmap? = null
         if (path != null) try {
-            val decoded = withContext(Dispatchers.IO) {
+            val decoded = withContext(DesktopDispatchers.decode) {
                 DesktopImageDecoder.decode(path).also { unpublished = it }
             }
             // Compose adopts this bounded bitmap. Close only unpublished results on cancellation/failure.
             value = decoded.asComposeImageBitmap()
             unpublished = null
         } catch (error: CancellationException) { throw error }
-        catch (_: Exception) { failure = "页面解码失败，请重新加载" }
+        catch (_: Exception) { failure = desktopText("reader.decodeFailed") }
         finally { unpublished?.close() }
     }
     val style = LocalDesktopReaderPageStyle.current
     Box(modifier, contentAlignment = Alignment.Center) {
         val image = bitmap
-        if (image == null) Text(failure ?: "正在准备第 ${pageIndex + 1} 页…", color = style.text)
+        if (image == null) Text(failure ?: desktopText("reader.pagePreparing", pageIndex + 1), color = style.text)
         else {
             // A cropped page shows only its content bounds; the decode may be downscaled, so scale them to it.
             val crop = page?.crop?.takeIf { page.width > 0 && page.height > 0 }
@@ -250,7 +257,7 @@ internal fun ReaderImage(page: DesktopReaderImage?, pageIndex: Int, modifier: Mo
                             (crop.height * sy).toInt().coerceIn(1, image.height - top)))
                 }
             }
-            Image(painter, "第 ${pageIndex + 1} 页", contentScale = ContentScale.FillBounds,
+            Image(painter, desktopText("reader.pageLabel", pageIndex + 1), contentScale = ContentScale.FillBounds,
                 colorFilter = style.colorFilter, modifier = Modifier.fillMaxSize().testTag("reader-page"))
         }
     }

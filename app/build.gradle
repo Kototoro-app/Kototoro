@@ -1,3 +1,14 @@
+import org.gradle.api.DefaultTask
+import org.gradle.api.file.ConfigurableFileCollection
+import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.tasks.CacheableTask
+import org.gradle.api.tasks.InputFile
+import org.gradle.api.tasks.InputFiles
+import org.gradle.api.tasks.OutputDirectory
+import org.gradle.api.tasks.PathSensitive
+import org.gradle.api.tasks.PathSensitivity
+import org.gradle.api.tasks.TaskAction
 import java.time.LocalDateTime
 import java.util.Locale
 import java.util.zip.ZipFile
@@ -51,8 +62,8 @@ android {
 		// Phase E: targetSdk 37. Large-screen orientation locks are skipped in
 		// ScreenOrientationHelper to match Android 17 behavior.
 		targetSdk = 37
-		versionCode = 1243
-		versionName = '2.2.10'
+		versionCode = 1250
+		versionName = '2.3.6'
 		manifestPlaceholders = [
 			appClassName: 'org.skepsun.kototoro.KototoroApp'
 		]
@@ -68,6 +79,11 @@ android {
 			localProperties.load(new FileInputStream(localPropertiesFile))
 		}
 		resValue 'string', 'tg_backup_bot_token', localProperties.getProperty('tg_backup_bot_token', '')
+		buildConfigField 'String', 'MANGABAKA_CLIENT_ID', groovy.json.JsonOutput.toJson(
+			providers.gradleProperty('mangabakaClientId').getOrElse(
+				localProperties.getProperty('mangabaka_client_id', 'vCGYJtdnDzunRzShmuaKlkjwVKkMIwcA')
+			)
+		)
 		def dandanAppId = (project.findProperty('dandanplay.appId')
 			?: localProperties.getProperty('dandanplay.appId')
 			?: 'demo_app_id').toString()
@@ -208,6 +224,22 @@ android {
 	// AGP 9 removed the legacy applicationVariants API; nightly version overrides use the
 	// Variant API instead (AGENTS.md: nightly versionCode/versionName are date-generated).
 	androidComponents {
+		onVariants(selector().all(), { variant ->
+			def capName = variant.name.capitalize()
+			def genUiStrings = tasks.register("generate${capName}UiStringIds", GenerateAndroidUiStringIdsTask) {
+				uiSources.from(
+					fileTree(rootProject.file('core-ui/src/commonMain/kotlin')) { include '**/*.kt' },
+					fileTree('src/main/kotlin') { include '**/*.kt' },
+				)
+				resourceCatalogs.from(
+					fileTree('src/main/res/values') { include '*.xml' },
+				)
+				contentTypesFile.set(
+					rootProject.file('parser-api/src/commonMain/kotlin/org/skepsun/kototoro/parsers/model/ContentType.kt'),
+				)
+			}
+			variant.sources.kotlin.addGeneratedSourceDirectory(genUiStrings) { it.outputDir }
+		})
 		onVariants(selector().withName('nightly'), { variant ->
 			def now = LocalDateTime.now()
 			variant.outputs.each { output ->
@@ -286,8 +318,6 @@ def cloudstreamSanitizedJarTask = tasks.register('prepareCloudstreamRuntimeJar',
 		}
 		zipTree(sourceJar)
 	}) {
-		// Kototoro supplies an Android-aware YouTube extractor implementation.
-		exclude 'com/lagradost/cloudstream3/extractors/Youtube*.class'
 		// library:jvmJar contains a no-op JVM resolver. Kototoro supplies the Android implementation.
 		exclude 'com/lagradost/cloudstream3/network/WebViewResolver*.class'
 		// The JVM context helper always returns null. Kototoro supplies the Android implementation.
@@ -344,6 +374,8 @@ def cloudstreamSanitizedJarTask = tasks.register('prepareCloudstreamRuntimeJar',
 				'com/lagradost/cloudstream3/plugins/BasePlugin.class',
 				'com/lagradost/cloudstream3/utils/ExtractorApi.class',
 				'com/lagradost/cloudstream3/utils/JsInterpreterKt.class',
+				// The official NewPipe-backed extractor; the host bundles NewPipeExtractor for it (#608).
+				'com/lagradost/cloudstream3/extractors/YoutubeExtractor.class',
 			].each { requiredEntry ->
 				if (verifiedZipFile.getEntry(requiredEntry) == null) {
 					throw new GradleException("Sanitized Cloudstream jar is missing ${requiredEntry}")
@@ -422,12 +454,14 @@ dependencies {
 	implementation project(':core-backup')
 	// Shared identity and library-state merge/import rules.
 	implementation project(':core-domain')
+	implementation project(':core-library')
 	// Shared Google Drive HTTP protocol; Android supplies the Ktor OkHttp engine and authorization.
 	implementation project(':core-net')
 	implementation project(':core-cloudflare')
 	implementation project(':cloudstream-shared')
 	// Portable source protocol; the Android adapter reuses the existing repository factory.
 	implementation project(':core-source')
+	implementation project(':core-local')
 	// Reader semantics (scenes, geometry, planner contract) — pure JVM module extracted per
 	// improvement plan 2026-09 §8.2; app depends one-way on :reader-core (I1 compile boundary).
 	implementation project(':reader-core')
@@ -524,8 +558,13 @@ dependencies {
 	implementation libs.xsoup
 	implementation libs.jsonpath
 	
-	// Rhino JavaScript engine for Legado compatibility
+	// Rhino JavaScript engine for Legado compatibility (NewPipeExtractor runs YouTube's player JS on it too)
 	implementation libs.rhino
+	// Cloudstream's YouTube extractor and YouTube plugins resolve streams with NewPipeExtractor, as in the official app
+	implementation(libs.newpipe.extractor) {
+		// The javax.script adapter: Android has no javax.script, and NewPipe calls Rhino directly.
+		exclude group: 'org.mozilla', module: 'rhino-engine'
+	}
 	// QuickJS library (Android packaged)
 	implementation libs.quickjsKt
 
@@ -651,5 +690,126 @@ tasks.register('printVersionCode') {
 	def versionCode = android.defaultConfig.versionCode
 	doLast {
 		println versionCode
+	}
+}
+
+
+@CacheableTask
+abstract class GenerateAndroidUiStringIdsTask extends DefaultTask {
+	@InputFiles
+	@PathSensitive(PathSensitivity.RELATIVE)
+	abstract ConfigurableFileCollection getUiSources()
+
+	@InputFiles
+	@PathSensitive(PathSensitivity.RELATIVE)
+	abstract ConfigurableFileCollection getResourceCatalogs()
+
+	@InputFile
+	@PathSensitive(PathSensitivity.RELATIVE)
+	abstract RegularFileProperty getContentTypesFile()
+
+	@OutputDirectory
+	abstract DirectoryProperty getOutputDir()
+
+	static List<String> extractFirstArgs(String text, java.util.regex.Pattern callPattern) {
+		def args = []
+		def matcher = callPattern.matcher(text)
+		while (matcher.find()) {
+			int i = matcher.end()
+			int start = i
+			int depth = 1
+			boolean inStr = false
+			boolean esc = false
+			Integer firstEnd = null
+			while (i < text.length() && depth > 0) {
+				char ch = text.charAt(i)
+				if (inStr) {
+					if (esc) esc = false
+					else if (ch == (char) '\\') esc = true
+					else if (ch == (char) '"') inStr = false
+				} else {
+					if (ch == (char) '"') inStr = true
+					else if (ch == (char) '(') depth++
+					else if (ch == (char) ')') {
+						depth--
+						if (depth == 0 && firstEnd == null) firstEnd = i
+					} else if (ch == (char) ',' && depth == 1 && firstEnd == null) {
+						firstEnd = i
+					}
+				}
+				i++
+			}
+			if (firstEnd != null) args << text.substring(start, firstEnd)
+		}
+		return args
+	}
+
+	@TaskAction
+	void generate() {
+		def declaredStrings = new HashSet<String>()
+		def declaredArrays = new HashSet<String>()
+		resourceCatalogs.files.findAll { it.isFile() }.each { file ->
+			def root = new groovy.xml.XmlParser(false, false).parse(file)
+			root.children().each { node ->
+				def name = node.attribute('name')
+				if (!name) return
+				if (node.name() == 'string' || (node.name() == 'item' && node.attribute('type') == 'string')) {
+					declaredStrings << name.toString()
+				} else if (node.name() in ['string-array', 'array']) {
+					declaredArrays << name.toString()
+				}
+			}
+		}
+		def strCall = ~/\b(?:uiString|strings\.string|strings\.format)\s*\(/
+		def arrCall = ~/\b(?:uiStringArray|strings\.array)\s*\(/
+		def keyHelper = ~/(?s)(?:fun\s+\w*(?:LabelKey|TitleKey|StringKey)\s*\([^)]*\)\s*:\s*String\s*=\s*when\s*\([^)]*\)\s*\{([^}]*)\})|(?:enum\s+class\s+\w+\s*\([^)]*\btitleKey\s*:\s*String[^)]*\)\s*\{([^}]*)\})/
+		def lit = ~/"([a-z][a-z0-9_]*)"/
+		def stringKeys = new TreeSet<String>()
+		def arrayKeys = new TreeSet<String>()
+		uiSources.files.findAll { it.isFile() }.each { file ->
+			def text = file.getText('UTF-8')
+			if (!text.contains('core.ui.text')) return
+			GenerateAndroidUiStringIdsTask.extractFirstArgs(text, strCall).each { arg ->
+				lit.matcher(arg).each { m -> if (m[1] in declaredStrings) stringKeys << m[1].toString() }
+			}
+			GenerateAndroidUiStringIdsTask.extractFirstArgs(text, arrCall).each { arg ->
+				lit.matcher(arg).each { m -> if (m[1] in declaredArrays) arrayKeys << m[1].toString() }
+			}
+			keyHelper.matcher(text).each { hm ->
+				def body = (hm[1] ?: hm[2] ?: '').toString()
+				lit.matcher(body).each { m -> if (m[1] in declaredStrings) stringKeys << m[1].toString() }
+			}
+		}
+		boolean inEnum = false
+		contentTypesFile.get().asFile.eachLine('UTF-8') { line ->
+			if (line.contains('enum class ContentType')) inEnum = true
+			else if (inEnum) {
+				def entry = line =~ /^\s*([A-Z][A-Z_]+)\s*[,(]/
+				if (entry.find()) {
+					def key = 'content_type_' + entry.group(1).toLowerCase(Locale.ROOT)
+					if (key in declaredStrings) stringKeys << key
+				}
+			}
+		}
+		def strBranches = stringKeys.collect { '        "' + it + '" -> R.string.' + it }.join('\n')
+		def arrBranches = arrayKeys.collect { '        "' + it + '" -> R.array.' + it }.join('\n')
+		def target = outputDir.get().file('org/skepsun/kototoro/core/ui/text/AndroidUiStringIds.kt').asFile
+		target.parentFile.mkdirs()
+		target.setText("""// Generated by GenerateAndroidUiStringIdsTask. Do not edit.
+package org.skepsun.kototoro.core.ui.text
+
+import org.skepsun.kototoro.R
+
+/** Direct resource IDs for shared UI string lookups so R8 resource shrinking retains them. */
+internal object AndroidUiStringIds {
+    fun stringId(name: String): Int = when (name) {
+${strBranches ? strBranches + '\n' : ''}        else -> 0
+    }
+
+    fun arrayId(name: String): Int = when (name) {
+${arrBranches ? arrBranches + '\n' : ''}        else -> 0
+    }
+}
+""", 'UTF-8')
 	}
 }

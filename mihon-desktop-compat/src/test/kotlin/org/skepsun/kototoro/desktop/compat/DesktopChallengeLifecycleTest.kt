@@ -21,7 +21,7 @@ class DesktopChallengeLifecycleTest {
         assumeTrue(Files.isRegularFile(Path.of(System.getProperty("kototoro.compat.bridge.exe"))),
             "Windows WebView2 bridge must be built")
         val output = Files.createDirectories(Path.of("build/reports/browser-challenges")).resolve("$mode.log")
-        val process = ProcessBuilder(Path.of(System.getProperty("java.home"), "bin/java.exe").toString(),
+        val process = ProcessBuilder(currentJavaExecutable(),
             "-Dstdout.encoding=UTF-8", "-Dstderr.encoding=UTF-8", "-cp", System.getProperty("kototoro.compat.test.classpath"),
             DesktopChallengeLifecycleProbe::class.java.name, mode, directory.toString(),
             System.getProperty("kototoro.compat.bridge.exe"))

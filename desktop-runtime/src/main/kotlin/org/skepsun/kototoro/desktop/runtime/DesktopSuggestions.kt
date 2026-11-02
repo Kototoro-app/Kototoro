@@ -1,23 +1,17 @@
 package org.skepsun.kototoro.desktop.runtime
 
+import org.skepsun.kototoro.core.extensions.SourceNsfwOverrideSet
+import org.skepsun.kototoro.core.library.SourceSuggestionPreferences
+import org.skepsun.kototoro.core.library.SourceSuggestions
 import org.skepsun.kototoro.core.source.SourceContent
-import org.skepsun.kototoro.core.source.SourceFilter
 import org.skepsun.kototoro.core.source.SourceListing
 import org.skepsun.kototoro.core.source.SourcePreferenceValue
 import org.skepsun.kototoro.core.source.SourceRuntime
 import org.skepsun.kototoro.parsers.util.almostEquals
 import org.skepsun.kototoro.suggestions.domain.SUGGESTION_TAG_THRESHOLD
 import org.skepsun.kototoro.suggestions.domain.SuggestionLimits
-import org.skepsun.kototoro.suggestions.domain.SuggestionTagBlacklist
 import org.skepsun.kototoro.suggestions.domain.SuggestionTagMatcher
-import org.skepsun.kototoro.suggestions.domain.cleanSuggestionList
-import org.skepsun.kototoro.suggestions.domain.collectSourceResults
 import org.skepsun.kototoro.suggestions.domain.parseSuggestionTags
-import org.skepsun.kototoro.suggestions.domain.pickSuggestionSortOrder
-import org.skepsun.kototoro.suggestions.domain.pickSuggestionTag
-import org.skepsun.kototoro.suggestions.domain.rankSuggestions
-import org.skepsun.kototoro.suggestions.domain.suggestionRelevance
-import org.skepsun.kototoro.suggestions.domain.suggestionSeedTags
 
 /** Windows counterparts of Android's suggestion settings, stored under Android's keys and defaults. */
 data class DesktopSuggestionSettings(
@@ -27,6 +21,12 @@ data class DesktopSuggestionSettings(
     val tagWhitelist: Set<String> = emptySet(),
     val preferredSources: Set<String> = emptySet(),
     val excludedSources: Set<String> = emptySet(),
+    /** Android's `KEY_SUGGESTIONS_WIFI_ONLY`: the worker only runs on an unmetered network. */
+    val wifiOnly: Boolean = false,
+    /** Android's `KEY_SUGGESTIONS_DISABLED_SOURCES`: candidates come from every installed source, not only enabled. */
+    val includeDisabledSources: Boolean = false,
+    /** Android's `KEY_SUGGESTIONS_NOTIFICATIONS`: one recommended work is announced after a run stores results. */
+    val notifications: Boolean = false,
 ) {
     fun toPreferences(): Map<String, SourcePreferenceValue?> = mapOf(
         KEY_ENABLED to SourcePreferenceValue.Toggle(enabled),
@@ -35,6 +35,9 @@ data class DesktopSuggestionSettings(
         KEY_PREFERRED_TAGS to SourcePreferenceValue.Text(tagWhitelist.joinToString(", ")),
         KEY_PREFERRED_SOURCES to SourcePreferenceValue.TextSet(preferredSources),
         KEY_EXCLUDED_SOURCES to SourcePreferenceValue.TextSet(excludedSources),
+        KEY_WIFI_ONLY to SourcePreferenceValue.Toggle(wifiOnly),
+        KEY_DISABLED_SOURCES to SourcePreferenceValue.Toggle(includeDisabledSources),
+        KEY_NOTIFICATIONS to SourcePreferenceValue.Toggle(notifications),
     )
 
     companion object {
@@ -44,6 +47,9 @@ data class DesktopSuggestionSettings(
         const val KEY_PREFERRED_TAGS = "suggestions_preferred_tags"
         const val KEY_PREFERRED_SOURCES = "suggestions_preferred_sources"
         const val KEY_EXCLUDED_SOURCES = "suggestions_excluded_sources"
+        const val KEY_WIFI_ONLY = "suggestions_wifi"
+        const val KEY_DISABLED_SOURCES = "suggestions_disabled_sources"
+        const val KEY_NOTIFICATIONS = "suggestions_notifications"
 
         fun from(values: Map<String, SourcePreferenceValue>) = DesktopSuggestionSettings(
             enabled = (values[KEY_ENABLED] as? SourcePreferenceValue.Toggle)?.value ?: false,
@@ -52,6 +58,9 @@ data class DesktopSuggestionSettings(
             tagWhitelist = parseSuggestionTags((values[KEY_PREFERRED_TAGS] as? SourcePreferenceValue.Text)?.value),
             preferredSources = (values[KEY_PREFERRED_SOURCES] as? SourcePreferenceValue.TextSet)?.values.orEmpty(),
             excludedSources = (values[KEY_EXCLUDED_SOURCES] as? SourcePreferenceValue.TextSet)?.values.orEmpty(),
+            wifiOnly = (values[KEY_WIFI_ONLY] as? SourcePreferenceValue.Toggle)?.value ?: false,
+            includeDisabledSources = (values[KEY_DISABLED_SOURCES] as? SourcePreferenceValue.Toggle)?.value ?: false,
+            notifications = (values[KEY_NOTIFICATIONS] as? SourcePreferenceValue.Toggle)?.value ?: false,
         )
     }
 }
@@ -92,49 +101,21 @@ class DesktopSuggestions(
     suspend fun suggestions(limit: Int = limits.maxResults): List<SourceContent> = library.suggestions(limit)
 
     /** Rebuilds the suggestions; returns how many were stored (0 without reading history or installed sources). */
-    suspend fun refresh(sources: List<SourceListing>, settings: DesktopSuggestionSettings = DesktopSuggestionSettings()): Int {
+    suspend fun refresh(
+        sources: List<SourceListing>,
+        settings: DesktopSuggestionSettings = DesktopSuggestionSettings(),
+        nsfwOverrides: SourceNsfwOverrideSet = SourceNsfwOverrideSet(),
+    ): Int {
         val seed = (library.history().take(limits.seedItems) + library.favourites().take(limits.seedItems))
             .distinctBy { it.id }
         val candidates = sourceOrder(sources.filterNot {
-            it.source.name in settings.excludedSources || (settings.excludeNsfw && it.isNsfw())
+            it.source.name in settings.excludedSources || (settings.excludeNsfw && it.isNsfwSource(nsfwOverrides))
         })
         if (seed.isEmpty() || candidates.isEmpty()) return 0
-        val blacklist = SuggestionTagBlacklist(settings.tagBlacklist, matcher)
-        val tags = suggestionSeedTags(settings.tagWhitelist.toList(), seed.flatMap { content -> content.tags.map { it.title } })
-        val raw = collectSourceResults(candidates) { listing -> fetch(listing, tags, blacklist, settings) }
-        val ranked = rankSuggestions(
-            items = raw,
-            relevance = { suggestionRelevance(it.tags.map { tag -> tag.title }, tags, matcher) },
-            id = { it.id },
-            source = { it.source.name },
-            preferredSources = settings.preferredSources - settings.excludedSources,
-            limits = limits,
-        )
-        return library.replaceSuggestions(ranked.map { it.item to it.relevance }, now())
-    }
-
-    private suspend fun fetch(listing: SourceListing, tags: List<String>, blacklist: SuggestionTagBlacklist,
-        settings: DesktopSuggestionSettings): List<SourceContent> {
-        val name = listing.source.name
-        val order = pickSuggestionSortOrder(runtime.describe(name).sortOrders)
-        val available = runCatching { runtime.getFilterOptions(name).availableTags }.getOrDefault(emptySet())
-        val tag = pickSuggestionTag(tags, available, { it.title }, { blacklist.containsTitle(it.title) }, matcher)
-        val tagged = runtime.getList(name, 0, order, tag?.let { SourceFilter(tags = setOf(it)) })
-        // Android falls back to the unfiltered list when the tagged one is empty.
-        val list = if (tagged.isEmpty() && tag != null) runtime.getList(name, 0, order, null) else tagged
-        return cleanSuggestionList(
-            items = list,
-            title = { it.title },
-            hasAddress = { it.url.isNotBlank() || it.publicUrl.isNotBlank() },
-            excluded = { content ->
-                (settings.excludeNsfw && content.isNsfw()) || blacklist.containsAny(content.tags.map { it.title })
-            },
-            limits = limits,
-            shuffle = shuffle,
-        )
+        val result = SourceSuggestions(runtime, matcher, limits, shuffle).generate(seed, candidates.map { it.source },
+            SourceSuggestionPreferences(settings.excludeNsfw, settings.tagBlacklist, settings.tagWhitelist,
+                settings.preferredSources, settings.excludedSources))
+        return library.replaceSuggestions(result.items.map { it.item to it.relevance }, now())
     }
 }
 
-private fun SourceListing.isNsfw() = source.contentType.startsWith("HENTAI_")
-
-private fun SourceContent.isNsfw() = contentRating == "ADULT" || source.contentType.startsWith("HENTAI_")

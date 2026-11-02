@@ -38,6 +38,27 @@ class LocalSourceRuntimeTest {
     }
 
     @Test
+    fun comicInfoDescribesArchivesWithoutAnIndex() = runTest {
+        val comicInfo = """<?xml version="1.0"?><ComicInfo><Series>Witch Hat Atelier</Series>
+            |<Title>The Return</Title><Number>12</Number><Summary>Coco learns magic.</Summary>
+            |<Writer>Kamome Shirahama</Writer><Genre>Fantasy, Adventure</Genre></ComicInfo>""".trimMargin()
+        val file = zip("ch12.cbz", mapOf(
+            "ComicInfo.xml" to comicInfo.encodeToByteArray(),
+            "001.png" to png,
+            "002.png" to png,
+        ))
+        val runtime = runtime()
+        val details = runtime.getDetails(runtime.import(file, "ch12.cbz"), SourceDetailsFetchMode.ALLOW_CACHE)
+        assertEquals("Witch Hat Atelier", details.title)
+        assertEquals("Coco learns magic.", details.description)
+        assertEquals(setOf("Kamome Shirahama"), details.authors)
+        assertEquals(setOf("Fantasy", "Adventure"), details.tags.map { it.title }.toSet())
+        assertEquals(listOf("The Return"), details.chapters!!.map { it.title })
+        assertEquals(12f, details.chapters!!.single().number)
+        assertEquals(2, runtime.getPages(details.chapters!!.single(), null).size)
+    }
+
+    @Test
     fun epubSectionsOfOneDocumentBecomeChaptersForNewImportsOnly() = runTest {
         val opf = """<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0">
             |<metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>分节</dc:title></metadata>
@@ -296,5 +317,24 @@ class LocalSourceRuntimeTest {
         }
         assertTrue(runtime.getList("LOCAL_VIDEO", 0, null, null).isEmpty())
         assertTrue(File(dir, "store/items").listFiles().orEmpty().isEmpty())
+    }
+
+    @Test
+    fun aVideoFolderBecomesOneWorkWithAnEpisodePerFileAndKeepsItsIdOnReimport() = runTest {
+        val folder = File(dir, "show").apply { mkdirs() }
+        val files = listOf("Ep10.mp4", "Ep2.mp4", "cover.jpg", "Ep1.mkv").map { name ->
+            File(folder, name).apply { writeBytes(name.encodeToByteArray()) }
+        }.map { it.toOkioPath() to it.name }
+        val runtime = runtime()
+        val first = runtime.importVideoFolder(files, "Show")
+        val details = runtime.getDetails(first, SourceDetailsFetchMode.ALLOW_CACHE)
+        // Natural order, pictures skipped.
+        assertEquals(listOf("Ep1", "Ep2", "Ep10"), details.chapters!!.map { it.title })
+        val page = runtime.getPages(details.chapters!![2], null).single()
+        assertTrue(page.url.startsWith("file://") && page.url.endsWith("/episodes/2.mp4"), page.url)
+        assertEquals(first.id, runtime.importVideoFolder(files.reversed(), "Show").id)
+        assertThrows(IllegalArgumentException::class.java) {
+            kotlinx.coroutines.runBlocking { runtime.importVideoFolder(listOf(files[2]), "Pictures") }
+        }
     }
 }

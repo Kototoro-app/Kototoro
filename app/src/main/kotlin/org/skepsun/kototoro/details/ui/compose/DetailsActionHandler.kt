@@ -4,11 +4,13 @@ import android.view.View
 import android.widget.Toast
 import androidx.activity.result.ActivityResultLauncher
 import android.content.Intent
+import com.google.android.material.snackbar.Snackbar
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.os.AppShortcutManager
+import org.skepsun.kototoro.core.util.ext.makeSnackbar
 import org.skepsun.kototoro.details.ui.DetailsViewModel
 import org.skepsun.kototoro.details.ui.openDetailsReader
 import org.skepsun.kototoro.parsers.model.ContentListFilter
@@ -72,10 +74,9 @@ internal fun handleDetailsAction(
         DetailsAction.Translate -> {
             val hasCache = viewModel.hasTranslationCache.value
             viewModel.translateTitleAndDescription(forceRefresh = hasCache)
-            com.google.android.material.snackbar.Snackbar.make(
-                snackbarHost,
+            snackbarHost.makeSnackbar(
                 if (hasCache) R.string.reader_translation_retranslate_started else R.string.translating,
-                com.google.android.material.snackbar.Snackbar.LENGTH_SHORT,
+                Snackbar.LENGTH_SHORT,
             ).show()
         }
 
@@ -122,11 +123,7 @@ internal fun handleDetailsAction(
             viewModel.getContentOrNull()?.let { manga ->
                 coroutineScope.launch {
                     if (!appShortcutManager.requestPinShortcut(manga)) {
-                        com.google.android.material.snackbar.Snackbar.make(
-                            snackbarHost,
-                            R.string.operation_not_supported,
-                            com.google.android.material.snackbar.Snackbar.LENGTH_SHORT,
-                        ).show()
+                        snackbarHost.makeSnackbar(R.string.operation_not_supported, Snackbar.LENGTH_SHORT).show()
                     }
                 }
             }

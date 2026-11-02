@@ -51,12 +51,16 @@ internal class DesktopScrollOperations(private val state: MutableStateFlow<Deskt
                                         error = null) else it
                                 }
                             } catch (error: CancellationException) { throw error }
-                            catch (error: Exception) { failed(chapterId, epoch, page.id, error.message ?: "页面加载失败") }
-                            catch (error: LinkageError) { failed(chapterId, epoch, page.id, "来源 API 不兼容") }
+                            catch (error: Exception) {
+                                failed(chapterId, epoch, page.id, error.message ?: desktopText("reader.pageLoadFailed"))
+                            }
+                            catch (error: LinkageError) {
+                                failed(chapterId, epoch, page.id, desktopText("error.sourceApiIncompatibleShort"))
+                            }
                         }
                     }
                     val challenges = session.browserChallenges
-                    if (challenges == null) block() else challenges.withRequestCancellation(block)
+                    if (challenges == null) block() else challenges.withInteraction(block)
                 }
             } finally {
                 if (generation.get() == epoch) state.update { it.copy(readerLoading = emptySet()) }
@@ -93,6 +97,8 @@ internal class DesktopScrollOperations(private val state: MutableStateFlow<Deskt
         val chapter = snapshot.chapter ?: return
         if (!accepts(snapshot, chapter.id) || !snapshot.readerScrollReady) return
         val content = snapshot.content ?: return
+        // Android's incognito session keeps the position on screen only.
+        if (!snapshot.savesProgress) return
         val position = Position(content.id, chapter.id, snapshot.pageIndex, snapshot.readerScroll, snapshot.readerLastVisible)
         if (position == lastSaved) return
         session.library.recordPage(content, chapter, position.first, snapshot.pages.size, position.last, position.offset)
@@ -113,7 +119,7 @@ internal class DesktopScrollOperations(private val state: MutableStateFlow<Deskt
     }
 
     private fun accepts(snapshot: DesktopAppState, chapterId: Long) = snapshot.screen == DesktopScreen.READER &&
-        snapshot.chapter?.id == chapterId && snapshot.readerSettings.mode == DesktopReaderMode.CONTINUOUS
+        snapshot.chapter?.id == chapterId && snapshot.readerSettings.mode.isContinuous
 
     private data class Position(val content: Long, val chapter: Long, val first: Int, val offset: Float, val last: Int)
 }

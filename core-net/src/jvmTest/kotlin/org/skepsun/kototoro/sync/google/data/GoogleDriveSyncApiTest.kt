@@ -7,6 +7,7 @@ import io.ktor.client.engine.mock.respond
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.headersOf
 import io.ktor.http.content.OutgoingContent
 import io.ktor.utils.io.ByteChannel
 import kotlinx.coroutines.CancellationException
@@ -51,7 +52,7 @@ class GoogleDriveSyncApiTest {
             assertEquals(HttpMethod.Get, request.method)
             assertEquals("https://www.googleapis.com/drive/v3/files", request.url.toString().substringBefore('?'))
             assertEquals("appDataFolder", request.url.parameters["spaces"])
-            assertEquals("files(id,name,createdTime,modifiedTime,version)", request.url.parameters["fields"])
+            assertEquals("nextPageToken,files(id,name,createdTime,modifiedTime,version)", request.url.parameters["fields"])
             assertEquals("createdTime", request.url.parameters["orderBy"])
             assertEquals("100", request.url.parameters["pageSize"])
             assertEquals("Bearer fixture-token", request.headers[HttpHeaders.Authorization])
@@ -123,22 +124,24 @@ class GoogleDriveSyncApiTest {
     }
 
     @Test
-    fun `new upload creates appDataFolder metadata before uploading content`() = runTest {
+    fun `new upload publishes metadata and content through an unpublished resumable session`() = runTest {
         var count = 0
         withApi({ request ->
             count++
             if (count == 1) {
                 assertEquals(HttpMethod.Post, request.method)
-                assertEquals("/drive/v3/files", request.url.encodedPath)
+                assertEquals("/upload/drive/v3/files", request.url.encodedPath)
+                assertEquals("resumable", request.url.parameters["uploadType"])
                 assertEquals(
                     """{"name":"kototoro_sync_content_v3.json","parents":["appDataFolder"]}""",
                     (request.body as OutgoingContent.ByteArrayContent).bytes().decodeToString(),
                 )
-                respond("{\"id\":\"created-id\"}")
+                respond("", headers = headersOf("Location", "https://www.googleapis.com/upload/drive/v3/files?upload_id=fixture"))
             } else {
-                assertEquals(HttpMethod.Patch, request.method)
-                assertEquals("/upload/drive/v3/files/created-id", request.url.encodedPath)
-                respond("")
+                assertEquals(HttpMethod.Put, request.method)
+                assertEquals("fixture", request.url.parameters["upload_id"])
+                assertArrayEquals(byteArrayOf(1), (request.body as OutgoingContent.ByteArrayContent).bytes())
+                respond("{\"id\":\"created-id\"}")
             }
         }) { api, _ ->
             assertEquals("created-id", api.upload("token", byteArrayOf(1), null))
@@ -151,7 +154,30 @@ class GoogleDriveSyncApiTest {
         withApi({ respond(" ") }) { api, engine ->
             val error = expectFailure<GoogleDriveSyncApiException> { api.upload("token", byteArrayOf(1), null) }
             assertEquals(0, error.code)
-            assertEquals("Failed to create Google Drive sync file", error.message)
+            assertEquals("Missing Google Drive upload session", error.message)
+            assertEquals(1, engine.requestHistory.size)
+        }
+    }
+
+    @Test
+    fun `file listing follows pages before returning the complete conflict input`() = runTest {
+        withApi({ request ->
+            if (request.url.parameters["pageToken"] == null) {
+                respond("""{"files":[{"id":"first","version":"1"}],"nextPageToken":"next"}""")
+            } else {
+                assertEquals("next", request.url.parameters["pageToken"])
+                respond("""{"files":[{"id":"second","version":"2"}]}""")
+            }
+        }) { api, engine ->
+            assertEquals(listOf("first", "second"), api.findCurrentSyncFiles("token").map { it.id })
+            assertEquals(2, engine.requestHistory.size)
+        }
+    }
+
+    @Test
+    fun `upload session cannot redirect a bearer token to another host`() = runTest {
+        withApi({ respond("", headers = headersOf("Location", "https://unexpected.invalid/upload")) }) { api, engine ->
+            expectFailure<IllegalArgumentException> { api.upload("token", byteArrayOf(1), null) }
             assertEquals(1, engine.requestHistory.size)
         }
     }

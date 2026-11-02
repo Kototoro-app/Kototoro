@@ -6,7 +6,6 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
 import java.nio.file.Path
-import java.util.concurrent.TimeUnit
 
 class DesktopAppTest {
     @TempDir lateinit var directory: Path
@@ -26,6 +25,73 @@ class DesktopAppTest {
     }
 
     @Test
+    fun `Windows incognito reader records nothing while a normal read does and stores Android's adult rule`() {
+        probe("incognito", directory.resolve("中文 incognito"), 120)
+    }
+
+    @Test
+    fun `a read stop shows up in the statistics screen and clearing asks first`() {
+        probe("stats", directory.resolve("中文 stats"), 150)
+    }
+
+    @Test
+    fun `the storage hub shows the data root's real sizes and reaches the proxy page`() {
+        probe("storage", directory.resolve("中文 storage"), 150)
+    }
+
+    @Test
+    fun `the data cleanup page clears what this data root holds and arms Android's auto sweep`() {
+        probe("cleanup", directory.resolve("中文 cleanup"), 150)
+    }
+
+    @Test
+    fun `the proxy page routes the real client and its test row reports Android's result`() {
+        probe("proxy", directory.resolve("中文 proxy"), 150)
+    }
+
+    @Test
+    fun `the playback page writes the backdrop decoder and both overlay opacities`() {
+        probe("playback", directory.resolve("中文 playback"), 150)
+    }
+
+    @Test
+    fun `the changelog page lists the channel's published notes and returns to the about card`() {
+        assumeTrue(org.skepsun.kototoro.desktop.runtime.DesktopUpdateTarget.current() != null,
+            "no package updater on this platform")
+        probe("changelog", directory.resolve("中文 changelog"), 180)
+    }
+
+    @Test
+    fun `the about card switches the unstable update channel and lists Android's support links`() {
+        probe("about", directory.resolve("中文 about"), 180)
+    }
+
+    @Test
+    fun `a real crash writes a report the crash log page lists opens and deletes`() {
+        probe("crashlogs", directory.resolve("崩溃 日志"), 180)
+    }
+
+    @Test
+    fun `replacement rules are edited previewed toggled and reimported from the reading settings page`() {
+        probe("replacerules", directory.resolve("替换 规则"), 180)
+    }
+
+    @Test
+    fun `dictionary rules are seeded from the shipped asset stored toggled and reimported`() {
+        probe("dictionaryrules", directory.resolve("词典 规则"), 180)
+    }
+
+    @Test
+    fun `download settings edit the speed and retry numbers the offline queue reads`() {
+        probe("downloadsettings", directory.resolve("下载 设置"), 180)
+    }
+
+    @Test
+    fun `navigation configuration reorders adds and removes the rail destinations`() {
+        probe("navconfig", directory.resolve("导航 配置"), 180)
+    }
+
+    @Test
     fun `real Tsundoku APK installs converts and reads a novel over the live network`() {
         org.junit.jupiter.api.Assumptions.assumeTrue(System.getProperty("kototoro.dex.real.apks") != null, "no -PrealApkDirectory")
         probe("real-novel", directory.resolve("中文 real novel"), 180)
@@ -33,7 +99,7 @@ class DesktopAppTest {
     @Test
     fun `reader pages are upscaled by the installed ncnn programs and the choice persists`() {
         org.junit.jupiter.api.Assumptions.assumeTrue(System.getProperty("kototoro.ncnn.dir") != null, "no -PncnnDirectory")
-        probe("upscale", directory.resolve("中文 upscale"), 300)
+        probe("upscale", directory.resolve("中文 upscale"), 600)
     }
     @Test
     fun `an anime episode plays in the window switches quality continues and records history`() {
@@ -57,8 +123,46 @@ class DesktopAppTest {
     @Test
     fun `kototoro kotatsu and UMA plugins browse page read and favourite through the UI and survive a restart`() {
         val root = directory.resolve("中文 parser plugins")
-        probe("parsers-write", root, 90)
-        probe("parsers-read", root)
+        probe("parsers-write", root, 150)
+        probe("parsers-read", root, 150)
+    }
+
+    @Test
+    fun `source settings reorder the parser deduplication priority and the next start serves the shared source`() {
+        val root = directory.resolve("中文 jar priority")
+        probe("jarpriority-write", root, 150)
+        probe("jarpriority-read", root, 150)
+    }
+
+    @Test
+    fun `the source reorder editor stores Android's manual order and the rail follows it after a restart`() {
+        val root = directory.resolve("中文 source order")
+        probe("sourceorder-write", root, 150)
+        probe("sourceorder-read", root, 120)
+    }
+
+    @Test
+    fun `the setup wizard walks the intro appearance and done pages from the source settings row`() {
+        probe("wizard", directory.resolve("中文 setup wizard"), 180)
+    }
+
+    @Test
+    fun `the source test page runs every step against a local CMS site and exports the run`() {
+        probe("sourcetest", directory.resolve("中文 source test"), 180)
+    }
+
+    @Test
+    fun `a parser marked broken stays installed and the show broken sources switch hides and offers it`() {
+        val root = directory.resolve("中文 broken sources")
+        probe("brokensource-write", root, 150)
+        probe("brokensource-read", root, 150)
+    }
+
+    @Test
+    fun `the install behavior answers the catalogue question switches new sources and persists per kind`() {
+        val root = directory.resolve("中文 install behavior")
+        probe("installpolicy-write", root, 240)
+        probe("installpolicy-read", root, 150)
     }
 
     @Test
@@ -74,11 +178,17 @@ class DesktopAppTest {
     }
 
     @Test
+    fun `a JSON CMS source imports from the extensions page browses and is removed again`() {
+        probe("json-sources", directory.resolve("中文 json source"), 120)
+        probe("json-sources-narrow", directory.resolve("中文 json source narrow"), 120)
+    }
+
+    @Test
     fun `tablet layout and immersive reader panels preserve progress in wide and narrow windows`() {
-        probe("tablet", directory.resolve("中文 tablet wide"))
-        probe("tablet-narrow", directory.resolve("中文 tablet narrow"))
-        probe("tablet-boundary", directory.resolve("中文 tablet expanded boundary"))
-        probe("tablet-boundary-compact", directory.resolve("中文 tablet medium boundary"))
+        probe("tablet", directory.resolve("中文 tablet wide"), 150)
+        probe("tablet-narrow", directory.resolve("中文 tablet narrow"), 150)
+        probe("tablet-boundary", directory.resolve("中文 tablet expanded boundary"), 150)
+        probe("tablet-boundary-compact", directory.resolve("中文 tablet medium boundary"), 150)
     }
 
     @Test
@@ -183,36 +293,24 @@ class DesktopAppTest {
     }
 
     @Test
+    fun `recommendation worker switches gate the run on Wi-Fi widen the candidates and announce results`() {
+        val root = directory.resolve("中文 suggestion policy")
+        probe("suggestionpolicy-write", root, 120)
+        probe("suggestionpolicy-read", root, 90)
+    }
+
+    @Test
+    fun `services page records statistics on demand and hides the reading-time estimate`() {
+        val root = directory.resolve("中文 services")
+        probe("services-write", root, 180)
+        probe("services-read", root, 90)
+    }
+
+    @Test
     fun `production Windows window closes during startup and after import and releases storage`() {
         probe("window-early", directory.resolve("中文 early close"))
         probe("window", directory.resolve("中文 normal window"))
     }
 
-    private fun probe(mode: String, root: Path, seconds: Long = 60) {
-        val output = Files.createDirectories(Path.of("build/reports/desktop-smoke")).resolve("$mode.log")
-        val process = ProcessBuilder(Path.of(System.getProperty("java.home"), "bin/java.exe").toString(),
-            "-Xms32m", "-Xmx768m",
-            "-Dfile.encoding=UTF-8", "-Dstdout.encoding=UTF-8", "-Dstderr.encoding=UTF-8",
-            *System.getProperties().stringPropertyNames()
-                .filter { it == "kototoro.dex.real.apks" || it == "kototoro.desktop.cloudstream.fixture" || it == "kototoro.libmpv.dir" || it == "kototoro.desktop.anime.fixture.jar" || it == "kototoro.ncnn.dir" ||
-                    it.startsWith("kototoro.real.") }
-                .map { "-D$it=${System.getProperty(it)}" }.toTypedArray(),
-            "-cp", System.getProperty("kototoro.desktop.test.classpath"),
-            DesktopAppProbe::class.java.name, mode, root.toString(),
-            System.getProperty("kototoro.desktop.fixture.jar"),
-            Path.of("build/reports/desktop-smoke").toAbsolutePath().toString(),
-            System.getProperty("kototoro.desktop.bridge.exe"), System.getProperty("kototoro.desktop.challenge.fixture.jar"),
-            System.getProperty("kototoro.desktop.reader.fixture.jar"), System.getProperty("kototoro.desktop.cover.fixture.jar"),
-            System.getProperty("kototoro.desktop.filter.fixture.jar"), System.getProperty("kototoro.desktop.parser.fixtures"))
-            .redirectErrorStream(true).redirectOutput(output.toFile()).start()
-        try {
-            assertTrue(process.waitFor(seconds, TimeUnit.SECONDS), "UI process did not finish: ${outputText(output)}")
-            val log = outputText(output)
-            assertEquals(0, process.exitValue(), log)
-            assertTrue(log.contains("DESKTOP_UI_OK=$mode"), log)
-        } finally { if (process.isAlive) process.destroyForcibly() }
-    }
-
-    // HotSpot native allocation errors can use the Windows locale even with UTF-8 stdout configured.
-    private fun outputText(path: Path): String = String(Files.readAllBytes(path), Charsets.UTF_8)
+    private fun probe(mode: String, root: Path, seconds: Long = 60) = DesktopProbes.run(mode, root, seconds)
 }

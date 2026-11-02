@@ -25,7 +25,7 @@ jobs:
     steps:
     - name: Checkout code
       id: checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         ref: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.tag || github.sha }}
         submodules: recursive
@@ -55,7 +55,7 @@ jobs:
         echo "previous_tag=$PREVIOUS_TAG" >> $GITHUB_OUTPUT
 
     - name: Set up JDK
-      uses: actions/setup-java@v4
+      uses: actions/setup-java@v5
       with:
         distribution: 'temurin'
         java-version: '17'
@@ -145,6 +145,8 @@ jobs:
     permissions:
       contents: read
     uses: ./.github/workflows/windows-build.yml
+    secrets:
+      GOOGLE_DRIVE_DESKTOP_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_DESKTOP_CLIENT_SECRET }}
     with:
       ref: ${{ needs.build.outputs.built-sha }}
       channel: release
@@ -158,7 +160,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: ${{ needs.windows.outputs.artifact-name }}
           path: release-windows
@@ -170,3 +172,104 @@ jobs:
           set -euo pipefail
           gh release view "$TAG_NAME" >/dev/null
           gh release upload "$TAG_NAME" release-windows/* --clobber
+
+  macos:
+    needs: [build, windows]
+    permissions:
+      contents: read
+    uses: ./.github/workflows/macos-build.yml
+    secrets:
+      GOOGLE_DRIVE_DESKTOP_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_DESKTOP_CLIENT_SECRET }}
+    with:
+      ref: ${{ needs.build.outputs.built-sha }}
+      channel: release
+      version-name: ${{ needs.build.outputs.version-name }}
+      compatibility-artifact: ${{ needs.windows.outputs.artifact-name }}
+
+  publish-macos:
+    needs: [build, macos]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: ${{ needs.macos.outputs.artifact-pattern }}
+          path: release-macos
+          merge-multiple: true
+      - name: Attach macOS packages to Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh release view "$TAG_NAME" >/dev/null
+          gh release upload "$TAG_NAME" release-macos/* --clobber
+
+  linux:
+    needs: build
+    permissions:
+      contents: read
+    uses: ./.github/workflows/linux-build.yml
+    secrets:
+      GOOGLE_DRIVE_DESKTOP_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_DESKTOP_CLIENT_SECRET }}
+    with:
+      ref: ${{ needs.build.outputs.built-sha }}
+      compatibility-url: ${{ vars.WINDOWS_COMPATIBILITY_URL }}
+
+  publish-linux:
+    needs: [build, linux]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: ${{ needs.linux.outputs.artifact-name }}
+          path: release-linux
+      - name: Attach the Linux package to Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh release view "$TAG_NAME" >/dev/null
+          gh release upload "$TAG_NAME" release-linux/* --clobber
+
+  ios:
+    needs: build
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ios-build.yml
+    with:
+      ref: ${{ needs.build.outputs.built-sha }}
+      channel: release
+      version-name: ${{ needs.build.outputs.version-name }}
+
+  publish-ios:
+    needs: [build, ios]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: ${{ needs.ios.outputs.artifact-name }}
+          path: release-ios
+      - name: Attach iOS package to Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh release view "$TAG_NAME" >/dev/null
+          gh release upload "$TAG_NAME" release-ios/* --clobber
+      # The docs site rebuilds the AltStore sources from the releases, so the new IPA appears in them.
+      - name: Refresh AltStore sources
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run docs-pages.yml --repo "${{ github.repository }}" --ref devel

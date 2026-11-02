@@ -13,6 +13,7 @@ import okhttp3.Request
 import org.json.JSONObject
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
 import org.skepsun.kototoro.core.network.BaseHttpClient
+import org.skepsun.kototoro.core.util.archiveEntryFile
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
 import java.io.File
 import java.io.FileInputStream
@@ -323,11 +324,7 @@ class PaddleModelManager @Inject constructor(
     }
 
     private fun writeSafeFile(outputDir: File, entryName: String, input: InputStream) {
-        val safeName = entryName.replace('\\', '/').removePrefix("/")
-        val outFile = File(outputDir, safeName).canonicalFile
-        check(outFile.path.startsWith(outputDir.canonicalPath)) {
-            "Invalid archive entry path: $entryName"
-        }
+        val outFile = archiveEntryFile(outputDir, entryName)
         outFile.parentFile?.mkdirs()
         FileOutputStream(outFile).use { fos ->
             input.copyTo(fos)

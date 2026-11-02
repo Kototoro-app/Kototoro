@@ -129,6 +129,15 @@ class ParserSourceRuntime(
         handle.parser.getRelatedContent(content.toParser(resolver(handle))).map { it.toSourceContent() }
     }
 
+    /**
+     * The plugin's own icon candidates for a source, largest first — Android's `ContentParser.getFavicons()`, which by
+     * default parses the site's `<link rel="icon">` and falls back to `<domain>/favicon.ico`. Empty when the plugin
+     * offers nothing, which leaves the host's letter tile in place.
+     */
+    suspend fun favicons(sourceName: String): List<String> = execute(sourceName) { handle ->
+        handle.parser.getFavicons().map { it.url }.filter { it.isNotBlank() }
+    }
+
     override suspend fun fetchImage(page: SourcePage): SourceImageArtifact = execute(page.source.name) { handle ->
         val store = images ?: throw SourceOperationUnsupportedException()
         val url = if (isDirect(page.url)) page.url else
@@ -155,15 +164,18 @@ class ParserSourceRuntime(
     override suspend fun browserSession(sourceName: String): SourceBrowserSession = execute(sourceName) { handle ->
         val domain = handle.parser.domain.takeIf(String::isNotBlank) ?: throw SourceOperationUnsupportedException()
         val userAgent = runCatching { handle.parser.getRequestHeaders()["User-Agent"] }.getOrNull()
-        SourceBrowserSession("https://$domain", userAgent?.takeIf(String::isNotBlank) ?: platform.defaultUserAgent)
+        platform.browserSession("https://$domain", userAgent?.takeIf(String::isNotBlank) ?: platform.defaultUserAgent)
     }
 
-    /** Parser requests share the platform's cookie jar, so the clearance reaches every parser of that site. */
+    /**
+     * Parser requests share the platform's cookie jar, so the clearance reaches every parser of that site. A login
+     * made in the browser stays across restarts, as in Android's WebView store.
+     */
     override suspend fun importCookies(sourceName: String, url: String, cookies: List<String>): Int =
         execute(sourceName) { _ ->
             val httpUrl = url.toHttpUrlOrNull() ?: throw SourceInvalidArgumentException()
             val parsed = cookies.mapNotNull { Cookie.parse(httpUrl, it) }
-            platform.cookieJar.saveFromResponse(httpUrl, parsed)
+            ParserCookieJar(platform.cookieJar).saveFromResponse(httpUrl, parsed)
             parsed.size
         }
 

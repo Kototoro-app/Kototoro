@@ -6,6 +6,7 @@ import com.google.android.material.snackbar.Snackbar
 import kotlinx.coroutines.flow.FlowCollector
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.util.ext.findActivity
+import org.skepsun.kototoro.core.util.ext.makeSnackbar
 import org.skepsun.kototoro.main.ui.owners.BottomSheetOwner
 
 class ReversibleActionObserver(
@@ -16,7 +17,7 @@ class ReversibleActionObserver(
         val handle = value.handle
         val length = if (handle == null) Snackbar.LENGTH_SHORT else Snackbar.LENGTH_LONG
         val snackbar = try {
-            Snackbar.make(snackbarHost, value.stringResId, length)
+            snackbarHost.makeSnackbar(value.stringResId, length)
         } catch (_: RuntimeException) {
             Toast.makeText(snackbarHost.context, value.stringResId, Toast.LENGTH_SHORT).show()
             return

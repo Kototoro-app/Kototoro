@@ -76,6 +76,20 @@ internal object DesktopMangaDirectoryProbe {
                     SemanticsProperties.VerticalScrollAxisRange].value() > before)
                 onNodeWithTag("reader-panel").assertExists()
                 check(controller.state.value.readerNavigation == navigation && controller.state.value.pageIndex == 1)
+                val wheelBefore = onNodeWithTag("chapter-directory-list").fetchSemanticsNode().config[
+                    SemanticsProperties.VerticalScrollAxisRange].value()
+                // A mouse wheel and a trackpad's two-finger scroll are scroll input without a press: they must
+                // scroll the chapter list instead of dragging the panel away (issue #601).
+                onNodeWithTag("chapter-directory-list").performMouseInput { moveTo(center); scroll(4f) }
+                waitForIdle()
+                check(onNodeWithTag("chapter-directory-list").fetchSemanticsNode().config[
+                    SemanticsProperties.VerticalScrollAxisRange].value() > wheelBefore) { "the wheel must scroll" }
+                onNodeWithTag("reader-panel").assertExists()
+                check(controller.state.value.readerNavigation == navigation && controller.state.value.pageIndex == 1)
+                onNodeWithTag("chapter-directory-list").performMouseInput { moveTo(center); scroll(-12f) }
+                waitForIdle()
+                onNodeWithTag("reader-panel").assertExists()
+                check(controller.state.value.pageIndex == 1)
                 onNodeWithTag("reader-chapter-locate").performClick()
                 snapshot("list")
                 onNodeWithTag("reader-chapter-branch:other branch").performClick()

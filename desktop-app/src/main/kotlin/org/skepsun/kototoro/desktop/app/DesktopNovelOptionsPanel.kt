@@ -8,6 +8,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import org.skepsun.kototoro.reader.novel.compose.NovelReadingModeOptions
 import org.skepsun.kototoro.reader.novel.compose.NovelReaderQuickLayer
 import org.skepsun.kototoro.reader.novel.compose.NovelReaderThemeSwatch
 import org.skepsun.kototoro.reader.novel.compose.NovelReaderValueOption
@@ -45,11 +46,11 @@ internal fun DesktopNovelOptionsPanel(
     )
     ReaderOptionsPanelHost(
         colors = readerPanelColors(
-            base = Color(theme.background),
-            content = Color(theme.text),
-            contentSecondary = Color(theme.muted),
-            accent = Color(theme.text),
-            isDark = theme == DesktopNovelTheme.DARK,
+            base = Color(theme.palette.background),
+            content = Color(theme.palette.text),
+            contentSecondary = Color(theme.palette.secondaryText),
+            accent = Color(theme.palette.text),
+            isDark = theme.palette.isDark,
         ),
         surfaceMode = ReaderPanelSurfaceMode.Opaque,
         onDismissRequest = onDismiss,
@@ -59,7 +60,7 @@ internal fun DesktopNovelOptionsPanel(
             NovelReaderQuickLayer(
                 fontSize = fontSize.copy(tag = "novel-quick-font-size"),
                 themes = DesktopNovelTheme.entries.map {
-                    NovelReaderThemeSwatch(it.name, it.title, Color(it.background), Color(it.text))
+                    NovelReaderThemeSwatch(it.name, it.title, Color(it.palette.background), Color(it.palette.text))
                 },
                 selectedTheme = theme.name,
                 onThemeSelected = { controller.novelSettings(settings.copy(theme = DesktopNovelTheme.valueOf(it))) },
@@ -84,7 +85,7 @@ internal fun DesktopNovelOptionsPanel(
                             ),
                             fontOption = {
                                 ReaderOptionSwitchRow(
-                                    label = "衬线字体",
+                                    label = desktopText("novel.serifFont"),
                                     checked = settings.serif,
                                     onCheckedChange = { controller.novelSettings(settings.copy(serif = it)) },
                                     modifier = Modifier.testTag("novel-serif"),
@@ -93,7 +94,7 @@ internal fun DesktopNovelOptionsPanel(
                             additionalOptions = {
                                 ReaderOptionDivider()
                                 NovelReaderValueStepper(NovelReaderValueOption(
-                                    label = "版心宽度",
+                                    label = desktopText("novel.contentWidth"),
                                     valueLabel = "${settings.width}dp",
                                     value = settings.width.toFloat(),
                                     range = DesktopNovelSettings.WIDTHS.let { it.first.toFloat()..it.last.toFloat() },
@@ -108,6 +109,15 @@ internal fun DesktopNovelOptionsPanel(
                     },
                     ReaderOptionsTab(AndroidStrings["novel_reader_tab_reading"]) {
                         ReaderOptionsPageList {
+                            item {
+                                ReaderOptionGroup {
+                                    NovelReadingModeOptions(
+                                        paged = settings.paged,
+                                        onPagedChange = { controller.novelSettings(settings.copy(paged = it)) },
+                                        modifier = Modifier.testTag("novel-paged-mode"),
+                                    )
+                                }
+                            }
                             if (onToggleFullscreen != null) item {
                                 ReaderOptionGroup {
                                     ReaderOptionSwitchRow(
@@ -119,10 +129,9 @@ internal fun DesktopNovelOptionsPanel(
                                 }
                             }
                             item {
-                                ReaderOptionGroup(title = "快捷键") {
+                                ReaderOptionGroup(title = desktopText("reader.shortcuts")) {
                                     Text(
-                                        text = "PageUp / PageDown / 空格 翻页滚动\nHome / End 章首末\n" +
-                                            "H 收起或显示工具栏\nF11 全屏\nEsc 关闭面板或返回详情",
+                                        text = desktopText("novel.shortcutsHelp"),
                                         style = MaterialTheme.typography.bodyMedium,
                                         modifier = Modifier.padding(16.dp),
                                     )

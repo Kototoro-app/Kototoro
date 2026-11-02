@@ -2,6 +2,67 @@ import XCTest
 
 final class LibraryPersistenceTests: XCTestCase {
     @MainActor
+    func testRecordsNavigationTitleIsCentered() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launch()
+        app.mainTab("记录").tap()
+        let title = app.navigationBars.staticTexts["记录"]
+        XCTAssertTrue(title.waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertEqual(title.frame.midX, app.frame.midX, accuracy: 2)
+        XCTAssertTrue(app.buttons["space.menu"].exists)
+    }
+
+    @MainActor
+    func testRecordsFiltersCompactStatsAndDownloadList() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launch()
+        XCTAssertTrue(app.mainTab("记录").waitForExistence(timeout: 30))
+        app.mainTab("记录").tap()
+        let title = app.navigationBars.staticTexts["记录"]
+        XCTAssertTrue(title.waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertEqual(title.frame.midX, app.frame.midX, accuracy: 2)
+        XCTAssertFalse(app.buttons["records.more"].exists)
+        XCTAssertTrue(app.staticTexts["本期概览"].waitForExistence(timeout: 20), app.debugDescription)
+        let compactTop = app.buttons["timeline.filter.all"].frame.minY
+        app.selectRecordsFilter("reading")
+        XCTAssertTrue(app.staticTexts["stats.duration"].waitForExistence(timeout: 10))
+        let chart = app.descendants(matching: .any)["stats.activity"]
+        XCTAssertFalse(chart.exists)
+        XCTAssertLessThanOrEqual(abs(app.buttons["timeline.filter.reading"].frame.minY - compactTop), 16)
+        app.buttons["stats.expand"].tap()
+        XCTAssertTrue(chart.waitForExistence(timeout: 5))
+        app.buttons["stats.expand"].tap()
+        XCTAssertTrue(chart.waitForNonExistence(timeout: 5))
+        let reading = XCTAttachment(screenshot: app.screenshot())
+        reading.name = "Compact reading statistics"
+        reading.lifetime = .keepAlways
+        add(reading)
+        for filter in ["updates", "downloads", "all"] {
+            app.selectRecordsFilter(filter)
+            XCTAssertTrue(app.buttons["timeline.filter.\(filter)"].isSelected)
+            XCTAssertTrue(title.exists)
+            let excluded = filter == "updates" ? ["timeline.read-", "timeline.download."]
+                : filter == "downloads" ? ["timeline.read-", "timeline.update-"] : []
+            for prefix in excluded {
+                XCTAssertFalse(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", prefix)).firstMatch.exists)
+            }
+        }
+        app.selectRecordsFilter("downloads")
+        let entry = app.buttons["records.downloads.queue"]
+        XCTAssertTrue(entry.waitForExistence(timeout: 5))
+        let downloads = XCTAttachment(screenshot: app.screenshot())
+        downloads.name = "Download timeline and task list entry"
+        downloads.lifetime = .keepAlways
+        add(downloads)
+        entry.tap()
+        XCTAssertTrue(app.navigationBars["下载"].waitForExistence(timeout: 10), app.debugDescription)
+        app.navigationBars.buttons.firstMatch.tap()
+        XCTAssertTrue(title.waitForExistence(timeout: 10), app.debugDescription)
+    }
+
+    @MainActor
     func testCategoryOrderAndVisibilitySurviveRestartAndCancelDoesNotWrite() {
         continueAfterFailure = false
         let app = XCUIApplication(); app.launch()
@@ -51,6 +112,7 @@ final class LibraryPersistenceTests: XCTestCase {
         let firstCell = app.cells.containing(.switch, identifier: "category.visibility.\(firstId)").firstMatch
         let secondCell = app.cells.containing(.switch, identifier: "category.visibility.\(secondId)").firstMatch
         XCTAssertTrue(firstCell.exists && secondCell.exists, app.debugDescription)
+        app.buttons["category.reorder"].tap()
         secondCell.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).press(
             forDuration: 0.5, thenDragTo: firstCell.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.1)),
             withVelocity: .slow, thenHoldForDuration: 0.3)

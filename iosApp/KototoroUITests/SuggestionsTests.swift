@@ -1,0 +1,678 @@
+import XCTest
+import UIKit
+
+final class SuggestionsTests: XCTestCase {
+    @MainActor
+    func testWebsiteSearchKeepsItsTitleAndSearchContext() async throws {
+        let health = URLRequest(url: URL(string: "http://127.0.0.1:8765/health")!, timeoutInterval: 2)
+        guard (try? await URLSession.shared.data(for: health)) != nil else {
+            throw XCTSkip("Start serve-cms-fixture.py first")
+        }
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["-space.enabled", "YES", "-space.kind", "VIDEO",
+            "-sources.layout", "list", "-browse.recommendations.feed", "website", "-browse.recommendations.collapsed", "NO",
+            "-browse.tracking.site", "5", "-browse.tracking.category", "calendar", "-browse.tracking.weekday", "2",
+            "-tracking.bangumi.apiBase", "http://127.0.0.1:8765/tracking"]
+        app.launch()
+        app.mainTab("浏览").tap()
+        let work = app.buttons["tracking.preview.201"]
+        XCTAssertTrue(work.waitForExistence(timeout: 20))
+        work.tap()
+        let searchWork = app.buttons["tracking.searchWork"]
+        XCTAssertTrue(searchWork.waitForExistence(timeout: 10))
+        searchWork.tap()
+        let field = app.searchFields["搜索全部来源中的作品"]
+        let found = field.waitForExistence(timeout: 5)
+        attach(app, "网站关联搜索上下文")
+        XCTAssertTrue(found, app.debugDescription)
+        XCTAssertEqual(field.value as? String, "放送作品 201")
+    }
+
+    /// The app lock covers the app while locked, explains when the device has no authentication to offer, and the
+    /// background update switch persists (after the system notification prompt).
+    @MainActor
+    func testAppLockAndBackgroundUpdateSettings() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["-app_lock_enabled", "YES"]
+        app.launch()
+        let lock = app.descendants(matching: .any)["appLock.screen"]
+        XCTAssertTrue(lock.waitForExistence(timeout: 15), app.debugDescription)
+        // The simulator has no passcode: authentication fails and the app stays covered.
+        XCTAssertTrue(app.buttons["appLock.unlock"].waitForExistence(timeout: 10))
+        attach(app, "应用锁")
+        app.terminate()
+
+        app.launchArguments = []
+        app.launch()
+        XCTAssertFalse(lock.waitForExistence(timeout: 3))
+        app.openSettings("settings.privacy")
+        let toggle = app.switches["settings.appLock"]
+        for _ in 0..<4 where !toggle.exists { app.swipeUp() }
+        XCTAssertTrue(toggle.waitForExistence(timeout: 10), app.debugDescription)
+        toggle.tap()
+        // Without a passcode or enrolled biometrics the lock cannot be turned on: either the app explains that, or
+        // the system authentication fails (or is cancelled) and the switch stays off.
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        if app.alerts["无法开启应用锁"].waitForExistence(timeout: 5) { app.alerts.buttons["好"].tap() }
+        let cancel = springboard.buttons.matching(NSPredicate(format: "label IN %@", ["取消", "Cancel"])).firstMatch
+        if cancel.waitForExistence(timeout: 2) { cancel.tap() }
+        Thread.sleep(forTimeInterval: 1)
+        XCTAssertEqual(toggle.value as? String, "0", "The lock is not enabled without a successful authentication")
+
+        app.terminate()
+        app.launch()
+        app.openSettings("settings.general")
+        let updates = app.switches["settings.backgroundUpdates"]
+        for _ in 0..<5 where !updates.isHittable { app.swipeUp() }
+        // The switch sits at the trailing end of a wide row.
+        func flip() { updates.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap() }
+        if updates.value as? String == "1" { flip() }
+        flip()
+        let allow = springboard.buttons.matching(NSPredicate(format: "label IN %@", ["允许", "Allow"])).firstMatch
+        if allow.waitForExistence(timeout: 5) { allow.tap() }
+        XCTAssertEqual(updates.value as? String, "1")
+        app.terminate()
+        app.launch()
+        app.openSettings("settings.general")
+        XCTAssertTrue(updates.waitForExistence(timeout: 10))
+        XCTAssertEqual(updates.value as? String, "1", "The background update switch survives a relaunch")
+        flip()
+    }
+
+    /// Settings is a list of entries only; each opens its page, and Back returns to the list.
+    @MainActor
+    func testSettingsRootEntriesOpenTheirPages() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launch()
+        app.mainTab("设置").tap()
+        XCTAssertTrue(app.buttons["settings.extensions"].waitForExistence(timeout: 15), app.debugDescription)
+        XCTAssertFalse(app.switches.firstMatch.exists, "The settings root holds no controls of its own")
+        attach(app, "设置首页")
+        let pages = [("settings.reader", "阅读器"), ("settings.translation", "翻译"),
+                     ("settings.contentSpaces", "内容空间"), ("settings.details", "详情页"),
+                     ("settings.downloads", "下载"), ("settings.storage", "存储管理"),
+                     ("settings.backup", "备份与同步"), ("settings.tracking", "追踪网站"),
+                     ("settings.privacy", "隐私与安全"), ("settings.general", "通用"), ("settings.about", "关于")]
+        for (id, title) in pages {
+            let entry = app.buttons[id]
+            for _ in 0..<4 where !(entry.exists && entry.isHittable) { app.swipeUp() }
+            XCTAssertTrue(entry.waitForExistence(timeout: 10), app.debugDescription)
+            entry.tap()
+            XCTAssertTrue(app.navigationBars[title].waitForExistence(timeout: 10), "\(id): \(app.debugDescription)")
+            if id == "settings.backup" {
+                XCTAssertTrue(app.buttons["settings.googleDrive"].exists, app.debugDescription)
+                XCTAssertTrue(app.buttons["settings.webdav"].exists, app.debugDescription)
+            }
+            attach(app, title)
+            app.navigationBars[title].buttons.element(boundBy: 0).tap()
+            XCTAssertTrue(app.navigationBars["设置"].waitForExistence(timeout: 10), app.debugDescription)
+        }
+    }
+
+    /// The GitHub mirror choice persists and the reachability test reports every mirror (time or timeout).
+    @MainActor
+    func testGitHubMirrorChoicePersistsAndProbes() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launch()
+        func openMirrors() {
+            app.openSettings("settings.general", "settings.githubMirror")
+        }
+        openMirrors()
+        let mirror = app.buttons["mirror.gh_proxy_com"]
+        XCTAssertTrue(mirror.waitForExistence(timeout: 10), app.debugDescription)
+        mirror.tap()
+        XCTAssertTrue(mirror.isSelected)
+        app.terminate()
+        app.launch()
+        openMirrors()
+        XCTAssertTrue(mirror.waitForExistence(timeout: 10))
+        XCTAssertTrue(mirror.isSelected, "The mirror choice survives a relaunch")
+        let probe = app.buttons["mirror.probe"]
+        for _ in 0..<3 where !probe.isHittable { app.swipeUp() }
+        probe.tap()
+        // The probe row may scroll out of the lazily drawn list; the reported times are what counts.
+        let reported = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            app.staticTexts.matching(NSPredicate(format: "label ENDSWITH %@ OR label CONTAINS %@ OR label == %@",
+                                                 " ms", " ms ·", "超时")).count > 0
+        }, object: nil)
+        wait(for: [reported], timeout: 30)
+        attach(app, "GitHub 镜像测速")
+        app.swipeDown(); app.swipeDown()
+        app.buttons["mirror.native"].tap()
+    }
+
+    /// WebDAV backup against Scripts/serve-webdav-fixture.py: connect with Basic credentials, upload under Android's
+    /// name, list it, and merge it back through the backup preview.
+    @MainActor
+    func testWebDavBackupUploadsListsAndRestores() async throws {
+        guard (try? await URLSession.shared.data(from: URL(string: "http://127.0.0.1:8766/__files")!)) != nil else {
+            throw XCTSkip("Start serve-webdav-fixture.py first")
+        }
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launch()
+        app.openSettings("settings.backup", "settings.webdav")
+        func fill(_ id: String, _ text: String) {
+            let field = app.descendants(matching: .any)[id]
+            XCTAssertTrue(field.waitForExistence(timeout: 5), app.debugDescription)
+            field.tap()
+            if let value = field.value as? String, !value.isEmpty, value != field.placeholderValue {
+                field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: value.count))
+            }
+            field.typeText(text)
+        }
+        fill("webdav.server", "http://127.0.0.1:8766")
+        fill("webdav.path", "backups")
+        fill("webdav.user", "kototoro")
+        fill("webdav.password", "secret")
+        app.buttons["webdav.test"].tap()
+        let message = app.staticTexts["webdav.message"]
+        XCTAssertTrue(message.waitForExistence(timeout: 20), app.debugDescription)
+        XCTAssertEqual(message.label, "连接成功", app.debugDescription)
+        app.buttons["webdav.upload"].tap()
+        let uploaded = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "已上传 kototoro-v3-work-v1-")).firstMatch
+        XCTAssertTrue(uploaded.waitForExistence(timeout: 60), app.debugDescription)
+        let file = app.buttons.matching(identifier: "webdav.file").firstMatch
+        for _ in 0..<4 where !file.isHittable { app.swipeUp() }
+        XCTAssertTrue(file.waitForExistence(timeout: 10), app.debugDescription)
+        attach(app, "WebDAV 备份")
+        file.tap()
+        let restore = app.buttons["webdav.restore"]
+        for _ in 0..<4 where !restore.exists { app.swipeDown() }
+        XCTAssertTrue(restore.waitForExistence(timeout: 30), app.debugDescription)
+        restore.tap()
+        let merged = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "已合并")).firstMatch
+        XCTAssertTrue(merged.waitForExistence(timeout: 60), app.debugDescription)
+    }
+
+    /// Android's tag blacklist: catalog tags and free-form titles are hidden, kept across launches and cleared.
+    @MainActor
+    func testTagBlacklistSelectsCatalogAndCustomTagsAndPersists() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["-global_tag_blacklist", "()"]
+        app.launch()
+        openTagBlacklist(app)
+        let search = app.searchFields["搜索标签"]
+        XCTAssertTrue(search.waitForExistence(timeout: 10), app.debugDescription)
+        search.tap()
+        search.typeText("恐怖")
+        let horror = app.buttons["tags.blacklist.genre.horror"]
+        XCTAssertTrue(horror.waitForExistence(timeout: 5), app.debugDescription)
+        horror.tap()
+        XCTAssertTrue(horror.isSelected, app.debugDescription)
+        search.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 2) + "测试自定义词")
+        let addRaw = app.buttons["tags.blacklist.addRaw"]
+        XCTAssertTrue(addRaw.waitForExistence(timeout: 5), app.debugDescription)
+        addRaw.tap()
+        attach(app, "标签黑名单")
+
+        app.terminate()
+        app.launchArguments = []
+        app.launch()
+        openTagBlacklist(app)
+        let count = app.descendants(matching: .any)["tags.blacklist.count"]
+        XCTAssertTrue(count.waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertTrue(count.label.contains("2") || (count.value as? String) == "2", count.debugDescription)
+        XCTAssertTrue(app.staticTexts["测试自定义词"].exists || app.buttons["测试自定义词"].exists, app.debugDescription)
+        app.navigationBars.buttons["清空"].tap()
+        app.buttons.matching(NSPredicate(format: "label == %@", "清空")).allElementsBoundByIndex.last?.tap()
+        XCTAssertTrue(app.navigationBars.buttons["清空"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.navigationBars.buttons["清空"].isEnabled, app.debugDescription)
+    }
+
+    private func openTagBlacklist(_ app: XCUIApplication) {
+        app.openSettings("settings.privacy", "settings.tagBlacklist")
+    }
+
+    @MainActor
+    func testGlobalSearchFiltersRemainVisibleWhileTyping() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launch()
+        app.mainTab("搜索").tap()
+        let filter = app.buttons["search.filter"]
+        XCTAssertTrue(filter.waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertTrue(filter.isHittable)
+        let search = app.pageSearchField()
+        search.tap(); search.typeText("测试")
+        XCTAssertTrue(app.keyboards.firstMatch.exists)
+        XCTAssertTrue(filter.isHittable, "Filters must remain reachable while the system search is active")
+        filter.tap()
+        XCTAssertTrue(app.switches["仅搜索置顶来源"].exists || app.buttons["仅搜索置顶来源"].exists)
+        attach(app, "全局搜索可见筛选")
+    }
+
+    @MainActor
+    func testWebsiteDetailsSearchesSourcesAndOpensTheBoundWork() async throws {
+        let health = URLRequest(url: URL(string: "http://127.0.0.1:8765/health")!, timeoutInterval: 2)
+        guard (try? await URLSession.shared.data(for: health)) != nil else {
+            throw XCTSkip("Start serve-cms-fixture.py first")
+        }
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["-space.enabled", "YES", "-space.kind", "VIDEO", "-sources.layout", "list",
+            "-search.pinnedOnly", "NO", "-browse.recommendations.feed", "website",
+            "-browse.recommendations.collapsed", "NO", "-browse.tracking.site", "5",
+            "-browse.tracking.category", "calendar", "-browse.tracking.weekday", "2",
+            "-tracking.bangumi.apiBase", "http://127.0.0.1:8765/tracking"]
+        app.launch()
+        importVideoSite(app, url: "http://127.0.0.1:8765/binding/api.php/provide/vod/", title: "关联搜索测试源")
+        app.terminate(); app.launch()
+        app.mainTab("浏览").tap()
+        let work = app.buttons["tracking.preview.201"]
+        XCTAssertTrue(work.waitForExistence(timeout: 20))
+        work.tap()
+        let searchWork = app.buttons["tracking.searchWork"]
+        XCTAssertTrue(searchWork.waitForExistence(timeout: 15), app.debugDescription)
+        attach(app, "网站作品详情信息卡")
+        searchWork.tap()
+        let search = app.searchFields["搜索全部来源中的作品"]
+        XCTAssertTrue(search.waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertEqual(search.value as? String, "放送作品 201")
+        search.tap()
+        search.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: "放送作品 201".count))
+        search.typeText("测试动画\n")
+        let source = app.staticTexts.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label == %@",
+            "search.source.", "关联搜索测试源")).firstMatch
+        // Results append in the order sources answer, so this one may sit below rows the lazy list has not built yet.
+        let searched = NSPredicate(format: "label BEGINSWITH %@", "已搜索")
+        XCTAssertTrue(app.staticTexts["search.progress"].waitForExistence(timeout: 30), app.debugDescription)
+        wait(for: [XCTNSPredicateExpectation(predicate: searched, object: app.staticTexts["search.progress"])], timeout: 60)
+        for _ in 0..<12 where !source.exists { app.scrollViews.firstMatch.swipeUp() }
+        XCTAssertTrue(source.exists, app.debugDescription)
+        let sourceName = String(source.identifier.dropFirst("search.source.".count))
+        let result = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@",
+            "search.result.\(sourceName).", "测试动画")).firstMatch
+        for _ in 0..<6 where !result.isHittable { app.scrollViews.firstMatch.swipeUp() }
+        XCTAssertTrue(result.isHittable)
+        attach(app, "从网站作品搜索来源")
+        result.tap()
+        let chosen = app.descendants(matching: .any)["tracking.chosenWork"].firstMatch
+        XCTAssertTrue(chosen.waitForExistence(timeout: 10))
+        let bind = app.buttons["tracking.bind"]
+        XCTAssertTrue(bind.isEnabled)
+        attach(app, "确认来源作品关联")
+        bind.tap()
+        let title = app.staticTexts["details.title"]
+        XCTAssertTrue(title.waitForExistence(timeout: 20), app.debugDescription)
+        XCTAssertEqual(title.label, "放送作品 201", "The chosen source work must use the bound website metadata")
+        attach(app, "关联后打开来源作品")
+    }
+
+    @MainActor
+    func testManualWebsiteRefreshBypassesFreshCache() async throws {
+        let health = URLRequest(url: URL(string: "http://127.0.0.1:8765/health")!, timeoutInterval: 2)
+        func requestCount() async throws -> Int {
+            let (data, _) = try await URLSession.shared.data(for: health)
+            return try XCTUnwrap((JSONSerialization.jsonObject(with: data) as? [String: Any])?["calendarRequests"] as? Int)
+        }
+        guard (try? await requestCount()) != nil else {
+            throw XCTSkip("Start the updated serve-cms-fixture.py first")
+        }
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["-space.enabled", "YES", "-space.kind", "VIDEO", "-sources.layout", "list",
+            "-browse.recommendations.feed", "website", "-browse.recommendations.collapsed", "NO",
+            "-browse.tracking.site", "5", "-browse.tracking.category", "calendar", "-browse.tracking.weekday", "2",
+            "-tracking.bangumi.apiBase", "http://127.0.0.1:8765/tracking"]
+        app.launch()
+        app.mainTab("浏览").tap()
+        XCTAssertTrue(app.buttons["tracking.preview.201"].waitForExistence(timeout: 20))
+        let before = try await requestCount()
+        app.buttons["recommendations.more"].tap()
+        let refresh = app.buttons["recommendations.refresh"]
+        XCTAssertTrue(refresh.isEnabled)
+        refresh.tap()
+        let deadline = Date().addingTimeInterval(10)
+        var after = before
+        while Date() < deadline && after == before {
+            try await Task.sleep(for: .milliseconds(100))
+            after = try await requestCount()
+        }
+        XCTAssertGreaterThan(after, before, "Manual refresh must reach the server inside the 15-minute cache window")
+        XCTAssertTrue(app.buttons["tracking.preview.201"].exists, "Keep the shelf visible while refreshing")
+    }
+
+    @MainActor
+    func testSourceSearchAndFiltersPreserveDraftChoicesUntilSave() async throws {
+        let health = URLRequest(url: URL(string: "http://127.0.0.1:8765/health")!, timeoutInterval: 2)
+        guard (try? await URLSession.shared.data(for: health)) != nil else {
+            throw XCTSkip("Start serve-cms-fixture.py first")
+        }
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["-suggestions", "NO", "-sources.layout", "list",
+            "-browse.recommendations.feed", "personal", "-browse.recommendations.collapsed", "NO"]
+        app.launch()
+        importVideoSite(app, url: "http://127.0.0.1:8765/api.php/provide/vod/", title: "推荐筛选测试")
+        app.terminate()
+        app.launch()
+        app.mainTab("浏览").tap()
+        app.buttons["recommendations.more"].tap()
+        app.buttons["suggestions.shelf.settings"].tap()
+        let tags = app.textFields["suggestions.preferredTags"]
+        XCTAssertTrue(tags.waitForExistence(timeout: 10))
+        tags.tap()
+        if let text = tags.value as? String, text != tags.placeholderValue {
+            tags.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: text.count))
+        }
+        tags.typeText("source-draft")
+        app.buttons["suggestions.sources"].tap()
+        let search = app.pageSearchField()
+        XCTAssertTrue(search.exists)
+        search.tap(); search.typeText("推荐筛选测试")
+        let row = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@",
+            "suggestions.source.", "推荐筛选测试")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 10), app.debugDescription)
+        let identifier = row.identifier
+        row.tap(); app.buttons["优先推荐"].tap()
+        func filterChoice(_ title: String) {
+            app.buttons["suggestions.sources.filter"].tap()
+            app.buttons["推荐状态"].tap()
+            app.buttons[title].tap()
+        }
+        filterChoice("不推荐")
+        XCTAssertFalse(app.buttons[identifier].exists, "Filtering must hide the preferred source")
+        filterChoice("优先推荐")
+        XCTAssertTrue(app.buttons[identifier].waitForExistence(timeout: 5), "Filtering must preserve the draft choice")
+        attach(app, "推荐来源搜索与状态筛选")
+        if !app.navigationBars.buttons["推荐偏好"].exists {
+            let close = app.buttons["关闭"].firstMatch
+            if close.exists { close.tap() } else { app.buttons["取消"].tap() }
+        }
+        app.navigationBars.buttons["推荐偏好"].tap()
+        XCTAssertEqual(tags.value as? String, "source-draft", "Returning must not reload the unsaved draft")
+        app.buttons["suggestions.save"].tap()
+        app.buttons["recommendations.more"].tap()
+        app.buttons["suggestions.shelf.settings"].tap()
+        app.buttons["suggestions.sources"].tap()
+        filterChoice("优先推荐")
+        let saved = app.buttons[identifier]
+        XCTAssertTrue(saved.waitForExistence(timeout: 10), "Saving must retain a choice hidden by other filters")
+        saved.tap(); app.buttons["不推荐"].tap()
+        app.navigationBars.buttons["推荐偏好"].tap()
+        app.buttons["取消"].tap()
+        app.buttons["recommendations.more"].tap()
+        app.buttons["suggestions.shelf.settings"].tap()
+        app.buttons["suggestions.sources"].tap()
+        filterChoice("优先推荐")
+        XCTAssertTrue(app.buttons[identifier].waitForExistence(timeout: 5), "Cancel must discard the new draft")
+    }
+
+    @MainActor
+    func testLeadingWebsiteCaptionIsNotClippedByTheSourceList() async throws {
+        let health = URLRequest(url: URL(string: "http://127.0.0.1:8765/health")!, timeoutInterval: 2)
+        guard (try? await URLSession.shared.data(for: health)) != nil else {
+            throw XCTSkip("Start serve-cms-fixture.py first")
+        }
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["-space.enabled", "YES", "-space.kind", "VIDEO", "-sources.layout", "list",
+            "-browse.recommendations.feed", "website", "-browse.recommendations.collapsed", "NO",
+            "-browse.tracking.site", "5", "-browse.tracking.category", "calendar", "-browse.tracking.weekday", "2",
+            "-tracking.bangumi.apiBase", "http://127.0.0.1:8765/tracking"]
+        app.launch()
+        app.mainTab("浏览").tap()
+        let first = app.buttons["tracking.preview.201"]
+        let second = app.buttons["tracking.preview.202"]
+        XCTAssertTrue(first.waitForExistence(timeout: 20))
+        XCTAssertTrue(second.exists)
+        let screenshot = app.screenshot()
+        let pixels = screenshot.image.cgImage!
+        let scale = CGFloat(pixels.width) / app.frame.width
+        func leadingGlyph(_ frame: CGRect) -> Int {
+            let rect = CGRect(x: frame.minX, y: frame.maxY - 16, width: 12, height: 16)
+                .applying(CGAffineTransform(scaleX: scale, y: scale)).integral
+            let glyph = pixels.cropping(to: rect)!
+            let width = glyph.width, height = glyph.height
+            var bytes = [UInt8](repeating: 0, count: width * height * 4)
+            let context = CGContext(data: &bytes, width: width, height: height, bitsPerComponent: 8,
+                bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+            context.draw(glyph, in: CGRect(x: 0, y: 0, width: width, height: height))
+            return stride(from: 0, to: bytes.count, by: 4).filter {
+                max(bytes[$0], bytes[$0 + 1], bytes[$0 + 2]) < 100
+            }.count
+        }
+        let firstInk = leadingGlyph(first.frame), secondInk = leadingGlyph(second.frame)
+        XCTAssertGreaterThan(secondInk, 100, "The fixture's reference glyph must be visible")
+        XCTAssertGreaterThanOrEqual(Double(firstInk), Double(secondInk) * 0.9,
+            "The identical leading glyph is clipped: first=\(firstInk), second=\(secondInk)")
+        attach(app, "首字裁切回归")
+    }
+
+    @MainActor
+    func testWebsiteCalendarSelectionAndBothShelvesFollowSpace() async throws {
+        let health = URLRequest(url: URL(string: "http://127.0.0.1:8765/health")!, timeoutInterval: 2)
+        guard (try? await URLSession.shared.data(for: health)) != nil else {
+            throw XCTSkip("Start serve-cms-fixture.py first")
+        }
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        let common = ["-suggestions", "YES", "-suggestions_preferred_tags", "动画",
+                      "-sources.layout", "list", "-space.enabled", "YES",
+                      "-browse.tracking.site", "5", "-browse.tracking.category", "calendar",
+                      "-browse.tracking.weekday", "2", "-tracking.bangumi.apiBase", "http://127.0.0.1:8765/tracking"]
+        app.launchArguments = common + ["-space.kind", "VIDEO"]
+        app.launch()
+        app.mainTab("浏览").tap()
+        func showWebsiteShelf() {
+            if !app.buttons["sources.tracking"].exists {
+                app.buttons["recommendations.more"].tap()
+                app.buttons["推荐内容"].tap()
+                app.buttons["网站推荐"].tap()
+            }
+            app.buttons["recommendations.more"].tap()
+            let collapse = app.buttons["recommendations.collapse"]
+            if collapse.label == "展开推荐" { collapse.tap() }
+            else { app.coordinate(withNormalizedOffset: CGVector(dx: 0.05, dy: 0.15)).tap() }
+        }
+        showWebsiteShelf()
+        let calendarWork = app.buttons["tracking.preview.201"]
+        XCTAssertTrue(calendarWork.waitForExistence(timeout: 25), app.debugDescription)
+        let shelf = app.scrollViews["tracking.shelf"]
+        for _ in 0..<4 { shelf.swipeLeft() }
+        XCTAssertTrue(app.buttons["tracking.preview.210"].exists)
+        XCTAssertFalse(app.buttons["tracking.preview.211"].exists, "The shelf is limited to ten works")
+        for _ in 0..<4 { shelf.swipeRight() }
+        attach(app, "视频空间网站放送与精选推荐")
+        let firstSource = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "source.JSON_TVBOX_")).firstMatch
+        let expandedSourceY = firstSource.exists ? firstSource.frame.minY : nil
+        app.buttons["recommendations.more"].tap()
+        app.buttons["recommendations.collapse"].tap()
+        XCTAssertFalse(app.scrollViews["tracking.shelf"].exists)
+        if let expandedSourceY {
+            XCTAssertLessThan(firstSource.frame.minY, expandedSourceY, "Collapsing must free source space")
+        }
+        attach(app, "推荐收起后的来源区域")
+        app.buttons["recommendations.more"].tap()
+        XCTAssertEqual(app.buttons["recommendations.collapse"].label, "展开推荐")
+        app.buttons["recommendations.collapse"].tap()
+        app.buttons["sources.tracking"].tap()
+        let calendar = app.segmentedControls["tracking.ranking"].buttons["每日放送"]
+        XCTAssertTrue(calendar.waitForExistence(timeout: 10))
+        XCTAssertTrue(calendar.isSelected)
+        XCTAssertTrue(app.buttons["tracking.result.201"].waitForExistence(timeout: 15))
+        app.terminate()
+
+        app.launchArguments = common + ["-space.kind", "MANGA"]
+        app.launch()
+        app.mainTab("浏览").tap()
+        showWebsiteShelf()
+        let manga = app.buttons["tracking.preview.901"]
+        XCTAssertTrue(manga.waitForExistence(timeout: 25), app.debugDescription)
+        XCTAssertTrue(manga.label.contains("推荐漫画"))
+        XCTAssertFalse(app.buttons["tracking.preview.201"].exists, "Video calendar must disappear in manga space")
+        app.buttons["recommendations.more"].tap()
+        app.buttons["推荐内容"].tap()
+        app.buttons["为你推荐"].tap()
+        XCTAssertTrue(app.buttons["sources.suggestions"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@",
+                                                      "suggestions.preview.", "测试动画")).firstMatch.exists)
+        app.buttons["recommendations.more"].tap()
+        app.buttons["推荐内容"].tap()
+        app.buttons["网站推荐"].tap()
+        app.buttons["recommendations.more"].tap()
+        XCTAssertFalse(app.buttons["内容类型"].exists, "Media type is controlled by Space")
+        app.buttons["分区"].tap()
+        XCTAssertFalse(app.buttons["每日放送"].exists, "Calendar is unavailable outside video")
+        attach(app, "漫画空间与网站分区选择")
+        app.terminate()
+        app.launchArguments = common.map { $0 == "calendar" ? "popular" : $0 } + ["-space.kind", ""]
+        app.launch()
+        app.mainTab("浏览").tap()
+        showWebsiteShelf()
+        for id in [901, 1901, 2901] {
+            XCTAssertTrue(app.buttons["tracking.preview.\(id)"].waitForExistence(timeout: 20), app.debugDescription)
+        }
+        attach(app, "全部空间混合网站推荐")
+    }
+
+    @MainActor
+    func testBrowseEntryPreservesMainTabsAndPreferencesCanBeSaved() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["-suggestions", "NO", "-sources.layout", "list",
+                               "-browse.recommendations.feed", "personal", "-browse.recommendations.collapsed", "NO"]
+        app.launch()
+        app.mainTab("浏览").tap()
+        let entry = app.buttons["sources.suggestions"]
+        XCTAssertTrue(entry.waitForExistence(timeout: 20), app.debugDescription)
+        for title in ["作品库", "浏览", "记录", "设置"] { XCTAssertTrue(app.tabBars.buttons[title].exists) }
+        XCTAssertFalse(app.tabBars.buttons["为你推荐"].exists)
+        attach(app, "浏览页推荐入口")
+        entry.tap()
+        XCTAssertTrue(app.buttons["suggestions.enable"].waitForExistence(timeout: 10))
+        app.buttons["suggestions.settings"].tap()
+        let preferred = app.textFields["suggestions.preferredTags"]
+        XCTAssertTrue(preferred.waitForExistence(timeout: 10))
+        preferred.tap()
+        if let text = preferred.value as? String, text != preferred.placeholderValue {
+            preferred.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: text.count))
+        }
+        preferred.typeText("奇幻, 冒险")
+        app.buttons["suggestions.save"].tap()
+        app.buttons["suggestions.settings"].tap()
+        XCTAssertEqual(app.textFields["suggestions.preferredTags"].value as? String, "奇幻, 冒险")
+        attach(app, "推荐偏好")
+        app.buttons["取消"].tap()
+    }
+
+    @MainActor
+    func testLargeRecommendationCatalogKeepsDetailsUsable() async throws {
+        let health = URLRequest(url: URL(string: "http://127.0.0.1:8765/health")!, timeoutInterval: 2)
+        guard (try? await URLSession.shared.data(for: health)) != nil else {
+            throw XCTSkip("Start serve-cms-fixture.py first")
+        }
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["-suggestions", "YES", "-suggestions_preferred_tags", "动画",
+                               "-suggestions_exclude_tags", "", "-suggestions.updatedAt", "0",
+                               "-space.enabled", "YES", "-space.kind", "VIDEO", "-sources.layout", "list",
+                               "-browse.recommendations.feed", "personal", "-browse.recommendations.collapsed", "NO"]
+        app.launch()
+        importVideoSite(app, url: "http://127.0.0.1:8765/recommendation-sites.json", title: nil)
+        app.terminate(); app.launch()
+        app.mainTab("浏览").tap()
+        let entry = app.buttons["sources.suggestions"]
+        XCTAssertTrue(entry.waitForExistence(timeout: 20))
+        entry.tap()
+        let work = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "suggestion.")).firstMatch
+        XCTAssertTrue(work.waitForExistence(timeout: 60), app.debugDescription)
+        let openedAt = Date()
+        work.tap()
+        XCTAssertTrue(app.staticTexts["details.title"].waitForExistence(timeout: 10))
+        XCTAssertLessThan(Date().timeIntervalSince(openedAt), 5,
+                          "A large recommendation catalog must not block details navigation")
+        for _ in 0..<3 {
+            let startedAt = Date()
+            app.buttons["details.more"].tap()
+            XCTAssertLessThan(Date().timeIntervalSince(startedAt), 5,
+                              "The recommendation catalog must not block controls on the details screen")
+            XCTAssertTrue(app.buttons["details.changeSource"].waitForExistence(timeout: 3))
+            app.navigationBars.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.08, dy: 0.15)).tap()
+            XCTAssertTrue(app.buttons["details.changeSource"].waitForNonExistence(timeout: 3))
+        }
+        attach(app, "大量推荐进入视频详情")
+    }
+
+    @MainActor
+    func testRecommendationsFromNativeSourceOpenDetails() async throws {
+        // The fixture also exercises the unfiltered fallback for sources with no matching preference tag.
+        let health = URLRequest(url: URL(string: "http://127.0.0.1:8765/health")!, timeoutInterval: 2)
+        guard (try? await URLSession.shared.data(for: health)) != nil else {
+            throw XCTSkip("Start serve-cms-fixture.py first")
+        }
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["-suggestions", "YES", "-suggestions_preferred_tags", "动画",
+                               "-suggestions_exclude_tags", "", "-suggestions.updatedAt", "0",
+                               "-space.enabled", "YES", "-space.kind", "VIDEO", "-sources.layout", "list",
+                               "-browse.recommendations.feed", "personal", "-browse.recommendations.collapsed", "NO"]
+        app.launch()
+        importVideoSite(app, url: "http://127.0.0.1:8765/api.php/provide/vod/", title: "推荐测试来源")
+        app.terminate()
+        app.launch()
+        app.mainTab("浏览").tap()
+        let entry = app.buttons["sources.suggestions"]
+        XCTAssertTrue(entry.waitForExistence(timeout: 20))
+        entry.tap()
+        let work = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@",
+                                                    "suggestion.", "测试动画")).firstMatch
+        XCTAssertTrue(work.waitForExistence(timeout: 90), app.debugDescription)
+        attach(app, "为你推荐作品列表")
+        let openedAt = Date()
+        work.tap()
+        XCTAssertTrue(app.staticTexts["details.title"].waitForExistence(timeout: 20), app.debugDescription)
+        XCTAssertEqual(app.staticTexts["details.title"].label, "测试动画")
+        XCTAssertLessThan(Date().timeIntervalSince(openedAt), 5, "Opening a cached recommendation must stay responsive")
+        let episodeProgress = app.buttons.matching(NSPredicate(format: "label MATCHES %@", "全部剧集，[0-9]+/[0-9]+"))
+            .firstMatch
+        XCTAssertTrue(episodeProgress.waitForExistence(timeout: 10),
+                      "Video details keep the Android episode progress row above the summary")
+        for _ in 0..<3 {
+            let startedAt = Date()
+            app.buttons["details.more"].tap()
+            XCTAssertLessThan(Date().timeIntervalSince(startedAt), 5,
+                              "Opening a details control must stay responsive after navigation")
+            XCTAssertTrue(app.buttons["details.changeSource"].waitForExistence(timeout: 3))
+            app.navigationBars.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.08, dy: 0.15)).tap()
+            XCTAssertTrue(app.buttons["details.changeSource"].waitForNonExistence(timeout: 3))
+        }
+        attach(app, "推荐视频详情控件")
+        let line = app.descendants(matching: .any)["details.line"].firstMatch
+        XCTAssertTrue(line.waitForExistence(timeout: 5))
+        line.tap(); tapMenuItem(app, "备用")
+        let episodes = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "chapter."))
+        XCTAssertEqual(episodes.count, 1, "The backup line has only one episode")
+        line.tap(); tapMenuItem(app, "高清")
+        XCTAssertEqual(episodes.count, 2)
+        let firstEpisode = episodes.firstMatch
+        for _ in 0..<3 where !firstEpisode.isHittable { app.collectionViews.firstMatch.swipeUp() }
+        XCTAssertTrue(firstEpisode.isHittable)
+        firstEpisode.tap()
+        let position = app.staticTexts["player.position"]
+        XCTAssertTrue(position.waitForExistence(timeout: 20))
+        let advancing = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label != %@ AND label != %@",
+            "已播放 0 秒", ""), object: position)
+        XCTAssertEqual(XCTWaiter.wait(for: [advancing], timeout: 20), .completed)
+        XCTAssertFalse(app.staticTexts["player.error"].exists)
+        playerControl(app, "player.close").tap()
+        XCTAssertTrue(app.staticTexts["details.title"].waitForExistence(timeout: 10))
+        attach(app, "视频选集播放后返回详情")
+    }
+
+    @MainActor private func attach(_ app: XCUIApplication, _ name: String) {
+        let screenshot = app.screenshot()
+        let attachment = XCTAttachment(screenshot: screenshot)
+        attachment.name = name; attachment.lifetime = .keepAlways; add(attachment)
+        // Keep local copies for visual QA alongside the XCTest attachments.
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("suggestions-\(name).png")
+        try? screenshot.pngRepresentation.write(to: file)
+    }
+}

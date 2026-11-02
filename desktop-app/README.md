@@ -1,4 +1,161 @@
- Windows desktop application
+# Desktop application (Windows / macOS / Linux)
+
+## Linux 服务器开发
+
+Linux 沿用 Windows/macOS 的同一个 JVM `desktop-app`、Controller、数据库及来源运行时；
+Android 与桌面共享的呈现继续放在 `core-ui/commonMain`，遵循
+[CMP 共享 UI 指导](../docs/architecture/shared-ui-guidelines.md)，不新增 Linux 页面副本。
+提供源码运行、离线冒烟、自带 JVM 的应用目录及 `.deb` 本地预览包。
+浏览器桥与自动更新尚未适配；播放走发行版的 libmpv、超分在阅读器里按需下载官方 ncnn-vulkan 程序，
+两者都不随包分发（见下文「Linux 打包与产物自检」）。
+
+需要可供 Gradle 发现的 JDK 21、X11 图形会话，以及现有锁定哈希的 29 个兼容 JAR。
+从已下载的官方 Windows 桌面 ZIP 中提取共享 JVM 运行时；所有同名副本都必须匹配锁定哈希，
+不提取 Windows JVM、EXE 或 DLL：
+
+```bash
+python3 "desktop-app/prepare-compatibility.py" "/absolute/path/Kototoro-windows.zip"
+./gradlew -PwithDesktopApp \
+    "-PmihonCompatibilityDirectory=build/desktop-compatibility" \
+    :desktop-app:compileKotlin --console=plain --no-configuration-cache
+bash "desktop-app/run-linux.sh" \
+    "-PdesktopDataDirectory=/absolute/path/linux-debug-data"
+```
+
+默认数据目录沿用 `~/.kototoro`；开发时建议显式指定独立目录。
+首个位置参数可以指定已有兼容目录，之后的参数传给 Gradle；例如
+`bash "desktop-app/run-linux.sh" "/absolute/path/compatibility" --debug-jvm`。
+调试器通过 SSH 隧道连接服务器 `localhost:5005`。
+人工调试可连接已有 X11 桌面，或使用通过 SSH 隧道访问的 VNC/noVNC 会话。
+只有 Wayland 环境时需提供 XWayland/X11 显示；启动脚本不会创建远程桌面服务。
+
+无桌面的服务器使用 Xvfb 与 `xauth` 运行既有离线探针：
+
+```bash
+bash "desktop-app/smoke-linux.sh"
+# 有 X11 显示时直接使用，否则自动通过 xvfb-run 启动虚拟显示。
+# 如将 Xvfb 解包在项目 build/linux-tools 中，可仅对这条命令添加路径：
+PATH="$PWD/build/linux-tools/usr/bin:$PATH" bash "desktop-app/smoke-linux.sh"
+```
+
+冒烟入口复用 `DesktopAppTest`，验证浏览、搜索、详情、收藏、阅读、返回、偏好保存及第二进程恢复，
+并验证生产窗口关闭、数据库释放；使用临时数据和离线 fixture，不依赖在线来源或 Windows 浏览器桥。
+探针日志与截图输出到 `desktop-app/build/reports/desktop-smoke`，JUnit 报告位于
+`desktop-app/build/reports/tests/test/index.html`。测试失败时先检查探针日志，不能只看构建成功与否。
+Xvfb 结果不代表 GPU 播放、Wayland、高 DPI 或实际桌面性能已通过验收。
+
+网络受限时在 Gradle 命令或脚本末尾追加：
+`-Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=7890 -Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=7890`。
+开发辅助下载、解包工具、测试数据和截图保留在忽略的 `build/` 目录，Gradle 依赖继续使用常规缓存。
+
+2026-10-27 已在 Ubuntu 24.04 x86_64、JDK 21、Xvfb 下完成 `:desktop-app:compileKotlin`，
+冒烟入口的两项测试均通过（无跳过），并检查了详情与重启后阅读截图；运行时提取的四项 Python
+回归测试通过。生产窗口在 Xvfb 中无法创建 OpenGL 上下文后成功回退到软件渲染。
+本次未验证人工远程桌面会话、真实在线来源、GPU 播放或其他操作系统。
+
+### Linux 打包与产物自检
+
+打包沿用 Compose 官方的 `jpackage` 流程，必须在 Linux 主机执行，使用 JDK 21；
+生成 `.deb` 还需系统提供 `dpkg-deb`、`fakeroot` 等 Debian 打包工具。
+启用 `withLinuxDistribution` 后，兼容 JAR 的成员与哈希必须全部通过现有锁定校验。
+
+```bash
+# 仅生成自带 JVM 的应用目录，不需要显示服务。
+./gradlew -PwithDesktopApp -PwithLinuxDistribution \
+    "-PmihonCompatibilityDirectory=build/desktop-compatibility" \
+    :desktop-app:createDistributable --console=plain --no-configuration-cache
+
+# 生成 .deb 并检查包内内容；已有桌面会话时可省略 xvfb-run。
+xvfb-run -a -s "-screen 0 1600x1200x24 -nolisten tcp" \
+    ./gradlew -PwithDesktopApp -PwithLinuxDistribution \
+    "-PmihonCompatibilityDirectory=build/desktop-compatibility" \
+    :desktop-app:linuxDebContentsCheck --console=plain --no-configuration-cache
+```
+
+应用入口为 `desktop-app/build/compose/binaries/main/app/Kototoro/bin/Kototoro`，
+`.deb` 输出在 `desktop-app/build/compose/binaries/main/deb/`。包名为 `kototoro`，
+本地预览默认包版本为 `0.1.0`，可用 `-PdesktopPackageVersion=2.3.2` 显式指定。
+打包复用 Android 的现有应用图标，不附带 Windows 浏览器桥、播放和超分二进制。
+Windows `.ico`、macOS `.icns`、Linux `.deb` 图标与运行窗口图标都从
+`app/src/main/ic_launcher-playstore.png` 生成，不维护桌面端图标副本；探针会检查生产窗口的
+AWT 图标尺寸，`:desktop-app:linuxDebContentsCheck` 同时校验 `.deb` 图标与该 Android 源文件一致。
+
+`:desktop-app:linuxDistributionTest` 会复制应用到含中文与空格的目录，清除子进程的开发 Java
+配置，并使用包内 JVM 验证 classpath 顺序、来源导入与第二进程恢复、数据库、备份、图片解码、
+错误退出及生产窗口启动/关闭。`.deb` 使用该测试通过的同一应用目录；日志和自检报告位于
+`desktop-app/build/reports/linux-distribution/`。
+`:desktop-app:linuxDebContentsCheck` 进一步解包 `.deb`，比对受测目录中的文件字节、图标和执行权限，
+检查桌面入口，再从解包后的启动器执行运行时自检；报告位于 `desktop-app/build/reports/linux-deb/`。
+
+可直接通过应用入口检查运行时（此模式不需要显示服务）：
+
+```bash
+"desktop-app/build/compose/binaries/main/app/Kototoro/bin/Kototoro" \
+    --data-dir "/absolute/path/linux-runtime-check-data" \
+    --check-runtime "/absolute/path/linux-runtime-check.properties"
+```
+
+报告中的 `browser=unsupported` 表示当前预览包没有系统 WebView 桥，不表示这类能力已通过验证；
+`upscale.native=on-demand` 表示超分用的是官方 ncnn-vulkan 程序、由用户在阅读器里按需下载（`upscale.realcugan`/
+`upscale.realesrgan` 写程序路径或 `unavailable`，两个都装好并用样张真实放大成功时才写 `upscale=ok`）。
+`player.embedded=x11-window` 只说明 Linux 上 AWT 画布会成为 X11 窗口（Wayland 会话经 XWayland）、可以交给 mpv 的
+`wid` 输出，播放器是否可用另看 `player`/`player.library`：发行版装了 libmpv（Debian/Ubuntu 的 `libmpv2`，或
+`/usr/lib/<multiarch>` 下的 `libmpv.so.2`、`LD_LIBRARY_PATH`、`ldconfig` 缓存）时为 `ok`，没有时是 `unavailable`
+并给出 `player.hint`，此时视频页仍可退到外部 mpv。`.deb` 可生成不等于已经完成跨发行版
+兼容性验收；当前构建主机为 Ubuntu 24.04 x86_64。打包参考
+[Compose 官方文档](https://kotlinlang.org/docs/multiplatform/compose-native-distribution.html)。
+
+## macOS 本机开发
+
+Windows 与 macOS 使用同一个 `desktop-app` 入口、Compose 页面、Controller、数据库与源运行时；
+系统能力在现有平台服务边界适配，不复制 UI 或业务实现。macOS 当前提供本机开发与未签名本地预览。
+macOS 已接入 WKWebView 浏览器桥、libmpv render API 内嵌播放与官方 ncnn 超分。
+开发启动会用 Xcode Command Line Tools 编译浏览器桥，应用预览包随附桥程序；Cookie 由现有 SDK store 统一持久化。
+macOS 安装包随附 libmpv 及 FFmpeg 等动态库依赖，无需另装 Homebrew；支持进度回写、续播、切集和投屏；默认 CGL／OpenGL 呈现已支持 Anime4K／FSR 视频增强。
+GPU 输出仍需读回为 Swing 图像；可用 JVM 参数 `-Dkototoro.mpv.renderer=software` 切回软件排障路径。
+应用自动更新已接入：按芯片和渠道筛选 DMG，校验 SHA-256 与 bundle，退出后替换，失败时回滚。
+生成配套更新资产使用 `:desktop-app:macosUpdatePackage`；Developer ID 签名与公证仍待配置。
+实现及验证见 [macOS 原生能力](../docs/architecture/desktop-macos-native-2026-10.md)。
+
+运行需要 JDK 21 和与 Windows 相同、通过 SHA-256 验证的 29 个兼容运行时 JAR。
+已有兼容目录可直接使用；也可以从已下载的 Windows 桌面 ZIP 中提取纯 JVM 产物，
+脚本只接受锁定哈希的 JAR，不提取 Windows JVM、EXE 或 DLL：
+
+```bash
+python3 "desktop-app/prepare-compatibility.py" "/absolute/path/Kototoro-windows.zip"
+bash "desktop-app/run-macos.sh"
+# 或指定已有兼容目录，以及独立调试数据目录：
+bash "desktop-app/run-macos.sh" "/absolute/path/compatibility" \
+    "-PdesktopDataDirectory=/absolute/path/debug-data"
+```
+
+默认数据目录为 `~/Library/Application Support/Kototoro`。命令行 `--data-dir` 或
+Gradle 的 `desktopDataDirectory` 可以覆盖；已有 `~/.kototoro` 不自动迁移。
+在 IDE 中调试同一 `DesktopMainKt`，使用 JDK 21，并将兼容 JAR 加入运行 classpath；
+也可运行 `bash "desktop-app/run-macos.sh" "/absolute/path/compatibility" --debug-jvm`，
+然后在 IDE 中用 Remote JVM Debug 连接 `localhost:5005`。
+
+生成自带 JVM 的本机 `.app`（将最后的 task 改为 `:desktop-app:packageDmg` 可生成 DMG）：
+
+```bash
+./gradlew -PwithDesktopApp -PwithMacosDistribution \
+    "-PmihonCompatibilityDirectory=build/desktop-compatibility" \
+    :desktop-app:createDistributable --console=plain
+```
+
+输出位于 `desktop-app/build/compose/binaries/main/app/Kototoro.app`。
+可对实际打包产物执行本地存储、兼容运行时、备份和图片解码检查：
+
+```bash
+"desktop-app/build/compose/binaries/main/app/Kototoro.app/Contents/MacOS/Kototoro" \
+    --data-dir "/absolute/path/runtime-check-data" --check-runtime "/absolute/path/runtime-check.properties"
+```
+
+检查报告明确记录未适配能力为 `unsupported`；Windows 打包检查继续要求浏览器、播放器与超分组件全部通过。
+macOS 本地预览尚未签名、公证，不代表完成公开发行准备。打包参考
+[Compose 官方文档](https://kotlinlang.org/docs/multiplatform/compose-native-distribution.html)。
+
+## Windows
 
 Windows/JVM 的 Compose Desktop 应用入口，复用 `desktop-runtime` 的共享 Room v84 数据库、
 `core-source` JSON 契约和 `source-host` Mihon 执行器。提供扩展仓库、JAR 安装/更新/导入、来源浏览/搜索、详情、
@@ -11,12 +168,17 @@ Windows/JVM 的 Compose Desktop 应用入口，复用 `desktop-runtime` 的共�
 2:3 竖版网格；窗口达到 1000dp 时，详情将作品信息和可搜索、排序的章节列表分成两栏，
 较窄窗口使用横向封面与操作区，章节随页面滚动。导航图标直接由 Android 现有 vector 资源生成
 SVG，构建遇到不支持的变换会失败；没有引入另一套图标依赖。
+详情页的收藏按钮与 Android 一样是双向的：未收藏时显示“加入收藏”，已收藏后变为“取消收藏”，
+点击即用共享 `SourceLibrary.removeFavourite` 把作品移出书架，提示同步更新。
+简介下方是 Android 详情的信息区：状态、评分、别名、标签与“复制链接”按钮同源取自本次详情应答，
+缺项直接省略而不是留空；标签是只读胶囊（桌面暂无标签检索页），复制按钮把 Android 分享的链接放进
+系统剪贴板，之后按钮显示“已复制链接”，换作品后复原。
 
 主页直接调用 Android / Windows 共用的 `HomeScreenLayout`、`HomeHeroPager`、`HomeHeroCardSurface`
 和 `HomeHeroStandardContent`，统一懒列表、宽屏居中、内容面板断点、双栏、快捷入口与 Hero 动画。
 窗口缩窄后快捷入口随页面滚动；Hero 在主页视口内裁剪，不覆盖顶部工具栏。来源数据、图片加载和
-操作回调保留桌面适配。主页分区装配、订阅页容器、详情内部及其余旧 Material 2 页面仍在迁移中，
-当前没有宣称全应用已经共用一套完整 UI；后续继续提取 Android 呈现，避免独立重写桌面页面。
+操作回调保留桌面适配。主页分区装配、订阅页容器、详情内层内容仍由桌面实现（界面栈已统一为
+Material 3），当前没有宣称全应用已经共用一套完整 UI；后续继续提取 Android 呈现，避免独立重写桌面页面。
 
 鼠标左键按住封面即可左右拖动主页历史、推荐和 Hero，以及订阅更新横栏、顶部分类/来源筛选横栏；
 快速拖动松手后继续滚动，Hero 自动吸附到页面。在历史封面上纵向拖动会滚动主页，轻点仍打开作品。
@@ -34,23 +196,57 @@ SVG，构建遇到不支持的变换会失败；没有引入另一套图标依�
 
 小说“阅读设置”也使用共享面板：主题色卡、字号快捷调整、排版卡片和标签页来自 `core-ui`，
 支持字号、行距、衬线字体、版心宽度及实际窗口全屏。设置沿用已有偏好键，重启恢复；
-Esc 或遮罩关闭面板并回到正文。Windows 当前按段落连续滚动，Android 的亮度、分页动画、
-双页、翻译和 TTS 仍由 Android 宿主处理。
+Esc 或遮罩关闭面板并回到正文。Windows 提供段落连续滚动与分页阅读两种模式：分页模式按当前窗口和字号
+实测每段高度切页，复用 `reader-novel` 的 `splitNovelPageLineRanges`，段落不会被切断，超出一页的插图独占一页；
+滚轮、PageUp/PageDown/空格翻页，Home/End 到章首末，翻到本章边界后与连续模式一样进入相邻章。
+两种模式切换时停在同一段落。Android 的亮度、分页动画、双页、翻译和 TTS 仍由 Android 宿主处理。
 小说上下栏同样使用共享组件：返回、章节标题、选项、进度底座、上一章/下一章、渐变与显隐动画。
 正文点击或 H 切换控件，隐藏时的章节/段落状态可点击恢复控件；显隐保持正文视口与滚动锚点。
-滑条按段落定位并保存进度，控制栏颜色跟随阅读主题；Android 仍按原阅读引擎的页码定位。
+滑条按段落定位并保存进度，控制栏颜色跟随阅读主题；分页模式下状态改为当前页/总页，进度按当前页的
+首段与末段写入原历史，因此两种模式互相恢复。
 小说章节目录也复用共享面板、搜索框、分卷/分组标题和章节行，可反转顺序、定位当前章节。
+详情页的章节行有溢出菜单：标为已读把原历史移到该章，标为未读回到同分支上一章（首章直接清空记录，
+不写入指向空的进度），已下载的章节还能删除本地下载；三者复用阅读器写入的同一份历史与下载存储，
+无鼠标长按也用同一入口。
+“选择章节”把详情目录切到批量模式（也可靠按住章节行进入）：点行只切换选中而不跳转，行内的下载与
+溢出菜单隐藏，底栏按当前筛选全选/清除，并批量下载、标为已读（历史落在所选最后一章）或删除本地下载；
+退出模式后点击恢复导航与行内按钮。
 定位会清除筛选；选择当前章直接回到原正文位置，选择其他章沿用原章节加载和历史记录。
 小说右下书签按钮或 B 保存/移除当前段落，长按按钮打开书签列表，可按正文摘要或章节标题搜索，
 跳回同章或跨章位置，并单独删除书签。卡片、删除图标及搜索框来自共享 UI；正文摘要和定位沿用
 共享书签表，重启保留。Android 和 Windows 共用摘要解析与正文匹配，历史 HTML/base64 摘要也可搜索和定位。
 分页或段落划分变化后优先寻找原正文；正文已变化时提示无法定位，重复摘要按章节进度选择近似位置。
+详情页也按 Android 的“章节/书签”标签组织内容：书签标签对图片类作品用页面缩略图网格展示，
+点卡片回到该作者位置，卡片内可单独删除，“全部删除”清空本作品的全部书签；小说没有页面图像，
+改用文本卡片（章节、正文摘要、百分比）跳转与删除。缩略图走阅读器自己的图片管线与磁盘索引，
+按 400k 像素/1024px 上限解码，因此已读过的页面通常离线即可显示；删除复用共享 `SourceLibrary`
+的逐条事务，取消收藏或换源后失效的书签会按原规则失效。
+详情目录的批量模式也提供安卓的“书签”命令：选中章节后一次写入章节级书签（`pageId` 复用章节 id，
+记录整章而不带阅读位置，共享 `SourceLibrary.addChapterBookmark`），全部选中章节已有书签时按钮翻转为
+“删除书签”并按章移除；这类书签在书签标签里显示为“章节书签”卡片，缩略图取该章第一页。
+安卓的书签多选删除也已接入：书签标签右上角的“选择书签”进入多选（对应 Android 的长按），
+卡片出现勾选框，可“全选/清除选择”后“删除所选”；删除逐条走同一事务，卡片已被别处删掉时只是跳过，
+退出标签或删空后自动离开多选状态，并提示“已删除 N 个书签”。
 没有文本摘要的旧书签仍按原页/段落索引恢复，无法保证跨阅读引擎精确对应。
 
 收藏与历史提供标题/别名/作者搜索和右侧筛选抽屉，可按收藏分类、多个来源、未读/阅读中/已读完
 组合筛选，并按默认顺序、标题、最近阅读或进度排序。抽屉带滚动条，Esc 或点击遮罩关闭；空结果
 可一键清除条件。两页的条件在当前运行期间分别保留，输入只筛选共享数据库的快照，不重新请求
-来源列表；可见封面仍走原图片请求与缓存。
+来源列表；可见封面仍走原图片请求与缓存。抽屉底部依次对应 Android 的四个筛选组：标签组用对话框
+按标签在此库中的作品数降序列出（带作品数、可搜索、可清除），出版状态组只列出此库实际存在的状态
+（连载中/已完结/已停更/暂停更新/即将推出/不可用，取自作品自身状态），下载组为“全部/已下载/未下载”
+单选（已下载指该作品至少有一章存在本地下载记录，与下载页同一份队列），快速筛选组是 Android 的宏芯片：
+新章节（更新检查器记下的未读新章数）、收藏/非收藏（仅历史页，收藏页作品全是收藏）、18+/全年龄
+（取保存时写入的 nsfw 标志，两者同选必然为空）。各组都是组内任意命中即可，
+与其他筛选组按“且”组合，筛选立即生效，已选条件计入顶栏筛选计数。标签来自收藏保存时写入的标签行，
+列表项没有标签的作品不参与标签筛选。收藏卡片沿用 Android 的新章节角标：`tracks.chapters_new` 大于 0
+时在封面右上角画一个强调色数字角标，已读完的作品不画（Android 的计数器在完成时归零），历史页不画；
+角标的读屏文案为“N 个新章节”。
+
+收藏页顶栏的“分类管理”对应 Android 的分类界面：对话框里可新建分类、重命名、上移/下移调整
+标签顺序、删除分类（连同该分类下的收藏记录，与 Android 的删除语义一致，作品本身不删除），
+改动立即写库并重新加载快照，标签栏与卡片归属同步更新；删除正被筛选的分类会退回“全部”。
+分类的增删改查在 `core-library` 的 `SourceLibrary`，桌面与后续平台共用。
 
 阅读器右下书签按钮或 B 保存当前页；长按书签按钮打开书签面板，可跨章节跳回保存的位置。连续模式保存
 整数像素滚动偏移，重启后仍可恢复；单/双页模式通过原阅读布局定位。沿用共享书签表和备份格式，
@@ -74,7 +270,9 @@ Esc 或遮罩关闭面板并回到正文。Windows 当前按段落连续滚动�
 随正文滚动，避免操作区被挤出。Android 的资源/Coil/HTML/本地化/玻璃表面和 Windows 的缓存/模型/窗口操作
 通过适配层接入，不在共享组件里获取 Context、Hilt、文件或业务仓库。
 
-共享组件使用 Material3，桌面尚未迁移的屏幕通过同一主题角色的 Material 2 桥接继续运行。
+共享组件使用 Material3；桌面外壳同为纯 Material 3，不再有 Material 2 桥接——原 M2 的
+`Colors`/`Typography.h4–caption` 角色、`Divider`、`Card`/`Surface` 的 `elevation`、
+`DropdownMenuItem` 位置参数和 `AlertDialog.buttons` 槽都已换成对应的 M3 API。
 颜色与主题偏好仍由平台解析。作品封面的边框、书脊、标题渐变，以及内容源网格卡片和尺寸规则
 已进一步从 Android 提取到 `core-ui`，两端调用同一实现。Android 保留图片缓存、共享转场、TV 焦点、
 徽标和进度适配；桌面提供自己的图片、数据和动作。最新视觉参考为用户 2026-10-04 提供的五张平板截图。
@@ -83,16 +281,25 @@ Backdrop 已恢复为固定 2.0.0 的 Android/JVM KMP 模块，保留两处本�
 镜片参数保护也进入 `core-ui`；Windows 可在“更多 → 界面风格”选择 iOS 玻璃，搜索控件调用同一渲染器。
 默认保持 Material 3，主题与界面风格选择会持久化。桌面只捕获独立画布，完整动态作品背景仍待接入。
 主页/订阅整页、详情内层内容、完整书库徽标/进度及小说阅读器正文
-仍有桌面实现，后续按组件继续提取。书库筛选尚未覆盖 Android 的标签、
-追踪状态和下载条件；“已读完”按当前分支的共享历史进度判断，不表示所有分支均已阅读。
+仍有桌面实现，后续按组件继续提取。书库筛选的标签、出版状态、下载与快速筛选（宏）四个组已对齐 Android
+（组内“或”、跨组“且”）；Android 的追踪阅读状态组在桌面按“阅读进度”近似（进度为空/进行中/已完成
+对应计划中/阅读中/已读完，完成阈值同为 99.9%），其中仅来自追踪器的“重读中/搁置/弃坑”需要桌面尚无的
+追踪状态持久化，暂不可选；Android 的“已完结”宏也因为桌面“阅读进度=已读完”读的是同一份进度而不再重复；
+“已读完”按当前分支的共享历史进度判断，不表示所有分支均已阅读。
+收藏卡片的新章节角标、筛选抽屉与卡片徽标共用共享的角标胶囊/颜色，卡片本身仍由桌面的
+`ContentGrid` 负责。
 
 ## 扩展仓库
 
-“更多 → 扩展与仓库”可输入完整 `index.pb`、新版 `index.json`、旧版 `index.min.json` 或仓库根地址，点击“添加 / 读取仓库”。
+“更多 → 扩展与仓库”沿用 Android 的“来源／仓库／扩展包”标签页。标签栏与仓库卡片由
+`core-ui/commonMain` 提供，Android 和 Windows/macOS 调用同一组件。来源列表统一管理所有来源，
+包括 TVBox/CMS；仓库列表按配置中已有的来源地址聚合导入站点，支持刷新和确认后批量移除。
+右上角“添加”统一处理扩展仓库、TVBox/CMS 链接，以及本地 JAR/APK/CS3/JSON 文件。
+扩展仓库链接支持完整 `index.pb`、新版 `index.json`、旧版 `index.min.json` 或仓库根地址。
 根地址依次请求 `index.pb`、`index.json`、`index.min.json`，仅在 HTTP 404 时回退；带查询参数时需提供完整索引地址。
 旧版数组（Aniyomi、早期 Keiyoushi/Tsundoku 仓库）没有仓库头，名称取自地址的 owner/仓库名，条目只有 APK。
 支持 gzip、相对扩展列表地址和相对 JAR 地址，JSON 的 64 位编号与版本保持整数精度。
-仓库列表保存到应用偏好，点击仓库名称刷新，再按扩展名称、来源名称或语言搜索并安装/更新。
+仓库列表保存到应用偏好，在仓库卡片选择“浏览扩展”，再按扩展名称、来源名称或语言搜索并安装/更新。
 
 有 `resources.jarUrl` 时下载 JVM JAR；只发布 APK 的条目下载 APK 后在本机由 `dex-convert` 转成 JVM JAR
 （同时修复 R8 内联构造器留下的 JVM 校验问题），按钮显示“安装（转换 APK）”。清单决定生态：
@@ -105,7 +312,9 @@ Backdrop 已恢复为固定 2.0.0 的 Android/JVM KMP 模块，保留两处本�
 持久化记录，最后替换旧版本；失败保留已安装来源，正在执行的旧请求持有旧加载器直到结束。
 禁止降级。索引上限 16 MiB，JAR 上限 64 MiB；取消下载关闭流并清理应用拥有的临时文件。
 索引 signingKey 变化会拒绝刷新，但它不构成 JAR 签名验证，SHA 用于本地身份与恢复校验。
-已安装列表支持卸载、检查/全部更新、启动自动更新及不再使用的旧文件清理；仓库删除仍待接入。
+已安装列表支持卸载、检查/全部更新、启动自动更新及不再使用的旧文件清理。仓库列表里每个仓库旁边
+有“忘记该仓库”：只删除保存的索引条目并清空右侧目录，已安装的扩展保留（与 Android 一致，扩展
+仍可正常使用，只是不再从该仓库检查更新）；重新添加同一地址即可恢复。删除不触碰任何 JAR 文件。
 
 来源筛选面板消费共享的原生控件树：复选、包含/排除、选项、文本、排序方向、可清除排序和嵌套
 分组。选项按原生索引提交，同名标签不会混淆；恢复默认保留来源的默认值。草稿仅在“应用”成功
@@ -167,12 +376,13 @@ Home/End 和 Esc 返回详情。快捷键仅在阅读器焦点范围生效，Ctr
 
 ## 视频播放
 
-视频来源（Aniyomi、kototoro-parsers 的视频源）在应用内用 libmpv 播放：mpv 渲染进内容区里的原生子窗口，
+视频来源（Aniyomi、kototoro-parsers 的视频源）在应用内用 libmpv 播放：Windows/Linux 使用原生子窗口，macOS 默认使用 CGL／OpenGL render API 呈现，
 其余控件为 Compose。支持画质/线路切换（续播当前位置）、字幕与音轨、倍速、音量/静音、±10 秒、
 上一集/下一集、剧集列表、窗口全屏与快捷键（空格/K、←→/J L、Shift 加大步长、↑↓、M、N、F/F11、Esc）。
 流自带的请求头（Referer、User-Agent 等）同样用于字幕/音轨；播完自动进入下一集。观看位置按秒写入共享
 历史（page = 已看秒数，pageCount = 时长），重新打开从历史恢复。
 
+macOS 安装包随附固定版本的 LGPL libmpv 及完整非系统 dylib 依赖，来源与许可见资源目录 `mpv/THIRD_PARTY_PLAYBACK.md`。
 Windows 安装包随附 libmpv（LGPL 构建）与 RealCUGAN / Real-ESRGAN 的 ncnn-vulkan 官方程序，许可与来源见 resources 中的 THIRD_PARTY_PLAYBACK.md。开发运行时不自带 libmpv。查找顺序：`-Dkototoro.libmpv` / `KOTOTORO_LIBMPV` 指定文件、`kototoro.libmpv.dir`、
 打包资源 `mpv/`、数据目录 `mpv/`（缺失时界面给出此路径与“打开文件夹”“重新检测”）、PATH。
 没有 libmpv 时可复制视频地址，或在 PATH 有 `mpv.exe` 时交给外部 mpv（带请求头、字幕与起始位置）。
@@ -188,6 +398,9 @@ Windows 安装包随附 libmpv（LGPL 构建）与 RealCUGAN / Real-ESRGAN 的 n
 
 “阅读设置 → 超分辨率”可选 RealCUGAN 2x（含降噪档）、Real-ESRGAN 4x 动漫、AnimeVideo 2x（官方 ncnn-vulkan 程序，首次使用时下载并校验，约 45 MB，
 也可选择已下载的官方压缩包），以及 Android 的六种 Anime4K 模式（需要 libmpv，离屏运行）。结果缓存在数据目录 `cache/upscale`，失败时显示原图。
+
+程序按平台取同一 release 的资产：Windows 随包（`*.exe`），Linux 下载官方的 `*-ubuntu.zip` 并补上可执行位，
+macOS 下载官方的 `*-macos.zip` 并补上可执行位（通用二进制支持 Intel 和 Apple Silicon）。Anime4K 离屏渲染走 mpv 的 GPU 输出，需要桌面会话（无显示的 CI 请用 Xvfb）。
 
 Aniyomi 扩展若实现 `ConfigurableAnimeSource`，与 Mihon 来源一样在“来源设置”中显示原生控件，修改写入 `source_<id>`。
 
@@ -260,6 +473,7 @@ Edge WebView2 Runtime。MSI 使用当前用户安装权限，将程序放在 `%L
 ```powershell
 ./Kototoro.exe --data-dir "E:/tmp/独立 preview"
 ./Kototoro.exe --data-dir "E:/tmp/runtime-check" --check-runtime "E:/tmp/runtime-check.properties"
+./Kototoro.exe --check-update "E:/tmp/update-check.properties"
 ```
 
 运行时检查必须提供独立数据目录，执行本地 Room/备份格式/Skia/浏览器检查，不请求来源网站。
@@ -290,7 +504,34 @@ WebView2 SDK、播放器与超分组件继续使用各自固定版本和 SHA-256
 ```
 
 CI 使用应用版本作为 MSI 的三段版本，可通过 `-PdesktopPackageVersion` 覆盖；本地默认仍为 `0.1.0`。
+同名参数 `-PdesktopVersionName`（默认取 `app/build.gradle` 的 versionName）与 `-PdesktopChannel`
+（`release`/`nightly`）写入更新面板显示并参与版本比较，CI 直接传发布资产的版本名与频道。
 `-PwindowsWixDirectory` 可指定 MSI 内容检查所用 WiX 3 的 `bin` 目录。
+
+### Linux
+
+`linux-build.yml` 手动（`workflow_dispatch`）或由其他工作流 `uses:` 调用，只构建和验证 Linux 桌面端，
+不发布任何产物；`.deb` 版本取 Android 的 versionName 的三段值。它分两个 job：
+
+- `Linux player and upscaling`：不准备兼容 JAR，只装 `libmpv2`、Xvfb 与 Mesa lavapipe，跑 `:desktop-player:test`
+  和 `:desktop-runtime:test`。`LC_NUMERIC` 设为 `en_US.UTF-8`，让 mpv 真的走到 `MpvLocale` 要修的那条路径；
+  `vulkaninfo` 里找不到 `llvmpipe` 直接失败，否则 ncnn 超分只会在测试里以看不懂的方式失败。
+- `Linux package`：一次调用生成应用目录、用该目录打 `.deb`，再由 `linuxDebContentsCheck` 解包执行运行时自检；
+  另外用真实阅读器 UI 走一遍超分的安装/放大/记忆。`.deb` 作为 Actions artifact 保留 14 天。
+
+兼容 JAR 与 Windows 同源：仓库变量 `WINDOWS_COMPATIBILITY_URL` 有值时用该 ZIP，否则用 JDK 25 从固定的
+Suwayomi/TachiyomiAzIOS 提交重建，最终 29 个 JAR 仍逐个核对 `windows-runtime-pins.properties`。
+`.github/scripts/prepare-linux-ci.sh` 只做这两件事（兼容 JAR 与两个 ncnn release ZIP），WebView2 SDK、
+WiX 等 Windows 专用步骤不搬过来；离线复现时用下面两条，CI 里对应的就是同一条脚本：
+
+```bash
+bash ./.github/scripts/prepare-linux-ci.sh --source-java-home /path/to/jdk-25
+bash ./.github/scripts/prepare-linux-ci.sh --upscalers-only
+bash ./.github/scripts/prepare-linux-ci.sh --compatibility-archive build/desktop-compatibility.zip --upscalers-dir /path/to/zips
+```
+
+Linux job 用的是 Xvfb + 软件渲染的 Ubuntu 24.04 x86_64，不代表真实 GPU 播放、Wayland 会话或跨发行版验收；
+macOS 桌面端目前没有任何 CI。
 
 ## 图书馆备份
 
@@ -312,10 +553,26 @@ Kototoro JSON 模型与 Android ZIP 节名。先写完独立临时文件，再�
 压缩文件上限 512 MiB、全部解压数据上限 1 GiB，导出使用同样限制。数据逐条编码/解码，
 ZIP CRC、重复/无效节名、目录一致性、缺少索引、未来格式版本及无效支持节会在预览阶段拒绝。
 分类与作品锚点映射仍按记录数占用内存，单个 JSON 记录的最大驻留未单独限制。
-更新追踪/其他设置与授权、Mihon/Aniyomi 外部备份导入、扩展文件和图片、WebDAV 同步仍待接入。
+更新追踪/其他设置与授权、Mihon/Aniyomi 外部备份导入、扩展文件和图片仍待接入。
 界面明确显示当前范围，完整 Windows 备份迁移尚未完成。
 
+同一页面的“云同步（WebDAV）”填服务器地址、远程目录、账号与每个命名空间保留的数量，可测试连接、
+上传当前图书馆、刷新远端列表、下载备份并删除。上传复用本页导出，远端文件名、分类、最新备份判定与
+旧文件保留规则都来自 `core-net`，与安卓的 `kototoro-v3-work-v1-<时间>.zip` 命名一致；服务器返回的
+XML 与 HTTP 日期也由共享读取器解析，不再各端各写一套。下载的备份先落到数据目录下的暂存文件，再交给
+本页原有的预览与合并，因此远端恢复与本地恢复走同一条事务路径，暂存文件在打开预览后立即删除。
+“自动备份间隔”填大于 0 的小时数后，应用内计时器按安卓周期备份的规则执行：距上次成功上传满该间隔才上传，
+首次没有基准时启动即上传一次；间隔与上次上传时间都保存在同一偏好命名空间，改间隔或手动上传会重排计时，
+上传失败保留旧基准并退避十分钟再试，退出应用即停止，不与手动上传并发。
+当前是手动触发，没有安卓的周期调度；Google Drive 与系统同步仍待接入。
+
 ## 章节下载
+
+作品详情的章节标题栏有“批量下载”菜单，作用范围与 Android 的对话框一致但用固定档位代替数字
+输入：全部章节、未读章节（当前阅读位置之后的章节）、某个翻译分支的全部章节、前 10/25/50 章。
+每个条目显示实际会入队的章数，已完成的章节不重复入队，队列为空的条目直接隐藏。阅读顺序取
+未筛选的全部章节，所以即使列表正筛在某个分支上，菜单仍然按整部作品计算；进入分支的判定用
+列表下标而不是章节号，源给出重复或缺失话号时也不会错位。
 
 作品详情的每个章节提供“下载”。侧栏“下载”显示等待、下载中、暂停、失败和完成状态，可暂停、
 继续或校验已下载章节。队列归当前窗口所有，退出会取消正在执行的来源调用；重启后未完成章节
@@ -327,11 +584,67 @@ ZIP CRC、重复/无效节名、目录一致性、缺少索引、未来格式版
 扩展哈希变化时，继续下载获取新页列表；已保存章节仍是下载时快照。manifest 复用既有偏好
 store，按章节发布清单，每 64 页保存一个内容寻址块，发现索引按身份分片；总下载和单章请求
 数据不再共用一个 4 MiB snapshot。每个底层文件仍受原大小上限约束，超限明确失败。
-旧版平面索引自动迁移，保留原记录；发布失败不替换上次成功状态。尚无批量选择、导出、
-下载删除或图片磁盘容量清理。
+旧版平面索引自动迁移，保留原记录；发布失败不替换上次成功状态。
+
+下载页顶部显示已保存章节、已完成章节、页数与图片占用（按每页 artifact 的字节求和，来自已保存
+记录，重启后仍准确）。每章可选，批量栏提供全选、清除选择、暂停选中、继续选中、重试失败和移除
+选中：暂停只作用于等待/下载中的章节，继续只作用于已暂停章节，重试只作用于失败章节，移除跳过
+仍在下载的章节。移除先取消并等待其协程结束，再删发现索引项，最后删章节清单——顺序反了会让清单
+在下次启动时被重新索引；清单消失后它引用的页面块变成不可达元数据，可在“下载占用 / 回收旧记录”
+里回收。图片文件本身不随移除删除：它们由图片 store 按内容寻址并被阅读索引共享。
 下载页的“下载占用 / 回收旧记录”会预览元数据占用和可回收数量，确认后仅回收未被任何
 磁盘章节清单引用的旧页面块。取消不更改文件；确认时重新核对引用和文件身份。清单损坏
-或数据不完整时停止回收，章节、图片和其他设置保留。当前没有自动后台回收或图片总量预算。
+或数据不完整时停止回收，章节、图片和其他设置保留。
+
+已完成章节可以“导出 CBZ”，相当于 Android 把下载写进可见下载目录：选择文件夹后生成
+`作品 - 章节名.cbz`，图片按页序编号（`0001.png` 等）存为不压缩条目（图片本身已压缩），
+文件名去掉 Windows 禁止的字符并把长度限制在 80 字符。导出逐页复核 SHA 和大小，命中
+缺失/损坏的图片会失败且不留下半个压缩包；同一章节再次导出覆盖原文件。导出只读存储里的
+内容寻址文件，不复制第二份图片，也不会因为导出而改写章节清单。
+批量栏还有“导出全部已完成章节”：选一个文件夹后把所有已完成章节一次写成各自的 CBZ，
+跳过未完成的队列项，某一章因图片缺失/损坏失败只计数、不中断其余章节，最后提示
+“已导出 N 章”或“已导出 N 章，M 章失败”。
+
+下载页的“自动回收未引用块”默认开启：应用启动时和队列空闲时各扫一次，自动回收不再被任何
+章节清单引用的页面块，因此不必等用户手动点“回收旧记录”。回收只动元数据块，图片文件由图片
+store 按内容寻址并与阅读索引共享，不会被自动删除；关闭开关后完全交回手动。扫描发现清单损坏
+或数据不完整时整体放弃，不会误删。
+
+下载页还显示图片总磁盘预算（对应 Android 的图片缓存上限）：同一条“图片缓存”行给出目录实际占用、
+其中已保存章节占用的字节、当前上限，以及带几档预设（512 MB、1 GB、2 GB、4 GB、8 GB、不限制）的
+上限菜单和“清理缓存”。预算由后台循环按 10 分钟节流执行，切换上限或点清理时立即执行；回收顺序是
+最久未使用的 `*.img` 优先，`verifiedImagePath` 命中校验会把文件时间刷新为最近使用时间，因此阅读
+索引里的图片会自然沉到队尾。已保存章节引用的 blob 永不删除，离线阅读不受影响；两分钟（手动清理
+五秒）内刚发布的文件不动，避免删掉正在读的页面；一小时前的 `.image-*.part` 残留直接清掉。读取时
+仍复核大小和 SHA-256，被清掉的缓存只是重新下载。尚无整部作品批量导出。
+
+## 应用内更新
+
+“更多 → 关于与更新”显示当前版本与发布频道，并提供检查、下载与“重启并更新”。版本名、MSI 三段版本和
+频道由构建写入 `desktop-version.properties`（`:desktop-app:prepareDesktopVersion`，CI 用
+`-PdesktopVersionName`/`-PdesktopChannel` 覆盖），运行时不再猜测自己是什么版本。窗口打开时每 6 小时
+自动检查一次（可关闭），与追踪/推荐任务分属不同协程：慢仓库或下载不会推迟另一项，反之亦然。
+
+检查读取 GitHub Release：稳定频道只看 `Kototoro-app/Kototoro` 的非预发布版本，nightly 频道看
+`Kototoro-app/Kototoro-Nightly` 的 `nightly-<日期>` 标签；比较复用 Android 的版本语义（alpha/beta/rc 权重、
+`N<日期>` 形式），发布包里的其他平台资产（如 arm64）不会被误判。
+
+下载使用发布附带的 `.sha256`，流式写入 `<数据目录>/updates` 下的 `.part` 文件，核对大小与 SHA-256，
+ZIP 必须包含 `Kototoro.exe`（MSI 校验复合文档头），校验通过才原子改名；随后解压到暂存目录并核对镜像
+结构（EXE + `app/` + `runtime/`）。便携版整目录覆盖，MSI 安装改用 `msiexec`；两者都由一个等待本进程
+退出的 PowerShell 脚本执行（日志在 `updates/update.log`），完成后重启应用。程序目录与
+`%LOCALAPPDATA%/Kototoro` 用户数据分离，覆盖不触碰收藏、历史与下载。
+
+“自动下载”和“退出时安装”可分别开启；从构建目录（Gradle/IDE）启动的副本没有可替换的镜像，面板会说明
+不支持自更新。签名校验（Authenticode）与 S3/代理镜像仍待接入。
+
+安装好的镜像可以用 `--check-update <文件>` 自查而不用打开窗口：报告写入
+`version.name/package/channel/parsed`、`install.supported/kind/root/executable`、`channel.newest`（该频道
+当前发布的最新版本与 tag）和 `status`——`available`（有可安装的新版本，附带版本、包名、大小、SHA-256 地址）、
+`upToDate`（发布的就是本副本或更旧）、`unpublished`（该频道还没有可安装的发布）、`failed`（问不到，带
+`error`）。退出码 0 表示问到了发布频道，1 表示问不到或本副本没有版本标记。`--channel` 可临时改看另一个
+频道，此时 `channel.newest` 会如实说明那边发布了什么、是否比本副本新。打包脚本与 Windows CI 用它核对
+镜像自称的版本/频道与发布资产名一致，且该副本能认出自己的安装布局。
 
 ## 验证
 

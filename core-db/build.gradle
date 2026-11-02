@@ -2,9 +2,11 @@
 // and DAOs. Packages are unchanged, so :app keeps importing them from the same place.
 //
 // commonMain  entities, DAOs, the database declaration and ListFilterCriteria (the data-only filter the DAOs
-//             build SQL from). Compiled for Android, JVM (tests) and iOS.
-// androidMain the 85 legacy migrations (SupportSQLiteDatabase) and getDatabaseMigrations(context). Android keeps
-//             the framework SQLite driver, which is what those migrations rely on.
+//             build SQL from), plus the migrations from 84 on (sharedDatabaseMigrations), which run on every
+//             driver. Compiled for Android, JVM (tests) and iOS.
+// androidMain the legacy migrations up to 84 (SupportSQLiteDatabase) and getDatabaseMigrations(context). Android
+//             keeps the framework SQLite driver, which is what those migrations rely on; it registers each shared
+//             migration with a SupportSQLiteDatabase override.
 //
 // The exported schema JSON stays in app/schemas: it is tracked there and the app's migration tests read it.
 plugins {
@@ -57,6 +59,8 @@ kotlin {
 			dependencies {
 				implementation 'androidx.sqlite:sqlite-bundled:2.6.2'
 				implementation 'org.junit.jupiter:junit-jupiter:5.8.2'
+				// Reads the exported schema JSON to build an old-version database for migration tests.
+				implementation libs.kotlinx.serialization.json
 				implementation libs.kotest.runner.junit5
 			}
 		}

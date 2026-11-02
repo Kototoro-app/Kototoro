@@ -301,6 +301,8 @@ class DownloadsViewModel @Inject constructor(
             isPartial = DownloadState.isPartial(workData),
             isExpanded = isExpanded,
             chapters = chapters,
+            byteProgress = DownloadState.getByteProgress(workData),
+            currentChapterTitle = DownloadState.getCurrentChapterTitle(workData),
         )
     }
 

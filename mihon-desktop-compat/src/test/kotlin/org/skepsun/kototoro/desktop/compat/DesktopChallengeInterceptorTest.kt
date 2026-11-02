@@ -83,6 +83,41 @@ class DesktopChallengeInterceptorTest {
     }
 
     @Test
+    fun `an unsolved challenge outside a user action fails without opening the verification window`() {
+        challenges().use { owner ->
+            var requests = 0
+            var challenged = true
+            val solves = AtomicInteger()
+            val client = OkHttpClient.Builder()
+                .addInterceptor(DesktopChallengeInterceptor(owner, solver = ClearanceSolver { solves.incrementAndGet(); false }))
+                .addInterceptor { chain ->
+                    requests++
+                    val builder = Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1)
+                    if (challenged) builder.code(403).message("challenge").header("cf-mitigated", "challenge")
+                        .body("challenge".toResponseBody()).build()
+                    else builder.code(200).message("OK").body("content".toResponseBody()).build()
+                }.build()
+            // A background load (icon, cover, update check): the hidden solve is tried, then it fails quietly.
+            val failure = runCatching {
+                client.newCall(Request.Builder().url("https://fixture.invalid/icon.png").build()).execute()
+            }.exceptionOrNull()
+            assertTrue(failure is IOException, failure.toString())
+            assertTrue(failure?.message?.contains("网页验证") == true, failure?.message)
+            assertEquals(1, solves.get())
+            assertEquals(1, requests)
+            assertNull(owner.pending.value, "no verification prompt may appear")
+            assertFalse(owner.interactionActive)
+            // Android's notification instead: the site root is listed once, however many requests it fails.
+            runCatching { client.newCall(Request.Builder().url("https://fixture.invalid/cover.jpg?x=1").build()).execute() }
+            assertEquals(listOf("https://fixture.invalid/"), owner.blocked.value)
+            // Verified (here or anywhere): the next normal answer from that host clears it.
+            challenged = false
+            client.newCall(Request.Builder().url("https://fixture.invalid/list").build()).execute().close()
+            assertEquals(emptyList<String>(), owner.blocked.value)
+        }
+    }
+
+    @Test
     fun `a challenged POST is not replayed or sent to a browser`() {
         challenges().use { owner ->
             var requests = 0

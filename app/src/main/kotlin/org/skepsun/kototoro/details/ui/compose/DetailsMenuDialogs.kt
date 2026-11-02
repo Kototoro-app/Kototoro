@@ -13,13 +13,14 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.boundsInRoot
@@ -30,6 +31,8 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
+import org.skepsun.kototoro.core.ui.compose.DialogActionButton
+import org.skepsun.kototoro.core.ui.compose.DialogChoiceOption
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
@@ -115,13 +118,16 @@ internal fun DetailsOverflowMenu(
     val interfaceStyleTokens = LocalInterfaceStyleTokens.current
     var expanded by remember { mutableStateOf(false) }
     var menuAnchorBounds by remember { mutableStateOf<Rect?>(null) }
+    val menuAnchorFocus = remember { FocusRequester() }
 
     Box(
         modifier = Modifier.onGloballyPositioned { menuAnchorBounds = it.boundsInRoot() },
     ) {
         DetailsChromeButton(
             onClick = { expanded = true },
-            modifier = Modifier.size(interfaceStyleTokens.topBarButtonSize),
+            modifier = Modifier
+                .focusRequester(menuAnchorFocus)
+                .size(interfaceStyleTokens.topBarButtonSize),
         ) {
             Icon(
                 imageVector = Icons.Default.MoreVert,
@@ -135,6 +141,9 @@ internal fun DetailsOverflowMenu(
             style = GlassDefaults.subtleStyle(),
             useRootOverlay = LocalInterfaceStyle.current == InterfaceStyle.IOS,
             anchorBounds = menuAnchorBounds,
+            // The ⋮ draws its menu in the root overlay, which has no focus restore of
+            // its own: hand the ring back here once the menu is gone.
+            anchorFocusRequester = menuAnchorFocus,
         ) {
             if (showTranslateAction) {
                 CompactDropdownMenuItem(
@@ -288,14 +297,13 @@ internal fun DeleteLocalDialog(
         title = { Text(stringResource(R.string.delete_manga)) },
         text = { Text(stringResource(R.string.text_delete_local_manga, title)) },
         confirmButton = {
-            TextButton(onClick = onConfirm) {
-                Text(stringResource(R.string.delete))
-            }
+            DialogActionButton(label = stringResource(R.string.delete), onClick = onConfirm)
         },
         dismissButton = {
-            TextButton(onClick = onDismissRequest) {
-                Text(stringResource(android.R.string.cancel))
-            }
+            DialogActionButton(
+                label = stringResource(android.R.string.cancel),
+                onClick = onDismissRequest,
+            )
         },
     )
 }
@@ -320,30 +328,18 @@ internal fun SearchTargetDialog(
         title = { Text(text = title) },
         text = {
             Column {
-                TextButton(
+                DialogChoiceOption(
+                    label = stringResource(R.string.search_on_s, sourceTitle),
                     onClick = onSearchOnSource,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(
-                        text = stringResource(R.string.search_on_s, sourceTitle),
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-                TextButton(
+                )
+                DialogChoiceOption(
+                    label = stringResource(R.string.search_everywhere),
                     onClick = onSearchEverywhere,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(
-                        text = stringResource(R.string.search_everywhere),
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
+                )
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismissRequest) {
-                Text(text = stringResource(R.string.close))
-            }
+            DialogActionButton(label = stringResource(R.string.close), onClick = onDismissRequest)
         },
         confirmButton = {},
     )
@@ -376,30 +372,21 @@ internal fun ShareOptionsDialog(
                         .fillMaxWidth()
                         .padding(bottom = 12.dp),
                 )
-                TextButton(
+                DialogChoiceOption(
+                    label = stringResource(R.string.link_to_manga_in_app),
                     onClick = onShareAppLink,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(
-                        text = stringResource(R.string.link_to_manga_in_app),
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-                TextButton(
+                )
+                DialogChoiceOption(
+                    label = stringResource(R.string.link_to_manga_on_s, sourceTitle),
                     onClick = onShareSourceLink,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(
-                        text = stringResource(R.string.link_to_manga_on_s, sourceTitle),
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
+                )
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismissRequest) {
-                Text(text = stringResource(android.R.string.cancel))
-            }
+            DialogActionButton(
+                label = stringResource(android.R.string.cancel),
+                onClick = onDismissRequest,
+            )
         },
         confirmButton = {},
     )

@@ -52,6 +52,9 @@ data class MihonBackupChapter(
     @ProtoNumber(1) val url: String,
     @ProtoNumber(2) val name: String = "",
     @ProtoNumber(4) val read: Boolean = false,
+    @ProtoNumber(6) val lastPageRead: Long = 0,
+    @ProtoNumber(9) val chapterNumber: Float = 0f,
+    @ProtoNumber(10) val sourceOrder: Long = 0,
 )
 
 @Serializable

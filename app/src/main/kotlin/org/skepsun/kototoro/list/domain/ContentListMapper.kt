@@ -1,19 +1,16 @@
 package org.skepsun.kototoro.list.domain
 
 import android.annotation.SuppressLint
-import android.content.Context
 import androidx.annotation.ColorRes
 import androidx.annotation.IntDef
 import androidx.collection.MutableLongObjectMap
-import androidx.collection.MutableScatterSet
-import androidx.collection.ScatterSet
 import dagger.Reusable
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.parser.ContentDataRepository
+import org.skepsun.kototoro.core.model.TagWarnings
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.prefs.observeAsFlow
@@ -39,7 +36,6 @@ import javax.inject.Inject
 
 @Reusable
 class ContentListMapper @Inject constructor(
-    @ApplicationContext context: Context,
     private val settings: AppSettings,
     private val trackingRepository: TrackingRepository,
     private val historyRepository: HistoryRepository,
@@ -57,8 +53,6 @@ class ContentListMapper @Inject constructor(
         val manualOverride: ContentOverride? = null,
         val useManualOverride: Boolean = false,
     )
-
-    private val dict by lazy { readTagsDict(context) }
 
     fun observeDisplayChanges(): Flow<Unit> = merge(
         dataRepository.observeDisplayPreferencesChanges().map { Unit },
@@ -274,11 +268,11 @@ class ContentListMapper @Inject constructor(
         )
     }
 
-    /** Warning tint of a tag title (the raw warn-list dictionary), `0` when harmless. */
+    /** Warning tint of a tag title (the shared warn-list), `0` when harmless. */
     @ColorRes
     fun tagTint(title: String): Int = if (isTagWarning(title)) R.color.warning else 0
 
-    private fun isTagWarning(title: String) = settings.isTagsWarningsEnabled && title.lowercase() in dict
+    private fun isTagWarning(title: String) = settings.isTagsWarningsEnabled && TagWarnings.isWarned(title)
 
     private suspend fun toCompactListModel(
         manga: Content,
@@ -487,19 +481,6 @@ class ContentListMapper @Inject constructor(
     private fun getTagTint(tag: ContentTag): Int {
         return if (isTagWarning(tag.title)) R.color.warning else 0
     }
-
-    private fun readTagsDict(context: Context): ScatterSet<String> =
-        context.resources.openRawResource(R.raw.tags_warnlist).use {
-            val set = MutableScatterSet<String>()
-            it.bufferedReader().forEachLine { x ->
-                val line = x.trim()
-                if (line.isNotEmpty()) {
-                    set.add(line)
-                }
-            }
-            set.trim()
-            set
-        }
 
     private fun Int.isBadgeEnabled(@Options badge: Int) = this and badge == badge
 

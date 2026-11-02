@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.local.ui.compose
 
 import android.net.Uri
+import android.content.Intent
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -20,7 +21,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -41,11 +41,15 @@ import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.os.OpenDocumentTreeHelper
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
+import org.skepsun.kototoro.core.ui.adaptive.tvChipRing
 import org.skepsun.kototoro.core.util.ext.tryLaunch
 import org.skepsun.kototoro.local.data.LocalStorageManager
 import org.skepsun.kototoro.local.data.importer.ImportMode
 import org.skepsun.kototoro.local.data.importer.LocalImportKind
 import org.skepsun.kototoro.local.ui.ImportService
+import org.skepsun.kototoro.local.data.StorageContentKind
+import org.skepsun.kototoro.settings.storage.directories.ContentDirectoriesActivity
 
 private enum class ImportContentType(
     val kind: LocalImportKind?,
@@ -138,6 +142,20 @@ fun ImportDialog(
                 )
                 Column {
                     ImportOptionItem(
+                        option = ImportOption(R.drawable.ic_folder_file, R.string.link_content_folder,
+                            R.string.link_content_folder_summary),
+                        onClick = {
+                            val kind = when (selectedType) {
+                                ImportContentType.NOVEL -> StorageContentKind.NOVEL
+                                ImportContentType.VIDEO -> StorageContentKind.VIDEO
+                                else -> StorageContentKind.MANGA
+                            }
+                            context.startActivity(Intent(context, ContentDirectoriesActivity::class.java)
+                                .putExtra(ContentDirectoriesActivity.EXTRA_CONTENT_KIND, kind.name))
+                            onDismissRequest()
+                        },
+                    )
+                    ImportOptionItem(
                         option = selectedType.fileOption(),
                         onClick = {
                             if (!importFileLauncher.tryLaunch(arrayOf("*/*"))) {
@@ -166,7 +184,7 @@ fun ImportDialog(
         },
         confirmButton = {},
         dismissButton = {
-            TextButton(onClick = onDismissRequest) {
+            TvTextButton(onClick = onDismissRequest) {
                 Text(text = stringResource(android.R.string.cancel))
             }
         },
@@ -241,7 +259,7 @@ private fun ImportTypeChip(
             selected = selected,
             onClick = onClick,
             role = Role.RadioButton,
-        ),
+        ).tvChipRing(),
     )
 }
 

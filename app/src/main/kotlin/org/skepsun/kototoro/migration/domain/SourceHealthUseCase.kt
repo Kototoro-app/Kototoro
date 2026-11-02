@@ -19,7 +19,10 @@ class SourceHealthUseCase @Inject constructor(
         val disabled = sourcesRepository.getDisabledSources().mapTo(HashSet()) { it.name }
         return rows.groupBy { it.source }
             .mapNotNull { (name, group) -> evaluate(name, group, disabled, now) }
-            .sortedWith(compareBy<SourceHealth> { !it.status.needsAttention }.thenByDescending { it.favouriteCount })
+            .sortedWith(
+                compareBy<SourceHealth> { it.status.sectionRank }
+                    .thenByDescending { it.favouriteCount },
+            )
     }
 
     /** Verdict for a single source, used by the details screen. */

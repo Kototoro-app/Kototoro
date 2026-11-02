@@ -19,10 +19,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
@@ -31,6 +33,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.ReaderOcrMode
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.reader.ui.colorfilter.ReaderImageComparisonPreview
 import org.skepsun.kototoro.reader.ui.colorfilter.rememberReaderColorCorrectionLabels
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderChoiceChips
@@ -60,19 +63,31 @@ internal fun ComposeReaderOptionsPanel(
     if (!state.visible) return
     val colors = mangaReaderPanelColors(state.background, isSystemInDarkTheme(), MaterialTheme.colorScheme)
     val strings = rememberReaderOptionsStrings()
+    // A television is always landscape, so the rotation cell can only flip a lock the set ignores.
+    val isTv = LocalUiPresentationConfig.current.isTv
+    // The panel opens for the quick actions, so that is where the ring has to start: the host takes
+    // the focus on the very first frame the sheet has a placed row.
+    val firstActionFocusRequester = remember { FocusRequester() }
     ReaderOptionsPanelHost(
         colors = if (eInkMode) colors.forEInk() else colors,
         surfaceMode = rememberReaderPanelSurfaceMode(eInkMode),
         onDismissRequest = callbacks.onDismiss,
+        initialFocusRequester = firstActionFocusRequester,
         quickLayer = {
             ReaderMangaQuickLayer(
                 state = state,
                 callbacks = callbacks,
                 strings = strings,
-                features = ReaderOptionsFeatures(),
-                actions = mangaQuickActions(translationAvailable, translationActive),
+                features = AndroidReaderOptionsFeatures,
+                actions = mangaQuickActions(
+                    translationAvailable = translationAvailable,
+                    translationActive = translationActive,
+                    canRotate = !isTv,
+                    canDownload = state.canDownloadChapter,
+                ),
                 actionIcon = { painterResource(MangaQuickActionId.valueOf(it.id).iconResId) },
                 actionLabel = { stringResource(MangaQuickActionId.valueOf(it.id).labelResId) },
+                firstActionFocusRequester = firstActionFocusRequester,
                 onAction = { action ->
                     val handler = when (MangaQuickActionId.valueOf(action.id)) {
                         MangaQuickActionId.CHAPTERS -> callbacks.onPages
@@ -94,7 +109,7 @@ internal fun ComposeReaderOptionsPanel(
             ReaderOptionsDetailTabs(
                 tabs = listOf(
                     ReaderOptionsTab(stringResource(R.string.reader_more_tab_layout)) {
-                        ReaderLayoutOptionsPage(state, callbacks, strings)
+                        ReaderLayoutOptionsPage(state, callbacks, strings, AndroidReaderOptionsFeatures)
                     },
                     ReaderOptionsTab(stringResource(R.string.reader_more_tab_display)) {
                         ReaderDisplayOptionsPage(state, callbacks, strings) {
@@ -160,7 +175,10 @@ internal fun rememberReaderOptionsStrings() = ReaderOptionsStrings(
     imageServer = stringResource(R.string.image_server),
     automatic = stringResource(R.string.automatic),
     colorCorrection = rememberReaderColorCorrectionLabels(),
+    chaptersReversed = stringResource(R.string.reader_chapters_reversed),
 )
+
+private val AndroidReaderOptionsFeatures = ReaderOptionsFeatures(chaptersReversed = true)
 private enum class TranslationPageTab {
     SETTINGS,
     LOGS,

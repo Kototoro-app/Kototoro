@@ -27,7 +27,6 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Surface
@@ -35,7 +34,6 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -61,6 +59,10 @@ import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.ContentSourceInfo
 import org.skepsun.kototoro.core.model.getTitle
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
+import org.skepsun.kototoro.core.ui.adaptive.tvTabRing
+import org.skepsun.kototoro.core.ui.compose.TvModalBottomSheet
 import org.skepsun.kototoro.core.ui.compose.rememberResolvedSourceTitle
 import org.skepsun.kototoro.core.util.ext.mangaSourceExtra
 import org.skepsun.kototoro.parsers.model.Content
@@ -94,7 +96,7 @@ fun TrackingLocalSearchSheet(
         }
     }
 
-    ModalBottomSheet(
+    TvModalBottomSheet(
         onDismissRequest = onDismissRequest,
         sheetState = sheetState,
     ) {
@@ -115,7 +117,7 @@ fun TrackingLocalSearchSheet(
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 trailingIcon = {
                     if (currentQuery.isNotEmpty()) {
-                        IconButton(onClick = { currentQuery = "" }) {
+                        IconButton(onClick = { currentQuery = "" }, modifier = Modifier.tvIconButtonRing()) {
                             Icon(Icons.Default.Close, contentDescription = stringResource(R.string.clear))
                         }
                     }
@@ -140,7 +142,7 @@ fun TrackingLocalSearchSheet(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                return@ModalBottomSheet
+                return@TvModalBottomSheet
             }
 
             val selectedIndex = availableSources.indexOfFirst { it.mangaSource.name == selectedSourceName }
@@ -170,6 +172,7 @@ fun TrackingLocalSearchSheet(
                 availableSources.forEachIndexed { index, info ->
                     val sourceTitle = rememberResolvedSourceTitle(info.mangaSource)
                     Tab(
+                        modifier = Modifier.tvTabRing(),
                         selected = index == selectedIndex,
                         onClick = { onSourceSelected(info.mangaSource.name) },
                         text = {
@@ -236,7 +239,7 @@ fun TrackingLocalSearchSheet(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.error,
                             )
-                            TextButton(onClick = { onSearch(currentQuery) }) {
+                            TvTextButton(onClick = { onSearch(currentQuery) }) {
                                 Text(stringResource(R.string.retry))
                             }
                         }
@@ -269,7 +272,7 @@ fun TrackingLocalSearchSheet(
                 )
             },
             confirmButton = {
-                TextButton(onClick = {
+                TvTextButton(onClick = {
                     onMigrateClick(target)
                     pendingMigrationTarget = null
                 }) {
@@ -277,7 +280,7 @@ fun TrackingLocalSearchSheet(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { pendingMigrationTarget = null }) {
+                TvTextButton(onClick = { pendingMigrationTarget = null }) {
                     Text(stringResource(android.R.string.cancel))
                 }
             },

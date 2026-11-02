@@ -12,6 +12,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import org.skepsun.kototoro.core.ui.source.SourceListRow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.focus.FocusRequester
@@ -41,6 +42,7 @@ import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.parser.external.ExternalContentSource
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
@@ -357,7 +359,7 @@ fun ExploreSelectionTopBar(
         TopBarControlSurface {
             IconButton(
                 onClick = onClearSelection,
-                modifier = Modifier.size(topBarControlHeight),
+                modifier = Modifier.size(topBarControlHeight).tvIconButtonRing(),
             ) {
                 Icon(
                     imageVector = Icons.Default.Close,
@@ -399,7 +401,7 @@ fun ExploreSelectionTopBar(
                     if (canPin) {
                         IconButton(
                             onClick = onPin,
-                            modifier = Modifier.size(topBarControlHeight),
+                            modifier = Modifier.size(topBarControlHeight).tvIconButtonRing(),
                         ) {
                             Icon(
                                 painterResource(id = R.drawable.ic_pin),
@@ -411,7 +413,7 @@ fun ExploreSelectionTopBar(
                     if (canUnpin) {
                         IconButton(
                             onClick = onUnpin,
-                            modifier = Modifier.size(topBarControlHeight),
+                            modifier = Modifier.size(topBarControlHeight).tvIconButtonRing(),
                         ) {
                             Icon(
                                 painterResource(id = R.drawable.ic_unpin),
@@ -423,7 +425,7 @@ fun ExploreSelectionTopBar(
                     if (canDisable) {
                         IconButton(
                             onClick = onDisable,
-                            modifier = Modifier.size(topBarControlHeight),
+                            modifier = Modifier.size(topBarControlHeight).tvIconButtonRing(),
                         ) {
                             Icon(
                                 painterResource(id = R.drawable.ic_eye_off),
@@ -434,7 +436,7 @@ fun ExploreSelectionTopBar(
                     }
                     IconButton(
                         onClick = onToggleEmptyAvailability,
-                        modifier = Modifier.size(topBarControlHeight),
+                        modifier = Modifier.size(topBarControlHeight).tvIconButtonRing(),
                     ) {
                         Icon(
                             painter = painterResource(id = R.drawable.ic_source_empty),
@@ -448,12 +450,17 @@ fun ExploreSelectionTopBar(
                     if (hasOverflowActions) {
                         var overflowAnchorBounds by remember { mutableStateOf(Rect.Zero) }
                         var showOverflowMenu by remember { mutableStateOf(false) }
+                        // Root-overlay menu on TV: give the closing menu a target to hand the ring
+                        // back to, otherwise the focus ends up on the navigation rail.
+                        val overflowAnchorFocus = remember { FocusRequester() }
                         Box(
                             modifier = Modifier.onGloballyPositioned { overflowAnchorBounds = it.boundsInRoot() },
                         ) {
                         IconButton(
                             onClick = { showOverflowMenu = true },
-                            modifier = Modifier.size(topBarControlHeight),
+                            modifier = Modifier
+                                .focusRequester(overflowAnchorFocus)
+                                .size(topBarControlHeight).tvIconButtonRing(),
                         ) {
                             Icon(
                                 imageVector = Icons.Default.MoreVert,
@@ -469,6 +476,7 @@ fun ExploreSelectionTopBar(
                             useRootOverlay = LocalInterfaceStyle.current == InterfaceStyle.IOS,
                             anchorTapThrough = true,
                             anchorBounds = overflowAnchorBounds,
+                            anchorFocusRequester = overflowAnchorFocus,
                             shape = CompactTopBarPillShape,
                             style = GlassDefaults.subtleStyle(),
                         ) {
@@ -524,7 +532,6 @@ fun KototoroSourceCard(
     val summary = item.source.getSummary(context)
     val expressive = LocalMaterialExpressiveComponentsEnabled.current
     val cardShape = RoundedCornerShape(if (expressive) 20.dp else 12.dp)
-    val listShape = RoundedCornerShape(if (expressive) 22.dp else 0.dp)
     val iconShape = RoundedCornerShape(if (expressive) 14.dp else 8.dp)
     val containerColor = when {
         isSelected -> MaterialTheme.colorScheme.secondaryContainer
@@ -581,56 +588,26 @@ fun KototoroSourceCard(
             }
         }
     } else {
-        Row(
-            modifier = modifier
-                .fillMaxWidth()
-                .padding(horizontal = if (expressive) 8.dp else 0.dp, vertical = if (expressive) 3.dp else 0.dp)
-                .background(containerColor, listShape)
-                .padding(vertical = if (expressive) 10.dp else 12.dp, horizontal = if (expressive) 14.dp else 16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .background(
-                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        shape = iconShape
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
+        SourceListRow(
+            title = title,
+            summary = summary,
+            icon = { iconModifier ->
                 ContentSourceIcon(
                     source = item.source,
-                    modifier = Modifier.size(28.dp),
+                    modifier = iconModifier,
                     contentDescription = title,
                 )
+            },
+            modifier = modifier,
+            selected = isSelected,
+            expressive = expressive,
+            badge = {
                 SourceAvailabilityBadge(
                     availability = item.source.availability,
                     modifier = Modifier.align(Alignment.TopEnd),
                 )
-            }
-            Spacer(modifier = Modifier.width(16.dp))
-            Column(
-                modifier = Modifier.weight(1f)
-            ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
-                    color = if (isSelected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                if (!summary.isNullOrBlank()) {
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = summary,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-        }
+            },
+        )
     }
 }
 

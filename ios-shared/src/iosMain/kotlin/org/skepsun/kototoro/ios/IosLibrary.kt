@@ -10,6 +10,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import org.skepsun.kototoro.core.db.DATABASE_VERSION
 import org.skepsun.kototoro.core.db.MangaDatabase
+import org.skepsun.kototoro.core.db.migrations.sharedDatabaseMigrations
 import org.skepsun.kototoro.core.db.entity.MangaSourceEntity
 import org.skepsun.kototoro.parsers.network.CloudFlareProtection
 import org.skepsun.kototoro.favourites.data.FavouriteCategoryEntity
@@ -38,8 +39,26 @@ data class IosSourceSetting(
 class IosLibrary {
     internal val database: MangaDatabase
     private val sourceRefs = AtomicReference<Map<String, SourceRef>>(emptyMap())
-    private val records by lazy { SourceLibrary(database) { sourceRefs.load()[it] } }
+    internal val records by lazy { SourceLibrary(database) { sourceRefs.load()[it] } }
     val tracking by lazy { IosTracking(this) }
+    /** Novel text replacement rules in the shared `replace_rules` table. */
+    /** WebDAV backups (Android's uploader format), over the shared `WebDavLibrarySync`. */
+    val webDav by lazy { IosWebDav(this) }
+    /** Custom Spaces (`space_definitions`), shared with Android. */
+    val spaces by lazy { IosSpaces(this) }
+    /** Novel highlights (`novel_markings`), shared with Android. */
+    val markings by lazy { IosNovelMarkings(org.skepsun.kototoro.core.library.NovelMarkingStore(database)) }
+    /** Panel crops and video time points (`media_notes`) and the notes overview. */
+    val notes by lazy { IosNotes(org.skepsun.kototoro.core.library.BookNotesStore(database), this) }
+    val replaceRules by lazy { IosReplaceRules(org.skepsun.kototoro.core.library.ReplaceRuleStore(database)) }
+    val duplicates by lazy { IosLibraryDuplicates(this) }
+    val statistics by lazy { IosStatistics(this) }
+    val recovery by lazy { IosLibraryRecovery(this) }
+    val googleDriveSync by lazy { IosGoogleDriveSync(this) }
+    val suggestions by lazy { IosSuggestions(this) }
+
+    /** Sources of the current catalog; works of other sources cannot be opened or refreshed here. */
+    internal val knownSources: Set<String> get() = sourceRefs.load().keys
 
     fun updateSources(sources: List<IosSource>) {
         sourceRefs.store(sources.associate { it.name to SourceRef(it.name, it.locale, it.contentType) })
@@ -52,8 +71,13 @@ class IosLibrary {
         }
         database = Room.databaseBuilder<MangaDatabase>(name = databasePath)
             .setDriver(BundledSQLiteDriver())
+            .addMigrations(*sharedDatabaseMigrations())
             .setQueryCoroutineContext(Dispatchers.IO)
             .build()
+    }
+
+    internal constructor(database: MangaDatabase) {
+        this.database = database
     }
 
     val schemaVersion: Int get() = DATABASE_VERSION
@@ -71,7 +95,7 @@ class IosLibrary {
                 val categories = database.getFavouriteCategoriesDao()
                 val currentIds = categories.findAll().map { it.categoryId }.toSet()
                 require(orderedIds.size == currentIds.size && orderedIds.toSet() == currentIds) {
-                    "分类列表已变化，请重新打开管理分类后保存"
+                    localized("分类列表已变化，请重新打开管理分类后保存")
                 }
                 val visible = visibleIds.toSet()
                 require(visible.all { it in currentIds }) { "Visible category no longer exists" }
@@ -122,6 +146,23 @@ class IosLibrary {
         database.useWriterConnection { connection ->
             connection.immediateTransaction {
                 database.getFavouritesDao().deleteAll(id.toLong())
+                database.getFavouriteCategoriesDao().delete(id.toLong())
+                database.getChaptersDao().gc()
+            }
+        }
+    }
+
+    /**
+     * Removes the category and unfavourites every work in it, including from their other categories. All rows are
+     * tombstoned with fresh timestamps, so the deletion reaches Google Drive and other devices.
+     */
+    @Throws(Exception::class)
+    suspend fun removeCategoryWithWorks(id: Int) {
+        database.useWriterConnection { connection ->
+            connection.immediateTransaction {
+                val favourites = database.getFavouritesDao()
+                favourites.findActiveMangaIds(id.toLong()).forEach { favourites.delete(it) }
+                favourites.deleteAll(id.toLong())
                 database.getFavouriteCategoriesDao().delete(id.toLong())
                 database.getChaptersDao().gc()
             }
@@ -213,14 +254,14 @@ class IosLibrary {
 
     @Throws(Exception::class)
     suspend fun favourites(): List<IosLibraryEntry> {
-        val entries = records.snapshot().entries
+        val entries = records.snapshot(withChapters = false).entries
         val metadata = tracking.selected(entries.map { it.content.id })
         return entries.map { IosLibraryEntry(it, metadata[it.content.id]) }
     }
 
     @Throws(Exception::class)
     suspend fun history(): List<IosLibraryEntry> {
-        val entries = records.snapshot(history = true).entries
+        val entries = records.snapshot(history = true, withChapters = false).entries
         val metadata = tracking.selected(entries.map { it.content.id })
         return entries.map { IosLibraryEntry(it, metadata[it.content.id]) }
     }
@@ -231,6 +272,16 @@ class IosLibrary {
     @Throws(Exception::class)
     suspend fun setFavourite(content: IosSourceContent, favourite: Boolean) {
         if (favourite) records.addFavourite(content.value) else records.removeFavourite(content.value.id)
+    }
+
+    /** Unfavourites the works from every category in one transaction. */
+    @Throws(Exception::class)
+    suspend fun removeFavourites(contents: List<IosSourceContent>) {
+        database.useWriterConnection { connection ->
+            connection.immediateTransaction {
+                contents.forEach { database.getFavouritesDao().delete(it.value.id) }
+            }
+        }
     }
 
     @Throws(Exception::class)
@@ -250,7 +301,17 @@ class IosLibrary {
     suspend fun removeHistory(content: IosSourceContent) = records.removeHistory(content.value.id)
 
     @Throws(Exception::class)
-    suspend fun saveDetails(content: IosSourceContent) = records.save(content.value)
+    suspend fun saveDetails(content: IosSourceContent) =
+        // Details without chapters (a source that failed quietly) keep the saved list instead of erasing it.
+        records.save(content.value.let { if (it.chapters?.isEmpty() == true) it.copy(chapters = null) else it })
+
+    /** Lightweight saved details for restoring a space's last browsed artwork, without loading its chapters. */
+    @Throws(Exception::class)
+    suspend fun storedContent(id: String): IosSourceContent? {
+        val contentId = id.toLongOrNull() ?: return null
+        val content = records.findMany(listOf(contentId)).firstOrNull() ?: return null
+        return IosSourceContent(content, tracking.selected(listOf(contentId))[contentId])
+    }
 
     /** Moves Android-compatible library records after Swift has fetched and confirmed the target's details. */
     @Throws(Exception::class)
@@ -267,11 +328,54 @@ class IosLibrary {
             ?.takeIf { it.source.name == content.value.source.name && !it.chapters.isNullOrEmpty() }
             ?.let(::IosSourceContent)
 
+    /** Resolve a download from its saved update log, refreshing missing chapter metadata on explicit request. */
+    @Throws(Exception::class)
+    suspend fun prepareUpdateDownload(event: IosTimelineEvent, sources: IosSources): IosTimelineEvent {
+        require(event.isUpdate) { "Not an update event" }
+        val ids = event.updateLogIds.ifEmpty { listOf(requireNotNull(event.id.removePrefix("update-").toLongOrNull())) }
+        val logs = ids.map { id -> checkNotNull(database.getTrackLogsDao().find(id)) {
+            localized("更新记录已不存在，请刷新记录页。")
+        } }
+        require(logs.all { it.mangaId == event.content.value.id }) { "Update content mismatch" }
+        val names = logs.flatMap { it.chapters.lines().filter(String::isNotBlank) }.distinct()
+        var content = storedDetails(event.content) ?: event.content
+        var chapters = resolveUpdateEventChapters(content, names, event.updateChapterKeys)
+        if (chapters.isEmpty()) {
+            content = sources.refreshDetails(content)
+            require(content.value.id == event.content.value.id && content.sourceName == event.content.sourceName) {
+                "Update details mismatch"
+            }
+            saveDetails(content)
+            chapters = resolveUpdateEventChapters(content, names, event.updateChapterKeys)
+        }
+        check(chapters.isNotEmpty()) {
+            localized("无法匹配更新章节，请在作品详情中选择章节下载。")
+        }
+        return event.copy(content = content, downloadChapters = chapters)
+    }
+
+    @Throws(Exception::class)
+    suspend fun markUpdateSeen(event: IosTimelineEvent) = database.useWriterConnection { connection ->
+        connection.immediateTransaction {
+            require(event.isUpdate)
+            for (id in event.updateLogIds) {
+                val log = database.getTrackLogsDao().find(id) ?: continue
+                require(log.mangaId == event.content.value.id)
+                database.getTrackLogsDao().markAsRead(id)
+            }
+        }
+    }
+
     @Throws(Exception::class)
     suspend fun position(content: IosSourceContent): IosReadingPosition? {
         val history = records.progress(content.value.id) ?: return null
-        val ids = content.value.chapters.orEmpty().map { it.id }
+        // A downloaded book's chapters are listed, and recorded, in place of the download.
+        val chapters = content.listed.takeIf { content.value.chapters != null }
+            ?: storedDetails(content)?.value?.chapters ?: return null
+        val ids = chapters.map { it.id }
         val recovered = recoverHistoryChapterId(false, history.chapterId, history.parentChapterId, history.percent, ids)
+            // A book's chapter whose download is not listed by its chapters resumes at the download.
+            ?: history.parentChapterId?.takeIf { history.chapterId !in ids && it in ids }
         val chapterId = recovered ?: history.chapterId
         if (chapterId !in ids) return null
         return IosReadingPosition(chapterId.toString(), if (recovered == null) history.page else 0,
@@ -285,10 +389,29 @@ class IosLibrary {
     @Throws(Exception::class)
     suspend fun recordPosition(content: IosSourceContent, chapter: IosSourceChapter, index: Int,
         count: Int, lastVisible: Int, scroll: Float) =
-        records.recordPage(content.value, chapter.value, index, count, lastVisible, scroll)
+        records.recordPage(content.value, chapter.value, index, count, lastVisible, scroll, content.part(chapter.value))
 
     @Throws(Exception::class)
+    /**
+     * Android's "time left" for [content] (shared `ReadingTimeEstimate`): the work's own pace once enough of it is
+     * read, else the reader's overall pace; null for novels, videos and less than a minute.
+     */
+    suspend fun readingTimeLeft(content: IosSourceContent, progress: Float?): Long? {
+        val stats = database.getStatsDao()
+        val id = content.value.id
+        val perPageMillis = if (stats.getReadPagesCount(id) >= org.skepsun.kototoro.details.domain.ReadingTimeEstimate.MIN_PAGES_FOR_WORK_PACE)
+            stats.getAverageTimePerPage(id) else stats.getAverageTimePerPage()
+        return org.skepsun.kototoro.details.domain.ReadingTimeEstimate.remainingSeconds(content.contentType,
+            content.chapterCount, progress, perPageMillis / 1000)
+    }
+
     suspend fun bookmarks(content: IosSourceContent): List<IosBookmark> = records.bookmarks(content.value.id).map(::IosBookmark)
+
+    /** Every work with saved positions, in one read (Android's bookmarks shelf); works come back without chapters. */
+    @Throws(Exception::class)
+    suspend fun bookmarkGroups(): List<IosBookmarkGroup> = records.bookmarkGroups().map { group ->
+        IosBookmarkGroup(IosSourceContent(group.content), group.bookmarks.map(::IosBookmark))
+    }
 
     @Throws(Exception::class)
     suspend fun toggleBookmark(content: IosSourceContent, chapter: IosSourceChapter, page: IosSourcePage,
@@ -296,17 +419,22 @@ class IosLibrary {
 
     @Throws(Exception::class)
     suspend fun toggleNovelBookmark(content: IosSourceContent, chapter: IosSourceChapter, index: Int,
-        count: Int, preview: String) = records.toggleNovelBookmark(content.value, chapter.value, index, count, preview)
+        count: Int, preview: String) =
+        records.toggleNovelBookmark(content.value, chapter.value, index, count, preview, content.part(chapter.value))
 
     @Throws(Exception::class)
     suspend fun removeBookmark(content: IosSourceContent, bookmark: IosBookmark) = records.removeBookmark(content.value, bookmark.value)
 
     @Throws(Exception::class)
-    suspend fun updates(): List<IosUpdate> = database.getTracksDao().findAllIds().toList().mapNotNull { id ->
-        val track = database.getTracksDao().find(id) ?: return@mapNotNull null
-        if (track.newChapters <= 0) return@mapNotNull null
-        records.find(id)?.let { IosUpdate(IosSourceContent(it), track.newChapters, track.lastCheckTime) }
-    }.sortedByDescending { it.checkedAt }
+    suspend fun updates(): List<IosUpdate> = database.useReaderConnection { connection ->
+        connection.deferredTransaction {
+            val tracks = database.getTracksDao().findUpdated()
+            val works = records.findMany(tracks.map { it.mangaId }).associateBy { it.id }
+            tracks.mapNotNull { track ->
+                works[track.mangaId]?.let { IosUpdate(IosSourceContent(it), track.newChapters, track.lastCheckTime) }
+            }
+        }
+    }
 
     @Throws(Exception::class)
     suspend fun checkUpdates(sources: IosSources): IosUpdateReport {
@@ -317,8 +445,8 @@ class IosLibrary {
     }
 
     @Throws(Exception::class)
-    suspend fun markUpdateRead(content: IosSourceContent) = SourceTracker(database, records,
-        { it }, { it.chapters?.firstOrNull()?.branch }).markRead(content.value.id)
+    suspend fun markUpdatesSeen(content: IosSourceContent) = SourceTracker(database, records,
+        { it }, { it.chapters?.firstOrNull()?.branch }).markSeen(content.value.id)
 
     private val backups by lazy { IosBackupService(this) }
 

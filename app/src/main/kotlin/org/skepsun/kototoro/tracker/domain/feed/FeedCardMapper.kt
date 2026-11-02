@@ -56,9 +56,12 @@ internal fun buildFeedCardModel(row: FeedCardRow, request: FeedCardMapper.Reques
         override = row.toDisplayOverride(),
         manga = row.toStubContent(request.brokenTitle),
         createdAt = Instant.ofEpochMilli(row.createdAt),
-        count = row.chapters.size,
+        count = row.updateCount,
         isNew = row.unread,
         totalChapters = row.chapters.size,
+        logIds = row.logIds,
+        pendingCount = row.pendingCount,
+        updateChapters = row.updateChapters,
     )
 }
 

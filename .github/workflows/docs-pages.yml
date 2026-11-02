@@ -10,6 +10,7 @@ on:
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/docs-pages.yml"
+      - "iosApp/Scripts/altstore-source.py"
   workflow_dispatch:
 
 permissions:
@@ -26,16 +27,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 20
           cache: npm
 
       - name: Set up GitHub Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
 
       - name: Install dependencies
         run: npm ci
@@ -45,8 +46,23 @@ jobs:
           DOCS_EDIT_BRANCH: ${{ github.ref_name }}
         run: npm run docs:build
 
+      # AltStore / SideStore sources, rebuilt from the GitHub releases on every deploy; publish-ios in the release
+      # and nightly workflows dispatches this workflow after uploading an IPA.
+      - name: Generate AltStore sources
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          out=docs/.vitepress/dist/altstore
+          mkdir -p "$out"
+          cp iosApp/Kototoro/Assets.xcassets/AppIcon.appiconset/AppIcon.png "$out/icon.png"
+          python3 iosApp/Scripts/altstore-source.py source --repository Kototoro-app/Kototoro --channel release \
+            -o "$out/release.json"
+          python3 iosApp/Scripts/altstore-source.py source --repository Kototoro-app/Kototoro-Nightly \
+            --channel nightly -o "$out/nightly.json"
+
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: docs/.vitepress/dist
 
@@ -59,4 +75,4 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

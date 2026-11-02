@@ -1,5 +1,8 @@
 package org.skepsun.kototoro.discover.ui.compose
 
+import org.skepsun.kototoro.scrobbling.common.ui.scrobblerIconTint
+import androidx.compose.foundation.layout.size
+
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
@@ -41,6 +44,7 @@ import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.compose.KototoroLoadingIndicator
 import org.skepsun.kototoro.core.ui.compose.KototoroPullToRefreshBox
+import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
 import org.skepsun.kototoro.core.ui.compose.contentCoverSharedKey
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.main.ui.compose.GlassDropdownMenu
@@ -363,7 +367,8 @@ private fun DiscoverServiceSwitcherChip(
                 androidx.compose.material3.Icon(
                     painter = rememberSafePainter(activeService.iconResId),
                     contentDescription = null,
-                    modifier = Modifier.padding(end = 2.dp),
+                    tint = scrobblerIconTint(activeService.iconResId),
+                    modifier = Modifier.size(20.dp).padding(end = 2.dp),
                 )
             },
             trailingIcon = {
@@ -380,12 +385,14 @@ private fun DiscoverServiceSwitcherChip(
             offset = androidx.compose.ui.unit.DpOffset(x = 0.dp, y = 4.dp),
         ) {
             availableServices.forEach { candidate ->
-                androidx.compose.material3.DropdownMenuItem(
+                TvDropdownMenuItem(
                     text = { androidx.compose.material3.Text(stringResource(candidate.titleResId)) },
                     leadingIcon = {
                         androidx.compose.material3.Icon(
                             painter = rememberSafePainter(candidate.iconResId),
                             contentDescription = null,
+                            tint = scrobblerIconTint(candidate.iconResId),
+                            modifier = Modifier.size(20.dp),
                         )
                     },
                     onClick = {

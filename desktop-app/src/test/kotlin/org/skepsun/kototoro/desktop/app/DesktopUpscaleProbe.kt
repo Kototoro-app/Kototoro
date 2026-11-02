@@ -24,7 +24,8 @@ internal object DesktopUpscaleProbe {
             runDesktopComposeUiTest(width = 1260, height = 850) {
                 setContent { DesktopApp(controller) }
                 fun settled(allowError: Boolean = false) {
-                    waitUntil(timeoutMillis = 60_000) { !controller.state.value.busy }
+                    // ncnn on CI's software Vulkan (lavapipe) needs about a minute for a 4x page; leave it room.
+                    waitUntil(timeoutMillis = 180_000) { !controller.state.value.busy }
                     waitForIdle()
                     if (!allowError) check(controller.state.value.error == null) { controller.state.value.error.orEmpty() }
                 }
@@ -55,7 +56,7 @@ internal object DesktopUpscaleProbe {
                 check(session.upscaleError.value?.contains("尚未安装") == true) { session.upscaleError.value.orEmpty() }
                 onNodeWithTag("reader-upscaler-install").performScrollTo().assertExists()
                 runBlocking { controller.installUpscalerArchive(DesktopUpscaleTool.REALESRGAN,
-                    archives.resolve(DesktopUpscaleTool.REALESRGAN.asset)).join() }
+                    archives.resolve(requireNotNull(DesktopUpscaleTool.REALESRGAN.asset()).archive)).join() }
                 settled()
                 check(width() == original * 2) { "after install: ${width()} vs $original" }
                 check(controller.state.value.image.toString().contains("upscale")) { controller.state.value.image.toString() }
@@ -63,7 +64,7 @@ internal object DesktopUpscaleProbe {
                 onNodeWithTag("reader-option-upscale:REALCUGAN_2X").performScrollTo().performClick()
                 settled()
                 runBlocking { controller.installUpscalerArchive(DesktopUpscaleTool.REALCUGAN,
-                    archives.resolve(DesktopUpscaleTool.REALCUGAN.asset)).join() }
+                    archives.resolve(requireNotNull(DesktopUpscaleTool.REALCUGAN.asset()).archive)).join() }
                 settled()
                 onNodeWithTag("reader-option-noise:2").performScrollTo().performClick()
                 settled()
@@ -77,7 +78,9 @@ internal object DesktopUpscaleProbe {
                 settled()
                 check(width() == original * 4) { "4x: ${width()}" }
                 // Android's Anime4K page modes run offscreen through libmpv when it is present.
-                if (org.skepsun.kototoro.desktop.player.MpvLocator.find(Path.of(args[1])) != null) {
+                if (System.getProperty("kototoro.desktop.skip.anime4k.pages") != null) {
+                    println("ANIME4K_PAGES skipped (-PskipAnime4KPages)")
+                } else if (org.skepsun.kototoro.desktop.player.MpvLocator.find(Path.of(args[1])) != null) {
                     onNodeWithTag("reader-option-upscale:ANIME4K_B").performScrollTo().performClick()
                     settled()
                     check(width() == original * 2) { "Anime4K B: ${width()}" }

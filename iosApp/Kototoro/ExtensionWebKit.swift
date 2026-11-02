@@ -13,6 +13,7 @@ final class ExtensionWebKit: NSObject {
     static let shared = ExtensionWebKit()
     private var views: [Int64: BridgedWebView] = [:]
     private var nextView: Int64 = 1
+    private var httpRequests: [UUID: WebKitHttpRequest] = [:]
     /// Ordered delivery of notifications (page started before finished, progress, console...).
     fileprivate let events = DispatchQueue(label: "org.skepsun.kototoro.webkit.events")
     /// Calls whose answer something waits for (navigation decisions, intercepted requests, interface results).
@@ -37,6 +38,24 @@ final class ExtensionWebKit: NSObject {
     fileprivate func perform(_ operation: String, _ view: Int64, _ payload: [String: Any]) -> String? {
         Self.log("op \(view) \(operation) \(String(describing: payload["url"] ?? payload["baseUrl"] ?? ""))")
         switch operation {
+        case "http.fetch":
+            return wait { (done: @escaping (String?) -> Void) in
+                let id = UUID()
+                guard let request = WebKitHttpRequest(payload: payload, completion: { [weak self] response in
+                    self?.httpRequests.removeValue(forKey: id)
+                    done(response)
+                }) else { done(nil); return }
+                self.httpRequests[id] = request
+                request.start()
+            }
+        case "userAgent.default":
+            return wait { (done: @escaping (String?) -> Void) in
+                let view = WKWebView(frame: .zero)
+                view.evaluateJavaScript("navigator.userAgent") { [view] value, _ in
+                    _ = view
+                    done(value as? String)
+                }
+            }
         case "create":
             return onMain { () -> String in
                 let id = self.nextView
@@ -130,7 +149,7 @@ final class ExtensionWebKit: NSObject {
     }
 
     /// Starts [start] on the main thread and waits (on this Java thread) until it calls back, at most 30 seconds.
-    fileprivate func wait<T>(_ start: @escaping (@escaping (T?) -> Void) -> Void) -> T? {
+    fileprivate func wait<T>(_ start: @escaping @MainActor (@escaping (T?) -> Void) -> Void) -> T? {
         if Thread.isMainThread { return nil }
         let semaphore = DispatchSemaphore(value: 0)
         var value: T?
@@ -217,6 +236,11 @@ private final class BridgedWebView: NSObject, WKNavigationDelegate, WKUIDelegate
     /// The next main-frame navigation shows a response shouldInterceptRequest supplied; do not ask again.
     private var showingIntercepted = false
     private var observations: [NSKeyValueObservation] = []
+    /// Early Android onPageStarted hooks must also reach the destination document, rather than about:blank.
+    private var navigationPending = false
+    private var navigationScripts: [String] = []
+    private var navigationGeneration = 0
+    private var announcedNavigation = false
     private var bridge: ExtensionWebKit { .shared }
 
     init(id: Int64) {
@@ -235,6 +259,7 @@ private final class BridgedWebView: NSObject, WKNavigationDelegate, WKUIDelegate
         webView.uiDelegate = self
         webView.alpha = 0.01
         webView.isUserInteractionEnabled = false
+        webView.accessibilityElementsHidden = true
         UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.keyWindow }.first?
             .insertSubview(webView, at: 0)
         observations = [
@@ -250,6 +275,7 @@ private final class BridgedWebView: NSObject, WKNavigationDelegate, WKUIDelegate
     }
 
     func close() {
+        navigationGeneration += 1
         observations = []
         webView.stopLoading()
         webView.configuration.userContentController.removeAllScriptMessageHandlers()
@@ -260,24 +286,60 @@ private final class BridgedWebView: NSObject, WKNavigationDelegate, WKUIDelegate
 
     func perform(_ operation: String, _ payload: [String: Any]) -> String? {
         switch operation {
+        case "presentation":
+            return bridge.onMain {
+                if payload["shown"] as? Bool == true {
+                    guard let width = payload["width"] as? Double, let height = payload["height"] as? Double,
+                          let dpi = payload["densityDpi"] as? Double,
+                          width > 0, height > 0, dpi > 0, width <= 16384, height <= 16384,
+                          let window = UIApplication.shared.connectedScenes.compactMap({
+                              ($0 as? UIWindowScene)?.keyWindow
+                          }).first else { return "unavailable:Native browser presentation has no window" }
+                    webView.frame = CGRect(x: 0, y: 0, width: width * 160 / dpi, height: height * 160 / dpi)
+                    if webView.superview !== window { window.insertSubview(webView, at: 0) }
+                    webView.setNeedsLayout()
+                    webView.layoutIfNeeded()
+                } else {
+                    webView.removeFromSuperview()
+                }
+                return ""
+            }
         case "load":
             guard let url = (payload["url"] as? String).flatMap(URL.init(string:)) else { return nil }
             var request = URLRequest(url: url)
             for (key, value) in payload["headers"] as? [String: String] ?? [:] { request.setValue(value, forHTTPHeaderField: key) }
-            bridge.onMain { programmaticLoads += 1; webView.load(request) }
+            bridge.onMain {
+                startNavigation(url: url.absoluteString) { self.webView.load(request) }
+            }
         case "post":
             guard let url = (payload["url"] as? String).flatMap(URL.init(string:)) else { return nil }
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
             request.httpBody = Data(base64Encoded: payload["body"] as? String ?? "")
             request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-            bridge.onMain { programmaticLoads += 1; webView.load(request) }
+            bridge.onMain { startNavigation(url: url.absoluteString) { self.webView.load(request) } }
         case "html":
             let html = payload["html"] as? String ?? ""
             let base = (payload["baseUrl"] as? String).flatMap(URL.init(string:))
-            bridge.onMain { programmaticLoads += 1; webView.loadHTMLString(html, baseURL: base) }
+            bridge.onMain {
+                startNavigation(url: base?.absoluteString ?? "about:blank") {
+                    self.webView.loadHTMLString(html, baseURL: base)
+                }
+            }
         case "evaluate":
             return evaluate(payload["script"] as? String ?? "")
+        case "touch":
+            guard let action = payload["action"] as? Int, (0...3).contains(action),
+                  let x = payload["x"] as? Double, let y = payload["y"] as? Double,
+                  x.isFinite, y.isFinite else { return nil }
+            return evaluate("""
+            (function(){var x=\(x),y=\(y),a=\(action),e=document.elementFromPoint(x,y);if(!e)return false;
+            var types=['pointerdown','pointerup','pointermove','pointercancel'];
+            e.dispatchEvent(new PointerEvent(types[a],{bubbles:true,clientX:x,clientY:y,pointerId:1,
+                pointerType:'touch',isPrimary:true,buttons:a===1||a===3?0:1}));
+            if(a===1)e.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true,clientX:x,clientY:y}));
+            return true;})();
+            """)
         case "interfaces":
             let described = payload["interfaces"] as? [String: [[String: Any]]] ?? [:]
             bridge.onMain {
@@ -296,7 +358,11 @@ private final class BridgedWebView: NSObject, WKNavigationDelegate, WKUIDelegate
                 webView.customUserAgent = agent.isEmpty ? nil : agent
                 webView.configuration.defaultWebpagePreferences.allowsContentJavaScript = javaScript
             }
-        case "stop": bridge.onMain { webView.stopLoading() }
+        case "stop": bridge.onMain {
+            navigationGeneration += 1
+            navigationPending = false
+            webView.stopLoading()
+        }
         case "reload": bridge.onMain { _ = webView.reload() }
         case "back": bridge.onMain { _ = webView.goBack() }
         case "forward": bridge.onMain { _ = webView.goForward() }
@@ -336,6 +402,13 @@ private final class BridgedWebView: NSObject, WKNavigationDelegate, WKUIDelegate
         let wrapped = "(function(){var r=(0,eval)(\(ExtensionWebKit.json(script)));if(r===undefined)return \"null\";" +
             "var j=JSON.stringify(r);return j===undefined?\"null\":j;})()"
         return bridge.wait { (done: @escaping (String?) -> Void) in
+            // Provisional navigation still exposes the previous document to evaluateJavaScript. Keep early
+            // extension hooks on the destination document too, before the site's scripts read or decode data.
+            if self.navigationPending, !self.navigationScripts.contains(script) {
+                self.navigationScripts.append(script)
+                self.webView.configuration.userContentController.addUserScript(
+                    WKUserScript(source: script, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+            }
             self.webView.evaluateJavaScript(wrapped) { value, error in
                 if let error { ExtensionWebKit.log("evaluate \(self.id) failed: \(error.localizedDescription)") }
                 done(value as? String)
@@ -345,11 +418,37 @@ private final class BridgedWebView: NSObject, WKNavigationDelegate, WKUIDelegate
 
     // MARK: Scripts
 
+    /// The JNI caller can itself be the compatibility Looper, so announce asynchronously after loadUrl returns.
+    /// Once that Looper finishes onPageStarted, every early hook is installed before WebKit parses the page.
+    private func startNavigation(url: String, load: @escaping () -> Void) {
+        beginNavigation()
+        navigationGeneration += 1
+        let generation = navigationGeneration, id = id
+        bridge.events.async {
+            _ = ExtensionWebKit.send(id, "willStart", ["url": url])
+            DispatchQueue.main.async {
+                guard self.navigationGeneration == generation else { return }
+                self.announcedNavigation = true
+                self.programmaticLoads += 1
+                load()
+            }
+        }
+    }
+
+    private func beginNavigation() {
+        navigationPending = true
+        navigationScripts = []
+        installScripts()
+    }
+
     private func installScripts() {
         let content = webView.configuration.userContentController
         content.removeAllUserScripts()
         for source in [Self.consoleScript, Self.requestScript] + interfaces.map({ Self.interfaceScript($0.key, $0.value) }) {
             content.addUserScript(WKUserScript(source: source, injectionTime: .atDocumentStart, forMainFrameOnly: false))
+        }
+        for source in navigationScripts {
+            content.addUserScript(WKUserScript(source: source, injectionTime: .atDocumentStart, forMainFrameOnly: true))
         }
     }
 
@@ -539,13 +638,23 @@ private final class BridgedWebView: NSObject, WKNavigationDelegate, WKUIDelegate
     }
 
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        if announcedNavigation {
+            announcedNavigation = false
+            return
+        }
+        if !navigationPending { beginNavigation() }
         let id = id, url = webView.url?.absoluteString ?? "about:blank"
         bridge.events.async { _ = ExtensionWebKit.send(id, "started", ["url": url]) }
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        navigationPending = false
         let id = id, url = webView.url?.absoluteString ?? "about:blank"
         bridge.events.async { _ = ExtensionWebKit.send(id, "finished", ["url": url]) }
+    }
+
+    func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+        navigationPending = false
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
@@ -557,6 +666,7 @@ private final class BridgedWebView: NSObject, WKNavigationDelegate, WKUIDelegate
     }
 
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        navigationPending = false
         let id = id
         bridge.events.async { _ = ExtensionWebKit.send(id, "crashed") }
     }
@@ -566,6 +676,7 @@ private final class BridgedWebView: NSObject, WKNavigationDelegate, WKUIDelegate
         ExtensionWebKit.log("navigation error \(id) \(nsError.domain) \(nsError.code) \(nsError.localizedDescription)")
         // A navigation the page or the extension replaced is not a failure on Android either.
         if nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorCancelled { return }
+        navigationPending = false
         let failing = (nsError.userInfo[NSURLErrorFailingURLErrorKey] as? URL) ?? webView.url
         let payload: [String: Any] = ["url": failing?.absoluteString ?? "about:blank", "mainFrame": true,
                                       "description": nsError.localizedDescription]

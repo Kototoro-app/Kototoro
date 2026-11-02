@@ -11,6 +11,9 @@ import org.skepsun.kototoro.core.source.SourceChapter
 import org.skepsun.kototoro.core.source.SourceContent
 import org.skepsun.kototoro.core.source.SourceContentImage
 import org.skepsun.kototoro.desktop.runtime.NovelBlock
+import org.skepsun.kototoro.reader.novel.NovelReaderColors
+import org.skepsun.kototoro.reader.novel.NovelReaderThemePreset
+import org.skepsun.kototoro.reader.novel.novelReaderColors
 
 /** What the reader shows for one novel chapter; [firstVisible]/[lastVisible] are block indexes, not pixels. */
 data class DesktopNovel(
@@ -24,13 +27,35 @@ data class DesktopNovel(
     /** Repeated jumps to the same block still request a scroll without replacing the chapter body. */
     val navigation: Long = 0,
     val bookmarkBlocks: Map<Long, Int> = emptyMap(),
-)
+    /** Chapter id → the title after Android's TITLE rules; a chapter the rules left alone has no entry. */
+    val chapterTitles: Map<Long, String> = emptyMap(),
+) {
+    /** The title to draw for a chapter: the rule's rewrite when there is one, the source's own title otherwise. */
+    fun titleOf(chapter: SourceChapter): String? = chapterTitles[chapter.id] ?: chapter.title
+}
 
-enum class DesktopNovelTheme(val title: String, val background: Long, val text: Long, val muted: Long) {
-    LIGHT("白色", 0xFFFFFFFF, 0xFF1B2635, 0xFF687385),
-    SEPIA("护眼黄", 0xFFF4ECD8, 0xFF3A2F20, 0xFF7A6A52),
-    GREEN("豆沙绿", 0xFFCCE8CF, 0xFF1F3A25, 0xFF4F7357),
-    DARK("夜间", 0xFF15191F, 0xFFD5D9E0, 0xFF8E97A6),
+enum class DesktopNovelTheme(val preset: NovelReaderThemePreset) {
+    LIGHT(NovelReaderThemePreset.PAPER),
+    SEPIA(NovelReaderThemePreset.SEPIA),
+    GREEN(NovelReaderThemePreset.MOSS),
+    DARK(NovelReaderThemePreset.SLATE);
+
+    /**
+     * Android's own palette for this theme, so the Windows reader shows the surface and text color Android shows.
+     * [DARK] is the dark variant of Android's slate theme; the other three are the light variants of paper, sepia and
+     * moss. The enum names are persisted in preferences and in source preference values, so they stay as they are.
+     */
+    val palette: NovelReaderColors
+        get() = novelReaderColors(preset, isDarkTheme = this == DARK)
+
+    /** Resolved per call, so an already-open options panel follows a language switch. */
+    val title: String
+        get() = when (this) {
+            LIGHT -> desktopText("novel.theme.LIGHT")
+            SEPIA -> desktopText("novel.theme.SEPIA")
+            GREEN -> desktopText("novel.theme.GREEN")
+            DARK -> desktopText("novel.theme.DARK")
+        }
 }
 
 data class DesktopNovelSettings(
@@ -39,6 +64,8 @@ data class DesktopNovelSettings(
     val width: Int = 760,
     val theme: DesktopNovelTheme = DesktopNovelTheme.LIGHT,
     val serif: Boolean = false,
+    /** Android's reading modes: continuous scrolling, or whole pages turned by the wheel and the paging keys. */
+    val paged: Boolean = false,
 ) {
     companion object {
         val FONT_SIZES = 14..36
@@ -91,6 +118,8 @@ internal class DesktopNovelOperations(
         val novel = snapshot.novel ?: return
         val content = snapshot.content ?: return
         if (snapshot.screen != DesktopScreen.NOVEL) return
+        // Android's incognito session keeps the position on screen only.
+        if (!snapshot.savesProgress) return
         val position = Position(content.id, novel.chapter.id, novel.firstVisible, novel.lastVisible)
         if (position == lastSaved) return
         session.library.recordPage(content, novel.chapter, position.first, novel.blocks.size, position.last)

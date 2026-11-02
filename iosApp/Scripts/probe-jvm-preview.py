@@ -5,11 +5,11 @@ Same classpath, platform class and config as the iOS app (iosApp/build/jvm-real-
 fresh directory under iosApp/build. For each requested source: list -> details -> first chapter's pages / text,
 plus an image or stream check. Usage: probe-jvm-preview.py [source names...] (default: one per ecosystem).
 """
+import argparse
 import json
 import os
 from pathlib import Path
 import subprocess
-import sys
 import tempfile
 import uuid
 
@@ -37,7 +37,10 @@ class Host:
         request = {"version": 1, "requestId": str(uuid.uuid4()), "call": call}
         self.process.stdin.write(json.dumps(request, ensure_ascii=False) + "\n")
         self.process.stdin.flush()
-        response = json.loads(self.process.stdout.readline())
+        line = self.process.stdout.readline()
+        if not line:
+            raise RuntimeError(f"JVM host exited before replying; see {self.data / 'host.log'}")
+        response = json.loads(line)
         if response.get("error"):
             raise RuntimeError(f"{call['operation']}: {response['error']}")
         return response["result"]
@@ -75,15 +78,27 @@ def probe(host, name, ref):
 
 
 def main():
+    global PROFILE
+    arguments = argparse.ArgumentParser(description=__doc__)
+    arguments.add_argument('--runtime', type=Path, default=PROFILE,
+                           help='JVM resource directory, including a built app bundle\'s jvm directory')
+    arguments.add_argument('--startup-only', action='store_true',
+                           help='Check host startup and source enumeration without browsing online')
+    arguments.add_argument('sources', nargs='*')
+    options = arguments.parse_args()
+    PROFILE = options.runtime.resolve()
     host = Host()
     try:
         sources = host.call({"operation": "sources"})["sources"]
+        if options.startup_only:
+            print('STARTUP OK', 'sources=' + str(len(sources)), flush=True)
+            return
         by_prefix = {}
         for ref in sources:
             prefix = ref["name"].split("_", 1)[0] if ref["name"].split("_", 1)[0] in ("MIHON", "TSUNDOKU", "ANIYOMI") else "JAR"
             by_prefix.setdefault(prefix, []).append(ref)
         print("SOURCES", {k: len(v) for k, v in by_prefix.items()}, flush=True)
-        wanted = sys.argv[1:] or [v[0]["name"] for k, v in by_prefix.items() if k != "JAR"]
+        wanted = options.sources or [v[0]["name"] for k, v in by_prefix.items() if k != "JAR"]
         refs = {ref["name"]: ref for ref in sources}
         for name in wanted:
             try:

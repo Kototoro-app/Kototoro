@@ -43,10 +43,13 @@ internal object DesktopClearanceSolveProbe {
                                 delay(20)
                             }
                         }
+                        // As a user action: only then may an unsolved challenge open the window (background work never does).
                         val result = async(Dispatchers.IO) {
                             runCatching {
-                                platform.sharedHttpClient().newCall(Request.Builder().url(site.url("/protected")).build())
-                                    .execute().use { it.code to it.body.string() }
+                                challenges.withInteraction {
+                                    platform.sharedHttpClient().newCall(Request.Builder().url(site.url("/protected")).build())
+                                        .execute().use { it.code to it.body.string() }
+                                }
                             }
                         }.await()
                         watcher.cancel()

@@ -12,6 +12,9 @@ import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpMethod
+import io.ktor.http.HttpHeaders
+import io.ktor.http.URLProtocol
+import io.ktor.http.Url
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import kotlinx.coroutines.CancellationException
@@ -28,6 +31,7 @@ class GoogleDriveSyncApi(private val httpClient: HttpClient) {
 
     private val json = Json {
         ignoreUnknownKeys = true
+        encodeDefaults = true
     }
 
     @Serializable
@@ -42,6 +46,7 @@ class GoogleDriveSyncApi(private val httpClient: HttpClient) {
     @Serializable
     private class FileList(
         @SerialName("files") val files: List<DriveFile> = emptyList(),
+        @SerialName("nextPageToken") val nextPageToken: String? = null,
     )
 
     @Serializable
@@ -64,14 +69,26 @@ class GoogleDriveSyncApi(private val httpClient: HttpClient) {
     suspend fun findSettingsSyncFiles(token: String): List<DriveFile> = findSyncFiles(token, SETTINGS_FILE_NAME)
 
     private suspend fun findSyncFiles(token: String, fileName: String): List<DriveFile> {
-        val request = request(token, "$DRIVE_BASE/files").apply {
-            url.parameters.append("spaces", "appDataFolder")
-            url.parameters.append("q", "name = '$fileName' and trashed = false")
-            url.parameters.append("fields", "files(id,name,createdTime,modifiedTime,version)")
-            url.parameters.append("orderBy", "createdTime")
-            url.parameters.append("pageSize", "100")
-        }
-        return request.executeWithRetry("list Drive sync files") { it.parse<FileList>()?.files.orEmpty() }
+        val files = mutableListOf<DriveFile>()
+        val pages = mutableSetOf<String>()
+        var page: String? = null
+        do {
+            val request = request(token, "$DRIVE_BASE/files").apply {
+                url.parameters.append("spaces", "appDataFolder")
+                url.parameters.append("q", "name = '$fileName' and trashed = false")
+                url.parameters.append("fields", "nextPageToken,files(id,name,createdTime,modifiedTime,version)")
+                url.parameters.append("orderBy", "createdTime")
+                url.parameters.append("pageSize", "100")
+                page?.let { url.parameters.append("pageToken", it) }
+            }
+            val result = request.executeWithRetry("list Drive sync files") { it.parse<FileList>() }
+            files += result?.files.orEmpty()
+            page = result?.nextPageToken?.takeIf(String::isNotBlank)
+            if (page != null && !pages.add(page)) {
+                throw GoogleDriveSyncApiException(0, "Repeated Google Drive file-list page")
+            }
+        } while (page != null)
+        return files.distinctBy { it.id }
     }
 
     suspend fun getFileVersion(token: String, fileId: String): String? {
@@ -92,7 +109,7 @@ class GoogleDriveSyncApi(private val httpClient: HttpClient) {
     }
 
     suspend fun upload(token: String, content: ByteArray, fileId: String?, fileName: String = CURRENT_FILE_NAME): String {
-        val targetId = fileId ?: createEmptyFile(token, fileName)
+        val targetId = fileId ?: return createFileWithContent(token, fileName, content)
         val request = request(token, "$UPLOAD_BASE/files/$targetId", HttpMethod.Patch).apply {
             url.parameters.append("uploadType", "media")
             url.parameters.append("fields", "id")
@@ -109,16 +126,37 @@ class GoogleDriveSyncApi(private val httpClient: HttpClient) {
             }
     }
 
-    private suspend fun createEmptyFile(token: String, fileName: String = CURRENT_FILE_NAME): String {
-        val metadata = """{"name":"$fileName","parents":["appDataFolder"]}"""
-        val request = request(token, "$DRIVE_BASE/files", HttpMethod.Post).apply {
+    /** A resumable session does not publish a file until its content is complete, including snapshots over 5 MiB. */
+    private suspend fun createFileWithContent(token: String, fileName: String, content: ByteArray): String {
+        val metadata = json.encodeToString(FileMetadata.serializer(), FileMetadata(fileName))
+        val start = request(token, "$UPLOAD_BASE/files", HttpMethod.Post).apply {
+            url.parameters.append("uploadType", "resumable")
             url.parameters.append("fields", "id")
             contentType(JSON_MEDIA_TYPE)
+            header("X-Upload-Content-Type", JSON_MEDIA_TYPE.toString())
+            header("X-Upload-Content-Length", content.size.toString())
             setBody(metadata.encodeToByteArray())
         }
-        return request.executeWithRetry("create Drive sync file") { it.parse<IdResponse>()?.id }
+        val location = start.executeWithRetry("start Drive sync upload") { response ->
+            if (!response.status.isSuccess()) throw response.toError()
+            response.headers[HttpHeaders.Location]
+                ?: throw GoogleDriveSyncApiException(0, "Missing Google Drive upload session")
+        }
+        val session = Url(location)
+        require(session.protocol == URLProtocol.HTTPS && session.host == "www.googleapis.com" &&
+            session.port == 443 && session.encodedPath == "/upload/drive/v3/files" &&
+            session.user == null && session.password == null && session.fragment.isEmpty()) {
+            "Invalid Google Drive upload session"
+        }
+        return request(token, location, HttpMethod.Put).apply {
+            contentType(JSON_MEDIA_TYPE)
+            setBody(content)
+        }.executeWithRetry("create Drive sync file") { it.parse<IdResponse>()?.id }
             ?: throw GoogleDriveSyncApiException(0, "Failed to create Google Drive sync file")
     }
+
+    @Serializable
+    private class FileMetadata(val name: String, val parents: List<String> = listOf("appDataFolder"))
 
     private fun request(token: String, endpoint: String, method: HttpMethod = HttpMethod.Get): HttpRequestBuilder =
         HttpRequestBuilder().apply {

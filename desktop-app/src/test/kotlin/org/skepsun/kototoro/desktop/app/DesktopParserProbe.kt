@@ -13,11 +13,14 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import com.sun.net.httpserver.HttpServer
 import kotlinx.coroutines.runBlocking
+import kotlin.time.Duration.Companion.minutes
 import org.jetbrains.skia.Image
 import org.skepsun.kototoro.core.source.SourcePagingMode
 import org.skepsun.kototoro.core.source.SourcePreferenceEdit
 import org.skepsun.kototoro.core.source.SourcePreferenceValue
 import org.skepsun.kototoro.parserhost.ParserSourceRuntime
+import java.awt.Toolkit
+import java.awt.datatransfer.DataFlavor
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.nio.file.Files
@@ -63,7 +66,8 @@ internal object DesktopParserProbe {
                 }
             }
             check(session.startupErrors.isEmpty()) { session.startupErrors.joinToString() }
-            runDesktopComposeUiTest(width = if (writing) 1260 else 920, height = if (writing) 850 else 620) {
+            runDesktopComposeUiTest(width = if (writing) 1260 else 920, height = if (writing) 850 else 620,
+        testTimeout = 5.minutes) {
                 var fullscreen by mutableStateOf(false)
                 setContent { DesktopApp(controller, fullscreen = fullscreen, onToggleFullscreen = { fullscreen = !fullscreen }) }
                 fun idle() {
@@ -145,6 +149,13 @@ internal object DesktopParserProbe {
                     onNodeWithTag("novel-bookmark-toggle").performTouchInput { longClick() }
                     waitForIdle()
                     onNodeWithTag("novel-bookmarks-panel").assertExists()
+                }
+                fun expandDetails() {
+                    // A card opens the floating preview; the tabs belong to the expanded details screen.
+                    if (onAllNodesWithTag("details-expand").fetchSemanticsNodes().isNotEmpty()) {
+                        onNodeWithTag("details-expand").performClick(); idle()
+                    }
+                    onNodeWithTag("details-full").assertExists()
                 }
                 fun novelBookmarks() {
                     val content = controller.state.value.content!!
@@ -250,14 +261,20 @@ internal object DesktopParserProbe {
                     onNodeWithTag("source:FIXTURE_KOTOTORO_ONLY").performClick(); idle()
                     check(controller.state.value.descriptor?.pagingMode == SourcePagingMode.OFFSET)
                     check(controller.state.value.descriptor?.isChapterContentSupported == true)
-                    check(controller.state.value.items.map { it.id } == listOf(1000L, 1001L))
-                    // Offset paging: the second batch continues after the two items shown, the third is past the end.
-                    onNodeWithText("下一批").performClick(); idle()
-                    check(controller.state.value.items.map { it.id } == listOf(1002L, 1003L) && controller.state.value.offset == 1)
-                    onNodeWithText("下一批").performClick(); idle()
-                    check(controller.state.value.items.isEmpty())
-                    onNodeWithText("上一批").performClick(); idle()
-                    check(controller.state.value.items.map { it.id } == listOf(1002L, 1003L))
+                    // Offset paging appends: the grid keeps asking for the next batch while rows are on screen, so
+                    // the whole fixture list (four works) arrives without a click, and the empty batch past the end
+                    // ends the list without adding a page.
+                    waitUntil(timeoutMillis = 15_000) {
+                        !controller.state.value.busy && controller.state.value.browseExhausted
+                    }
+                    check(controller.state.value.items.map { it.id } == listOf(1000L, 1001L, 1002L, 1003L) &&
+                        controller.state.value.offset == 1)
+                    onNodeWithTag("browse-no-more").assertExists()
+                    onNodeWithTag("browse-next-page").assertIsNotEnabled()
+                    // 上一批 still replaces the rows with that batch alone (the manual button keeps replace semantics).
+                    runBlocking { controller.browse(0).join() }
+                    check(controller.state.value.items.map { it.id } == listOf(1000L, 1001L) &&
+                        !controller.state.value.browseExhausted && controller.state.value.offset == 0)
                     // Parser sources expose their full sort list, not only Mihon's two buttons.
                     onNodeWithTag("source-sort").performClick()
                     onNodeWithTag("source-sort:RATING").performClick(); idle()
@@ -269,6 +286,32 @@ internal object DesktopParserProbe {
                     val book = controller.state.value.content!!
                     check(book.chapters.orEmpty().size == 2)
                     onAllNodesWithText("下载").assertCountEquals(0) // no page-image downloads for text chapters
+                    // The overlay carries Android's shared preview; the full screen adds the facts and the share action.
+                    onNodeWithTag("details-expand").performClick(); idle()
+                    onNodeWithTag("details-full").assertExists()
+                    onNodeWithTag("details-info").assertExists()
+                    onNodeWithTag("details-status").assertTextContains("连载中", substring = true)
+                    onNodeWithTag("details-rating").assertTextContains("5.0", substring = true)
+                    onNodeWithTag("details-alt-titles").assertTextContains("Fixture Alias", substring = true)
+                    check(book.tags.map { it.title }.sorted() == listOf("Action", "Drama")) { book.tags.toString() }
+                    onNodeWithTag("details-tag:Drama").performScrollTo().assertIsDisplayed()
+                    onNodeWithTag("details-tag:Action").assertIsDisplayed()
+                    snapshot("details-info")
+                    // The link Android shares is what a desktop copies.
+                    onNodeWithTag("details-copy-link").performScrollTo().performClick(); idle()
+                    val clip = runCatching {
+                        Toolkit.getDefaultToolkit().systemClipboard.getData(DataFlavor.stringFlavor) as? String
+                    }.getOrNull()
+                    // The button keeps saying so until another work is shown, which is what a copy means here.
+                    onNodeWithTag("details-copy-link").assertTextContains("已复制链接")
+                    if (clip != null) check(clip.endsWith(book.url)) { "clipboard: $clip" }
+                    // Android's bookmark tab belongs to the details screen; before reading it is empty.
+                    onNodeWithTag("details-tab:BOOKMARKS").performClick(); idle()
+                    onNodeWithTag("details-bookmarks").assertExists()
+                    onNodeWithTag("details-bookmarks-clear").assertIsNotEnabled()
+                    check(controller.state.value.bookmarks.isEmpty())
+                    onNodeWithTag("details-tab:CHAPTERS").performClick(); idle()
+                    onNodeWithTag("details-info").assertExists()
                     runBlocking { controller.addFavourite().join() }
                     onNodeWithTag("preview-read").performClick(); idle()
                     waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.NOVEL }
@@ -332,6 +375,93 @@ internal object DesktopParserProbe {
                     waitUntil(timeoutMillis = 15_000) { runBlocking { session.library.progress(book.id) }?.page == 16 }
                     novelKey(Key.B); idle()
                     novelBookmarks()
+                    // Paged reading: whole paragraphs per page, turned by the wheel and the paging keys.
+                    fun pagedNovel() {
+                        val requests = requested.size
+                        fun statusLabel(): String {
+                            novelKey(Key.H); waitForIdle()
+                            onNodeWithTag("novel-progress", useUnmergedTree = true).assertExists()
+                            val label = onNodeWithTag("novel-progress", useUnmergedTree = true).fetchSemanticsNode()
+                                .config[SemanticsProperties.Text].joinToString("") { it.text }
+                            novelKey(Key.H); waitForIdle()
+                            return label
+                        }
+                        // "第 3 / 5 页 · 60%": the status bar counts pages while paged, not paragraphs.
+                        fun pageOf(label: String): Pair<Int, Int> {
+                            val match = Regex("^第 (\\d+) / (\\d+) 页").find(label)
+                            check(match != null) { "paged status: $label" }
+                            return match.groupValues[1].toInt() to match.groupValues[2].toInt()
+                        }
+                        // The paragraph the scroll reader showed is on the page that opens.
+                        val reading = controller.state.value.novel!!.firstVisible
+                        controller.novelSettings(controller.state.value.novelSettings.copy(paged = true)); waitForIdle()
+                        check(controller.state.value.novelSettings.paged)
+                        val store = session.storage.preferences.open("desktop_novel").snapshot()
+                        check(store["paged"] == SourcePreferenceValue.Toggle(true)) { store["paged"].toString() }
+                        onNodeWithTag("novel-paged").assertIsDisplayed()
+                        onNodeWithTag("novel-list").assertDoesNotExist()
+                        onNodeWithTag("reader-page-slider").assertIsDisplayed()
+                        onNodeWithTag("novel-block:$reading").assertIsDisplayed()
+                        val first = controller.state.value.novel!!.firstVisible
+                        // A font change re-measures every page and keeps the anchored paragraph on screen.
+                        controller.novelSettings(controller.state.value.novelSettings.copy(fontSize = 23)); waitForIdle()
+                        onNodeWithTag("novel-block:$first").assertIsDisplayed()
+                        controller.novelSettings(controller.state.value.novelSettings.copy(fontSize = 20)); waitForIdle()
+                        onNodeWithTag("novel-block:$first").assertIsDisplayed()
+                        val (startPage, pages) = pageOf(statusLabel())
+                        check(pages > 1) { "the fixture chapter must span pages, got $pages" }
+                        check(startPage in 1..pages) { "the opening page must hold the read paragraph: $startPage of $pages" }
+                        snapshot("novel-paged")
+                        // A page holds several paragraphs, so the reported anchor moves by a page, not a block.
+                        novelKey(Key.PageDown); waitForIdle()
+                        val second = controller.state.value.novel!!.firstVisible
+                        check(second > first) { "PageDown did not turn the page: $first -> $second" }
+                        onNodeWithTag("novel-block:$second").assertIsDisplayed()
+                        check(pageOf(statusLabel()).first == minOf(startPage + 1, pages)) { "paged status after turning" }
+                        waitUntil(timeoutMillis = 15_000) { runBlocking { session.library.progress(book.id) }?.page == second }
+                        // The wheel goes back one page; a burst still counts once, so a beat is left between flips.
+                        onNodeWithTag("novel-paged").performMouseInput { moveTo(center); scroll(-3f) }
+                        waitForIdle()
+                        check(controller.state.value.novel!!.firstVisible == first)
+                        Thread.sleep(120)
+                        onNodeWithTag("novel-paged").performMouseInput { moveTo(center); scroll(3f) }
+                        waitForIdle()
+                        check(controller.state.value.novel!!.firstVisible == second)
+                        // The slider counts pages too: the chosen page decides which paragraph is reported.
+                        onNodeWithTag("reader-page-slider").performSemanticsAction(SemanticsActions.SetProgress) {
+                            it((pages - 1).toFloat())
+                        }
+                        waitForIdle()
+                        val lastPageStart = controller.state.value.novel!!.firstVisible
+                        check(lastPageStart > second) { "the slider did not reach the last page: $second -> $lastPageStart" }
+                        onNodeWithTag("novel-block:$lastPageStart").assertIsDisplayed()
+                        check(pageOf(statusLabel()) == pages to pages) { "paged status after the slider" }
+                        // Home and End reach the chapter's ends without leaving it.
+                        novelKey(Key.MoveHome); waitForIdle()
+                        check(controller.state.value.novel!!.firstVisible == 0)
+                        check(pageOf(statusLabel()).first == 1)
+                        novelKey(Key.MoveEnd); waitForIdle()
+                        val end = controller.state.value.novel!!
+                        check(end.firstVisible == lastPageStart && end.chapter.id == book.chapters!![1].id) {
+                            "End must stay on the chapter's last page: ${end.firstVisible} in ${end.chapter.id}"
+                        }
+                        snapshot("novel-paged-end")
+                        // Scrolling resumes at the page's first paragraph, and the stored setting goes back.
+                        onNodeWithTag("reader-page-slider").performSemanticsAction(SemanticsActions.SetProgress) {
+                            it((pages / 2).toFloat())
+                        }
+                        waitForIdle()
+                        val resume = controller.state.value.novel!!.firstVisible
+                        controller.novelSettings(controller.state.value.novelSettings.copy(paged = false)); waitForIdle()
+                        onNodeWithTag("novel-list").assertIsDisplayed()
+                        onNodeWithTag("novel-paged").assertDoesNotExist()
+                        onNodeWithTag("novel-block:$resume").assertIsDisplayed()
+                        waitUntil(timeoutMillis = 10_000) { controller.state.value.novel!!.firstVisible == resume }
+                        check(session.storage.preferences.open("desktop_novel").snapshot()["paged"] ==
+                            SourcePreferenceValue.Toggle(false))
+                        check(requested.size == requests) { "paging must not fetch anything" }
+                    }
+                    pagedNovel()
                     importedNovelBookmark()
 
                     // A manga-type UMA source still takes the page reader and its images come from the plugin's domain.
@@ -345,9 +475,69 @@ internal object DesktopParserProbe {
                     check(controller.state.value.pages.size == 3 && controller.state.value.readerImages.isNotEmpty())
                     check(requested.any { it.startsWith("/img/") }) { "page images must come from the plugin's own domain" }
                     check(runBlocking { session.library.progress(comic.id) } != null)
+                    // A page bookmark shows its page image in the details tab, and clearing empties the work.
+                    onNodeWithTag("reader-bookmark-toggle").performClick(); idle()
+                    val pageBookmark = controller.state.value.bookmarks.single()
+                    check(pageBookmark.contentId == comic.id)
+                    onNodeWithTag("reader-back").performClick(); idle()
+                    expandDetails()
+                    onNodeWithTag("details-tab:BOOKMARKS").performClick(); idle()
+                    onNodeWithTag("details-bookmarks-grid").assertExists()
+                    onNodeWithTag("details-bookmark:${pageBookmark.pageId}").assertExists()
+                    // The card merges its descendants, so the image node lives on the unmerged tree.
+                    waitUntil(timeoutMillis = 15_000) {
+                        onAllNodesWithTag("bookmark-thumb-image:${pageBookmark.pageId}", useUnmergedTree = true)
+                            .fetchSemanticsNodes().isNotEmpty()
+                    }
+                    snapshot("details-bookmarks")
+                    onNodeWithTag("details-bookmarks-clear").performClick(); idle()
+                    check(controller.state.value.bookmarks.isEmpty())
+                    check(runBlocking { session.library.bookmarks(comic.id) }.isEmpty())
+                    onNodeWithTag("details-bookmarks-grid").assertDoesNotExist()
+                    // Android's batch bookmarks a whole chapter from the chapter selection bar.
+                    onNodeWithTag("details-tab:CHAPTERS").performClick(); idle()
+                    onNodeWithTag("details-chapter-select").performClick(); idle()
+                    val chapterBookmarks = comic.chapters!!.take(2)
+                    for (chapter in chapterBookmarks) {
+                        onNodeWithTag("read-chapter:${chapter.id}").performScrollTo().performClick(); idle()
+                    }
+                    onNodeWithTag("details-selection-count").assertTextContains("已选 2 章")
+                    onNodeWithTag("details-selection-bookmark").assertTextContains("添加书签").performClick(); idle()
+                    val chapterOnly = runBlocking { session.library.bookmarks(comic.id) }
+                    check(chapterOnly.size == 2 && chapterOnly.all { it.pageId == it.chapterId }) { "$chapterOnly" }
+                    check(chapterOnly.map { it.chapterId }.toSet() == chapterBookmarks.map { it.id }.toSet())
+                    onNodeWithTag("details-tab:BOOKMARKS").performClick(); idle()
+                    onNodeWithTag("details-bookmarks-grid").assertExists()
+                    for (chapter in chapterBookmarks) {
+                        onNodeWithTag("details-bookmark:${chapter.id}").assertExists()
+                    }
+                    snapshot("details-chapter-bookmarks")
+                    // Once every selected chapter is bookmarked the same button removes them.
+                    onNodeWithTag("details-tab:CHAPTERS").performClick(); idle()
+                    onNodeWithTag("details-selection-bookmark").assertTextContains("删除书签").performClick(); idle()
+                    check(runBlocking { session.library.bookmarks(comic.id) }.isEmpty())
+                    // Android deletes several bookmarks from one long-press menu; the grid does it from a selection.
+                    onNodeWithTag("details-selection-bookmark").assertTextContains("添加书签").performClick(); idle()
+                    onNodeWithTag("details-tab:BOOKMARKS").performClick(); idle()
+                    onNodeWithTag("details-bookmarks-grid").assertExists()
+                    onNodeWithTag("details-bookmarks-select").performClick(); idle()
+                    onNodeWithTag("details-bookmarks-select-all").performClick(); idle()
+                    onNodeWithTag("details-bookmarks-count").assertTextContains("已选 2 个书签")
+                    snapshot("details-bookmarks-select")
+                    onNodeWithTag("details-bookmarks-select-delete").performClick()
+                    waitUntil(timeoutMillis = 15_000) { controller.state.value.bookmarks.isEmpty() }
+                    check(runBlocking { session.library.bookmarks(comic.id) }.isEmpty())
+                    onNodeWithTag("details-bookmarks-grid").assertDoesNotExist()
+                    onNodeWithTag("details-bookmarks-clear").assertIsNotEnabled()
+                    snapshot("details-bookmarks-deleted")
+                    onNodeWithTag("details-tab:CHAPTERS").performClick(); idle()
+                    onNodeWithTag("details-selection-clear").performClick(); idle()
+                    onNodeWithTag("details-chapter-select").performClick(); idle()
+                    onNodeWithTag("details-chapter-select").assertTextContains("选择章节")
                 } else {
                     onNodeWithTag("source:FIXTURE_KOTOTORO_ONLY").performClick(); idle()
-                    check(controller.state.value.items.size == 2)
+                    // The endless list may already have appended further batches; the first row is what paging starts at.
+                    check(controller.state.value.items.first().id == 1000L)
                     // The favourite resolves its source through the restored plugin again.
                     runBlocking { controller.library().join() }
                     val saved = controller.state.value.library.entries.single().content
@@ -373,6 +563,35 @@ internal object DesktopParserProbe {
                     check(controller.state.value.bookmarks.size == 1)
                     novelKey(Key.B); idle()
                     check(controller.state.value.bookmarks.size == 2)
+                    // The details bookmark tab lists novel positions with their excerpt, jumps, and deletes.
+                    val jump = controller.state.value.bookmarks.minByOrNull { it.page }!!
+                    onNodeWithTag("reader-back").performClick(); idle()
+                    expandDetails()
+                    onNodeWithTag("details-tab:BOOKMARKS").performClick(); idle()
+                    onNodeWithTag("details-bookmarks-grid").assertExists()
+                    onNodeWithTag("details-bookmark:${jump.pageId}").assertExists().performClick(); idle()
+                    waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.NOVEL }
+                    waitUntil(timeoutMillis = 15_000) { controller.state.value.novel?.firstVisible == jump.page }
+                    onNodeWithTag("novel-block:${jump.page}").assertIsDisplayed()
+                    onNodeWithTag("reader-back").performClick(); idle()
+                    expandDetails()
+                    onNodeWithTag("details-tab:BOOKMARKS").performClick(); idle()
+                    snapshot("details-bookmarks-novel")
+                    // Android's selection: a long press selects the card, the bar's delete removes it.
+                    onNodeWithTag("details-bookmark:${jump.pageId}").performTouchInput { longClick() }; idle()
+                    onNodeWithTag("details-bookmarks-count").assertTextContains("已选 1 个书签")
+                    onNodeWithTag("details-bookmarks-select-delete").performClick(); idle()
+                    check(controller.state.value.bookmarks.size == 1)
+                    check(controller.state.value.bookmarks.none { it.pageId == jump.pageId })
+                    check(runBlocking { session.library.bookmarks(controller.state.value.content!!.id) }
+                        .none { it.pageId == jump.pageId })
+                    // Opening a chapter from the details list enters the reader again for the settings panel.
+                    val remaining = controller.state.value.bookmarks.single()
+                    onNodeWithTag("details-tab:CHAPTERS").performClick(); idle()
+                    onNodeWithTag("chapter-directory-list")
+                        .performScrollToNode(hasTestTag("read-chapter:${remaining.chapterId}"))
+                    onNodeWithTag("read-chapter:${remaining.chapterId}").performClick(); idle()
+                    waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.NOVEL }
                     // The shared panel also fits the smaller window after a real process restart.
                     onNodeWithTag("reader-options").performClick(); waitForIdle()
                     onNodeWithTag("novel-serif").assertIsDisplayed().assertIsOn()
@@ -384,6 +603,8 @@ internal object DesktopParserProbe {
                     runBlocking { controller.showExtensions().join() }
                     idle()
                     val tsuki = controller.state.value.installedEntries.single { it.kind == DesktopInstalledKind.PARSER && it.ecosystem.name == "UMA" }
+                    // Installed packages live on the packages tab of Android's three-tab extension manager.
+                    onNodeWithTag("extensions-tab:2").performClick(); idle()
                     onNodeWithTag("installed-list").performScrollToNode(hasTestTag("extension-uninstall:${tsuki.id}"))
                     onNodeWithTag("extension-uninstall:${tsuki.id}").performClick(); idle()
                     onNodeWithTag("extension-uninstall-confirm").performClick(); idle()

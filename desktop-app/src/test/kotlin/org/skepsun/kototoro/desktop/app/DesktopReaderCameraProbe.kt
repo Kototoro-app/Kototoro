@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.desktop.app
 
+import org.skepsun.kototoro.core.db.DATABASE_VERSION
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.asSkiaBitmap
 import androidx.compose.ui.input.key.Key
@@ -211,7 +212,7 @@ internal object DesktopReaderCameraProbe {
                 }
             }
         } finally { runBlocking { controller.shutdown() } }
-        runBlocking { DesktopRuntime.open(root).use { check(it.storageInfo().schemaVersion == 84) } }
+        runBlocking { DesktopRuntime.open(root).use { check(it.storageInfo().schemaVersion == DATABASE_VERSION) } }
         println("DESKTOP_UI_OK=$mode")
         println("NETWORK_REQUESTS=0")
     }

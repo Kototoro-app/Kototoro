@@ -5,11 +5,28 @@ enum ReaderStorageError: LocalizedError, Equatable {
     case busy, invalidPath, invalidMetadata, recoveryConflict
     var errorDescription: String? {
         switch self {
-        case .busy: "文件正在使用，请等待阅读或下载请求结束后再清理。"
-        case .invalidPath: "存储路径无法安全读取，原文件已保留。"
-        case .invalidMetadata: "离线文件信息无法读取，原文件已保留。"
-        case .recoveryConflict: "未完成的文件清理无法恢复，请先检查存储。"
+        case .busy: String(localized: "文件正在使用，请等待阅读或下载请求结束后再清理。")
+        case .invalidPath: String(localized: "存储路径无法安全读取，原文件已保留。")
+        case .invalidMetadata: String(localized: "离线文件信息无法读取，原文件已保留。")
+        case .recoveryConflict: String(localized: "未完成的文件清理无法恢复，请先检查存储。")
         }
+    }
+}
+
+/// Automatic maintenance follows actual image idle time and scans at most once per minute for the same budget.
+struct ReaderCacheTrimSchedule {
+    private var lastAttempt: ContinuousClock.Instant?
+    private var lastBudget: Int64?
+
+    func isDue(at now: ContinuousClock.Instant, budget: Int64) -> Bool {
+        guard budget > 0 else { return false }
+        guard lastBudget == budget, let lastAttempt else { return true }
+        return now >= lastAttempt.advanced(by: .seconds(60))
+    }
+
+    mutating func recordAttempt(at now: ContinuousClock.Instant, budget: Int64) {
+        lastAttempt = now
+        lastBudget = budget
     }
 }
 
@@ -73,6 +90,15 @@ func withReaderStorage<T>(_ body: () async throws -> T) async throws -> T {
     }
 }
 
+/// The manifest a finished download leaves in its directory, one per media kind. The listing lives in this file, so
+/// the UI test target (which compiles it without the download engine) still agrees on the names.
+enum DownloadManifests {
+    static let chapter = "chapter.json"
+    static let novel = "novel.json"
+    static let video = "video.json"
+    static let all = [chapter, novel, video]
+}
+
 struct ReaderStorageMetadata: Codable, Equatable, Sendable {
     let version: Int
     let source: String
@@ -83,9 +109,26 @@ struct ReaderStorageMetadata: Codable, Equatable, Sendable {
     let mediaKind: String
 
     var directoryID: String { Self.directoryID(contentID: contentID, chapterID: chapterID) }
+    /// Lowercase hex of the SHA-256, written from a table: `String(format: "%02x")` per byte cost most of the time.
     static func directoryID(contentID: String, chapterID: String) -> String {
-        SHA256.hash(data: Data((contentID + ":" + chapterID).utf8)).map { String(format: "%02x", $0) }.joined()
+        let digest = SHA256.hash(data: Data((contentID + ":" + chapterID).utf8))
+        var hex = [UInt8]()
+        hex.reserveCapacity(SHA256.byteCount * 2)
+        for byte in digest {
+            hex.append(hexDigits[Int(byte >> 4)])
+            hex.append(hexDigits[Int(byte & 0x0f)])
+        }
+        return String(decoding: hex, as: UTF8.self)
     }
+    private static let hexDigits = Array("0123456789abcdef".utf8)
+}
+
+/// A finished offline chapter: what it is, the request it was downloaded with (the work's and chapter's source fields,
+/// absent for downloads made before requests were kept) and when it finished.
+struct ReaderDownloadRecord: Sendable {
+    let metadata: ReaderStorageMetadata
+    let payload: String?
+    let completedAt: Date
 }
 
 struct ReaderStorageItem: Identifiable, Sendable {
@@ -146,6 +189,39 @@ actor ReaderStorageStore {
         self.files = files
     }
 
+    /// Keeps the download's request next to its files, so the work stays listed (and readable) once its task is gone.
+    func keep(payload: String, for metadata: ReaderStorageMetadata) throws {
+        let data = Data(payload.utf8)
+        guard data.count <= Self.maximumRequestBytes else { throw ReaderStorageError.invalidMetadata }
+        try data.write(to: try chapter(metadata.directoryID, create: true).appendingPathComponent(Self.requestName),
+                       options: .atomic)
+    }
+
+    /// Every finished offline chapter with its request, newest first.
+    func downloadRecords() throws -> [ReaderDownloadRecord] {
+        var result: [ReaderDownloadRecord] = []
+        for folder in try children(downloads) where Self.isDirectoryID(folder.lastPathComponent) {
+            try Task.checkCancellation()
+            let id = folder.lastPathComponent
+            guard let metadata: ReaderStorageMetadata = try? read(folder.appendingPathComponent("download.json"),
+                                                                 maximumBytes: 128 * 1024),
+                  metadata.version == 1, metadata.directoryID == id else { continue }
+            let manifest = DownloadManifests.all.map { folder.appendingPathComponent($0) }
+                .first { files.fileExists(atPath: $0.path) }
+            guard let manifest, let completed = try? manifest.resourceValues(forKeys: Self.keys).contentModificationDate
+            else { continue }
+            let request = folder.appendingPathComponent(Self.requestName)
+            let size = (try? request.resourceValues(forKeys: Self.keys).fileSize) ?? 0
+            let payload = size > 0 && size <= Self.maximumRequestBytes
+                ? (try? Data(contentsOf: request)).map { String(decoding: $0, as: UTF8.self) } : nil
+            result.append(ReaderDownloadRecord(metadata: metadata, payload: payload, completedAt: completed))
+        }
+        return result.sorted { $0.completedAt > $1.completedAt }
+    }
+
+    private static let requestName = "request.json"
+    private static let maximumRequestBytes = 1024 * 1024
+
     func record(_ metadata: ReaderStorageMetadata) throws {
         guard metadata.version == 1, !metadata.source.isEmpty, !metadata.contentID.isEmpty,
               !metadata.chapterID.isEmpty else { throw ReaderStorageError.invalidMetadata }
@@ -172,11 +248,10 @@ actor ReaderStorageStore {
             let stored: ReaderStorageMetadata? = try? read(folder.appendingPathComponent("download.json"),
                                                           maximumBytes: 128 * 1024)
             let metadata = stored.flatMap { $0.version == 1 && $0.directoryID == id ? $0 : nil } ?? known[id]
-            let chapterManifest = folder.appendingPathComponent("chapter.json")
-            let novelManifest = folder.appendingPathComponent("novel.json")
-            let completed = files.fileExists(atPath: chapterManifest.path)
-                || files.fileExists(atPath: novelManifest.path)
-            let status = completed ? "已下载" : "未完成的下载"
+            let completed = DownloadManifests.all.contains {
+                files.fileExists(atPath: folder.appendingPathComponent($0).path)
+            }
+            let status = completed ? String(localized: "已下载") : String(localized: "未完成的下载")
             items.append(ReaderStorageItem(
                 id: id, metadata: metadata, bytes: try records(folder).reduce(0) { $0 + $1.bytes },
                 modified: values.contentModificationDate, status: status
@@ -205,9 +280,10 @@ actor ReaderStorageStore {
     /// A soft byte budget: leases protect reading/downloads; the caller retries when their last user finishes.
     func trimCaches(to limit: Int64) throws {
         guard limit > 0 else { return }
-        let entries = try caches.flatMap { try records($0.directory) }.sorted { $0.modified < $1.modified }
+        let entries = try caches.flatMap { try records($0.directory) }
         var total = entries.reduce(Int64(0)) { $0 + $1.bytes }
-        for record in entries where total > limit {
+        guard total > limit else { return }
+        for record in entries.sorted(by: { $0.modified < $1.modified }) where total > limit {
             try Task.checkCancellation()
             try files.removeItem(at: record.url)
             total -= record.bytes

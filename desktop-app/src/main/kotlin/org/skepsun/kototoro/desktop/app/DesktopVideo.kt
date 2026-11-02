@@ -32,7 +32,7 @@ data class DesktopVideo(
         val page = streams[index]
         val quality = page.playbackQuality?.let { "${it}p" }
         return listOfNotNull(page.playbackLabel?.takeIf(String::isNotBlank), quality)
-            .distinct().joinToString(" · ").ifBlank { "线路 ${index + 1}" }
+            .distinct().joinToString(" · ").ifBlank { desktopText("video.line", index + 1) }
     }
 }
 
@@ -85,6 +85,8 @@ internal class DesktopVideoOperations(
         val video = snapshot.video ?: return
         val content = snapshot.content ?: return
         if (snapshot.screen != DesktopScreen.VIDEO || video.duration <= 0) return
+        // Android's incognito session keeps the position on screen only.
+        if (!snapshot.savesProgress) return
         val length = ceil(video.duration).toInt().coerceAtLeast(1)
         val second = video.position.toInt().coerceIn(0, length - 1)
         val position = Position(content.id, video.chapter.id, second)

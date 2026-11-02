@@ -27,7 +27,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -63,6 +62,8 @@ import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ReaderMode
 import org.skepsun.kototoro.core.prefs.TriStateOption
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
+import org.skepsun.kototoro.core.ui.compose.DialogActionButton
+import org.skepsun.kototoro.core.ui.compose.DialogChoiceOption
 import org.skepsun.kototoro.core.ui.compose.rememberDrawablePainter
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.core.ui.dialog.BigButtonsAlertDialog
@@ -160,19 +161,12 @@ private fun AppRouterChoiceDialog(
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
                 options.forEachIndexed { index, option ->
-                    TextButton(
-                        onClick = { onOptionSelected(index) },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(option, modifier = Modifier.fillMaxWidth())
-                    }
+                    DialogChoiceOption(label = option, onClick = { onOptionSelected(index) })
                 }
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismissRequest) {
-                Text(dismissLabel)
-            }
+            DialogActionButton(label = dismissLabel, onClick = onDismissRequest)
         },
     )
 }

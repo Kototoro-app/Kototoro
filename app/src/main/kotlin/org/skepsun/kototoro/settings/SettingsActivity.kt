@@ -79,6 +79,7 @@ import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
 import org.skepsun.kototoro.core.ui.adaptive.resolveUiPresentationConfig
 import org.skepsun.kototoro.core.ui.compose.DynamicArtworkBackdrop
+import org.skepsun.kototoro.core.util.ext.makeSnackbar
 import org.skepsun.kototoro.sync.google.data.GoogleDriveSyncSettings
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.explore.data.ContentSourcesRepository
@@ -457,6 +458,7 @@ class SettingsActivity :
             val backgroundArtwork by backgroundArtworkRepository.observe()
                 .catch { emit(BackgroundArtwork()) }
                 .collectAsStateWithLifecycle(initialValue = BackgroundArtwork())
+            val isSettingsSearchActive by viewModel.isSearchActive.collectAsStateWithLifecycle()
             DynamicArtworkBackdrop(
                 content = backgroundArtwork.content,
                 imageUri = backgroundArtwork.imageUri,
@@ -469,6 +471,7 @@ class SettingsActivity :
                     destination = composeDestination,
                     destinationKey = ::composeDestinationStateKey,
                     modifier = Modifier.fillMaxSize(),
+                    searchActive = isSettingsSearchActive,
                     rootContent = { modifier -> RenderSettingsRootContent(modifier) },
                     destinationContent = { destination -> RenderComposeDestination(destination) },
                 )
@@ -1585,6 +1588,7 @@ class SettingsActivity :
                 searchQuery = searchQuery,
                 searchResults = searchResults,
                 onSearchResultClick = { item -> navigateToPreference(item) },
+                searchActive = isSearchActive,
                 listState = listState,
                 topInset = innerPadding.calculateTopPadding(),
                 applyHorizontalDisplayCutoutPadding = false,
@@ -1661,16 +1665,10 @@ class SettingsActivity :
                 )
             }
             is SettingsDialogState.ProxyTestResult -> {
-                SettingsAlertDialog(
-                    title = stringResource(R.string.proxy),
-                    onDismissRequest = { dismissSettingsDialog(dialog) },
-                    text = { Text(dialog.message) },
-                    confirmButton = {
-                        SettingsDialogActionButton(
-                            text = stringResource(android.R.string.ok),
-                            onClick = { dismissSettingsDialog(dialog) },
-                        )
-                    },
+                org.skepsun.kototoro.core.ui.settings.ProxyTestResultDialog(
+                    message = dialog.message,
+                    onDismiss = { dismissSettingsDialog(dialog) },
+                    renderDialog = { org.skepsun.kototoro.settings.compose.AndroidPreferenceDialog(it) },
                 )
             }
         }
@@ -1738,7 +1736,7 @@ class SettingsActivity :
 
     private fun showContentSnackbar(text: CharSequence) {
         try {
-            Snackbar.make(contentRoot, text, Snackbar.LENGTH_SHORT).show()
+            contentRoot.makeSnackbar(text, Snackbar.LENGTH_SHORT).show()
         } catch (_: RuntimeException) {
             Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
         }

@@ -91,6 +91,7 @@ data class CloudstreamEpisodeMetadata(
     val score: Float? = null,
     val description: String? = null,
     val runtimeSeconds: Int? = null,
+    val posterHeaders: Map<String, String> = emptyMap(),
 ) {
     companion object {
         const val CURRENT_VERSION = 1

@@ -1,0 +1,46 @@
+name: Attach Release Assets
+
+# Attaches the package artifact of another run (a Windows/Linux/macOS/iOS package workflow) to an existing release.
+# For a release whose platform job failed for reasons outside the code (an upstream download that disappeared, say):
+# rebuild that platform from a commit with the same code, then attach its artifact here instead of re-tagging.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing release tag (e.g. v2.3.6)'
+        required: true
+        type: string
+      run-id:
+        description: 'ID of the run that uploaded the package artifact'
+        required: true
+        type: string
+      artifact:
+        description: 'Artifact name in that run (e.g. kototoro-windows-release-<run id>)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  attach:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: ${{ inputs.artifact }}
+          run-id: ${{ inputs.run-id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: assets
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG_NAME: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          gh release view "$TAG_NAME" >/dev/null
+          ls -l assets
+          gh release upload "$TAG_NAME" assets/* --clobber

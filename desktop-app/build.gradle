@@ -18,8 +18,12 @@ def desktopIcons = ['ic_bookmark', 'ic_explore_normal', 'ic_history', 'ic_downlo
     'ic_backup_restore', 'ic_web', 'ic_more_vert', 'ic_search', 'ic_heart_outline', 'ic_heart',
     'ic_play', 'ic_star_small', 'ic_tts_close', 'ic_filter_menu', 'ic_check',
     'ic_source_builtin', 'ic_source_mihon', 'ic_source_aniyomi', 'ic_source_tsundoku', 'ic_source_cloudstream',
+    'ic_source_tvbox',
     'ic_home', 'ic_feed', 'ic_updated', 'ic_suggestion', 'ic_read', 'ic_arrow_forward', 'ic_settings', 'ic_dice',
-    'ic_storage']
+    'ic_sync',
+    'ic_storage', 'ic_pin', 'ic_unpin', 'ic_content_video', 'ic_code', 'ic_delete_all', 'ic_expand_more', 'ic_tag', 'ic_sort', 'ic_error_large',
+    'ic_state_finished', 'ic_state_abandoned', 'ic_action_pause', 'ic_timer', 'ic_disable', 'ic_info_outline',
+    'ic_grid', 'ic_list', 'ic_list_detailed']
 def desktopIconResources = layout.buildDirectory.dir('generated/android-icons')
 def prepareDesktopIcons = tasks.register('prepareDesktopIcons') {
     def vectors = desktopIcons.collect { rootProject.file("app/src/main/res/drawable/${it}.xml") }
@@ -68,14 +72,110 @@ def prepareDesktopIcons = tasks.register('prepareDesktopIcons') {
 sourceSets.main.resources.srcDir(desktopIconResources)
 tasks.named('processResources').configure { dependsOn prepareDesktopIcons }
 
-// Android's own string resources (Simplified Chinese, falling back to the default locale) for the shared screens,
-// so both hosts show the same text. String arrays are resolved to their @string items.
+// One Android-owned source for native launchers and the running desktop window. No platform artwork copies.
+def androidAppIcon = rootProject.file('app/src/main/ic_launcher-playstore.png')
+def desktopAppIcons = layout.buildDirectory.dir('generated/app-icons')
+def prepareDesktopAppIcons = tasks.register('prepareDesktopAppIcons') {
+    inputs.file(androidAppIcon)
+    outputs.dir(desktopAppIcons)
+    doLast {
+        def root = desktopAppIcons.get().asFile
+        def resources = new File(root, 'resources/icons')
+        resources.mkdirs()
+        new File(resources, 'app.png').bytes = androidAppIcon.bytes
+        def source = javax.imageio.ImageIO.read(androidAppIcon)
+        def png = { int size ->
+            def image = new java.awt.image.BufferedImage(size, size, java.awt.image.BufferedImage.TYPE_INT_ARGB)
+            def graphics = image.createGraphics()
+            try {
+                graphics.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION,
+                    java.awt.RenderingHints.VALUE_INTERPOLATION_BICUBIC)
+                graphics.drawImage(source, 0, 0, size, size, null)
+            } finally { graphics.dispose() }
+            def bytes = new ByteArrayOutputStream()
+            try { javax.imageio.ImageIO.write(image, 'png', bytes) } finally { image.flush() }
+            bytes.toByteArray()
+        }
+        try {
+            def sizes = [16, 32, 48, 64, 128, 256]
+            def images = sizes.collect { png(it) }
+            int offset = 6 + 16 * sizes.size()
+            def ico = java.nio.ByteBuffer.allocate(offset + images.sum { it.length })
+                .order(java.nio.ByteOrder.LITTLE_ENDIAN)
+            ico.putShort(0 as short).putShort(1 as short).putShort(sizes.size() as short)
+            sizes.eachWithIndex { size, index ->
+                ico.put((size == 256 ? 0 : size) as byte).put((size == 256 ? 0 : size) as byte)
+                    .put(0 as byte).put(0 as byte).putShort(1 as short).putShort(32 as short)
+                    .putInt(images[index].length).putInt(offset)
+                offset += images[index].length
+            }
+            images.each { ico.put(it) }
+            new File(root, 'Kototoro.ico').bytes = ico.array()
+            def entries = ['icp4': 16, 'icp5': 32, 'icp6': 64, 'ic07': 128, 'ic08': 256, 'ic09': 512]
+                .collect { type, size ->
+                    byte[] data = png(size)
+                    java.nio.ByteBuffer.allocate(data.length + 8).put(type.getBytes('US-ASCII'))
+                        .putInt(data.length + 8).put(data).array()
+                }
+            def icns = java.nio.ByteBuffer.allocate(8 + entries.sum { it.length })
+            icns.put('icns'.getBytes('US-ASCII')).putInt(icns.capacity())
+            entries.each { icns.put(it) }
+            new File(root, 'Kototoro.icns').bytes = icns.array()
+        } finally { source.flush() }
+    }
+}
+sourceSets.main.resources.srcDir(prepareDesktopAppIcons.map { desktopAppIcons.get().dir('resources') })
+tasks.named('processResources').configure { dependsOn prepareDesktopAppIcons }
+
+// Android's own string resources for the screens both hosts share, so Windows shows the same text as Android.
+//
+// The Windows UI language is resolved at runtime (see DesktopStrings): `follow the system`, or a language picked in
+// "More". Every language the app offers therefore needs the Android strings in that language, generated here as
+// `android-strings.properties` (English, from `values`) plus `android-strings_<tag>.properties` (one per language).
+// The offered set is discovered from `src/main/resources/i18n` — dropping in `desktop-strings_<tag>.properties` is
+// all it takes to add a language — so untranslated Android folders never ship and the distribution stays small.
+def desktopI18nDirectory = file('src/main/resources/i18n')
+def desktopAndroidResources = rootProject.file('app/src/main/res')
+/** Language tags with a desktop catalog, in the order the settings page lists them. */
+def desktopLocales = { ->
+    def tags = new LinkedHashSet<String>()
+    def files = desktopI18nDirectory.isDirectory() ? desktopI18nDirectory.listFiles() : null
+    files?.findAll { it.name ==~ /desktop-strings_[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*\.properties/ }?.sort { it.name }?.each {
+        tags << it.name.substring('desktop-strings_'.length(), it.name.length() - '.properties'.length())
+    }
+    // `en` is the base catalog (desktop-strings.properties) and always ships.
+    tags.add('en')
+    tags
+}
+/**
+ * The Android resource folder holding a language, following Android's qualifier syntax: `zh-CN` -> `values-zh-rCN`,
+ * `zh-Hant-TW` -> `values-b+zh+Hant+TW`, and the English base lives in `values`.
+ */
+def androidResourceDirectoryFor = { String tag ->
+    def parts = tag.split('-')
+    def language = parts[0]
+    def candidates = []
+    if (parts.length >= 3) {
+        // zh-Hant-TW: Android's BCP-47 form, then the region-only form some forks use.
+        candidates << "values-b+${parts[0]}+${parts[1]}+${parts[2]}"
+        candidates << "values-${language}-r${parts[2].toUpperCase()}"
+    } else if (parts.length == 2) {
+        candidates << "values-${language}-r${parts[1].toUpperCase()}"
+        candidates << "values-b+${language}+${parts[1]}"
+    }
+    if (language != 'en') candidates << "values-${language}"
+    candidates << 'values'
+    candidates.find { new File(desktopAndroidResources, it).isDirectory() }
+}
 def desktopStringResources = layout.buildDirectory.dir('generated/android-strings')
 def prepareDesktopStrings = tasks.register('prepareDesktopStrings') {
-    def resources = rootProject.file('app/src/main/res')
-    def sources = files(fileTree(new File(resources, 'values')) { include 'strings*.xml', 'arrays.xml' },
-        fileTree(new File(resources, 'values-zh-rCN')) { include 'strings*.xml', 'arrays.xml' })
+    def locales = desktopLocales()
+    def sources = files(locales.collect { tag ->
+        def directory = androidResourceDirectoryFor(tag)
+        fileTree(new File(desktopAndroidResources, directory)) { include 'strings*.xml', 'arrays.xml', 'constants.xml' }
+    })
     inputs.files(sources)
+    inputs.property('locales', locales.join(','))
     outputs.dir(desktopStringResources)
     doLast {
         def unescape = { String raw ->
@@ -91,29 +191,157 @@ def prepareDesktopStrings = tasks.register('prepareDesktopStrings') {
             }
             out.toString()
         }
-        def strings = [:]
-        def arrays = [:]
-        ['values', 'values-zh-rCN'].each { folder ->
-            new File(resources, folder).listFiles().findAll { it.name ==~ /(strings.*|arrays)\.xml/ }.sort { it.name }.each { file ->
-                def root = new groovy.xml.XmlParser(false, false).parse(file)
-                root.children().each { node ->
-                    def name = node.attribute('name')
-                    if (node.name() == 'string') strings[name] = unescape(node.text())
-                    else if (node.name() == 'string-array') arrays[name] = node.children().collect { unescape(it.text()) }
+        /** Every string/array of one Android resource folder; a later folder in [folders] wins, as on Android. */
+        def readFolder = { List<String> folders ->
+            def strings = [:]
+            def arrays = [:]
+            folders.each { folder ->
+                new File(desktopAndroidResources, folder).listFiles()
+                    .findAll { it.name ==~ /(strings.*|arrays|constants)\.xml/ }.sort { it.name }.each { file ->
+                        def root = new groovy.xml.XmlParser(false, false).parse(file)
+                        root.children().each { node ->
+                            def name = node.attribute('name')
+                            // `constants.xml` also holds build keys and OAuth credentials; only Android's untranslatable
+                            // `url_*` addresses are copied, because the window opens the same links.
+                            if (file.name == 'constants.xml' && !name?.startsWith('url_')) return
+                            if (node.name() == 'string') strings[name] = unescape(node.text())
+                            else if (node.name() == 'string-array') arrays[name] = node.children().collect { unescape(it.text()) }
+                        }
+                    }
+            }
+            [strings: strings, arrays: arrays]
+        }
+        /** `@string/name` references inside a value are replaced by the text, as the desktop UI has no resource ids. */
+        def resolveReferences = { Map<String, String> strings ->
+            def resolve = { String item ->
+                def seen = 0
+                while (item.startsWith('@string/') && seen++ < 8) item = strings[item.substring(8)] ?: item
+                item
+            }
+            strings.collectEntries { key, value -> [key, resolve(value)] }
+        }
+        /** Written as readable UTF-8, one `key=value` per line, so a catalog stays diffable for translators. */
+        def escape = { String value ->
+            def out = new StringBuilder()
+            for (int i = 0; i < value.length(); i++) {
+                def ch = value.charAt(i)
+                if (ch == ('\\' as char)) out.append('\\\\')
+                else if (ch == ('\n' as char)) out.append('\\n')
+                else if (ch == ('\r' as char)) out.append('\\r')
+                else if (ch == ('\t' as char)) out.append('\\t')
+                else if (ch < (' ' as char)) out.append(String.format('\\u%04x', (int) ch))
+                else {
+                    if (i == 0 && Character.isWhitespace(ch)) out.append('\\')
+                    out.append(ch)
+                }
+            }
+            out.toString()
+        }
+        def write = { String fileName, List<String> folders, Map<String, String> fallback ->
+            def read = readFolder(folders)
+            // A translation only carries the strings it translates; the rest stays English.
+            def strings = (fallback ?: [:]) + resolveReferences(read.strings)
+            def arrays = read.arrays.collectEntries { key, items ->
+                ['@array/' + key, items.collect { item ->
+                    item.startsWith('@string/') ? (strings[item.substring(8)] ?: item) : item
+                }.join('\u001F')]
+            }
+            def target = desktopStringResources.get().file("i18n/${fileName}").asFile
+            target.parentFile.mkdirs()
+            def lines = ["# Android string resources (${folders.join(', ')}) exported for the Windows UI."]
+            (strings + arrays).sort { it.key }.each { key, value -> lines << "${key}=${escape(value)}" }
+            target.setText(lines.join('\n') + '\n', 'UTF-8')
+            logger.info("Desktop strings ${fileName}: ${strings.size()} strings, ${arrays.size()} arrays")
+        }
+        def base = readFolder(['values'])
+        write('android-strings.properties', ['values'], null)
+        def baseStrings = resolveReferences(base.strings)
+        locales.each { tag ->
+            def directory = androidResourceDirectoryFor(tag)
+            if (directory == 'values') return
+            write("android-strings_${tag}.properties", [directory], baseStrings)
+        }
+        // The language list the settings page offers and the runtime resolves against: English first, then the rest.
+        def index = new File(desktopStringResources.get().asFile, 'i18n/desktop-languages.properties')
+        def ordered = ['en'] + (locales - ['en'])
+        index.parentFile.mkdirs()
+        index.setText("# Languages this build offers the Windows UI in (English is the base catalog).\n" +
+            "languages=${ordered.join(',')}\n", 'UTF-8')
+    }
+}
+
+// Guards the hand-maintained Windows catalogs: every translation must carry exactly the keys of the English base
+// catalog, and keep its String.format placeholders, so a wrong or missing translation fails the build instead of
+// showing up as a raw key or a crash at runtime.
+def verifyDesktopStrings = tasks.register('verifyDesktopStrings') {
+    group = 'verification'
+    description = 'Checks the Windows string catalogs against the English base catalog.'
+    def catalogs = layout.projectDirectory.dir('src/main/resources/i18n')
+    def base = new File(catalogs.asFile, 'desktop-strings.properties')
+    def translations = fileTree(catalogs.asFile) { include 'desktop-strings_*.properties' }
+    // The runtime module reports its messages through these catalogs too, so it is scanned as well.
+    def kotlinSources = fileTree('src/main/kotlin') { include '**/*.kt' } +
+        fileTree(rootProject.file('desktop-runtime/src/main/kotlin')) { include '**/*.kt' }
+    inputs.file(base)
+    inputs.files(translations)
+    inputs.files(kotlinSources)
+    doLast {
+        def placeholders = ~/%\d+\$?[-#+ 0,(]*\d*(?:\.\d+)?[a-zA-Z%]/
+        def load = { File file ->
+            def bundle = new Properties()
+            file.withInputStream { stream -> bundle.load(new InputStreamReader(stream, 'UTF-8')) }
+            bundle
+        }
+        def baseBundle = load(base)
+        def baseKeys = baseBundle.stringPropertyNames().sort()
+        if (baseKeys.isEmpty()) throw new GradleException("${base.name} has no keys")
+        translations.files.sort { it.name }.each { file ->
+            def bundle = load(file)
+            def keys = bundle.stringPropertyNames().sort()
+            def missing = baseKeys - keys
+            def extra = keys - baseKeys
+            if (missing) throw new GradleException("${file.name} misses ${missing.size()} keys: ${missing.take(5)}")
+            if (extra) throw new GradleException("${file.name} has ${extra.size()} unknown keys: ${extra.take(5)}")
+            baseKeys.each { key ->
+                def expected = (baseBundle.getProperty(key) =~ placeholders).collect { it }
+                def actual = (bundle.getProperty(key) =~ placeholders).collect { it }
+                if (expected.sort() != actual.sort()) {
+                    throw new GradleException("${file.name}: '${key}' placeholders ${actual} do not match the base catalog ${expected}")
                 }
             }
         }
-        def resolve = { String item -> item.startsWith('@string/') ? (strings[item.substring(8)] ?: item) : item }
-        def properties = new Properties()
-        strings.each { k, v -> properties.setProperty(k, v) }
-        arrays.each { k, v -> properties.setProperty('@array/' + k, v.collect(resolve).join('\u001F')) }
-        def target = desktopStringResources.get().file('android-strings.properties').asFile
-        target.parentFile.mkdirs()
-        target.withWriter('UTF-8') { properties.store(it, 'Generated from app/src/main/res by prepareDesktopStrings') }
+        // The translations are no use if a screen still hardcodes one language: every visible string has to come
+        // from the catalog, every catalog key has to be used, and no Chinese literal may remain in the UI code.
+        def used = new TreeSet<String>()
+        def hardcoded = []
+        // A call may wrap its key onto the next line, so the key scan runs over the whole file; the Chinese literal
+        // check stays line based, because it only has to point at the offending line.
+        def call = ~/(?:desktopText|DesktopRuntimeStrings\.text)\(\s*"([^"]+)"/
+        def chinese = ~/"[^"\n]*[\u4e00-\u9fff][^"\n]*"/
+        kotlinSources.files.sort { it.path }.each { file ->
+            def text = file.getText('UTF-8')
+            (text =~ call).each { match -> used << match[1] }
+            // Read as UTF-8 explicitly: on Windows the platform default would turn the catalogs' own characters into
+            // CJK mojibake and report them as hardcoded text.
+            file.eachLine('UTF-8') { line ->
+                def trimmed = line.trim()
+                if (!trimmed.startsWith('*') && !trimmed.startsWith('//') && !trimmed.startsWith('/*')) {
+                    def found = (line =~ chinese)
+                    if (found.find()) hardcoded << "${file.name}: ${found.group()}".toString()
+                }
+            }
+        }
+        def unknown = used - (baseKeys as Set)
+        if (unknown) throw new GradleException("desktopText() keys missing from ${base.name}: ${unknown.take(10)}")
+        def unused = (baseKeys as Set) - used
+        if (unused) throw new GradleException("${base.name} has keys no screen uses: ${unused.take(10)}")
+        if (hardcoded) throw new GradleException("hardcoded Chinese UI text (${hardcoded.size()}): ${hardcoded.take(5)}")
+        logger.lifecycle("Desktop string catalogs: ${baseKeys.size()} keys in ${base.name}, ${translations.files.size()} translation(s) verified, ${used.size()} keys used by the UI")
     }
 }
 sourceSets.main.resources.srcDir(desktopStringResources)
 tasks.named('processResources').configure { dependsOn prepareDesktopStrings }
+tasks.named('check').configure { dependsOn verifyDesktopStrings }
 
 dependencies {
     implementation compose.desktop.currentOs
@@ -124,11 +352,18 @@ dependencies {
     implementation project(':parser-host')
     implementation project(':mihon-desktop-compat')
     implementation project(':cloudstream-desktop')
+    implementation project(':source-tvbox')
     implementation project(':core-domain')
     implementation project(':reader-core')
+    // Novel paging reuses the shared line splitter Android paginates with, not a Windows-only rewrite.
+    implementation project(':reader-novel')
+    // The WebDAV sync protocol and its remote catalog/retention rules are shared with Android, not reimplemented here.
+    implementation project(':core-net')
+    implementation libs.ktor.client.java
     implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:${libs.versions.coroutines.get()}"
     implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:${libs.versions.serialization.get()}"
     testImplementation 'org.junit.jupiter:junit-jupiter:5.8.2'
+    testImplementation libs.ktor.client.mock
     testImplementation compose.uiTest
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.8.2'
 }
@@ -155,7 +390,85 @@ dependencies.add(compatibilityFiles.name,
 def runtimeJavaVersion = providers.gradleProperty('mihonCompatibilityJavaVersion').map { it.toInteger() }.getOrElse(21)
 def desktopLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(runtimeJavaVersion) }
 def bundleWindowsRuntime = providers.gradleProperty('withWindowsDistribution').isPresent()
-def windowsPackageVersion = providers.gradleProperty('desktopPackageVersion').getOrElse('0.1.0')
+def bundleMacosRuntime = providers.gradleProperty('withMacosDistribution').isPresent()
+def bundleLinuxRuntime = providers.gradleProperty('withLinuxDistribution').isPresent()
+def bundleDesktopRuntime = bundleWindowsRuntime || bundleMacosRuntime || bundleLinuxRuntime
+if ([bundleWindowsRuntime, bundleMacosRuntime, bundleLinuxRuntime].count { it } > 1) {
+    throw new GradleException('Select only one desktop distribution platform')
+}
+if (bundleMacosRuntime && !System.getProperty('os.name').startsWith('Mac')) {
+    throw new GradleException('macOS distribution requires a macOS build host')
+}
+if (bundleLinuxRuntime && !System.getProperty('os.name').startsWith('Linux')) {
+    throw new GradleException('Linux distribution requires a Linux build host')
+}
+// jpackage on macOS requires a positive major version; Windows keeps its existing local-preview default.
+def windowsPackageVersion = providers.gradleProperty('desktopPackageVersion')
+    .getOrElse(System.getProperty('os.name').startsWith('Mac') ? '1.0.0' : '0.1.0')
+
+// The Windows client checks for its own updates, so the build stamps what this copy *is* — version name, package
+// version and release channel — into the resources. The default version name is the application's, read from its
+// build file: a Windows build is named after the release it belongs to, and CI overrides it with the asset name it
+// publishes (`-PdesktopVersionName`), which for a nightly is the `N<date>` form.
+def desktopVersionName = providers.gradleProperty('desktopVersionName').map { it.trim() }.orElse(
+    providers.provider {
+        def matcher = rootProject.file('app/build.gradle').getText('UTF-8') =~ /(?m)^\s*versionName\s*=\s*['"]([^'"]+)['"]/
+        if (!matcher.find()) throw new GradleException('Cannot read the application versionName from app/build.gradle')
+        matcher.group(1)
+    })
+def desktopUpdateChannel = providers.gradleProperty('desktopChannel').getOrElse('release')
+def desktopVersionResources = layout.buildDirectory.dir('generated/desktop-version')
+def prepareDesktopVersion = tasks.register('prepareDesktopVersion') {
+    def versionName = desktopVersionName
+    def channel = desktopUpdateChannel
+    inputs.property('versionName', versionName)
+    inputs.property('channel', channel)
+    inputs.property('packageVersion', windowsPackageVersion)
+    outputs.dir(desktopVersionResources)
+    doLast {
+        def name = versionName.get()
+        def allowed = channel in ['release', 'nightly']
+        def versionAllowed = name ==~ /^[A-Za-z0-9][A-Za-z0-9.+-]*$/
+        if (!allowed) throw new GradleException("Unknown Windows update channel: ${channel}")
+        if (!versionAllowed) throw new GradleException("Invalid Windows version name: ${name}")
+        def target = desktopVersionResources.get().file('desktop-version.properties').asFile
+        target.parentFile.mkdirs()
+        target.setText(
+            "# Stamped by :desktop-app:prepareDesktopVersion; the update check compares this copy against the releases.\n" +
+                "versionName=${name}\n" +
+                "packageVersion=${windowsPackageVersion}\n" +
+                "channel=${channel}\n", 'UTF-8')
+    }
+}
+sourceSets.main.resources.srcDir(desktopVersionResources)
+tasks.named('processResources').configure { dependsOn prepareDesktopVersion }
+
+// Google requires a desktop client secret for token exchange even with PKCE. Keep its value out of tracked files.
+def desktopGoogleClientSecret = providers.environmentVariable('KOTOTORO_GOOGLE_DESKTOP_CLIENT_SECRET')
+    .map { it.trim() }.filter { !it.isEmpty() }
+    .orElse(providers.fileContents(rootProject.layout.projectDirectory.file('local.properties')).asText.orElse('').map { text ->
+        def properties = new Properties()
+        properties.load(new StringReader(text))
+        properties.getProperty('googleDrive.desktop.clientSecret', '').trim()
+    })
+def desktopGoogleResources = layout.buildDirectory.dir('generated/google-drive-client')
+def prepareDesktopGoogleOAuth = tasks.register('prepareDesktopGoogleOAuth') {
+    // Only a digest participates in task diagnostics; never print the secret as an input value.
+    inputs.property('clientSecretSha256', desktopGoogleClientSecret.map { secret ->
+        java.security.MessageDigest.getInstance('SHA-256').digest(secret.getBytes('UTF-8')).encodeHex().toString()
+    })
+    outputs.dir(desktopGoogleResources)
+    doLast {
+        def properties = new Properties()
+        properties.setProperty('client_secret', desktopGoogleClientSecret.get())
+        def target = desktopGoogleResources.get().file('google-drive-client.properties').asFile
+        target.parentFile.mkdirs()
+        target.withOutputStream { properties.store(it, 'Desktop OAuth client configuration; not user credentials.') }
+    }
+}
+sourceSets.main.resources.srcDir(desktopGoogleResources)
+tasks.named('processResources').configure { dependsOn prepareDesktopGoogleOAuth }
+
 def windowsWixDirectory = providers.gradleProperty('windowsWixDirectory')
     .getOrElse(rootProject.layout.buildDirectory.dir('wix311').get().asFile.absolutePath)
 // Optional: a directory holding libmpv-2.dll (run/tests); distributions bundle it either from here or from the pinned
@@ -165,9 +478,12 @@ def ncnnDirectory = providers.gradleProperty('ncnnDirectory').getOrNull()
 
 // Pinned third-party playback/upscaling artifacts for the Windows distribution (fetched once into the build cache).
 def bundledDownloads = [
-    libmpv: [repo: 'zhongfly/mpv-winbuild', tag: '2026-10-03-413ff0b1cd',
-        asset: 'mpv-dev-lgpl-x86_64-20261003-git-413ff0b1cd.7z',
-        sha256: '12a9966bad239672c97276f01a9e625504e0b1d1fdcff95256066eeb8ffb1f21'],
+    // zhongfly/mpv-winbuild deletes releases after about a month, so libmpv-2.dll comes from the project's own
+    // third-party-mirror release: the DLL of mpv-dev-lgpl-x86_64-20261003-git-413ff0b1cd.7z (SHA-256 12a9966b…),
+    // byte for byte the one Kototoro 2.3.4 shipped (mpv v0.41.0-1095-g413ff0b1c).
+    libmpv: [repo: 'Kototoro-app/Kototoro', tag: 'third-party-mirror', asset: 'libmpv-2-20261003-git-413ff0b1cd.dll',
+        sha256: '6209dfe89b45d726bedc3b932e9321e9d1a49b64b2e1fefdf8c2973e384e7001',
+        version: '2026-10-03-413ff0b1cd', build: 'zhongfly/mpv-winbuild'],
     realcugan: [repo: 'nihui/realcugan-ncnn-vulkan', tag: '20220728', asset: 'realcugan-ncnn-vulkan-20220728-windows.zip',
         sha256: 'c6e08d46c11704b1e3a1ada9ddd591cb5005f52f132136c8633ba25def400e01'],
     realesrgan: [repo: 'xinntao/Real-ESRGAN', tag: 'v0.2.5.0', asset: 'realesrgan-ncnn-vulkan-20220424-windows.zip',
@@ -223,29 +539,7 @@ def prepareBundledThirdParty = tasks.register('prepareBundledThirdParty') {
         if (suppliedDll != null && suppliedDll.isFile()) {
             project.copy { from suppliedDll; into mpv }
         } else {
-            def archive = pinnedArtifact('libmpv', null)
-            def unpack = new File(temporaryDir, 'mpv'); project.delete(unpack); unpack.mkdirs()
-            // Prefer 7-Zip (preinstalled on GitHub's Windows images), then Windows' bsdtar by path. Older bsdtar
-            // builds (windows-2022) lack LZMA, and Git's GNU tar, first on CI PATH, reads neither 7z nor "D:\" paths.
-            def systemRoot = System.getenv('SystemRoot')
-            def extractors = [
-                [new File(System.getenv('ProgramFiles') ?: 'C:/Program Files', '7-Zip/7z.exe'),
-                    ['x', '-y', "-o${unpack.absolutePath}", archive.absolutePath, 'libmpv-2.dll']],
-                [systemRoot != null ? new File(systemRoot, 'System32/tar.exe') : null,
-                    ['-xf', archive.absolutePath, '-C', unpack.absolutePath, 'libmpv-2.dll']],
-            ].findAll { it[0]?.isFile() }
-            def failures = []
-            for (extractor in extractors) {
-                def command = ([extractor[0].absolutePath] + extractor[1]).collect { it.toString() }
-                def process = new ProcessBuilder(command).redirectErrorStream(true).start()
-                def output = process.inputStream.text
-                if (process.waitFor() == 0 && new File(unpack, 'libmpv-2.dll').isFile()) break
-                failures << "${extractor[0].name}: ${output.trim()}"
-            }
-            if (!new File(unpack, 'libmpv-2.dll').isFile()) {
-                throw new GradleException("Cannot extract libmpv-2.dll (${failures.join('; ') ?: 'no 7z or bsdtar found'})")
-            }
-            project.copy { from new File(unpack, 'libmpv-2.dll'); into mpv }
+            project.copy { from pinnedArtifact('libmpv', null); into mpv; rename { 'libmpv-2.dll' } }
         }
         ['realcugan', 'realesrgan'].each { key ->
             def supplied = ncnnDirectory != null ? new File(ncnnDirectory, bundledDownloads[key].asset) : null
@@ -271,7 +565,7 @@ def prepareBundledThirdParty = tasks.register('prepareBundledThirdParty') {
 
 | Component | Version | Licence | Source |
 |---|---|---|---|
-| libmpv (LGPL build, with FFmpeg, libplacebo) | ${bundledDownloads.libmpv.tag} | LGPL-2.1-or-later | https://github.com/mpv-player/mpv, build: https://github.com/${bundledDownloads.libmpv.repo} |
+| libmpv (LGPL build, with FFmpeg, libplacebo) | ${bundledDownloads.libmpv.version} | LGPL-2.1-or-later | https://github.com/mpv-player/mpv, build: https://github.com/${bundledDownloads.libmpv.build} |
 | realcugan-ncnn-vulkan (ncnn, Real-CUGAN models) | ${bundledDownloads.realcugan.tag} | MIT (program), BSD-3-Clause (ncnn) | https://github.com/${bundledDownloads.realcugan.repo} |
 | realesrgan-ncnn-vulkan (ncnn, Real-ESRGAN models) | ${bundledDownloads.realesrgan.tag} | BSD-3-Clause | https://github.com/${bundledDownloads.realesrgan.repo} |
 | Anime4K GLSL shaders | as in the Android app | MIT | https://github.com/bloc97/Anime4K |
@@ -336,25 +630,82 @@ def prepareWindowsResources = tasks.register('prepareWindowsResources', Copy) {
     }
 }
 
+// All desktop hosts use the same pinned compatibility runtime and ordered JARs. Only native resources differ.
+def macosPlaybackResources = layout.buildDirectory.dir('bundled-macos-playback')
+def macosMpvArchitecture = System.getProperty('os.arch') in ['arm64', 'aarch64'] ? 'arm64' : 'x86_64'
+def suppliedMacosMpvArchive = providers.gradleProperty('macosMpvArchive').orNull
+def prepareMacosPlayback = tasks.register('prepareMacosPlayback', Exec) {
+    inputs.file('prepare-macos-mpv.py')
+    inputs.file('distribution/macos-mpv-pins.json')
+    inputs.file('distribution/licenses/lua-5.2.4-LICENSE.txt')
+    inputs.property('architecture', macosMpvArchitecture)
+    if (suppliedMacosMpvArchive != null) inputs.file(suppliedMacosMpvArchive)
+    outputs.dir(macosPlaybackResources)
+    commandLine 'python3', file('prepare-macos-mpv.py').absolutePath,
+        '--pins', file('distribution/macos-mpv-pins.json').absolutePath,
+        '--architecture', macosMpvArchitecture, '--cache', downloadCache.absolutePath,
+        '--output', macosPlaybackResources.get().dir('mpv').asFile.absolutePath
+    if (suppliedMacosMpvArchive != null) args '--archive', file(suppliedMacosMpvArchive).absolutePath
+}
+def macosResources = layout.buildDirectory.dir('macos-resources')
+def prepareMacosResources = tasks.register('prepareMacosResources', Copy) {
+    dependsOn ':mihon-desktop-compat:verifyWindowsRuntime'
+    dependsOn ':mihon-desktop-compat:compileMacosWebViewBridge'
+    dependsOn prepareMacosPlayback
+    from(macosPlaybackResources) { into 'macos' }
+    from(project(':mihon-desktop-compat').layout.buildDirectory.file('bridge/kototoro-webview-bridge')) {
+        into 'macos/browser'
+    }
+    from(rootProject.file('LICENSE')) { rename { 'PROJECT_LICENSE' }; into 'common' }
+    from('distribution/MACOS_PREVIEW.md') { into 'common' }
+    from(runtimePins) { into 'common' }
+    into macosResources
+}
+def linuxResources = layout.buildDirectory.dir('linux-resources')
+def prepareLinuxResources = tasks.register('prepareLinuxResources', Copy) {
+    dependsOn ':mihon-desktop-compat:verifyWindowsRuntime'
+    from(rootProject.file('LICENSE')) { rename { 'PROJECT_LICENSE' }; into 'common' }
+    from('distribution/LINUX_PREVIEW.md') { into 'common' }
+    from(runtimePins) { into 'common' }
+    into linuxResources
+}
+def prepareDistributionResources = bundleLinuxRuntime ? prepareLinuxResources :
+    (bundleMacosRuntime ? prepareMacosResources : prepareWindowsResources)
+
 compose.desktop {
     application {
         mainClass = 'org.skepsun.kototoro.desktop.app.DesktopMainKt'
         javaHome = desktopLauncher.get().metadata.installationPath.asFile.absolutePath
-        if (bundleWindowsRuntime) {
+        if (bundleDesktopRuntime) {
             disableDefaultConfiguration()
             mainJar.set(tasks.named('jar').flatMap { it.archiveFile })
             fromFiles(packagedRuntimeArtifacts)
-            dependsOn(prepareWindowsResources.get())
+            dependsOn(prepareDistributionResources.get())
         }
         nativeDistributions {
             packageName = 'Kototoro'
             packageVersion = windowsPackageVersion
-            description = 'Kototoro Windows local preview'
+            description = 'Kototoro desktop local preview'
             vendor = 'Kototoro'
             includeAllModules = true
-            targetFormats(org.jetbrains.compose.desktop.application.dsl.TargetFormat.Msi)
+            targetFormats(org.jetbrains.compose.desktop.application.dsl.TargetFormat.Msi,
+                org.jetbrains.compose.desktop.application.dsl.TargetFormat.Dmg,
+                org.jetbrains.compose.desktop.application.dsl.TargetFormat.Deb)
             if (bundleWindowsRuntime) appResourcesRootDir.set(windowsResources)
+            if (bundleMacosRuntime) appResourcesRootDir.set(macosResources)
+            if (bundleLinuxRuntime) appResourcesRootDir.set(linuxResources)
+            linux {
+                packageName = 'kototoro'
+                shortcut = true
+                menuGroup = 'Office'
+                iconFile.set(rootProject.layout.projectDirectory.file('app/src/main/ic_launcher-playstore.png'))
+            }
+            macOS {
+                bundleID = 'org.skepsun.kototoro.desktop'
+                iconFile.set(desktopAppIcons.map { it.file('Kototoro.icns') })
+            }
             windows {
+                iconFile.set(desktopAppIcons.map { it.file('Kototoro.ico') })
                 perUserInstall = true
                 // A sibling directory avoids merging program uninstall rules with the user data directory.
                 installationPath = 'Kototoro-App'
@@ -369,22 +720,58 @@ compose.desktop {
 }
 
 tasks.withType(org.jetbrains.compose.desktop.application.tasks.AbstractJPackageTask).configureEach {
-    if (bundleWindowsRuntime) dependsOn prepareWindowsResources
+    dependsOn prepareDesktopAppIcons
+    if (bundleDesktopRuntime) dependsOn prepareDistributionResources
     doFirst {
-        if (!bundleWindowsRuntime) throw new GradleException('Supply -PwithWindowsDistribution to bundle the verified Windows runtime')
+        if (!bundleDesktopRuntime) {
+            throw new GradleException('Supply -PwithWindowsDistribution, -PwithMacosDistribution or -PwithLinuxDistribution to bundle the verified runtime')
+        }
+    }
+}
+
+// Compose copies app resources through Kotlin File.copyTo, which drops POSIX mode bits. Restore the helper's
+// executable bit in the generated image before packageDmg consumes it; code bytes and signatures stay unchanged.
+def packagedMacosBridge = layout.buildDirectory.file(
+    'compose/binaries/main/app/Kototoro.app/Contents/app/resources/browser/kototoro-webview-bridge')
+tasks.matching { it.name == 'createDistributable' }.configureEach {
+    if (bundleMacosRuntime) doLast {
+        def helper = packagedMacosBridge.get().asFile
+        if (!helper.isFile() || !helper.setExecutable(true, false)) {
+            throw new GradleException('Cannot make the packaged WKWebView bridge executable')
+        }
+        // jpackage ad-hoc signs the image only on Apple Silicon (arm64 cannot run unsigned code). An Intel image comes
+        // out unsigned, and the self-updater refuses an update that does not pass `codesign --verify --deep --strict`,
+        // so sign it the same way here; an image that already verifies is left as jpackage made it.
+        def app = helper.parentFile.parentFile.parentFile.parentFile.parentFile
+        def codesign = { List<String> arguments ->
+            def process = new ProcessBuilder(['/usr/bin/codesign'] + arguments).redirectErrorStream(true).start()
+            def output = process.inputStream.text
+            [process.waitFor(), output]
+        }
+        if (codesign(['--verify', '--deep', '--strict', app.absolutePath])[0] != 0) {
+            def (signed, signOutput) = codesign(['--force', '--deep', '--sign', '-', app.absolutePath])
+            def (verified, verifyOutput) = codesign(['--verify', '--deep', '--strict', app.absolutePath])
+            if (signed != 0 || verified != 0) throw new GradleException("Cannot ad-hoc sign ${app}: ${signOutput}${verifyOutput}")
+        }
     }
 }
 
 tasks.withType(org.jetbrains.compose.desktop.application.tasks.AbstractJLinkTask).configureEach { link ->
     // Compose 1.12.0 defaults to stripping commands. Keep the bundled JVM usable for local support/probes.
-    if (bundleWindowsRuntime) link.'getStripNativeCommands$compose'().set(false)
+    if (bundleDesktopRuntime) link.'getStripNativeCommands$compose'().set(false)
 }
 
 tasks.matching { it.name == 'prepareAppResources' }.configureEach {
-    if (bundleWindowsRuntime) dependsOn prepareWindowsResources
+    if (bundleDesktopRuntime) dependsOn prepareDistributionResources
 }
 
 def bridgePath = providers.gradleProperty('desktopBridgeExecutable').getOrNull()
+def macBridgePath = project(':mihon-desktop-compat').layout.buildDirectory
+    .file('bridge/kototoro-webview-bridge').get().asFile.absolutePath
+def mpvRenderer = providers.gradleProperty('mpvRenderer').orNull
+if (mpvRenderer != null && !(mpvRenderer in ['opengl', 'software'])) {
+    throw new GradleException('mpvRenderer must be opengl or software')
+}
 def desktopDataDirectory = providers.gradleProperty('desktopDataDirectory').getOrNull()
 def desktopImportJar = providers.gradleProperty('desktopImportJar').getOrNull()
 def developerClasspath = sourceSets.main.runtimeClasspath + compatibilityFiles
@@ -394,11 +781,18 @@ if (desktopImportJar != null) desktopArguments.addAll(['--import', desktopImport
 tasks.withType(JavaExec).configureEach {
     if (name == 'run') {
         dependsOn ':mihon-desktop-compat:verifyMihonCompatibility'
+        if (System.getProperty('os.name', '').startsWith('Mac')) {
+            dependsOn ':mihon-desktop-compat:compileMacosWebViewBridge'
+        }
         // Compose sets run classpath/args late. Apply developer-only inputs after that configuration.
         doFirst { launch ->
             launch.classpath = developerClasspath
             if (bridgePath != null) launch.systemProperty 'kototoro.compat.bridge.exe', bridgePath
+            else if (System.getProperty('os.name', '').startsWith('Mac')) {
+                launch.systemProperty 'kototoro.compat.bridge.exe', macBridgePath
+            }
             if (libmpvDirectory != null) launch.systemProperty 'kototoro.libmpv.dir', libmpvDirectory
+            if (mpvRenderer != null) launch.systemProperty 'kototoro.mpv.renderer', mpvRenderer
             if (!desktopArguments.isEmpty()) launch.setArgs(desktopArguments)
         }
     }
@@ -406,13 +800,18 @@ tasks.withType(JavaExec).configureEach {
 tasks.withType(Test).configureEach {
     useJUnitPlatform()
     javaLauncher = desktopLauncher
+    // The UI tests assert the text the app ships in Chinese, so the language is pinned instead of following the
+    // machine's locale (`--lang`/DesktopStrings.pin); without this, the same tests fail on an English CI machine.
+    systemProperty 'kototoro.desktop.locale', 'zh-CN'
     systemProperty 'kototoro.desktop.test.classpath', (sourceSets.test.runtimeClasspath + compatibilityFiles).asPath
     systemProperty 'kototoro.desktop.fixture.jar', project(':mihon-desktop-compat').layout.buildDirectory.file('fixtures/offline-desktop-fixture.jar').get().asFile
     systemProperty 'kototoro.desktop.challenge.fixture.jar', project(':mihon-desktop-compat').layout.buildDirectory.file('fixtures/interactive-desktop-fixture.jar').get().asFile
     systemProperty 'kototoro.desktop.reader.fixture.jar', project(':mihon-desktop-compat').layout.buildDirectory.file('fixtures/reader-desktop-fixture.jar').get().asFile
     systemProperty 'kototoro.desktop.cover.fixture.jar', project(':mihon-desktop-compat').layout.buildDirectory.file('fixtures/cover-desktop-fixture.jar').get().asFile
     systemProperty 'kototoro.desktop.filter.fixture.jar', project(':mihon-desktop-compat').layout.buildDirectory.file('fixtures/filter-desktop-fixture.jar').get().asFile
-    systemProperty 'kototoro.desktop.bridge.exe', project(':mihon-desktop-compat').layout.buildDirectory.file('bridge/kototoro-webview-bridge.exe').get().asFile
+    systemProperty 'kototoro.desktop.bridge.exe', project(':mihon-desktop-compat').layout.buildDirectory.file(
+        System.getProperty('os.name', '').startsWith('Mac') ? 'bridge/kototoro-webview-bridge' : 'bridge/kototoro-webview-bridge.exe').get().asFile
+    if (System.getProperty('os.name', '').startsWith('Mac')) dependsOn ':mihon-desktop-compat:compileMacosWebViewBridge'
     // kototoro / kotatsu / Tsuki plugin fixtures: real bytecode built by :parser-host against the shared ABI.
     systemProperty 'kototoro.desktop.anime.fixture.jar', project(':mihon-desktop-compat').layout.buildDirectory.file('fixtures/anime-desktop-fixture.jar').get().asFile
     systemProperty 'kototoro.desktop.parser.fixtures', project(':parser-host').layout.buildDirectory.dir('fixtures').get().asFile
@@ -426,8 +825,11 @@ tasks.withType(Test).configureEach {
     providers.gradleProperty('realDirect').orNull?.with { systemProperty 'kototoro.real.direct', it }
     providers.gradleProperty('mpvOptions').orNull?.with { systemProperty 'kototoro.real.mpvoptions', it }
     providers.gradleProperty('ncnnDirectory').orNull?.with { systemProperty 'kototoro.ncnn.dir', it }
+    // CI's software GPU needs minutes for a full Anime4K page; MpvPlayerTest still covers Anime4K on small images.
+    if (providers.gradleProperty('skipAnime4KPages').isPresent()) systemProperty 'kototoro.desktop.skip.anime4k.pages', 'true'
     if (libmpvDirectory != null) systemProperty 'kototoro.libmpv.dir', libmpvDirectory
-    dependsOn ':parser-host:fixtureKototoroJar', ':parser-host:fixtureKotatsuJar', ':parser-host:fixtureTsukiJar'
+    dependsOn ':parser-host:fixtureKototoroJar', ':parser-host:fixtureKotatsuJar', ':parser-host:fixtureTsukiJar',
+        ':parser-host:fixtureBrokenJar'
     inputs.file(project(':mihon-desktop-compat').layout.buildDirectory.file('fixtures/offline-desktop-fixture.jar'))
     inputs.file(project(':mihon-desktop-compat').layout.buildDirectory.file('fixtures/interactive-desktop-fixture.jar'))
     inputs.file(project(':mihon-desktop-compat').layout.buildDirectory.file('fixtures/reader-desktop-fixture.jar'))
@@ -444,7 +846,86 @@ tasks.withType(Test).configureEach {
     dependsOn ':mihon-desktop-compat:animeFixtureJar'
 }
 
-tasks.named('test') { exclude '**/DesktopDistributionTest.class' }
+tasks.named('test') {
+    exclude '**/DesktopDistributionTest.class', '**/LinuxDistributionTest.class', '**/MacosDistributionTest.class'
+}
+if (bundleMacosRuntime) {
+    def macosImage = layout.buildDirectory.dir('compose/binaries/main/app/Kototoro.app')
+    tasks.register('macosDistributionTest', Test) {
+        dependsOn tasks.named('createDistributable'), tasks.named('testClasses')
+        inputs.dir(macosImage)
+        testClassesDirs = sourceSets.test.output.classesDirs
+        classpath = sourceSets.test.runtimeClasspath
+        include '**/MacosDistributionTest.class'
+        // POSIX execute bits and the host graphics runtime are not represented by content hashes.
+        outputs.upToDateWhen { false }
+        systemProperty 'kototoro.desktop.distribution', macosImage.get().asFile
+        // `-PmacosDistributionRenderer=software` for hosts without an accelerated OpenGL device (GitHub runners).
+        providers.gradleProperty('macosDistributionRenderer').orNull?.with { systemProperty 'kototoro.desktop.distribution.renderer', it }
+    }
+    tasks.matching { it.name == 'packageDmg' }.configureEach {
+        appImage.set(macosImage)
+        dependsOn 'macosDistributionTest'
+    }
+    def macUpdateArch = System.getProperty('os.arch') in ['arm64', 'aarch64'] ? 'arm64' : 'x64'
+    def macUpdateStem = desktopVersionName.map { "Kototoro-${it}-macos-${macUpdateArch}-${desktopUpdateChannel}" }
+    def macUpdateDmg = layout.buildDirectory.file(macUpdateStem.map { "compose/binaries/main/update/${it}.dmg" })
+    def macUpdateChecksums = layout.buildDirectory.file(macUpdateStem.map { "compose/binaries/main/update/${it}.sha256" })
+    def packagedDmg = layout.buildDirectory.file("compose/binaries/main/dmg/Kototoro-${windowsPackageVersion}.dmg")
+    tasks.register('macosUpdatePackage') {
+        dependsOn 'packageDmg'
+        inputs.file(packagedDmg)
+        inputs.property('stem', macUpdateStem)
+        outputs.file(macUpdateDmg)
+        outputs.file(macUpdateChecksums)
+        doLast {
+            def target = macUpdateDmg.get().asFile
+            target.parentFile.mkdirs()
+            java.nio.file.Files.copy(packagedDmg.get().asFile.toPath(), target.toPath(),
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+            def digest = java.security.MessageDigest.getInstance('SHA-256')
+            target.withInputStream { input ->
+                byte[] buffer = new byte[65536]
+                int count
+                while ((count = input.read(buffer)) != -1) digest.update(buffer, 0, count)
+            }
+            macUpdateChecksums.get().asFile.setText("${digest.digest().encodeHex()}  ${target.name}\n", 'UTF-8')
+        }
+    }
+}
+if (bundleLinuxRuntime) {
+    tasks.register('linuxDistributionTest', Test) {
+        dependsOn tasks.named('createDistributable'), tasks.named('testClasses')
+        inputs.dir(layout.buildDirectory.dir('compose/binaries/main/app/Kototoro'))
+        testClassesDirs = sourceSets.test.output.classesDirs
+        classpath = sourceSets.test.runtimeClasspath
+        include '**/LinuxDistributionTest.class'
+        systemProperty 'kototoro.desktop.distribution', layout.buildDirectory.dir('compose/binaries/main/app/Kototoro').get().asFile
+        systemProperty 'kototoro.desktop.probe.classes', sourceSets.test.output.classesDirs.asPath
+    }
+    tasks.matching { it.name == 'packageDeb' }.configureEach {
+        // Ship the same image that passed the relocation/runtime/window checks.
+        appImage.set(layout.buildDirectory.dir('compose/binaries/main/app/Kototoro'))
+        // With --app-image, Compose omits --icon and jpackage otherwise replaces our icon with Java's default.
+        freeArgs.addAll(['--icon', rootProject.file('app/src/main/ic_launcher-playstore.png').absolutePath])
+        dependsOn 'linuxDistributionTest'
+    }
+    tasks.register('linuxDebContentsCheck', Exec) {
+        dependsOn 'packageDeb'
+        // jpackage names the architecture after the host; arm64 builds use Debian's arm64 suffix.
+        def architecture = System.getProperty('os.arch') in ['aarch64', 'arm64'] ? 'arm64' : 'amd64'
+        def deb = layout.buildDirectory.file("compose/binaries/main/deb/kototoro_${windowsPackageVersion}_${architecture}.deb")
+        inputs.file('inspect-linux-deb.py')
+        inputs.file(deb)
+        inputs.file(androidAppIcon)
+        inputs.dir(layout.buildDirectory.dir('compose/binaries/main/app/Kototoro'))
+        commandLine 'python3', file('inspect-linux-deb.py').absolutePath,
+            '--package', deb.get().asFile.absolutePath,
+            '--image', layout.buildDirectory.dir('compose/binaries/main/app/Kototoro').get().asFile.absolutePath,
+            '--icon', androidAppIcon.absolutePath,
+            '--output', layout.buildDirectory.dir('reports/linux-deb').get().asFile.absolutePath
+    }
+}
 if (bundleWindowsRuntime) {
     // The jpackage launcher resolves its runtime, and the bundled ncnn tools open their images, through ANSI APIs.
     // Give every shipped executable the UTF-8 code page so paths outside the system code page (install directory,

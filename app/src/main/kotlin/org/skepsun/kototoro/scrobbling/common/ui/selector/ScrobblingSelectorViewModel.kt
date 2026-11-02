@@ -205,21 +205,23 @@ class ScrobblingSelectorViewModel @Inject constructor(
                 "Scrobbling info for manga ${manga.id} not found after linking target $targetId"
             }
             val history = historyRepository.getOne(manga)
-            currentScrobbler.updateScrobblingInfo(
-                mangaId = manga.id,
-                rating = prevInfo?.rating ?: 0f,
-                status = prevInfo?.status ?: when {
-                    history == null -> ScrobblingStatus.PLANNED
-                    ReadingProgress.isCompleted(history.percent) -> ScrobblingStatus.COMPLETED
-                    else -> ScrobblingStatus.READING
-                },
-                comment = prevInfo?.comment,
-            )
-            if (history != null && manga.chapters?.any { it.id == history.chapterId } == true) {
-                currentScrobbler.scrobble(
-                    manga = manga,
-                    chapterId = history.chapterId,
+            if (!currentScrobbler.preservesRemoteStateOnBinding) {
+                currentScrobbler.updateScrobblingInfo(
+                    mangaId = manga.id,
+                    rating = prevInfo?.rating ?: 0f,
+                    status = prevInfo?.status ?: when {
+                        history == null -> ScrobblingStatus.PLANNED
+                        ReadingProgress.isCompleted(history.percent) -> ScrobblingStatus.COMPLETED
+                        else -> ScrobblingStatus.READING
+                    },
+                    comment = prevInfo?.comment,
                 )
+                if (history != null && manga.chapters?.any { it.id == history.chapterId } == true) {
+                    currentScrobbler.scrobble(
+                        manga = manga,
+                        chapterId = history.chapterId,
+                    )
+                }
             }
             if (favouritesRepository.getCategoriesIdsByWork(manga.id).isEmpty()) {
                 val categories = favouritesRepository.observeCategories().firstOrNull()

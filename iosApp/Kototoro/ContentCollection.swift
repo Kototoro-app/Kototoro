@@ -8,12 +8,12 @@ enum ContentListMode: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .list: "列表"
-        case .detailed: "详细列表"
-        case .grid: "网格"
-        case .compactGrid: "紧凑网格"
-        case .movieGrid: "电影网格"
-        case .compactMovieGrid: "紧凑电影网格"
+        case .list: String(localized: "列表")
+        case .detailed: String(localized: "详细列表")
+        case .grid: String(localized: "网格")
+        case .compactGrid: String(localized: "紧凑网格")
+        case .movieGrid: String(localized: "电影网格")
+        case .compactMovieGrid: String(localized: "紧凑电影网格")
         }
     }
 
@@ -49,6 +49,7 @@ enum ContentGridSize {
 /// One work in a list, with what the screen knows about it beyond the source's own fields.
 struct ContentItem: Identifiable {
     let content: IosSourceContent
+    let identity: String
     var progress: Float?
     /// Short emphasis on the cover, such as the number of new chapters.
     var badge: String?
@@ -57,8 +58,27 @@ struct ContentItem: Identifiable {
     /// Filled by [ContentCollection] from the library and downloads.
     var marks = ContentMarks()
     var id: String { content.id }
-    /// Rendering identity follows the same source/id pair as favourites and selection state.
-    var identity: String { ContentMarks.key(content) }
+
+    init(
+        content: IosSourceContent,
+        progress: Float? = nil,
+        badge: String? = nil,
+        subtitle: String? = nil,
+        marks: ContentMarks = ContentMarks()
+    ) {
+        self.content = content
+        self.identity = ContentMarks.key(content)
+        self.progress = progress
+        self.badge = badge
+        self.subtitle = subtitle
+        self.marks = marks
+    }
+
+    func withMarks(_ marks: ContentMarks) -> ContentItem {
+        var copy = self
+        copy.marks = marks
+        return copy
+    }
 }
 
 /// Android's card badges (`ContentCardRenderModel`), the ones that help when choosing what to read: new chapters,
@@ -70,7 +90,11 @@ struct ContentMarks {
     var adult = false
 
     /// Works are matched by source and id, as the shared records key them.
-    static func key(_ content: IosSourceContent) -> String { "\(content.sourceName)|\(content.id)" }
+    static func key(_ content: IosSourceContent) -> String { content.contentKey }
+}
+
+extension IosSourceContent {
+    var contentKey: String { "\(sourceName)|\(id)" }
 }
 
 private extension ContentItem {
@@ -179,18 +203,80 @@ struct ContentCollection<Destination: View, Actions: View>: View {
 
     @AppStorage(ContentGridSize.key) private var gridSize = 100.0
     @EnvironmentObject private var library: LibraryModel
-    @EnvironmentObject private var downloads: ReaderDownloadQueue
+    @EnvironmentObject private var downloads: DownloadedContent
+    @ObservedObject private var tagFilter = TagFilterStore.shared
+    @ObservedObject private var customSpaces = CustomSpaceStore.shared
+    @EnvironmentObject private var sourcesModel: SourcesModel
+    @AppStorage(ContentSpace.key) private var space = ""
+    @AppStorage(AdultContentFilter.Target.favourites.rawValue) private var hideAdultFavourites = false
+    @AppStorage(AdultContentFilter.Target.suggestions.rawValue) private var hideAdultSuggestions = false
+
+    /// Android's adult filter target of this list, by its identifier prefix.
+    private var adultHidden: Bool {
+        switch identifierPrefix {
+        case "favourite.": hideAdultFavourites
+        case "suggestion.": hideAdultSuggestions
+        default: false
+        }
+    }
+
+    private var gridColumns: [GridItem] {
+        let compact = mode.hasTitleOverlay
+        let spacing: CGFloat = compact ? 8 : 14
+        return [GridItem(.adaptive(minimum: mode.targetWidth(scale: gridSize / 100)), spacing: spacing, alignment: .top)]
+    }
+
+    private struct MarksLookup {
+        let favourites: Set<String>
+        let updates: [String: Int]
+        let downloaded: Set<String>
+
+        func marks(for content: IosSourceContent, key: String? = nil) -> ContentMarks {
+            let itemKey = key ?? ContentMarks.key(content)
+            return ContentMarks(
+                newChapters: updates[itemKey] ?? 0,
+                favourite: favourites.contains(itemKey),
+                downloaded: downloaded.contains(itemKey),
+                adult: content.isNsfw
+            )
+        }
+    }
+
+    private var lookup: MarksLookup {
+        let favourites = marksFavourites ? library.favouriteKeys : []
+        let updates = library.updateChapterCounts
+        let downloaded = downloads.keys
+        return MarksLookup(favourites: favourites, updates: updates, downloaded: downloaded)
+    }
 
     var body: some View {
-        let items = marked(self.items)
+        let adult = adultHidden
+        // A custom Space also narrows works by their sources' language and kind.
+        let custom = ContentSpace.isCustom(space) ? ContentSpace.activeCustom() : nil
+        let shown = tagFilter.blacklist.isEmpty && !adult && custom == nil ? items
+            : items.filter { !tagFilter.hides($0.content) && !(adult && $0.content.isNsfw)
+                && ContentSpace.admits($0.content, in: custom, sources: sourcesModel) }
+        VStack(spacing: 12) {
+            collection(shown)
+            if shown.count < items.count {
+                Label("已按标签黑名单隐藏 \(items.count - shown.count) 部", systemImage: "eye.slash")
+                    .font(.caption).foregroundStyle(.secondary)
+                    .accessibilityIdentifier("\(identifierPrefix)hiddenByTags")
+                    // Paging asks for more when the caller's last work appears; when that one is hidden (or a whole
+                    // page is), reaching the end of what is shown stands in for it.
+                    .onAppear { if shown.last?.identity != items.last?.identity, let last = items.last { onItemAppear?(last) } }
+                    .id(items.count)
+            }
+        }
+    }
+
+    @ViewBuilder private func collection(_ items: [ContentItem]) -> some View {
+        let lookup = self.lookup
         if mode.isGrid {
             let compact = mode.hasTitleOverlay
-            let spacing: CGFloat = compact ? 8 : 14
-            // Adaptive columns: floor((width + spacing) / (target + spacing)), the same count Android computes.
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: mode.targetWidth(scale: gridSize / 100)), spacing: spacing,
-                                         alignment: .top)],
-                      spacing: compact ? 8 : 16) {
-                ForEach(items, id: \.identity) { item in
+            LazyVGrid(columns: gridColumns, spacing: compact ? 8 : 16) {
+                ForEach(items, id: \.identity) { rawItem in
+                    let item = rawItem.withMarks(lookup.marks(for: rawItem.content, key: rawItem.identity))
                     link(item) {
                         if compact { CompactCard(runtime: runtime, item: item, movie: mode.isMovie) }
                         else { GridCard(runtime: runtime, item: item, movie: mode.isMovie) }
@@ -199,38 +285,24 @@ struct ContentCollection<Destination: View, Actions: View>: View {
             }
             .padding(.horizontal, compact ? 12 : 16)
         } else {
+            let lastIdentity = items.last?.identity
             LazyVStack(spacing: 0) {
-                ForEach(Array(items.enumerated()), id: \.element.identity) { index, item in
+                // Keyed by the work, as the grid is: an index would rebind a row's cover, menu and tasks to
+                // whichever work moved into that position after a refresh, filter or page.
+                ForEach(items, id: \.identity) { rawItem in
+                    let item = rawItem.withMarks(lookup.marks(for: rawItem.content, key: rawItem.identity))
                     link(item) {
-                        ContentRow(runtime: runtime, item: item, detailed: mode == .detailed)
+                        ContentRow(runtime: runtime, item: item, detailed: mode == .detailed,
+                                   sourceTitle: sourcesModel.source(named: rawItem.content.sourceName)?.title)
                             .padding(.horizontal, 16).padding(.vertical, mode == .detailed ? 12 : 9)
                     }
-                    if index < items.count - 1 {
+                    if rawItem.identity != lastIdentity {
                         Divider().padding(.leading, mode == .detailed ? 120 : 76)
                     }
                 }
             }
             .background(.background.secondary, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
             .padding(.horizontal, 16)
-        }
-    }
-
-    private func marked(_ items: [ContentItem]) -> [ContentItem] {
-        let favourites = marksFavourites ? Set(library.favourites.map { ContentMarks.key($0.content) }) : []
-        var updates: [String: Int] = [:]
-        for update in library.updates { updates[ContentMarks.key(update.content)] = Int(update.newChapters) }
-        let downloaded = Set(downloads.entries.filter { $0.state == .completed }
-            .map { "\($0.request.source)|\($0.request.contentID)" })
-        return items.map { item in
-            var item = item
-            let key = ContentMarks.key(item.content)
-            item.marks = ContentMarks(
-                newChapters: updates[key] ?? 0,
-                favourite: favourites.contains(key),
-                downloaded: downloaded.contains(key),
-                adult: item.content.contentType.hasPrefix("HENTAI_") || item.content.contentRating == "ADULT"
-            )
-            return item
         }
     }
 
@@ -301,7 +373,6 @@ private struct CompactCard: View {
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.white)
                     .lineLimit(2)
-                    .shadow(color: .black.opacity(0.4), radius: 2, y: 1)
                     .padding(.horizontal, 7).padding(.top, 18)
                     .padding(.bottom, item.progress == nil ? 7 : 11)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -315,7 +386,8 @@ private struct ContentRow: View {
     let runtime: IosSources
     let item: ContentItem
     let detailed: Bool
-    @EnvironmentObject private var sources: SourcesModel
+    /// Passed in rather than observed, so a source-settings publish does not redraw every row.
+    let sourceTitle: String?
 
     var body: some View {
         let content = item.content
@@ -342,13 +414,25 @@ private struct ContentRow: View {
                 ContentStatusLine(item: item).padding(.top, 1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            if let badge = item.badge { BadgeView(text: badge) }
         }
     }
 
     private var sourceLine: String {
-        let source = sources.sources.first { $0.name == item.content.sourceName }?.title ?? item.content.sourceName
-        return "\(source) · \(SourcesView.kindName(item.content.mediaKind))"
+        "\(sourceTitle ?? item.content.sourceName) · \(SourcesView.kindName(item.content.mediaKind))"
+    }
+}
+
+private struct CardProgressBar: View {
+    let progress: Float
+    var body: some View {
+        GeometryReader { geometry in
+            Capsule().fill(.white.opacity(0.35))
+                .overlay(alignment: .leading) {
+                    Capsule().fill(Color.accentColor)
+                        .frame(width: max(0, geometry.size.width * CGFloat(min(max(progress, 0), 1))))
+                }
+        }
+        .frame(height: 3)
     }
 }
 
@@ -362,6 +446,8 @@ private struct CoverFrame: View {
     var showsProgress = true
     /// Compact cells (list thumbnails) keep only the counter; the row spells out the rest.
     var showsMarks = true
+    @ScaledMetric(relativeTo: .caption2) private var adultMark: CGFloat = 9
+    private var adultMarkSize: CGFloat { min(adultMark, 14) }
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
@@ -379,15 +465,9 @@ private struct CoverFrame: View {
             }
             .overlay(alignment: .bottom) {
                 if showsProgress, let progress = item.progress, !item.isFinished {
-                    GeometryReader { geometry in
-                        Capsule().fill(.white.opacity(0.35))
-                            .overlay(alignment: .leading) {
-                                Capsule().fill(Color.accentColor).frame(width: geometry.size.width * CGFloat(min(max(progress, 0), 1)))
-                            }
-                    }
-                    .frame(height: 3)
-                    .padding(.horizontal, 6).padding(.bottom, 5)
-                    .accessibilityLabel("已读 \(Int(progress * 100))%")
+                    CardProgressBar(progress: progress)
+                        .padding(.horizontal, 6).padding(.bottom, 5)
+                        .accessibilityLabel(String(localized: "已读 \(Int(progress * 100))%"))
                 }
             }
             .overlay(alignment: .topTrailing) {
@@ -411,7 +491,7 @@ private struct CoverFrame: View {
             .overlay(alignment: .bottomTrailing) {
                 if showsMarks && item.marks.adult {
                     Text("18+")
-                        .font(.system(size: 9, weight: .heavy))
+                        .font(.system(size: adultMarkSize, weight: .heavy))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 4).padding(.vertical, 1.5)
                         .background(Color.red.opacity(0.85), in: .rect(cornerRadius: 4, style: .continuous))
@@ -422,7 +502,10 @@ private struct CoverFrame: View {
             }
             .clipShape(shape)
             .overlay { shape.strokeBorder(.primary.opacity(0.12), lineWidth: 0.5) }
-            .shadow(color: .black.opacity(0.16), radius: 3, y: 1.5)
+            .background {
+                shape.fill(Color(uiColor: .secondarySystemBackground))
+                    .shadow(color: .black.opacity(0.12), radius: 2.5, y: 1)
+            }
     }
 }
 
@@ -430,14 +513,16 @@ private struct CoverFrame: View {
 private struct MarkIcon: View {
     let symbol: String
     let tint: Color
+    /// Grows with Dynamic Type, but stays a corner mark that leaves the cover visible.
+    @ScaledMetric(relativeTo: .caption2) private var side: CGFloat = 18
     var body: some View {
+        let side = min(self.side, 28)
         Image(systemName: symbol)
-            .font(.system(size: 9, weight: .bold))
+            .font(.system(size: side / 2, weight: .bold))
             .foregroundStyle(.white)
-            .frame(width: 18, height: 18)
+            .frame(width: side, height: side)
             .background(tint.gradient, in: .circle)
             .overlay { Circle().strokeBorder(.white.opacity(0.7), lineWidth: 1) }
-            .shadow(color: .black.opacity(0.25), radius: 1.5, y: 0.5)
     }
 }
 
@@ -450,7 +535,6 @@ private struct BadgeView: View {
             .padding(.horizontal, 6).padding(.vertical, 2)
             .background(Color.red.gradient, in: .capsule)
             .overlay { Capsule().strokeBorder(.white.opacity(0.7), lineWidth: 1) }
-            .shadow(color: .black.opacity(0.25), radius: 1.5, y: 0.5)
     }
 }
 
@@ -460,11 +544,11 @@ private struct ContentStatusLine: View {
     let item: ContentItem
     var body: some View {
         let parts = [
-            item.isFinished ? "已读完" : item.progress.map { "已读 \(Int($0 * 100))%" },
-            item.marks.favourite ? "已收藏" : nil,
-            item.marks.downloaded ? "已下载" : nil,
+            item.isFinished ? String(localized: "已读完") : item.progress.map { String(localized: "已读 \(Int($0 * 100))%") },
+            item.marks.favourite ? String(localized: "已收藏") : nil,
+            item.marks.downloaded ? String(localized: "已下载") : nil,
         ].compactMap { $0 }
-        // An explicit badge (the updates list) already shows the count beside the row.
+        // An explicit badge (the updates list) already shows the count on the cover.
         let newChapters = item.badge == nil ? item.marks.newChapters : 0
         if newChapters > 0 || !parts.isEmpty || item.marks.adult {
             HStack(spacing: 6) {
@@ -487,15 +571,41 @@ private struct ContentStatusLine: View {
 }
 
 enum ContentText {
+    /// Cards ask again whenever they reappear while scrolling; the regex passes run once per summary.
+    nonisolated(unsafe) private static let plainCache: NSCache<NSString, NSString> = {
+        let cache = NSCache<NSString, NSString>()
+        cache.countLimit = 1_000
+        return cache
+    }()
+    nonisolated(unsafe) private static let firstLineCache: NSCache<NSString, NSString> = {
+        let cache = NSCache<NSString, NSString>()
+        cache.countLimit = 1_000
+        return cache
+    }()
+
     /// Source summaries are often HTML; lists show plain text.
     static func plain(_ text: String) -> String {
+        let key = text as NSString
+        if let cached = plainCache.object(forKey: key) { return cached as String }
+        let plain = strip(text)
+        plainCache.setObject(plain as NSString, forKey: key)
+        return plain
+    }
+
+    static func firstLine(_ text: String) -> String {
+        let key = text as NSString
+        if let cached = firstLineCache.object(forKey: key) { return cached as String }
+        // Only the first line is needed; splitting the whole summary allocated every line of it.
+        let first = text.firstIndex(where: \.isNewline).map { String(text[..<$0]) } ?? text
+        let line = strip(first)
+        firstLineCache.setObject(line as NSString, forKey: key)
+        return line
+    }
+
+    private static func strip(_ text: String) -> String {
         text.replacingOccurrences(of: "<[^>]+>", with: " ", options: .regularExpression)
             .replacingOccurrences(of: "&nbsp;", with: " ")
             .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    static func firstLine(_ text: String) -> String {
-        plain(text.components(separatedBy: .newlines).first ?? text)
     }
 }

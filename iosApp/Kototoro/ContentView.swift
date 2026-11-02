@@ -24,6 +24,7 @@ struct ContentView: View {
     }
 
     var body: some View {
+        let latest = resumeLatest
         TabView(selection: $selectedTab) {
             Tab("作品库", systemImage: "books.vertical", value: MainTab.library) {
                 LibraryView(library: library, sources: sources)
@@ -34,55 +35,10 @@ struct ContentView: View {
             Tab("记录", systemImage: "clock.arrow.circlepath", value: MainTab.records) {
                 LibraryRecordsView()
             }
+            .badge(library.unreadUpdateChapters)
             Tab("设置", systemImage: "gearshape", value: MainTab.settings) {
             NavigationStack {
-                List {
-                    Section {
-                        NavigationLink { RepositoriesView() } label: {
-                            HStack {
-                                Label("仓库与扩展", systemImage: "shippingbox")
-                                if repositories.updatesCount > 0 {
-                                    Spacer()
-                                    HStack(spacing: 4) {
-                                        Image(systemName: "arrow.triangle.2.circlepath")
-                                            .font(.caption2)
-                                        Text("\(repositories.updatesCount)")
-                                            .font(.caption2.bold())
-                                    }
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 3)
-                                    .background(Color.orange.opacity(0.18))
-                                    .foregroundStyle(.orange)
-                                    .clipShape(Capsule())
-                                }
-                            }
-                        }
-                        NavigationLink { ReaderDownloadsView() } label: { Label("下载", systemImage: "arrow.down.circle") }
-                            .accessibilityIdentifier("settings.downloads")
-                        NavigationLink { BackupView() } label: { Label("备份与恢复", systemImage: "externaldrive") }
-                            .accessibilityIdentifier("settings.backup")
-                        NavigationLink { TrackingSitesView() } label: { Label("追踪网站", systemImage: "link") }
-                            .accessibilityIdentifier("settings.tracking")
-                    }
-                    Section("本地存储") {
-                        NavigationLink { ReaderStorageView() } label: { Label("存储管理", systemImage: "internaldrive") }
-                            .accessibilityIdentifier("settings.storage")
-                        if let version = library.schemaVersion {
-                            LabeledContent("数据库版本", value: "\(version)")
-                                .accessibilityIdentifier("database.ready")
-                        } else {
-                            Text("正在打开数据库…")
-                        }
-                    }
-                    ContentSpaceSettingsSection()
-                    PanoramaSettingsSection()
-                    ReaderLoadingSettingsSection()
-                    Section("关于") {
-                        LabeledContent("应用", value: "Kototoro")
-                        LabeledContent("版本", value: "iOS 开发版")
-                    }
-                }
-                .navigationTitle("设置")
+                SettingsView(library: library, extensionUpdates: repositories.updatesCount)
             }
             }
             .badge(repositories.updatesCount)
@@ -94,38 +50,72 @@ struct ContentView: View {
         // The global search belongs to its own tab: `.searchable` on the TabView is inherited by every tab's
         // navigation bar and showed a second search field under the library and browse titles.
         .tabViewSearchActivation(.searchTabSelection)
-        .tabBarMinimizeBehavior(.onScrollDown)
+        .tabViewStyle(.sidebarAdaptable)
+        .modifier(MainTabPlacement())
+        // Switching sections is more frequent than resuming; keep every tab reachable while scrolling.
+        .tabBarMinimizeBehavior(.never)
         .continueReadingAccessory(
-            enabled: !ReaderPresence.shared.shouldSuppressAccessory &&
-                ContentSpace.latest(in: library.history, enabled: spacesEnabled, space: space) != nil
+            enabled: !ReaderPresence.shared.shouldSuppressAccessory && (spacesEnabled || latest != nil)
         )
+        .spaceSwitcherPresentation { resumed = $0 }
         .continueReadingPresentation(opened: $resumed)
         .environment(\.openContinueReading) { resumed = $0 }
-        .task(id: "\(resumeLatest?.content.sourceName ?? "")|\(resumeLatest?.content.id ?? "")|\(sources.runtime != nil)") {
+        .task(id: "\(library.recordsRevision)|\(library.history.count)|\(sources.runtime != nil)") {
+            await WidgetSnapshot.write(history: library.history, runtime: sources.runtime)
+        }
+        .task(id: "\(latest?.content.sourceName ?? "")|\(latest?.content.id ?? "")|\(sources.runtime != nil)") {
             ContinueReadingCover.shared.image = nil
-            guard let latest = resumeLatest, let runtime = sources.runtime else { return }
+            guard let latest, let runtime = sources.runtime else { return }
             ContinueReadingCover.shared.image = try? await CoverImage.image(runtime: runtime, content: latest.content)
         }
         .environment(\.openGlobalSearch) { selectedTab = .search }
         .environmentObject(library)
         .environmentObject(sources)
         .environmentObject(downloads)
+        .environmentObject(downloads.downloaded)
         .environmentObject(storage)
         .environmentObject(repositories)
+        .task(id: library.library != nil) {
+            await library.googleDrive.sync(library, automatic: true)
+        }
+        .task(id: "\(library.recordsRevision)|\(sources.isLoading)|\(sources.catalogRevision)") {
+            guard sources.runtime != nil, !sources.isLoading else { return }
+            await library.refreshMissingSources(installed: sources.sources.map(\.name))
+        }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .background { downloads.setForeground(false) }
-            else if phase == .active {
-                downloads.setForeground(true)
+            if phase == .background {
+                let save = ReaderBackgroundSave()
+                save.begin(name: "pause-downloads")
+                Task {
+                    defer { save.end() }
+                    await downloads.setForeground(false)
+                }
+                BackgroundUpdates.shared.schedule()
+            } else if phase == .active {
+                Task { await downloads.setForeground(true) }
                 Task { await repositories.checkForUpdates(force: false) }
+                Task { await library.googleDrive.sync(library, automatic: true) }
+                Task { await WebDavConfig.backUpIfDue(library.library) }
             }
         }
         .onOpenURL { url in
+            // ASWebAuthenticationSession owns these callbacks; they must never open the repository importer.
+            guard !TrackingAccountsModel.isAuthorizationCallback(url) else { return }
+            guard url.scheme != GoogleDriveOAuth.configured?.scheme else { return }
+            // The home-screen widget opens a work of the history (kototoro://continue?key=…).
+            if url.scheme == "kototoro", url.host == "continue" {
+                let key = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "key" }?.value
+                if let entry = library.history.first(where: { ContentMarks.key($0.content) == key }) {
+                    resumed = CategoryContent(content: entry.content)
+                }
+                return
+            }
             // Files shared to the app ("用 Kototoro 打开") become local works; links add repositories.
             guard url.isFileURL else { incomingLink = IncomingRepositoryLink(address: url.absoluteString); return }
             guard let runtime = sources.runtime else { return }
             Task {
                 openedFileMessage = await LocalImport.run([url], runtime: runtime)
-                    ?? "已导入“\(url.deletingPathExtension().lastPathComponent)”，可在“浏览 · 本地作品”中查看"
+                    ?? String(localized: "已导入“\(url.deletingPathExtension().lastPathComponent)”，可在“浏览 · 本地作品”中查看")
             }
         }
         .alert("导入本地文件", isPresented: Binding(get: { openedFileMessage != nil },
@@ -143,11 +133,13 @@ struct ContentView: View {
             .environmentObject(library)
             .environmentObject(sources)
             .environmentObject(downloads)
+            .environmentObject(downloads.downloaded)
             .environmentObject(storage)
             .environmentObject(repositories)
         }
         .task(id: library.library == nil) {
             guard let database = library.library else { return }
+            await downloads.prepare()
             await storage.prepare(queue: downloads)
             sources.attach(database)
             repositories.attach(library: database, sources: sources)
@@ -155,7 +147,22 @@ struct ContentView: View {
             await sources.load()
             await library.refresh()
             await storage.trimAutomatically()
+            await CustomSpaceStore.shared.load(database)
+            BackgroundUpdates.shared.library = library
+            BackgroundUpdates.shared.sources = sources
+            if ProcessInfo.processInfo.environment["KOTOTORO_RUN_UPDATE_REFRESH"] == "1" { await BackgroundUpdates.shared.run() }
             await repositories.checkForUpdates(force: false)
+        }
+    }
+}
+
+private struct MainTabPlacement: ViewModifier {
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 27.0, *) {
+            content.defaultTabBarPlacement(.sidebar)
+        } else {
+            content.defaultAdaptableTabBarPlacement(.sidebar)
         }
     }
 }
@@ -203,7 +210,7 @@ struct FavouriteCategoriesView: View {
         NavigationStack {
             List {
                 Section {
-                    Text(contents.count == 1 ? contents[0].title : "已选择 \(contents.count) 部作品")
+                    Text(contents.count == 1 ? contents[0].title : String(localized: "已选择 \(contents.count) 部作品"))
                         .font(.headline)
                     if loading { ProgressView("正在读取分类…") }
                     else {

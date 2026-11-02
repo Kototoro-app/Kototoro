@@ -52,6 +52,7 @@ internal class BulkImportEntry(
             favoriteCategoryOrders = (record.favoriteCategoryOrders + other.favoriteCategoryOrders).distinct(),
             historyTimestamp = historyRecord.historyTimestamp,
             historyChapterUrl = historyRecord.historyChapterUrl,
+            historyPage = historyRecord.historyPage,
             progressPercent = historyRecord.progressPercent,
             chaptersCount = maxOf(record.chaptersCount, other.chaptersCount),
             readEntriesCount = maxOf(record.readEntriesCount, other.readEntriesCount),

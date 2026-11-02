@@ -1,6 +1,293 @@
 import XCTest
 
 final class ProductFlowTests: XCTestCase {
+    /// Needs at least one favourite. Selection starts from a work's menu and borrows the top bar; the library's
+    /// other tools sit in its more menu; a source's listing searches with the field under its title.
+    @MainActor
+    func testLibrarySelectionFromMenuMoreMenuAndSourceSearchDrawer() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["-space.enabled", "NO"]
+        app.launch()
+        func shot(_ name: String) {
+            let attachment = XCTAttachment(screenshot: app.screenshot()); attachment.name = name
+            attachment.lifetime = .keepAlways; add(attachment)
+        }
+        app.mainTab("作品库").tap()
+        let work = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "favourite.")).firstMatch
+        XCTAssertTrue(work.waitForExistence(timeout: 30), app.debugDescription)
+        XCTAssertFalse(app.buttons["library.select"].exists, "Selection has no toolbar button of its own")
+        work.press(forDuration: 0.8)
+        XCTAssertTrue(app.buttons["library.select"].waitForExistence(timeout: 5), app.debugDescription)
+        app.buttons["library.select"].tap()
+        let done = app.navigationBars.buttons["library.selectDone"]
+        XCTAssertTrue(done.waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertTrue(work.isSelected)
+        // Batch actions move to the bottom toolbar, where the tabs were.
+        XCTAssertTrue(app.toolbars.buttons["library.selection.unfavourite"].isEnabled)
+        XCTAssertTrue(app.toolbars.buttons["library.selection.unfavourite"].isHittable,
+                      "Nothing (tab bar, resume accessory) may cover the batch actions: \(app.debugDescription)")
+        XCTAssertTrue(app.toolbars.buttons["library.selection.migrate"].exists)
+        XCTAssertFalse(app.mainTab("浏览").isHittable)
+        XCTAssertFalse(app.buttons["library.more"].exists, "Selection replaces the toolbar's buttons")
+        shot("Library selection toolbar")
+        done.tap()
+        XCTAssertTrue(app.buttons["library.more"].waitForExistence(timeout: 5))
+        XCTAssertFalse(work.isSelected)
+        XCTAssertTrue(app.mainTab("浏览").waitForExistence(timeout: 5))
+
+        app.buttons["library.more"].tap()
+        XCTAssertTrue(app.buttons["library.migrate"].waitForExistence(timeout: 5))
+        shot("Library more menu")
+        app.buttons["library.duplicates"].tap()
+        let empty = app.descendants(matching: .any)["duplicates.empty"]
+        let merge = app.buttons["duplicates.merge"].firstMatch
+        let found = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in empty.exists || merge.exists }, object: nil)
+        XCTAssertEqual(XCTWaiter().wait(for: [found], timeout: 30), .completed, app.debugDescription)
+        shot("Find duplicates")
+        // Fuzzy matching reveals its threshold; a released slider searches again.
+        let fuzzy = app.switches["duplicates.fuzzy"]
+        XCTAssertTrue(fuzzy.waitForExistence(timeout: 5), app.debugDescription)
+        if fuzzy.value as? String == "1" { fuzzy.switches.firstMatch.tap() }
+        XCTAssertFalse(app.sliders["duplicates.threshold"].exists)
+        fuzzy.switches.firstMatch.tap()
+        let slider = app.sliders["duplicates.threshold"]
+        XCTAssertTrue(slider.waitForExistence(timeout: 5), app.debugDescription)
+        slider.adjust(toNormalizedSliderPosition: 0.2)
+        XCTAssertEqual(XCTWaiter().wait(for: [XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in empty.exists || merge.exists }, object: nil)], timeout: 30), .completed,
+            app.debugDescription)
+        shot("Find duplicates fuzzy")
+        fuzzy.switches.firstMatch.tap()
+        XCTAssertTrue(slider.waitForNonExistence(timeout: 5))
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+
+        app.mainTab("浏览").tap()
+        let local = app.buttons["source.LOCAL"]
+        for _ in 0..<5 where !local.waitForExistence(timeout: 3) { app.swipeUp() }
+        XCTAssertTrue(local.exists, app.debugDescription)
+        local.tap()
+        XCTAssertFalse(app.navigationBars.buttons["搜索"].exists, "The listing has no toolbar search button")
+        let field = app.pageSearchField()
+        XCTAssertTrue(field.waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertEqual(field.placeholderValue?.hasSuffix("中搜索"), true)
+        field.tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5), "The field should take focus")
+        field.typeText("abc")
+        shot("Source search drawer")
+        // The drawer's close button: "关闭" beside the field on current systems, "取消" on earlier ones.
+        let cancel = app.navigationBars.buttons.matching(NSPredicate(format: "label IN %@", ["关闭", "取消"])).firstMatch
+        XCTAssertTrue(cancel.waitForExistence(timeout: 5), app.debugDescription)
+        cancel.tap()
+        // Closed, and still closed a moment later: the old toolbar search refocused itself right away.
+        XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 3), "Cancel closes the search")
+        sleep(1)
+        XCTAssertFalse(app.keyboards.firstMatch.exists, "The search reopened")
+        shot("Source search closed")
+    }
+
+    @MainActor
+    func testBatchMigrationReviewsTwoWorksAndMissingSourceRecoverySurvivesRestart() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["-space.enabled", "NO", "-listMode.browse", "grid"]
+        app.launch()
+        let tag = String(UUID().uuidString.prefix(6))
+        let categoryName = "迁移回归 \(tag)"
+        let firstSource = "使用排序\(tag)甲"
+        let secondSource = "使用排序\(tag)乙"
+        app.mainTab("作品库").tap()
+        let add = app.buttons["category.add"]
+        XCTAssertTrue(add.waitForExistence(timeout: 30))
+        expectation(for: NSPredicate(format: "enabled == true"), evaluatedWith: add)
+        waitForExpectations(timeout: 30)
+        add.tap()
+        let field = app.textFields["category.title"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap(); field.typeText(categoryName)
+        app.buttons["category.save"].tap()
+        XCTAssertTrue(field.waitForNonExistence(timeout: 10))
+        importVideoSite(app, url: "http://127.0.0.1:8765/usage-sites.json?run=\(tag)", title: nil)
+        let search = app.pageSearchField()
+        search.tap(); search.typeText(firstSource)
+        let source = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@",
+                                                       "source.JSON_TVBOX_", firstSource)).firstMatch
+        XCTAssertTrue(source.waitForExistence(timeout: 15)); source.tap()
+        for title in ["测试动画", "测试电影"] {
+            let work = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@",
+                                                         "source.content.", title)).firstMatch
+            XCTAssertTrue(work.waitForExistence(timeout: 15))
+            work.press(forDuration: 0.8)
+            app.buttons["browse.favourite"].tap()
+            XCTAssertTrue(app.buttons["favourite.save"].waitForExistence(timeout: 10))
+            let category = app.buttons.matching(NSPredicate(format: "identifier MATCHES %@", #"favourite\.category\.[0-9]+"#))
+                .allElementsBoundByIndex.first { $0.isHittable }
+            XCTAssertNotNil(category, app.debugDescription)
+            category?.tap(); app.buttons["favourite.save"].tap()
+            XCTAssertTrue(app.buttons["favourite.save"].waitForNonExistence(timeout: 10))
+        }
+        app.mainTab("作品库").tap()
+        app.buttons["library.more"].tap()
+        app.buttons["library.migrate"].tap()
+        XCTAssertTrue(app.segmentedControls["migration.scope"].waitForExistence(timeout: 10))
+        let emptySearch = app.pageSearchField()
+        emptySearch.tap(); emptySearch.typeText("no-migration-match-\(tag)")
+        XCTAssertFalse(app.buttons["migration.selectVisible"].isEnabled,
+                       "An empty search must not select invisible favourites")
+        app.buttons["清除文本"].firstMatch.tap()
+        let closeLibrarySearch = app.navigationBars.buttons["关闭"].firstMatch
+        if closeLibrarySearch.exists { closeLibrarySearch.tap() }
+        app.segmentedControls["migration.scope"].buttons["按原来源"].tap()
+        let origin = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@",
+                                                       "migration.source.", firstSource)).firstMatch
+        let originSearch = app.pageSearchField()
+        originSearch.tap(); originSearch.typeText(firstSource)
+        XCTAssertTrue(origin.waitForExistence(timeout: 10)); origin.tap()
+        app.buttons["migration.sources"].tap()
+        let done = app.buttons["sourceSelection.done"]
+        XCTAssertTrue(done.waitForExistence(timeout: 10))
+        XCTAssertTrue(done.isEnabled, "The eligible sources stand selected until the picker is answered")
+        app.buttons["sourceSelection.clear"].tap()
+        XCTAssertFalse(done.isEnabled, "Clearing the selection must not quietly fall back to every source")
+        let targetSearch = app.textFields["sourceSelection.query"]
+        XCTAssertTrue(targetSearch.waitForExistence(timeout: 10))
+        targetSearch.tap(); targetSearch.typeText(secondSource)
+        let targetSource = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@",
+                                                             "sourceSelection.source.", secondSource)).firstMatch
+        XCTAssertTrue(targetSource.waitForExistence(timeout: 10))
+        XCTAssertFalse(targetSource.isSelected, "A cleared picker leaves every row unselected")
+        targetSource.tap()
+        XCTAssertTrue(targetSource.isSelected, app.debugDescription)
+        done.tap()
+        XCTAssertTrue(app.buttons["migration.search"].isEnabled, app.debugDescription)
+        app.buttons["migration.search"].tap()
+        let workRows = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "migration.work."))
+        XCTAssertTrue(workRows.firstMatch.waitForExistence(timeout: 10))
+        expectation(for: NSPredicate(format: "enabled == true"), evaluatedWith: workRows.firstMatch)
+        waitForExpectations(timeout: 30)
+        XCTAssertEqual(workRows.count, 2)
+        let skipped = workRows.firstMatch
+        skipped.tap()
+        app.buttons["migration.skip"].tap()
+        app.buttons["migration.useExact"].tap()
+        XCTAssertEqual(skipped.value as? String, "已跳过", "Bulk matching must respect an explicit skip")
+        XCTAssertTrue(app.buttons["migration.execute"].label.contains("1 部"))
+        skipped.tap()
+        let candidate = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "migration.candidate.")).firstMatch
+        XCTAssertTrue(candidate.waitForExistence(timeout: 10), app.debugDescription)
+        candidate.tap()
+        let execute = app.buttons["migration.execute"]
+        for _ in 0..<5 where !execute.isHittable { app.swipeUp() }
+        XCTAssertTrue(execute.isEnabled)
+        // Selection alone never mutates the library; confirm explicitly, using the safer copy default.
+        execute.tap()
+        app.buttons["确认复制"].tap()
+        let completed = NSPredicate(format: "label CONTAINS %@", "2 部成功")
+        expectation(for: completed, evaluatedWith: app.staticTexts["migration.progress"])
+        waitForExpectations(timeout: 30)
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "Batch migration completed with two reviewed targets"; shot.lifetime = .keepAlways; self.add(shot)
+        app.terminate(); app.launch()
+        app.mainTab("浏览").tap()
+        let browseSearch = app.pageSearchField()
+        browseSearch.tap(); browseSearch.typeText(secondSource)
+        let installedTarget = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@",
+                                                                "source.JSON_TVBOX_", secondSource)).firstMatch
+        XCTAssertTrue(installedTarget.waitForExistence(timeout: 10))
+        installedTarget.press(forDuration: 0.8)
+        app.buttons["删除站点"].tap()
+        XCTAssertTrue(installedTarget.waitForNonExistence(timeout: 10))
+        // Native search owns keyboard focus and intercepts tab hit-testing until explicitly closed.
+        let closeSearch = app.navigationBars.buttons["关闭"].firstMatch
+        if closeSearch.waitForExistence(timeout: 3) { closeSearch.tap() }
+        app.mainTab("作品库").tap()
+        XCTAssertTrue(app.navigationBars["作品库"].waitForExistence(timeout: 10))
+        let notice = app.buttons["recovery.notice"]
+        XCTAssertTrue(notice.waitForExistence(timeout: 15), app.debugDescription); notice.tap()
+        XCTAssertTrue(app.navigationBars["补齐缺失来源"].waitForExistence(timeout: 10))
+        let recoverySearch = app.pageSearchField()
+        recoverySearch.tap(); recoverySearch.typeText(secondSource)
+        let missing = app.staticTexts[secondSource]
+        for _ in 0..<8 {
+            if missing.waitForExistence(timeout: 1) { break }
+            app.swipeUp()
+        }
+        XCTAssertTrue(missing.waitForExistence(timeout: 10), app.debugDescription)
+        let recovery = XCTAttachment(screenshot: app.screenshot())
+        recovery.name = "Missing source shows affected library works and migration action"; recovery.lifetime = .keepAlways; self.add(recovery)
+        app.terminate(); app.launch()
+        app.mainTab("作品库").tap()
+        XCTAssertTrue(app.buttons["recovery.notice"].waitForExistence(timeout: 15))
+    }
+
+    /// The change-source search shares its picker with batch migration: clearing the selection must stay cleared
+    /// instead of silently searching every source again, and the search field narrows the candidate rows.
+    @MainActor
+    func testChangeSourcePickerRequiresASelectionAndFiltersByName() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["-space.enabled", "NO"]
+        app.launch()
+        let tag = String(UUID().uuidString.prefix(6))
+        // The fixture names its two sites by the run tag, so each run imports a distinct pair.
+        let originSource = "使用排序\(tag)甲"
+        let targetSource = "使用排序\(tag)乙"
+        importVideoSite(app, url: "http://127.0.0.1:8765/usage-sites.json?run=\(tag)", title: nil)
+        // The browse catalog reads imported sites on launch; searching right after the back navigation misses them.
+        app.terminate(); app.launch()
+        app.mainTab("浏览").tap()
+        let search = app.pageSearchField()
+        search.tap(); search.typeText(originSource)
+        let source = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@",
+                                                      "source.JSON_TVBOX_", originSource)).firstMatch
+        XCTAssertTrue(source.waitForExistence(timeout: 15), app.debugDescription); source.tap()
+        let work = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier BEGINSWITH %@", "source.content.")).firstMatch
+        XCTAssertTrue(work.waitForExistence(timeout: 60), app.debugDescription)
+        work.tap()
+        XCTAssertTrue(app.staticTexts["details.title"].waitForExistence(timeout: 20), app.debugDescription)
+        app.buttons["details.more"].tap()
+        XCTAssertTrue(app.buttons["details.changeSource"].waitForExistence(timeout: 5), app.debugDescription)
+        app.buttons["details.changeSource"].tap()
+        let picker = app.buttons["sourceChange.sources"]
+        XCTAssertTrue(picker.waitForExistence(timeout: 10), app.debugDescription)
+        picker.tap()
+        let done = app.buttons["sourceSelection.done"]
+        XCTAssertTrue(done.waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertTrue(done.isEnabled, "Every other eligible source is searched until the picker is answered")
+        app.buttons["sourceSelection.clear"].tap()
+        XCTAssertFalse(done.isEnabled, "Clearing the picker must not fall back to every source")
+        app.buttons["sourceSelection.selectVisible"].tap()
+        XCTAssertTrue(done.isEnabled, "Selecting the visible rows must satisfy the requirement")
+
+        let rows = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "sourceSelection.source."))
+        XCTAssertGreaterThan(rows.count, 0, app.debugDescription)
+        let query = app.textFields["sourceSelection.query"]
+        XCTAssertTrue(query.waitForExistence(timeout: 5), app.debugDescription)
+        query.tap(); query.typeText("no-such-source-\(tag)")
+        XCTAssertTrue(rows.firstMatch.waitForNonExistence(timeout: 5), "The search field filters the rows")
+        app.buttons["sourceSelection.query.clear"].tap()
+        XCTAssertTrue(rows.firstMatch.waitForExistence(timeout: 5))
+        query.tap(); query.typeText(targetSource)
+        let target = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@",
+                                                      "sourceSelection.source.", targetSource)).firstMatch
+        XCTAssertTrue(target.waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertEqual(rows.count, 1, "Only the matching source remains listed")
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "Change-source picker filters by name"; shot.lifetime = .keepAlways; self.add(shot)
+        app.buttons["sourceSelection.clear"].tap()
+        rows.firstMatch.tap()
+        XCTAssertTrue(done.isEnabled, "The filtered row alone satisfies the requirement")
+        done.tap()
+        XCTAssertTrue(app.navigationBars["换源"].waitForExistence(timeout: 5), "Applying returns to the search page")
+        XCTAssertTrue(app.staticTexts["在 1 个来源中检索可替换的作品"].waitForExistence(timeout: 5),
+                      "The answered picker searches only the chosen source")
+        app.buttons["sourceChange.sources"].tap()
+        XCTAssertTrue(app.buttons["清空选择"].waitForExistence(timeout: 5), "Reopening keeps the answer")
+        app.buttons["取消"].firstMatch.tap()
+        XCTAssertTrue(app.navigationBars["换源"].waitForExistence(timeout: 5), "Cancelling keeps the search screen")
+    }
+
     @MainActor
     func testBrowseAndDetailsShareMultiCategoryFavouritesAndBulkSelection() {
         continueAfterFailure = false
@@ -83,8 +370,12 @@ final class ProductFlowTests: XCTestCase {
         XCTAssertTrue(work("测试动画").isSelected && work("测试电影").isSelected, app.debugDescription)
         let actionBar = XCTAttachment(screenshot: app.screenshot()); actionBar.name = "Browse bulk selection action bar"
         actionBar.lifetime = .keepAlways; add(actionBar)
-        app.buttons["browse.selection.favourite"].tap()
-        XCTAssertTrue(category(names[0]).waitForExistence(timeout: 10))
+        // The batch action sits in the bottom toolbar, in reach while the tabs are hidden.
+        let bulkFavourite = app.toolbars.buttons["browse.selection.favourite"]
+        XCTAssertTrue(bulkFavourite.waitForExistence(timeout: 5) && bulkFavourite.isHittable, app.debugDescription)
+        XCTAssertFalse(app.mainTab("浏览").isHittable)
+        bulkFavourite.tap()
+        XCTAssertTrue(category(names[0]).waitForExistence(timeout: 10), app.debugDescription)
         XCTAssertEqual(category(names[0]).value as? String, "部分选中")
         XCTAssertEqual(category(names[1]).value as? String, "部分选中")
         category(names[2]).tap()
@@ -97,11 +388,18 @@ final class ProductFlowTests: XCTestCase {
         XCTAssertTrue(app.buttons["details.favourite"].waitForExistence(timeout: 20))
         expectation(for: NSPredicate(format: "enabled == true"), evaluatedWith: app.buttons["details.favourite"])
         waitForExpectations(timeout: 20)
-        app.buttons["details.favourite"].tap()
+        // A favourited work's heart unfavourites it in one tap; its categories are in the heart's context menu.
+        func openDetailsCategories() {
+            app.buttons["details.favourite"].press(forDuration: 1)
+            let item = app.buttons["收藏分类"]
+            XCTAssertTrue(item.waitForExistence(timeout: 5), app.debugDescription)
+            item.tap()
+        }
+        openDetailsCategories()
         XCTAssertTrue(category(names[0]).waitForExistence(timeout: 10))
         for name in names { XCTAssertEqual(category(name).value as? String, "已选中") }
         category(names[1]).tap(); save()
-        app.buttons["details.favourite"].tap()
+        openDetailsCategories()
         XCTAssertTrue(category(names[0]).waitForExistence(timeout: 10))
         XCTAssertEqual(category(names[0]).value as? String, "已选中")
         XCTAssertEqual(category(names[1]).value as? String, "未选中")
@@ -423,7 +721,7 @@ final class ProductFlowTests: XCTestCase {
             .firstMatch
         XCTAssertTrue(card.waitForExistence(timeout: 30)); card.tap()
         XCTAssertTrue(app.staticTexts["details.title"].waitForExistence(timeout: 30))
-        let resume = app.buttons["details.resume"]
+        let resume = app.detailsReadButton()
         XCTAssertTrue(resume.waitForExistence(timeout: 30), app.debugDescription)
         resume.tap()
         XCTAssertTrue(position.waitForExistence(timeout: 30))
@@ -460,7 +758,7 @@ final class ProductFlowTests: XCTestCase {
         }, object: nil)
         wait(for: [advanced], timeout: 30)
         playerControl(app, "player.close").tap()
-        let resume = app.buttons["details.resume"]
+        let resume = app.detailsReadButton()
         XCTAssertTrue(resume.waitForExistence(timeout: 30), app.debugDescription)
         resume.tap()
         XCTAssertTrue(position.waitForExistence(timeout: 30))
@@ -469,5 +767,68 @@ final class ProductFlowTests: XCTestCase {
         }, object: nil)
         wait(for: [resumed], timeout: 3)
         playerControl(app, "player.close").tap()
+    }
+
+    /// Typing the start of an earlier search offers it under the field; one tap runs that search.
+    @MainActor
+    func testGlobalSearchSuggestsEarlierSearchesWhileTyping() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments += ["-search.recent", "建议测试作品\n其他搜索"]
+        app.launch()
+        XCTAssertTrue(app.tabBars.buttons["搜索"].waitForExistence(timeout: 30), app.debugDescription)
+        app.tabBars.buttons["搜索"].tap()
+        let field = app.pageSearchField()
+        XCTAssertTrue(field.waitForExistence(timeout: 10), app.debugDescription)
+        field.tap()
+        field.typeText("建议")
+        let suggestion = app.buttons["search.suggestion.建议测试作品"]
+        XCTAssertTrue(suggestion.waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertFalse(app.buttons["search.suggestion.其他搜索"].exists, "Only searches starting with the typed text")
+        let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Search suggestions"
+        shot.lifetime = .keepAlways; add(shot)
+        suggestion.tap()
+        XCTAssertTrue(app.staticTexts["search.progress"].waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertEqual(field.value as? String, "建议测试作品")
+        XCTAssertFalse(suggestion.exists, "A submitted search no longer offers itself")
+    }
+
+    /// Work cells open their details from the library, from a source listing reached through details, and from search.
+    /// Needs at least one favourite.
+    @MainActor
+    func testWorkLinksOpenDetailsFromLibraryAndGlobalSearch() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["-space.enabled", "NO"]
+        app.launch()
+        app.mainTab("作品库").tap()
+        let work = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "favourite.")).firstMatch
+        XCTAssertTrue(work.waitForExistence(timeout: 30), app.debugDescription)
+        work.tap()
+        let title = app.staticTexts["details.title"]
+        XCTAssertTrue(title.waitForExistence(timeout: 20), app.debugDescription)
+        let name = title.label
+        // Details push the source's listing through their own destination; its works must open too.
+        let source = app.buttons["details.source"]
+        XCTAssertTrue(source.waitForExistence(timeout: 10), app.debugDescription)
+        source.tap()
+        let listed = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "source.content.")).firstMatch
+        XCTAssertTrue(listed.waitForExistence(timeout: 30), app.debugDescription)
+        listed.tap()
+        XCTAssertTrue(app.staticTexts["details.title"].waitForExistence(timeout: 20), app.debugDescription)
+        for _ in 0..<3 where !work.exists { app.navigationBars.buttons["BackButton"].firstMatch.tap() }
+        XCTAssertTrue(work.waitForExistence(timeout: 10))
+
+        app.tabBars.buttons["搜索"].tap()
+        let field = app.pageSearchField()
+        XCTAssertTrue(field.waitForExistence(timeout: 10), app.debugDescription)
+        field.tap()
+        field.typeText(name + "\n")
+        XCTAssertTrue(app.descendants(matching: .any)["search.library"].waitForExistence(timeout: 15), app.debugDescription)
+        let result = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "search.result.")).firstMatch
+        XCTAssertTrue(result.waitForExistence(timeout: 10), app.debugDescription)
+        result.tap()
+        XCTAssertTrue(app.staticTexts["details.title"].waitForExistence(timeout: 20), app.debugDescription)
+        XCTAssertEqual(app.staticTexts["details.title"].label, name)
     }
 }

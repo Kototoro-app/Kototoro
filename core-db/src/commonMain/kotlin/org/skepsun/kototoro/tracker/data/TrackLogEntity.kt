@@ -30,6 +30,7 @@ class TrackLogEntity(
     @ColumnInfo(name = "chapters") val chapters: String,
     @ColumnInfo(name = "created_at") val createdAt: Long,
     @ColumnInfo(name = "unread") val isUnread: Boolean,
+    @ColumnInfo(name = "chapter_metadata", defaultValue = "''") val chapterMetadata: String = "",
 ) {
     val ownerId: Long get() = mangaId
     val entityId: Long? get() = null

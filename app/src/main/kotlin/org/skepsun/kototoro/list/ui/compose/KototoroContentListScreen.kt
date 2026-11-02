@@ -11,15 +11,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridState
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
@@ -28,6 +25,7 @@ import androidx.paging.compose.LazyPagingItems
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.theme.popupMenuContainerColor
 import androidx.compose.material3.Surface
 import androidx.compose.material3.DropdownMenuItem
@@ -36,7 +34,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -48,7 +45,6 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -56,6 +52,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.layout.layout
@@ -111,8 +109,16 @@ import kotlinx.coroutines.flow.first
 
 private const val LoadMoreVisibleThreshold = 4
 private const val GridColumnMinFitRatio = 0.94f
+private const val TvInitialFocusAttempts = 20
+
+/** TV grid scale multiplier; [compactPosterCardStyle] clamps the result at 1.4x. */
+private const val TvGridScaleBoost = 1.4f
+private const val MaxGridScale = 1.4f
 private val QuickFilterChipHeight = 32.dp
 private val QuickFilterChipIconSize = 16.dp
+
+/** Ring shape for the quick-filter dropdown rows; M3 menu items are full-width rectangles. */
+private val QuickFilterMenuItemShape = RoundedCornerShape(8.dp)
 internal val GridHorizontalPadding = AppLayoutTokens.compactItemHorizontalPadding
 internal val GridSpacing = 8.dp
 
@@ -135,62 +141,6 @@ private suspend fun scrollToTopAfterPagingSettles(
     }.first { isIdle -> isIdle }
     withFrameNanos { }
     scrollToTop()
-}
-
-@Composable
-private fun LoadMoreOnNearEndEffect(
-    state: LazyGridState,
-    enabled: Boolean,
-    visibleThreshold: Int,
-    onLoadMore: () -> Unit,
-) {
-    val loadMoreItemCount by remember(state, enabled, visibleThreshold) {
-        derivedStateOf {
-            val layoutInfo = state.layoutInfo
-            val totalItemsCount = layoutInfo.totalItemsCount
-            val lastVisibleIndex = layoutInfo.visibleItemsInfo.maxOfOrNull { it.index } ?: -1
-            if (enabled && totalItemsCount > 0 && lastVisibleIndex >= totalItemsCount - visibleThreshold) {
-                totalItemsCount
-            } else {
-                -1
-            }
-        }
-    }
-    var lastRequestedItemCount by remember(enabled) { mutableIntStateOf(-1) }
-    LaunchedEffect(loadMoreItemCount) {
-        if (loadMoreItemCount > 0 && loadMoreItemCount != lastRequestedItemCount) {
-            lastRequestedItemCount = loadMoreItemCount
-            onLoadMore()
-        }
-    }
-}
-
-@Composable
-private fun LoadMoreOnNearEndEffect(
-    state: LazyListState,
-    enabled: Boolean,
-    visibleThreshold: Int,
-    onLoadMore: () -> Unit,
-) {
-    val loadMoreItemCount by remember(state, enabled, visibleThreshold) {
-        derivedStateOf {
-            val layoutInfo = state.layoutInfo
-            val totalItemsCount = layoutInfo.totalItemsCount
-            val lastVisibleIndex = layoutInfo.visibleItemsInfo.maxOfOrNull { it.index } ?: -1
-            if (enabled && totalItemsCount > 0 && lastVisibleIndex >= totalItemsCount - visibleThreshold) {
-                totalItemsCount
-            } else {
-                -1
-            }
-        }
-    }
-    var lastRequestedItemCount by remember(enabled) { mutableIntStateOf(-1) }
-    LaunchedEffect(loadMoreItemCount) {
-        if (loadMoreItemCount > 0 && loadMoreItemCount != lastRequestedItemCount) {
-            lastRequestedItemCount = loadMoreItemCount
-            onLoadMore()
-        }
-    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -276,6 +226,14 @@ fun KototoroContentListScreen(
     }
     val context = LocalContext.current
     val isTvPresentation = LocalUiPresentationConfig.current.isTv
+    // 10-foot UI: the same user grid scale renders covers ~100dp wide, which reads as postage
+    // stamps from a couch. Boost the scale on TV so covers and their title/metadata text grow
+    // together (columns then quantize to fewer, larger cells).
+    val effectiveGridScale = if (isTvPresentation) {
+        (gridScale * TvGridScaleBoost).coerceAtMost(MaxGridScale)
+    } else {
+        gridScale
+    }
     val pagingSnapshotItems = pagingItems?.itemSnapshotList?.items
     val firstContentIndex = remember(itemCount, items, pagingSnapshotItems) {
         (0 until itemCount).firstOrNull { index -> peekItem(index) is ContentListModel }
@@ -294,10 +252,16 @@ fun KototoroContentListScreen(
         ?: fallbackContentId
     val firstContentFocusRequester = remember { FocusRequester() }
     // Moving between cards updates focusTargetId; it must not schedule another focus request.
+    // A paged list can hand out the target card several frames after its page arrives, so retry
+    // instead of giving up silently: the first attempt often lands before the card is composed.
     LaunchedEffect(isTvPresentation, focusTargetId != null, listMode) {
         if (isTvPresentation && focusTargetId != null) {
-            withFrameNanos { }
-            runCatching { firstContentFocusRequester.requestFocus() }
+            repeat(TvInitialFocusAttempts) {
+                withFrameNanos { }
+                if (runCatching { firstContentFocusRequester.requestFocus() }.isSuccess) {
+                    return@LaunchedEffect
+                }
+            }
         }
     }
     val defaultSecondaryAction: (Throwable) -> Unit = remember(context) {
@@ -376,19 +340,13 @@ fun KototoroContentListScreen(
                     ListMode.COMPACT_GRID,
                     ListMode.MOVIE_GRID,
                     ListMode.COMPACT_MOVIE_GRID -> {
-                        val posterStyle = listMode.gridPosterCardStyle(gridScale)
+                        val posterStyle = listMode.gridPosterCardStyle(effectiveGridScale)
                         val actualGridState = gridState ?: rememberLazyGridState()
                         ScrollToTopEffect {
                             scrollToTopAfterPagingSettles(pagingItems) {
                                 actualGridState.scrollToItem(0)
                             }
                         }
-                        LoadMoreOnNearEndEffect(
-                            state = actualGridState,
-                            enabled = canLoadMore,
-                            visibleThreshold = loadMoreVisibleThreshold,
-                            onLoadMore = onLoadMore,
-                        )
                         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
                             val gridSpacing = GridSpacing
                             val innerHorizontalPadding = innerPadding.calculateLeftPadding(LayoutDirection.Ltr) +
@@ -417,87 +375,70 @@ fun KototoroContentListScreen(
                                 bottom = innerPadding.calculateBottomPadding(),
                             )
 
-                            LazyVerticalGrid(
+                            ContentCollectionGrid(
+                                count = itemCount,
+                                key = ::itemKey,
+                                contentType = ::itemContentType,
+                                fullSpan = { peekItem(it) !is ContentGridModel },
                                 columns = GridCells.Fixed(gridColumns),
                                 state = actualGridState,
                                 contentPadding = gridContentPadding,
                                 horizontalArrangement = Arrangement.spacedBy(gridSpacing),
                                 verticalArrangement = Arrangement.spacedBy(gridSpacing),
-                                modifier = Modifier
-                                    .fillMaxSize()
+                                canLoadMore = canLoadMore,
+                                visibleThreshold = loadMoreVisibleThreshold,
+                                onLoadMore = onLoadMore,
+                                header = listHeader?.let { header -> {
+                                    Box(Modifier.fillMaxWidth().horizontalBleed(GridHorizontalPadding)) { header() }
+                                } },
+                                modifier = Modifier.fillMaxSize()
                                     .then(if (isTvPresentation) Modifier.focusGroup() else Modifier),
-                            ) {
-                                if (listHeader != null) {
-                                    item(span = { GridItemSpan(maxLineSpan) }) {
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .horizontalBleed(GridHorizontalPadding),
-                                        ) {
-                                            listHeader()
-                                        }
-                                    }
-                                }
-
-                                items(
-                                    count = itemCount,
-                                    key = ::itemKey,
-                                    span = { index ->
-                                        val listModel = peekItem(index)
-                                        if (listModel is ContentGridModel) {
-                                            GridItemSpan(1)
-                                        } else {
-                                            GridItemSpan(maxLineSpan)
-                                        }
-                                    },
-                                    contentType = ::itemContentType,
-                                ) { index ->
-                                    val listModel = getItem(index) ?: return@items
-                                    if (listModel is ContentGridModel) {
-                                        Box(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            contentAlignment = Alignment.TopCenter,
-                                        ) {
-                                            KototoroContentCardGrid(
-                                                item = listModel,
-                                                isSelected = listModel.id in selectedItemsIds,
-                                                isHighlighted = listModel.id == highlightedItemId,
-                                                onClick = { coverBounds ->
-                                                    onPrepareItemTransition(listModel, coverBounds)
-                                                    onItemClick(listModel)
-                                                },
-                                                onLongClick = { onItemLongClick(listModel) },
-                                                sharedTransitionEnabled = sharedTransitionEnabled,
-                                                sharedElementInstanceKey = sharedElementInstanceKey,
-                                                showSourceInfo = showSourceOnCards,
-                                                gridScale = gridScale,
-                                                cardStyle = effectivePosterStyle,
-                                                compactOverlay = listMode.hasTitleOverlay,
-                                                cellContentPadding = PaddingValues(0.dp),
-                                                uiPrefs = cardUiPrefs,
-                                                focusRequester = firstContentFocusRequester.takeIf {
-                                                    isTvPresentation && listModel.id == focusTargetId
-                                                },
-                                                onFocused = { focusedContentId = listModel.id },
-                                                modifier = Modifier.width(effectivePosterStyle.itemWidth),
-                                            )
-                                        }
-                                    } else {
-                                        SupplementaryListItem(
+                            ) { index ->
+                                val listModel = getItem(index) ?: return@ContentCollectionGrid
+                                if (listModel is ContentGridModel) {
+                                    Box(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        contentAlignment = Alignment.TopCenter,
+                                    ) {
+                                        KototoroContentCardGrid(
                                             item = listModel,
-                                            listMode = listMode,
-                                            gridScale = gridScale,
-                                            horizontalBleed = GridHorizontalPadding,
-                                            onQuickFilterOptionClick = onQuickFilterOptionClick,
-                                            showQuickFilterInline = showQuickFilterInline,
-                                            leadingContent = quickFilterLeadingContent,
-                                            onEmptyActionClick = onEmptyActionClick,
-                                            onRetry = onRetry,
-                                            onSecondaryAction = secondaryAction,
+                                            isSelected = listModel.id in selectedItemsIds,
+                                            isHighlighted = listModel.id == highlightedItemId,
+                                            onClick = { coverBounds ->
+                                                onPrepareItemTransition(listModel, coverBounds)
+                                                onItemClick(listModel)
+                                            },
+                                            onLongClick = { onItemLongClick(listModel) },
+                                            sharedTransitionEnabled = sharedTransitionEnabled,
+                                            sharedElementInstanceKey = sharedElementInstanceKey,
+                                            showSourceInfo = showSourceOnCards,
+                                            gridScale = effectiveGridScale,
+                                            cardStyle = effectivePosterStyle,
+                                            compactOverlay = listMode.hasTitleOverlay,
+                                            cellContentPadding = PaddingValues(0.dp),
+                                            uiPrefs = cardUiPrefs,
+                                            focusRequester = firstContentFocusRequester.takeIf {
+                                                isTvPresentation && listModel.id == focusTargetId
+                                            },
+                                            onFocused = { focusedContentId = listModel.id },
+                                            modifier = Modifier.width(effectivePosterStyle.itemWidth),
                                         )
                                     }
-
+                                } else {
+                                    SupplementaryListItem(
+                                        item = listModel,
+                                        listMode = listMode,
+                                        gridScale = effectiveGridScale,
+                                        horizontalBleed = GridHorizontalPadding,
+                                        onQuickFilterOptionClick = onQuickFilterOptionClick,
+                                        showQuickFilterInline = showQuickFilterInline,
+                                        leadingContent = quickFilterLeadingContent,
+                                        onEmptyActionClick = onEmptyActionClick,
+                                        onRetry = onRetry,
+                                        onSecondaryAction = secondaryAction,
+                                    )
                                 }
+
                             }
                             if (showScrollbar) {
                                 VerticalScrollbar(
@@ -514,69 +455,58 @@ fun KototoroContentListScreen(
                                 actualListState.scrollToItem(0)
                             }
                         }
-                        LoadMoreOnNearEndEffect(
-                            state = actualListState,
-                            enabled = canLoadMore,
-                            visibleThreshold = loadMoreVisibleThreshold,
-                            onLoadMore = onLoadMore,
-                        )
-                        LazyColumn(
+                        ContentCollectionColumn(
+                            count = itemCount,
+                            key = ::itemKey,
+                            contentType = ::itemContentType,
                             state = actualListState,
                             contentPadding = innerPadding,
-                            modifier = Modifier
-                                .fillMaxSize()
+                            header = listHeader,
+                            canLoadMore = canLoadMore,
+                            visibleThreshold = loadMoreVisibleThreshold,
+                            onLoadMore = onLoadMore,
+                            modifier = Modifier.fillMaxSize()
                                 .then(if (isTvPresentation) Modifier.focusGroup() else Modifier),
-                        ) {
-                            if (listHeader != null) {
-                                item {
-                                    listHeader()
-                                }
-                            }
-                            items(
-                                count = itemCount,
-                                key = ::itemKey,
-                                contentType = ::itemContentType,
-                            ) { index ->
-                                val listModel = getItem(index) ?: return@items
-                                VerticalRailAnimatedVisibility(
-                                    animationKey = itemKey(index),
-                                    index = index,
-                                    listState = actualListState,
-                                    isAnimationEnabled = isVerticalCardListAnimationEnabled,
-                                ) { animatedModifier ->
-                                    if (listModel is ContentCompactListModel) {
-                                        KototoroContentCardList(
+                        ) { index ->
+                            val listModel = getItem(index) ?: return@ContentCollectionColumn
+                            VerticalRailAnimatedVisibility(
+                                animationKey = itemKey(index),
+                                index = index,
+                                listState = actualListState,
+                                isAnimationEnabled = isVerticalCardListAnimationEnabled,
+                            ) { animatedModifier ->
+                                if (listModel is ContentCompactListModel) {
+                                    KototoroContentCardList(
+                                        item = listModel,
+                                        isSelected = listModel.id in selectedItemsIds,
+                                        isHighlighted = listModel.id == highlightedItemId,
+                                        sharedTransitionEnabled = sharedTransitionEnabled,
+                                        sharedElementInstanceKey = sharedElementInstanceKey,
+                                        uiPrefs = cardUiPrefs,
+                                        focusRequester = firstContentFocusRequester.takeIf {
+                                            isTvPresentation && listModel.id == focusTargetId
+                                        },
+                                        onFocused = { focusedContentId = listModel.id },
+                                        onClick = { coverBounds ->
+                                            onPrepareItemTransition(listModel, coverBounds)
+                                            onItemClick(listModel)
+                                        },
+                                        onLongClick = { onItemLongClick(listModel) },
+                                        modifier = animatedModifier,
+                                    )
+                                } else {
+                                    Box(modifier = animatedModifier) {
+                                        SupplementaryListItem(
                                             item = listModel,
-                                            isSelected = listModel.id in selectedItemsIds,
-                                            isHighlighted = listModel.id == highlightedItemId,
-                                            sharedTransitionEnabled = sharedTransitionEnabled,
-                                            sharedElementInstanceKey = sharedElementInstanceKey,
-                                            uiPrefs = cardUiPrefs,
-                                            focusRequester = firstContentFocusRequester.takeIf {
-                                                isTvPresentation && listModel.id == focusTargetId
-                                            },
-                                            onFocused = { focusedContentId = listModel.id },
-                                            onClick = { coverBounds ->
-                                                onPrepareItemTransition(listModel, coverBounds)
-                                                onItemClick(listModel)
-                                            },
-                                            onLongClick = { onItemLongClick(listModel) },
-                                            modifier = animatedModifier,
+                                            listMode = listMode,
+                                            gridScale = effectiveGridScale,
+                                            onQuickFilterOptionClick = onQuickFilterOptionClick,
+                                            showQuickFilterInline = showQuickFilterInline,
+                                            leadingContent = quickFilterLeadingContent,
+                                            onEmptyActionClick = onEmptyActionClick,
+                                            onRetry = onRetry,
+                                            onSecondaryAction = secondaryAction,
                                         )
-                                    } else {
-                                        Box(modifier = animatedModifier) {
-                                            SupplementaryListItem(
-                                                item = listModel,
-                                                listMode = listMode,
-                                                gridScale = gridScale,
-                                                onQuickFilterOptionClick = onQuickFilterOptionClick,
-                                                showQuickFilterInline = showQuickFilterInline,
-                                                leadingContent = quickFilterLeadingContent,
-                                                onEmptyActionClick = onEmptyActionClick,
-                                                onRetry = onRetry,
-                                                onSecondaryAction = secondaryAction,
-                                            )
-                                        }
                                     }
                                 }
                             }
@@ -595,69 +525,58 @@ fun KototoroContentListScreen(
                                 actualListState.scrollToItem(0)
                             }
                         }
-                        LoadMoreOnNearEndEffect(
-                            state = actualListState,
-                            enabled = canLoadMore,
-                            visibleThreshold = loadMoreVisibleThreshold,
-                            onLoadMore = onLoadMore,
-                        )
-                        LazyColumn(
+                        ContentCollectionColumn(
+                            count = itemCount,
+                            key = ::itemKey,
+                            contentType = ::itemContentType,
                             state = actualListState,
                             contentPadding = innerPadding,
-                            modifier = Modifier
-                                .fillMaxSize()
+                            header = listHeader,
+                            canLoadMore = canLoadMore,
+                            visibleThreshold = loadMoreVisibleThreshold,
+                            onLoadMore = onLoadMore,
+                            modifier = Modifier.fillMaxSize()
                                 .then(if (isTvPresentation) Modifier.focusGroup() else Modifier),
-                        ) {
-                            if (listHeader != null) {
-                                item {
-                                    listHeader()
-                                }
-                            }
-                            items(
-                                count = itemCount,
-                                key = ::itemKey,
-                                contentType = ::itemContentType,
-                            ) { index ->
-                                val listModel = getItem(index) ?: return@items
-                                VerticalRailAnimatedVisibility(
-                                    animationKey = itemKey(index),
-                                    index = index,
-                                    listState = actualListState,
-                                    isAnimationEnabled = isVerticalCardListAnimationEnabled,
-                                ) { animatedModifier ->
-                                    if (listModel is ContentDetailedListModel) {
-                                        KototoroContentCardDetailedList(
+                        ) { index ->
+                            val listModel = getItem(index) ?: return@ContentCollectionColumn
+                            VerticalRailAnimatedVisibility(
+                                animationKey = itemKey(index),
+                                index = index,
+                                listState = actualListState,
+                                isAnimationEnabled = isVerticalCardListAnimationEnabled,
+                            ) { animatedModifier ->
+                                if (listModel is ContentDetailedListModel) {
+                                    KototoroContentCardDetailedList(
+                                        item = listModel,
+                                        isSelected = listModel.id in selectedItemsIds,
+                                        isHighlighted = listModel.id == highlightedItemId,
+                                        sharedTransitionEnabled = sharedTransitionEnabled,
+                                        sharedElementInstanceKey = sharedElementInstanceKey,
+                                        uiPrefs = cardUiPrefs,
+                                        focusRequester = firstContentFocusRequester.takeIf {
+                                            isTvPresentation && listModel.id == focusTargetId
+                                        },
+                                        onFocused = { focusedContentId = listModel.id },
+                                        onClick = { coverBounds ->
+                                            onPrepareItemTransition(listModel, coverBounds)
+                                            onItemClick(listModel)
+                                        },
+                                        onLongClick = { onItemLongClick(listModel) },
+                                        modifier = animatedModifier,
+                                    )
+                                } else {
+                                    Box(modifier = animatedModifier) {
+                                        SupplementaryListItem(
                                             item = listModel,
-                                            isSelected = listModel.id in selectedItemsIds,
-                                            isHighlighted = listModel.id == highlightedItemId,
-                                            sharedTransitionEnabled = sharedTransitionEnabled,
-                                            sharedElementInstanceKey = sharedElementInstanceKey,
-                                            uiPrefs = cardUiPrefs,
-                                            focusRequester = firstContentFocusRequester.takeIf {
-                                                isTvPresentation && listModel.id == focusTargetId
-                                            },
-                                            onFocused = { focusedContentId = listModel.id },
-                                            onClick = { coverBounds ->
-                                                onPrepareItemTransition(listModel, coverBounds)
-                                                onItemClick(listModel)
-                                            },
-                                            onLongClick = { onItemLongClick(listModel) },
-                                            modifier = animatedModifier,
+                                            listMode = listMode,
+                                            gridScale = effectiveGridScale,
+                                            onQuickFilterOptionClick = onQuickFilterOptionClick,
+                                            showQuickFilterInline = showQuickFilterInline,
+                                            leadingContent = quickFilterLeadingContent,
+                                            onEmptyActionClick = onEmptyActionClick,
+                                            onRetry = onRetry,
+                                            onSecondaryAction = secondaryAction,
                                         )
-                                    } else {
-                                        Box(modifier = animatedModifier) {
-                                            SupplementaryListItem(
-                                                item = listModel,
-                                                listMode = listMode,
-                                                gridScale = gridScale,
-                                                onQuickFilterOptionClick = onQuickFilterOptionClick,
-                                                showQuickFilterInline = showQuickFilterInline,
-                                                leadingContent = quickFilterLeadingContent,
-                                                onEmptyActionClick = onEmptyActionClick,
-                                                onRetry = onRetry,
-                                                onSecondaryAction = secondaryAction,
-                                            )
-                                        }
                                     }
                                 }
                             }
@@ -836,7 +755,7 @@ private fun ListHeaderItem(
             )
         }
         if (item.buttonTextRes != 0) {
-            TextButton(onClick = {}) {
+            TvTextButton(onClick = {}) {
                 Text(stringResource(item.buttonTextRes))
             }
         }
@@ -870,13 +789,35 @@ fun QuickFilterSection(
         val (checked, unchecked) = quickFilter.items.partition { chip -> chip.isChecked }
         checked + quickFilter.groups + unchecked
     }
+    // Applying a quick filter re-queries the list, and the rail is rebuilt from the new model: the
+    // focus node under the pressed chip no longer exists, so Compose drops the focus to the nearest
+    // ancestor. On a TV that ancestor is the nav rail, one CENTER press away from leaving the page.
+    // Ask the rail for the focus back, but only when this rail fired the change - walking in from
+    // the nav rail must leave the focus where the user put it.
+    val rowFocusRequester = remember { FocusRequester() }
+    var rowHasFocus by remember { mutableStateOf(false) }
+    var restoreFocusTick by remember { mutableIntStateOf(0) }
+    LaunchedEffect(restoreFocusTick) {
+        if (!isTvPresentation || restoreFocusTick == 0) return@LaunchedEffect
+        repeat(20) {
+            withFrameNanos { }
+            if (rowHasFocus) return@LaunchedEffect
+            runCatching { rowFocusRequester.requestFocus() }
+        }
+    }
+    val applyQuickFilter: (ListFilterOption) -> Unit = { option ->
+        restoreFocusTick++
+        onQuickFilterOptionClick(option)
+    }
     LazyRow(
         state = listState,
         contentPadding = PaddingValues(horizontal = AppLayoutTokens.sectionHorizontalPadding, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         modifier = modifier
             .fillMaxWidth()
-            .then(if (isTvPresentation) Modifier.focusGroup() else Modifier),
+            .focusRequester(rowFocusRequester)
+            .then(if (isTvPresentation) Modifier.focusGroup() else Modifier)
+            .onFocusChanged { rowHasFocus = it.hasFocus },
     ) {
         leadingContent?.let { content ->
             item(key = "quick_filter_leading_content", contentType = "quick_filter_leading_content") {
@@ -906,7 +847,7 @@ fun QuickFilterSection(
                     isIosStyle = isIosStyle,
                     context = context,
                     entryPoint = entryPoint,
-                    onQuickFilterOptionClick = onQuickFilterOptionClick,
+                    onQuickFilterOptionClick = applyQuickFilter,
                 )
                 return@items
             }
@@ -961,7 +902,7 @@ fun QuickFilterSection(
                             if (option != null) {
                                 Modifier
                                     .tvFocusable(shape = chipShape, addFocusTarget = false)
-                                    .clickable { onQuickFilterOptionClick(option) }
+                                    .clickable { applyQuickFilter(option) }
                             } else {
                                 Modifier
                             },
@@ -1109,7 +1050,16 @@ private fun QuickFilterGroupChip(
                             },
                         )
                     },
-                    onClick = { onQuickFilterOptionClick(option) },
+                    onClick = {
+                        // A remote has no "tap outside" to dismiss the popup with, and a menu that
+                        // survives the choice both hides the result and keeps the focus in its own
+                        // window, so close it on every pick.
+                        expanded = false
+                        onQuickFilterOptionClick(option)
+                    },
+                    // 菜单项是 M3 原生 DropdownMenuItem：遥控器能停上去，但没有任何可见反馈，
+                    // 于是"停在菜单里"和"菜单没响应"看起来一模一样。这里补一个环。
+                    modifier = Modifier.tvFocusable(shape = QuickFilterMenuItemShape, addFocusTarget = false),
                     leadingIcon = {
                         Icon(
                             painter = painterResource(
@@ -1125,10 +1075,16 @@ private fun QuickFilterGroupChip(
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.reset_filter)) },
                 onClick = {
+                    expanded = false
                     selectedItems.forEach { chip ->
                         (chip.data as? ListFilterOption)?.let(onQuickFilterOptionClick)
                     }
                 },
+                modifier = Modifier.tvFocusable(
+                    enabled = selectedItems.isNotEmpty(),
+                    shape = QuickFilterMenuItemShape,
+                    addFocusTarget = false,
+                ),
                 leadingIcon = {
                     Icon(
                         painter = painterResource(R.drawable.ic_clear_all),
@@ -1180,41 +1136,19 @@ private fun EmptyStateCard(
     item: EmptyState,
     onEmptyActionClick: () -> Unit,
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        if (item.icon != 0) {
-            Icon(
-                painter = painterResource(item.icon),
-                contentDescription = null,
-                modifier = Modifier.size(64.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        val titleText = item.textPrimaryText?.toString()
-        Text(
-            text = titleText ?: stringResource(item.textPrimary),
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        val subtitleText = item.textSecondaryText?.toString()
-        if (item.textSecondary != 0 || !subtitleText.isNullOrBlank()) {
-            Text(
-                text = subtitleText ?: stringResource(item.textSecondary),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        if (item.actionStringRes != 0) {
-            Button(onClick = onEmptyActionClick) {
-                Text(stringResource(item.actionStringRes))
-            }
-        }
-    }
+    val subtitleText = item.textSecondaryText?.toString()
+    ContentCollectionEmpty(
+        title = item.textPrimaryText?.toString() ?: stringResource(item.textPrimary),
+        subtitle = if (item.textSecondary != 0 || !subtitleText.isNullOrBlank()) {
+            subtitleText ?: stringResource(item.textSecondary)
+        } else null,
+        icon = if (item.icon != 0) ({
+            Icon(painterResource(item.icon), contentDescription = null, modifier = Modifier.size(64.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }) else null,
+        actionLabel = if (item.actionStringRes != 0) stringResource(item.actionStringRes) else null,
+        onAction = onEmptyActionClick,
+    )
 }
 
 @Composable
@@ -1223,38 +1157,21 @@ private fun ErrorStateCard(
     onRetry: () -> Unit,
     onSecondaryAction: (Throwable) -> Unit,
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Icon(
-            painter = painterResource(if (item.icon != 0) item.icon else R.drawable.ic_error_large),
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.error,
-        )
-        Text(
-            text = stringResource(R.string.error_occurred),
-            style = MaterialTheme.typography.titleMedium,
-        )
-        Text(
-            text = item.exception.localizedMessage ?: item.exception.javaClass.simpleName.orEmpty(),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        if (item.canRetry) {
-            Button(onClick = onRetry) {
-                Text(stringResource(item.buttonText.takeIf { it != 0 } ?: R.string.retry))
-            }
-        }
-        if (item.secondaryButtonText != 0) {
-            TextButton(onClick = { onSecondaryAction(item.exception) }) {
-                Text(stringResource(item.secondaryButtonText))
-            }
-        }
-    }
+    ContentCollectionError(
+        title = stringResource(R.string.error_occurred),
+        message = item.exception.localizedMessage ?: item.exception.javaClass.simpleName.orEmpty(),
+        icon = {
+            Icon(
+                painter = painterResource(if (item.icon != 0) item.icon else R.drawable.ic_error_large),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.error,
+            )
+        },
+        retryLabel = if (item.canRetry) stringResource(item.buttonText.takeIf { it != 0 } ?: R.string.retry) else null,
+        onRetry = onRetry,
+        secondaryLabel = if (item.secondaryButtonText != 0) stringResource(item.secondaryButtonText) else null,
+        onSecondary = { onSecondaryAction(item.exception) },
+    )
 }
 
 @Composable
@@ -1268,7 +1185,10 @@ private fun LoadingStateItem(
         ListMode.MOVIE_GRID,
         ListMode.COMPACT_MOVIE_GRID -> GridLoadingSkeleton(listMode = listMode, gridScale = gridScale)
         ListMode.LIST,
-        ListMode.DETAILED_LIST -> LinearLoadingSkeleton(isDetailed = listMode == ListMode.DETAILED_LIST)
+        ListMode.DETAILED_LIST -> ContentListLoadingSkeleton(
+            detailed = listMode == ListMode.DETAILED_LIST,
+            contentPadding = PaddingValues(horizontal = AppLayoutTokens.sectionHorizontalPadding, vertical = 8.dp),
+        )
     }
 }
 
@@ -1281,101 +1201,15 @@ private fun GridLoadingSkeleton(
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = GridHorizontalPadding, vertical = 8.dp),
+            .padding(horizontal = GridHorizontalPadding),
     ) {
-        val columns = resolveGridColumnCount(maxWidth, posterStyle.itemWidth, GridSpacing)
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(GridSpacing),
-        ) {
-            repeat(columns) {
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    SkeletonBlock(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .aspectRatio(posterStyle.itemWidth / posterStyle.posterHeight),
-                    )
-                    if (!listMode.hasTitleOverlay) {
-                        SkeletonBlock(
-                            modifier = Modifier.fillMaxWidth(0.92f).height(12.dp),
-                        )
-                        SkeletonBlock(
-                            modifier = Modifier.fillMaxWidth(0.68f).height(12.dp),
-                        )
-                    }
-                }
-            }
-        }
+        ContentGridLoadingSkeleton(
+            columns = resolveGridColumnCount(maxWidth, posterStyle.itemWidth, GridSpacing),
+            posterAspectRatio = posterStyle.itemWidth / posterStyle.posterHeight,
+            spacing = GridSpacing,
+            titleBelowPoster = !listMode.hasTitleOverlay,
+        )
     }
-}
-
-@Composable
-private fun LinearLoadingSkeleton(
-    isDetailed: Boolean,
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = AppLayoutTokens.sectionHorizontalPadding, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        repeat(3) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.Top,
-            ) {
-                SkeletonBlock(
-                    modifier = Modifier
-                        .width(if (isDetailed) 96.dp else 84.dp)
-                        .height(if (isDetailed) 132.dp else 116.dp)
-                )
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    SkeletonBlock(
-                        modifier = Modifier
-                            .fillMaxWidth(0.72f)
-                            .height(14.dp)
-                    )
-                    SkeletonBlock(
-                        modifier = Modifier
-                            .fillMaxWidth(0.92f)
-                            .height(12.dp)
-                    )
-                    SkeletonBlock(
-                        modifier = Modifier
-                            .fillMaxWidth(0.84f)
-                            .height(12.dp)
-                    )
-                    if (isDetailed) {
-                        SkeletonBlock(
-                            modifier = Modifier
-                                .fillMaxWidth(0.58f)
-                                .height(12.dp)
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SkeletonBlock(
-    modifier: Modifier = Modifier,
-) {
-    Box(
-        modifier = modifier
-            .background(
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f),
-                shape = MaterialTheme.shapes.medium,
-            ),
-    )
 }
 
 @Composable

@@ -2,9 +2,11 @@ package org.skepsun.kototoro.video.ui.compose
 
 import android.graphics.Color
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
@@ -19,15 +21,20 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SelectableChipColors
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color as ComposeColor
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontStyle
@@ -37,16 +44,26 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
+import org.skepsun.kototoro.core.ui.adaptive.tvChipRing
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
+import org.skepsun.kototoro.core.ui.adaptive.tvSliderDpad
+import org.skepsun.kototoro.core.ui.adaptive.tvTakeInitialFocus
 import org.skepsun.kototoro.core.ui.compose.KototoroSlider
 
 internal data class VideoSubtitleSettingsDialogState(
     val fontSizeSp: Float,
     val bold: Boolean,
     val italic: Boolean,
+    val fontFamily: SubtitleFontFamily,
     val textColor: Int,
     val borderColor: Int,
     val borderSize: Float,
     val backgroundColor: Int,
+    val backgroundStyle: SubtitleBackgroundStyle,
+    val backgroundCornerRadiusDp: Int,
+    val backgroundPaddingHorizontalDp: Int,
+    val backgroundPaddingVerticalDp: Int,
     val alignX: Int,
     val position: Int,
     val subtitleTrackOptions: List<String> = emptyList(),
@@ -57,6 +74,7 @@ internal data class VideoSubtitleSettingsDialogState(
 private enum class SubtitleSettingsTab {
     Tracks,
     Typography,
+    Background,
     Layout,
     Colors,
 }
@@ -92,6 +110,7 @@ internal fun VideoSubtitleSettingsDialog(
 
     val emit = { new: VideoSubtitleSettingsDialogState -> style = new; onStyleChanged(new) }
 
+    val isTv = LocalUiPresentationConfig.current.isTv
     Popup(
         popupPositionProvider = PlayerMenuPositionProvider(
             targetBounds = state.anchorBounds,
@@ -102,12 +121,13 @@ internal fun VideoSubtitleSettingsDialog(
         onDismissRequest = onDismissRequest,
         properties = PopupProperties(focusable = true, clippingEnabled = true),
     ) {
+        val (settingsMinWidth, settingsMaxWidth) = playerMenuWidth(phoneMin = 300.dp, phoneMax = 380.dp)
         Surface(
             modifier = Modifier
-                .widthIn(min = 300.dp, max = 380.dp)
+                .widthIn(min = settingsMinWidth, max = settingsMaxWidth)
                 .heightIn(max = maxHeight),
             shape = RoundedCornerShape(18.dp),
-            color = ComposeColor.Black.copy(alpha = 0.90f),
+            color = playerMenuContainerColor(phoneAlpha = 0.90f),
             contentColor = ComposeColor.White,
             border = BorderStroke(1.dp, ComposeColor.White.copy(alpha = 0.16f)),
             shadowElevation = 14.dp,
@@ -115,7 +135,8 @@ internal fun VideoSubtitleSettingsDialog(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
+                    .verticalScroll(rememberScrollState())
+                    .tvTakeInitialFocus(),
             ) {
                 Text(
                     text = stringResource(R.string.video_subtitle_settings),
@@ -133,7 +154,7 @@ internal fun VideoSubtitleSettingsDialog(
                         .padding(horizontal = 16.dp),
                 ) {
                     SubtitleSettingsTab.entries.forEach { t ->
-                        FilterChip(
+                        SubtitleChip(
                             selected = tab == t,
                             onClick = { tab = t },
                             label = { Text(tabLabel(t)) },
@@ -155,13 +176,13 @@ internal fun VideoSubtitleSettingsDialog(
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp, vertical = 8.dp),
                     ) {
-                        FilterChip(
+                        SubtitleChip(
                             selected = style.bold,
                             onClick = { emit(style.copy(bold = !style.bold)) },
                             label = { Text("B", fontWeight = FontWeight.Bold) },
                             colors = playerChipColors(),
                         )
-                        FilterChip(
+                        SubtitleChip(
                             selected = style.italic,
                             onClick = { emit(style.copy(italic = !style.italic)) },
                             label = { Text("I", fontStyle = FontStyle.Italic) },
@@ -181,7 +202,7 @@ internal fun VideoSubtitleSettingsDialog(
                             )
                         } else {
                             state.subtitleTrackOptions.forEachIndexed { index, label ->
-                                FilterChip(
+                                SubtitleChip(
                                     selected = state.subtitleTrackSelectedIndex == index,
                                     onClick = { onSubtitleTrackSelected(index) },
                                     label = { Text(label) },
@@ -195,6 +216,27 @@ internal fun VideoSubtitleSettingsDialog(
                     }
 
                     SubtitleSettingsTab.Typography -> {
+                        Text(
+                            text = stringResource(R.string.video_subtitle_font_family),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = ComposeColor.White.copy(alpha = 0.85f),
+                            modifier = Modifier.padding(horizontal = 16.dp).padding(top = 8.dp),
+                        )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                        ) {
+                            SubtitleFontFamily.entries.forEach { family ->
+                                SubtitleChip(
+                                    selected = style.fontFamily == family,
+                                    onClick = { emit(style.copy(fontFamily = family)) },
+                                    label = { Text(fontFamilyLabel(family)) },
+                                    colors = playerChipColors(),
+                                )
+                            }
+                        }
                         LabeledSlider(
                             label = stringResource(R.string.video_subtitle_font_size),
                             valueText = style.fontSizeSp.toInt().toString(),
@@ -211,6 +253,64 @@ internal fun VideoSubtitleSettingsDialog(
                         )
                     }
 
+                    SubtitleSettingsTab.Background -> {
+                        Text(
+                            text = stringResource(R.string.video_subtitle_background_style),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = ComposeColor.White.copy(alpha = 0.85f),
+                            modifier = Modifier.padding(horizontal = 16.dp).padding(top = 8.dp),
+                        )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState())
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                        ) {
+                            SubtitleBackgroundStyle.entries.forEach { backgroundStyle ->
+                                SubtitleChip(
+                                    selected = style.backgroundStyle == backgroundStyle,
+                                    onClick = { emit(style.copy(backgroundStyle = backgroundStyle)) },
+                                    label = { Text(backgroundStyleLabel(backgroundStyle)) },
+                                    colors = playerChipColors(),
+                                )
+                            }
+                        }
+                        val backgroundEnabled = style.backgroundStyle != SubtitleBackgroundStyle.NONE
+                        LabeledSlider(
+                            label = stringResource(R.string.video_subtitle_background_corner_radius),
+                            valueText = style.backgroundCornerRadiusDp.toString(),
+                            value = style.backgroundCornerRadiusDp.toFloat(),
+                            valueRange = 0f..32f,
+                            enabled = backgroundEnabled,
+                            onValueChange = { emit(style.copy(backgroundCornerRadiusDp = it.toInt())) },
+                        )
+                        LabeledSlider(
+                            label = stringResource(R.string.video_subtitle_background_padding_horizontal),
+                            valueText = style.backgroundPaddingHorizontalDp.toString(),
+                            value = style.backgroundPaddingHorizontalDp.toFloat(),
+                            valueRange = 0f..32f,
+                            enabled = backgroundEnabled,
+                            onValueChange = { emit(style.copy(backgroundPaddingHorizontalDp = it.toInt())) },
+                        )
+                        LabeledSlider(
+                            label = stringResource(R.string.video_subtitle_background_padding_vertical),
+                            valueText = style.backgroundPaddingVerticalDp.toString(),
+                            value = style.backgroundPaddingVerticalDp.toFloat(),
+                            valueRange = 0f..24f,
+                            enabled = backgroundEnabled,
+                            onValueChange = { emit(style.copy(backgroundPaddingVerticalDp = it.toInt())) },
+                        )
+                        if (backgroundEnabled) {
+                            Text(
+                                text = stringResource(R.string.video_subtitle_background_hint),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = ComposeColor.White.copy(alpha = 0.6f),
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                            )
+                        }
+                    }
+
                     SubtitleSettingsTab.Layout -> {
                         Text(
                             text = stringResource(R.string.video_subtitle_position),
@@ -224,19 +324,19 @@ internal fun VideoSubtitleSettingsDialog(
                                 .fillMaxWidth()
                                 .padding(horizontal = 16.dp, vertical = 8.dp),
                         ) {
-                            FilterChip(
+                            SubtitleChip(
                                 selected = style.alignX == 0,
                                 onClick = { emit(style.copy(alignX = 0)) },
                                 label = { Text(stringResource(R.string.video_subtitle_align_left)) },
                                 colors = playerChipColors(),
                             )
-                            FilterChip(
+                            SubtitleChip(
                                 selected = style.alignX == 1,
                                 onClick = { emit(style.copy(alignX = 1)) },
                                 label = { Text(stringResource(R.string.video_subtitle_align_center)) },
                                 colors = playerChipColors(),
                             )
-                            FilterChip(
+                            SubtitleChip(
                                 selected = style.alignX == 2,
                                 onClick = { emit(style.copy(alignX = 2)) },
                                 label = { Text(stringResource(R.string.video_subtitle_align_right)) },
@@ -260,7 +360,7 @@ internal fun VideoSubtitleSettingsDialog(
                                 .padding(horizontal = 16.dp),
                         ) {
                             SubtitleColorTarget.entries.forEach { target ->
-                                FilterChip(
+                                SubtitleChip(
                                     selected = colorTarget == target,
                                     onClick = { colorTarget = target },
                                     label = { Text(colorTargetLabel(target)) },
@@ -288,7 +388,8 @@ internal fun VideoSubtitleSettingsDialog(
                                 Surface(
                                     modifier = Modifier
                                         .weight(1f)
-                                        .heightIn(min = 28.dp)
+                                        .heightIn(min = if (isTv) 56.dp else 28.dp)
+                                        .tvFocusable(shape = RoundedCornerShape(8.dp), addFocusTarget = false)
                                         .clickable { colorTarget = target },
                                     shape = RoundedCornerShape(8.dp),
                                     color = ComposeColor(color),
@@ -358,32 +459,92 @@ private fun LabeledSlider(
     value: Float,
     valueRange: ClosedFloatingPointRange<Float>,
     onValueChange: (Float) -> Unit,
+    enabled: Boolean = true,
     accent: ComposeColor = ComposeColor.White,
 ) {
+    val steps = (valueRange.endInclusive - valueRange.start).toInt() - 1
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(
                 text = label,
                 style = MaterialTheme.typography.bodyMedium,
-                color = ComposeColor.White.copy(alpha = 0.85f),
+                color = ComposeColor.White.copy(alpha = if (enabled) 0.85f else 0.4f),
             )
             Text(
                 text = valueText,
                 style = MaterialTheme.typography.bodyMedium,
-                color = ComposeColor.White,
+                color = ComposeColor.White.copy(alpha = if (enabled) 1f else 0.4f),
             )
         }
         KototoroSlider(
             value = value,
             onValueChange = onValueChange,
+            modifier = Modifier
+                .fillMaxWidth()
+                .tvSliderDpad(
+                    value = value,
+                    valueRange = valueRange,
+                    onValueChange = onValueChange,
+                    steps = steps,
+                    enabled = enabled,
+                ),
+            enabled = enabled,
             valueRange = valueRange,
-            steps = (valueRange.endInclusive - valueRange.start).toInt() - 1,
+            steps = steps,
             colors = androidx.compose.material3.SliderDefaults.colors(
                 thumbColor = accent,
                 activeTrackColor = accent,
                 inactiveTrackColor = ComposeColor.White.copy(alpha = 0.3f),
             ),
         )
+    }
+}
+
+/**
+ * A filter chip that a remote can actually reach.
+ *
+ * A Material3 [FilterChip] only shows a focus state layer, which on a 1080p screen from three metres
+ * away is indistinguishable from "nothing is selected". The TV branch draws the same pill by hand so
+ * it can carry a focus ring and a row height that matches the rest of the player menu; the phone
+ * keeps the stock chip.
+ */
+@Composable
+private fun SubtitleChip(
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    colors: SelectableChipColors = playerChipColors(),
+    label: @Composable () -> Unit,
+) {
+    if (!LocalUiPresentationConfig.current.isTv) {
+        FilterChip(
+            selected = selected,
+            onClick = onClick,
+            label = label,
+            modifier = modifier.tvChipRing(),
+            colors = colors,
+        )
+        return
+    }
+    val shape = RoundedCornerShape(12.dp)
+    Box(
+        modifier = modifier
+            .heightIn(min = playerMenuRowMinHeight(32.dp))
+            .clip(shape)
+            .background(
+                color = if (selected) ComposeColor.White else ComposeColor.White.copy(alpha = 0.12f),
+                shape = shape,
+            )
+            .tvFocusable(shape = shape, addFocusTarget = false)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 10.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        CompositionLocalProvider(
+            LocalContentColor provides if (selected) ComposeColor.Black else ComposeColor.White,
+        ) {
+            label()
+        }
     }
 }
 
@@ -400,8 +561,28 @@ private fun tabLabel(tab: SubtitleSettingsTab): String = stringResource(
     when (tab) {
         SubtitleSettingsTab.Tracks -> R.string.video_subtitle_track
         SubtitleSettingsTab.Typography -> R.string.video_subtitle_style
+        SubtitleSettingsTab.Background -> R.string.video_subtitle_background
         SubtitleSettingsTab.Layout -> R.string.video_subtitle_layout
         SubtitleSettingsTab.Colors -> R.string.video_subtitle_colors
+    },
+)
+
+@Composable
+private fun backgroundStyleLabel(style: SubtitleBackgroundStyle): String = stringResource(
+    when (style) {
+        SubtitleBackgroundStyle.NONE -> R.string.video_subtitle_background_none
+        SubtitleBackgroundStyle.BAR -> R.string.video_subtitle_background_bar
+        SubtitleBackgroundStyle.BLOCK -> R.string.video_subtitle_background_block
+        SubtitleBackgroundStyle.LINES -> R.string.video_subtitle_background_lines
+    },
+)
+
+@Composable
+private fun fontFamilyLabel(family: SubtitleFontFamily): String = stringResource(
+    when (family) {
+        SubtitleFontFamily.SANS -> R.string.video_subtitle_font_sans
+        SubtitleFontFamily.SERIF -> R.string.video_subtitle_font_serif
+        SubtitleFontFamily.MONOSPACE -> R.string.video_subtitle_font_monospace
     },
 )
 

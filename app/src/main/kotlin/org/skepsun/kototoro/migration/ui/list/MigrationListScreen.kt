@@ -26,7 +26,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -36,7 +35,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -58,6 +56,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
+import org.skepsun.kototoro.core.ui.adaptive.tvChipRing
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
+import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
 import org.skepsun.kototoro.migration.ui.migrationTitle
 import org.skepsun.kototoro.migration.ui.rememberCoverRequest
 import org.skepsun.kototoro.migration.domain.MatchCandidate
@@ -123,7 +125,7 @@ fun MigrationListScreen(
                                     )
                                 }
                             }
-                            TextButton(
+                            TvTextButton(
                                 onClick = { sheetItemId = item.origin.id },
                                 modifier = Modifier.align(Alignment.End).padding(end = 16.dp),
                             ) {
@@ -177,6 +179,7 @@ private fun FilterRow(state: MigrationListState, onFilter: (MigrationFilter) -> 
                 selected = state.filter == filter,
                 onClick = { onFilter(filter) },
                 label = { Text(stringResource(label, state.count(filter))) },
+                modifier = Modifier.tvChipRing(),
             )
         }
     }
@@ -309,19 +312,22 @@ private fun DeltaBadge(delta: Int) {
 private fun RowMenu(item: MigrationItemState, onSkip: () -> Unit, onMigrateNow: () -> Unit, onOpenOriginal: () -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Box {
-        IconButton(onClick = { expanded = true }) { Icon(Icons.Default.MoreVert, contentDescription = null) }
+        IconButton(
+            onClick = { expanded = true },
+            modifier = Modifier.tvIconButtonRing(),
+        ) { Icon(Icons.Default.MoreVert, contentDescription = null) }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            DropdownMenuItem(
+            TvDropdownMenuItem(
                 text = { Text(stringResource(R.string.migration_action_skip)) },
                 onClick = { expanded = false; onSkip() },
             )
             if (item.status == MigrationItemStatus.MATCHED) {
-                DropdownMenuItem(
+                TvDropdownMenuItem(
                     text = { Text(stringResource(R.string.migration_action_migrate_now)) },
                     onClick = { expanded = false; onMigrateNow() },
                 )
             }
-            DropdownMenuItem(
+            TvDropdownMenuItem(
                 text = { Text(stringResource(R.string.migration_action_open)) },
                 onClick = { expanded = false; onOpenOriginal() },
             )
@@ -374,7 +380,7 @@ private fun MigrationDialogs(
                 }
             },
             confirmButton = {
-                TextButton(onClick = { onConfirmMigrate(dialog.mode) }) {
+                TvTextButton(onClick = { onConfirmMigrate(dialog.mode) }) {
                     Text(
                         stringResource(
                             if (dialog.mode == MigrationMode.REPLACE) R.string.migration_migrate_n else R.string.migration_copy_n,
@@ -383,7 +389,9 @@ private fun MigrationDialogs(
                     )
                 }
             },
-            dismissButton = { TextButton(onClick = onDismissDialog) { Text(stringResource(android.R.string.cancel)) } },
+            dismissButton = {
+                TvTextButton(onClick = onDismissDialog) { Text(stringResource(android.R.string.cancel)) }
+            },
         )
         is MigrationDialog.Progress -> AlertDialog(
             onDismissRequest = {},
@@ -395,19 +403,23 @@ private fun MigrationDialogs(
                 )
             },
             confirmButton = {},
-            dismissButton = { TextButton(onClick = onCancelMigrate) { Text(stringResource(android.R.string.cancel)) } },
+            dismissButton = {
+                TvTextButton(onClick = onCancelMigrate) { Text(stringResource(android.R.string.cancel)) }
+            },
         )
         is MigrationDialog.Result -> AlertDialog(
             onDismissRequest = onDismissDialog,
             title = { Text(stringResource(R.string.migration_result, dialog.succeeded, dialog.failed)) },
-            confirmButton = { TextButton(onClick = onDismissDialog) { Text(stringResource(android.R.string.ok)) } },
+            confirmButton = { TvTextButton(onClick = onDismissDialog) { Text(stringResource(android.R.string.ok)) } },
         )
         MigrationDialog.Exit -> AlertDialog(
             onDismissRequest = onDismissDialog,
             title = { Text(stringResource(R.string.migration_exit_title)) },
             text = { Text(stringResource(R.string.migration_exit_message)) },
-            confirmButton = { TextButton(onClick = onAbandon) { Text(stringResource(R.string.migration_abandon)) } },
-            dismissButton = { TextButton(onClick = onDismissDialog) { Text(stringResource(android.R.string.cancel)) } },
+            confirmButton = { TvTextButton(onClick = onAbandon) { Text(stringResource(R.string.migration_abandon)) } },
+            dismissButton = {
+                TvTextButton(onClick = onDismissDialog) { Text(stringResource(android.R.string.cancel)) }
+            },
         )
     }
 }

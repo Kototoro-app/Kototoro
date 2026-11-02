@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.desktop.app
 
+import org.skepsun.kototoro.core.db.DATABASE_VERSION
 import androidx.compose.ui.graphics.asSkiaBitmap
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
@@ -115,7 +116,7 @@ internal object DesktopChallengeProbe {
             runBlocking { controller.shutdown() }
             owner = null
             check(challenges.pending.value == null)
-            runBlocking { DesktopRuntime.open(root).use { check(it.storageInfo().schemaVersion == 84) } }
+            runBlocking { DesktopRuntime.open(root).use { check(it.storageInfo().schemaVersion == DATABASE_VERSION) } }
             println("DESKTOP_UI_OK=challenge")
             println("NETWORK_SCOPE=127.0.0.1")
         } catch (error: Throwable) {

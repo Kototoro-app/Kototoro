@@ -1,0 +1,212 @@
+package org.skepsun.kototoro.core.ui.compose
+
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.RangeSlider
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderColors
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import com.kyant.backdrop.Backdrop
+import com.kyant.backdrop.backdrops.LayerBackdrop
+import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.lens
+import com.kyant.backdrop.highlight.Highlight
+import com.kyant.backdrop.shadow.InnerShadow
+import com.kyant.backdrop.shadow.Shadow
+import com.kyant.shapes.Capsule
+import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
+import org.skepsun.kototoro.core.ui.theme.LocalIsIosInterfaceStyle
+
+val LocalLiquidGlassBackdrop = staticCompositionLocalOf<Backdrop?> { null }
+val LocalLiquidGlassLayerBackdrop = staticCompositionLocalOf<LayerBackdrop?> { null }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun KototoroSlider(
+    value: Float,
+    onValueChange: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    valueRange: ClosedFloatingPointRange<Float> = 0f..1f,
+    steps: Int = 0,
+    onValueChangeFinished: (() -> Unit)? = null,
+    colors: SliderColors = SliderDefaults.colors(),
+    compactThumb: Boolean = false,
+    trackHeight: Dp? = null,
+) {
+    val tokens = LocalInterfaceStyleTokens.current
+    val isIosStyle = LocalIsIosInterfaceStyle.current
+    val backdrop = LocalLiquidGlassBackdrop.current
+    val interactionSource = remember { MutableInteractionSource() }
+    Slider(
+        value = value,
+        onValueChange = onValueChange,
+        modifier = modifier,
+        enabled = enabled,
+        valueRange = valueRange,
+        steps = steps,
+        onValueChangeFinished = onValueChangeFinished,
+        colors = colors,
+        interactionSource = interactionSource,
+        thumb = {
+            KototoroSliderThumb(
+                interactionSource = interactionSource,
+                color = if (enabled) colors.thumbColor else colors.disabledThumbColor,
+                isIosStyle = isIosStyle,
+                useExpandedThumb = true, // both interface styles expand the touch target
+                compact = compactThumb,
+                backdrop = backdrop,
+            )
+        },
+        track = { state ->
+            val resolvedTrackHeight = trackHeight ?: tokens.sliderTrackHeight
+            SliderDefaults.Track(
+                sliderState = state,
+                modifier = Modifier.height(resolvedTrackHeight),
+                enabled = enabled,
+                colors = colors,
+                thumbTrackGapSize = 0.dp,
+                trackInsideCornerSize = resolvedTrackHeight / 2,
+            )
+        },
+    )
+}
+
+/** The slider thumb both styles draw; public so Android's range slider (newer Material API) reuses it. */
+@Composable
+fun KototoroSliderThumb(
+    interactionSource: MutableInteractionSource,
+    color: Color,
+    isIosStyle: Boolean,
+    useExpandedThumb: Boolean,
+    compact: Boolean,
+    backdrop: Backdrop?,
+) {
+    val tokens = LocalInterfaceStyleTokens.current
+    val pressed by interactionSource.collectIsPressedAsState()
+    val dragged by interactionSource.collectIsDraggedAsState()
+    val active = pressed || dragged
+    val pressProgress by animateFloatAsState(
+        targetValue = if (active) 1f else 0f,
+        animationSpec = tween(120),
+        label = "sliderThumbPressProgress",
+    )
+    val visualSize = if (compact) {
+        if (isIosStyle) 16.dp else 20.dp
+    } else {
+        tokens.sliderThumbSize
+    }
+    val width by animateDpAsState(
+        targetValue = if (active) {
+            if (compact) {
+                if (isIosStyle) 20.dp else 24.dp
+            } else {
+                tokens.sliderPressedThumbWidth
+            }
+        } else if (isIosStyle || useExpandedThumb) {
+            visualSize
+        } else {
+            6.dp
+        },
+        animationSpec = ThumbSpring,
+        label = "sliderThumbWidth",
+    )
+    val height by animateDpAsState(
+        targetValue = if (active) {
+            if (compact) {
+                if (isIosStyle) 20.dp else 28.dp
+            } else {
+                tokens.sliderPressedThumbHeight
+            }
+        } else {
+            visualSize
+        },
+        animationSpec = ThumbSpring,
+        label = "sliderThumbHeight",
+    )
+    val thumbShape = Capsule()
+    Box(
+        modifier = Modifier.size(tokens.sliderThumbSize),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .width(width)
+                .height(height)
+                .then(
+                    if (isIosStyle && backdrop != null) {
+                        Modifier.drawBackdrop(
+                            backdrop = backdrop,
+                            shape = { thumbShape },
+                            effects = {
+                                // Mirrors the library's LiquidSlider: blur eases
+                                // out and refraction ramps up while dragging.
+                                blur(8f.dp.toPx() * (1f - pressProgress))
+                                lens(
+                                    refractionHeight = 10f.dp.toPx() * pressProgress,
+                                    refractionAmount = 14f.dp.toPx() * pressProgress,
+                                    chromaticAberration = true,
+                                )
+                            },
+                            // Same press-driven highlight as the library's own
+                            // LiquidSlider (Highlight.Ambient @ pressProgress):
+                            // idle = clean glass, held/dragged = soft glow.
+                            highlight = {
+                                Highlight.Ambient.copy(
+                                    width = Highlight.Ambient.width / 1.5f,
+                                    blurRadius = Highlight.Ambient.blurRadius / 1.5f,
+                                    alpha = pressProgress,
+                                )
+                            },
+                            shadow = {
+                                Shadow(
+                                    radius = 4f.dp,
+                                    color = Color.Black.copy(alpha = 0.05f),
+                                )
+                            },
+                            innerShadow = {
+                                InnerShadow(
+                                    radius = 4f.dp * pressProgress,
+                                    alpha = pressProgress,
+                                )
+                            },
+                            layerBlock = {
+                                val scale = 1f + 0.1f * pressProgress
+                                scaleX = scale
+                                scaleY = scale
+                            },
+                        )
+                    } else {
+                        Modifier.background(color.copy(alpha = if (active) 0.88f else 1f), thumbShape)
+                    },
+                )
+                .border(1.dp, Color.White.copy(alpha = if (active) 0.28f else 0f), thumbShape),
+        )
+    }
+}
+
+/** Android's `KototoroMotion.ThumbSpring`. */
+private val ThumbSpring = androidx.compose.animation.core.spring<androidx.compose.ui.unit.Dp>(
+    dampingRatio = 0.72f, stiffness = 520f,
+)

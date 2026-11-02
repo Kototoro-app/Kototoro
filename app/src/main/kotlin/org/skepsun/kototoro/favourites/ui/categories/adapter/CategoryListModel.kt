@@ -4,6 +4,7 @@ import org.skepsun.kototoro.core.model.FavouriteCategory
 import org.skepsun.kototoro.favourites.domain.model.Cover
 import org.skepsun.kototoro.list.ui.ListModelDiffCallback
 import org.skepsun.kototoro.list.ui.model.ListModel
+import java.io.File
 
 class CategoryListModel(
     val mangaCount: Int,
@@ -11,6 +12,7 @@ class CategoryListModel(
     val category: FavouriteCategory,
     val isTrackerEnabled: Boolean,
     val isActionsEnabled: Boolean,
+    val customCover: File? = null,
 ) : ListModel {
 
     override fun areItemsTheSame(other: ListModel): Boolean {
@@ -32,6 +34,7 @@ class CategoryListModel(
         if (mangaCount != other.mangaCount) return false
         if (isTrackerEnabled != other.isTrackerEnabled) return false
         if (isActionsEnabled != other.isActionsEnabled) return false
+        if (customCover != other.customCover) return false
         if (covers != other.covers) return false
         if (category.id != other.category.id) return false
         if (category.title != other.category.title) return false
@@ -54,6 +57,7 @@ class CategoryListModel(
         result = 31 * result + category.createdAt.hashCode()
         result = 31 * result + category.isTrackingEnabled.hashCode()
         result = 31 * result + category.isVisibleInLibrary.hashCode()
+        result = 31 * result + (customCover?.hashCode() ?: 0)
         return result
     }
 

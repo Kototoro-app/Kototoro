@@ -1,6 +1,5 @@
 package org.skepsun.kototoro.reader.ui.compose
 
-
 import android.graphics.Bitmap
 import android.net.Uri
 import android.graphics.drawable.Animatable
@@ -23,7 +22,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -75,6 +73,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.core.prefs.ReaderBackground
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.reader.core.PageId
 import org.skepsun.kototoro.reader.core.ZoomMode
 import org.skepsun.kototoro.core.util.ext.mangaSourceExtra
@@ -315,10 +314,10 @@ internal fun ReaderPageError(
             text = cause.localizedMessage.orEmpty(),
             color = MaterialTheme.colorScheme.error,
         )
-        TextButton(onClick = onRetry) {
+        TvTextButton(onClick = onRetry) {
             Text(stringResource(resolveReaderErrorActionStringId(resolveStringId)))
         }
-        TextButton(onClick = onShowDetails) {
+        TvTextButton(onClick = onShowDetails) {
             Text(stringResource(R.string.error_details))
         }
     }

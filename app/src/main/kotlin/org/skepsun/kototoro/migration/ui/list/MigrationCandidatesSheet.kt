@@ -21,7 +21,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
@@ -38,17 +37,19 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.chaptersCount
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
+import org.skepsun.kototoro.core.ui.compose.TvModalBottomSheet
+import org.skepsun.kototoro.migration.domain.MatchCandidate
 import org.skepsun.kototoro.migration.ui.migrationTitle
 import org.skepsun.kototoro.migration.ui.rememberCoverRequest
-import org.skepsun.kototoro.migration.domain.MatchCandidate
 import org.skepsun.kototoro.parsers.model.Content
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -67,7 +68,7 @@ fun MigrationCandidatesSheet(
         focusManager.clearFocus()
         onSearch(query)
     }
-    ModalBottomSheet(
+    TvModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         modifier = Modifier.fillMaxHeight(0.85f),
@@ -82,7 +83,11 @@ fun MigrationCandidatesSheet(
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(onSearch = { search() }),
                 trailingIcon = {
-                    IconButton(onClick = { search() }, enabled = query.isNotBlank()) {
+                    IconButton(
+                        onClick = { search() },
+                        enabled = query.isNotBlank(),
+                        modifier = Modifier.tvIconButtonRing(),
+                    ) {
                         Icon(Icons.Default.Search, contentDescription = stringResource(R.string.migration_action_search))
                     }
                 },
@@ -154,7 +159,7 @@ internal fun MigrationCandidateRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        IconButton(onClick = { onOpen(content) }) {
+        IconButton(onClick = { onOpen(content) }, modifier = Modifier.tvIconButtonRing()) {
             Icon(painterResource(R.drawable.ic_info_outline), contentDescription = stringResource(R.string.details))
         }
     }

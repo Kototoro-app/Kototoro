@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.desktop.app
 
+import org.skepsun.kototoro.core.db.DATABASE_VERSION
 import androidx.compose.ui.graphics.asSkiaBitmap
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
@@ -118,7 +119,7 @@ internal object DesktopBrowserProbe {
                 check(withTimeout(3000) { navigation.await() }.isFailure)
             }
             controller = null
-            runBlocking { DesktopRuntime.open(root).use { check(it.storageInfo().schemaVersion == 84) } }
+            runBlocking { DesktopRuntime.open(root).use { check(it.storageInfo().schemaVersion == DATABASE_VERSION) } }
             val moved = root.resolveSibling("${root.fileName}-released")
             check(moved.parent == root.parent && moved != root)
             val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10)

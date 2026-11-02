@@ -12,6 +12,7 @@ import androidx.annotation.FloatRange
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.collection.ArraySet
 import androidx.core.content.edit
+import org.skepsun.kototoro.core.download.DownloadPolicy
 import androidx.core.os.LocaleListCompat
 import androidx.documentfile.provider.DocumentFile
 import androidx.preference.PreferenceManager
@@ -27,6 +28,7 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.image.AvifAnimationDeviceProfile
 import org.skepsun.kototoro.core.image.AvifAnimationPolicy
 import org.skepsun.kototoro.core.extensions.DEFAULT_JAR_PRIORITY_ORDER_VALUE
+import org.skepsun.kototoro.core.extensions.SourceNsfwOverrideSet
 import org.skepsun.kototoro.core.github.AppUpdateSource
 import org.skepsun.kototoro.core.model.SourceNsfwOverrides
 import org.skepsun.kototoro.reader.core.ZoomMode
@@ -409,7 +411,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
     var mainNavItems: List<NavItem>
         get() {
             val rawStr = prefs.getString(KEY_NAV_MAIN, null)
-            val legacyThreeItemDefault = migratedLegacyThreeNavItems.joinToString(",") { it.name }
+            val legacyThreeItemDefault = MainNavigationRules.format(migratedLegacyThreeNavItems) { it.name }
             val isLegacyThreeItemMigrationPending = !prefs.getBoolean(
                 KEY_NAV_MAIN_LEGACY_THREE_MIGRATED,
                 false,
@@ -421,18 +423,21 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
                 } else {
                     migratedLegacyThreeNavItems
                 }
-                else -> rawStr.split(',')
-                    .mapNotNull { x -> if (x == "DOWNLOADS") NavItem.LOCAL else NavItem.entries.find(x) }
-                    .filterNot { it == NavItem.DISCOVER }
-                    .ifEmpty { defaultMainNavItems }
+                else -> MainNavigationRules.parse(
+                    raw = rawStr,
+                    // 2.0.1 stored the local library tab as DOWNLOADS; DISCOVER left this list for good.
+                    resolve = { key -> if (key == "DOWNLOADS") NavItem.LOCAL else NavItem.entries.find(key) },
+                    fallback = defaultMainNavItems,
+                    excluded = listOf(NavItem.DISCOVER),
+                )
             }
-            return items.limitMainNavigationItems().also { limitedItems ->
+            return MainNavigationRules.limit(items).also { limitedItems ->
                 val shouldPersistItems = limitedItems.size != items.size ||
                     rawStr == legacyThreeItemDefault && isLegacyThreeItemMigrationPending
                 if (shouldPersistItems || isLegacyThreeItemMigrationPending) {
                     prefs.edit {
                         if (shouldPersistItems) {
-                            putString(KEY_NAV_MAIN, limitedItems.joinToString(",") { it.name })
+                            putString(KEY_NAV_MAIN, MainNavigationRules.format(limitedItems) { it.name })
                         }
                         if (isLegacyThreeItemMigrationPending) {
                             putBoolean(KEY_NAV_MAIN_LEGACY_THREE_MIGRATED, true)
@@ -443,7 +448,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         }
         set(value) {
             prefs.edit {
-                putString(KEY_NAV_MAIN, value.limitMainNavigationItems().joinToString(",") { it.name })
+                putString(KEY_NAV_MAIN, MainNavigationRules.format(MainNavigationRules.limit(value)) { it.name })
                 putBoolean(KEY_NAV_MAIN_LEGACY_THREE_MIGRATED, true)
             }
         }
@@ -572,6 +577,11 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
     var gridSizePages: Int
         get() = prefs.getSafeInt(KEY_GRID_SIZE_PAGES, 100).coerceIn(50, 150)
         set(value) = prefs.edit { putInt(KEY_GRID_SIZE_PAGES, value.coerceIn(50, 150)) }
+
+    /** The chapter grid's own size; until first changed it follows the page grid it used to share. */
+    var gridSizeChapters: Int
+        get() = prefs.getSafeInt(KEY_GRID_SIZE_CHAPTERS, gridSizePages).coerceIn(50, 150)
+        set(value) = prefs.edit { putInt(KEY_GRID_SIZE_CHAPTERS, value.coerceIn(50, 150)) }
 
     var pageThumbnailAspectRatio: Float
         get() = prefs.getSafeFloat(KEY_PAGE_THUMBNAIL_ASPECT_RATIO, PAGE_THUMBNAIL_ASPECT_RATIO_DEFAULT)
@@ -757,29 +767,12 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         if (names.isEmpty()) {
             return
         }
-        val nsfwSet = prefs.getStringSet(KEY_SOURCE_NSFW_OVERRIDES, emptySet()).orEmpty().toMutableSet()
-        val sfwSet = prefs.getStringSet(KEY_SOURCE_SFW_OVERRIDES, emptySet()).orEmpty().toMutableSet()
-        when (isNsfw) {
-            true -> {
-                nsfwSet.addAll(names)
-                sfwSet.removeAll(names)
-            }
-
-            false -> {
-                sfwSet.addAll(names)
-                nsfwSet.removeAll(names)
-            }
-
-            null -> {
-                nsfwSet.removeAll(names)
-                sfwSet.removeAll(names)
-            }
-        }
+        val updated = SourceNsfwOverrideSet(sourceNsfwOverrides, sourceSfwOverrides).withOverride(names, isNsfw)
         prefs.edit {
-            putStringSet(KEY_SOURCE_NSFW_OVERRIDES, nsfwSet)
-            putStringSet(KEY_SOURCE_SFW_OVERRIDES, sfwSet)
+            putStringSet(KEY_SOURCE_NSFW_OVERRIDES, updated.nsfw)
+            putStringSet(KEY_SOURCE_SFW_OVERRIDES, updated.sfw)
         }
-        SourceNsfwOverrides.update(nsfwSet, sfwSet)
+        SourceNsfwOverrides.update(updated.nsfw, updated.sfw)
     }
 
     var globalTagBlacklist: Set<String>
@@ -1371,6 +1364,11 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         get() = prefs.getBoolean(KEY_VIDEO_DOUBLE_TAP_SEEK_ENABLED, true)
         set(value) = prefs.edit { putBoolean(KEY_VIDEO_DOUBLE_TAP_SEEK_ENABLED, value) }
 
+    /** Playback time one full-width horizontal swipe covers, in seconds; 0 means the whole video. */
+    var videoSwipeSeekRangeSec: Int
+        get() = prefs.getSafeInt(KEY_VIDEO_SWIPE_SEEK_RANGE_SEC, 0).coerceAtLeast(0)
+        set(value) = prefs.edit { putInt(KEY_VIDEO_SWIPE_SEEK_RANGE_SEC, value.coerceAtLeast(0)) }
+
     var videoSubtitleFontSize: Float
         get() = prefs.getSafeFloat(KEY_VIDEO_SUBTITLE_FONT_SIZE, 18f)
         set(value) = prefs.edit { putFloat(KEY_VIDEO_SUBTITLE_FONT_SIZE, value) }
@@ -1382,6 +1380,11 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
     var videoSubtitleItalic: Boolean
         get() = prefs.getBoolean(KEY_VIDEO_SUBTITLE_ITALIC, false)
         set(value) = prefs.edit { putBoolean(KEY_VIDEO_SUBTITLE_ITALIC, value) }
+
+    /** 0 = sans-serif, 1 = serif, 2 = monospace; maps to `SubtitleFontFamily`, unknown values use the default. */
+    var videoSubtitleFontFamily: Int
+        get() = prefs.getSafeInt(KEY_VIDEO_SUBTITLE_FONT_FAMILY, 0)
+        set(value) = prefs.edit { putInt(KEY_VIDEO_SUBTITLE_FONT_FAMILY, value.coerceIn(0, 2)) }
 
     var videoSubtitleTextColor: Int
         get() = prefs.getSafeInt(KEY_VIDEO_SUBTITLE_TEXT_COLOR, android.graphics.Color.WHITE)
@@ -1398,6 +1401,26 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
     var videoSubtitleBgColor: Int
         get() = prefs.getSafeInt(KEY_VIDEO_SUBTITLE_BG_COLOR, 0x66000000)
         set(value) = prefs.edit { putInt(KEY_VIDEO_SUBTITLE_BG_COLOR, value) }
+
+    /**
+     * 0 = off, 1 = full-width bar, 2 = text block, 3 = per line; maps to `SubtitleBackgroundStyle`,
+     * unknown values use the default style.
+     */
+    var videoSubtitleBackgroundStyle: Int
+        get() = prefs.getSafeInt(KEY_VIDEO_SUBTITLE_BG_STYLE, 3)
+        set(value) = prefs.edit { putInt(KEY_VIDEO_SUBTITLE_BG_STYLE, value.coerceIn(0, 3)) }
+
+    var videoSubtitleBackgroundCornerRadius: Int
+        get() = prefs.getSafeInt(KEY_VIDEO_SUBTITLE_BG_CORNER_RADIUS, 10).coerceIn(0, 32)
+        set(value) = prefs.edit { putInt(KEY_VIDEO_SUBTITLE_BG_CORNER_RADIUS, value.coerceIn(0, 32)) }
+
+    var videoSubtitleBackgroundPaddingHorizontal: Int
+        get() = prefs.getSafeInt(KEY_VIDEO_SUBTITLE_BG_PADDING_H, 12).coerceIn(0, 32)
+        set(value) = prefs.edit { putInt(KEY_VIDEO_SUBTITLE_BG_PADDING_H, value.coerceIn(0, 32)) }
+
+    var videoSubtitleBackgroundPaddingVertical: Int
+        get() = prefs.getSafeInt(KEY_VIDEO_SUBTITLE_BG_PADDING_V, 6).coerceIn(0, 24)
+        set(value) = prefs.edit { putInt(KEY_VIDEO_SUBTITLE_BG_PADDING_V, value.coerceIn(0, 24)) }
 
     var videoSubtitleAlignX: Int
         get() = prefs.getSafeInt(KEY_VIDEO_SUBTITLE_ALIGN_X, 1) // 0=left, 1=center, 2=right
@@ -1591,6 +1614,16 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         get() = prefs.getBoolean(KEY_MERGE_REPEATED_CHAPTERS, false)
         set(value) = prefs.edit { putBoolean(KEY_MERGE_REPEATED_CHAPTERS, value) }
 
+    /** Per-chapter download button in the chapter directory; the panel more menu toggles it. */
+    var isChapterDownloadButtonVisible: Boolean
+        get() = prefs.getBoolean(KEY_CHAPTER_DOWNLOAD_BUTTON, true)
+        set(value) = prefs.edit { putBoolean(KEY_CHAPTER_DOWNLOAD_BUTTON, value) }
+
+    /** Per-chapter translate button in the chapter directory; the panel more menu toggles it. */
+    var isChapterTranslateButtonVisible: Boolean
+        get() = prefs.getBoolean(KEY_CHAPTER_TRANSLATE_BUTTON, true)
+        set(value) = prefs.edit { putBoolean(KEY_CHAPTER_TRANSLATE_BUTTON, value) }
+
     var zoomMode: ZoomMode
         get() = prefs.getEnumValue(KEY_ZOOM_MODE, ZoomMode.FIT_CENTER)
         set(value) = prefs.edit { putEnumValue(KEY_ZOOM_MODE, value) }
@@ -1756,6 +1789,10 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
     var isShowBrokenSources: Boolean
         get() = prefs.getBoolean(KEY_SHOW_BROKEN_SOURCES, false)
         set(value) = prefs.edit { putBoolean(KEY_SHOW_BROKEN_SOURCES, value) }
+
+    var isSearchHideEmptySourcesEnabled: Boolean
+        get() = prefs.getBoolean(KEY_SEARCH_HIDE_EMPTY_SOURCES, false)
+        set(value) = prefs.edit { putBoolean(KEY_SEARCH_HIDE_EMPTY_SOURCES, value) }
 
     var isPagesNumbersEnabled: Boolean
         get() = prefs.getBoolean(KEY_PAGES_NUMBERS, false)
@@ -2152,24 +2189,26 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         set(value) = prefs.edit { putBoolean(KEY_DOWNLOADS_AUTO_RETRY, value) }
 
     var downloadThreads: Int
-        get() = prefs.getSafeInt(KEY_DOWNLOADS_THREADS, DOWNLOADS_THREADS_DEFAULT).coerceIn(1, 10)
-        set(value) = prefs.edit { putInt(KEY_DOWNLOADS_THREADS, value.coerceIn(1, 10)) }
+        get() = DownloadPolicy.threads(prefs.getSafeInt(KEY_DOWNLOADS_THREADS, DOWNLOADS_THREADS_DEFAULT))
+        set(value) = prefs.edit { putInt(KEY_DOWNLOADS_THREADS, DownloadPolicy.threads(value)) }
 
     var downloadMaxActiveSeries: Int
-        get() = prefs.getSafeInt(KEY_DOWNLOADS_MAX_ACTIVE_SERIES, DOWNLOADS_MAX_ACTIVE_SERIES_DEFAULT).coerceIn(1, UNLIMITED_SERIES)
-        set(value) = prefs.edit { putInt(KEY_DOWNLOADS_MAX_ACTIVE_SERIES, value.coerceIn(1, UNLIMITED_SERIES)) }
+        get() = DownloadPolicy.maxActiveSeries(
+            prefs.getSafeInt(KEY_DOWNLOADS_MAX_ACTIVE_SERIES, DOWNLOADS_MAX_ACTIVE_SERIES_DEFAULT),
+        )
+        set(value) = prefs.edit { putInt(KEY_DOWNLOADS_MAX_ACTIVE_SERIES, DownloadPolicy.maxActiveSeries(value)) }
 
     var downloadRequestDelayMs: Int
-        get() = prefs.getSafeInt(KEY_DOWNLOADS_REQUEST_DELAY, DOWNLOADS_REQUEST_DELAY_DEFAULT).coerceIn(0, 5000)
-        set(value) = prefs.edit { putInt(KEY_DOWNLOADS_REQUEST_DELAY, value.coerceIn(0, 5000)) }
+        get() = DownloadPolicy.requestDelayMs(prefs.getSafeInt(KEY_DOWNLOADS_REQUEST_DELAY, DOWNLOADS_REQUEST_DELAY_DEFAULT))
+        set(value) = prefs.edit { putInt(KEY_DOWNLOADS_REQUEST_DELAY, DownloadPolicy.requestDelayMs(value)) }
 
     var downloadRetryCount: Int
-        get() = prefs.getSafeInt(KEY_DOWNLOADS_RETRY_COUNT, DOWNLOADS_RETRY_COUNT_DEFAULT).coerceIn(1, 10)
-        set(value) = prefs.edit { putInt(KEY_DOWNLOADS_RETRY_COUNT, value.coerceIn(1, 10)) }
+        get() = DownloadPolicy.retryCount(prefs.getSafeInt(KEY_DOWNLOADS_RETRY_COUNT, DOWNLOADS_RETRY_COUNT_DEFAULT))
+        set(value) = prefs.edit { putInt(KEY_DOWNLOADS_RETRY_COUNT, DownloadPolicy.retryCount(value)) }
 
     var downloadRetryDelayMs: Int
-        get() = prefs.getSafeInt(KEY_DOWNLOADS_RETRY_DELAY, DOWNLOADS_RETRY_DELAY_DEFAULT).coerceIn(500, 10_000)
-        set(value) = prefs.edit { putInt(KEY_DOWNLOADS_RETRY_DELAY, value.coerceIn(500, 10_000)) }
+        get() = DownloadPolicy.retryDelayMs(prefs.getSafeInt(KEY_DOWNLOADS_RETRY_DELAY, DOWNLOADS_RETRY_DELAY_DEFAULT))
+        set(value) = prefs.edit { putInt(KEY_DOWNLOADS_RETRY_DELAY, DownloadPolicy.retryDelayMs(value)) }
 
     var downloadChapterDelay: Int
         get() = prefs.getSafeInt(KEY_DOWNLOADS_CHAPTER_DELAY, 0).coerceIn(0, 10)
@@ -2953,6 +2992,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_UPDATES_FEED_CLEAR = "updates_feed_clear"
         const val KEY_GRID_SIZE = "grid_size"
         const val KEY_GRID_SIZE_PAGES = "grid_size_pages"
+        const val KEY_GRID_SIZE_CHAPTERS = "grid_size_chapters"
         const val KEY_PAGE_THUMBNAIL_ASPECT_RATIO = "page_thumbnail_aspect_ratio"
         const val KEY_PAGE_THUMBNAILS_FIT_PREVIEW = "page_thumbnails_fit_preview"
         const val KEY_RAIL_ANIMATION_INTENSITY = "rail_animation_intensity"
@@ -3031,6 +3071,8 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_GRID_VIEW_CHAPTERS = "grid_view_chapters"
         const val KEY_HIDE_READ_CHAPTERS = "hide_read_chapters"
         const val KEY_MERGE_REPEATED_CHAPTERS = "merge_repeated_chapters"
+        const val KEY_CHAPTER_DOWNLOAD_BUTTON = "chapter_download_button"
+        const val KEY_CHAPTER_TRANSLATE_BUTTON = "chapter_translate_button"
         const val KEY_INCOGNITO_NSFW = "incognito_nsfw"
         const val KEY_PAGES_NUMBERS = "pages_numbers"
         const val KEY_READER_TRANSLATION_ENABLED = "reader_translation_enabled"
@@ -3119,7 +3161,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_DOWNLOADS_AUTO_RETRY = "downloads_auto_retry"
         const val KEY_DOWNLOADS_THREADS = "downloads_threads"
         const val KEY_DOWNLOADS_MAX_ACTIVE_SERIES = "downloads_max_active_series"
-        const val UNLIMITED_SERIES = 11
+        const val UNLIMITED_SERIES = DownloadPolicy.MAX_ACTIVE_SERIES_UNLIMITED
         const val KEY_DOWNLOADS_REQUEST_DELAY = "downloads_request_delay"
         const val KEY_DOWNLOADS_RETRY_COUNT = "downloads_retry_count"
         const val KEY_DOWNLOADS_RETRY_DELAY = "downloads_retry_delay"
@@ -3187,10 +3229,15 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_VIDEO_SUBTITLE_FONT_SIZE = "video_subtitle_font_size"
         const val KEY_VIDEO_SUBTITLE_BOLD = "video_subtitle_bold"
         const val KEY_VIDEO_SUBTITLE_ITALIC = "video_subtitle_italic"
+        const val KEY_VIDEO_SUBTITLE_FONT_FAMILY = "video_subtitle_font_family"
         const val KEY_VIDEO_SUBTITLE_TEXT_COLOR = "video_subtitle_text_color"
         const val KEY_VIDEO_SUBTITLE_BORDER_COLOR = "video_subtitle_border_color"
         const val KEY_VIDEO_SUBTITLE_BORDER_SIZE = "video_subtitle_border_size"
         const val KEY_VIDEO_SUBTITLE_BG_COLOR = "video_subtitle_bg_color"
+        const val KEY_VIDEO_SUBTITLE_BG_STYLE = "video_subtitle_bg_style"
+        const val KEY_VIDEO_SUBTITLE_BG_CORNER_RADIUS = "video_subtitle_bg_corner_radius"
+        const val KEY_VIDEO_SUBTITLE_BG_PADDING_H = "video_subtitle_bg_padding_h"
+        const val KEY_VIDEO_SUBTITLE_BG_PADDING_V = "video_subtitle_bg_padding_v"
         const val KEY_VIDEO_SUBTITLE_ALIGN_X = "video_subtitle_align_x"
         const val KEY_VIDEO_SUBTITLE_POSITION = "video_subtitle_position"
         const val KEY_VIDEO_VOLUME_BOOST = "video_volume_boost"
@@ -3207,6 +3254,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_TTS_CACHE_MB = "tts_cache_mb"
         const val KEY_VIDEO_ASPECT_RATIO = "video_aspect_ratio"
         const val KEY_VIDEO_DOUBLE_TAP_SEEK_ENABLED = "video_double_tap_seek_enabled"
+        const val KEY_VIDEO_SWIPE_SEEK_RANGE_SEC = "video_swipe_seek_range_sec"
         const val KEY_VIDEO_CONTROLS_ALPHA = "video_controls_alpha"
         const val KEY_VIDEO_GRADIENT_ALPHA = "video_gradient_alpha"
         const val KEY_READER_SCREEN_ON = "reader_screen_on"
@@ -3229,11 +3277,11 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val DEFAULT_WEBTOON_VOLUME_KEY_SCROLL_DISTANCE = 90
         const val MIN_WEBTOON_VOLUME_KEY_SCROLL_DISTANCE = 10
         const val MAX_WEBTOON_VOLUME_KEY_SCROLL_DISTANCE = 100
-        const val DOWNLOADS_THREADS_DEFAULT = 4
-        const val DOWNLOADS_MAX_ACTIVE_SERIES_DEFAULT = 4
-        private const val DOWNLOADS_REQUEST_DELAY_DEFAULT = 1600
-        private const val DOWNLOADS_RETRY_COUNT_DEFAULT = 2
-        private const val DOWNLOADS_RETRY_DELAY_DEFAULT = 2000
+        const val DOWNLOADS_THREADS_DEFAULT = DownloadPolicy.THREADS_DEFAULT
+        const val DOWNLOADS_MAX_ACTIVE_SERIES_DEFAULT = DownloadPolicy.MAX_ACTIVE_SERIES_DEFAULT
+        private const val DOWNLOADS_REQUEST_DELAY_DEFAULT = DownloadPolicy.REQUEST_DELAY_DEFAULT_MS
+        private const val DOWNLOADS_RETRY_COUNT_DEFAULT = DownloadPolicy.RETRY_COUNT_DEFAULT
+        private const val DOWNLOADS_RETRY_DELAY_DEFAULT = DownloadPolicy.RETRY_DELAY_DEFAULT_MS
         const val KEY_WEBTOON_PULL_GESTURE = "webtoon_pull_gesture"
         const val KEY_PREFETCH_CONTENT = "prefetch_content"
         const val KEY_APP_LOCALE = "app_locale"
@@ -3338,6 +3386,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_SOURCES_ENABLED_ALL = "sources_enabled_all"
         const val KEY_EXTENSIONS_GRID = "extensions_grid"
         const val KEY_SHOW_BROKEN_SOURCES = "show_broken_sources"
+        const val KEY_SEARCH_HIDE_EMPTY_SOURCES = "search_hide_empty_sources"
         const val KEY_JAR_PRIORITY_ORDER = "jar_priority_order"
         const val KEY_EXTENSIONS = "extensions"
         const val KEY_JSON_SOURCES = "json_sources"

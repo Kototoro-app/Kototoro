@@ -12,6 +12,7 @@ import org.skepsun.kototoro.core.model.GlobalTagBlacklist
 import org.skepsun.kototoro.core.model.KototoroTaxonomy
 import org.skepsun.kototoro.core.model.TaxonomyCategory
 import org.skepsun.kototoro.core.model.TaxonomyTag
+import org.skepsun.kototoro.core.model.displayName
 import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsFlow

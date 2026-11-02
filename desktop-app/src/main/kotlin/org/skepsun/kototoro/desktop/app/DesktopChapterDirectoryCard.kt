@@ -1,12 +1,24 @@
 package org.skepsun.kototoro.desktop.app
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import org.skepsun.kototoro.core.source.SourceChapter
+import org.skepsun.kototoro.core.source.SourceContent
+import org.skepsun.kototoro.core.source.ChapterArtworkCodec
 import org.skepsun.kototoro.core.ui.chapters.*
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderPanelIcons
 
@@ -27,24 +39,78 @@ internal fun desktopChapterCardData(
     isDownloaded = downloaded.any { DesktopDownloadStore.sameChapter(it, chapter) },
 )
 
-/** Shared Android cards with the desktop's existing single-chapter download action supplied as a slot. */
+/**
+ * Shared Android cards with the desktop's own actions supplied as a slot. Android reaches read/unread/delete
+ * through the chapter long-press sheet; a desktop mouse has no long-press, so they sit behind an overflow menu.
+ */
 @Composable
 internal fun DesktopChapterDirectoryCard(
     chapter: SourceChapter,
     data: ChapterCardData,
     isGrid: Boolean,
     enabled: Boolean,
+    isSelected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier,
+    onLongClick: (() -> Unit)? = null,
+    showActions: Boolean = true,
     onDownload: (() -> Unit)? = null,
+    onMarkRead: (() -> Unit)? = null,
+    onMarkUnread: (() -> Unit)? = null,
+    onDeleteDownload: (() -> Unit)? = null,
+    covers: DesktopCovers? = null,
 ) {
-    val actions: (@Composable RowScope.() -> Unit)? = onDownload?.let { download ->
+    val menu = listOfNotNull(
+        onMarkRead?.let { Triple("details-mark-read", desktopText("details.markRead"), it) },
+        onMarkUnread?.let { Triple("details-mark-unread", desktopText("details.markUnread"), it) },
+        onDeleteDownload?.let { Triple("details-delete-download", desktopText("details.deleteDownload"), it) },
+    )
+    // Android hides the per-row buttons while a selection is active, so batch commands are the only buttons offered.
+    val actions: (@Composable RowScope.() -> Unit)? = if (!showActions || (menu.isEmpty() && onDownload == null)) null else {
         {
-            IconButton(download, enabled = enabled, modifier = Modifier.testTag("download-chapter:${chapter.id}")) {
-                Icon(ReaderPanelIcons.Download, AndroidStrings["download"])
+            if (menu.isNotEmpty()) {
+                Box {
+                    var open by remember { mutableStateOf(false) }
+                    IconButton({ open = true }, enabled = enabled,
+                        modifier = Modifier.testTag("chapter-menu:${chapter.id}")) {
+                        Icon(ReaderPanelIcons.MoreVert, desktopText("details.chapterActions"))
+                    }
+                    DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                        menu.forEach { (tag, label, action) ->
+                            DropdownMenuItem({ Text(label) }, {
+                                open = false
+                                action()
+                            }, modifier = Modifier.testTag("$tag:${chapter.id}"))
+                        }
+                    }
+                }
+            }
+            onDownload?.let { download ->
+                IconButton(download, enabled = enabled, modifier = Modifier.testTag("download-chapter:${chapter.id}")) {
+                    Icon(ReaderPanelIcons.Download, AndroidStrings["download"])
+                }
             }
         }
     }
-    if (isGrid) ChapterGridCard(data, false, onClick, enabled = enabled, modifier = modifier, actions = actions)
-    else ChapterListCard(data, false, onClick, enabled = enabled, modifier = modifier, actions = actions)
+    val thumbnailContent = remember(chapter) { chapterThumbnailContent(chapter) }
+    val thumbnail: (@Composable BoxScope.() -> Unit)? = if (thumbnailContent != null && covers != null) {
+        { DesktopCover(thumbnailContent, covers, Modifier.fillMaxSize()) }
+    } else null
+    if (isGrid) {
+        ChapterGridCard(data, isSelected, onClick, onLongClick, modifier = modifier,
+            enabled = enabled, actions = actions, thumbnail = thumbnail)
+    } else {
+        ChapterListCard(data, isSelected, onClick, onLongClick, modifier = modifier,
+            enabled = enabled, actions = actions, thumbnail = thumbnail)
+    }
+}
+
+private fun chapterThumbnailContent(chapter: SourceChapter): SourceContent? {
+    val metadata = ChapterArtworkCodec.decode(chapter.sourceData) ?: return null
+    return SourceContent(
+        id = chapter.id, title = desktopChapterTitle(chapter), altTitles = emptySet(),
+        url = chapter.url, publicUrl = chapter.url, rating = 0f, contentRating = null,
+        coverUrl = metadata.posterUrl, tags = emptySet(), state = null, authors = emptySet(), source = chapter.source,
+        sourceData = chapter.sourceData,
+    )
 }

@@ -2,19 +2,28 @@ package org.skepsun.kototoro.desktop.compat
 
 import android.app.Application
 import android.os.Looper
+import com.sun.net.httpserver.HttpServer
 import eu.kanade.tachiyomi.network.NetworkHelper
 import kotlinx.coroutines.runBlocking
+import okhttp3.Request
 import org.koin.core.context.GlobalContext
 import org.skepsun.kototoro.core.source.*
 import org.skepsun.kototoro.source.host.*
 import uy.kohesive.injekt.Injekt
+import java.io.IOException
 import java.net.CookieHandler
 import java.net.HttpCookie
+import java.net.InetSocketAddress
+import java.net.Proxy
+import java.net.ProxySelector
+import java.net.SocketAddress
 import java.net.URI
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.Base64
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 
@@ -46,12 +55,55 @@ object DesktopPlatformProbe {
                 platform.close()
                 check(Files.readString(blocked) == "preserved")
                 check(GlobalContext.getOrNull() == null && Looper.getMainLooper() == null)
+            } else if (args[0] == "proxy") {
+                // Android's proxy page hands its selector to the SDK client. A loopback server plays the proxy, so the
+                // routing of a plain HTTP request is observable without touching the network.
+                val hits = java.util.concurrent.atomic.AtomicInteger()
+                val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+                server.createContext("/") { exchange ->
+                    hits.incrementAndGet()
+                    val body = "proxied".toByteArray()
+                    exchange.sendResponseHeaders(200, body.size.toLong())
+                    exchange.responseBody.use { it.write(body) }
+                    exchange.close()
+                }
+                server.executor = Executors.newSingleThreadExecutor()
+                server.start()
+                try {
+                    val address = InetSocketAddress("127.0.0.1", server.address.port)
+                    val selector = object : ProxySelector() {
+                        override fun select(uri: URI?): List<Proxy> = listOf(Proxy(Proxy.Type.HTTP, address))
+                        override fun connectFailed(uri: URI?, socketAddress: SocketAddress?, error: IOException?) = Unit
+                    }
+                    val platform = MihonDesktopPlatform(root.resolve("compat"), proxySelector = selector)
+                    platform.initialize(prefs)
+                    try {
+                        val client = platform.sharedHttpClient()
+                        check(client.proxySelector === selector) { "The SDK client kept a different proxy selector" }
+                        client.newCall(Request.Builder().url("http://proxy-target.invalid/probe").build())
+                            .execute().use { response ->
+                                check(response.code == 200) { "HTTP ${response.code}" }
+                                check(response.body.string() == "proxied") { "Unexpected proxy body" }
+                            }
+                        check(hits.get() == 1) { "The proxy saw ${hits.get()} requests" }
+                    } finally {
+                        platform.close()
+                    }
+                } finally {
+                    server.stop(0)
+                    (server.executor as? ExecutorService)?.shutdownNow()
+                }
+                check(CookieHandler.getDefault() === previousCookies)
+                check(Injekt === previousInjekt)
             } else {
                 val platform = MihonDesktopPlatform(root.resolve("compat"))
                 val loader = platform.initialize(prefs)
                 val app = platform.preferenceContext() as Application
-                check(app.filesDir.toPath().startsWith(root.resolve("compat")))
-                check(app.cacheDir.toPath().startsWith(root.resolve("compat")))
+                // The platform keeps the real path of its data directory; macOS temp directories sit behind
+                // /var -> /private/var, so compare with the real path of the directory it created.
+                val compat = root.resolve("compat").toRealPath()
+                check(app.filesDir.toPath().startsWith(compat))
+                check(app.cacheDir.toPath().startsWith(compat))
                 check(!Files.exists(root.resolve("compat/server.conf")))
                 val helper = Injekt.getInstance<NetworkHelper>(NetworkHelper::class.java)
                 check(CookieHandler.getDefault() != null)
@@ -98,16 +150,17 @@ object DesktopPlatformProbe {
                             val chapter = details.chapters!!.single()
                             val defaultAgent = client.getPages(chapter, null).single().headers?.get("User-Agent")
                             check(!defaultAgent.isNullOrBlank())
-                            // Kototoro's own User-Agent row exists for every HTTP source, after the extension's rows.
+                            // Kototoro's own User-Agent row follows the extension's rows and precedes the domain row.
                             val agent = saved.screen.nodes.single { it.id == "host:user_agent" }
-                            check(saved.screen.nodes.last() == agent && agent.enabled)
+                            check(saved.screen.nodes.takeLast(2).first() == agent && agent.enabled)
                             val invalid = client.updatePreference(source, saved.screen.revision, agent.id,
                                 SourcePreferenceValue.Text("bad\u0001agent"))
                             check(invalid.status == SourcePreferenceUpdateStatus.REJECTED)
                             val custom = client.updatePreference(source, invalid.screen.revision, agent.id,
                                 SourcePreferenceValue.Text(" KototoroProbe/1.0 "))
                             check(custom.status == SourcePreferenceUpdateStatus.ACCEPTED)
-                            check(custom.screen.nodes.last().value == SourcePreferenceValue.Text("KototoroProbe/1.0"))
+                            check(custom.screen.nodes.single { it.id == "host:user_agent" }.value ==
+                                SourcePreferenceValue.Text("KototoroProbe/1.0"))
                             val pages = client.getPages(chapter, null)
                             check(pages.single().headers?.get("User-Agent") == "KototoroProbe/1.0") { "${pages.single().headers}" }
                             check(pages.single().requestContext!!.index == 12)

@@ -13,6 +13,11 @@ import kotlinx.serialization.json.JsonPrimitive
 
 /** Public read protocol shared with Android; the caller retains its client, auth and mirror policy. */
 class BangumiDiscoveryApi(private val client: HttpClient) {
+    suspend fun calendar(baseUrl: String = BASE_URL): String =
+        client.prepareGet("${baseUrl.trimEnd('/')}/calendar") {
+            expectSuccess = true
+        }.execute { it.bodyAsText() }
+
     suspend fun search(query: String, offset: Int, isAnime: Boolean, baseUrl: String = BASE_URL): String =
         client.preparePost("${baseUrl.trimEnd('/')}/v0/search/subjects") {
             expectSuccess = true

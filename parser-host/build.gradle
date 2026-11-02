@@ -70,9 +70,10 @@ sourceSets {
 	fixtureKototoro
 	fixtureKotatsu
 	fixtureTsuki
+	fixtureBroken
 }
 def fixtureDirectory = layout.buildDirectory.dir('fixtures')
-def fixtureJars = ['Kototoro', 'Kotatsu', 'Tsuki'].collect { name ->
+def fixtureJars = ['Kototoro', 'Kotatsu', 'Tsuki', 'Broken'].collect { name ->
 	tasks.register("fixture${name}Jar", Jar) {
 		archiveFileName = "fixture-${name.toLowerCase()}.jar"
 		destinationDirectory = fixtureDirectory
@@ -94,6 +95,7 @@ dependencies {
 	fixtureKototoroCompileOnly project(':parser-api')
 	fixtureKotatsuCompileOnly project(':parser-api')
 	fixtureTsukiCompileOnly project(':parser-api')
+	fixtureBrokenCompileOnly project(':parser-api')
 	fixtureTsukiCompileOnly tsukiRuntimeJar
 
 	testImplementation 'org.junit.jupiter:junit-jupiter:5.8.2'

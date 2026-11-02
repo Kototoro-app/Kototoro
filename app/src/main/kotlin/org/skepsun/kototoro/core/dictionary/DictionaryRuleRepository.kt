@@ -23,7 +23,7 @@ class DictionaryRuleRepository @Inject constructor(
 
     fun observeAll(): Flow<List<DictionaryRule>> = flow {
         withContext(Dispatchers.IO) { ensureDefaults() }
-        emitAll(dao.observeAll().map { it.sortedWith(compareBy<DictionaryRule> { rule -> rule.sortNumber }.thenBy { it.name }) })
+        emitAll(dao.observeAll().map { sorted(it) })
     }
 
     suspend fun getAll(): List<DictionaryRule> = withContext(Dispatchers.IO) {
@@ -39,18 +39,17 @@ class DictionaryRuleRepository @Inject constructor(
     suspend fun saveAll(rules: List<DictionaryRule>) = withContext(Dispatchers.IO) {
         ensureDefaults()
         dao.deleteAll()
-        if (rules.isNotEmpty()) dao.upsert(rules.mapIndexed { index, rule -> rule.copy(sortNumber = index) })
+        if (rules.isNotEmpty()) dao.upsert(normalizeDictionaryRuleOrder(rules))
     }
 
     suspend fun importFromJson(raw: String): Int = withContext(Dispatchers.IO) {
         val imported = runCatching { DictionaryRuleJsonCodec.decode(raw) }.getOrNull().orEmpty()
         if (imported.isEmpty()) return@withContext 0
         ensureDefaults()
-        val current = dao.getAll().associateBy { it.name }.toMutableMap()
-        imported.forEach { current[it.name] = it }
+        val merged = mergeImportedDictionaryRules(dao.getAll(), imported)
         dao.deleteAll()
-        dao.upsert(sorted(current.values.toList()).mapIndexed { index, rule -> rule.copy(sortNumber = index) })
-        imported.size
+        dao.upsert(merged.rules)
+        merged.importedCount
     }
 
     suspend fun exportToJson(): String = DictionaryRuleJsonCodec.encode(getAll())
@@ -67,8 +66,7 @@ class DictionaryRuleRepository @Inject constructor(
         }
     }
 
-    private fun sorted(rules: List<DictionaryRule>): List<DictionaryRule> =
-        rules.sortedWith(compareBy<DictionaryRule> { it.sortNumber }.thenBy { it.name })
+    private fun sorted(rules: List<DictionaryRule>): List<DictionaryRule> = sortDictionaryRules(rules)
 
     private companion object {
         const val DEFAULT_ASSET = "defaultData/dictRules.json"

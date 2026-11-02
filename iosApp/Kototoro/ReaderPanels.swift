@@ -68,7 +68,7 @@ struct ReaderChapterPanel: View {
             if tab == 0 {
                 HStack {
                     if branches.count > 1 {
-                        Menu(branch ?? "全部分支") {
+                        Menu(branch ?? String(localized: "全部分支")) {
                             Button("全部分支") { branch = nil }
                             ForEach(branches, id: \.self) { value in Button(value) { branch = value } }
                         }
@@ -84,10 +84,11 @@ struct ReaderChapterPanel: View {
                     Button(selecting ? "完成" : "多选") { selecting.toggle(); selection = [] }
                 }.padding(.horizontal, 12)
 
-                ScrollView {
+                ScrollViewReader { proxy in ScrollView {
+                    let read = readChapterIDs
                     if grid {
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 100))], spacing: 8) {
-                            ForEach(chapters, id: \.id) { chapter in chapterButton(chapter) }
+                            ForEach(chapters, id: \.id) { chapter in chapterButton(chapter, read: read) }
                         }.padding(12)
                     } else {
                         LazyVStack(alignment: .leading, spacing: 10) {
@@ -96,11 +97,18 @@ struct ReaderChapterPanel: View {
                                     get: { expandedVolumes.contains(volume) },
                                     set: { if $0 { expandedVolumes.insert(volume) } else { expandedVolumes.remove(volume) } }
                                 )) {
-                                    ForEach(chapters.filter { $0.volume == volume }, id: \.id) { chapter in chapterButton(chapter) }
+                                    ForEach(chapters.filter { $0.volume == volume }, id: \.id) { chapter in chapterButton(chapter, read: read) }
                                 }
                             }
                         }.padding(12)
                     }
+                }
+                // Opens on the chapter being read, like the details directory; the volume holding it is expanded first.
+                .task {
+                    expandedVolumes.insert(model.chapter.volume)
+                    await Task.yield()
+                    proxy.scrollTo(model.chapter.id, anchor: .center)
+                }
                 }
 
                 if let status { Text(status).font(.caption).padding(.horizontal, 12) }
@@ -156,11 +164,10 @@ struct ReaderChapterPanel: View {
                             }, id: \.id) { bookmark in
                                 HStack {
                                     Button { onBookmark(bookmark) } label: {
-                                        VStack(alignment: .leading) {
-                                            Text(model.content.chapters.first { $0.id == bookmark.chapterId }?.title ?? "章节")
-                                            Text("第 \(bookmark.index + 1) 页").font(.caption).foregroundStyle(.secondary)
-                                        }
+                                        BookmarkPreviewLabel(runtime: model.runtime, content: model.content, bookmark: bookmark,
+                                                             chapter: model.content.chapters.first { $0.id == bookmark.chapterId })
                                     }
+                                    .buttonStyle(.plain)
                                     Spacer()
                                     Button("删除", systemImage: "trash") { Task { await model.removeBookmark(bookmark) } }
                                         .labelStyle(.iconOnly)
@@ -171,12 +178,20 @@ struct ReaderChapterPanel: View {
                 }
             }
         }
-        .task { branch = model.chapter.branch; expandedVolumes.insert(model.chapter.volume); await model.refreshBookmarks() }
+        .task { branch = model.chapter.branch; await model.refreshBookmarks() }
         .onChange(of: tab) { _, _ in query = ""; selecting = false; selection = [] }
         .sheet(isPresented: $showingDownloads) { ReaderDownloadsSheet() }
     }
 
-    private func chapterButton(_ chapter: IosSourceChapter) -> some View {
+    /// The details directory's rule (`SourceDetailsModel.isBeforeResume`): chapters before the one being read, in source
+    /// order and on its branch and line.
+    private var readChapterIDs: Set<String> {
+        let all = model.content.chapters, current = model.chapter
+        guard let end = all.firstIndex(where: { $0.id == current.id }) else { return [] }
+        return Set(all[..<end].filter { $0.branch == current.branch && $0.line == current.line }.map(\.id))
+    }
+
+    private func chapterButton(_ chapter: IosSourceChapter, read: Set<String>) -> some View {
         Button {
             if selecting {
                 if selection.contains(chapter.id) { selection.remove(chapter.id) } else { selection.insert(chapter.id) }
@@ -184,10 +199,9 @@ struct ReaderChapterPanel: View {
         } label: {
             HStack {
                 if selecting { Image(systemName: selection.contains(chapter.id) ? "checkmark.circle.fill" : "circle") }
-                Text(chapter.title).lineLimit(2)
-                Spacer(minLength: 0)
+                DetailsChapterLabel(chapter: chapter, resume: nil, isRead: read.contains(chapter.id),
+                                    offline: ChapterOfflineMark.of(model.content, chapter))
                 if chapter.id == model.chapter.id { Image(systemName: "book.fill") }
-                if ReaderDownloads.isDownloaded(content: model.content, chapter: chapter) { Image(systemName: "arrow.down.circle.fill") }
             }.padding(10).frame(maxWidth: .infinity, alignment: .leading)
         }.buttonStyle(.plain).background(.quaternary.opacity(0.5), in: .rect(cornerRadius: 12))
             .accessibilityIdentifier("reader.chapter.\(chapter.id)")
@@ -196,10 +210,14 @@ struct ReaderChapterPanel: View {
     private func batch(download: Bool) {
         let selected = chapters.filter { selection.contains($0.id) }
         if download {
-            do {
-                try downloads.enqueue(content: model.content, chapters: selected)
-                status = "已加入下载队列，共 \(selected.count) 章"
-            } catch { status = error.localizedDescription }
+            busy = true
+            Task {
+                defer { busy = false }
+                do {
+                    try await downloads.enqueue(content: model.content, chapters: selected)
+                    status = String(localized: "已加入下载队列，共 \(selected.count) 章")
+                } catch { status = error.localizedDescription }
+            }
             return
         }
         busy = true
@@ -207,11 +225,13 @@ struct ReaderChapterPanel: View {
             var done = 0
             do {
                 for chapter in selected {
-                    status = "\(download ? "下载" : "移除") \(done + 1)/\(selected.count)"
+                    status = download ? String(localized: "下载 \(done + 1)/\(selected.count)") : String(localized: "移除 \(done + 1)/\(selected.count)")
                     // A removed task can still own a finishing JNI request; do not delete its destination yet.
                     guard !downloads.isFinishing(content: model.content, chapter: chapter) else {
-                        if let entry = downloads.entry(content: model.content, chapter: chapter) { try downloads.pause(entry.id) }
-                        status = "已暂停下载，请待当前请求结束后移除下载"
+                        if let entry = downloads.entry(content: model.content, chapter: chapter) {
+                            try await downloads.pause(entry.id)
+                        }
+                        status = String(localized: "已暂停下载，请待当前请求结束后移除下载")
                         busy = false
                         return
                     }
@@ -220,8 +240,8 @@ struct ReaderChapterPanel: View {
                     )
                     done += 1
                 }
-                status = "完成 \(done) 章"
-            } catch { status = "已完成 \(done) 章；\(error.localizedDescription)" }
+                status = String(localized: "完成 \(done) 章")
+            } catch { status = String(localized: "已完成 \(done) 章；\(error.localizedDescription)") }
             busy = false
         }
     }
@@ -231,18 +251,23 @@ struct ReaderMorePanel: View {
     @ObservedObject var settings: ReaderSettings
     @Binding var autoScroll: Bool
     let isBookmarked: Bool
+    var translating = false
     let status: String?
     let downloading: Bool
     let onAction: (String) -> Void
+    /// Called when a page translation option changes, so translated pages are redone with it.
+    var onTranslationOptions: () -> Void = {}
     @State private var section = 0
     @State private var savedDefault = false
 
     static let actions: [(String, String, String)] = [
-        ("chapters", "章节列表", "list.bullet"), ("thumbnails", "缩略图", "square.grid.2x2"),
-        ("bookmark", "添加书签", "bookmark"),
-        ("save", "保存页面", "square.and.arrow.down"), ("crop", "裁切批注", "crop"),
-        ("auto", "自动翻页", "play.circle"), ("direction", "切换方向", "arrow.left.arrow.right"),
-        ("download", "下载本章", "arrow.down.circle"), ("browser", "浏览器打开", "safari"),
+        ("chapters", String(localized: "章节列表"), "list.bullet"), ("thumbnails", String(localized: "缩略图"), "square.grid.2x2"),
+        ("bookmark", String(localized: "添加书签"), "bookmark"),
+        ("save", String(localized: "保存页面"), "square.and.arrow.down"),
+        ("share", String(localized: "分享页面"), "square.and.arrow.up"), ("crop", String(localized: "裁切批注"), "crop"),
+        ("translate", String(localized: "翻译页面"), "translate"),
+        ("auto", String(localized: "自动翻页"), "play.circle"), ("direction", String(localized: "切换方向"), "arrow.left.arrow.right"),
+        ("download", String(localized: "下载本章"), "arrow.down.circle"), ("browser", String(localized: "浏览器打开"), "safari"),
     ]
     static func actionTitle(_ id: String) -> String { actions.first { $0.0 == id }?.1 ?? id }
     static func actionSymbol(_ id: String) -> String { actions.first { $0.0 == id }?.2 ?? "circle" }
@@ -250,6 +275,7 @@ struct ReaderMorePanel: View {
         VStack {
             Picker("选项", selection: $section) {
                 Text("快捷").tag(0); Text("布局").tag(1); Text("显示").tag(2); Text("控件").tag(3)
+                Text("翻译").tag(4)
             }.pickerStyle(.segmented).padding(.horizontal, 12)
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
@@ -259,11 +285,13 @@ struct ReaderMorePanel: View {
                                 Button {
                                     if action.0 == "auto" { autoScroll.toggle() } else { onAction(action.0) }
                                 } label: {
-                                    Label(action.0 == "auto" && autoScroll ? "停止自动翻页" :
-                                          action.0 == "bookmark" && isBookmarked ? "取消书签" : action.1,
+                                    Label(action.0 == "auto" && autoScroll ? String(localized: "停止自动翻页") :
+                                          action.0 == "bookmark" && isBookmarked ? String(localized: "取消书签") :
+                                          action.0 == "translate" && translating ? String(localized: "显示原文") : action.1,
                                           systemImage: action.0 == "bookmark" && isBookmarked ? "bookmark.fill" : action.2)
                                         .font(.subheadline).frame(maxWidth: .infinity, minHeight: 52)
                                 }.buttonStyle(.glass).disabled(action.0 == "download" && downloading)
+                                    .accessibilityIdentifier("reader.action.\(action.0)")
                             }
                         }
                         if let status { Text(status).font(.caption).foregroundStyle(.secondary) }
@@ -273,7 +301,7 @@ struct ReaderMorePanel: View {
                     } else if section == 1 {
                         Picker("阅读模式", selection: $settings.value.mode) {
                             // Android's reader mode names: STANDARD, REVERSED, VERTICAL, WEBTOON, CONTINUOUS_HORIZONTAL.
-                            Text("默认（从左到右）").tag(0); Text("从右到左").tag(1); Text("从上到下").tag(2)
+                            Text("从左到右").tag(0); Text("从右到左").tag(1); Text("从上到下").tag(2)
                             Text("条漫").tag(3); Text("横向条漫（连续）").tag(4)
                         }
                         if settings.value.mode == 4 {
@@ -283,10 +311,10 @@ struct ReaderMorePanel: View {
                         Picker("缩放基准", selection: $settings.value.fit) {
                             Text("适应页面").tag(0); Text("适应宽度").tag(1); Text("适应高度").tag(2); Text("保持起始位置").tag(3)
                         }
-                        Toggle("双页", isOn: $settings.value.doublePage).disabled(settings.value.mode >= 3)
+                        Toggle("自动双页（横屏或宽窗口）", isOn: $settings.value.doublePage).disabled(settings.value.mode >= 3)
                         Toggle("封面单独显示", isOn: $settings.value.cover).disabled(!settings.value.doublePage)
                         Toggle("宽页左右拆分", isOn: $settings.value.splitWidePages)
-                            .disabled(settings.value.mode >= 3 || settings.value.doublePage)
+                            .disabled(settings.value.mode >= 3)
                         Toggle("自动裁切白边", isOn: $settings.value.cropMargins)
                         Picker("翻页效果", selection: Binding(get: { settings.value.animation }, set: { settings.value.animation = $0 })) {
                             // Stored values stay stable: Android's ADVANCED (cover) and SIMULATION (curl) follow the
@@ -303,6 +331,8 @@ struct ReaderMorePanel: View {
                         Toggle("书页阴影", isOn: $settings.value.bookEffect)
                         Text("亮度"); Slider(value: $settings.value.brightness, in: -0.5...0.5)
                         Text("对比度"); Slider(value: $settings.value.contrast, in: 0.5...2)
+                    } else if section == 4 {
+                        PageTranslationSettingsView(onChange: onTranslationOptions)
                     } else {
                         Toggle("阅读时保持屏幕常亮", isOn: $settings.value.keepScreenOn)
                             .accessibilityIdentifier("reader.option.keepScreenOn")
@@ -323,6 +353,10 @@ struct ReaderMorePanel: View {
                         Toggle("点击屏幕边缘翻页", isOn: $settings.value.tapZones)
                             .accessibilityIdentifier("reader.option.tapZones")
                         Toggle("反转点击区域", isOn: $settings.value.reverseTaps).disabled(!settings.value.tapZones)
+                        Toggle("边缘滑动返回", isOn: $settings.value.edgeSwipeBack)
+                            .accessibilityIdentifier("reader.option.edgeSwipeBack")
+                        Text("关闭后可从屏幕边缘滑动翻页，点按画面显示控件后使用返回按钮退出。")
+                            .font(.caption).foregroundStyle(.secondary)
                         Text("左右两侧或上下边缘翻页，中间显示或隐藏控件；双击缩放，双指捏合缩放。")
                             .font(.caption).foregroundStyle(.secondary)
                         Button(savedDefault ? "已设为全局默认" : "将当前设置设为全局默认") {
@@ -339,7 +373,10 @@ struct ReaderMorePanel: View {
 struct ReaderCropView: View {
     let image: UIImage
     let onSave: (UIImage) -> Void
+    /// Saves the crop as a note: the picture, where it sits on the page (0–1) and the written thought.
+    var onNote: ((UIImage, CGRect, String) -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
+    @State private var note = ""
     @State private var start: CGPoint?
     @State private var rect = CGRect.zero
     @State private var strokes: [[CGPoint]] = []
@@ -371,14 +408,34 @@ struct ReaderCropView: View {
                     .toolbar {
                         Toggle("批注", isOn: $annotate)
                         Button("重置") { rect = .zero; strokes = [] }
-                        Button("保存") { render(fit: fit); dismiss() }
+                        Button("导出") { onSave(render(fit: fit).image); dismiss() }
+                    }
+                    .safeAreaInset(edge: .bottom) {
+                        if let onNote {
+                            HStack {
+                                TextField("写下想法（可选）", text: $note)
+                                    .textFieldStyle(.roundedBorder)
+                                    .accessibilityIdentifier("crop.note")
+                                Button("存为笔记") {
+                                    let result = render(fit: fit)
+                                    let unit = CGRect(x: result.rect.minX / size.width, y: result.rect.minY / size.height,
+                                                      width: result.rect.width / size.width, height: result.rect.height / size.height)
+                                    onNote(result.image, unit, note)
+                                    dismiss()
+                                }
+                                .buttonStyle(.glassProminent)
+                                .accessibilityIdentifier("crop.saveNote")
+                            }
+                            .padding(.vertical, 8)
+                        }
                     }
             }.padding()
                 .navigationTitle("裁切与批注")
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } } }
         }
     }
-    private func render(fit: CGFloat) {
+    /// The marked page cut to the selection (the whole page without one) and the selection in view points.
+    private func render(fit: CGFloat) -> (image: UIImage, rect: CGRect) {
         let renderer = UIGraphicsImageRenderer(size: image.size)
         let marked = renderer.image { context in
             image.draw(at: .zero)
@@ -390,11 +447,12 @@ struct ReaderCropView: View {
                 context.cgContext.strokePath()
             }
         }
+        let whole = CGRect(origin: .zero, size: CGSize(width: image.size.width * fit, height: image.size.height * fit))
         guard !rect.isEmpty, let cg = marked.cgImage,
               let crop = cg.cropping(to: CGRect(x: rect.minX / fit * marked.scale, y: rect.minY / fit * marked.scale,
                                                 width: rect.width / fit * marked.scale, height: rect.height / fit * marked.scale)) else {
-            onSave(marked); return
+            return (marked, whole)
         }
-        onSave(UIImage(cgImage: crop))
+        return (UIImage(cgImage: crop), rect)
     }
 }

@@ -39,6 +39,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.semantics.Role
@@ -50,7 +52,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.kyant.shapes.Capsule
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
+import org.skepsun.kototoro.core.ui.adaptive.tvHorizontalEdgeGuard
+import org.skepsun.kototoro.core.ui.adaptive.tvSliderDpad
 import kotlin.math.roundToInt
 
 private val ChipShape = RoundedCornerShape(16.dp)
@@ -64,6 +69,12 @@ fun ReaderPanelTabBar(
     onSelected: (Int) -> Unit,
     modifier: Modifier = Modifier,
     trailing: (@Composable () -> Unit)? = null,
+    // Buttons drawn beside the tabs (settings gear, chapter options) are the row's last stop, so the
+    // edge guard moves onto them; leaving it on the last tab would make those buttons unreachable.
+    guardLastTabRight: Boolean = trailing == null,
+    // Hosts whose panel body is rebuilt on a tab change can lose the ring right after it switches;
+    // they pass a requester pinned to the selected tab and put the ring back themselves.
+    selectedFocusRequester: FocusRequester? = null,
 ) {
     val colors = currentReaderPanelColors()
     Row(
@@ -92,7 +103,24 @@ fun ReaderPanelTabBar(
                         modifier = Modifier
                             .clip(Capsule())
                             .background(background)
-                            .tvFocusable(shape = Capsule(), addFocusTarget = false)
+                            .then(
+                                if (selected && selectedFocusRequester != null) {
+                                    Modifier.focusRequester(selectedFocusRequester)
+                                } else {
+                                    Modifier
+                                },
+                            )
+                            // A selected tab is already filled with the accent-derived container, so the
+                            // accent ring would drown in it; the content colour keeps the focus visible.
+                            .tvFocusable(
+                                shape = Capsule(),
+                                addFocusTarget = false,
+                                ringColor = if (selected) colors.content else Color.Unspecified,
+                            )
+                            .tvHorizontalEdgeGuard(
+                                blockLeft = index == 0,
+                                blockRight = guardLastTabRight && index == labels.lastIndex,
+                            )
                             .selectable(selected = selected, role = Role.Tab, onClick = { onSelected(index) })
                             .heightIn(min = 36.dp)
                             .padding(horizontal = 16.dp),
@@ -142,7 +170,11 @@ fun ReaderChoiceChips(
                 modifier = Modifier
                     .weight(1f)
                     .height(height)
-                    .tvFocusable(shape = ChipShape, addFocusTarget = false)
+                    .tvFocusable(
+                        shape = ChipShape,
+                        addFocusTarget = false,
+                        ringColor = if (selected) colors.content else Color.Unspecified,
+                    )
                     .selectable(selected = selected, role = Role.RadioButton, onClick = { onSelected(index) }),
             ) {
                 val text: @Composable () -> Unit = {
@@ -212,7 +244,11 @@ fun ReaderIconChoiceBar(
                         .size(width = 52.dp, height = 44.dp)
                         .clip(Capsule())
                         .background(if (selected) colors.selectedContainer else Color.Transparent)
-                        .tvFocusable(shape = Capsule(), addFocusTarget = false)
+                        .tvFocusable(
+                            shape = Capsule(),
+                            addFocusTarget = false,
+                            ringColor = if (selected) colors.content else Color.Unspecified,
+                        )
                         .selectable(selected = selected, role = Role.RadioButton, onClick = { onSelected(index) })
                         .semantics { contentDescription = options[index] },
                 ) {
@@ -250,6 +286,7 @@ fun ReaderQuickActionGrid(
     icon: @Composable (ReaderQuickAction) -> Painter,
     label: @Composable (ReaderQuickAction) -> String,
     modifier: Modifier = Modifier,
+    firstItemFocusRequester: FocusRequester? = null,
 ) {
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
         // Wide panels (landscape, tablets) fit more tiles per row, which keeps the quick layer
@@ -259,12 +296,27 @@ fun ReaderQuickActionGrid(
             actions.chunked(columns).forEach { row ->
                 Row(modifier = Modifier.fillMaxWidth()) {
                     row.forEach { action ->
+                        val flatIndex = actions.indexOf(action)
                         ReaderQuickTile(
                             action = action,
                             icon = icon(action),
                             label = label(action),
                             onClick = { onClick(action) },
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier
+                                .weight(1f)
+                                // The panel opens on the first action, not on the mode row above it:
+                                // that is the control the panel is opened for.
+                                .then(
+                                    if (flatIndex == 0 && firstItemFocusRequester != null) {
+                                        Modifier.focusRequester(firstItemFocusRequester)
+                                    } else {
+                                        Modifier
+                                    },
+                                )
+                                .tvHorizontalEdgeGuard(
+                                    blockLeft = flatIndex == 0,
+                                    blockRight = flatIndex == actions.lastIndex,
+                                ),
                         )
                     }
                     repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
@@ -286,6 +338,9 @@ fun ReaderQuickTile(
 ) {
     val colors = currentReaderPanelColors()
     val active = action.toggled == true
+    // A television shows the label at arm's length away, where one 11sp line in a narrow column
+    // truncates the action to "Chapters and ..."; the tile keeps the whole name on two lines instead.
+    val isTv = LocalUiPresentationConfig.current.isTv
     val interaction = if (action.toggled != null) {
         Modifier.toggleable(value = active, role = Role.Switch, onValueChange = { onClick() })
     } else {
@@ -316,9 +371,9 @@ fun ReaderQuickTile(
         }
         Text(
             text = label,
-            style = MaterialTheme.typography.labelSmall,
+            style = if (isTv) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelSmall,
             color = colors.content,
-            maxLines = 1,
+            maxLines = if (isTv) 2 else 1,
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(horizontal = 2.dp),
@@ -340,7 +395,11 @@ fun ReaderPanelToggleChip(
         modifier = modifier
             .clip(Capsule())
             .background(if (checked) colors.selectedContainer else colors.card)
-            .tvFocusable(shape = Capsule(), addFocusTarget = false)
+            .tvFocusable(
+                shape = Capsule(),
+                addFocusTarget = false,
+                ringColor = if (checked) colors.content else Color.Unspecified,
+            )
             .toggleable(value = checked, role = Role.Switch, onValueChange = onCheckedChange)
             .heightIn(min = 32.dp)
             .padding(horizontal = 12.dp),
@@ -421,7 +480,9 @@ fun ReaderStepperRow(
                 value = value.coerceIn(valueRange),
                 onValueChange = onValueChange,
                 valueRange = valueRange,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .tvSliderDpad(value = value, valueRange = valueRange, onValueChange = onValueChange, steps = 0),
             )
         }
     }
@@ -496,7 +557,15 @@ fun ReaderSliderRow(
             valueRange = valueRange,
             steps = steps,
             enabled = enabled,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .tvSliderDpad(
+                    value = value,
+                    valueRange = valueRange,
+                    onValueChange = onValueChange,
+                    steps = steps,
+                    enabled = enabled,
+                ),
         )
     }
 }

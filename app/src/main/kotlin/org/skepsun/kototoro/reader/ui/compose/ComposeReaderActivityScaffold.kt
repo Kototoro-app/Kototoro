@@ -22,6 +22,8 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
@@ -42,19 +44,18 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import com.kyant.shapes.Capsule
 import com.kyant.shapes.RoundedRectangle
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.MoreVert
@@ -67,12 +68,14 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
@@ -97,10 +100,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.Layout
-import androidx.compose.ui.layout.MeasurePolicy
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.IntSize
@@ -110,7 +111,10 @@ import androidx.core.content.ContextCompat
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.details.ui.compose.DETAILS_TAB_BOOKMARKS
 import org.skepsun.kototoro.details.ui.compose.DETAILS_TAB_CHAPTERS
 import org.skepsun.kototoro.details.ui.compose.DETAILS_TAB_PAGES
@@ -120,25 +124,36 @@ import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.prefs.ReaderControl
 import org.skepsun.kototoro.core.prefs.ReaderInfoBarLayout
+import org.skepsun.kototoro.core.prefs.rememberChapterRowActionPrefs
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassLayerBackdrop
+import org.skepsun.kototoro.core.ui.compose.TvModalBottomSheet
 import org.skepsun.kototoro.core.ui.compose.KototoroLoadingIndicator
 import org.skepsun.kototoro.core.ui.compose.KototoroMotion
 import org.skepsun.kototoro.core.ui.compose.ImmersiveEdgeGradient
 import org.skepsun.kototoro.core.ui.compose.toTransparentImmersiveColor
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderChapterTitleChip
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderChromeTopBar
+import org.skepsun.kototoro.reader.ui.compose.design.ReaderInfoBarAlignment
+import org.skepsun.kototoro.reader.ui.compose.design.ReaderInfoBarBounds
+import org.skepsun.kototoro.reader.ui.compose.design.ReaderInfoBarCutout
+import org.skepsun.kototoro.reader.ui.compose.design.ReaderInfoBarInsets
+import org.skepsun.kototoro.reader.ui.compose.design.ReaderInfoBarRow
+import org.skepsun.kototoro.reader.ui.compose.design.resolveReaderInfoBarRoundedCornerPadding
+import org.skepsun.kototoro.reader.ui.compose.design.ReaderInfoBarText
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderFloatingControlButton
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderZoomControls
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
+import org.skepsun.kototoro.core.ui.adaptive.tvHorizontalEdgeGuard
+import org.skepsun.kototoro.core.ui.adaptive.tvSliderDpad
 import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.reader.ui.ReaderActionsCallbacks
 import org.skepsun.kototoro.reader.ui.ReaderActionsUiState
-import org.skepsun.kototoro.reader.ui.autoScrollSpeedMultiplier
+import org.skepsun.kototoro.reader.ui.compose.design.ReaderAutoScrollSpeedControl
 import org.skepsun.kototoro.reader.domain.TapGridArea
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderControlDestination
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderControlTokens
@@ -147,6 +162,7 @@ import org.skepsun.kototoro.reader.ui.compose.design.ReaderPanelTabBar
 import org.skepsun.kototoro.reader.ui.compose.design.forEInk
 import org.skepsun.kototoro.reader.ui.compose.design.mangaReaderPanelColors
 import org.skepsun.kototoro.reader.ui.compose.design.readerChapterPanelSubtitle
+import org.skepsun.kototoro.reader.ui.compose.panel.LocalTvFocusRequest
 import org.skepsun.kototoro.reader.ui.compose.panel.ReaderPanelHost
 import org.skepsun.kototoro.reader.ui.compose.panel.rememberReaderPanelSurfaceMode
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderProgressBar
@@ -155,8 +171,6 @@ import org.skepsun.kototoro.reader.ui.compose.design.readerControlContentColor
 import org.skepsun.kototoro.main.ui.compose.CompactDropdownMenuItem
 import org.skepsun.kototoro.main.ui.compose.GlassDropdownMenu
 import kotlin.math.roundToInt
-import kotlin.math.ceil
-import kotlin.math.sqrt
 
 private val ReaderTopImmersiveFeatherExtension = 72.dp
 private val ReaderBottomImmersiveFeatherExtension = 48.dp
@@ -302,7 +316,10 @@ private fun ReaderChapterPanelActions(
         IconButton(
             onClick = callbacks.onSearchToggle,
             enabled = state.searchEnabled,
-            modifier = Modifier.size(44.dp),
+            // Beside the tab bar, so a remote has to be able to walk here and see where it is.
+            modifier = Modifier
+                .size(44.dp)
+                .tvFocusable(shape = CircleShape, addFocusTarget = false),
         ) {
             Icon(
                 imageVector = Icons.Default.Search,
@@ -317,7 +334,11 @@ private fun ReaderChapterPanelActions(
         Box {
             IconButton(
                 onClick = { moreMenuExpanded = true },
-                modifier = Modifier.size(44.dp),
+                // Right-most control of the header row: keep the press here instead of the scrim.
+                modifier = Modifier
+                    .size(44.dp)
+                    .tvFocusable(shape = CircleShape, addFocusTarget = false)
+                    .tvHorizontalEdgeGuard(blockRight = true),
             ) {
                 Icon(
                     imageVector = Icons.Default.MoreVert,
@@ -399,11 +420,28 @@ private fun ReaderChapterPanelMoreMenu(
                 },
             )
         }
+        val rowActions = rememberChapterRowActionPrefs()
+        ReaderChapterPanelMenuItem(
+            text = stringResource(R.string.chapter_show_download_button),
+            selected = rowActions.showDownload,
+            onClick = {
+                onDismissRequest()
+                rowActions.setShowDownload(!rowActions.showDownload)
+            },
+        )
+        ReaderChapterPanelMenuItem(
+            text = stringResource(R.string.chapter_show_translate_button),
+            selected = rowActions.showTranslate,
+            onClick = {
+                onDismissRequest()
+                rowActions.setShowTranslate(!rowActions.showTranslate)
+            },
+        )
     }
 }
 
 @Composable
-private fun ReaderChapterPanelMenuItem(
+internal fun ReaderChapterPanelMenuItem(
     text: String,
     selected: Boolean,
     enabled: Boolean = true,
@@ -447,12 +485,38 @@ internal fun ComposeReaderActivityScaffold(
     var chapterSelectionState by remember { mutableStateOf<ChapterSelectionUiState?>(null) }
     val isTvPresentation = LocalUiPresentationConfig.current.isTv
     val defaultFocusRequester = remember { FocusRequester() }
+    var topBarHasFocus by remember { mutableStateOf(false) }
+    val hostView = LocalView.current
+    // A television stays in touch mode after one tap on the screen or one closed sheet, and Compose
+    // silently drops a programmatic focus request there: the chrome would open with no ring at all
+    // and every direction press would be lost. Taking the Android focus back first makes the request
+    // land, so every panel in the reader shares this through LocalTvFocusRequest.
+    val requestTvFocus: (FocusRequester) -> Boolean = remember(hostView) {
+        { requester ->
+            // A Compose focus request is dropped while the window is in touch mode, which is the
+            // state the reader is in after any pointer input: taking the Android focus back first
+            // makes the request land.
+            hostView.requestFocusFromTouch()
+            runCatching { requester.requestFocus() }.getOrDefault(false)
+        }
+    }
     val expandedPanelVisible = state.chaptersVisible || state.options.visible ||
         state.toolsVisible || state.autoScroll.visible
+    val chapterTabsFocusRequester = remember { FocusRequester() }
+    val chapterTabsRestoreScope = rememberCoroutineScope()
     LaunchedEffect(isTvPresentation, state.controlsVisible, expandedPanelVisible) {
         if (isTvPresentation && state.controlsVisible && !expandedPanelVisible) {
-            withFrameNanos { }
-            runCatching { defaultFocusRequester.requestFocus() }
+            // One request on the state change is not enough on a television. A sheet that closes
+            // releases the focus owner a few frames after its dismissal starts, so a request
+            // issued on that same frame is dropped with it and every later direction press lands
+            // on nothing: the remote looks dead until the chrome is hidden and shown again. Retry
+            // while the top bar owns no ring yet, and stop the moment it does.
+            repeat(5) {
+                withFrameNanos { }
+                if (topBarHasFocus) return@LaunchedEffect
+                requestTvFocus(defaultFocusRequester)
+                delay(70)
+            }
         }
     }
     BackHandler { callbacks.onBackPressed() }
@@ -469,6 +533,7 @@ internal fun ComposeReaderActivityScaffold(
     CompositionLocalProvider(
         LocalLiquidGlassBackdrop provides readerBackdrop,
         LocalLiquidGlassLayerBackdrop provides readerBackdrop,
+        LocalTvFocusRequest provides requestTvFocus,
     ) {
         Box(modifier = modifier.fillMaxSize()) {
         Box(
@@ -519,7 +584,11 @@ internal fun ComposeReaderActivityScaffold(
         }
 
         AnimatedVisibility(
-            visible = state.controlsVisible,
+            // A panel is composed next to the chrome, not in its own window: on a television the
+            // D-pad can step off the panel onto the dimmed toolbar behind it, where the ring hides
+            // under the sheet and CENTER runs the wrong action. With the chrome gone there is no
+            // such target at all, and a direction press at the panel edge simply stays put.
+            visible = state.controlsVisible && !(isTvPresentation && expandedPanelVisible),
             // Alpha animations create an offscreen layer that clips Backdrop shadows to these bounds.
             enter = slideInVertically { -it }.whenReaderAnimationsEnabled(!state.eInkModeEnabled),
             exit = slideOutVertically { -it }.whenReaderAnimationsEnabled(!state.eInkModeEnabled),
@@ -531,12 +600,16 @@ internal fun ComposeReaderActivityScaffold(
                 onChapters = callbacks.actions.onPages,
                 onOptions = callbacks.actions.onOptions,
                 defaultFocusRequester = defaultFocusRequester,
+                onFocusChanged = { topBarHasFocus = it },
             )
         }
 
         AnimatedVisibility(
-            visible = shouldShowReaderInfoBar(state.infoBar.visible, state.controlsVisible) &&
-                !infoBarEmbedded,
+            visible = shouldShowReaderInfoBar(
+                infoBarEnabled = state.infoBar.visible,
+                controlsVisible = state.controlsVisible,
+                isTvPresentation = isTvPresentation,
+            ) && !infoBarEmbedded,
             enter = fadeIn(
                 animationSpec = KototoroMotion.InfoBarEnter,
             ).whenReaderAnimationsEnabled(!state.eInkModeEnabled),
@@ -562,7 +635,7 @@ internal fun ComposeReaderActivityScaffold(
         )
         val floatingControlExitOffset = with(LocalDensity.current) { 32.dp.roundToPx() }
         AnimatedVisibility(
-            visible = bottomChromeVisibility.visible,
+            visible = bottomChromeVisibility.visible && !(isTvPresentation && expandedPanelVisible),
             enter = slideInVertically { it }.whenReaderAnimationsEnabled(!state.eInkModeEnabled),
             exit = slideOutVertically { it }.whenReaderAnimationsEnabled(!state.eInkModeEnabled),
             modifier = Modifier.align(Alignment.BottomCenter),
@@ -597,7 +670,7 @@ internal fun ComposeReaderActivityScaffold(
                             .align(Alignment.BottomCenter)
                             .navigationBarsPadding()
                             .padding(horizontal = 12.dp)
-                        .padding(bottom = ReaderFloatingControlInset),
+                            .padding(bottom = ReaderFloatingControlInset),
                     )
                 }
                 if (floatingControls.isNotEmpty()) {
@@ -673,7 +746,26 @@ internal fun ComposeReaderActivityScaffold(
                                 selectedIndex = ReaderChapterPanelTabs
                                     .indexOfFirst { it.first == chapterPanelTabId }
                                     .coerceAtLeast(0),
-                                onSelected = { callbacks.chapterPanel.onTabSelected(ReaderChapterPanelTabs[it].first) },
+                                onSelected = { index ->
+                                    callbacks.chapterPanel.onTabSelected(ReaderChapterPanelTabs[index].first)
+                                    if (isTvPresentation) {
+                                        // The tab pages are a second composition inside the sheet, so
+                                        // switching one rebuilds the body and can release the ring a
+                                        // frame later; nothing is focused then and every direction
+                                        // press is lost until BACK. Put the ring back on the tab bar.
+                                        chapterTabsRestoreScope.launch {
+                                            repeat(6) {
+                                                withFrameNanos { }
+                                                if (hostView.findFocus() != null) return@launch
+                                                requestTvFocus(chapterTabsFocusRequester)
+                                                delay(70)
+                                            }
+                                        }
+                                    }
+                                },
+                                // The search and options buttons sit in the same row, past the tabs.
+                                guardLastTabRight = false,
+                                selectedFocusRequester = chapterTabsFocusRequester,
                             )
                         }
                     },
@@ -700,7 +792,7 @@ internal fun ComposeReaderActivityScaffold(
         }
 
         if (state.toolsVisible) {
-            ModalBottomSheet(
+            TvModalBottomSheet(
                 onDismissRequest = {
                     callbacks.onPrimaryDestination(ReaderControlDestination.TOOLS)
                 },
@@ -719,7 +811,7 @@ internal fun ComposeReaderActivityScaffold(
         }
 
         if (state.autoScroll.visible) {
-            ModalBottomSheet(onDismissRequest = callbacks.autoScroll.onClose) {
+            TvModalBottomSheet(onDismissRequest = callbacks.autoScroll.onClose) {
                 ReaderAutoScrollPanel(state.autoScroll, callbacks.autoScroll)
             }
         }
@@ -781,7 +873,7 @@ internal fun ComposeReaderActivityScaffold(
             ) {
                 IconButton(
                     onClick = callbacks.autoScroll.onOpen,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.fillMaxSize().tvIconButtonRing(),
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.ic_timer_run),
@@ -846,28 +938,62 @@ private fun ReaderProgressControl(
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
 private fun ReaderAutoScrollPanel(state: ReaderAutoScrollUiState, callbacks: ReaderAutoScrollCallbacks) {
-    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+    var startSwitchHasFocus by remember { mutableStateOf(false) }
+    val startSwitchRequester = rememberTvSheetStartFocus { startSwitchHasFocus }
+    Column(
+        // A television draws this sheet in landscape, where the stack of rows is taller than the
+        // screen: without a scroll the last switches are off-screen and a remote cannot drag the
+        // sheet up. Focus inside the column brings its row into view on its own.
+        modifier = Modifier
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+    ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(R.string.reader_autoscroll), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-            IconButton(onClick = callbacks.onClose) { Text("×", style = MaterialTheme.typography.titleLarge) }
+            IconButton(
+                onClick = callbacks.onClose,
+                modifier = Modifier.tvFocusable(shape = CircleShape, addFocusTarget = false),
+            ) { Text("×", style = MaterialTheme.typography.titleLarge) }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(R.string.reader_autoscroll), modifier = Modifier.weight(1f))
-            Switch(checked = state.active, onCheckedChange = callbacks.onActiveChanged)
+            Switch(
+                checked = state.active,
+                onCheckedChange = callbacks.onActiveChanged,
+                modifier = Modifier
+                    .focusRequester(startSwitchRequester)
+                    .onFocusChanged { startSwitchHasFocus = it.isFocused }
+                    .tvFocusable(shape = CircleShape, addFocusTarget = false),
+            )
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(if (state.manuallyPaused) stringResource(R.string.play) else stringResource(R.string.pause), modifier = Modifier.weight(1f))
-            Switch(checked = !state.manuallyPaused, onCheckedChange = { callbacks.onPausedChanged(!it) })
+            Switch(
+                checked = !state.manuallyPaused,
+                onCheckedChange = { callbacks.onPausedChanged(!it) },
+                modifier = Modifier.tvFocusable(shape = CircleShape, addFocusTarget = false),
+            )
         }
-        Text(text = stringResource(R.string.speed_value, autoScrollSpeedMultiplier(state.speed)))
-        Slider(value = state.speed, onValueChange = callbacks.onSpeedChanged, valueRange = 0f..1f)
+        ReaderAutoScrollSpeedControl(
+            speed = state.speed,
+            onSpeedChange = callbacks.onSpeedChanged,
+            commitOnRelease = false,
+        )
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(R.string.reader_autoscroll_fab), modifier = Modifier.weight(1f))
-            Switch(checked = state.fabVisible, onCheckedChange = callbacks.onFabChanged)
+            Switch(
+                checked = state.fabVisible,
+                onCheckedChange = callbacks.onFabChanged,
+                modifier = Modifier.tvFocusable(shape = CircleShape, addFocusTarget = false),
+            )
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(R.string.reader_autoscroll_pause_on_ui), modifier = Modifier.weight(1f))
-            Switch(checked = state.pauseOnUi, onCheckedChange = callbacks.onPauseOnUiChanged)
+            Switch(
+                checked = state.pauseOnUi,
+                onCheckedChange = callbacks.onPauseOnUiChanged,
+                modifier = Modifier.tvFocusable(shape = CircleShape, addFocusTarget = false),
+            )
         }
         if (state.showPageDelay) {
             Text(stringResource(R.string.page_switch_timer, state.pageDelaySeconds), style = MaterialTheme.typography.bodySmall)
@@ -1005,421 +1131,101 @@ private fun ReaderCutoutAwareInfoBarLayout(
     val density = LocalDensity.current
     val layoutDirection = LocalLayoutDirection.current
     val view = LocalView.current
+    val baseHorizontalPadding = with(density) { ReaderInfoBarHorizontalPadding.roundToPx() }
+    val verticalPadding = with(density) { ReaderInfoBarVerticalPadding.roundToPx() }
+    val obstructionSpacing = with(density) { ReaderInfoBarObstructionSpacing.roundToPx() }
     // Reading the Compose inset values keeps this branch in sync when immersive mode or rotation changes.
     val displayCutoutInsets = WindowInsets.displayCutout
     val hasDisplayCutoutInsets = displayCutoutInsets.getLeft(density, layoutDirection) > 0 ||
         displayCutoutInsets.getTop(density) > 0 ||
         displayCutoutInsets.getRight(density, layoutDirection) > 0 ||
         displayCutoutInsets.getBottom(density) > 0
-    val displayCutouts = if (
-        avoidDisplayCutout && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && hasDisplayCutoutInsets
-    ) {
-        view.rootWindowInsets?.displayCutout?.boundingRects.orEmpty()
-    } else {
-        emptyList()
-    }
-    val topLeftRoundedCorner = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        view.rootWindowInsets?.getRoundedCorner(RoundedCorner.POSITION_TOP_LEFT)
-    } else {
-        null
-    }
-    val topRightRoundedCorner = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        view.rootWindowInsets?.getRoundedCorner(RoundedCorner.POSITION_TOP_RIGHT)
-    } else {
-        null
-    }
-    var boundsInWindow by remember { mutableStateOf<IntRect?>(null) }
-    val localCutout = boundsInWindow?.let { barBounds ->
-        displayCutouts
-            .asSequence()
-            .filter { cutout ->
-                cutout.right > barBounds.left && cutout.left < barBounds.right &&
-                    cutout.bottom > barBounds.top && cutout.top < barBounds.bottom
-            }
-            .maxByOrNull { cutout ->
-                minOf(cutout.right, barBounds.right) - maxOf(cutout.left, barBounds.left)
-            }
-            ?.let { cutout ->
-                ReaderInfoBarCutout(
-                    left = (cutout.left - barBounds.left).coerceAtLeast(0),
-                    right = (cutout.right - barBounds.left).coerceAtMost(barBounds.width),
-                )
-            }
-    }
-    val baseHorizontalPadding = with(density) { ReaderInfoBarHorizontalPadding.roundToPx() }
-    val verticalPadding = with(density) { ReaderInfoBarVerticalPadding.roundToPx() }
-    val obstructionSpacing = with(density) { ReaderInfoBarObstructionSpacing.roundToPx() }
-    val itemSpacing = with(density) { ReaderInfoBarItemSpacing.roundToPx() }
-    val contentTopInWindow = boundsInWindow?.top?.plus(verticalPadding)
-    val leftPadding = maxOf(
-        baseHorizontalPadding,
-        boundsInWindow?.let { bounds ->
-            topLeftRoundedCorner?.let { corner ->
-                resolveReaderInfoBarRoundedCornerPadding(
-                    edgeDistanceToCenter = corner.center.x - bounds.left,
-                    cornerCenterY = corner.center.y,
-                    radius = corner.radius,
-                    contentTopY = contentTopInWindow ?: bounds.top,
-                    spacing = obstructionSpacing,
-                )
-            }
-        } ?: 0,
-    )
-    val rightPadding = maxOf(
-        baseHorizontalPadding,
-        boundsInWindow?.let { bounds ->
-            topRightRoundedCorner?.let { corner ->
-                resolveReaderInfoBarRoundedCornerPadding(
-                    edgeDistanceToCenter = bounds.right - corner.center.x,
-                    cornerCenterY = corner.center.y,
-                    radius = corner.radius,
-                    contentTopY = contentTopInWindow ?: bounds.top,
-                    spacing = obstructionSpacing,
-                )
-            }
-        } ?: 0,
-    )
-
-    Layout(
-        content = {
-            readingStatus()
-            progressStatus?.invoke()
-            systemStatus?.invoke()
+    ReaderInfoBarRow(
+        alignment = when (layout) {
+            ReaderInfoBarLayout.CENTERED -> ReaderInfoBarAlignment.CENTERED
+            ReaderInfoBarLayout.SPLIT -> ReaderInfoBarAlignment.SPLIT
+            ReaderInfoBarLayout.SPLIT_LEADING_PROGRESS -> ReaderInfoBarAlignment.SPLIT_LEADING_PROGRESS
         },
-        modifier = Modifier
-            .fillMaxWidth()
-            .onGloballyPositioned { coordinates ->
-                val position = coordinates.positionInWindow()
-                val updatedBounds = IntRect(
-                    left = position.x.roundToInt(),
-                    top = position.y.roundToInt(),
-                    right = position.x.roundToInt() + coordinates.size.width,
-                    bottom = position.y.roundToInt() + coordinates.size.height,
-                )
-                if (boundsInWindow != updatedBounds) boundsInWindow = updatedBounds
-            },
-        measurePolicy = readerInfoBarMeasurePolicy(
-            layout = layout,
-            leftPadding = leftPadding,
-            rightPadding = rightPadding,
-            verticalPadding = verticalPadding,
-            obstructionSpacing = obstructionSpacing,
-            itemSpacing = itemSpacing,
-            localCutout = localCutout,
-            hasProgressStatus = progressStatus != null,
-            hasSystemStatus = systemStatus != null,
-        ),
+        readingStatus = readingStatus,
+        progressStatus = progressStatus,
+        systemStatus = systemStatus,
+        itemSpacing = ReaderInfoBarItemSpacing,
+        obstructionSpacing = ReaderInfoBarObstructionSpacing,
+        insets = { bounds ->
+            val topLeftRoundedCorner = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                view.rootWindowInsets?.getRoundedCorner(RoundedCorner.POSITION_TOP_LEFT)
+            } else {
+                null
+            }
+            val topRightRoundedCorner = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                view.rootWindowInsets?.getRoundedCorner(RoundedCorner.POSITION_TOP_RIGHT)
+            } else {
+                null
+            }
+            val contentTopInWindow = bounds?.top?.plus(verticalPadding)
+            val leftPadding = maxOf(
+                baseHorizontalPadding,
+                bounds?.let { bar ->
+                    topLeftRoundedCorner?.let { corner ->
+                        resolveReaderInfoBarRoundedCornerPadding(
+                            edgeDistanceToCenter = corner.center.x - bar.left,
+                            cornerCenterY = corner.center.y,
+                            radius = corner.radius,
+                            contentTopY = contentTopInWindow ?: bar.top,
+                            spacing = obstructionSpacing,
+                        )
+                    }
+                } ?: 0,
+            )
+            val rightPadding = maxOf(
+                baseHorizontalPadding,
+                bounds?.let { bar ->
+                    topRightRoundedCorner?.let { corner ->
+                        resolveReaderInfoBarRoundedCornerPadding(
+                            edgeDistanceToCenter = bar.right - corner.center.x,
+                            cornerCenterY = corner.center.y,
+                            radius = corner.radius,
+                            contentTopY = contentTopInWindow ?: bar.top,
+                            spacing = obstructionSpacing,
+                        )
+                    }
+                } ?: 0,
+            )
+            ReaderInfoBarInsets(left = leftPadding, right = rightPadding, vertical = verticalPadding)
+        },
+        cutout = { bounds ->
+            val displayCutouts = if (
+                avoidDisplayCutout && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && hasDisplayCutoutInsets
+            ) {
+                view.rootWindowInsets?.displayCutout?.boundingRects.orEmpty()
+            } else {
+                emptyList()
+            }
+            resolveDisplayCutout(bounds, displayCutouts)
+        },
     )
 }
 
-internal fun readerInfoBarMeasurePolicy(
-    layout: ReaderInfoBarLayout,
-    leftPadding: Int,
-    rightPadding: Int,
-    verticalPadding: Int,
-    obstructionSpacing: Int,
-    itemSpacing: Int,
-    localCutout: ReaderInfoBarCutout?,
-    hasProgressStatus: Boolean,
-    hasSystemStatus: Boolean,
-): MeasurePolicy = MeasurePolicy { measurables, constraints ->
-    val width = constraints.maxWidth
-    val contentHeightLimit = (constraints.maxHeight - verticalPadding * 2).coerceAtLeast(0)
-    val childConstraints = Constraints(
-        minWidth = 0,
-        maxWidth = (width - leftPadding - rightPadding).coerceAtLeast(0),
-        minHeight = 0,
-        maxHeight = contentHeightLimit,
-    )
-    var measurableIndex = 1
-    val progressMeasurable = if (hasProgressStatus) measurables.getOrNull(measurableIndex++) else null
-    val systemPlaceable = if (hasSystemStatus) {
-        measurables.getOrNull(measurableIndex)?.measure(childConstraints)
-    } else {
-        null
-    }
-    val systemWidth = systemPlaceable?.width ?: 0
-    val progressWidth = progressMeasurable?.maxIntrinsicWidth(contentHeightLimit)
-        ?.coerceIn(0, childConstraints.maxWidth) ?: 0
-    val trailingWidth = if (layout == ReaderInfoBarLayout.CENTERED && progressWidth > 0) {
-        itemSpacing + progressWidth + systemWidth
-    } else {
-        systemWidth
-    }
-    val readingMeasurable = measurables.first()
-    val desiredReadingWidth = readingMeasurable
-        .maxIntrinsicWidth(contentHeightLimit)
-        .coerceAtMost((childConstraints.maxWidth - trailingWidth).coerceAtLeast(0))
-    val placement = resolveReaderInfoBarPlacement(
-        width = width,
-        desiredReadingWidth = desiredReadingWidth,
-        systemStatusWidth = trailingWidth,
-        layout = layout,
-        leftPadding = leftPadding,
-        rightPadding = rightPadding,
-        cutout = localCutout,
-        cutoutSpacing = obstructionSpacing,
-    )
-    val readingPlaceable = readingMeasurable.measure(
-        childConstraints.copy(maxWidth = placement.readingWidth),
-    )
-    val progressPlacement = progressMeasurable?.let {
-        if (layout == ReaderInfoBarLayout.CENTERED) {
-            ReaderInfoBarItemPlacement(
-                x = placement.systemStatusX + itemSpacing,
-                width = progressWidth,
-            )
-        } else {
-            resolveReaderInfoBarProgressPlacement(
-                readingEnd = placement.readingX + readingPlaceable.width,
-                systemStatusX = placement.systemStatusX,
-                desiredProgressWidth = progressWidth,
-                cutout = localCutout,
-                cutoutSpacing = obstructionSpacing,
+/** The biggest display cutout the bar actually runs into, in bar-local x coordinates. */
+private fun resolveDisplayCutout(
+    bounds: ReaderInfoBarBounds?,
+    displayCutouts: List<android.graphics.Rect>,
+): ReaderInfoBarCutout? = bounds?.let { barBounds ->
+    displayCutouts
+        .asSequence()
+        .filter { cutout ->
+            cutout.right > barBounds.left && cutout.left < barBounds.right &&
+                cutout.bottom > barBounds.top && cutout.top < barBounds.bottom
+        }
+        .maxByOrNull { cutout ->
+            minOf(cutout.right, barBounds.right) - maxOf(cutout.left, barBounds.left)
+        }
+        ?.let { cutout ->
+            ReaderInfoBarCutout(
+                left = (cutout.left - barBounds.left).coerceAtLeast(0),
+                right = (cutout.right - barBounds.left).coerceAtMost(barBounds.width),
             )
         }
-    }
-    val progressPlaceable = progressPlacement?.let { progress ->
-        progressMeasurable.measure(childConstraints.copy(maxWidth = progress.width))
-    }
-    val resolvedSystemStatusX = if (layout == ReaderInfoBarLayout.CENTERED && progressPlaceable != null) {
-        progressPlacement.x + progressPlaceable.width
-    } else {
-        placement.systemStatusX
-    }
-    val contentHeight = maxOf(
-        readingPlaceable.height,
-        progressPlaceable?.height ?: 0,
-        systemPlaceable?.height ?: 0,
-    )
-    val height = (contentHeight + verticalPadding * 2).coerceIn(constraints.minHeight, constraints.maxHeight)
-    layout(width, height) {
-        readingPlaceable.place(
-            x = placement.readingX,
-            y = (height - readingPlaceable.height) / 2,
-        )
-        systemPlaceable?.place(
-            x = resolvedSystemStatusX,
-            y = (height - systemPlaceable.height) / 2,
-        )
-        progressPlaceable?.place(
-            x = progressPlacement.x,
-            y = (height - progressPlaceable.height) / 2,
-        )
-    }
-}
-
-@Immutable
-internal data class ReaderInfoBarCutout(
-    val left: Int,
-    val right: Int,
-)
-
-@Immutable
-internal data class ReaderInfoBarPlacement(
-    val readingX: Int,
-    val readingWidth: Int,
-    val systemStatusX: Int,
-)
-
-@Immutable
-internal data class ReaderInfoBarItemPlacement(
-    val x: Int,
-    val width: Int,
-)
-
-internal fun resolveReaderInfoBarProgressPlacement(
-    readingEnd: Int,
-    systemStatusX: Int,
-    desiredProgressWidth: Int,
-    cutout: ReaderInfoBarCutout?,
-    cutoutSpacing: Int,
-): ReaderInfoBarItemPlacement {
-    val availableStart = readingEnd + cutoutSpacing
-    val availableEnd = (systemStatusX - cutoutSpacing).coerceAtLeast(availableStart)
-    val overlappingCutout = cutout?.takeIf {
-        it.right > availableStart && it.left < availableEnd
-    }
-    if (overlappingCutout == null) {
-        val width = desiredProgressWidth.coerceIn(0, availableEnd - availableStart)
-        return ReaderInfoBarItemPlacement(
-            x = availableStart + (availableEnd - availableStart - width) / 2,
-            width = width,
-        )
-    }
-
-    val leftEnd = (overlappingCutout.left - cutoutSpacing).coerceIn(availableStart, availableEnd)
-    val rightStart = (overlappingCutout.right + cutoutSpacing).coerceIn(availableStart, availableEnd)
-    val leftWidth = leftEnd - availableStart
-    val rightWidth = availableEnd - rightStart
-    return if (rightWidth >= leftWidth) {
-        ReaderInfoBarItemPlacement(
-            x = rightStart,
-            width = desiredProgressWidth.coerceIn(0, rightWidth),
-        )
-    } else {
-        val width = desiredProgressWidth.coerceIn(0, leftWidth)
-        ReaderInfoBarItemPlacement(
-            x = leftEnd - width,
-            width = width,
-        )
-    }
-}
-
-internal fun resolveReaderInfoBarRoundedCornerPadding(
-    edgeDistanceToCenter: Int,
-    cornerCenterY: Int,
-    radius: Int,
-    contentTopY: Int,
-    spacing: Int,
-): Int {
-    if (radius <= 0 || edgeDistanceToCenter <= 0) return 0
-    val verticalDistance = (cornerCenterY - contentTopY).coerceIn(0, radius)
-    val visibleRadiusAtContentTop = sqrt(
-        radius.toDouble() * radius - verticalDistance.toDouble() * verticalDistance,
-    )
-    val clippedInset = edgeDistanceToCenter - visibleRadiusAtContentTop
-    return if (clippedInset > 0) ceil(clippedInset + spacing).toInt() else 0
-}
-
-internal fun resolveReaderInfoBarPlacement(
-    width: Int,
-    desiredReadingWidth: Int,
-    systemStatusWidth: Int,
-    layout: ReaderInfoBarLayout,
-    leftPadding: Int,
-    rightPadding: Int,
-    cutout: ReaderInfoBarCutout?,
-    cutoutSpacing: Int,
-): ReaderInfoBarPlacement {
-    val contentLeft = leftPadding
-    val contentRight = (width - rightPadding).coerceAtLeast(contentLeft)
-    val availableWidth = contentRight - contentLeft
-    val readingWidth = desiredReadingWidth.coerceIn(0, (availableWidth - systemStatusWidth).coerceAtLeast(0))
-    val naturalSystemX = when (layout) {
-        ReaderInfoBarLayout.CENTERED -> (width - readingWidth - systemStatusWidth) / 2 + readingWidth
-        ReaderInfoBarLayout.SPLIT -> contentRight - systemStatusWidth
-    }
-    val naturalReadingX = when (layout) {
-        ReaderInfoBarLayout.CENTERED -> naturalSystemX - readingWidth
-        ReaderInfoBarLayout.SPLIT -> contentLeft
-    }
-    val protectedCutout = cutout?.let {
-        ReaderInfoBarCutout(
-            left = (it.left - cutoutSpacing).coerceIn(contentLeft, contentRight),
-            right = (it.right + cutoutSpacing).coerceIn(contentLeft, contentRight),
-        )
-    }?.takeIf { it.left < it.right }
-        ?: return ReaderInfoBarPlacement(naturalReadingX, readingWidth, naturalSystemX)
-
-    val leftWidth = (protectedCutout.left - contentLeft).coerceAtLeast(0)
-    val rightWidth = (contentRight - protectedCutout.right).coerceAtLeast(0)
-
-    if (layout == ReaderInfoBarLayout.SPLIT) {
-        val readingPlacement = resolveReaderEdgeAnchoredItem(
-            itemWidth = readingWidth,
-            contentLeft = contentLeft,
-            contentRight = contentRight,
-            cutout = protectedCutout,
-            anchorAtStart = true,
-        )
-        val systemPlacement = resolveReaderEdgeAnchoredItem(
-            itemWidth = systemStatusWidth,
-            contentLeft = contentLeft,
-            contentRight = contentRight,
-            cutout = protectedCutout,
-            anchorAtStart = false,
-        )
-        return ReaderInfoBarPlacement(
-            readingX = readingPlacement.x,
-            readingWidth = readingPlacement.width,
-            systemStatusX = systemPlacement.x,
-        )
-    }
-
-    fun overlaps(x: Int, itemWidth: Int): Boolean =
-        itemWidth > 0 && x < protectedCutout.right && x + itemWidth > protectedCutout.left
-
-    if (!overlaps(naturalReadingX, readingWidth) && !overlaps(naturalSystemX, systemStatusWidth)) {
-        return ReaderInfoBarPlacement(naturalReadingX, readingWidth, naturalSystemX)
-    }
-
-    val totalWidth = readingWidth + systemStatusWidth
-    if (readingWidth <= leftWidth && systemStatusWidth <= rightWidth) {
-        return ReaderInfoBarPlacement(
-            readingX = if (layout == ReaderInfoBarLayout.CENTERED) {
-                protectedCutout.left - readingWidth
-            } else {
-                contentLeft
-            },
-            readingWidth = readingWidth,
-            systemStatusX = if (layout == ReaderInfoBarLayout.CENTERED) {
-                protectedCutout.right
-            } else {
-                contentRight - systemStatusWidth
-            },
-        )
-    }
-    if (totalWidth <= leftWidth) {
-        val start = if (layout == ReaderInfoBarLayout.CENTERED) {
-            contentLeft + (leftWidth - totalWidth) / 2
-        } else {
-            contentLeft
-        }
-        return ReaderInfoBarPlacement(start, readingWidth, start + readingWidth)
-    }
-    if (totalWidth <= rightWidth) {
-        val start = if (layout == ReaderInfoBarLayout.CENTERED) {
-            protectedCutout.right + (rightWidth - totalWidth) / 2
-        } else {
-            contentRight - totalWidth
-        }
-        return ReaderInfoBarPlacement(start, readingWidth, start + readingWidth)
-    }
-
-    val systemOnRight = systemStatusWidth <= rightWidth || systemStatusWidth > leftWidth
-    val safeReadingWidth = if (systemOnRight) leftWidth else rightWidth
-    val resolvedReadingWidth = readingWidth.coerceAtMost(safeReadingWidth)
-    return if (systemOnRight) {
-        ReaderInfoBarPlacement(
-            readingX = contentLeft,
-            readingWidth = resolvedReadingWidth,
-            systemStatusX = protectedCutout.right,
-        )
-    } else {
-        ReaderInfoBarPlacement(
-            readingX = protectedCutout.right,
-            readingWidth = resolvedReadingWidth,
-            systemStatusX = protectedCutout.left - systemStatusWidth,
-        )
-    }
-}
-
-private fun resolveReaderEdgeAnchoredItem(
-    itemWidth: Int,
-    contentLeft: Int,
-    contentRight: Int,
-    cutout: ReaderInfoBarCutout,
-    anchorAtStart: Boolean,
-): ReaderInfoBarItemPlacement {
-    val naturalX = if (anchorAtStart) contentLeft else contentRight - itemWidth
-    val overlapsCutout = itemWidth > 0 && naturalX < cutout.right && naturalX + itemWidth > cutout.left
-    if (!overlapsCutout) return ReaderInfoBarItemPlacement(naturalX, itemWidth)
-
-    val beforeWidth = (cutout.left - contentLeft).coerceAtLeast(0)
-    val afterWidth = (contentRight - cutout.right).coerceAtLeast(0)
-    if (anchorAtStart) {
-        if (itemWidth <= beforeWidth) return ReaderInfoBarItemPlacement(contentLeft, itemWidth)
-        if (itemWidth <= afterWidth) return ReaderInfoBarItemPlacement(cutout.right, itemWidth)
-    } else {
-        if (itemWidth <= afterWidth) return ReaderInfoBarItemPlacement(contentRight - itemWidth, itemWidth)
-        if (itemWidth <= beforeWidth) return ReaderInfoBarItemPlacement(cutout.left - itemWidth, itemWidth)
-    }
-    return if (beforeWidth >= afterWidth) {
-        ReaderInfoBarItemPlacement(contentLeft, itemWidth.coerceAtMost(beforeWidth))
-    } else {
-        ReaderInfoBarItemPlacement(cutout.right, itemWidth.coerceAtMost(afterWidth))
-    }
 }
 
 @Composable
@@ -1557,7 +1363,11 @@ internal fun BoxScope.ReaderPageInfoBar(
     animationsEnabled: Boolean = true,
 ) {
     AnimatedVisibility(
-        visible = shouldShowReaderInfoBar(state.visible, controlsVisible),
+        visible = shouldShowReaderInfoBar(
+            infoBarEnabled = state.visible,
+            controlsVisible = controlsVisible,
+            isTvPresentation = LocalUiPresentationConfig.current.isTv,
+        ),
         enter = fadeIn(animationSpec = KototoroMotion.InfoBarEnter)
             .whenReaderAnimationsEnabled(animationsEnabled),
         exit = fadeOut(animationSpec = KototoroMotion.fadeFast())
@@ -1591,15 +1401,37 @@ private fun ReaderMessageHost(
         exit = fadeOut().whenReaderAnimationsEnabled(animationsEnabled),
         modifier = modifier,
     ) {
-        Surface(shape = MaterialTheme.shapes.small, color = Color.Black.copy(alpha = 0.78f), contentColor = Color.White) {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 10.dp)) {
+        // The reader's only feedback channel for actions like "rotation unlocked" or "saved":
+        // bodySmall on a 78% black plate is fine in the hand but unreadable from a couch, so the
+        // television gets the chrome's own surface ramp and body-sized text instead.
+        val isTvPresentation = LocalUiPresentationConfig.current.isTv
+        Surface(
+            shape = if (isTvPresentation) RoundedCornerShape(12.dp) else MaterialTheme.shapes.small,
+            color = if (isTvPresentation) {
+                MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.96f)
+            } else {
+                Color.Black.copy(alpha = 0.78f)
+            },
+            contentColor = if (isTvPresentation) MaterialTheme.colorScheme.onSurface else Color.White,
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(
+                    start = if (isTvPresentation) 20.dp else 10.dp,
+                    end = if (isTvPresentation) 20.dp else 0.dp,
+                ),
+            ) {
                 Text(
                     text = displayedMessage?.text.orEmpty(),
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.padding(vertical = 10.dp),
+                    style = if (isTvPresentation) {
+                        MaterialTheme.typography.titleMedium
+                    } else {
+                        MaterialTheme.typography.bodySmall
+                    },
+                    modifier = Modifier.padding(vertical = if (isTvPresentation) 14.dp else 10.dp),
                 )
                 displayedMessage?.actionLabel?.let { label ->
-                    TextButton(onClick = onAction) { Text(label) }
+                    TvTextButton(onClick = onAction) { Text(label) }
                 }
             }
         }
@@ -1613,25 +1445,38 @@ private fun ReaderComposeTopBar(
     onChapters: () -> Unit,
     onOptions: () -> Unit,
     defaultFocusRequester: FocusRequester? = null,
+    onFocusChanged: (Boolean) -> Unit = {},
 ) {
     val isTvPresentation = LocalUiPresentationConfig.current.isTv
     // Shared with the Windows reader (core-ui `ReaderChromeTopBar`).
-    ReaderChromeTopBar(
-        title = state.title,
-        subtitle = state.subtitle,
-        chapterTitleAtBottom = state.options.chapterTitleAtBottom,
-        backDescription = stringResource(androidx.appcompat.R.string.abc_action_bar_up_description),
-        optionsDescription = stringResource(R.string.options),
-        onNavigateBack = onNavigateBack,
-        onChapters = onChapters,
-        onOptions = onOptions,
-        titleFocusRequester = defaultFocusRequester.takeIf { isTvPresentation && !state.options.chapterTitleAtBottom },
-        optionsFocusRequester = defaultFocusRequester.takeIf { isTvPresentation && state.options.chapterTitleAtBottom },
-    )
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .onFocusChanged { onFocusChanged(it.hasFocus) },
+    ) {
+        ReaderChromeTopBar(
+            title = state.title,
+            subtitle = state.subtitle,
+            chapterTitleAtBottom = state.options.chapterTitleAtBottom,
+            backDescription = stringResource(androidx.appcompat.R.string.abc_action_bar_up_description),
+            optionsDescription = stringResource(R.string.options),
+            onNavigateBack = onNavigateBack,
+            onChapters = onChapters,
+            onOptions = onOptions,
+            titleFocusRequester = defaultFocusRequester.takeIf {
+                isTvPresentation && !state.options.chapterTitleAtBottom
+            },
+            optionsFocusRequester = defaultFocusRequester.takeIf {
+                isTvPresentation && state.options.chapterTitleAtBottom
+            },
+        )
+    }
 }
 
-internal fun shouldShowReaderInfoBar(infoBarEnabled: Boolean, controlsVisible: Boolean): Boolean =
-    infoBarEnabled && !controlsVisible
+internal fun shouldShowReaderInfoBar(    infoBarEnabled: Boolean,
+    controlsVisible: Boolean,
+    isTvPresentation: Boolean = false,
+): Boolean = infoBarEnabled && !controlsVisible && !isTvPresentation
 
 internal fun isReaderBatteryCharging(status: Int): Boolean =
     status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL
