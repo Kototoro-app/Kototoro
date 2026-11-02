@@ -2,6 +2,9 @@ package org.skepsun.kototoro.settings.sources.groups
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 const val SOURCE_GROUP_SCHEMA_VERSION = 1
 const val SOURCE_GROUP_MAX_BYTES = 2L * 1024L * 1024L
@@ -64,7 +67,15 @@ object SourceGroupJson {
 	fun encode(group: SourceGroup): String = json.encodeToString(SourceGroup.serializer(), group)
 
 	fun decode(text: String): SourceGroup = json.decodeFromString(SourceGroup.serializer(), text)
+
+	/** Reads only the "schema" field, so a newer file whose body no longer decodes is still recognized. */
+	fun peekSchema(text: String): Int? = runCatching {
+		json.parseToJsonElement(text).jsonObject["schema"]?.jsonPrimitive?.intOrNull
+	}.getOrNull()
 }
+
+/** True when the group was written by a newer app version than this one understands. */
+fun SourceGroup.isNewerSchema(): Boolean = schema > SOURCE_GROUP_SCHEMA_VERSION
 
 /** Returns true when the group can be safely stored and applied. */
 fun SourceGroup.isValid(): Boolean {
