@@ -10,10 +10,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.core.ui.compose.KototoroSheetSurface
 import org.skepsun.kototoro.core.ui.compose.SheetDragHandle
+import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.core.ui.settings.ExtensionInstallBehaviorContent
 import org.skepsun.kototoro.core.ui.settings.ExtensionInstallBehaviorUiItem
 import org.skepsun.kototoro.core.ui.settings.PreferenceChoice
@@ -47,7 +47,7 @@ fun ExtensionInstallBehaviorSheet(
         ) {
             ExtensionInstallBehaviorContent(
                 behaviors = behaviors.map {
-                    ExtensionInstallBehaviorUiItem(it.type, it.title, it.policy.name, painterResource(it.iconRes))
+                    ExtensionInstallBehaviorUiItem(it.type, it.title, it.policy.name, rememberSafePainter(it.iconRes))
                 },
                 policyOptions = policyOptions.map { PreferenceChoice(it.value.name, it.label) },
                 onPolicyChange = { type, policy -> onPolicyChange(type, ExtensionInstallPolicy.valueOf(policy)) },
