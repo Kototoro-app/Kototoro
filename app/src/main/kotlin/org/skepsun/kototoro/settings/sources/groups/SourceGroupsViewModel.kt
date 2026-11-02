@@ -110,6 +110,8 @@ class SourceGroupsViewModel @Inject constructor(
 			throw e
 		} catch (e: SourceGroupTooLargeException) {
 			_message.value = context.getString(R.string.source_groups_file_too_large)
+		} catch (e: SourceGroupNewerSchemaException) {
+			_message.value = context.getString(R.string.source_groups_newer_schema)
 		} catch (e: SourceGroupFormatException) {
 			_message.value = context.getString(R.string.source_groups_invalid_file)
 		} catch (e: Exception) {
