@@ -20,6 +20,7 @@ import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.settings.compose.SyncSettingsScreen
 import org.skepsun.kototoro.settings.compose.SyncSettingsUiState
 import org.skepsun.kototoro.sync.google.ui.GoogleDriveSyncSettingsViewModel
+import org.skepsun.kototoro.sync.google.ui.syncStageLabel
 
 @Composable
 fun SyncSettingsRoute(
@@ -66,7 +67,7 @@ fun SyncSettingsRoute(
             },
             googleDriveErrorSummary = googleDriveState.lastError,
             isGoogleDriveSyncing = googleDriveState.isSyncing,
-            googleDriveSyncStage = googleDriveState.syncStage,
+            googleDriveSyncStage = googleDriveState.syncStage?.let { context.syncStageLabel(it) },
             isGoogleDriveSettingsSyncEnabled = googleDriveState.isSettingsSyncEnabled,
         ),
         snackbarHostState = snackbarHostState,
