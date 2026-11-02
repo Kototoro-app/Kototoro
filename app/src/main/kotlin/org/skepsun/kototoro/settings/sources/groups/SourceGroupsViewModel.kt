@@ -86,9 +86,12 @@ class SourceGroupsViewModel @Inject constructor(
 
 	fun importGroup(uri: Uri) {
 		viewModelScope.launch {
-			runAction(R.string.source_groups_imported) {
-				repository.importFromUri(uri)
+			runAction(null) {
+				val result = repository.importFromUri(uri)
 				_groups.value = repository.list()
+				_message.value = context.getString(
+					if (result.updated) R.string.source_groups_updated else R.string.source_groups_imported,
+				)
 			}
 		}
 	}
