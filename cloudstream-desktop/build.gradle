@@ -136,6 +136,8 @@ dependencies {
 	implementation 'com.fasterxml.jackson.core:jackson-databind:2.15.2'
 	implementation 'com.fasterxml.jackson.module:jackson-module-kotlin:2.15.2'
 	implementation libs.jsoup
+	// Android gets ksoup through IReader; plugins (StreamPlay, AnimePahe, …) need the official library's release here.
+	implementation libs.ksoup.cloudstream
 	implementation libs.rhino
 	implementation libs.gson
 	implementation libs.ktor.http
