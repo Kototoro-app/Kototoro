@@ -16,7 +16,7 @@ class CloudstreamPluginCompatibilityCheckerTest : FunSpec({
 		val pluginFile = createPluginArchive(
 			listOf(
 				"Lcom/lagradost/cloudstream3/MainAPI;",
-				"Lcom/lagradost/cloudstream3/MainActivity;",
+				"Lcom/lagradost/cloudstream3/ui/home/HomeViewModel;",
 				"Lcom/lagradost/cloudstream3/ui/home/HomeViewModel;",
 			),
 		)
@@ -29,7 +29,7 @@ class CloudstreamPluginCompatibilityCheckerTest : FunSpec({
 
 	test("plugin executing an instruction against an unavailable Cloudstream class is rejected") {
 		val pluginFile = createPluginArchive(
-			createExecutableReferenceDex("Lcom/lagradost/cloudstream3/MainActivity;"),
+			createExecutableReferenceDex("Lcom/lagradost/cloudstream3/ui/home/HomeViewModel;"),
 		)
 
 		val result = CloudstreamPluginCompatibilityChecker.inspect(
@@ -37,7 +37,7 @@ class CloudstreamPluginCompatibilityCheckerTest : FunSpec({
 			hostClassLoader = CloudstreamPluginCompatibilityChecker::class.java.classLoader!!,
 		).shouldBeInstanceOf<CloudstreamPluginCompatibility.Incompatible>()
 
-		result.missingHostClasses shouldContainExactly listOf("com.lagradost.cloudstream3.MainActivity")
+		result.missingHostClasses shouldContainExactly listOf("com.lagradost.cloudstream3.ui.home.HomeViewModel")
 	}
 
 	test("plugin referencing only available Cloudstream runtime classes is accepted") {
@@ -149,7 +149,7 @@ class CloudstreamPluginCompatibilityCheckerTest : FunSpec({
 
     test("a missing host class is still rejected next to the plugin's own Cloudstream-namespace classes") {
         val provider = "Lcom/lagradost/cloudstream3/ar/youtube/YoutubeProvider;"
-        val missing = "Lcom/lagradost/cloudstream3/MainActivity;"
+        val missing = "Lcom/lagradost/cloudstream3/ui/home/HomeViewModel;"
 
         val result = CloudstreamPluginCompatibilityChecker.inspect(
             createPluginArchive(
@@ -162,7 +162,7 @@ class CloudstreamPluginCompatibilityCheckerTest : FunSpec({
             CloudstreamPluginCompatibilityChecker::class.java.classLoader!!,
         ).shouldBeInstanceOf<CloudstreamPluginCompatibility.Incompatible>()
 
-        result.missingHostClasses shouldContainExactly listOf("com.lagradost.cloudstream3.MainActivity")
+        result.missingHostClasses shouldContainExactly listOf("com.lagradost.cloudstream3.ui.home.HomeViewModel")
     }
 })
 
