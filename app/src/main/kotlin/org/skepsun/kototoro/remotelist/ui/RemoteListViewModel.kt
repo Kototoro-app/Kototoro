@@ -45,6 +45,7 @@ import org.skepsun.kototoro.core.util.ext.getCauseUrl
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
 import org.skepsun.kototoro.explore.data.ContentSourcesRepository
 import org.skepsun.kototoro.explore.data.SourceAvailabilityRepository
+import org.skepsun.kototoro.explore.data.classifyAvailability
 import org.skepsun.kototoro.explore.domain.ExploreRepository
 import org.skepsun.kototoro.filter.ui.FilterCoordinator
 import org.skepsun.kototoro.list.domain.ContentListMapper
@@ -360,7 +361,7 @@ open class RemoteListViewModel @Inject constructor(
                     e.printStackTraceDebug()
                     listError.value = e
                     if (shouldUpdateSourceAvailability(append)) {
-                        sourceAvailabilityRepository.markEmpty(source)
+                        sourceAvailabilityRepository.setAvailability(source, classifyAvailability(e))
                     }
                     if (!mangaList.value.isNullOrEmpty()) {
                         errorEvent.call(e)
