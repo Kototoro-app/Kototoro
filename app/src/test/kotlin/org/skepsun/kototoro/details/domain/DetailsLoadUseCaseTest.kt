@@ -45,7 +45,6 @@ class DetailsLoadUseCaseTest {
 		imageGetter = mockk<Html.ImageGetter>(relaxed = true),
 		networkState = networkState,
 		mangaDatabase = database,
-		sourceAvailabilityRepository = mockk(relaxed = true),
 	)
 
 	@Test
