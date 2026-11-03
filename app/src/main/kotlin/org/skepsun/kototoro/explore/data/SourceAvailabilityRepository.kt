@@ -57,6 +57,7 @@ class SourceAvailabilityRepository @Inject constructor(
         setAvailability(source.name, availability)
     }
 
+    @Synchronized
     private fun setAvailability(sourceName: String, availability: ContentSourceAvailability) {
         val available = getSet(KEY_AVAILABLE_SOURCES).toMutableSet()
         val empty = getSet(KEY_EMPTY_SOURCES).toMutableSet()

@@ -43,6 +43,7 @@ class SourceLockStore private constructor(context: Context) {
 	 * null = unlocked. The unlock is stored as a marker string instead of removing the key, so the settings
 	 * sync (which merges per key and never deletes) can propagate it to other devices.
 	 */
+	@Synchronized
 	fun set(name: String, lockedEnabled: Boolean?) {
 		prefs.edit {
 			if (lockedEnabled == null) putString(name, UNLOCKED) else putBoolean(name, lockedEnabled)

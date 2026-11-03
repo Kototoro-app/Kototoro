@@ -50,6 +50,7 @@ class FavouriteCategoryDisplayPreferences @Inject constructor(
     }
 
     /** Stores [ids] as the hidden set; an empty set removes the key entirely. */
+    @Synchronized
     fun setHiddenCategoryIds(spaceId: SpaceId, ids: Set<Long>) {
         prefs.edit {
             if (ids.isEmpty()) {
@@ -60,6 +61,7 @@ class FavouriteCategoryDisplayPreferences @Inject constructor(
         }
     }
 
+    @Synchronized
     fun setCategoryHidden(spaceId: SpaceId, categoryId: Long, isHidden: Boolean) {
         val current = getHiddenCategoryIds(spaceId).toMutableSet()
         if (if (isHidden) current.add(categoryId) else current.remove(categoryId)) {
