@@ -733,7 +733,7 @@ RELEASE_KEY_PASSWORD=***
 - `chore: ...` - 杂项
 
 ### 翻译
-翻译内容通过 Weblate 管理，避免手动批量修改字符串资源。
+项目不使用 Weblate：翻译直接修改 `app/src/main/res/values-*/strings.xml`（社区 PR 也是这样提交的），改动时保持占位符的序号与类型不变。桌面端文案由 `prepareDesktopStrings` 从同一份资源导出，会一起生效。
 
 ### 发布流程
 参考 `.github/RELEASE_GUIDE.md`：
