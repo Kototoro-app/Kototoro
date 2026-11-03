@@ -1105,8 +1105,9 @@ class ContentSourcesRepository @Inject constructor(
         if (jsonSourcesToEnable.isNotEmpty()) jsonSourceManager.toggleSourcesBatch(jsonSourcesToEnable, true)
         if (jsonSourcesToDisable.isNotEmpty()) jsonSourceManager.toggleSourcesBatch(jsonSourcesToDisable, false)
 
+        // Rows must exist before the UPDATEs below; done outside withLocalChanges to avoid re-entering it.
+        assimilateNewSources(force = true)
         sourceStateModifiedStore.withLocalChanges(db) {
-            assimilateNewSources()
             for (name in nativeSourcesToEnable) dao.setEnabled(name, true, BuildConfig.VERSION_CODE)
             for (name in nativeSourcesToDisable) dao.setEnabled(name, false, BuildConfig.VERSION_CODE)
         }
@@ -1330,8 +1331,8 @@ class ContentSourcesRepository @Inject constructor(
         if (jsonOff.isNotEmpty()) jsonSourceManager.toggleSourcesBatch(jsonOff, false)
 
         if (nativeOn.isNotEmpty() || nativeOff.isNotEmpty()) {
+            assimilateNewSources(force = true)
             sourceStateModifiedStore.withLocalChanges(db) {
-                assimilateNewSources()
                 for (name in nativeOn) dao.setEnabled(name, true, BuildConfig.VERSION_CODE)
                 for (name in nativeOff) dao.setEnabled(name, false, BuildConfig.VERSION_CODE)
             }
