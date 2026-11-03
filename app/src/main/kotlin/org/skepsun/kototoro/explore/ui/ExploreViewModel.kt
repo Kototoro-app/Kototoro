@@ -318,15 +318,24 @@ class ExploreViewModel @Inject constructor(
                     pinned.mapTo(result) { ContentSourceItem(it, isGrid) }
                 }
 
+                // null key = sources without a locale ("Other"), resolved via resources at render time.
                 val grouped = unpinned.groupBy {
-                    it.mangaSource.getLocale()?.getDisplayName(java.util.Locale.getDefault())?.replaceFirstChar { c -> c.uppercase() } ?: "Other"
-                }.toSortedMap()
+                    it.mangaSource.getLocale()?.getDisplayName(java.util.Locale.getDefault())?.replaceFirstChar { c -> c.uppercase() }
+                }.toSortedMap(nullsLast<String>())
 
                 grouped.forEach { (language, sourcesInLang) ->
-                    result += ListHeader(
-                        text = language,
-                        buttonTextRes = if (allSourcesEnabled && result.none { it is ListHeader && it.buttonTextRes == R.string.manage }) R.string.manage else if (result.none { it is ListHeader && it.buttonTextRes == R.string.catalog }) R.string.catalog else 0,
-                    )
+                    val buttonRes = if (allSourcesEnabled && result.none { it is ListHeader && it.buttonTextRes == R.string.manage }) {
+                        R.string.manage
+                    } else if (result.none { it is ListHeader && it.buttonTextRes == R.string.catalog }) {
+                        R.string.catalog
+                    } else {
+                        0
+                    }
+                    result += if (language != null) {
+                        ListHeader(text = language, buttonTextRes = buttonRes)
+                    } else {
+                        ListHeader(textRes = R.string.other, buttonTextRes = buttonRes)
+                    }
                     sourcesInLang.mapTo(result) { ContentSourceItem(it, isGrid) }
                 }
             } else {

@@ -170,7 +170,7 @@ fun KototoroExploreSourcesScreen(
                             if (listModel.buttonTextRes != 0) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                                    contentDescription = "More",
+                                    contentDescription = stringResource(R.string.more),
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
@@ -369,7 +369,7 @@ fun ExploreSelectionTopBar(
             }
         }
         Text(
-            text = "$selectedCount selected",
+            text = stringResource(R.string.selected_count, selectedCount),
             style = MaterialTheme.typography.titleLarge,
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
@@ -492,7 +492,7 @@ fun ExploreSelectionTopBar(
                                 )
                                 CompactDropdownMenuItem(
                                     text = {
-                                        CompactDropdownMenuText(text = "Shortcut")
+                                        CompactDropdownMenuText(text = stringResource(R.string.create_shortcut))
                                     },
                                     onClick = {
                                         showOverflowMenu = false
