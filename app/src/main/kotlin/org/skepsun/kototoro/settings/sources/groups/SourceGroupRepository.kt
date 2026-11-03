@@ -110,7 +110,7 @@ class SourceGroupRepository @Inject constructor(
 				packages = collectInstalledPackages(),
 				sourceStates = database.getSourcesDao().findAll().mapNotNull {
 					val lock = contentSources.lockState(it.source)
-					if (it.isEnabled || lock != null || it.isPinned) {
+					if (it.isEnabled || lock != null || it.isPinned || currentDomainOverride(it.source) != null) {
 						SourceGroupSourceState(
 							source = it.source,
 							enabled = it.isEnabled,
@@ -123,7 +123,7 @@ class SourceGroupRepository @Inject constructor(
 				} + database.getJsonSourceDao().findAll().mapNotNull {
 					// JSON sources live in their own table; their lock is keyed by the entity id.
 					val lock = contentSources.lockState(it.id)
-					if (it.enabled || lock != null || it.isPinned) {
+					if (it.enabled || lock != null || it.isPinned || currentDomainOverride(it.id) != null) {
 						SourceGroupSourceState(
 							source = it.id,
 							enabled = it.enabled,
@@ -383,8 +383,8 @@ class SourceGroupRepository @Inject constructor(
 	}
 
 	/**
-	 * Resets the per-source state of everything the group does not mention: pins and manual domain
-	 * overrides are removed, and the manual order becomes the group order followed by the remaining rows.
+	 * Resets the per-source state of everything the group does not mention: pins are removed (manual domain
+	 * overrides are user data and kept), and the manual order becomes the group order followed by the remaining rows.
 	 */
 	private suspend fun syncOutsideGroup(group: SourceGroup) {
 		val inGroup = group.sourceStates.mapTo(HashSet()) { it.source }
@@ -395,12 +395,6 @@ class SourceGroupRepository @Inject constructor(
 			jsonRows.filter { it.isPinned && it.id !in inGroup }.map { it.id }
 		if (pinned.isNotEmpty()) {
 			contentSources.setIsPinned(pinned.map(contentSources::resolveSource), false)
-		}
-
-		for (key in rows.map { it.source } + jsonRows.map { it.id }) {
-			if (key in inGroup || currentDomainOverride(key) == null) continue
-			sourcePrefs(key).edit().remove(SourceSettings.KEY_DOMAIN).apply()
-			repositoryFactory.invalidate(contentSources.resolveSource(key))
 		}
 
 		contentSources.applySourceOrder(
