@@ -13,6 +13,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.BuildConfig
+import org.skepsun.kototoro.aniyomi.AniyomiExtensionManager
+import org.skepsun.kototoro.ireader.IReaderExtensionManager
+import org.skepsun.kototoro.mihon.MihonExtensionManager
+import org.skepsun.kototoro.tsundoku.TsundokuExtensionManager
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.db.dao.SourceOriginsDao
@@ -75,6 +79,10 @@ class SourceGroupRepository @Inject constructor(
 	private val contentSources: ContentSourcesRepository,
 	private val repositoryFactory: ContentRepository.Factory,
 	private val settings: AppSettings,
+	private val mihonExtensionManager: MihonExtensionManager,
+	private val aniyomiExtensionManager: AniyomiExtensionManager,
+	private val ireaderExtensionManager: IReaderExtensionManager,
+	private val tsundokuExtensionManager: TsundokuExtensionManager,
 ) {
 
 	private val groupsDir: File
@@ -245,6 +253,7 @@ class SourceGroupRepository @Inject constructor(
 			}
 
 			val catalogCache = HashMap<ExternalExtensionType, List<RepoAvailableExtension>>()
+			val installedTypes = LinkedHashSet<ExternalExtensionType>()
 			for (pkg in missing) {
 				// A package that comes from a repository which just failed cannot be fetched either:
 				// skip it so one broken repository does not add a second, chained error.
@@ -253,10 +262,15 @@ class SourceGroupRepository @Inject constructor(
 					tick()
 					continue
 				}
-				runGuarded(errors, context.getString(R.string.source_groups_error_package, pkg.pkg)) {
+				val installed = runGuarded(errors, context.getString(R.string.source_groups_error_package, pkg.pkg)) {
 					applyPackage(pkg, catalogCache)
 				}
+				if (installed) pkg.kind.toExternalTypeOrNull()?.let { installedTypes += it }
 				tick()
+			}
+			// APK-based packages only show up after their manager rescans: once per kind, not per package.
+			runGuarded(errors, context.getString(R.string.source_groups_error_apply_state)) {
+				reloadManagers(installedTypes)
 			}
 
 			group.sourceStates.forEach { state ->
@@ -332,6 +346,13 @@ class SourceGroupRepository @Inject constructor(
 			is PrepareAddRepoResult.FetchFailed -> throw prepared.error
 			PrepareAddRepoResult.InvalidUrl -> throw IllegalArgumentException(repo.url)
 		}
+	}
+
+	private suspend fun reloadManagers(types: Set<ExternalExtensionType>) {
+		if (ExternalExtensionType.MIHON in types) mihonExtensionManager.loadExtensions()
+		if (ExternalExtensionType.ANIYOMI in types) aniyomiExtensionManager.loadExtensions()
+		if (ExternalExtensionType.IREADER in types) ireaderExtensionManager.loadExtensions()
+		if (ExternalExtensionType.TSUNDOKU in types) tsundokuExtensionManager.loadExtensions()
 	}
 
 	private suspend fun applyPackage(

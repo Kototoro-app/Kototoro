@@ -42,6 +42,7 @@ class AvailableExtensionsViewModel @Inject constructor(
     private val signatureValidator: InstalledExtensionSignatureValidator,
     private val ireaderExtensionManager: IReaderExtensionManager,
     private val catalogRepository: org.skepsun.kototoro.settings.sources.unified.UnifiedSourceCatalogRepository,
+    private val tsundokuExtensionManager: org.skepsun.kototoro.tsundoku.TsundokuExtensionManager,
 ) : BaseViewModel() {
 
     val type: ExternalExtensionType = enumValueOf(savedStateHandle.require<String>(ARG_EXTENSION_TYPE))
@@ -138,6 +139,7 @@ class AvailableExtensionsViewModel @Inject constructor(
             ExternalExtensionType.MIHON -> mihonExtensionManager.loadExtensions()
             ExternalExtensionType.ANIYOMI -> aniyomiExtensionManager.loadExtensions()
             ExternalExtensionType.IREADER -> ireaderExtensionManager.loadExtensions()
+            ExternalExtensionType.TSUNDOKU -> tsundokuExtensionManager.loadExtensions()
             else -> Unit
         }
     }

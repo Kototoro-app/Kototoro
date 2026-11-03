@@ -49,6 +49,7 @@ class ExtensionsBrowserViewModel @Inject constructor(
     private val cloudstreamRuntimeManager: org.skepsun.kototoro.cloudstream.runtime.CloudstreamRuntimeManager,
     private val packageRemovalCleanup: org.skepsun.kototoro.extensions.install.PackageRemovalCleanup,
     private val catalogRepository: org.skepsun.kototoro.settings.sources.unified.UnifiedSourceCatalogRepository,
+    private val tsundokuExtensionManager: org.skepsun.kototoro.tsundoku.TsundokuExtensionManager,
 ) : BaseViewModel() {
 
     val type: ExternalExtensionType = enumValueOf(savedStateHandle.require<String>(ARG_EXTENSION_TYPE))
@@ -285,6 +286,7 @@ class ExtensionsBrowserViewModel @Inject constructor(
             mihonExtensionManager.loadExtensions()
             aniyomiExtensionManager.loadExtensions()
             ireaderExtensionManager.loadExtensions()
+            tsundokuExtensionManager.loadExtensions()
         }
     }
 
@@ -434,6 +436,7 @@ class ExtensionsBrowserViewModel @Inject constructor(
             ExternalExtensionType.MIHON -> mihonExtensionManager.loadExtensions()
             ExternalExtensionType.ANIYOMI -> aniyomiExtensionManager.loadExtensions()
             ExternalExtensionType.IREADER -> ireaderExtensionManager.loadExtensions()
+            ExternalExtensionType.TSUNDOKU -> tsundokuExtensionManager.loadExtensions()
             else -> Unit
         }
     }
