@@ -88,6 +88,16 @@ internal object DesktopRepositoriesProbe {
                     onNodeWithTag("extension-add").performClick(); idle()
                     onNodeWithTag("repository-url").performTextInput(address)
                     onNodeWithTag("repository-add").performClick(); idle()
+                    // Android's repository chips: reading a repository filters the available list to it, and "all"
+                    // leaves that filter again with every read catalogue still listed; the chip filters back.
+                    val saved = controller.state.value.repositories.single().indexUrl
+                    check(controller.state.value.extensionCatalog?.repository?.indexUrl == saved)
+                    onNodeWithTag("extension-repository-filter:all").performClick(); idle()
+                    check(controller.state.value.extensionCatalog == null)
+                    check(controller.state.value.extensionCatalogs.map { it.repository.indexUrl } == listOf(saved))
+                    onNodeWithTag("extension-list").performScrollToNode(hasTestTag("extension-install:${metadata.packageName}"))
+                    onNodeWithTag("extension-repository-filter:$saved").performClick(); idle()
+                    check(controller.state.value.extensionCatalog?.repository?.indexUrl == saved)
                     // APK-only entries are installable (converted on this machine); entries with no package are not.
                     for ((tag, installable) in listOf("fixture.apkonly" to true, "fixture.nopackage" to false)) {
                         onNodeWithTag("extension-list").performScrollToNode(hasTestTag("extension-install:$tag"))

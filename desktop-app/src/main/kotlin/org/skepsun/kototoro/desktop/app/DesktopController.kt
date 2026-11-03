@@ -189,7 +189,13 @@ data class DesktopAppState(
     /** Android's `ConfirmPackageInstall`: the row waiting for "install and enable" / "install only". */
     val installPrompt: DesktopInstallRequest? = null,
     val repositories: List<DesktopRepository> = emptyList(),
+    /**
+     * The repository the available list is filtered to (Android's repository chip on the packages tab); null lists
+     * every catalogue in [extensionCatalogs].
+     */
     val extensionCatalog: DesktopRepositoryCatalog? = null,
+    /** Every repository catalogue read this session, in the saved repositories' order. */
+    val extensionCatalogs: List<DesktopRepositoryCatalog> = emptyList(),
     val installedExtensions: Map<String, Long> = emptyMap(),
     val installedEntries: List<DesktopInstalledEntry> = emptyList(),
     val jsonSources: List<org.skepsun.kototoro.desktop.runtime.DesktopJsonSource> = emptyList(),
@@ -895,8 +901,11 @@ class DesktopController(
      * puts the same question Android's `UnifiedInstallChoiceDialog` does — unless this is an update, which Android
      * installs without asking and whose sources keep the switches they already have.
      */
-    fun installExtension(extension: ExtensionStoreIndex.Extension) = action {
-        val catalog = requireNotNull(state.value.extensionCatalog) { desktopText("extensions.readRepositoryFirst") }
+    fun installExtension(extension: ExtensionStoreIndex.Extension,
+        from: DesktopRepositoryCatalog? = state.value.extensionCatalog) = action {
+        val catalog = requireNotNull(from ?: state.value.extensionCatalogs.firstOrNull { extension in it.extensions }) {
+            desktopText("extensions.readRepositoryFirst")
+        }
         val kind = installKind(catalog, extension)
         val request = DesktopInstallRequest.FromRepository(catalog, extension, kind, extension.sources.size)
         val updating = state.value.installedExtensions.containsKey(extension.packageName)
@@ -1009,8 +1018,44 @@ class DesktopController(
     fun fetchRepository(address: String) = action {
         val catalog = session.repositories.fetch(address)
         mutableState.update { it.copy(screen = DesktopScreen.EXTENSIONS, extensionCatalog = catalog,
+            extensionCatalogs = withCatalog(it.extensionCatalogs, catalog),
             repositories = session.repositories.saved(), installedExtensions = installedVersions(),
             message = desktopText("extensions.catalogRead", catalog.repository.name, catalog.extensions.size)) }
+    }
+
+    /**
+     * Android's repository chips on the packages tab: a repository already read is filtered to without another
+     * request; null is "all", which reads the saved repositories not read yet (failures are reported, not fatal).
+     */
+    fun selectExtensionCatalog(repository: DesktopRepository?) {
+        val known = state.value.extensionCatalogs
+        if (repository != null) {
+            val catalog = known.firstOrNull { it.repository.indexUrl == repository.indexUrl }
+            if (catalog != null) mutableState.update { it.copy(extensionCatalog = catalog) }
+            else fetchRepository(repository.indexUrl)
+            return
+        }
+        mutableState.update { it.copy(extensionCatalog = null) }
+        val missing = state.value.repositories.filter { saved -> known.none { it.repository.indexUrl == saved.indexUrl } }
+        if (missing.isEmpty()) return
+        action {
+            val failures = mutableListOf<String>()
+            for (saved in missing) {
+                val catalog = try { session.repositories.fetch(saved.indexUrl) }
+                    catch (error: CancellationException) { throw error }
+                    catch (error: Exception) { failures += "${saved.name}：${error.message ?: error.javaClass.simpleName}"; continue }
+                mutableState.update { it.copy(extensionCatalogs = withCatalog(it.extensionCatalogs, catalog)) }
+            }
+            mutableState.update { it.copy(installedExtensions = installedVersions(), error = failures.firstOrNull()) }
+        }
+    }
+
+    /** Replaces (or adds) [catalog] and keeps the saved repositories' order. */
+    private fun withCatalog(catalogs: List<DesktopRepositoryCatalog>, catalog: DesktopRepositoryCatalog):
+        List<DesktopRepositoryCatalog> {
+        val order = session.repositories.saved().map { it.indexUrl }
+        return (catalogs.filter { it.repository.indexUrl != catalog.repository.indexUrl } + catalog)
+            .sortedBy { order.indexOf(it.repository.indexUrl).let { index -> if (index < 0) Int.MAX_VALUE else index } }
     }
 
     /** Drops a saved repository; its extensions stay installed, matching Android's "forget the source" behavior. */
@@ -1021,6 +1066,7 @@ class DesktopController(
                 extensionCatalog = it.extensionCatalog?.takeIf { catalog ->
                     catalog.repository.indexUrl != repository.indexUrl
                 },
+                extensionCatalogs = it.extensionCatalogs.filter { catalog -> catalog.repository.indexUrl != repository.indexUrl },
                 message = desktopText("extensions.repositoryRemoved", repository.name))
         }
     }

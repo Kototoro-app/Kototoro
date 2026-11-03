@@ -18,6 +18,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -74,6 +75,10 @@ internal fun DesktopExtensionsPanel(controller: DesktopController, closing: Bool
     val importedRepositories = remember(state.jsonSources) { importedSourceRepositories(state.jsonSources) }
     androidx.compose.runtime.LaunchedEffect(state.extensionCatalog) {
         if (state.extensionCatalog != null) { tab = 2; available = true }
+    }
+    // "All" lists every saved repository, as Android's packages tab does; read the ones not read yet.
+    androidx.compose.runtime.LaunchedEffect(tab, available) {
+        if (tab == 2 && available && controller.state.value.extensionCatalog == null) controller.selectExtensionCatalog(null)
     }
     Column(Modifier.fillMaxSize().testTag("extensions-page"),
         verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -152,24 +157,42 @@ private fun ExtensionCatalog(
     enabled: Boolean,
     modifier: Modifier,
 ) {
-    val catalog = state.extensionCatalog
+    val filter = state.extensionCatalog
+    val catalogs = filter?.let(::listOf) ?: state.extensionCatalogs
     Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         SettingsSectionHeader(
-            catalog?.let { desktopText("extensions.catalogCount", it.repository.name, it.extensions.size) }
-                ?: desktopText("extensions.catalog"),
+            if (catalogs.isEmpty()) desktopText("extensions.catalog")
+            else desktopText("extensions.catalogCount", filter?.repository?.name ?: AndroidStrings["all"],
+                catalogs.sumOf { it.extensions.size }),
         )
+        // Android's repository chips: "all" and one per saved repository; a picked one is left with "all" again.
+        if (state.repositories.isNotEmpty()) androidx.compose.foundation.lazy.LazyRow(
+            Modifier.fillMaxWidth().testTag("extension-repository-filter"),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            item(key = "all") {
+                FilterChip(filter == null, { controller.selectExtensionCatalog(null) }, { Text(AndroidStrings["all"]) },
+                    enabled = enabled, modifier = Modifier.testTag("extension-repository-filter:all"))
+            }
+            items(state.repositories, key = { it.indexUrl }) { repository ->
+                val selected = filter?.repository?.indexUrl == repository.indexUrl
+                FilterChip(selected, { controller.selectExtensionCatalog(if (selected) null else repository) },
+                    { Text(repository.name) }, enabled = enabled,
+                    modifier = Modifier.testTag("extension-repository-filter:${repository.indexUrl}"))
+            }
+        }
         SettingsGroup(Modifier.weight(1f)) {
             OutlinedTextField(
                 value = query,
                 onValueChange = onQueryChange,
                 label = { Text(desktopText("extensions.search")) },
                 singleLine = true,
-                enabled = catalog != null,
+                enabled = catalogs.isNotEmpty(),
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)
                     .testTag("extension-search"),
             )
             SettingsRowDivider()
-            val extensions = catalog?.extensions.orEmpty().filter { extension ->
+            val extensions = catalogs.flatMap { catalog -> catalog.extensions.map { catalog to it } }.filter { (_, extension) ->
                 query.isBlank() || extension.name.contains(query, true) ||
                     extension.packageName.contains(query, true) ||
                     extension.sources.any { it.name.contains(query, true) || it.language.contains(query, true) }
@@ -181,9 +204,10 @@ private fun ExtensionCatalog(
                 }
             } else {
                 LazyColumn(Modifier.weight(1f).fillMaxWidth().testTag("extension-list")) {
-                    itemsIndexed(extensions, key = { _, extension -> extension.packageName }) { index, extension ->
+                    itemsIndexed(extensions, key = { _, (catalog, extension) ->
+                        "${catalog.repository.indexUrl}\u0000${extension.packageName}"
+                    }) { index, (repository, extension) ->
                         if (index > 0) SettingsRowDivider()
-                        val repository = requireNotNull(catalog)
                         val parserPlugin = repository.isParserPlugin(extension)
                         val cloudstreamPlugin = repository.isCloudstreamPlugin(extension)
                         val installed = state.installedExtensions[extension.packageName]
@@ -220,7 +244,7 @@ private fun ExtensionCatalog(
                             verticalPadding = 10.dp,
                         ) {
                             Button(
-                                onClick = { controller.installExtension(extension) },
+                                onClick = { controller.installExtension(extension, repository) },
                                 enabled = enabled && hasPackage && compatible &&
                                     (installed == null || installed < extension.versionCode),
                                 modifier = Modifier.testTag("extension-install:${extension.packageName}"),
