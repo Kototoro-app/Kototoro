@@ -314,7 +314,6 @@ class ExploreViewModel @Inject constructor(
                     result += ListHeader(
                         textRes = R.string.source_pinned,
                         buttonTextRes = if (allSourcesEnabled) R.string.manage else R.string.catalog,
-                        badge = if (!allSourcesEnabled && hasNewSources) "" else null,
                     )
                     pinned.mapTo(result) { ContentSourceItem(it, isGrid) }
                 }
@@ -327,7 +326,6 @@ class ExploreViewModel @Inject constructor(
                     result += ListHeader(
                         text = language,
                         buttonTextRes = if (allSourcesEnabled && result.none { it is ListHeader && it.buttonTextRes == R.string.manage }) R.string.manage else if (result.none { it is ListHeader && it.buttonTextRes == R.string.catalog }) R.string.catalog else 0,
-                        badge = if (!allSourcesEnabled && hasNewSources && result.none { it is ListHeader && it.badge != null }) "" else null,
                     )
                     sourcesInLang.mapTo(result) { ContentSourceItem(it, isGrid) }
                 }
@@ -335,17 +333,26 @@ class ExploreViewModel @Inject constructor(
                 result += ListHeader(
                     textRes = R.string.remote_sources,
                     buttonTextRes = if (allSourcesEnabled) R.string.manage else R.string.catalog,
-                    badge = if (!allSourcesEnabled && hasNewSources) "" else null,
                 )
                 filteredSources.mapTo(result) { ContentSourceItem(it, isGrid) }
             }
         } else {
-            result += EmptyHint(
-                icon = R.drawable.ic_empty_common,
-                textPrimary = emptySourceTitle(groupTab),
-                textSecondary = emptySourceSubtitle(groupTab),
-                actionStringRes = R.string.catalog,
-            )
+            result += if (sources.isNotEmpty()) {
+                // Sources exist but the active tab/tag/preset filter hides all of them.
+                EmptyHint(
+                    icon = R.drawable.ic_empty_common,
+                    textPrimary = R.string.no_sources_found,
+                    textSecondary = R.string.no_sources_found_desc,
+                    actionStringRes = R.string.catalog,
+                )
+            } else {
+                EmptyHint(
+                    icon = R.drawable.ic_empty_common,
+                    textPrimary = emptySourceTitle(groupTab),
+                    textSecondary = emptySourceSubtitle(groupTab),
+                    actionStringRes = R.string.catalog,
+                )
+            }
         }
         return result
     }
