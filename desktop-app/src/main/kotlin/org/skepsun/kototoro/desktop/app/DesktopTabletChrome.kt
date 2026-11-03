@@ -96,7 +96,10 @@ internal fun DesktopNavigationRail(controller: DesktopController, state: Desktop
                 }
             },
             modifier = Modifier.fillMaxSize(), enabled = enabled,
-            selectedIconColor = androidx.compose.material3.MaterialTheme.colorScheme.primary,
+            // Android's rail (KototoroBottomNav): the accent on iOS, the indicator's content colour on Material.
+            selectedIconColor = if (LocalDesktopInterfaceStyle.current == DesktopInterfaceStyle.IOS) {
+                androidx.compose.material3.MaterialTheme.colorScheme.primary
+            } else androidx.compose.material3.MaterialTheme.colorScheme.onSecondaryContainer,
             itemModifier = { id -> Modifier.testTag("nav:${destinations.first { it.id == id }.title}") },
         )
     }

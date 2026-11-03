@@ -19,6 +19,7 @@ import org.skepsun.kototoro.core.ui.feed.FeedTimelineCard
 import org.skepsun.kototoro.core.ui.feed.FeedUpdateDetails
 import org.skepsun.kototoro.core.ui.feed.UpdatedContentCarousel
 import org.skepsun.kototoro.core.ui.topbar.TopBarTitleBlock
+import org.skepsun.kototoro.core.ui.topbar.FloatingTopBarScaffold
 import org.skepsun.kototoro.desktop.runtime.DesktopNsfwTarget
 import org.skepsun.kototoro.list.ui.compose.ContentCardBadgePill
 import org.skepsun.kototoro.list.ui.compose.ContentCardBadgeText
@@ -87,32 +88,43 @@ internal fun DesktopFeedPanel(controller: DesktopController, state: DesktopAppSt
             }
             .sortedWith(compareByDescending<FeedUpdateRow> { it.isPinned }.thenByDescending { it.lastCheckTime })
     }
-    Column(Modifier.fillMaxSize().testTag("feed-panel"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            TopBarTitleBlock(desktopText("nav.subscriptions"))
-            Spacer(Modifier.weight(1f))
-            DesktopSourceFilterControls(filter, state.sources, controller::feedFilter, enabled, "feed")
-            Button({ controller.checkUpdates() }, enabled = enabled, modifier = Modifier.testTag("feed-check")) {
-                Text(desktopText("feed.checkUpdates"))
-            }
-            // Android's feed menu (R.menu.opt_feed): its "update" item is the visible button above, the other two
-            // have no room in the row and live behind the overflow.
-            FeedOverflowMenu(controller, state, enabled)
-        }
-        if (state.trackedCategories == 0) {
-            Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.secondaryContainer,
-                modifier = Modifier.fillMaxWidth().testTag("feed-tracking-off")) {
-                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(desktopText("feed.trackingOff"),
-                        modifier = Modifier.weight(1f))
-                    FilledTonalButton({ controller.enableTracking() }, enabled = enabled,
-                        modifier = Modifier.testTag("feed-enable-tracking")) { Text(desktopText("feed.enableTracking")) }
+    // Android's floating feed bar: the title, filters and update action float over the timeline, which scrolls beneath.
+    val inset = LocalDesktopTopInset.current
+    FloatingTopBarScaffold(
+        modifier = Modifier.fillMaxSize().testTag("feed-panel"),
+        backdropColor = Canvas, scrimColor = Canvas,
+        topBar = {
+            Box(Modifier.fillMaxWidth().padding(top = inset, bottom = 12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    TopBarTitleBlock(desktopText("nav.subscriptions"))
+                    Spacer(Modifier.weight(1f))
+                    DesktopSourceFilterControls(filter, state.sources, controller::feedFilter, enabled, "feed")
+                    Button({ controller.checkUpdates() }, enabled = enabled, modifier = Modifier.testTag("feed-check")) {
+                        Text(desktopText("feed.checkUpdates"))
+                    }
+                    // Android's feed menu (R.menu.opt_feed): its "update" item is the visible button above, the other two
+                    // have no room in the row and live behind the overflow.
+                    FeedOverflowMenu(controller, state, enabled)
                 }
             }
-        }
+        },
+    ) { inner ->
         val listState = rememberLazyListState()
-        LazyColumn(Modifier.weight(1f).fillMaxWidth().testTag("feed-list"), state = listState) {
+        LazyColumn(Modifier.fillMaxSize().testTag("feed-list"), state = listState,
+            contentPadding = PaddingValues(top = inner.calculateTopPadding())) {
+            // The tracking hint scrolls with the timeline under the floating bar.
+            if (state.trackedCategories == 0) item(key = "tracking-off") {
+                Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.secondaryContainer,
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp).testTag("feed-tracking-off")) {
+                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(desktopText("feed.trackingOff"),
+                            modifier = Modifier.weight(1f))
+                        FilledTonalButton({ controller.enableTracking() }, enabled = enabled,
+                            modifier = Modifier.testTag("feed-enable-tracking")) { Text(desktopText("feed.enableTracking")) }
+                    }
+                }
+            }
             if (updates.isNotEmpty() && state.feedDisplay.showUpdated) item(key = "updated") {
                 UpdatedContentCarousel(
                     items = updates,

@@ -28,6 +28,7 @@ import org.skepsun.kototoro.core.ui.compose.HeroPagerIndicator
 import org.skepsun.kototoro.core.ui.home.*
 import org.skepsun.kototoro.core.ui.gestures.mouseDragScroll
 import org.skepsun.kototoro.core.ui.topbar.TopBarTitleBlock
+import org.skepsun.kototoro.core.ui.topbar.FloatingTopBarScaffold
 import org.skepsun.kototoro.list.domain.ReadingProgress
 import org.skepsun.kototoro.list.ui.compose.ContentCardBookSpine
 import org.skepsun.kototoro.list.ui.compose.ContentCardBottomProgressBar
@@ -99,22 +100,32 @@ internal fun DesktopHomePanel(controller: DesktopController, state: DesktopAppSt
         )
     }
     val open: (SourceContent) -> Unit = { if (enabled) controller.details(it) }
-    Column(Modifier.fillMaxSize().testTag("home-panel"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            TopBarTitleBlock(desktopText("nav.home"))
-            Spacer(Modifier.weight(1f))
-            DesktopSourceFilterControls(filter, state.sources, controller::homeFilter, enabled, "home")
-        }
+    // Android's floating home bar: the title and the filter capsule float over the hero and rails, which scroll beneath.
+    val inset = LocalDesktopTopInset.current
+    FloatingTopBarScaffold(
+        modifier = Modifier.fillMaxSize().testTag("home-panel"),
+        backdropColor = Canvas, scrimColor = Canvas,
+        topBar = {
+            Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = inset + 8.dp, bottom = 8.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                TopBarTitleBlock(desktopText("nav.home"))
+                Spacer(Modifier.weight(1f))
+                DesktopSourceFilterControls(filter, state.sources, controller::homeFilter, enabled, "home")
+            }
+        },
+    ) { inner ->
+        val barTop = inner.calculateTopPadding()
         HomeScreenLayout(
             hasHero = hero.isNotEmpty(),
             hasHighlights = true,
             initialized = true,
             tabletLayoutEnabled = true,
-            modifier = Modifier.weight(1f).fillMaxWidth(),
-            estimatedHeroHeight = HomeHeroCardHeight + 8.dp,
+            modifier = Modifier.fillMaxSize(),
+            estimatedHeroHeight = HomeHeroCardHeight + 8.dp + barTop,
+            // Without a hero the list itself starts below the bar; with one, the hero's own padding does.
+            contentPadding = PaddingValues(top = if (hero.isEmpty()) barTop else 0.dp, bottom = 12.dp),
             hero = { modifier, layoutClass ->
-                Box(modifier.fillMaxWidth().padding(top = 8.dp)) {
+                Box(modifier.fillMaxWidth().padding(top = 8.dp + barTop)) {
                     HomeHero(controller, hero, layoutClass, open)
                 }
             },

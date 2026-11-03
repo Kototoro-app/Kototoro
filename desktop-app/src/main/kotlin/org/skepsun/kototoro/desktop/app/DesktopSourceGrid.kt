@@ -46,7 +46,11 @@ internal fun DesktopSourceGrid(controller: DesktopController, state: DesktopAppS
     }
     val groups = remember(sources, settings) { settings.groups(sources) }
     val metrics = sourceQuickAccessMetrics(1.15f)
-    Column(Modifier.fillMaxSize().testTag("source-pane"), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    // Android's floating browse bar: the title, search and filters float over the source grid, which scrolls beneath.
+    val inset = LocalDesktopTopInset.current
+    org.skepsun.kototoro.core.ui.topbar.FloatingTopBarScaffold(modifier = Modifier.fillMaxSize().testTag("source-pane"),
+        backdropColor = Canvas, scrimColor = Canvas, topBar = {
+    Column(Modifier.fillMaxWidth().padding(top = inset, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             org.skepsun.kototoro.core.ui.topbar.TopBarTitleBlock(desktopText("nav.browse"))
             DesktopSearchField(query, { query = it }, desktopText("sourceGrid.search"), modifier = Modifier.weight(1f),
@@ -61,9 +65,12 @@ internal fun DesktopSourceGrid(controller: DesktopController, state: DesktopAppS
         if (state.enabledSources.isEmpty()) {
             Text(desktopText("sourceGrid.empty"), color = Muted)
         }
+    }
+    }) { inner ->
+        val padding = PaddingValues(top = inner.calculateTopPadding())
         if (settings.grid) {
             LazyVerticalGrid(GridCells.Adaptive(metrics.minCardWidth),
-                modifier = Modifier.weight(1f).testTag("source-list"),
+                modifier = Modifier.fillMaxSize().testTag("source-list"), contentPadding = padding,
                 horizontalArrangement = Arrangement.spacedBy(metrics.gridSpacing),
                 verticalArrangement = Arrangement.spacedBy(metrics.gridSpacing)) {
                 groups.forEach { (language, entries) ->
@@ -86,7 +93,7 @@ internal fun DesktopSourceGrid(controller: DesktopController, state: DesktopAppS
             }
         } else {
             // Android's list mode: one source per row instead of a tile grid; the same tap target and tags.
-            LazyColumn(Modifier.weight(1f).testTag("source-list-rows")) {
+            LazyColumn(Modifier.fillMaxSize().testTag("source-list-rows"), contentPadding = padding) {
                 groups.forEach { (language, entries) ->
                     if (language.isNotEmpty()) item(key = "header:$language") { SourceGroupHeader(language) }
                     items(entries, key = { it.source.name }) { source ->

@@ -443,6 +443,22 @@ Android 详情是可折叠头部 + 章节/页面/书签分页 + 底部 Dock，�
 - 验证：三端编译；`:core-ui:jvmTest` 与完整 `:desktop-app:test` 共 382 项通过、7 项跳过、0 失败；
   抽查筛选抽屉、阅读器滑块截图无视觉回退。Android 实机/模拟器、Windows 实机/CI 尚未运行。
 
+#### 共享基础：悬浮顶栏与玻璃 backdrop（2026-11-03）
+
+- 问题：桌面 backdrop 只录窗口底色，顶栏排在内容之上而非浮在其上，iOS 玻璃胶囊下永远是纯色；
+  共享组件读的 `LocalLiquidGlassBackdrop` 桌面也从未提供。
+- 共享入口 [FloatingTopBarScaffold](../../core-ui/src/commonMain/kotlin/org/skepsun/kototoro/core/ui/topbar/FloatingTopBarScaffold.kt)：
+  照 Android `SettingsTopBarScaffold` 的做法把页面录进 layer backdrop、顶栏浮于其上并只向顶栏提供
+  `LocalLiquidGlassBackdrop`，顶栏下方画 `ImmersiveEdgeGradient`（Material 稳定色调、iOS 更轻），量得的栏高作为
+  内容的上内边距；`recordBackdrop = false` 用于原生视频/浏览器窗口。
+- 桌面调用方：`DesktopApp` 根部（通用 `Header` 与挑战/失败提示悬浮；进度线另画在最上层、不占栏高；阅读页仍把
+  提示放在阅读器上方），主页、订阅、收藏/历史、浏览（来源网格与结果）各自套一层，网格/列表用
+  `contentPadding` 从栏下滚过；起点由 `LocalDesktopTopInset` 给出。`DesktopControlSurface` 优先用页面 backdrop。
+  导航栏选中图标色随风格（iOS `primary`，Material `onSecondaryContainer`），与 `KototoroBottomNav` 一致。
+- 尚未收敛：Android 侧仍用 `SettingsTopBarScaffold`/`KototoroAppTopChrome`，未改为调用共享骨架；约 30 个设置/功能
+  页只是放在栏下（内容尚未从栏下滚过）；浏览页底部的“上一批/下一批”与播放器文字按钮仍是旧形态。
+- 验证：`DesktopFloatingChromeTest`（Material/iOS × 浅/深，断言列表起点在栏下而非被推下、滚动后行进入栏下，并截图）。
+
 ### 第三批：设置与功能页面
 
 范围：07 的其余设置，以及 08–17。
