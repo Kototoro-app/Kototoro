@@ -35,4 +35,31 @@ class SourceGroupApplyRulesTest {
 		val plan = groupLockPlan(groupLocks = mapOf("listed" to false), previouslyApplied = setOf("old"))
 		assertEquals(mapOf<String, Boolean?>("old" to null, "listed" to false), plan)
 	}
+
+	@Test
+	fun `source name must match pattern and be known`() {
+		val known = setOf("MIHON_1", "a.b:c-d_e", "../x", "a/b")
+		assertEquals(true, isValidGroupSourceName("MIHON_1", known))
+		assertEquals(true, isValidGroupSourceName("a.b:c-d_e", known))
+		assertEquals(false, isValidGroupSourceName("MIHON_2", known))
+		assertEquals(false, isValidGroupSourceName("../x", known))
+		assertEquals(false, isValidGroupSourceName("a/b", known))
+		assertEquals(false, isValidGroupSourceName("a..b", setOf("a..b")))
+		assertEquals(false, isValidGroupSourceName("", setOf("")))
+		assertEquals(false, isValidGroupSourceName("a".repeat(129), setOf("a".repeat(129))))
+	}
+
+	@Test
+	fun `domain accepts plain hosts and https only`() {
+		assertEquals(true, isValidGroupDomain("example.com"))
+		assertEquals(true, isValidGroupDomain("https://sub.example.com:8080"))
+		assertEquals(false, isValidGroupDomain("http://example.com"))
+		assertEquals(false, isValidGroupDomain("example.com/path"))
+		assertEquals(false, isValidGroupDomain("user@example.com"))
+		assertEquals(false, isValidGroupDomain("exa mple.com"))
+		assertEquals(false, isValidGroupDomain("a..com"))
+		assertEquals(false, isValidGroupDomain(""))
+		assertEquals(false, isValidGroupDomain("a".repeat(254)))
+		assertEquals(false, isValidGroupDomain("javascript:alert(1)"))
+	}
 }

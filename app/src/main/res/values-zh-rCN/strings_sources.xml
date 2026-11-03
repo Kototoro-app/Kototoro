@@ -83,4 +83,5 @@
     <string name="source_lock_unlocked">锁定当前状态</string>
     <string name="extension_file_delete_failed">无法删除 %1$s。</string>
     <string name="extension_repo_update_failed">更新失败：%1$s</string>
+    <string name="source_groups_confirm_domains">域名覆盖（%1$d 个来源）：</string>
 </resources>

@@ -83,4 +83,5 @@
     <string name="extension_file_delete_failed">無法刪除 %1$s。</string>
     <string name="source_groups_export_lost">匯出目標已丟失，請重新匯出。</string>
     <string name="extension_repo_update_failed">更新失敗：%1$s</string>
+    <string name="source_groups_confirm_domains">網域覆寫（%1$d 個來源）：</string>
 </resources>

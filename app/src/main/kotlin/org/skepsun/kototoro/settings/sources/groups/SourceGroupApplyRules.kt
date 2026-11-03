@@ -19,3 +19,18 @@ internal fun groupJarPriorityToApply(groupJarPriority: List<String>, installedJa
 	val filtered = groupJarPriority.filter { it.trim().lowercase() in installedJarNames }
 	return filtered.takeIf { it.isNotEmpty() }?.joinToString(",")
 }
+
+private val GROUP_SOURCE_NAME = Regex("[A-Za-z0-9_.:-]{1,128}")
+private val GROUP_DOMAIN_HOST = Regex("[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?(?::\\d{1,5})?")
+
+/** True when [name] is a well-formed source name that is also one of the [knownNames] this device resolves. */
+internal fun isValidGroupSourceName(name: String, knownNames: Set<String>): Boolean =
+	GROUP_SOURCE_NAME.matches(name) && !name.contains("..") && name in knownNames
+
+/** True for a bare host (optional port) with no scheme other than https, path, user info or whitespace. */
+internal fun isValidGroupDomain(domain: String): Boolean {
+	if (domain.length > 253 || domain.any { it.isWhitespace() }) return false
+	val host = domain.removePrefix("https://")
+	if (host.contains("://") || host.contains('/') || host.contains('@') || host.contains('\\')) return false
+	return GROUP_DOMAIN_HOST.matches(host) && !host.startsWith("..") && !host.contains("..")
+}

@@ -96,4 +96,5 @@
     <string name="extension_repo_update_failed">Update failed: %1$s</string>
     <string name="source_groups_updated">Group updated</string>
     <string name="source_groups_newer_schema">This group file is from a newer version. Update the app.</string>
+    <string name="source_groups_confirm_domains">Domain overrides (%1$d sources):</string>
 </resources>

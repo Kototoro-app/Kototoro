@@ -334,6 +334,10 @@ fun SourceGroupsDialog(
 						add(stringResource(R.string.source_groups_confirm_packages))
 						addAll(preview.packagesToInstall.map { "• $it" })
 					}
+					if (preview.domainOverrideCount > 0) {
+						add(stringResource(R.string.source_groups_confirm_domains, preview.domainOverrideCount))
+						addAll(preview.domainOverrideSample.map { "• $it" })
+					}
 				}
 				val shown = lines.take(CONFIRM_MAX_LINES)
 				Column(

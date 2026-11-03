@@ -76,9 +76,13 @@ data class SourceGroupApplyPreview(
 	val packagesToInstall: List<String> = emptyList(),
 	/** Normal-APK packages the user has to install by hand. */
 	val manualPackages: List<String> = emptyList(),
+	/** Number of sources whose manual domain the group would overwrite. */
+	val domainOverrideCount: Int = 0,
+	/** Names of the first few of those sources. */
+	val domainOverrideSample: List<String> = emptyList(),
 ) {
 	val needsConfirmation: Boolean
-		get() = reposToAdd.isNotEmpty() || packagesToInstall.isNotEmpty()
+		get() = reposToAdd.isNotEmpty() || packagesToInstall.isNotEmpty() || domainOverrideCount > 0
 }
 
 /** [updated] is true when an imported group replaced a stored group with the same id. */
@@ -238,7 +242,14 @@ class SourceGroupRepository @Inject constructor(
 		}.map { it.url }.distinct()
 		val (manual, auto) = group.packages.filterNot { isPackageInstalled(it) }
 			.partition { it.installMode == SOURCE_GROUP_INSTALL_MODE_SYSTEM }
+		// Preview runs before packages are installed, so only the shape is checked here; apply also needs a resolvable source.
+		val allNames = group.sourceStates.mapTo(HashSet()) { it.source }
+		val domainSources = group.sourceStates
+			.filter { !it.domain.isNullOrBlank() && isValidGroupDomain(it.domain) && isValidGroupSourceName(it.source, allNames) }
+			.map { it.source }
 		SourceGroupApplyPreview(
+			domainOverrideCount = domainSources.size,
+			domainOverrideSample = domainSources.take(3),
 			groupName = group.name,
 			reposToAdd = reposToAdd,
 			packagesToInstall = auto.map { it.pkg }.distinct(),
@@ -354,9 +365,10 @@ class SourceGroupRepository @Inject constructor(
 				contentSources.setSourcesEnabledExclusive(groupEnabled)
 			}
 
+			val knownNames = knownGroupSourceNames(group)
 			for (state in group.sourceStates) {
 				runGuarded(errors, context.getString(R.string.source_groups_error_source, state.source)) {
-					applySourceDetails(state)
+					applySourceDetails(state, knownNames)
 				}
 				tick()
 			}
@@ -442,10 +454,17 @@ class SourceGroupRepository @Inject constructor(
 		)
 	}
 
-	private suspend fun applySourceDetails(state: SourceGroupSourceState) {
+	/** Names of the group's sources that this device can actually resolve (the only ones a domain may be written for). */
+	private fun knownGroupSourceNames(group: SourceGroup): Set<String> =
+		group.sourceStates.mapNotNullTo(HashSet()) { s -> s.source.takeIf { contentSources.isSourceAvailable(it) } }
+
+	private suspend fun applySourceDetails(state: SourceGroupSourceState, knownNames: Set<String>) {
 		val source = contentSources.resolveSource(state.source)
 		contentSources.setIsPinned(listOf(source), state.pinned)
 		if (!state.domain.isNullOrBlank()) {
+			if (!isValidGroupSourceName(state.source, knownNames) || !isValidGroupDomain(state.domain)) {
+				throw IllegalArgumentException("Invalid source name or domain")
+			}
 			sourcePrefs(state.source).edit()
 				.putString(SourceSettings.KEY_DOMAIN, state.domain)
 				.apply()
