@@ -27,9 +27,13 @@ class SourceLockStore private constructor(context: Context) {
 	 */
 	val externalRevision = AtomicInteger(0)
 
+	@Volatile
+	private var applyingBatch = false
+
 	// Held strongly: SharedPreferences keeps listeners weakly.
 	private val changeListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-		applyKeyChange(key)
+		// A batch publishes [locks] once at its end instead of once per key.
+		if (!applyingBatch) applyKeyChange(key)
 		externalRevision.incrementAndGet()
 	}
 
@@ -73,15 +77,20 @@ class SourceLockStore private constructor(context: Context) {
 	@Synchronized
 	fun setAll(entries: Map<String, Boolean?>) {
 		if (entries.isEmpty()) return
-		prefs.edit {
-			for ((name, lockedEnabled) in entries) {
-				if (lockedEnabled == null) putString(name, UNLOCKED) else putBoolean(name, lockedEnabled)
+		applyingBatch = true
+		try {
+			prefs.edit {
+				for ((name, lockedEnabled) in entries) {
+					if (lockedEnabled == null) putString(name, UNLOCKED) else putBoolean(name, lockedEnabled)
+				}
 			}
-		}
-		_locks.value = _locks.value.toMutableMap().also { map ->
-			for ((name, lockedEnabled) in entries) {
-				if (lockedEnabled == null) map.remove(name) else map[name] = lockedEnabled
+			_locks.value = _locks.value.toMutableMap().also { map ->
+				for ((name, lockedEnabled) in entries) {
+					if (lockedEnabled == null) map.remove(name) else map[name] = lockedEnabled
+				}
 			}
+		} finally {
+			applyingBatch = false
 		}
 	}
 
