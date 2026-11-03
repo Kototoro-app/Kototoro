@@ -15,6 +15,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.AppSettings
@@ -80,10 +82,20 @@ class ExtensionsBrowserViewModel @Inject constructor(
         context = appContext,
     ).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    @Volatile private var trustCacheInstalled: List<InstalledExtensionEntry>? = null
+    private val trustCache = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
+
+    private fun isTrustedCached(packageName: String, expectedFingerprint: String): Boolean {
+        val key = "$packageName:$expectedFingerprint"
+        return trustCache[key] ?: signatureValidator.isTrusted(packageName, expectedFingerprint).also { trustCache[key] = it }
+    }
+
     private val browserInputsBase: StateFlow<BrowserInputs> = combine(
         installedExtensions,
         availableExtensions,
-        installService.downloadStates,
+        installService.downloadStates.distinctUntilChanged { a, b ->
+            a.size == b.size && a.all { (k, v) -> b[k]?.progressPercent == v.progressPercent }
+        },
         selectedExtensionLanguages,
         isStrictExtensionLanguageFilter,
     ) { installed, available, downloads, selectedLanguages, isStrict ->
@@ -123,6 +135,10 @@ class ExtensionsBrowserViewModel @Inject constructor(
         browserInputs,
         searchQuery,
     ) { inputs, query ->
+        if (inputs.installed !== trustCacheInstalled) {
+            trustCache.clear()
+            trustCacheInstalled = inputs.installed
+        }
         buildExtensionsBrowserItems(
             type = type,
             installed = inputs.installed,
@@ -131,28 +147,27 @@ class ExtensionsBrowserViewModel @Inject constructor(
             selectedExtensionLanguages = inputs.selectedLanguages,
             collapsedLanguageGroups = inputs.collapsedGroups,
             query = query,
-            isTrustedPackage = signatureValidator::isTrusted,
+            isTrustedPackage = ::isTrustedCached,
             isStrictLanguageFilter = inputs.isStrictLanguageFilter,
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    }.flowOn(Dispatchers.Default).distinctUntilChanged().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val installedCount: StateFlow<Int> = items.map { list ->
-        list.filterIsInstance<ExtensionsBrowserListItem.SectionHeader>()
-            .firstOrNull { it.section == ExtensionsBrowserSection.INSTALLED }
-            ?.count ?: 0
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+    private val sectionCounts: StateFlow<Map<ExtensionsBrowserSection, Int>> = items.map { list ->
+        val counts = HashMap<ExtensionsBrowserSection, Int>(4)
+        for (item in list) {
+            if (item is ExtensionsBrowserListItem.SectionHeader) counts.putIfAbsent(item.section, item.count)
+        }
+        counts
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
-    val updateCount: StateFlow<Int> = items.map { list ->
-        list.filterIsInstance<ExtensionsBrowserListItem.SectionHeader>()
-            .firstOrNull { it.section == ExtensionsBrowserSection.UPDATES }
-            ?.count ?: 0
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+    val installedCount: StateFlow<Int> = sectionCounts.map { it[ExtensionsBrowserSection.INSTALLED] ?: 0 }
+        .distinctUntilChanged().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
-    val availableCount: StateFlow<Int> = items.map { list ->
-        list.filterIsInstance<ExtensionsBrowserListItem.SectionHeader>()
-            .firstOrNull { it.section == ExtensionsBrowserSection.AVAILABLE }
-            ?.count ?: 0
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+    val updateCount: StateFlow<Int> = sectionCounts.map { it[ExtensionsBrowserSection.UPDATES] ?: 0 }
+        .distinctUntilChanged().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    val availableCount: StateFlow<Int> = sectionCounts.map { it[ExtensionsBrowserSection.AVAILABLE] ?: 0 }
+        .distinctUntilChanged().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
     val availableLanguageCodes: StateFlow<List<String>> = combine(installedExtensions, availableExtensions) { installed, available ->
         (installed.asSequence().map { it.lang.normalizeExtensionLanguageCode() } + available.asSequence().map { it.normalizeExtensionLanguageCode() })
@@ -211,44 +226,8 @@ class ExtensionsBrowserViewModel @Inject constructor(
             return
         }
 
-        if (item.extension.type == ExternalExtensionType.JAR) {
-            val pluginDir = java.io.File(appContext.filesDir, "plugins")
-            val jarFile = java.io.File(pluginDir, "${item.pkgName}.jar")
-            if (jarFile.exists() && !jarFile.delete()) {
-                errorEvent.call(java.io.IOException(appContext.getString(R.string.extension_file_delete_failed, jarFile.name)))
-                return
-            }
-            appContext.getSharedPreferences("jar_plugin_versions", android.content.Context.MODE_PRIVATE)
-                .edit()
-                .remove(item.pkgName)
-                .remove("${item.pkgName}:repo")
-                .remove("${item.pkgName}:repoName")
-                .apply()
-            org.skepsun.kototoro.core.extensions.GlobalExtensionManager.initialize(appContext)
-            refresh()
-            return
-        }
-
-        if (item.extension.type == ExternalExtensionType.CLOUDSTREAM) {
-            val prefs = appContext.getSharedPreferences("cloudstream_plugin_versions", android.content.Context.MODE_PRIVATE)
-            val archiveName = prefs.getString("${item.pkgName}:archive", null) ?: "${item.pkgName}.cs3"
-            val pluginDir = java.io.File(java.io.File(appContext.filesDir, "cloudstream"), "plugins")
-            val pluginFile = java.io.File(pluginDir, archiveName)
-            if (pluginFile.exists() && !pluginFile.delete()) {
-                errorEvent.call(java.io.IOException(appContext.getString(R.string.extension_file_delete_failed, pluginFile.name)))
-                return
-            }
-            prefs.edit()
-                .remove(item.pkgName)
-                .remove("${item.pkgName}:name")
-                .remove("${item.pkgName}:lang")
-                .remove("${item.pkgName}:repo")
-                .remove("${item.pkgName}:repoName")
-                .remove("${item.pkgName}:archive")
-                .remove("${item.pkgName}:icon")
-                .apply()
-            cloudstreamRuntimeManager.initialize()
-            refresh()
+        if (item.extension.type == ExternalExtensionType.JAR || item.extension.type == ExternalExtensionType.CLOUDSTREAM) {
+            launchJob(Dispatchers.IO) { uninstallFileBased(item) }
             return
         }
 
@@ -265,6 +244,43 @@ class ExtensionsBrowserViewModel @Inject constructor(
         onUninstallIntent.call(
             Intent(action, Uri.fromParts("package", uninstallPkg, null)),
         )
+    }
+
+    private fun uninstallFileBased(item: ExtensionsBrowserListItem.Entry) {
+        if (item.extension.type == ExternalExtensionType.JAR) {
+            val pluginDir = java.io.File(appContext.filesDir, "plugins")
+            val jarFile = java.io.File(pluginDir, "${item.pkgName}.jar")
+            if (jarFile.exists() && !jarFile.delete()) {
+                errorEvent.call(java.io.IOException(appContext.getString(R.string.extension_file_delete_failed, jarFile.name)))
+                return
+            }
+            appContext.getSharedPreferences("jar_plugin_versions", android.content.Context.MODE_PRIVATE)
+                .edit()
+                .remove(item.pkgName)
+                .remove("${item.pkgName}:repo")
+                .remove("${item.pkgName}:repoName")
+                .apply()
+            org.skepsun.kototoro.core.extensions.GlobalExtensionManager.initialize(appContext)
+            return
+        }
+        val prefs = appContext.getSharedPreferences("cloudstream_plugin_versions", android.content.Context.MODE_PRIVATE)
+        val archiveName = prefs.getString("${item.pkgName}:archive", null) ?: "${item.pkgName}.cs3"
+        val pluginDir = java.io.File(java.io.File(appContext.filesDir, "cloudstream"), "plugins")
+        val pluginFile = java.io.File(pluginDir, archiveName)
+        if (pluginFile.exists() && !pluginFile.delete()) {
+            errorEvent.call(java.io.IOException(appContext.getString(R.string.extension_file_delete_failed, pluginFile.name)))
+            return
+        }
+        prefs.edit()
+            .remove(item.pkgName)
+            .remove("${item.pkgName}:name")
+            .remove("${item.pkgName}:lang")
+            .remove("${item.pkgName}:repo")
+            .remove("${item.pkgName}:repoName")
+            .remove("${item.pkgName}:archive")
+            .remove("${item.pkgName}:icon")
+            .apply()
+        cloudstreamRuntimeManager.initialize()
     }
 
     fun setSearchQuery(query: String?) {
@@ -325,14 +341,12 @@ class ExtensionsBrowserViewModel @Inject constructor(
                             onInstallIntent.call(userAction)
                         }
                         result.session.awaitCompletion()
-                        refresh()
                         onMessage.call(appContext.getString(R.string.unified_sources_package_installed))
                         if (fromBatch) {
                             handleBatchNextAction(batchUpdateState.finishCurrentInstall())
                         }
                     }
                     ExtensionInstallResult.Completed -> {
-                        refresh()
                         onMessage.call(appContext.getString(R.string.unified_sources_package_installed))
                         if (fromBatch) {
                             handleBatchNextAction(batchUpdateState.finishCurrentInstall())
@@ -398,7 +412,7 @@ class ExtensionsBrowserViewModel @Inject constructor(
             selectedExtensionLanguages = browserInputs.value.selectedLanguages,
             collapsedLanguageGroups = browserInputs.value.collapsedGroups,
             query = "",
-            isTrustedPackage = signatureValidator::isTrusted,
+            isTrustedPackage = ::isTrustedCached,
             isStrictLanguageFilter = browserInputs.value.isStrictLanguageFilter,
         ).filterIsInstance<ExtensionsBrowserListItem.Entry>()
             .filter { it.state == ExtensionsBrowserEntryState.UPDATE_AVAILABLE }

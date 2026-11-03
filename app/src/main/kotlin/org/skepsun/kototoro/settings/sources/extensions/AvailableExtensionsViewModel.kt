@@ -12,6 +12,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import org.skepsun.kototoro.aniyomi.AniyomiExtensionManager
 import org.skepsun.kototoro.R
@@ -59,7 +61,7 @@ class AvailableExtensionsViewModel @Inject constructor(
     val items: StateFlow<List<AvailableExtensionListItem>> = combine(
         rawExtensions,
         installedExtensions,
-        installService.downloadStates,
+        installService.downloadStates.map { it.keys }.distinctUntilChanged(),
     ) { available, installed, downloads ->
         available.map { extension ->
             val installedSearchKey = type.normalizePackageNameForMatching(extension.pkgName)
@@ -74,7 +76,8 @@ class AvailableExtensionsViewModel @Inject constructor(
                 state = state,
             )
         }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    }.flowOn(Dispatchers.Default).distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val availableCount: StateFlow<Int> = items.map { it.size }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
@@ -107,11 +110,9 @@ class AvailableExtensionsViewModel @Inject constructor(
                     is ExtensionInstallResult.RequiresInstaller -> {
                         result.session.awaitUserAction()?.let { onInstallIntent.call(it) }
                         result.session.awaitCompletion()
-                        refresh()
                         onMessage.call(appContext.getString(R.string.unified_sources_package_installed))
                     }
                     ExtensionInstallResult.Completed -> {
-                        refresh()
                         onMessage.call(appContext.getString(R.string.unified_sources_package_installed))
                     }
                 }
