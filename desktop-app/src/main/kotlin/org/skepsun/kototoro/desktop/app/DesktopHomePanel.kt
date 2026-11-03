@@ -6,6 +6,8 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.snapping.SnapPosition
+import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -212,13 +214,22 @@ private fun UpdatesRail(controller: DesktopController, works: List<HomeWork>) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         HomeSectionHeader(desktopText("home.sectionUpdates"), works.size, painterResource("icons/ic_arrow_forward.svg"),
             onMoreClick = { controller.subscriptions() }, titleModifier = Modifier.testTag("home-updates-more"))
-        // Android's list-mode rail: rows of covers with the new chapter count, three to a row on wide windows.
+        // Android's list-mode rail: a horizontally scrolling row of pages, each a column of rows, three pages across on
+        // wide windows with the next one peeking in from the right edge.
         BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val pages = works.take(30).chunked(UPDATES_ROWS_PER_PAGE)
             val columns = (maxWidth / 300.dp).toInt().coerceIn(1, 3)
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                works.take(columns * 2).chunked(columns).forEach { row ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        row.forEach { work ->
+            val spacing = 12.dp
+            val exact = (maxWidth - spacing * (columns - 1)) / columns
+            val pageWidth = if (pages.size > columns) exact * 0.92f else exact
+            val listState = rememberLazyListState()
+            LazyRow(state = listState, horizontalArrangement = Arrangement.spacedBy(spacing),
+                flingBehavior = rememberSnapFlingBehavior(listState, SnapPosition.Start),
+                modifier = Modifier.fillMaxWidth().mouseDragScroll(listState, Orientation.Horizontal)
+                    .testTag("home-updates")) {
+                items(pages, key = { it.first().content.id }) { page ->
+                    Column(Modifier.width(pageWidth), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        page.forEach { work ->
                             HomeListRailRow(
                                 title = work.content.title,
                                 sourceTitle = controller.state.value.sources.firstOrNull { it.source.name == work.content.source.name }
@@ -228,20 +239,21 @@ private fun UpdatesRail(controller: DesktopController, works: List<HomeWork>) {
                                 rimBorderBrush = rim,
                                 onClick = { controller.openTracked(work.content.id) },
                                 supportingText = desktopText("home.newChapters", work.newChapters),
-                                modifier = Modifier.weight(1f).testTag("home-update:${work.content.id}"),
+                                modifier = Modifier.fillMaxWidth().testTag("home-update:${work.content.id}"),
                                 cover = {
                                     DesktopCover(work.content, controller.session.covers, Modifier.matchParentSize())
                                     ContentCardBookSpine(Modifier.align(Alignment.CenterStart), width = 2.5.dp)
                                 },
                             )
                         }
-                        repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
                     }
                 }
             }
         }
     }
 }
+
+private const val UPDATES_ROWS_PER_PAGE = 2
 
 @Composable
 private fun QuickAccess(controller: DesktopController, enabled: Boolean, expanded: Boolean) {
