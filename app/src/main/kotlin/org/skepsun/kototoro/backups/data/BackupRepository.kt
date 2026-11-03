@@ -897,6 +897,7 @@ class BackupRepository @Inject constructor(
         map.remove(AppSettings.KEY_PROXY_PASSWORD)
         map.remove(AppSettings.KEY_PROXY_LOGIN)
         map.remove(AppSettings.KEY_INCOGNITO_MODE)
+        AppSettings.DEVICE_LOCAL_KEYS.forEach { map.remove(it) }
         return JSONObject(map).toString()
     }
 

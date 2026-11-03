@@ -130,8 +130,8 @@ class SourceAvailabilityRepository @Inject constructor(
     }
 
     private companion object {
-        const val KEY_AVAILABLE_SOURCES = "available_sources"
-        const val KEY_EMPTY_SOURCES = "empty_sources"
-        const val KEY_CLOUDFLARE_SOURCES = "cloudflare_sources"
+        const val KEY_AVAILABLE_SOURCES = AppSettings.KEY_AVAILABLE_SOURCES
+        const val KEY_EMPTY_SOURCES = AppSettings.KEY_EMPTY_SOURCES
+        const val KEY_CLOUDFLARE_SOURCES = AppSettings.KEY_CLOUDFLARE_SOURCES
     }
 }

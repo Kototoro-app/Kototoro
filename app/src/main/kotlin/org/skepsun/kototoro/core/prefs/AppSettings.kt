@@ -2742,9 +2742,14 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
     }
 
     fun upsertAll(m: Map<String, *>) {
+        // Source availability verdicts are per device: keep the local values, never import them.
+        val deviceLocal = DEVICE_LOCAL_KEYS.associateWith { prefs.getStringSet(it, null) }
         prefs.edit {
             removeAll(prefs)
             putAll(m)
+            for ((key, value) in deviceLocal) {
+                if (value != null) putStringSet(key, value) else remove(key)
+            }
         }
         migrateLegacyUiPreferences()
     }
@@ -3051,6 +3056,13 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val EINK_REFRESH_EVERY_DEFAULT = 1
         const val EINK_REFRESH_EVERY_MIN = 1
         const val EINK_REFRESH_EVERY_MAX = 10
+        const val KEY_AVAILABLE_SOURCES = "available_sources"
+        const val KEY_EMPTY_SOURCES = "empty_sources"
+        const val KEY_CLOUDFLARE_SOURCES = "cloudflare_sources"
+
+        /** Keys that describe this device only: excluded from backups and sync, kept on restore. */
+        val DEVICE_LOCAL_KEYS: Set<String> = setOf(KEY_AVAILABLE_SOURCES, KEY_EMPTY_SOURCES, KEY_CLOUDFLARE_SOURCES)
+
         const val KEY_APP_PASSWORD = "app_password"
         const val KEY_APP_PASSWORD_NUMERIC = "app_password_num"
         const val KEY_PROTECT_APP = "protect_app"
