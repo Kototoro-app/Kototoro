@@ -40,11 +40,12 @@ class SourceAvailabilityRepository @Inject constructor(
         )
     }
 
-    /** Forgets a stored CLOUDFLARE verdict (the challenge was solved); other states are left alone. */
+    /** Forgets a stored CLOUDFLARE verdict (the challenge was solved); EMPTY / AVAILABLE verdicts are left alone. */
     @Synchronized
     fun clearCloudflare(source: ContentSource) {
-        if (source.name in getSet(KEY_CLOUDFLARE_SOURCES)) {
-            setAvailability(source.name, ContentSourceAvailability.UNKNOWN)
+        val cloudflare = getSet(KEY_CLOUDFLARE_SOURCES)
+        if (source.name in cloudflare) {
+            settings.prefs.edit { putStringSet(KEY_CLOUDFLARE_SOURCES, cloudflare - source.name) }
         }
     }
 

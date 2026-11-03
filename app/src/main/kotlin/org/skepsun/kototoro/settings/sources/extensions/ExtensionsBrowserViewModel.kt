@@ -48,6 +48,7 @@ class ExtensionsBrowserViewModel @Inject constructor(
     private val ireaderExtensionManager: org.skepsun.kototoro.ireader.IReaderExtensionManager,
     private val cloudstreamRuntimeManager: org.skepsun.kototoro.cloudstream.runtime.CloudstreamRuntimeManager,
     private val packageRemovalCleanup: org.skepsun.kototoro.extensions.install.PackageRemovalCleanup,
+    private val catalogRepository: org.skepsun.kototoro.settings.sources.unified.UnifiedSourceCatalogRepository,
 ) : BaseViewModel() {
 
     val type: ExternalExtensionType = enumValueOf(savedStateHandle.require<String>(ARG_EXTENSION_TYPE))
@@ -357,6 +358,7 @@ class ExtensionsBrowserViewModel @Inject constructor(
                             onInstallIntent.call(userAction)
                         }
                         result.session.awaitCompletion()
+                        clearInstalledAvailability(item.extension)
                         onMessage.call(appContext.getString(R.string.unified_sources_package_installed))
                         if (fromBatch) {
                             handleBatchNextAction(batchUpdateState.finishCurrentInstall())
@@ -364,6 +366,7 @@ class ExtensionsBrowserViewModel @Inject constructor(
                     }
                     ExtensionInstallResult.Completed -> {
                         reloadInstalledManager(item.extension)
+                        clearInstalledAvailability(item.extension)
                         onMessage.call(appContext.getString(R.string.unified_sources_package_installed))
                         if (fromBatch) {
                             handleBatchNextAction(batchUpdateState.finishCurrentInstall())
@@ -385,6 +388,11 @@ class ExtensionsBrowserViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    private suspend fun clearInstalledAvailability(extension: RepoAvailableExtension) {
+        val pkg = extension.pkgName
+        catalogRepository.clearAvailabilityForPackage(extension.type, pkg, extension.type.normalizePackageNameForMatching(pkg))
     }
 
     private suspend fun reloadInstalledManager(extension: RepoAvailableExtension) {

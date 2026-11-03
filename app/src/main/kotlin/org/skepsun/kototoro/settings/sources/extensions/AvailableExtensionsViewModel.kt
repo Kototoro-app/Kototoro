@@ -41,6 +41,7 @@ class AvailableExtensionsViewModel @Inject constructor(
     private val aniyomiExtensionManager: AniyomiExtensionManager,
     private val signatureValidator: InstalledExtensionSignatureValidator,
     private val ireaderExtensionManager: IReaderExtensionManager,
+    private val catalogRepository: org.skepsun.kototoro.settings.sources.unified.UnifiedSourceCatalogRepository,
 ) : BaseViewModel() {
 
     val type: ExternalExtensionType = enumValueOf(savedStateHandle.require<String>(ARG_EXTENSION_TYPE))
@@ -112,10 +113,12 @@ class AvailableExtensionsViewModel @Inject constructor(
                     is ExtensionInstallResult.RequiresInstaller -> {
                         result.session.awaitUserAction()?.let { onInstallIntent.call(it) }
                         result.session.awaitCompletion()
+                        clearInstalledAvailability(extension)
                         onMessage.call(appContext.getString(R.string.unified_sources_package_installed))
                     }
                     ExtensionInstallResult.Completed -> {
                         reloadInstalledManager(extension)
+                        clearInstalledAvailability(extension)
                         onMessage.call(appContext.getString(R.string.unified_sources_package_installed))
                     }
                 }
@@ -123,6 +126,11 @@ class AvailableExtensionsViewModel @Inject constructor(
                 errorEvent.call(e)
             }
         }
+    }
+
+    private suspend fun clearInstalledAvailability(extension: RepoAvailableExtension) {
+        val pkg = extension.pkgName
+        catalogRepository.clearAvailabilityForPackage(extension.type, pkg, extension.type.normalizePackageNameForMatching(pkg))
     }
 
     private suspend fun reloadInstalledManager(extension: RepoAvailableExtension) {

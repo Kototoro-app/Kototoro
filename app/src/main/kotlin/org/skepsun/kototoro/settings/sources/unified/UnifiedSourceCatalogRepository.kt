@@ -491,6 +491,21 @@ class UnifiedSourceCatalogRepository @Inject constructor(
         return buildSourceItems().filter { it.packageId == packageId }
     }
 
+    /** A new build invalidates the old probe verdicts (EMPTY / CLOUDFLARE badges) of the package's sources. */
+    suspend fun clearAvailabilityForPackage(type: ExternalExtensionType, vararg packageNames: String) {
+        val kind = when (type) {
+            ExternalExtensionType.MIHON -> UnifiedSourceKind.MIHON
+            ExternalExtensionType.ANIYOMI -> UnifiedSourceKind.ANIYOMI
+            ExternalExtensionType.IREADER -> UnifiedSourceKind.IREADER
+            ExternalExtensionType.TSUNDOKU -> UnifiedSourceKind.TSUNDOKU
+            ExternalExtensionType.JAR -> UnifiedSourceKind.JAR
+            ExternalExtensionType.CLOUDSTREAM -> UnifiedSourceKind.CLOUDSTREAM
+        }
+        val ids = packageNames.mapTo(HashSet()) { packageId(kind, it) }
+        val names = buildSourceItems().filter { it.packageId in ids }.map { it.source.name }
+        sourceAvailabilityRepository.clearAvailability(names)
+    }
+
     private fun observeRuntimeSourceChanges(): Flow<Unit> {
         val apkChanges = combine(
             mihonExtensionManager.changes,
