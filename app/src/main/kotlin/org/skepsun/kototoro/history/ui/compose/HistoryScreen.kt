@@ -77,6 +77,7 @@ fun HistoryScreen(
     statsSummary: org.skepsun.kototoro.stats.domain.StatsDashboard? = null,
     libraryQuery: String = "",
     onClearLibraryQuery: () -> Unit = {},
+    onEmptyActionClick: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val hapticFeedback = LocalHapticFeedback.current
@@ -161,6 +162,7 @@ fun HistoryScreen(
         onItemLongClick = onItemLongClick,
         onClearSelection = onClearSelection,
         onSelectionAction = onSelectionAction,
+        onEmptyActionClick = onEmptyActionClick,
         showInlineSelectionTopBar = showInlineSelectionTopBar,
         gridState = gridState,
         listState = listState,

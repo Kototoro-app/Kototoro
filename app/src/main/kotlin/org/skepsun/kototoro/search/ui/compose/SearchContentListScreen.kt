@@ -755,6 +755,7 @@ fun AppSearchContentListRoute(
                         },
                         selectedItemsIds = selectedItemsIds,
                         showInlineSelectionTopBar = false,
+                        onEmptyActionClick = viewModel.filterCoordinator::reset,
                         onRetry = ::resolveErrorAndRetry,
                         onSecondaryAction = ::openErrorInBrowser,
                         highlightedItemId = panels.previewContentId,

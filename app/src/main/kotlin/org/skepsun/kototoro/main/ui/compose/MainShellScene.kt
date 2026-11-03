@@ -1092,7 +1092,14 @@ internal fun LocalTopLevelRouteContent(
                     org.skepsun.kototoro.core.util.ShareHelper(activity).shareCbz(files)
                 }
             },
-            onEmptyActionClick = { appRouter.showImportDialog() },
+            // The filtered empty state offers "reset filter"; only the empty library offers import.
+            onEmptyActionClick = {
+                if (viewModel.filterCoordinator.isFilterApplied) {
+                    viewModel.filterCoordinator.reset()
+                } else {
+                    appRouter.showImportDialog()
+                }
+            },
             listHeader = {
                 Column {
                     if (localLibraryQuery.isNotEmpty()) {
@@ -1645,6 +1652,7 @@ internal fun HistoryTopLevelRouteContent(
     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides animatedVisibilityScope) {
         org.skepsun.kototoro.history.ui.compose.HistoryScreen(
             contentPadding = contentPadding,
+            onEmptyActionClick = { viewModel.resetFilters() },
             items = historySnapshotItems,
             pagingItems = null,
             headerQuickFilter = headerQuickFilter,
