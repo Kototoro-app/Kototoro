@@ -26,6 +26,7 @@ import org.skepsun.kototoro.core.ui.BaseViewModel
 import org.skepsun.kototoro.core.util.ext.MutableEventFlow
 import org.skepsun.kototoro.core.util.ext.call
 import org.skepsun.kototoro.core.util.ext.require
+import org.skepsun.kototoro.extensions.install.ExtensionInstallMode
 import org.skepsun.kototoro.extensions.install.ExtensionInstallResult
 import org.skepsun.kototoro.extensions.install.ExtensionInstallService
 import org.skepsun.kototoro.extensions.repo.ExternalExtensionRepoRepository
@@ -384,7 +385,7 @@ class ExtensionsBrowserViewModel @Inject constructor(
         }
         launchLoadingJob(Dispatchers.IO) {
             try {
-                when (val result = installService.install(item.extension)) {
+                when (val result = installService.install(item.extension, preferredInstallMode(item.extension))) {
                     is ExtensionInstallResult.RequiresInstaller -> {
                         val userAction = result.session.awaitUserAction()
                         if (userAction != null) {
@@ -424,6 +425,22 @@ class ExtensionsBrowserViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    /**
+     * Same rule as the unified screen: a package that the system installed is updated through the system installer
+     * (no second managed copy); everything else is a managed LOCAL_APK install.
+     */
+    private fun preferredInstallMode(extension: RepoAvailableExtension): ExtensionInstallMode {
+        val installedName = extension.type.normalizePackageNameForMatching(extension.pkgName)
+        val isSystemInstalled = try {
+            @Suppress("DEPRECATION")
+            appContext.packageManager.getPackageInfo(installedName, 0)
+            true
+        } catch (_: android.content.pm.PackageManager.NameNotFoundException) {
+            false
+        }
+        return if (isSystemInstalled) ExtensionInstallMode.SYSTEM else ExtensionInstallMode.LOCAL_APK
     }
 
     private suspend fun clearInstalledAvailability(extension: RepoAvailableExtension) {
