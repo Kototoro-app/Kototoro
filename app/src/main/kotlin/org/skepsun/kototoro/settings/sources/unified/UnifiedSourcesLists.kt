@@ -1428,14 +1428,6 @@ private fun UnifiedPackageRow(
                                 fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.primary,
                             )
-                            if (installProgress != null) {
-                                Text(
-                                    text = "%$installProgress",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
-                            }
                         }
                         if (installProgress != null) {
                             LinearProgressIndicator(
@@ -1506,7 +1498,7 @@ private fun UnifiedPackageRow(
                     }
                         UnifiedSourcePackageState.INSTALLING -> {
                             val chipText = if (item.installProgressPercent != null) {
-                                "%${item.installProgressPercent}"
+                                stringResource(R.string.package_download_progress, item.installProgressPercent)
                             } else {
                                 item.primaryActionLabel().ifBlank { stringResource(R.string.loading_) }
                             }
