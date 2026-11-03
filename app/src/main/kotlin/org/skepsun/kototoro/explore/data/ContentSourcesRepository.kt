@@ -694,9 +694,10 @@ class ContentSourcesRepository @Inject constructor(
                 observeJarParserSourceChanges(),
                 observeExternalExtensionChanges(),
                 cloudstreamRuntimeManager.sources,
-            ) { _, _, _ -> Unit },
-        ) { skipNsfw, allEnabled, rows, jsonSummaries, _ ->
-            computeSourceCounts(skipNsfw, allEnabled, rows, jsonSummaries)
+                observeLocks(),
+            ) { _, _, _, locks -> locks },
+        ) { skipNsfw, allEnabled, rows, jsonSummaries, locks ->
+            computeSourceCounts(skipNsfw, allEnabled, rows, jsonSummaries, locks)
         }.flowOn(Dispatchers.Default)
     }
 
@@ -705,6 +706,7 @@ class ContentSourcesRepository @Inject constructor(
         allEnabled: Boolean,
         rows: List<MangaSourceEntity>,
         jsonSummaries: List<JsonSourceSummary>,
+        locks: Map<String, Boolean>,
     ): SourceCounts {
         // Same pool as the unified catalog: built-in + Cloudstream, Mihon/Aniyomi/IReader/Tsundoku, JSON.
         val sources = LinkedHashMap<String, ContentSource>()
@@ -722,7 +724,8 @@ class ContentSourcesRepository @Inject constructor(
             if (skipNsfw && source.isNsfw()) continue
             total++
             // Same rule as UnifiedSourceCatalogRepository: JSON uses its own flag, the rest the db row.
-            val isEnabled = jsonById[name]?.enabled ?: (allEnabled || name in enabledRows)
+            // A lock overrides the stored flag, exactly as the unified list shows it.
+            val isEnabled = locks[name] ?: jsonById[name]?.enabled ?: (allEnabled || name in enabledRows)
             if (isEnabled) enabled++
         }
         return SourceCounts(total = total, enabled = enabled)
@@ -1229,10 +1232,12 @@ class ContentSourcesRepository @Inject constructor(
         }
         var maxSortKey = dao.getMaxSortKey()
         val isAllEnabled = settings.isAllSourcesEnabled
+        // A new row of a locked source is created in its locked state, so the row never disagrees with the lock.
+        val locks = lockStore?.locks?.value.orEmpty()
         val entities = new.map { x ->
             MangaSourceEntity(
                 source = x.name,
-                isEnabled = isAllEnabled,
+                isEnabled = locks[x.name] ?: isAllEnabled,
                 sortKey = ++maxSortKey,
                 addedIn = BuildConfig.VERSION_CODE,
                 lastUsedAt = 0,
