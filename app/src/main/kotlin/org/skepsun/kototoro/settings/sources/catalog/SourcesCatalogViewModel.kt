@@ -51,13 +51,19 @@ class SourcesCatalogViewModel @Inject constructor(
     private val externalExtensionChanges: Flow<Unit> = repository.observeExternalExtensionChanges()
         .shareIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, replay = 1)
 
+    // Same base query as the list (disabled sources only) so chips/locales never lead to an empty result.
     private val availableSources: Flow<List<ContentSource>> = combine(
         externalExtensionChanges,
         settings.observeAsFlow(AppSettings.KEY_DISABLE_NSFW) { isNsfwContentDisabled },
-    ) { _: Unit, isNsfwDisabled: Boolean ->
+        db.invalidationTrackerFlow(TABLE_SOURCES, org.skepsun.kototoro.core.db.TABLE_JSON_SOURCES).conflate(),
+    ) { _, isNsfwDisabled, _ ->
         isNsfwDisabled
     }.mapLatest { isNsfwDisabled: Boolean ->
-        repository.getAllAvailableSourcesUnfiltered().filterNot { source ->
+        repository.queryAllSources(
+            isDisabledOnly = true,
+            excludeBroken = !settings.isShowBrokenSources,
+            sortOrder = SourcesSortOrder.ALPHABETIC,
+        ).filterNot { source ->
             isNsfwDisabled && source.isNsfw()
         }
     }
