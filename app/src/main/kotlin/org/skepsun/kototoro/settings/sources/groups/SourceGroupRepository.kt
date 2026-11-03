@@ -263,13 +263,13 @@ class SourceGroupRepository @Inject constructor(
 				}
 			}
 
-			// A lock already set on this device always wins over the group: it is kept as it is, and
-			// every state the group wanted to change on such a source is reported as skipped.
-			val deviceLocks = group.sourceStates.associate { it.source to contentSources.lockState(it.source) }
-			group.sourceStates.forEach { state ->
-				val deviceLock = deviceLocks[state.source] ?: return@forEach
-				if (deviceLock != state.enabled || (state.locked != null && state.locked != deviceLock)) {
-					errors += context.getString(R.string.source_groups_skipped_locked, state.source)
+			// The group's lock state replaces the device lock of every source it lists (null clears it):
+			// locks left by an earlier group apply or sync are not manual choices. Sources the group does
+			// not list keep their device lock. Locks are written before the exclusive batch, which keeps
+			// locked sources at their lock value.
+			for (state in group.sourceStates) {
+				runGuarded(errors, context.getString(R.string.source_groups_error_source, state.source)) {
+					contentSources.setSourceLock(contentSources.resolveSource(state.source), state.locked)
 				}
 			}
 
@@ -285,7 +285,7 @@ class SourceGroupRepository @Inject constructor(
 
 			for (state in group.sourceStates) {
 				runGuarded(errors, context.getString(R.string.source_groups_error_source, state.source)) {
-					applySourceDetails(state, deviceLocks[state.source])
+					applySourceDetails(state)
 				}
 				tick()
 			}
@@ -368,13 +368,9 @@ class SourceGroupRepository @Inject constructor(
 		)
 	}
 
-	/** [deviceLock] is the lock this device already has on the source; it is never replaced by the group's. */
-	private suspend fun applySourceDetails(state: SourceGroupSourceState, deviceLock: Boolean?) {
+	private suspend fun applySourceDetails(state: SourceGroupSourceState) {
 		val source = contentSources.resolveSource(state.source)
 		contentSources.setIsPinned(listOf(source), state.pinned)
-		if (state.locked != null && deviceLock == null) {
-			contentSources.setSourceLock(source, state.locked)
-		}
 		if (!state.domain.isNullOrBlank()) {
 			sourcePrefs(state.source).edit()
 				.putString(SourceSettings.KEY_DOMAIN, state.domain)
