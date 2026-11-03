@@ -15,6 +15,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
 import kotlinx.serialization.json.Json
 import org.skepsun.kototoro.aniyomi.AniyomiExtensionManager
@@ -69,6 +71,24 @@ import javax.inject.Singleton
  */
 private const val CATALOG_COALESCE_MS = 150L
 
+/** Debounce that lets the first emission through immediately so first paint is not delayed. */
+internal fun <T> Flow<T>.debounceAfterFirst(timeoutMillis: Long): Flow<T> {
+    val upstream = this
+    return kotlinx.coroutines.flow.flow {
+        var first = true
+        emitAll(
+            upstream.debounce {
+                if (first) {
+                    first = false
+                    0L
+                } else {
+                    timeoutMillis
+                }
+            },
+        )
+    }
+}
+
 @Singleton
 class UnifiedSourceCatalogRepository @Inject constructor(
     @ApplicationContext private val appContext: Context,
@@ -87,8 +107,11 @@ class UnifiedSourceCatalogRepository @Inject constructor(
     private val json: Json,
 ) {
 
+    @Volatile
+    private var lastCatalogState: UnifiedSourceCatalogState? = null
+
     fun observeState(): Flow<UnifiedSourceCatalogState> {
-        return combine(
+        val upstream = combine(
             observeRepositories(),
             observePackages(),
             observeSources(),
@@ -102,7 +125,10 @@ class UnifiedSourceCatalogRepository @Inject constructor(
             Log.e("UnifiedSourceCatalog", "Error in observeState flow", e)
             emit(UnifiedSourceCatalogState())
         }
-            .debounce(CATALOG_COALESCE_MS)
+        return upstream
+            .debounceAfterFirst(CATALOG_COALESCE_MS)
+            .onStart { lastCatalogState?.let { emit(it) } }
+            .onEach { lastCatalogState = it }
             .distinctUntilChanged()
     }
 
@@ -420,7 +446,7 @@ class UnifiedSourceCatalogRepository @Inject constructor(
             settings.observeAsFlow(AppSettings.KEY_SOURCE_SFW_OVERRIDES) { sourceSfwOverrides },
         ) { _, _ -> Unit }
         return combine(dbChanges, runtimeChanges, settingsChanges, nsfwOverrideChanges) { _, _, _, _ -> Unit }
-            .debounce(CATALOG_COALESCE_MS)
+            .debounceAfterFirst(CATALOG_COALESCE_MS)
             .mapLatest {
                 runCatching { buildSourceItems() }.getOrElse { e ->
                     Log.e("UnifiedSourceCatalog", "Failed to buildSourceItems", e)
