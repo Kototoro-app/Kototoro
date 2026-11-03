@@ -57,19 +57,27 @@ class SourceAvailabilityRepository @Inject constructor(
         setAvailability(source.name, availability)
     }
 
-    @Synchronized
     private fun setAvailability(sourceName: String, availability: ContentSourceAvailability) {
+        setAvailabilities(mapOf(sourceName to availability))
+    }
+
+    /** Applies all [updates] with a single read-modify-write and a single prefs commit. */
+    @Synchronized
+    fun setAvailabilities(updates: Map<String, ContentSourceAvailability>) {
+        if (updates.isEmpty()) return
         val available = getSet(KEY_AVAILABLE_SOURCES).toMutableSet()
         val empty = getSet(KEY_EMPTY_SOURCES).toMutableSet()
         val cloudflare = getSet(KEY_CLOUDFLARE_SOURCES).toMutableSet()
-        available.remove(sourceName)
-        empty.remove(sourceName)
-        cloudflare.remove(sourceName)
-        when (availability) {
-            ContentSourceAvailability.AVAILABLE -> available += sourceName
-            ContentSourceAvailability.EMPTY -> empty += sourceName
-            ContentSourceAvailability.CLOUDFLARE -> cloudflare += sourceName
-            ContentSourceAvailability.UNKNOWN -> Unit
+        for ((sourceName, availability) in updates) {
+            available.remove(sourceName)
+            empty.remove(sourceName)
+            cloudflare.remove(sourceName)
+            when (availability) {
+                ContentSourceAvailability.AVAILABLE -> available += sourceName
+                ContentSourceAvailability.EMPTY -> empty += sourceName
+                ContentSourceAvailability.CLOUDFLARE -> cloudflare += sourceName
+                ContentSourceAvailability.UNKNOWN -> Unit
+            }
         }
         settings.prefs.edit {
             putStringSet(KEY_AVAILABLE_SOURCES, available)

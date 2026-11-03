@@ -1152,12 +1152,9 @@ class UnifiedSourcesViewModel @Inject constructor(
                     item to outcome
                 }
             }.awaitAll()
-            results.forEach { (item, outcome) ->
-                sourceAvailabilityRepository.setAvailability(
-                    item.source,
-                    outcome.availability,
-                )
-            }
+            sourceAvailabilityRepository.setAvailabilities(
+                results.associate { (item, outcome) -> item.source.name to outcome.availability },
+            )
             logTestSummary(results)
             emitMessage(
                 appContext.getString(

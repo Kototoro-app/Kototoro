@@ -35,6 +35,9 @@ class SourceTestViewModel @Inject constructor(
 
 	private val sourcesByKey = mutableMapOf<String, ContentSource>()
 	private var job: Job? = null
+	private val lock = Any()
+	private val allResults = ArrayList<SourceTestResult>()
+	private val pendingAvailability = LinkedHashMap<String, ContentSourceAvailability>()
 
 	/** Tests [sources] with at most [SOURCE_TEST_MAX_PARALLELISM] running at once. Ignored while a run is active. */
 	fun testAll(sources: List<ContentSource>) {
@@ -42,6 +45,10 @@ class SourceTestViewModel @Inject constructor(
 		val unique = sources.distinctBy { it.name }
 		sourcesByKey.clear()
 		unique.forEach { sourcesByKey[it.name] = it }
+		synchronized(lock) {
+			allResults.clear()
+			pendingAvailability.clear()
+		}
 		_progress.value = TestProgress(total = unique.size)
 		job = viewModelScope.launch(Dispatchers.IO) {
 			var completed = false
@@ -53,12 +60,11 @@ class SourceTestViewModel @Inject constructor(
 							semaphore.withPermit {
 								_progress.update { it.copy(running = it.running + source.name) }
 								val result = tester.test(source)
-								recordAvailability(source, result)
+								onResult(source, result)
 								_progress.update {
 									it.copy(
 										done = it.done + 1,
 										running = it.running - source.name,
-										results = it.results + result,
 									)
 								}
 							}
@@ -67,19 +73,52 @@ class SourceTestViewModel @Inject constructor(
 				}
 				completed = true
 			} finally {
-				_progress.update { it.copy(running = emptySet(), finished = true, cancelled = !completed) }
+				val (finalResults, batch) = synchronized(lock) {
+					val snapshot = allResults.toList()
+					val pending = LinkedHashMap(pendingAvailability)
+					pendingAvailability.clear()
+					snapshot to pending
+				}
+				flushAvailability(batch)
+				_progress.update {
+					it.copy(running = emptySet(), results = finalResults, finished = true, cancelled = !completed)
+				}
 			}
 		}
 	}
 
-	/** Persists the verdict so the sources list shows the tested state of every source. */
-	private fun recordAvailability(source: ContentSource, result: SourceTestResult) {
-		val availability = when (result.overall) {
-			StepStatus.PASS, StepStatus.SKIP -> ContentSourceAvailability.AVAILABLE
-			StepStatus.FAIL -> ContentSourceAvailability.EMPTY
-			StepStatus.CLOUDFLARE -> ContentSourceAvailability.CLOUDFLARE
+	/**
+	 * Collects a result. Results are published and verdicts persisted in batches of
+	 * [RESULT_BATCH_SIZE] so a long run neither copies the whole list per result nor rewrites prefs per source.
+	 */
+	private fun onResult(source: ContentSource, result: SourceTestResult) {
+		var published: List<SourceTestResult>? = null
+		var batch: Map<String, ContentSourceAvailability>? = null
+		synchronized(lock) {
+			allResults += result
+			pendingAvailability[source.name] = result.toAvailability()
+			if (pendingAvailability.size >= RESULT_BATCH_SIZE) {
+				published = allResults.toList()
+				batch = LinkedHashMap(pendingAvailability)
+				pendingAvailability.clear()
+			}
 		}
-		runCatching { sourceAvailabilityRepository.setAvailability(source, availability) }
+		batch?.let(::flushAvailability)
+		published?.let { snapshot ->
+			_progress.update { if (snapshot.size > it.results.size) it.copy(results = snapshot) else it }
+		}
+	}
+
+	/** Persists the verdicts so the sources list shows the tested state of every source. */
+	private fun flushAvailability(batch: Map<String, ContentSourceAvailability>) {
+		if (batch.isEmpty()) return
+		runCatching { sourceAvailabilityRepository.setAvailabilities(batch) }
+	}
+
+	private fun SourceTestResult.toAvailability(): ContentSourceAvailability = when (overall) {
+		StepStatus.PASS, StepStatus.SKIP -> ContentSourceAvailability.AVAILABLE
+		StepStatus.FAIL -> ContentSourceAvailability.EMPTY
+		StepStatus.CLOUDFLARE -> ContentSourceAvailability.CLOUDFLARE
 	}
 
 	fun cancel() {
@@ -141,5 +180,9 @@ class SourceTestViewModel @Inject constructor(
 				_progress.update { it.copy(errorMessage = e.message ?: e.javaClass.simpleName) }
 			}
 		}
+	}
+
+	private companion object {
+		const val RESULT_BATCH_SIZE = 20
 	}
 }
