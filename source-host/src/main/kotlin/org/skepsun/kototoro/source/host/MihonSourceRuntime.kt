@@ -175,6 +175,10 @@ class MihonSourceRuntime @JvmOverloads constructor(
                     adapter.chapter(nativeChapter, parentUrl, if (declared >= 0) declared else (index + 1).toFloat())
                         .also { session.chapters[it.id] = snapshotChapter(nativeChapter, lease) }
                 }
+                .let { list ->
+                    if (MihonModelRules.scanlatorBranches(list, SourceChapter::branch, SourceChapter::number)) list
+                    else list.map { if (it.branch == null) it else it.copy(branch = null) }
+                }
             // Source order (oldest first), as Mihon lists them: extensions' numbers can be wrong (AllNovelFull reads
             // the last number of a title, so "Wedding Night 1" is 1), and the reading order follows the list.
             adapter.detailFallbacks(details, original)

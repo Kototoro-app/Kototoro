@@ -14,6 +14,7 @@ import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.core.cache.MemoryContentCache
 import org.skepsun.kototoro.core.parser.CachingContentRepository
 import org.skepsun.kototoro.core.parser.RelatedContentSearchFallback
+import org.skepsun.kototoro.core.source.MihonModelRules
 import org.skepsun.kototoro.mihon.compat.MihonRequestContext
 import org.skepsun.kototoro.mihon.model.MihonMangaSource
 import org.skepsun.kototoro.mihon.model.getPublicContentUrl
@@ -189,6 +190,10 @@ class MihonMangaRepository(
                 }
             }
             .sortedBy { it.number } // Kototoro 内部列表始终保持升序
+            .let { list ->
+                if (MihonModelRules.scanlatorBranches(list, ContentChapter::branch, ContentChapter::number)) list
+                else list.map { if (it.branch == null) it else it.copy(branch = null) }
+            }
 
         // Legacy sources may return a partial SManga whose required lateinit fields are unset.
         details.applyDetailFallbacks(sContent)

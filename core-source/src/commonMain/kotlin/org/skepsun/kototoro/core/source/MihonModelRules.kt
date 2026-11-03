@@ -26,6 +26,21 @@ object MihonModelRules {
         return identity.hashCode().toLong() and Long.MAX_VALUE
     }
 
+    /**
+     * Mihon/Aniyomi's scanlator is a credit, not a translation branch. Groups become branches only when they offer
+     * competing versions of one chapter number; otherwise every chapter stays on one list, as Mihon shows it
+     * (Komga credits per-book translators, so a series with partly filled metadata would otherwise split).
+     */
+    fun <T> scanlatorBranches(chapters: List<T>, scanlator: (T) -> String?, number: (T) -> Float): Boolean {
+        val owners = HashMap<Float, String?>()
+        for (chapter in chapters) {
+            val group = scanlator(chapter)?.takeIf(String::isNotBlank)
+            val key = number(chapter)
+            if (key !in owners) owners[key] = group else if (owners[key] != group) return true
+        }
+        return false
+    }
+
     fun pageId(chapterIdentity: String, index: Int): Long =
         "$chapterIdentity|page|$index".hashCode().toLong() and Long.MAX_VALUE
 
