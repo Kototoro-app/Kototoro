@@ -353,6 +353,7 @@ class ExtensionsBrowserViewModel @Inject constructor(
                         }
                     }
                     ExtensionInstallResult.Completed -> {
+                        reloadInstalledManager(item.extension)
                         onMessage.call(appContext.getString(R.string.unified_sources_package_installed))
                         if (fromBatch) {
                             handleBatchNextAction(batchUpdateState.finishCurrentInstall())
@@ -373,6 +374,15 @@ class ExtensionsBrowserViewModel @Inject constructor(
                     handleBatchNextAction(batchUpdateState.finishCurrentInstall())
                 }
             }
+        }
+    }
+
+    private suspend fun reloadInstalledManager(extension: RepoAvailableExtension) {
+        when (extension.type) {
+            ExternalExtensionType.MIHON -> mihonExtensionManager.loadExtensions()
+            ExternalExtensionType.ANIYOMI -> aniyomiExtensionManager.loadExtensions()
+            ExternalExtensionType.IREADER -> ireaderExtensionManager.loadExtensions()
+            else -> Unit
         }
     }
 

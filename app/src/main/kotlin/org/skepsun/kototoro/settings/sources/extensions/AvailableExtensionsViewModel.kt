@@ -115,12 +115,22 @@ class AvailableExtensionsViewModel @Inject constructor(
                         onMessage.call(appContext.getString(R.string.unified_sources_package_installed))
                     }
                     ExtensionInstallResult.Completed -> {
+                        reloadInstalledManager(extension)
                         onMessage.call(appContext.getString(R.string.unified_sources_package_installed))
                     }
                 }
             } catch (e: Throwable) {
                 errorEvent.call(e)
             }
+        }
+    }
+
+    private suspend fun reloadInstalledManager(extension: RepoAvailableExtension) {
+        when (extension.type) {
+            ExternalExtensionType.MIHON -> mihonExtensionManager.loadExtensions()
+            ExternalExtensionType.ANIYOMI -> aniyomiExtensionManager.loadExtensions()
+            ExternalExtensionType.IREADER -> ireaderExtensionManager.loadExtensions()
+            else -> Unit
         }
     }
 }
