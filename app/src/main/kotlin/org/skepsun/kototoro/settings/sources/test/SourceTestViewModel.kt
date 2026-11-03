@@ -169,6 +169,8 @@ class SourceTestViewModel @Inject constructor(
 		val targets = current.results
 			.filter { it.overall == StepStatus.FAIL && it.sourceKey !in current.disabledKeys }
 			.mapNotNull { sourcesByKey[it.sourceKey] }
+			// A locked source stays as it is: it is neither disabled nor reported as disabled.
+			.filter { contentSourcesRepository.lockState(it.name) == null }
 		if (targets.isEmpty()) return
 		val keys = targets.mapTo(mutableSetOf()) { it.name }
 		viewModelScope.launch(Dispatchers.IO) {
