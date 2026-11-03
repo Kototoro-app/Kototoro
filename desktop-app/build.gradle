@@ -111,12 +111,29 @@ def prepareDesktopAppIcons = tasks.register('prepareDesktopAppIcons') {
             }
             images.each { ico.put(it) }
             new File(root, 'Kototoro.ico').bytes = ico.array()
-            def entries = ['icp4': 16, 'icp5': 32, 'icp6': 64, 'ic07': 128, 'ic08': 256, 'ic09': 512]
-                .collect { type, size ->
-                    byte[] data = png(size)
-                    java.nio.ByteBuffer.allocate(data.length + 8).put(type.getBytes('US-ASCII'))
-                        .putInt(data.length + 8).put(data).array()
+            // Same element types iconutil writes. Finder garbles PNG data in icp4/icp5/icp6 (icp6 is also 48 px, not
+            // 64), so 16/32 px use ic04/ic05: 'ARGB' + per-channel icns RLE, here as literal runs only.
+            def argb = { int size ->
+                def image = javax.imageio.ImageIO.read(new ByteArrayInputStream(png(size)))
+                def bytes = new ByteArrayOutputStream()
+                bytes.write('ARGB'.getBytes('US-ASCII'))
+                int[] pixels = image.getRGB(0, 0, size, size, null, 0, size)
+                [24, 16, 8, 0].each { shift ->
+                    for (int start = 0; start < pixels.length; start += 128) {
+                        int count = Math.min(128, pixels.length - start)
+                        bytes.write(count - 1)
+                        for (int i = start; i < start + count; i++) bytes.write((pixels[i] >>> shift) & 0xFF)
+                    }
                 }
+                bytes.toByteArray()
+            }
+            def entries = [
+                ic04: argb(16), ic05: argb(32), ic11: png(32), ic12: png(64), ic07: png(128),
+                ic13: png(256), ic08: png(256), ic14: png(512), ic09: png(512),
+            ].collect { type, byte[] data ->
+                java.nio.ByteBuffer.allocate(data.length + 8).put(type.getBytes('US-ASCII'))
+                    .putInt(data.length + 8).put(data).array()
+            }
             def icns = java.nio.ByteBuffer.allocate(8 + entries.sum { it.length })
             icns.put('icns'.getBytes('US-ASCII')).putInt(icns.capacity())
             entries.each { icns.put(it) }
