@@ -301,13 +301,16 @@ class UnifiedSourcesViewModel @Inject constructor(
         combine(
             catalogRepository.observeState(),
             availableExternalExtensions,
-            installService.downloadStates.distinctUntilChanged { a, b ->
-                a.size == b.size && a.all { (k, v) -> b[k]?.progressPercent == v.progressPercent }
-            },
+            combine(
+                installService.downloadStates.distinctUntilChanged { a, b ->
+                    a.size == b.size && a.all { (k, v) -> b.containsKey(k) && b[k]?.progressPercent == v.progressPercent }
+                },
+                installService.installing,
+            ) { downloads, installing -> downloads to installing },
             lnReaderPackageSnapshot,
-        ) { catalog, availableExtensions, downloadStates, lnReaderSnapshot ->
+        ) { catalog, availableExtensions, downloadInputs, lnReaderSnapshot ->
             catalog
-                .withAvailableExternalPackages(availableExtensions, downloadStates)
+                .withAvailableExternalPackages(availableExtensions, downloadInputs.first, downloadInputs.second)
                 .withAvailableLnReaderPackages(lnReaderSnapshot.plugins, lnReaderSnapshot.installingPackageIds)
                 .withAvailableJsonPackages(lnReaderSnapshot.jsonPackages)
         },
@@ -588,7 +591,9 @@ class UnifiedSourcesViewModel @Inject constructor(
 
     fun installPackage(packageId: String, mode: ExtensionInstallMode) {
         val item = currentPackage(packageId) ?: return
-        if (item.state == UnifiedSourcePackageState.INSTALLED || item.packageName in installService.downloadStates.value) {
+        if (item.state == UnifiedSourcePackageState.INSTALLED || item.packageName in installService.downloadStates.value ||
+            item.packageName in installService.installing.value
+        ) {
             return
         }
         if (item.state == UnifiedSourcePackageState.UPDATE_AVAILABLE) {
@@ -1370,7 +1375,7 @@ class UnifiedSourcesViewModel @Inject constructor(
         enableAfterInstall: Boolean? = null,
     ) {
         val extension = item.installPayload ?: return
-        if (extension.pkgName in installService.downloadStates.value) {
+        if (extension.pkgName in installService.downloadStates.value || extension.pkgName in installService.installing.value) {
             return
         }
         if (fromBatch) {
@@ -1884,6 +1889,7 @@ class UnifiedSourcesViewModel @Inject constructor(
     private fun UnifiedSourceCatalogState.withAvailableExternalPackages(
         availableExtensions: List<RepoAvailableExtension>,
         downloadStates: Map<String, ExtensionInstallDownloadState>,
+        installing: Set<String>,
     ): UnifiedSourceCatalogState {
         val externalInstalledPackages = packages
             .filter { it.kind.isExternalExtensionKind() && !it.packageName.isNullOrBlank() }
@@ -1900,6 +1906,7 @@ class UnifiedSourcesViewModel @Inject constructor(
             extension.toUnifiedPackageItem(
                 installedPackage = installedPackage,
                 downloadState = downloadStates[extension.pkgName],
+                isInstalling = extension.pkgName in installing,
             )
         }
         val installedWithoutCatalogMatch = packages.filterNot { item ->
@@ -1970,12 +1977,13 @@ class UnifiedSourcesViewModel @Inject constructor(
     private fun RepoAvailableExtension.toUnifiedPackageItem(
         installedPackage: UnifiedSourcePackageItem?,
         downloadState: ExtensionInstallDownloadState?,
+        isInstalling: Boolean = false,
     ): UnifiedSourcePackageItem {
         val isInstalled = installedPackage != null
         val isTrusted = installedPackage == null ||
             signatureValidator.isTrusted(installedPackage.packageName.orEmpty(), signatureHash)
         val state = when {
-            downloadState != null -> UnifiedSourcePackageState.INSTALLING
+            downloadState != null || isInstalling -> UnifiedSourcePackageState.INSTALLING
             isInstalled && !isTrusted -> UnifiedSourcePackageState.UNTRUSTED
             !isCompatible -> UnifiedSourcePackageState.INCOMPATIBLE
             !isInstalled -> UnifiedSourcePackageState.AVAILABLE

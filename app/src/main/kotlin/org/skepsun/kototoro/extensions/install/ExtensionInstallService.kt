@@ -63,9 +63,35 @@ class ExtensionInstallService @Inject constructor(
 
     val downloadStates: StateFlow<Map<String, ExtensionInstallDownloadState>> = _downloadStates.asStateFlow()
 
+    private val _installing = MutableStateFlow<Set<String>>(emptySet())
+
+    /** Packages with an [install] call in flight (covers the post-download phase, unlike [downloadStates]). */
+    val installing: StateFlow<Set<String>> = _installing.asStateFlow()
+
     suspend fun install(
         extension: RepoAvailableExtension,
         mode: ExtensionInstallMode = ExtensionInstallMode.LOCAL_APK,
+    ): ExtensionInstallResult {
+        val pkg = extension.pkgName
+        var added = false
+        _installing.update { current ->
+            added = pkg !in current
+            if (added) current + pkg else current
+        }
+        if (!added) {
+            // Another install for this package is already running (e.g. double tap): ignore this request.
+            return ExtensionInstallResult.Completed
+        }
+        try {
+            return performInstall(extension, mode)
+        } finally {
+            _installing.update { it - pkg }
+        }
+    }
+
+    private suspend fun performInstall(
+        extension: RepoAvailableExtension,
+        mode: ExtensionInstallMode,
     ): ExtensionInstallResult {
         val rawUrl = extension.archiveUrl ?: when (extension.type) {
             ExternalExtensionType.CLOUDSTREAM -> "${extension.repoUrl}/${extension.archiveName}"

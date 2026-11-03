@@ -93,16 +93,20 @@ class ExtensionsBrowserViewModel @Inject constructor(
     private val browserInputsBase: StateFlow<BrowserInputs> = combine(
         installedExtensions,
         availableExtensions,
-        installService.downloadStates.distinctUntilChanged { a, b ->
-            a.size == b.size && a.all { (k, v) -> b[k]?.progressPercent == v.progressPercent }
-        },
+        combine(
+            installService.downloadStates.distinctUntilChanged { a, b ->
+                a.size == b.size && a.all { (k, v) -> b.containsKey(k) && b[k]?.progressPercent == v.progressPercent }
+            },
+            installService.installing,
+        ) { downloads, installing -> downloads to installing },
         selectedExtensionLanguages,
         isStrictExtensionLanguageFilter,
-    ) { installed, available, downloads, selectedLanguages, isStrict ->
+    ) { installed, available, downloadInputs, selectedLanguages, isStrict ->
         BrowserInputs(
             installed = installed,
             available = available,
-            downloads = downloads,
+            downloads = downloadInputs.first,
+            installing = downloadInputs.second,
             selectedLanguages = selectedLanguages,
             isStrictLanguageFilter = isStrict,
             collapsedGroups = emptySet(),
@@ -114,6 +118,7 @@ class ExtensionsBrowserViewModel @Inject constructor(
             installed = emptyList(),
             available = emptyList(),
             downloads = emptyMap(),
+            installing = emptySet(),
             selectedLanguages = selectedExtensionLanguages.value,
             isStrictLanguageFilter = isStrictExtensionLanguageFilter.value,
             collapsedGroups = emptySet(),
@@ -144,6 +149,7 @@ class ExtensionsBrowserViewModel @Inject constructor(
             installed = inputs.installed,
             available = inputs.available,
             downloadStates = inputs.downloads,
+            installing = inputs.installing,
             selectedExtensionLanguages = inputs.selectedLanguages,
             collapsedLanguageGroups = inputs.collapsedGroups,
             query = query,
@@ -194,7 +200,7 @@ class ExtensionsBrowserViewModel @Inject constructor(
     }
 
     fun install(item: ExtensionsBrowserListItem.Entry) {
-        if (item.state == ExtensionsBrowserEntryState.INSTALLED || item.extension.pkgName in installService.downloadStates.value) {
+        if (item.state == ExtensionsBrowserEntryState.INSTALLED || item.extension.pkgName in installService.downloadStates.value || item.extension.pkgName in installService.installing.value) {
             return
         }
         requestInstall(item, fromBatch = false)
@@ -323,7 +329,7 @@ class ExtensionsBrowserViewModel @Inject constructor(
     }
 
     private fun requestInstall(item: ExtensionsBrowserListItem.Entry, fromBatch: Boolean) {
-        if (item.extension.pkgName in installService.downloadStates.value) {
+        if (item.extension.pkgName in installService.downloadStates.value || item.extension.pkgName in installService.installing.value) {
             return
         }
         if (fromBatch) {
@@ -409,6 +415,7 @@ class ExtensionsBrowserViewModel @Inject constructor(
             installed = browserInputs.value.installed,
             available = browserInputs.value.available,
             downloadStates = browserInputs.value.downloads,
+            installing = browserInputs.value.installing,
             selectedExtensionLanguages = browserInputs.value.selectedLanguages,
             collapsedLanguageGroups = browserInputs.value.collapsedGroups,
             query = "",
@@ -422,6 +429,7 @@ class ExtensionsBrowserViewModel @Inject constructor(
         val installed: List<InstalledExtensionEntry>,
         val available: List<RepoAvailableExtension>,
         val downloads: Map<String, org.skepsun.kototoro.extensions.install.ExtensionInstallDownloadState>,
+        val installing: Set<String>,
         val selectedLanguages: Set<String>,
         val isStrictLanguageFilter: Boolean,
         val collapsedGroups: Set<ExtensionsLanguageGroupKey>,

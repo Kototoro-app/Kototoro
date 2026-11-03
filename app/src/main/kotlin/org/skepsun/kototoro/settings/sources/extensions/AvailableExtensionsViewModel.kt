@@ -61,7 +61,9 @@ class AvailableExtensionsViewModel @Inject constructor(
     val items: StateFlow<List<AvailableExtensionListItem>> = combine(
         rawExtensions,
         installedExtensions,
-        installService.downloadStates.map { it.keys }.distinctUntilChanged(),
+        combine(installService.downloadStates.map { it.keys }.distinctUntilChanged(), installService.installing) { downloading, installing ->
+            downloading + installing
+        },
     ) { available, installed, downloads ->
         available.map { extension ->
             val installedSearchKey = type.normalizePackageNameForMatching(extension.pkgName)
@@ -101,7 +103,7 @@ class AvailableExtensionsViewModel @Inject constructor(
 
     fun install(item: AvailableExtensionListItem) {
         val extension = item.extension
-        if (item.state == AvailableExtensionState.INSTALLED || extension.pkgName in installService.downloadStates.value) {
+        if (item.state == AvailableExtensionState.INSTALLED || extension.pkgName in installService.downloadStates.value || extension.pkgName in installService.installing.value) {
             return
         }
         launchLoadingJob(Dispatchers.IO) {
