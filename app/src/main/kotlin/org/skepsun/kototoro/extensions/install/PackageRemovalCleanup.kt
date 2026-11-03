@@ -21,19 +21,11 @@ class PackageRemovalCleanup @Inject constructor(
     private val sourceAvailabilityRepository: SourceAvailabilityRepository,
 ) {
 
-    /** Drops the package from the JAR priority (JAR only), clears its sources' availability and its origin rows. */
+    /** Clears the package's sources' availability and its package-level (`PKG_`) origin rows. Per-source rows are kept. */
     suspend fun afterPackageRemoved(packageName: String, sourceNames: Collection<String>, isJar: Boolean) {
-        if (isJar) {
-            val current = settings.jarPriorityOrder.split(',').map { it.trim() }.filter { it.isNotEmpty() }
-            val kept = current.filterNot { it.equals(packageName.removeSuffix(".jar"), ignoreCase = true) }
-            if (kept.size != current.size) {
-                settings.jarPriorityOrder = kept.joinToString(",")
-            }
-        }
         sourceAvailabilityRepository.clearAvailability(sourceNames)
         sourceOriginsDao.findAll()
-            // Tsundoku per-source origins are a long-term registry (they keep offline sources addressable): never deleted.
-            .filter { it.packageName == packageName && !it.sourceKey.startsWith("TSUNDOKU_") }
+            .filter { it.packageName == packageName && it.sourceKey.startsWith("PKG_") }
             .forEach { sourceOriginsDao.deleteByKey(it.sourceKey) }
     }
 
