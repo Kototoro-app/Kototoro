@@ -25,7 +25,10 @@ import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.ui.compose.KototoroSlider
 
 /** The grid size range of Android's display options, in percent of the default card width. */
-val GridSizeRange: IntRange = 50..150
+val GridSizeRange: IntRange = 50..200
+
+/** Slider stops between the ends of [GridSizeRange], one every 5%. */
+val GridSizeSliderSteps: Int = (GridSizeRange.last - GridSizeRange.first) / 5 - 1
 
 /**
  * Android's display-options mode chips (DisplayOptionsSheet), two per row. Hosts supply the labels and icons from their
@@ -101,7 +104,7 @@ fun GridSizeOption(
             sliderValue = it
             onValueChange(it.toInt().coerceIn(GridSizeRange))
         }
-        KototoroSlider(value = sliderValue, onValueChange = commit, valueRange = range, steps = 19,
+        KototoroSlider(value = sliderValue, onValueChange = commit, valueRange = range, steps = GridSizeSliderSteps,
             modifier = sliderModifier(sliderValue, commit).testTag("grid-size-slider"))
     }
 }

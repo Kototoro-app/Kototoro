@@ -49,6 +49,7 @@ import org.skepsun.kototoro.core.ui.glass.GlassCustomPreset
 import org.skepsun.kototoro.core.ui.glass.GlassTuningParam
 import org.skepsun.kototoro.core.ui.glass.GlassTuningScope
 import org.skepsun.kototoro.core.ui.glass.GlassTuningState
+import org.skepsun.kototoro.list.ui.compose.GridSizeRange
 import org.skepsun.kototoro.settings.compose.glass.GlassPreset
 import org.skepsun.kototoro.settings.compose.glass.GlassTuningSection
 
@@ -586,7 +587,7 @@ fun AppearanceSettingsScreen(
                         title = stringResource(R.string.grid_size),
                         iconRes = R.drawable.ic_grid,
                         value = state.gridSize,
-                        valueRange = 50..150,
+                        valueRange = GridSizeRange,
                         step = 5,
                         valueText = { "$it%" },
                         onValueChange = onGridSizeChange,

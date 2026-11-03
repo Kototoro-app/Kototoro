@@ -71,6 +71,7 @@ import java.util.UUID
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
+import org.skepsun.kototoro.list.ui.compose.GridSizeRange
 
 private const val PAGE_THUMBNAIL_ASPECT_RATIO_DEFAULT = 0.7f
 private const val PAGE_THUMBNAIL_ASPECT_RATIO_MIN = 0.35f
@@ -307,16 +308,16 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         set(value) = prefs.edit { putEnumValue(KEY_HOME_SECTION_LIST_MODE_RECOMMENDATIONS, value) }
 
     var homeSectionGridSizeHistory: Int
-        get() = prefs.getSafeInt(KEY_HOME_SECTION_GRID_SIZE_HISTORY, gridSize).coerceIn(50, 150)
-        set(value) = prefs.edit { putInt(KEY_HOME_SECTION_GRID_SIZE_HISTORY, value.coerceIn(50, 150)) }
+        get() = prefs.getSafeInt(KEY_HOME_SECTION_GRID_SIZE_HISTORY, gridSize).coerceIn(GridSizeRange)
+        set(value) = prefs.edit { putInt(KEY_HOME_SECTION_GRID_SIZE_HISTORY, value.coerceIn(GridSizeRange)) }
 
     var homeSectionGridSizeUpdates: Int
-        get() = prefs.getSafeInt(KEY_HOME_SECTION_GRID_SIZE_UPDATES, gridSize).coerceIn(50, 150)
-        set(value) = prefs.edit { putInt(KEY_HOME_SECTION_GRID_SIZE_UPDATES, value.coerceIn(50, 150)) }
+        get() = prefs.getSafeInt(KEY_HOME_SECTION_GRID_SIZE_UPDATES, gridSize).coerceIn(GridSizeRange)
+        set(value) = prefs.edit { putInt(KEY_HOME_SECTION_GRID_SIZE_UPDATES, value.coerceIn(GridSizeRange)) }
 
     var homeSectionGridSizeRecommendations: Int
-        get() = prefs.getSafeInt(KEY_HOME_SECTION_GRID_SIZE_RECOMMENDATIONS, gridSize).coerceIn(50, 150)
-        set(value) = prefs.edit { putInt(KEY_HOME_SECTION_GRID_SIZE_RECOMMENDATIONS, value.coerceIn(50, 150)) }
+        get() = prefs.getSafeInt(KEY_HOME_SECTION_GRID_SIZE_RECOMMENDATIONS, gridSize).coerceIn(GridSizeRange)
+        set(value) = prefs.edit { putInt(KEY_HOME_SECTION_GRID_SIZE_RECOMMENDATIONS, value.coerceIn(GridSizeRange)) }
 
     /** Rows per list-mode rail page (1..3); only meaningful for LIST modes. */
     var homeSectionRailRowsHistory: Int
@@ -571,8 +572,8 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         set(value) = prefs.edit { putInt(KEY_NAV_FLOATING_HEIGHT, value.coerceIn(48, 84)) }
 
     var gridSize: Int
-        get() = prefs.getSafeInt(KEY_GRID_SIZE, 100).coerceIn(50, 150)
-        set(value) = prefs.edit { putInt(KEY_GRID_SIZE, value.coerceIn(50, 150)) }
+        get() = prefs.getSafeInt(KEY_GRID_SIZE, 100).coerceIn(GridSizeRange)
+        set(value) = prefs.edit { putInt(KEY_GRID_SIZE, value.coerceIn(GridSizeRange)) }
 
     var gridSizePages: Int
         get() = prefs.getSafeInt(KEY_GRID_SIZE_PAGES, 100).coerceIn(50, 150)

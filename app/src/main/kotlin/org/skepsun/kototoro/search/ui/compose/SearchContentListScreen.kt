@@ -120,6 +120,7 @@ import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
 import org.skepsun.kototoro.reader.ui.ReaderState
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import org.skepsun.kototoro.list.ui.compose.GridSizeRange
 
 import org.skepsun.kototoro.list.ui.compose.KototoroContentListScreen
 import org.skepsun.kototoro.list.ui.model.ContentListModel
@@ -671,7 +672,7 @@ fun AppSearchContentListRoute(
                 onSettingsClick = { appRouter.openSourceSettings(viewModel.source) },
                 onListModeChange = { settings.listMode = it },
                 onGridSizeChange = { size ->
-                    settings.gridSize = size.coerceIn(50, 150)
+                    settings.gridSize = size.coerceIn(GridSizeRange)
                 },
                 onClearActiveQuery = {
                     searchQuery = ""

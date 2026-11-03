@@ -130,6 +130,7 @@ fun compactGridTitleOverlayHeight(posterHeight: androidx.compose.ui.unit.Dp): an
     (posterHeight.value * 0.42f).dp.coerceIn(54.dp, 72.dp)
 
 fun resolveGridTitleFontSize(gridScale: Float): TextUnit {
-    val normalized = ((gridScale.coerceIn(0.5f, 1.5f) - 0.5f) / 1f).coerceIn(0f, 1f)
+    // 12sp at 50%, 16sp at 150%, 18sp at 200%.
+    val normalized = gridScale.coerceIn(0.5f, 2f) - 0.5f
     return (12f + 4f * normalized).sp
 }

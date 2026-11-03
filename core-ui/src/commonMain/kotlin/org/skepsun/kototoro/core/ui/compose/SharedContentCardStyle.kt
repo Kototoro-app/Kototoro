@@ -17,9 +17,9 @@ data class CompactPosterCardStyle(
 )
 
 fun compactPosterCardStyle(gridScale: Float): CompactPosterCardStyle {
-    val normalizedScale = gridScale.coerceIn(0.5f, 1.4f)
-    val width = (96f * normalizedScale).dp.coerceIn(48.dp, 134.dp)
-    val height = (136f * normalizedScale).dp.coerceIn(68.dp, 190.dp)
+    val normalizedScale = gridScale.coerceIn(0.5f, 2f)
+    val width = (96f * normalizedScale).dp.coerceIn(48.dp, 192.dp)
+    val height = (136f * normalizedScale).dp.coerceIn(68.dp, 272.dp)
     return CompactPosterCardStyle(
         itemWidth = width,
         posterHeight = height,
@@ -39,7 +39,7 @@ fun compactPosterRailCardStyle(gridScale: Float): CompactPosterCardStyle {
 
 fun moviePosterCardStyle(gridScale: Float): CompactPosterCardStyle {
     // Keep landscape cards wide enough for titles and corner badges at small grid scales.
-    val width = (176f * gridScale.coerceIn(0.5f, 1.5f)).dp.coerceIn(160.dp, 264.dp)
+    val width = (176f * gridScale.coerceIn(0.5f, 2f)).dp.coerceIn(160.dp, 352.dp)
     return CompactPosterCardStyle(
         itemWidth = width,
         posterHeight = width * (9f / 16f),

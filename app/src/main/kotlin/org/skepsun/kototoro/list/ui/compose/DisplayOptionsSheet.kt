@@ -364,7 +364,8 @@ internal fun GridSizeSlider(
         onValueChange = onValueChange,
         columnsHint = columnsHint,
         sliderModifier = { current, commit ->
-            Modifier.tvSliderDpad(value = current, valueRange = 50f..150f, onValueChange = commit, steps = 19)
+            Modifier.tvSliderDpad(value = current, valueRange = GridSizeRange.first.toFloat()..GridSizeRange.last.toFloat(),
+                onValueChange = commit, steps = GridSizeSliderSteps)
         },
     )
 }
