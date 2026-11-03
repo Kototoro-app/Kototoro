@@ -3,7 +3,8 @@ package org.skepsun.kototoro.settings.sources.test
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -24,9 +25,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -61,6 +60,7 @@ import java.time.Instant
  * "Test all" dialog for the sources tab. Starts testing [sources] when shown and cancels
  * the run when dismissed.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun SourceTestDialog(
 	sources: List<ContentSource>,
@@ -76,44 +76,35 @@ internal fun SourceTestDialog(
 	val failedCount = progress.results.count {
 		it.overall == StepStatus.FAIL && it.sourceKey !in progress.disabledKeys
 	}
-	val closeButton: @Composable () -> Unit = {
-		TvTextButton(
-			onClick = onDismiss,
-			enabled = progress.finished && failedCount > 0,
-			modifier = Modifier.alpha(if (progress.finished && failedCount == 0) 0f else 1f),
-		) {
-			Text(stringResource(R.string.source_test_close))
-		}
-	}
 	val stopped = progress.finished && progress.cancelled && progress.done < progress.total
-	val resumeButton: @Composable () -> Unit = {
-		TvTextButton(onClick = viewModel::resume) {
-			Text(stringResource(R.string.source_test_resume))
-		}
-	}
 	SettingsAlertDialog(
 		title = stringResource(R.string.source_test_title),
 		onDismissRequest = {
 			viewModel.cancel()
 			onDismiss()
 		},
+		// The two dialog buttons are flow control; result actions live in the content.
 		confirmButton = {
 			when {
 				!progress.finished -> TvTextButton(onClick = viewModel::cancel) {
 					Text(stringResource(R.string.source_test_stop))
 				}
-				failedCount > 0 -> TvTextButton(onClick = viewModel::disableFailed) {
-					Text(stringResource(R.string.source_test_disable_failed))
+				stopped -> TvTextButton(onClick = viewModel::resume) {
+					Text(stringResource(R.string.source_test_resume))
 				}
 				else -> TvTextButton(onClick = onDismiss) {
 					Text(stringResource(R.string.source_test_close))
 				}
 			}
 		},
-		dismissButton = when {
-			!progress.finished -> null
-			stopped -> resumeButton
-			else -> closeButton
+		dismissButton = if (stopped) {
+			{
+				TvTextButton(onClick = onDismiss) {
+					Text(stringResource(R.string.source_test_close))
+				}
+			}
+		} else {
+			null
 		},
 		text = {
 			Column(modifier = Modifier.fillMaxWidth()) {
@@ -170,11 +161,16 @@ internal fun SourceTestDialog(
 						HorizontalDivider()
 					}
 				}
-				Row(
+				FlowRow(
 					modifier = Modifier.fillMaxWidth(),
 					horizontalArrangement = Arrangement.End,
-					verticalAlignment = Alignment.CenterVertically,
+					verticalArrangement = Arrangement.Center,
 				) {
+					if (progress.finished && failedCount > 0) {
+						TvTextButton(onClick = viewModel::disableFailed) {
+							Text(stringResource(R.string.source_test_disable_failed))
+						}
+					}
 					TvTextButton(
 						onClick = { clipboard.setText(AnnotatedString(viewModel.exportJson())) },
 						enabled = progress.finished,

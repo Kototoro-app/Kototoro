@@ -40,6 +40,7 @@ class SourceTestViewModel @Inject constructor(
 	private val allResults = ArrayList<SourceTestResult>()
 	private val pendingAvailability = LinkedHashMap<String, ContentSourceAvailability>()
 	private var lastPublishAt = -1L
+	private var lastFlushAt = SystemClock.elapsedRealtime()
 
 	/** Tests [sources] with at most [SOURCE_TEST_MAX_PARALLELISM] running at once. Ignored while a run is active. */
 	fun testAll(sources: List<ContentSource>) {
@@ -51,6 +52,7 @@ class SourceTestViewModel @Inject constructor(
 			allResults.clear()
 			pendingAvailability.clear()
 			lastPublishAt = -1L
+			lastFlushAt = SystemClock.elapsedRealtime()
 		}
 		_progress.value = TestProgress(total = unique.size)
 		runSources(unique)
@@ -110,7 +112,7 @@ class SourceTestViewModel @Inject constructor(
 
 	/**
 	 * Collects a result. The result list is published at most every [PUBLISH_INTERVAL_MS] so rows show up live
-	 * without copying the whole list per result; verdicts are persisted in batches of [RESULT_BATCH_SIZE]
+	 * without copying the whole list per result; verdicts are persisted in batches of [RESULT_BATCH_SIZE] (or every [FLUSH_INTERVAL_MS])
 	 * so a long run does not rewrite prefs per source.
 	 */
 	private fun onResult(source: ContentSource, result: SourceTestResult) {
@@ -119,11 +121,12 @@ class SourceTestViewModel @Inject constructor(
 		synchronized(lock) {
 			allResults += result
 			pendingAvailability[source.name] = result.toAvailability()
-			if (pendingAvailability.size >= RESULT_BATCH_SIZE) {
+			val now = SystemClock.elapsedRealtime()
+			if (pendingAvailability.size >= RESULT_BATCH_SIZE || now - lastFlushAt >= FLUSH_INTERVAL_MS) {
 				batch = LinkedHashMap(pendingAvailability)
 				pendingAvailability.clear()
+				lastFlushAt = now
 			}
-			val now = SystemClock.elapsedRealtime()
 			if (lastPublishAt < 0L || now - lastPublishAt >= PUBLISH_INTERVAL_MS) {
 				lastPublishAt = now
 				published = allResults.toList()
@@ -214,5 +217,6 @@ class SourceTestViewModel @Inject constructor(
 		/** Batch size of persisted availability verdicts only. */
 		const val RESULT_BATCH_SIZE = 20
 		const val PUBLISH_INTERVAL_MS = 150L
+		const val FLUSH_INTERVAL_MS = 2000L
 	}
 }
