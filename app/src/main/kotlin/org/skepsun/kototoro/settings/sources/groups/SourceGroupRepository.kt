@@ -17,6 +17,7 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.db.dao.SourceOriginsDao
 import org.skepsun.kototoro.core.db.entity.MangaSourceEntity
+import org.skepsun.kototoro.core.extensions.DEFAULT_JAR_PRIORITY_ORDER_VALUE
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.SourceSettings
@@ -289,9 +290,18 @@ class SourceGroupRepository @Inject constructor(
 				tick()
 			}
 
+			// Applying is a sync: per-source state the group does not mention is reset, never kept.
+			runGuarded(errors, context.getString(R.string.source_groups_error_apply_state)) {
+				syncOutsideGroup(group)
+			}
+
 			runGuarded(errors, context.getString(R.string.source_groups_error_jar_priority)) {
-				if (group.jarPriority.isNotEmpty()) {
-					settings.jarPriorityOrder = group.jarPriority.joinToString(",")
+				val installed = installedJarNames()
+				val filtered = group.jarPriority.filter { it.trim().lowercase() in installed }
+				settings.jarPriorityOrder = if (filtered.isEmpty()) {
+					DEFAULT_JAR_PRIORITY_ORDER_VALUE
+				} else {
+					filtered.joinToString(",")
 				}
 			}
 			tick()
@@ -365,9 +375,6 @@ class SourceGroupRepository @Inject constructor(
 		if (state.locked != null && deviceLock == null) {
 			contentSources.setSourceLock(source, state.locked)
 		}
-		if (!state.source.startsWith("JSON_")) {
-			contentSources.setSourceSortKey(state.source, state.sortKey)
-		}
 		if (!state.domain.isNullOrBlank()) {
 			sourcePrefs(state.source).edit()
 				.putString(SourceSettings.KEY_DOMAIN, state.domain)
@@ -376,6 +383,42 @@ class SourceGroupRepository @Inject constructor(
 			repositoryFactory.invalidate(source)
 		}
 	}
+
+	/**
+	 * Resets the per-source state of everything the group does not mention: pins and manual domain
+	 * overrides are removed, and the manual order becomes the group order followed by the remaining rows.
+	 */
+	private suspend fun syncOutsideGroup(group: SourceGroup) {
+		val inGroup = group.sourceStates.mapTo(HashSet()) { it.source }
+		val rows = database.getSourcesDao().findAll()
+		val jsonRows = database.getJsonSourceDao().findAll()
+
+		val pinned = rows.filter { it.isPinned && it.source !in inGroup }.map { it.source } +
+			jsonRows.filter { it.isPinned && it.id !in inGroup }.map { it.id }
+		if (pinned.isNotEmpty()) {
+			contentSources.setIsPinned(pinned.map(contentSources::resolveSource), false)
+		}
+
+		for (key in rows.map { it.source } + jsonRows.map { it.id }) {
+			if (key in inGroup || currentDomainOverride(key) == null) continue
+			sourcePrefs(key).edit().remove(SourceSettings.KEY_DOMAIN).apply()
+			repositoryFactory.invalidate(contentSources.resolveSource(key))
+		}
+
+		contentSources.applySourceOrder(
+			group.sourceStates
+				.filterNot { it.source.startsWith("JSON_") }
+				.sortedBy { it.sortKey }
+				.map { it.source },
+		)
+	}
+
+	/** Lower-cased base names of the JAR plugins that exist on disk. */
+	private fun installedJarNames(): Set<String> =
+		File(context.filesDir, "plugins")
+			.listFiles { f -> f.isFile && f.extension.equals("jar", ignoreCase = true) }
+			.orEmpty()
+			.mapTo(HashSet()) { it.nameWithoutExtension.lowercase() }
 
 	/** The per-source settings file, named exactly like [org.skepsun.kototoro.core.prefs.SourceSettings] names it. */
 	private fun sourcePrefs(sourceKey: String): android.content.SharedPreferences =

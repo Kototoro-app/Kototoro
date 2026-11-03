@@ -1146,6 +1146,23 @@ class ContentSourcesRepository @Inject constructor(
         }
     }
 
+    /**
+     * Gives the native sources a collision-free manual order: [leading] first (in the given order),
+     * then every other row in its existing order.
+     */
+    suspend fun applySourceOrder(leading: List<String>) {
+        sourceStateModifiedStore.withLocalChanges(db) {
+            val existing = dao.findAll().sortedBy { it.sortKey }.map { it.source }
+            val known = existing.toHashSet()
+            val head = leading.distinct().filter { it in known }
+            val headSet = head.toHashSet()
+            val order = head + existing.filter { it !in headSet }
+            for ((index, name) in order.withIndex()) {
+                dao.setSortKey(name, index)
+            }
+        }
+    }
+
     suspend fun getSourcesForReorder(): List<ContentSourceInfo> {
         assimilateNewSources()
         return createEnabledSourcesFlow().first().filterNot { it.isLocal }
