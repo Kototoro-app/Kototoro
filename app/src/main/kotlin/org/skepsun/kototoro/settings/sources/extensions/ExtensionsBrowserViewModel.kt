@@ -249,9 +249,43 @@ class ExtensionsBrowserViewModel @Inject constructor(
             @Suppress("DEPRECATION")
             Intent.ACTION_UNINSTALL_PACKAGE
         }
-        onUninstallIntent.call(
-            Intent(action, Uri.fromParts("package", uninstallPkg, null)),
-        )
+        launchJob(Dispatchers.IO) {
+            val sourceNames = catalogRepository.sourceNamesForPackage(
+                item.extension.type,
+                item.pkgName,
+                item.extension.type.normalizePackageNameForMatching(item.pkgName),
+            )
+            pendingUninstalls[uninstallPkg] = PendingUninstall(item.extension.type, item.pkgName, sourceNames)
+            onUninstallIntent.call(Intent(action, Uri.fromParts("package", uninstallPkg, null)))
+        }
+    }
+
+    private class PendingUninstall(val type: ExternalExtensionType, val packageName: String, val sourceNames: List<String>)
+
+    private val pendingUninstalls = java.util.concurrent.ConcurrentHashMap<String, PendingUninstall>()
+
+    /** Call when the system uninstaller returns: packages that are really gone get the usual removal cleanup. */
+    fun onUninstallActivityResult() {
+        launchJob(Dispatchers.IO) {
+            val pm = appContext.packageManager
+            val gone = pendingUninstalls.filterKeys { pkg ->
+                try {
+                    @Suppress("DEPRECATION")
+                    pm.getPackageInfo(pkg, 0)
+                    false
+                } catch (_: android.content.pm.PackageManager.NameNotFoundException) {
+                    true
+                }
+            }
+            if (gone.isEmpty()) return@launchJob
+            gone.forEach { (pkg, info) ->
+                pendingUninstalls.remove(pkg)
+                packageRemovalCleanup.afterPackageRemoved(info.packageName, info.sourceNames, isJar = false)
+            }
+            mihonExtensionManager.loadExtensions()
+            aniyomiExtensionManager.loadExtensions()
+            ireaderExtensionManager.loadExtensions()
+        }
     }
 
     private suspend fun uninstallFileBased(item: ExtensionsBrowserListItem.Entry) {

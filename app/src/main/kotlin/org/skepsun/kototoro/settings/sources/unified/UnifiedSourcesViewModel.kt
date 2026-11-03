@@ -224,6 +224,10 @@ class UnifiedSourcesViewModel @Inject constructor(
     private val availableJsonPackages = MutableStateFlow<List<UnifiedSourcePackageItem>>(emptyList())
     private val installingLnReaderPackageIds = MutableStateFlow<Set<String>>(emptySet())
     private val pendingUninstallIntents = ArrayDeque<Intent>()
+
+    /** System uninstalls handed to the OS: package to its source names (gone once the package is removed). */
+    private data class PendingUninstall(val packageName: String, val sourceNames: List<String>, val type: ExternalExtensionType?)
+    private val pendingUninstalls = java.util.concurrent.ConcurrentHashMap<String, PendingUninstall>()
     private val lnReaderPackageSnapshot = combine(
         availableLnReaderPlugins,
         installingLnReaderPackageIds,
@@ -733,6 +737,7 @@ class UnifiedSourcesViewModel @Inject constructor(
 
     fun onUninstallActivityResult() {
         viewModelScope.launch {
+            withContext(Dispatchers.IO) { cleanUpCompletedUninstalls() }
             dispatchNextPendingUninstall()
         }
     }
@@ -1298,7 +1303,32 @@ class UnifiedSourcesViewModel @Inject constructor(
             }
         }
 
-        return PackageRemovalResult(uninstallIntent = buildUninstallIntent(item.kind, packageName))
+        val uninstallIntent = buildUninstallIntent(item.kind, packageName)
+        uninstallIntent.data?.schemeSpecificPart?.let { systemPkg ->
+            pendingUninstalls[systemPkg] = PendingUninstall(packageName, packageSourceNames, item.kind.toExternalExtensionType())
+        }
+        return PackageRemovalResult(uninstallIntent = uninstallIntent)
+    }
+
+    private fun isPackageInstalledOnDevice(packageName: String): Boolean = try {
+        @Suppress("DEPRECATION")
+        appContext.packageManager.getPackageInfo(packageName, 0)
+        true
+    } catch (_: android.content.pm.PackageManager.NameNotFoundException) {
+        false
+    }
+
+    /** After the system uninstaller returns: packages that are really gone get the same cleanup as a direct removal. */
+    private suspend fun cleanUpCompletedUninstalls() {
+        val gone = pendingUninstalls.filterKeys { !isPackageInstalledOnDevice(it) }
+        if (gone.isEmpty()) return
+        val types = HashSet<ExternalExtensionType?>()
+        gone.forEach { (systemPkg, info) ->
+            pendingUninstalls.remove(systemPkg)
+            packageRemovalCleanup.afterPackageRemoved(info.packageName, info.sourceNames, isJar = false)
+            types += info.type
+        }
+        types.forEach { reloadExternalExtensionManagers(it) }
     }
 
     private fun buildUninstallIntent(kind: UnifiedSourceKind, packageName: String): Intent {
