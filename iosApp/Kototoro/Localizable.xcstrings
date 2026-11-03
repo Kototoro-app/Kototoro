@@ -880,6 +880,16 @@
         }
       }
     },
+    "下载 IPA": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Download IPA"
+          }
+        }
+      }
+    },
     "下载任务版本尚不支持": {
       "extractionState": "manual",
       "localizations": {
@@ -897,6 +907,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Download all remaining chapters"
+          }
+        }
+      }
+    },
+    "下载后可保存到“文件”或分享给侧载工具，由 AltStore、SideStore 等工具完成签名安装。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "After downloading, save the IPA to Files or share it with a sideloading tool. Use AltStore, SideStore, or another tool to sign and install it."
           }
         }
       }
@@ -2054,6 +2074,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Save and sync"
+          }
+        }
+      }
+    },
+    "保存或分享 IPA": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save or share IPA"
           }
         }
       }
@@ -3622,6 +3652,16 @@
         }
       }
     },
+    "发现新版本": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "An update is available"
+          }
+        }
+      }
+    },
     "发现更多内容": {
       "localizations": {
         "en": {
@@ -3658,6 +3698,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Cancel"
+          }
+        }
+      }
+    },
+    "取消下载": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel download"
           }
         }
       }
@@ -4857,12 +4907,32 @@
         }
       }
     },
+    "安装包大小": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Package size"
+          }
+        }
+      }
+    },
     "安装包已损坏或不是有效的扩展文件": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "The package is damaged or isn't a valid extension file"
+          }
+        }
+      }
+    },
+    "安装包校验失败，请重新下载。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Package verification failed. Please download it again."
           }
         }
       }
@@ -5997,6 +6067,16 @@
         }
       }
     },
+    "应用更新": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "App updates"
+          }
+        }
+      }
+    },
     "应用锁": {
       "localizations": {
         "en": {
@@ -6094,6 +6174,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "This build doesn't include the extension runtime, so extensions can't be installed"
+          }
+        }
+      }
+    },
+    "当前版本": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Current version"
+          }
+        }
+      }
+    },
+    "当前版本已是最新": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You are up to date"
           }
         }
       }
@@ -8375,6 +8475,16 @@
         }
       }
     },
+    "更新服务器返回了无效响应，请稍后重试。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The update server returned an invalid response. Please try again later."
+          }
+        }
+      }
+    },
     "更新检测": {
       "localizations": {
         "en": {
@@ -8385,12 +8495,32 @@
         }
       }
     },
+    "更新渠道": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Update channel"
+          }
+        }
+      }
+    },
     "更新记录": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Update record"
+          }
+        }
+      }
+    },
+    "更新说明": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Release notes"
           }
         }
       }
@@ -8431,6 +8561,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Newest first"
+          }
+        }
+      }
+    },
+    "最新版本": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Latest version"
           }
         }
       }
@@ -9083,6 +9223,16 @@
         }
       }
     },
+    "构建渠道": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Build channel"
+          }
+        }
+      }
+    },
     "柔和": {
       "localizations": {
         "en": {
@@ -9389,6 +9539,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Downloading %1$lld/%2$lld%3$@"
+          }
+        }
+      }
+    },
+    "正在下载并校验 IPA…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Downloading and verifying IPA…"
           }
         }
       }
@@ -9853,6 +10013,16 @@
         }
       }
     },
+    "正式版": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Release"
+          }
+        }
+      }
+    },
     "此 GitHub 发布没有 JAR 插件": {
       "extractionState": "manual",
       "localizations": {
@@ -9942,6 +10112,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "This build doesn't include the extension runtime"
+          }
+        }
+      }
+    },
+    "此渠道尚未发布可用的 iOS 安装包。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No iOS package is available on this channel yet."
+          }
+        }
+      }
+    },
+    "此渠道的安装包需要更新的 iOS 版本。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The packages on this channel require a newer version of iOS."
           }
         }
       }
@@ -10388,6 +10578,36 @@
         }
       }
     },
+    "添加到 AltStore": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add to AltStore"
+          }
+        }
+      }
+    },
+    "添加到 SideStore": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add to SideStore"
+          }
+        }
+      }
+    },
+    "添加发布源后，也可以在侧载工具中接收后续更新。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add the source to receive future updates in your sideloading tool."
+          }
+        }
+      }
+    },
     "添加扩展仓库，获取漫画、小说和视频来源。": {
       "localizations": {
         "en": {
@@ -10774,6 +10994,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Version code"
+          }
+        }
+      }
+    },
+    "版本发布页": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Releases"
           }
         }
       }

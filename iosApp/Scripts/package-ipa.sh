@@ -4,6 +4,7 @@
 #   --jvm  embed the extension runtime (default iosApp/build/jvm-device, made by
 #          build-jvm-preview.py --platform iphoneos --profile <staged profile>)
 # Output: iosApp/build/release-ios/Kototoro-<version>-ios[-jvm]-unsigned.ipa and its .sha256.
+# KOTOTORO_UPDATE_CHANNEL selects the embedded update channel (release by default, or nightly).
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -23,6 +24,11 @@ fi
 version="${1:-$(xcodebuild -project "$project" -target Kototoro -configuration Release -showBuildSettings |
     awk '$1 == "MARKETING_VERSION" { print $3; exit }')}"
 build_number="${2:-$(git rev-list --count HEAD)}"
+update_channel="${KOTOTORO_UPDATE_CHANNEL:-release}"
+case "$update_channel" in
+    release|nightly) ;;
+    *) echo "Invalid iOS update channel '$update_channel'." >&2; exit 1 ;;
+esac
 if ! [[ "$version" =~ ^[0-9]+(\.[0-9]+){0,2}$ ]] || ! [[ "$build_number" =~ ^[0-9]+$ ]]; then
     echo "Invalid version '$version' or build number '$build_number'." >&2
     exit 1
@@ -72,6 +78,7 @@ xcodebuild -project "$project" -scheme Kototoro \
     -derivedDataPath "$derived" -archivePath "$archive" \
     CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
     "${jvm_settings[@]}" MARKETING_VERSION="$version" CURRENT_PROJECT_VERSION="$build_number" \
+    KOTOTORO_UPDATE_CHANNEL="$update_channel" \
     archive
 
 app="$archive/Products/Applications/Kototoro.app"
