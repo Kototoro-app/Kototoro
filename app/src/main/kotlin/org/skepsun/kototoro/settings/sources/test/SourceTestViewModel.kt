@@ -52,7 +52,25 @@ class SourceTestViewModel @Inject constructor(
 			pendingAvailability.clear()
 			lastPublishAt = -1L
 		}
-		_progress.value =TestProgress(total = unique.size)
+		_progress.value = TestProgress(total = unique.size)
+		runSources(unique)
+	}
+
+	/** Continues a stopped run: keeps finished results and tests only the sources that have none yet. */
+	fun resume() {
+		if (job?.isActive == true) return
+		val current = _progress.value
+		if (!current.finished || !current.cancelled) return
+		val remaining = synchronized(lock) {
+			val tested = allResults.mapTo(HashSet()) { it.sourceKey }
+			sourcesByKey.values.filter { it.name !in tested }
+		}
+		if (remaining.isEmpty()) return
+		_progress.update { it.copy(finished = false, cancelled = false, running = emptySet()) }
+		runSources(remaining)
+	}
+
+	private fun runSources(unique: List<ContentSource>) {
 		job = viewModelScope.launch(Dispatchers.IO) {
 			var completed = false
 			try {

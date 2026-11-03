@@ -85,6 +85,12 @@ internal fun SourceTestDialog(
 			Text(stringResource(R.string.source_test_close))
 		}
 	}
+	val stopped = progress.finished && progress.cancelled && progress.done < progress.total
+	val resumeButton: @Composable () -> Unit = {
+		TvTextButton(onClick = viewModel::resume) {
+			Text(stringResource(R.string.source_test_resume))
+		}
+	}
 	SettingsAlertDialog(
 		title = stringResource(R.string.source_test_title),
 		onDismissRequest = {
@@ -104,7 +110,11 @@ internal fun SourceTestDialog(
 				}
 			}
 		},
-		dismissButton = if (progress.finished) closeButton else null,
+		dismissButton = when {
+			!progress.finished -> null
+			stopped -> resumeButton
+			else -> closeButton
+		},
 		text = {
 			Column(modifier = Modifier.fillMaxWidth()) {
 				val passedCount = progress.results.count { it.overall == StepStatus.PASS }
