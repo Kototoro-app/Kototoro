@@ -955,7 +955,10 @@ class ContentSourcesRepository @Inject constructor(
             settings.observeAsFlow(AppSettings.KEY_EXPLORE_HIDE_EMPTY_SOURCES) { isEmptySourcesHiddenInExplore },
         ) { sources, hideEmptySources ->
             if (hideEmptySources) {
-                sources.filterNot { it.availability == ContentSourceAvailability.EMPTY }
+                sources.filterNot {
+                    it.availability == ContentSourceAvailability.EMPTY ||
+                        it.availability == ContentSourceAvailability.CLOUDFLARE
+                }
             } else {
                 sources
             }
