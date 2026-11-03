@@ -417,10 +417,15 @@ class SourceGroupRepository @Inject constructor(
 		context.getSharedPreferences(sourceKey.replace(File.separatorChar, '$'), Context.MODE_PRIVATE)
 
 	/** The manual domain override currently saved for the source, or null when none is set. */
-	private fun currentDomainOverride(sourceKey: String): String? =
-		sourcePrefs(sourceKey).getString(SourceSettings.KEY_DOMAIN, null)
+	private fun currentDomainOverride(sourceKey: String): String? {
+		// Opening a missing prefs file would create it: only sources that ever saved a setting have one.
+		val prefsDir = File(context.applicationInfo.dataDir, "shared_prefs")
+		val file = File(prefsDir, sourceKey.replace(File.separatorChar, '$') + ".xml")
+		if (!file.isFile) return null
+		return sourcePrefs(sourceKey).getString(SourceSettings.KEY_DOMAIN, null)
 			?.trim()
 			?.takeIf { it.isNotEmpty() }
+	}
 
 	/** Runs [block]; a failure is recorded in [errors] and reported as false so dependent steps can be skipped. */
 	private suspend fun runGuarded(errors: MutableList<String>, label: String, block: suspend () -> Unit): Boolean {
