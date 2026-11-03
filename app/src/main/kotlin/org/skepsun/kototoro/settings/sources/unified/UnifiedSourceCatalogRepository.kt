@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
 import kotlinx.serialization.json.Json
+import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.aniyomi.AniyomiExtensionManager
 import org.skepsun.kototoro.aniyomi.model.AniyomiAnimeSource
 import org.skepsun.kototoro.core.LocalizedAppContext
@@ -533,15 +534,17 @@ class UnifiedSourceCatalogRepository @Inject constructor(
                 }.getOrNull()
             }
             .sortedWith(compareBy({ it.kind.ordinal }, { it.title.lowercase() }))
-        Log.d(
-            "UnifiedSourceCatalog",
-            "buildSourceItems available=${availableSources.size} installedApk=${installedApkSources.size} " +
-                "mihonWrapped=${mihonExtensionManager.getMihonMangaSources().size} " +
-                "tsundokuWrapped=${tsundokuExtensionManager.getTsundokuNovelSources().size} " +
-                "mihonInstalled=${mihonExtensionManager.installedExtensions.value.size} " +
-                "mihonItems=${items.count { it.kind == UnifiedSourceKind.MIHON }} total=${items.size} " +
-                "ms=${android.os.SystemClock.elapsedRealtime() - startedAt}",
-        )
+        if (BuildConfig.DEBUG) {
+            Log.d(
+                "UnifiedSourceCatalog",
+                "buildSourceItems available=${availableSources.size} installedApk=${installedApkSources.size} " +
+                    "mihonWrapped=${mihonExtensionManager.getMihonMangaSources().size} " +
+                    "tsundokuWrapped=${tsundokuExtensionManager.getTsundokuNovelSources().size} " +
+                    "mihonInstalled=${mihonExtensionManager.installedExtensions.value.size} " +
+                    "mihonItems=${items.count { it.kind == UnifiedSourceKind.MIHON }} total=${items.size} " +
+                    "ms=${android.os.SystemClock.elapsedRealtime() - startedAt}",
+            )
+        }
         return items
     }
 
