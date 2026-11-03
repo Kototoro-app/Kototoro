@@ -111,7 +111,8 @@ class ExtensionInstallService @Inject constructor(
                 // A download for this package is already running (e.g. double tap): ignore this request.
                 return ExtensionInstallResult.Completed
             }
-            updateDownloadState(extension.pkgName, bytesRead = 0L, contentLength = -1L)
+            // Initial state: published without arming the throttle so the first real tick is not swallowed.
+            _downloadStates.update { it + (extension.pkgName to ExtensionInstallDownloadState(extension.pkgName, 0L, -1L)) }
             try {
                 call.awaitSuccess().use { response ->
                     val body = requireNotNull(response.body) { "Missing APK response body" }
