@@ -5,6 +5,11 @@ import Network
 import SwiftUI
 import os
 
+enum SourceIconRetry {
+    /// Icon completions must not invalidate the browse page's AppStorage-backed filters and rebuild its catalog.
+    static let failures = UserDefaults(suiteName: "org.skepsun.kototoro.ios.source-icons")!
+}
+
 /// Bounded request concurrency with priorities, the iOS counterpart of Android's `PriorityPermitPool`: a freed slot
 /// goes to the highest-priority waiter (first come within a priority), and a waiter whose task is cancelled leaves the
 /// queue without ever holding a slot.

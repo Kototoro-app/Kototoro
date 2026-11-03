@@ -1,9 +1,36 @@
 import Foundation
+import SwiftUI
 import XCTest
 
 final class ImageLoadPolicyTests: XCTestCase {
     /// Lets queued tasks reach the gate; it exposes no state, so tests give them a moment.
     private func settle() async { try? await Task.sleep(for: .milliseconds(50)) }
+
+    @MainActor
+    func testSourceIconCompletionsDoNotRebuildBrowsePreferences() async throws {
+        let counter = BrowseBodyCounter()
+        let host = UIHostingController(rootView: BrowsePreferencesProbe(counter: counter))
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 320, height: 480))
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        await settle()
+        let baseline = counter.updates
+        XCTAssertGreaterThan(baseline, 0)
+
+        let key = "source.icon.v2.failed.\(UUID().uuidString)"
+        let failures = SourceIconRetry.failures
+        defer { failures.removeObject(forKey: key) }
+        // Cold website failures and successful disk hits both used to write the browse preferences' domain.
+        failures.set(Date().timeIntervalSince1970, forKey: key)
+        await settle()
+        XCTAssertGreaterThan(failures.double(forKey: key), 0)
+        failures.removeObject(forKey: key)
+        await settle()
+        failures.removeObject(forKey: key)
+        await settle()
+        XCTAssertEqual(counter.updates, baseline, "An icon completion must only update its own row")
+    }
 
     func testFreedSlotGoesToHighestPriorityThenArrivalOrder() async throws {
         let gate = RequestGate(limit: 1)
@@ -68,6 +95,21 @@ final class ImageLoadPolicyTests: XCTestCase {
         XCTAssertEqual(ReaderLoading.threads, 10)
         XCTAssertEqual(ReaderLoading.prefetchLimit, 1)
         XCTAssertEqual(ReaderLoading.preload, .always)
+    }
+}
+
+@MainActor
+private final class BrowseBodyCounter {
+    var updates = 0
+}
+
+private struct BrowsePreferencesProbe: View {
+    @AppStorage("sources.layout") private var layout = "list"
+    let counter: BrowseBodyCounter
+
+    var body: some View {
+        let _ = { counter.updates += 1 }()
+        Text(layout)
     }
 }
 
