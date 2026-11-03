@@ -46,7 +46,8 @@ import java.time.format.DateTimeFormatter
 internal fun DesktopCrashLogsPage(controller: DesktopController, state: DesktopAppState) {
     val ui by controller.crashLogs.collectAsState()
     val active = !state.busy
-    Column(Modifier.widthIn(max = 820.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    DesktopPageBar(modifier = Modifier.widthIn(max = 820.dp).fillMaxWidth(), bar = {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             // No title or back here: the shell's header names the page and goes back.
             Spacer(Modifier.weight(1f))
@@ -56,6 +57,8 @@ internal fun DesktopCrashLogsPage(controller: DesktopController, state: DesktopA
         Text(AndroidStrings["crash_logs_summary"], style = MaterialTheme.typography.bodySmall, color = Muted,
             modifier = Modifier.testTag("crash-logs-summary"))
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+    }
+    }) { padding ->
         val files = ui.files
         // Null means the directory has not been read yet: an empty list is a real answer, "not asked" is not.
         val entries = remember(files) {
@@ -78,6 +81,7 @@ internal fun DesktopCrashLogsPage(controller: DesktopController, state: DesktopA
             onOpen = { entry -> files?.firstOrNull { it.name == entry.id }?.let(controller::openCrashLog) },
             loadingTag = "crash-logs-loading",
             emptyTag = "crash-logs-empty",
+            contentPadding = padding,
         )
     }
     ui.detail?.let { detail -> DesktopCrashLogDetailDialog(detail, controller) }

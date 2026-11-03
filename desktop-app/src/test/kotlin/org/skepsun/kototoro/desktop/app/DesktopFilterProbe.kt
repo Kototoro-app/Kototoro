@@ -133,10 +133,10 @@ internal object DesktopFilterProbe {
                 onNodeWithTag("filter-apply").performClick()
                 received("1|中文作品|false|2|alternate|中文作者|1:true")
                 check(!controller.state.value.filterDialogOpen && controller.state.value.appliedFilters.size == 5)
-                onNodeWithText("下一批").performClick()
+                runBlocking { controller.browseMore().join() }
                 received("2|中文作品|false|2|alternate|中文作者|1:true")
                 check(controller.state.value.offset == 1)
-                onNodeWithText("上一批").performClick()
+                runBlocking { controller.browse(0).join() }
                 received("1|中文作品|false|2|alternate|中文作者|1:true")
                 onNodeWithTag("source-query").performTextReplacement("新查询")
                 onNodeWithText("搜索", useUnmergedTree = true).performClick()
@@ -152,7 +152,7 @@ internal object DesktopFilterProbe {
                 received("latest:1")
                 check(controller.state.value.appliedFilters.isEmpty() && controller.state.value.query.isEmpty())
                 check(onNodeWithTag("source-query").fetchSemanticsNode().config[SemanticsProperties.EditableText].text.isEmpty())
-                onNodeWithText("下一批").performClick()
+                runBlocking { controller.browseMore().join() }
                 received("latest:2")
                 listing("popular")
                 received("popular:1")

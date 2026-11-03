@@ -35,6 +35,7 @@ import org.skepsun.kototoro.core.ui.theme.LocalIsIosInterfaceStyle
  *
  * [backdropColor] is painted beneath the recorded page so the glass refracts the page colour, not transparency.
  * [recordBackdrop] false leaves the page unrecorded (native video or browser windows); the bar then has no glass.
+ * The page fills the scaffold without sizing it, so [modifier] has to give it a size (fillMaxSize, a weight).
  */
 @Composable
 fun FloatingTopBarScaffold(

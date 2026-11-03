@@ -459,9 +459,14 @@ Android 详情是可折叠头部 + 章节/页面/书签分页 + 底部 Dock，�
   来源测试、设置向导、推荐设置、来源偏好、备份）登记在 `DesktopApp.ScrollUnderScreens`，滚动容器从
   `LocalDesktopTopInset` 起排、从栏下滚过；共享的 `ServicesSettingsContent`、`PlaybackSettingsContent`、
   `ProxySettingsContent` 为此新增默认 0 的 `contentPadding`（Android 调用方不变）。
-- 尚未收敛：Android 侧仍用 `SettingsTopBarScaffold`/`KototoroAppTopChrome`，未改为调用共享骨架；列表上方有固定行的
-  页面（更新、推荐、下载、扩展、书签、更新日志、崩溃日志、标签黑名单、字典规则）仍放在栏下；浏览页底部的
-  “上一批/下一批”与播放器文字按钮仍是旧形态。
+- 列表上方有固定行的页面也已从栏下滚过：更新与推荐把摘要卡、筛选和提示作为列表/网格的头几项（`ContentGrid` 新增
+  `header`）；书签、下载、更新日志、崩溃日志、字典规则的选择栏或操作行由 `DesktopPageBar` 浮在窗口标题栏之下、
+  列表从两层栏下滚过；标签黑名单经共享网格的头部滚动。共享 `CrashLogsContent`（`contentPadding`）、
+  `DictionaryRulesContent`、`BlacklistedTagsContent`（`topPadding`）为此新增参数，默认值保持 Android 不变。
+- 浏览页去掉“上一批/下一批/第 N 批”行，与 Android 分页列表一致：滚到末尾自动加载，到头后网格页脚显示
+  `browse-no-more`；手动翻批测试改为调用同一组控制器操作。
+- 尚未收敛：Android 侧仍用 `SettingsTopBarScaffold`/`KototoroAppTopChrome`，未改为调用共享骨架；扩展管理页
+  （标签栏下三个子页各有列表与筛选芯片）仍放在栏下。
 - 验证：`DesktopFloatingChromeTest`（Material/iOS × 浅/深，断言列表起点在栏下而非被推下、滚动后行进入栏下，并截图）。
 
 #### 第三批阶段记录：播放器控制条（2026-11-03）

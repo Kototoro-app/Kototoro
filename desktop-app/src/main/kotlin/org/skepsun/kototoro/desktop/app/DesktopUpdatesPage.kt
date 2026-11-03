@@ -1,5 +1,7 @@
 package org.skepsun.kototoro.desktop.app
 
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -66,10 +68,14 @@ internal fun DesktopUpdatesPage(controller: DesktopController, state: DesktopApp
         }
     }
     val summary = remember(groups) { desktopUpdatesSummary(groups) }
-    Column(Modifier.fillMaxSize().testTag("updates-panel"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    // The header card, the filters and the tracking hint lead the list, so they scroll beneath the floating bar with it.
+    Box(Modifier.fillMaxSize().testTag("updates-panel")) {
+    LazyColumn(Modifier.fillMaxSize().testTag("updates-list"),
+        contentPadding = PaddingValues(top = LocalDesktopTopInset.current),
+        verticalArrangement = Arrangement.spacedBy(8.dp)) {
         // Android's UpdatesHeaderCard: the summary line and its two pills, on the shared page-summary card.
         val hasUpdates = groups.isNotEmpty()
-        PageSummaryHeader(
+        item(key = "summary") { PageSummaryHeader(
             title = if (hasUpdates) AndroidStrings["updated_header_title"] else AndroidStrings["updated_header_up_to_date"],
             subtitle = if (hasUpdates) {
                 AndroidStrings.format("updated_header_summary", summary.works, summary.newChapters)
@@ -106,12 +112,12 @@ internal fun DesktopUpdatesPage(controller: DesktopController, state: DesktopApp
                     modifier = Modifier.testTag("updates-check"),
                 )
             }
-        }
+        } }
         // Android keeps the source/ecosystem filters off the header card, so this row stays its own line.
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        item(key = "filters") { Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             DesktopSourceFilterControls(filter, state.sources, controller::feedFilter, enabled, "updates")
-        }
-        if (state.trackedCategories == 0) {
+        } }
+        if (state.trackedCategories == 0) item(key = "tracking-off") {
             Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.secondaryContainer,
                 modifier = Modifier.fillMaxWidth().testTag("updates-tracking-off")) {
                 Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically,
@@ -124,17 +130,12 @@ internal fun DesktopUpdatesPage(controller: DesktopController, state: DesktopApp
                 }
             }
         }
-        if (groups.isEmpty()) {
-            // The card above already carries Android's "up to date" line, so the body is only the empty placeholder.
-            Box(Modifier.weight(1f).fillMaxWidth().testTag("updates-empty"))
-        } else {
-            LazyColumn(Modifier.weight(1f).fillMaxWidth().testTag("updates-list"),
-                verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(groups, key = { it.key }) { group ->
-                    DesktopUpdateRow(group, contents[group.key], controller, enabled)
-                }
-            }
+        // The card above already carries Android's "up to date" line, so the body is only the empty placeholder.
+        if (groups.isEmpty()) item(key = "empty") { Box(Modifier.fillMaxWidth().height(1.dp).testTag("updates-empty")) }
+        items(groups, key = { it.key }) { group ->
+            DesktopUpdateRow(group, contents[group.key], controller, enabled)
         }
+    }
     }
 }
 

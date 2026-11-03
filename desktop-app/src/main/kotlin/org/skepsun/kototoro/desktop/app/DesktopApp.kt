@@ -272,13 +272,29 @@ private val ScrollUnderScreens = setOf(DesktopScreen.MORE, DesktopScreen.SERVICE
     DesktopScreen.SOURCE_SETTINGS, DesktopScreen.STORAGE, DesktopScreen.DATA_CLEANUP, DesktopScreen.PLAYBACK_SETTINGS,
     DesktopScreen.PROXY_SETTINGS, DesktopScreen.DOWNLOAD_SETTINGS, DesktopScreen.NAV_CONFIG, DesktopScreen.READING_STATS,
     DesktopScreen.REPLACE_RULES, DesktopScreen.SOURCE_TEST, DesktopScreen.SETUP_WIZARD, DesktopScreen.RECOMMENDATIONS,
-    DesktopScreen.PREFERENCES, DesktopScreen.BACKUPS)
+    DesktopScreen.PREFERENCES, DesktopScreen.BACKUPS, DesktopScreen.UPDATED, DesktopScreen.SUGGESTIONS,
+    DesktopScreen.BOOKMARKS, DesktopScreen.DOWNLOADS, DesktopScreen.CHANGELOG, DesktopScreen.CRASH_LOGS,
+    DesktopScreen.DICTIONARY_RULES, DesktopScreen.TAG_BLACKLIST)
 
 /**
  * Where a page with its own floating bar starts that bar: below the window's notices, or at the page margin. The page
  * pads its bar by it and lets its content scroll up to the top edge beneath.
  */
 internal val LocalDesktopTopInset = androidx.compose.runtime.compositionLocalOf { 0.dp }
+
+/**
+ * A generic-header page whose toolbar rows (selection bar, tabs, actions) stay put while its list scrolls: [bar] floats
+ * below the window's header at [LocalDesktopTopInset], and [content] receives the space both take as its top padding.
+ */
+@Composable
+internal fun DesktopPageBar(bar: @Composable () -> Unit, modifier: Modifier = Modifier,
+    content: @Composable (PaddingValues) -> Unit) {
+    val inset = LocalDesktopTopInset.current
+    // The scaffold takes its size from the caller, not from the page under the bar.
+    FloatingTopBarScaffold(modifier = modifier.fillMaxHeight(), backdropColor = Canvas, scrimColor = Canvas, topBar = {
+        Box(Modifier.fillMaxWidth().padding(top = inset, bottom = 12.dp)) { bar() }
+    }) { inner -> content(PaddingValues(top = inner.calculateTopPadding())) }
+}
 
 @Composable
 private fun Header(state: DesktopAppState, controller: DesktopController, enabled: Boolean) {
@@ -518,18 +534,9 @@ private fun SourceResults(controller: DesktopController, state: DesktopAppState,
                 )
                 else -> ContentGrid(visibleItems, enabled, controller.session.covers, controller::details,
                     onReachEnd = { controller.browseNextPage() }, endReached = state.browseExhausted,
+                    endLabel = desktopText("browse.noMorePages"),
                     contentPadding = PaddingValues(top = barTop))
             }
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedButton({ controller.browse((state.offset - 1).coerceAtLeast(0)) },
-                enabled = enabled && state.offset > 0) { Text(desktopText("browse.previousPage")) }
-            Text(desktopText("browse.pageNumber", state.offset + 1), color = Muted)
-            OutlinedButton({ controller.browseMore() },
-                enabled = enabled && !state.browseExhausted && state.items.isNotEmpty(),
-                modifier = Modifier.testTag("browse-next-page")) { Text(desktopText("browse.nextPage")) }
-            if (state.browseExhausted) Text(desktopText("browse.noMorePages"), color = Muted,
-                modifier = Modifier.testTag("browse-no-more"))
         }
     }
     }
@@ -556,7 +563,11 @@ internal fun ContentGrid(contents: List<SourceContent>, enabled: Boolean, covers
     /** Android's grouped lists (history by date or progress): a header row whenever the label changes. */
     groupOf: ((SourceContent) -> String?)? = null,
     /** The floating top bar's height: rows start below it and scroll beneath it. */
-    contentPadding: PaddingValues = PaddingValues(0.dp)) {
+    contentPadding: PaddingValues = PaddingValues(0.dp),
+    /** Shown after the last row once [endReached], as Android's paging list ends (browse only). */
+    endLabel: String? = null,
+    /** Leads the rows and scrolls with them (a page's summary card and chips). */
+    header: (@Composable () -> Unit)? = null) {
     if (contents.isEmpty()) {
         Box(Modifier.padding(contentPadding)) { EmptyPanel(desktopText("browse.noWorks"), desktopText("browse.noWorksDetail")) }
         return
@@ -565,7 +576,8 @@ internal fun ContentGrid(contents: List<SourceContent>, enabled: Boolean, covers
     if (!listMode.isGrid) {
         ContentRowList(contents, rows, enabled, covers, onOpen, progressOf, newChaptersOf, pinnedOf,
             selectedIds, onToggleSelection, metaOf, collectionState?.list,
-            detailed = listMode == org.skepsun.kototoro.core.prefs.ListMode.DETAILED_LIST, contentPadding = contentPadding)
+            detailed = listMode == org.skepsun.kototoro.core.prefs.ListMode.DETAILED_LIST, contentPadding = contentPadding,
+            header = header)
         return
     }
     val titleOverlay = listMode.hasTitleOverlay
@@ -577,12 +589,16 @@ internal fun ContentGrid(contents: List<SourceContent>, enabled: Boolean, covers
         columns = GridCells.Adaptive((112 * gridScale).dp), state = collectionState?.grid ?: rememberLazyGridState(),
         verticalArrangement = Arrangement.spacedBy(8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp),
         modifier = Modifier.fillMaxSize().testTag("content-grid"),
-        contentPadding = contentPadding,
+        contentPadding = contentPadding, header = header,
         canLoadMore = onReachEnd != null && !endReached,
         onLoadMore = { onReachEnd?.invoke() },
         footer = if (onReachEnd != null && !endReached) ({
             Box(Modifier.fillMaxWidth().height(40.dp), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(modifier = Modifier.size(18.dp).testTag("content-loading"), strokeWidth = 2.dp)
+            }
+        }) else if (endReached && endLabel != null) ({
+            Box(Modifier.fillMaxWidth().height(48.dp), contentAlignment = Alignment.Center) {
+                Text(endLabel, color = Muted, fontSize = 13.sp, modifier = Modifier.testTag("browse-no-more"))
             }
         }) else null,
     ) { index ->
@@ -685,7 +701,8 @@ private fun ContentRowList(contents: List<SourceContent>, rows: List<ContentRow>
     selectedIds: Set<Long>?, onToggleSelection: (SourceContent) -> Unit, metaOf: (SourceContent) -> String,
     listState: LazyListState? = null,
     /** Android's DETAILED_LIST: a larger cover and the work's tags under the supporting line. */
-    detailed: Boolean = false, contentPadding: PaddingValues = PaddingValues(0.dp)) {
+    detailed: Boolean = false, contentPadding: PaddingValues = PaddingValues(0.dp),
+    header: (@Composable () -> Unit)? = null) {
     val coverWidth = if (detailed) 72.dp else 48.dp
     val coverHeight = if (detailed) 108.dp else 72.dp
     val isIosStyle = LocalDesktopInterfaceStyle.current == DesktopInterfaceStyle.IOS
@@ -693,7 +710,7 @@ private fun ContentRowList(contents: List<SourceContent>, rows: List<ContentRow>
     ContentCollectionColumn(count = rows.size, key = { rows[it].key(contents) },
         contentType = { rows[it].javaClass },
         state = listState ?: rememberLazyListState(), modifier = Modifier.fillMaxSize().testTag("content-list"),
-        contentPadding = contentPadding,
+        contentPadding = contentPadding, header = header,
         verticalArrangement = Arrangement.spacedBy(8.dp)) { index ->
         val row = rows[index]
         if (row is ContentRow.Header) ContentGroupHeader(row.title) else {

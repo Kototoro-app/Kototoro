@@ -39,7 +39,8 @@ internal fun DesktopChangelogPage(controller: DesktopController, state: DesktopA
     val update = state.update
     val active = !state.busy
     val releases = update.changelog
-    Column(Modifier.widthIn(max = 820.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    DesktopPageBar(modifier = Modifier.widthIn(max = 820.dp).fillMaxWidth(), bar = {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Spacer(Modifier.weight(1f))
             OutlinedButton({ controller.reloadChangelog() }, enabled = active && !update.changelogLoading,
@@ -53,12 +54,15 @@ internal fun DesktopChangelogPage(controller: DesktopController, state: DesktopA
                 modifier = Modifier.testTag("changelog-version"))
         }
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+    }
+    }) { padding ->
         when {
             update.changelogError != null -> Text(update.changelogError, color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("changelog-error"))
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(padding).testTag("changelog-error"))
 
             // Null means the notes have not arrived yet: an empty list is a real answer, "not asked" is not.
-            releases == null -> Row(verticalAlignment = Alignment.CenterVertically) {
+            releases == null -> Row(Modifier.padding(padding), verticalAlignment = Alignment.CenterVertically) {
                 CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
                 Spacer(Modifier.width(8.dp))
                 Text(desktopText("update.changelogLoading"), style = MaterialTheme.typography.bodySmall,
@@ -67,9 +71,9 @@ internal fun DesktopChangelogPage(controller: DesktopController, state: DesktopA
 
             releases.isEmpty() -> Text(desktopText("update.changelogEmpty"),
                 style = MaterialTheme.typography.bodySmall, color = Muted,
-                modifier = Modifier.testTag("changelog-empty"))
+                modifier = Modifier.padding(padding).testTag("changelog-empty"))
 
-            else -> LazyColumn(Modifier.fillMaxWidth().testTag("changelog-list"),
+            else -> LazyColumn(Modifier.fillMaxWidth().testTag("changelog-list"), contentPadding = padding,
                 verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 items(releases, key = { it.tag }) { release ->
                     ChangelogReleaseCard(release, isCurrent = release.version == update.version.version)

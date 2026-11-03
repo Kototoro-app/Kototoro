@@ -48,7 +48,7 @@ internal fun DesktopBookmarksPage(controller: DesktopController, state: DesktopA
     val groups = state.bookmarkGroups
     val selection = state.bookmarkShelfSelection
     val total = remember(groups) { groups.sumOf { it.bookmarks.size } }
-    Column(Modifier.fillMaxSize().testTag("bookmarks-panel"), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    DesktopPageBar(modifier = Modifier.fillMaxSize().testTag("bookmarks-panel"), bar = {
         // Android's selection bar, shared with the library shelves: count, select-all and the removal, with the close
         // button clearing the selection (the text "clear" it replaces).
         ContentSelectionToolbar(
@@ -76,15 +76,17 @@ internal fun DesktopBookmarksPage(controller: DesktopController, state: DesktopA
             enabled = enabled,
             tagPrefix = "bookmarks",
         )
+    }) { padding ->
         if (groups.isEmpty()) {
             // Android's empty page: the same two lines, the second saying how a bookmark is made.
-            Column(Modifier.fillMaxSize().testTag("bookmarks-empty"), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(Modifier.fillMaxSize().padding(padding).testTag("bookmarks-empty"),
+                verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(AndroidStrings["no_bookmarks_yet"], style = MaterialTheme.typography.titleMedium, color = Ink)
                 Text(AndroidStrings["no_bookmarks_summary"], color = Muted, fontSize = 13.sp)
             }
-            return@Column
+            return@DesktopPageBar
         }
-        LazyColumn(Modifier.fillMaxSize().testTag("bookmarks-list"),
+        LazyColumn(Modifier.fillMaxSize().testTag("bookmarks-list"), contentPadding = padding,
             verticalArrangement = Arrangement.spacedBy(14.dp)) {
             items(groups, key = { group -> group.content.id }) { group ->
                 BookmarkGroupSection(controller, group, enabled, selection)

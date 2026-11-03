@@ -1,5 +1,7 @@
 package org.skepsun.kototoro.core.ui.settings
 
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -40,20 +42,23 @@ fun DictionaryRulesContent(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     loadingText: String = uiString("loading_"),
+    /** Added to the list's own 16dp padding: the space a floating top bar takes, the rules scrolling beneath it. */
+    topPadding: Dp = 0.dp,
 ) {
     when {
-        rules == null -> Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        rules == null -> Box(modifier.fillMaxSize().padding(top = topPadding), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 CircularProgressIndicator()
                 Text(loadingText, Modifier.testTag("dictionary-rules-loading"))
             }
         }
-        rules.isEmpty() -> Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        rules.isEmpty() -> Box(modifier.fillMaxSize().padding(top = topPadding), contentAlignment = Alignment.Center) {
             Text(uiString("dictionary_rules_empty"), color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.testTag("dictionary-rules-empty"))
         }
         else -> LazyColumn(modifier.fillMaxSize().testTag("dictionary-rules-list"),
-            contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp + topPadding, bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(rules, key = { it.name }) { rule ->
                 Card(onClick = { onEdit(rule) }, enabled = enabled,
                     modifier = Modifier.fillMaxWidth().testTag("dictionary-rule:${rule.name}")) {

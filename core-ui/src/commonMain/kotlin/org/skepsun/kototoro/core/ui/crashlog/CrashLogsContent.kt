@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.core.ui.crashlog
 
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -61,10 +62,12 @@ fun CrashLogsContent(
     loadingText: String = emptyText,
     emptyTag: String? = null,
     loadingTag: String? = null,
+    /** Space a floating top bar takes; the list scrolls beneath it. */
+    contentPadding: PaddingValues = PaddingValues(0.dp),
 ) {
     when {
         loading -> Row(
-            modifier = modifier.fillMaxWidth(),
+            modifier = modifier.fillMaxWidth().padding(contentPadding),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -80,10 +83,11 @@ fun CrashLogsContent(
             text = emptyText,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = modifier.fillMaxWidth().let { if (emptyTag != null) it.testTag(emptyTag) else it },
+            modifier = modifier.fillMaxWidth().padding(contentPadding)
+                .let { if (emptyTag != null) it.testTag(emptyTag) else it },
         )
 
-        else -> LazyColumn(modifier.fillMaxWidth()) {
+        else -> LazyColumn(modifier.fillMaxWidth(), contentPadding = contentPadding) {
             items(entries, key = { it.id }) { entry ->
                 CrashLogRow(entry, enabled = enabled, onClick = { onOpen(entry) }, tag = "$tagPrefix:${entry.id}")
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)

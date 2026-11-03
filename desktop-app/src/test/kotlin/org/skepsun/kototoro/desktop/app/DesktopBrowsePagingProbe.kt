@@ -1,5 +1,7 @@
 package org.skepsun.kototoro.desktop.app
 
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.onNodeWithTag
@@ -68,8 +70,7 @@ internal object DesktopBrowsePagingProbe {
                     controller.state.value.items.map { it.id }.toString()
                 }
                 check(controller.state.value.offset == 1) { controller.state.value.offset.toString() }
-                onNodeWithTag("browse-no-more").assertExists()
-                onNodeWithTag("browse-next-page").assertIsNotEnabled()
+                onNodeWithTag("content-grid").performScrollToNode(hasTestTag("browse-no-more")); onNodeWithTag("browse-no-more").assertExists()
                 // Every appended row is a real grid item, not only a state field.
                 onNodeWithTag("content:${works.last()}").assertExists()
 
