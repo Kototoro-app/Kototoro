@@ -388,7 +388,7 @@ class BackupRepository @Inject constructor(
                             database.getSourcesDao().findAll().asFlow()
                         }
                     ).filter { format != ExportFormat.KOTATSU || it.source in kotatsuSourceNames }
-                        .map { SourceBackup(it, SourceBackup.lockCode(sourceLocks.get(it.source))) }
+                        .map { SourceBackup(it, exportLockCode(sourceLocks.get(it.source))) }
                         .let { native ->
                             if (format == ExportFormat.KOTATSU) {
                                 native
@@ -405,7 +405,7 @@ class BackupRepository @Inject constructor(
                                                 addedIn = 0,
                                                 isPinned = it.isPinned,
                                                 isEnabled = it.enabled,
-                                                lock = SourceBackup.lockCode(sourceLocks.get(it.id)),
+                                                lock = exportLockCode(sourceLocks.get(it.id)),
                                             ),
                                         )
                                     }
@@ -667,18 +667,30 @@ class BackupRepository @Inject constructor(
                         getBookmarksDao().upsert(it.bookmarks.map { b -> b.toEntity() })
                     }
 
-                    BackupSection.SOURCES -> sectionInput.readJsonArray<SourceBackup>(serializer()).restoreToDb(
-                        "SOURCES",
-                        trackSourceChanges = true,
-                    ) {
-                        // JSON sources have no MangaSourceEntity row; only their lock is restored here.
-                        if (!it.source.startsWith("JSON_")) getSourcesDao().upsert(it.toEntity())
-                        when (it.lock) {
-                            SourceBackup.LOCK_ON -> sourceLocks.set(it.source, true)
-                            SourceBackup.LOCK_OFF -> sourceLocks.set(it.source, false)
-                            SourceBackup.LOCK_NONE -> sourceLocks.set(it.source, null)
-                            else -> Unit // old backup: keep the local lock
+                    BackupSection.SOURCES -> {
+                        val restoredLocks = LinkedHashMap<String, Int>()
+                        val sourcesResult = sectionInput.readJsonArray<SourceBackup>(serializer()).restoreToDb(
+                            "SOURCES",
+                            trackSourceChanges = true,
+                        ) {
+                            if (it.source.startsWith("JSON_")) {
+                                // JSON sources keep their own table; only an existing row gets the backup state,
+                                // and a merge leaves the local state alone.
+                                if (restoreMode == RestoreMode.SNAPSHOT_REPLACE && getJsonSourceDao().getById(it.source) != null) {
+                                    val now = System.currentTimeMillis()
+                                    getJsonSourceDao().setEnabled(it.source, it.isEnabled, now)
+                                    getJsonSourceDao().setPinned(it.source, it.isPinned, now)
+                                }
+                            } else if (restoreMode == RestoreMode.MERGE) {
+                                // Never overwrite a local row (enabled, pin, order, Cloudflare state, last use).
+                                getSourcesDao().insertIfAbsent(listOf(it.toEntity()))
+                            } else {
+                                getSourcesDao().upsert(it.toEntity())
+                            }
+                            if (it.lock != SourceBackup.LOCK_UNKNOWN) restoredLocks[it.source] = it.lock
                         }
+                        restoreSourceLocks(restoredLocks, restoreMode)
+                        sourcesResult
                     }
 
                     BackupSection.SOURCE_ORIGINS -> sectionInput.readJsonArray<SourceOriginBackup>(serializer()).restoreToDb(
@@ -999,6 +1011,35 @@ class BackupRepository @Inject constructor(
         categoryIdMapping[candidate.categoryId.toLong()] = localCategoryId
     }
 
+    /**
+     * Applies the lock codes of a restored SOURCES section in one batch. A merge keeps locks that already exist
+     * locally; "unlocked" never writes a marker (the key is removed instead).
+     */
+    private fun restoreSourceLocks(codes: Map<String, Int>, mode: RestoreMode) {
+        if (codes.isEmpty()) return
+        val merge = mode == RestoreMode.MERGE
+        val set = LinkedHashMap<String, Boolean?>()
+        val unlock = ArrayList<String>()
+        for ((name, code) in codes) {
+            if (merge && sourceLocks.get(name) != null) continue
+            when (code) {
+                SourceBackup.LOCK_ON -> set[name] = true
+                SourceBackup.LOCK_OFF -> set[name] = false
+                SourceBackup.LOCK_NONE -> if (!merge) unlock += name
+            }
+        }
+        if (set.isNotEmpty()) {
+            sourceLocks.setAll(set)
+            // A lock restored from a backup is no longer a group-applied one.
+            sourceLocks.setGroupApplied(sourceLocks.groupAppliedNames() - set.keys)
+        }
+        if (unlock.isNotEmpty()) sourceLocks.remove(unlock)
+    }
+
+    /** Unlocked sources are exported without a lock code (older readers and merges then keep their local lock). */
+    private fun exportLockCode(locked: Boolean?): Int =
+        if (locked == null) SourceBackup.LOCK_UNKNOWN else SourceBackup.lockCode(locked)
+
     private suspend fun clearRestoreTargets(
         sections: Set<BackupSection>,
         actOn: Set<BackupSection> = sections,
@@ -1037,6 +1078,11 @@ class BackupRepository @Inject constructor(
             }
             if (BackupSection.SOURCE_ORIGINS in actOn) {
                 database.getSourceOriginsDao().deleteAll()
+            }
+            if (BackupSection.SOURCES in actOn) {
+                // The section replaces the sources table and the source locks; JSON source rows are kept.
+                database.getSourcesDao().deleteAll()
+                sourceLocks.remove(sourceLocks.locks.value.keys.toList())
             }
             if (BackupSection.EXTENSION_GROUPS in actOn) {
                 sourceGroupsDir().listFiles().orEmpty().forEach { it.delete() }
