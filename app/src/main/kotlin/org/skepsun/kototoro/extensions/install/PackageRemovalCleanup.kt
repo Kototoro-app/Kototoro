@@ -33,7 +33,7 @@ class PackageRemovalCleanup @Inject constructor(
     suspend fun afterJsonSourcesDeleted(ids: Collection<String>) {
         if (ids.isEmpty()) return
         runCatching { SourceLockStore.get(context) }.getOrNull()?.let { store ->
-            ids.forEach { store.set(it, null) }
+            store.remove(ids)
         }
         sourceAvailabilityRepository.clearAvailability(ids)
         ids.forEach { sourceOriginsDao.deleteByKey(it) }

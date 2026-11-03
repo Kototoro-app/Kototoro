@@ -269,10 +269,10 @@ class SourceGroupRepository @Inject constructor(
 			// locks left by an earlier group apply or sync are not manual choices. Sources the group does
 			// not list keep their device lock. Locks are written before the exclusive batch, which keeps
 			// locked sources at their lock value.
-			for (state in group.sourceStates) {
-				runGuarded(errors, context.getString(R.string.source_groups_error_source, state.source)) {
-					contentSources.setSourceLock(contentSources.resolveSource(state.source), state.locked)
-				}
+			runGuarded(errors, context.getString(R.string.source_groups_error_apply_state)) {
+				contentSources.setSourceLocks(
+					group.sourceStates.associate { contentSources.resolveSource(it.source) to it.locked },
+				)
 			}
 
 			// Exclusive batch over the unfiltered db view: getEnabledSources() hides NSFW-disabled,

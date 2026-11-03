@@ -1049,6 +1049,21 @@ class ContentSourcesRepository @Inject constructor(
     }
 
     /**
+     * Batched [setSourceLock]. Entries whose lock is already [lockedEnabled] are left alone, and unlocking a source that
+     * has no lock writes nothing (no marker flood).
+     */
+    suspend fun setSourceLocks(entries: Map<ContentSource, Boolean?>) {
+        val store = lockStore ?: return
+        val changed = entries.filter { (source, lock) -> store.get(source.name) != lock }
+        if (changed.isEmpty()) return
+        store.setAll(changed.mapKeys { it.key.name })
+        for (lock in listOf(true, false)) {
+            val sources = changed.filterValues { it == lock }.keys
+            if (sources.isNotEmpty()) setSourcesEnabledImpl(sources, lock, force = true)
+        }
+    }
+
+    /**
      * Once per process and again after every external change of the lock prefs (settings sync): forces every locked source into its locked state. The lock map lives in its own
      * preferences, so a backup restore / sync can leave the DB row disagreeing with the lock (the list
      * shows the lock, Explore uses the DB). The lock always wins.

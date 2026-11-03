@@ -25,8 +25,8 @@ class SourceLockStore private constructor(context: Context) {
 	val externalRevision = AtomicInteger(0)
 
 	// Held strongly: SharedPreferences keeps listeners weakly.
-	private val changeListener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
-		_locks.value = read()
+	private val changeListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+		applyKeyChange(key)
 		externalRevision.incrementAndGet()
 	}
 
@@ -45,10 +45,48 @@ class SourceLockStore private constructor(context: Context) {
 	 */
 	@Synchronized
 	fun set(name: String, lockedEnabled: Boolean?) {
+		setAll(mapOf(name to lockedEnabled))
+	}
+
+	/** [set] for many sources: one prefs edit and one [locks] update. */
+	@Synchronized
+	fun setAll(entries: Map<String, Boolean?>) {
+		if (entries.isEmpty()) return
 		prefs.edit {
-			if (lockedEnabled == null) putString(name, UNLOCKED) else putBoolean(name, lockedEnabled)
+			for ((name, lockedEnabled) in entries) {
+				if (lockedEnabled == null) putString(name, UNLOCKED) else putBoolean(name, lockedEnabled)
+			}
 		}
-		_locks.value = read()
+		_locks.value = _locks.value.toMutableMap().also { map ->
+			for ((name, lockedEnabled) in entries) {
+				if (lockedEnabled == null) map.remove(name) else map[name] = lockedEnabled
+			}
+		}
+	}
+
+	/** Drops the entry entirely (no marker): for sources that no longer exist anywhere, e.g. a deleted JSON source. */
+	@Synchronized
+	fun remove(names: Collection<String>) {
+		if (names.isEmpty()) return
+		prefs.edit { names.forEach { remove(it) } }
+		_locks.value = _locks.value.toMutableMap().also { map -> names.forEach { map.remove(it) } }
+	}
+
+	/** Mirrors a single changed key (own or external write) into [locks] without re-reading the whole file. */
+	@Synchronized
+	private fun applyKeyChange(key: String?) {
+		if (key == null) {
+			_locks.value = read()
+			return
+		}
+		val value = try {
+			if (prefs.contains(key)) prefs.getBoolean(key, false) else null
+		} catch (_: ClassCastException) {
+			null
+		}
+		val current = _locks.value
+		if (current[key] == value) return
+		_locks.value = current.toMutableMap().also { if (value == null) it.remove(key) else it[key] = value }
 	}
 
 	private fun read(): Map<String, Boolean> = prefs.all.mapNotNull { (key, value) ->
