@@ -201,7 +201,7 @@ class ExploreViewModel @Inject constructor(
     }
 
     fun requestPinShortcut(source: ContentSource) {
-        launchLoadingJob(Dispatchers.Default) {
+        launchJob(Dispatchers.Default) {
             shortcutManager.requestPinShortcut(source)
         }
     }
