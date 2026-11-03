@@ -59,6 +59,8 @@ class SourceAvailabilityRepository @Inject constructor(
     }
 
     fun markAvailable(source: ContentSource) {
+        // No prefs write when the verdict is already AVAILABLE (called on every successful page).
+        if (getAvailability(source) == ContentSourceAvailability.AVAILABLE) return
         setAvailability(source.name, ContentSourceAvailability.AVAILABLE)
     }
 

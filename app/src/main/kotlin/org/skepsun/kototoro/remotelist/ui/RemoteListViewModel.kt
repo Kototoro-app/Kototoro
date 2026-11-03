@@ -299,12 +299,12 @@ open class RemoteListViewModel @Inject constructor(
                         order = filterState.sortOrder,
                         filter = filterState.listFilter,
                     )
-                    if (shouldUpdateSourceAvailability(append)) {
-                        if (list.isEmpty()) {
-                            sourceAvailabilityRepository.markEmpty(source)
-                        } else {
-                            sourceAvailabilityRepository.markAvailable(source)
-                        }
+                    if (list.isNotEmpty()) {
+                        // Any successful non-empty page (filtered or appended too) proves the source works.
+                        if (!source.isLocal) sourceAvailabilityRepository.markAvailable(source)
+                    } else if (shouldUpdateSourceAvailability(append)) {
+                        // An empty page only counts against the source for an unfiltered first page.
+                        sourceAvailabilityRepository.markEmpty(source)
                     }
                     val prevList = mangaList.value.orEmpty()
                     Log.d(

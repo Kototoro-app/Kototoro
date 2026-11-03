@@ -157,6 +157,7 @@ class TrackingSnapshotTest {
             contentRepository, localRepository, repositoryFactory,
             RecoverContentUseCase(contentRepository, repositoryFactory),
             Html.ImageGetter { error("No inline images in this fixture") }, networkState, db,
+            org.skepsun.kototoro.explore.data.SourceAvailabilityRepository(isolatedSettings),
         )
 
         val emissions = loader(ContentIntent.of(card.manga), force = false).toList()

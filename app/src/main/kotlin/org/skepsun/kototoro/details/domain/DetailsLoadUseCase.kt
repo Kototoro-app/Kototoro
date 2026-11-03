@@ -66,6 +66,7 @@ class DetailsLoadUseCase @Inject constructor(
     private val imageGetter: Html.ImageGetter,
     private val networkState: NetworkState,
     private val mangaDatabase: org.skepsun.kototoro.core.db.MangaDatabase,
+    private val sourceAvailabilityRepository: org.skepsun.kototoro.explore.data.SourceAvailabilityRepository,
 ) {
 
     operator fun invoke(intent: ContentIntent, force: Boolean): Flow<ContentDetails> = flow {
@@ -344,6 +345,8 @@ class DetailsLoadUseCase @Inject constructor(
             "DetailsLoadUseCase",
             "getDetails: returning manga with ${resolved.chapters?.size ?: 0} chapters after post-processing, totalCost=${SystemClock.elapsedRealtime() - start}ms",
         )
+        // A successful details load proves the source works (clears stale EMPTY / CLOUDFLARE verdicts).
+        if (!seed.isLocal) sourceAvailabilityRepository.markAvailable(seed.source)
         resolved
     }.recoverNotNull { e ->
         if (e is NotFoundException) {
