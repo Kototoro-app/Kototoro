@@ -32,13 +32,25 @@ class SourceAvailabilityRepository @Inject constructor(
     }
 
     fun getAvailability(source: ContentSource): ContentSourceAvailability {
-        val name = source.name
-        return when {
-            name in getSet(KEY_EMPTY_SOURCES) -> ContentSourceAvailability.EMPTY
-            name in getSet(KEY_CLOUDFLARE_SOURCES) -> ContentSourceAvailability.CLOUDFLARE
-            name in getSet(KEY_AVAILABLE_SOURCES) -> ContentSourceAvailability.AVAILABLE
-            else -> ContentSourceAvailability.UNKNOWN
+        return resolveAvailability(
+            name = source.name,
+            empty = getSet(KEY_EMPTY_SOURCES),
+            cloudflare = getSet(KEY_CLOUDFLARE_SOURCES),
+            available = getSet(KEY_AVAILABLE_SOURCES),
+        )
+    }
+
+    /** Forgets a stored CLOUDFLARE verdict (the challenge was solved); other states are left alone. */
+    @Synchronized
+    fun clearCloudflare(source: ContentSource) {
+        if (source.name in getSet(KEY_CLOUDFLARE_SOURCES)) {
+            setAvailability(source.name, ContentSourceAvailability.UNKNOWN)
         }
+    }
+
+    /** Forgets every stored verdict for the named sources (extension updated, reinstalled or removed). */
+    fun clearAvailability(sourceNames: Collection<String>) {
+        setAvailabilities(sourceNames.associateWith { ContentSourceAvailability.UNKNOWN })
     }
 
     fun observeAvailability(source: ContentSource): Flow<ContentSourceAvailability> {
@@ -91,10 +103,23 @@ class SourceAvailabilityRepository @Inject constructor(
         val available = getSet(KEY_AVAILABLE_SOURCES)
         val cloudflare = getSet(KEY_CLOUDFLARE_SOURCES)
         return buildMap(empty.size + available.size + cloudflare.size) {
-            available.forEach { put(it, ContentSourceAvailability.AVAILABLE) }
-            cloudflare.forEach { put(it, ContentSourceAvailability.CLOUDFLARE) }
-            empty.forEach { put(it, ContentSourceAvailability.EMPTY) }
+            for (name in available + cloudflare + empty) {
+                put(name, resolveAvailability(name, empty, cloudflare, available))
+            }
         }
+    }
+
+    /** The one precedence rule for a name that sits in several sets: EMPTY, then CLOUDFLARE, then AVAILABLE. */
+    private fun resolveAvailability(
+        name: String,
+        empty: Set<String>,
+        cloudflare: Set<String>,
+        available: Set<String>,
+    ): ContentSourceAvailability = when {
+        name in empty -> ContentSourceAvailability.EMPTY
+        name in cloudflare -> ContentSourceAvailability.CLOUDFLARE
+        name in available -> ContentSourceAvailability.AVAILABLE
+        else -> ContentSourceAvailability.UNKNOWN
     }
 
     private fun getSet(key: String): Set<String> {

@@ -1432,11 +1432,11 @@ class UnifiedSourcesViewModel @Inject constructor(
                 reloadInstalledExtensions = false,
             )
         }
-        if (enableAfterInstall != null) {
-            val sources = catalogRepository.getSourcesForPackage(item.id).map { it.source }
-            if (sources.isNotEmpty()) {
-                contentSourcesRepository.setSourcesEnabled(sources, enableAfterInstall)
-            }
+        val packageSources = catalogRepository.getSourcesForPackage(item.id).map { it.source }
+        // A new build invalidates the old probe verdicts (EMPTY / CLOUDFLARE badges of the previous version).
+        sourceAvailabilityRepository.clearAvailability(packageSources.map { it.name })
+        if (enableAfterInstall != null && packageSources.isNotEmpty()) {
+            contentSourcesRepository.setSourcesEnabled(packageSources, enableAfterInstall)
         }
         emitMessage(appContext.getString(R.string.unified_sources_package_installed))
         if (fromBatch) {
