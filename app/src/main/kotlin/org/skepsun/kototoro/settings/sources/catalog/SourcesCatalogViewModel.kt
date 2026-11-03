@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.debounce
@@ -90,6 +91,9 @@ class SourcesCatalogViewModel @Inject constructor(
         externalExtensionChanges,
     ) { q, f, _, _ ->
         buildSourcesList(f, q)
+    }.catch { e ->
+        android.util.Log.e("SourcesCatalogVM", "Error in content flow", e)
+        emit(listOf(errorHint()))
     }.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, listOf(LoadingState))
 
     init {
@@ -138,6 +142,12 @@ class SourcesCatalogViewModel @Inject constructor(
     fun setSourceType(value: SourceTypeFilter) {
         appliedFilter.value = appliedFilter.value.copy(sourceType = value)
     }
+
+    private fun errorHint() = SourceCatalogItem.Hint(
+        icon = R.drawable.ic_error_large,
+        title = R.string.error_occurred,
+        text = R.string.try_again,
+    )
 
     private suspend fun buildSourcesList(filter: SourcesCatalogFilter, query: String?): List<SourceCatalogItem> {
         val allSources = repository.queryAllSources(
