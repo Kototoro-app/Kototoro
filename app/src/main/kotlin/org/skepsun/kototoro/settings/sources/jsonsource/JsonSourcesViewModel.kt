@@ -55,6 +55,7 @@ class JsonSourcesViewModel @Inject constructor(
     private val mangaSourcesRepository: ContentSourcesRepository,
     private val json: Json,
     private val appSettings: AppSettings,
+    private val packageRemovalCleanup: org.skepsun.kototoro.extensions.install.PackageRemovalCleanup,
 ) : BaseViewModel() {
 
     val sourceTypeFilter: JsonSourceType? = savedStateHandle.get<String>(ARG_SOURCE_TYPE)
@@ -258,6 +259,7 @@ class JsonSourcesViewModel @Inject constructor(
     fun deleteSource(sourceId: String) {
         launchJob(Dispatchers.Default) {
             jsonSourceManager.deleteSource(sourceId)
+            packageRemovalCleanup.afterJsonSourcesDeleted(listOf(sourceId))
         }
     }
 
@@ -309,6 +311,7 @@ class JsonSourcesViewModel @Inject constructor(
     fun batchDelete(ids: List<String>) {
         launchJob(Dispatchers.Default) {
             jsonSourceManager.deleteSourcesBatch(ids)
+            packageRemovalCleanup.afterJsonSourcesDeleted(ids)
         }
     }
 

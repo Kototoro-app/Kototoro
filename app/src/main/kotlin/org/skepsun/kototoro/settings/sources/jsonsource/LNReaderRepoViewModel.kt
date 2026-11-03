@@ -32,6 +32,7 @@ class LNReaderRepoViewModel @Inject constructor(
     @JsonSourceHttpClient private val okHttpClient: OkHttpClient,
     private val appSettings: AppSettings,
     private val mirrorRepository: org.skepsun.kototoro.core.github.GitHubMirrorCatalogRepository,
+    private val packageRemovalCleanup: org.skepsun.kototoro.extensions.install.PackageRemovalCleanup,
 ) : BaseViewModel() {
 
     private val repository = LNReaderRepository(okHttpClient, jsonSourceManager, appSettings, mirrorRepository)
@@ -187,6 +188,7 @@ class LNReaderRepoViewModel @Inject constructor(
             idsToRemove.forEach { id ->
                 try {
                     jsonSourceManager.deleteSource(id)
+                    packageRemovalCleanup.afterJsonSourcesDeleted(listOf(id))
                     android.util.Log.d("LNReaderRepoVM", "Deleted source $id for ${plugin.name}")
                 } catch (e: Exception) {
                     android.util.Log.e("LNReaderRepoVM", "Failed to delete source $id", e)

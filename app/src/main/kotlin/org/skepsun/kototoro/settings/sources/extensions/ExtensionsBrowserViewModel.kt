@@ -47,6 +47,7 @@ class ExtensionsBrowserViewModel @Inject constructor(
     private val aniyomiExtensionManager: AniyomiExtensionManager,
     private val ireaderExtensionManager: org.skepsun.kototoro.ireader.IReaderExtensionManager,
     private val cloudstreamRuntimeManager: org.skepsun.kototoro.cloudstream.runtime.CloudstreamRuntimeManager,
+    private val packageRemovalCleanup: org.skepsun.kototoro.extensions.install.PackageRemovalCleanup,
 ) : BaseViewModel() {
 
     val type: ExternalExtensionType = enumValueOf(savedStateHandle.require<String>(ARG_EXTENSION_TYPE))
@@ -252,7 +253,7 @@ class ExtensionsBrowserViewModel @Inject constructor(
         )
     }
 
-    private fun uninstallFileBased(item: ExtensionsBrowserListItem.Entry) {
+    private suspend fun uninstallFileBased(item: ExtensionsBrowserListItem.Entry) {
         if (item.extension.type == ExternalExtensionType.JAR) {
             val pluginDir = java.io.File(appContext.filesDir, "plugins")
             val jarFile = java.io.File(pluginDir, "${item.pkgName}.jar")
@@ -266,7 +267,13 @@ class ExtensionsBrowserViewModel @Inject constructor(
                 .remove("${item.pkgName}:repo")
                 .remove("${item.pkgName}:repoName")
                 .apply()
+            val jarName = item.pkgName.removeSuffix(".jar")
+            val jarSourceNames = org.skepsun.kototoro.core.extensions.GlobalExtensionManager.contentSources.value
+                .filter { it.jarName.removeSuffix(".jar") == jarName }.map { it.name } +
+                org.skepsun.kototoro.core.extensions.GlobalExtensionManager.mangaSources.value
+                    .filter { it.jarName.removeSuffix(".jar") == jarName }.map { it.name }
             org.skepsun.kototoro.core.extensions.GlobalExtensionManager.initialize(appContext)
+            packageRemovalCleanup.afterPackageRemoved(item.pkgName, jarSourceNames, isJar = true)
             return
         }
         val prefs = appContext.getSharedPreferences("cloudstream_plugin_versions", android.content.Context.MODE_PRIVATE)
@@ -286,7 +293,10 @@ class ExtensionsBrowserViewModel @Inject constructor(
             .remove("${item.pkgName}:archive")
             .remove("${item.pkgName}:icon")
             .apply()
+        val csSourceNames = cloudstreamRuntimeManager.sources.value
+            .filter { it.pluginPackageName == item.pkgName }.map { it.name }
         cloudstreamRuntimeManager.initialize()
+        packageRemovalCleanup.afterPackageRemoved(item.pkgName, csSourceNames, isJar = false)
     }
 
     fun setSearchQuery(query: String?) {

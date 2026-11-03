@@ -194,6 +194,7 @@ class UnifiedSourcesViewModel @Inject constructor(
     private val catalogRepository: UnifiedSourceCatalogRepository,
     private val contentSourcesRepository: ContentSourcesRepository,
     private val sourceAvailabilityRepository: SourceAvailabilityRepository,
+    private val packageRemovalCleanup: org.skepsun.kototoro.extensions.install.PackageRemovalCleanup,
     private val contentRepositoryFactory: ContentRepository.Factory,
     private val jsonSourceManager: JsonSourceManager,
     private val legadoHttpClient: LegadoHttpClient,
@@ -1236,10 +1237,12 @@ class UnifiedSourcesViewModel @Inject constructor(
                 return PackageRemovalResult()
             }
             jsonSourceManager.deleteSourcesBatch(sourceIds)
+            packageRemovalCleanup.afterJsonSourcesDeleted(sourceIds)
             return PackageRemovalResult(removedDirectly = true)
         }
 
         val packageName = item.packageName ?: return PackageRemovalResult()
+        val packageSourceNames = ready.allSources.filter { it.packageId == item.id }.map { it.source.name }
         if (item.kind == UnifiedSourceKind.JAR) {
             val pluginDir = File(appContext.filesDir, "plugins")
             val jarFile = File(pluginDir, "$packageName.jar")
@@ -1253,6 +1256,7 @@ class UnifiedSourcesViewModel @Inject constructor(
                 .remove("${packageName}:repoName")
                 .apply()
             GlobalExtensionManager.initialize(appContext)
+            packageRemovalCleanup.afterPackageRemoved(packageName, packageSourceNames, isJar = true)
             return PackageRemovalResult(removedDirectly = true)
         }
 
@@ -1274,6 +1278,7 @@ class UnifiedSourcesViewModel @Inject constructor(
                 .remove("${packageName}:icon")
                 .apply()
             cloudstreamRuntimeManager.initialize()
+            packageRemovalCleanup.afterPackageRemoved(packageName, packageSourceNames, isJar = false)
             return PackageRemovalResult(removedDirectly = true)
         }
 
@@ -1285,6 +1290,7 @@ class UnifiedSourcesViewModel @Inject constructor(
                 packageName = packageName,
             )
             if (deleted) {
+                packageRemovalCleanup.afterPackageRemoved(packageName, packageSourceNames, isJar = false)
                 return PackageRemovalResult(
                     removedDirectly = true,
                     reloadExternalExtensionManagers = true,
@@ -1658,6 +1664,7 @@ class UnifiedSourcesViewModel @Inject constructor(
         }
         if (ids.isNotEmpty()) {
             jsonSourceManager.deleteSourcesBatch(ids)
+            packageRemovalCleanup.afterJsonSourcesDeleted(ids)
         }
         emitMessage(appContext.getString(R.string.unified_sources_repository_sources_deleted))
     }
