@@ -556,6 +556,7 @@ class BackupRepository @Inject constructor(
         progress: FlowCollector<Progress>?,
         restoreMode: RestoreMode = RestoreMode.MERGE,
         checkpointId: String? = null,
+        preserveLocalSources: Boolean = false,
     ): RestoreBackupResult {
         val restoreStartedAt = SystemClock.elapsedRealtime()
         val effectiveSections = sections.withImplicitRestoreSections()
@@ -681,8 +682,8 @@ class BackupRepository @Inject constructor(
                                     getJsonSourceDao().setEnabled(it.source, it.isEnabled, now)
                                     getJsonSourceDao().setPinned(it.source, it.isPinned, now)
                                 }
-                            } else if (restoreMode == RestoreMode.MERGE) {
-                                // Never overwrite a local row (enabled, pin, order, Cloudflare state, last use).
+                            } else if (preserveLocalSources) {
+                                // Automatic restore: never overwrite a local row (enabled, pin, order, Cloudflare state, last use).
                                 getSourcesDao().insertIfAbsent(listOf(it.toEntity()))
                             } else {
                                 getSourcesDao().upsert(it.toEntity())
