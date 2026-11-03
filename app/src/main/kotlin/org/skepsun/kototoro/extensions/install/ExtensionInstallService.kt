@@ -42,6 +42,7 @@ class ExtensionInstallService @Inject constructor(
     private val mirrorRepository: GitHubMirrorCatalogRepository,
     private val cloudstreamRuntimeManager: org.skepsun.kototoro.cloudstream.runtime.CloudstreamRuntimeManager,
     private val systemPackageInstaller: SystemPackageInstaller,
+    private val sourceOriginsDao: org.skepsun.kototoro.core.db.dao.SourceOriginsDao,
 ) {
     private val githubHttpClient by lazy {
         httpClient.newBuilder()
@@ -196,6 +197,7 @@ class ExtensionInstallService @Inject constructor(
 
         val ecosystem = extension.type.toLocalApkEcosystem()
         if (ecosystem != null) {
+            recordPackageOrigin(extension)
             if (mode == ExtensionInstallMode.LOCAL_APK) {
                 LocalApkExtensionSupport.storeManagedApk(
                     context = context,
@@ -214,6 +216,36 @@ class ExtensionInstallService @Inject constructor(
             expectedVersionCode = extension.versionCode,
         )
         return ExtensionInstallResult.RequiresInstaller(installSession)
+    }
+
+    /**
+     * Remembers which repository a MIHON / ANIYOMI / IREADER / TSUNDOKU package came from (JAR and Cloudstream keep it
+     * in their version prefs), so a saved source group keeps the package's repoUrl. The row is keyed per package,
+     * not per source, and never touches the per-source origin rows.
+     */
+    private suspend fun recordPackageOrigin(extension: RepoAvailableExtension) {
+        val installedName = extension.type.toInstalledPackageName(extension.pkgName)
+        val now = System.currentTimeMillis()
+        try {
+            sourceOriginsDao.upsert(
+                org.skepsun.kototoro.core.db.entity.SourceOriginEntity(
+                    sourceKey = "PKG_${extension.type.name}_$installedName",
+                    kind = extension.type.name,
+                    displayName = extension.name,
+                    packageName = installedName,
+                    repositoryUrl = extension.repoUrl,
+                    repositoryName = extension.repoName,
+                    versionName = extension.versionName,
+                    versionCode = extension.versionCode,
+                    lastSeenAt = now,
+                    updatedAt = now,
+                ),
+            )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            android.util.Log.w("KototoroInit", "recording package origin failed for ${extension.pkgName}", e)
+        }
     }
 
     fun onInstallerActivityReturned() {

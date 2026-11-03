@@ -32,7 +32,8 @@ class PackageRemovalCleanup @Inject constructor(
         }
         sourceAvailabilityRepository.clearAvailability(sourceNames)
         sourceOriginsDao.findAll()
-            .filter { it.packageName == packageName }
+            // Tsundoku per-source origins are a long-term registry (they keep offline sources addressable): never deleted.
+            .filter { it.packageName == packageName && !it.sourceKey.startsWith("TSUNDOKU_") }
             .forEach { sourceOriginsDao.deleteByKey(it.sourceKey) }
     }
 
