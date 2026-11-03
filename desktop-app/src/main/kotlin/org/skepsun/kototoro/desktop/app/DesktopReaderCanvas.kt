@@ -283,12 +283,21 @@ internal fun DesktopReaderCanvas(controller: DesktopController, state: DesktopAp
                 // or button turn would show the new page in place for one frame and then jump back to slide in from
                 // the old one, a flash on every page. Draw that starting offset here already.
                 val pendingTurn = slotIndex - settledSlot
-                val shownTravel = if (animated && !committedByDrag && abs(pendingTurn) == 1 &&
-                    !travel.isRunning && travel.value == 0f) -pendingTurn.toFloat() else travel.value
-                val snapshot = PagedMotionSnapshot(currentSlot = slotIndex, settledSlot = settledSlot,
+                // The reverse gap: an animated turn (keys, taps, wheel, drag release) commits after travel reached
+                // ±1 of the old slot, and the effect resets it only after this frame. Read against the new slot,
+                // that travel would put the slot after the next one in view, still undecoded, for a frame. Draw the
+                // committed slot as settled instead.
+                val committing = committedByDrag && pendingTurn != 0
+                val shownSettled = if (committing) slotIndex else settledSlot
+                val shownTravel = when {
+                    committing -> travel.value - pendingTurn
+                    animated && abs(pendingTurn) == 1 && !travel.isRunning && travel.value == 0f -> -pendingTurn.toFloat()
+                    else -> travel.value
+                }
+                val snapshot = PagedMotionSnapshot(currentSlot = slotIndex, settledSlot = shownSettled,
                     targetSlot = slotIndex, offsetFraction = shownTravel,
                     isScrollInProgress = dragging || travel.isRunning)
-                val travelFraction = slotIndex - settledSlot + shownTravel
+                val travelFraction = slotIndex - shownSettled + shownTravel
                 val inFlight = abs(travelFraction) > ScenePageTransitionRenderer.COVER_PROGRESS_EPSILON || snapshot.isScrollInProgress
                 val neighbours = (-1..1).mapNotNull { step -> layout.scene.allSlots.getOrNull(slotIndex + step) }
                 for (strip in neighbours) {
@@ -302,7 +311,7 @@ internal fun DesktopReaderCanvas(controller: DesktopController, state: DesktopAp
                         ScenePageTransition.SLIDE -> 0f
                         ScenePageTransition.CURL -> transform.translationFactor * extent * physicalSign
                         ScenePageTransition.COVER -> ScenePageTransitionRenderer.resolveSceneCoverPinShift(
-                            strip.slotIndex, settledSlot, travelFraction, base, inFlight)
+                            strip.slotIndex, shownSettled, travelFraction, base, inFlight)
                     }
                     val legacy = ComposeReaderPageTransform(alpha = transform.alpha, zIndex = transform.zIndex,
                         foldProgress = transform.foldProgress, isCurlUnfolding = transform.isCurlUnfolding,
