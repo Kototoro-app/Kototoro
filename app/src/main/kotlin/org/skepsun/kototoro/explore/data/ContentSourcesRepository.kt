@@ -1069,8 +1069,19 @@ class ContentSourcesRepository @Inject constructor(
         }
     }
 
+    /**
+     * Every source name the app knows about, with no NSFW / preset / language filtering:
+     * all db rows plus every manager pool (built-in, JAR/plugin, Mihon, Aniyomi, IReader, Tsundoku, Cloudstream, JSON).
+     */
+    private suspend fun getUnfilteredPoolNames(): Set<String> {
+        val names = LinkedHashSet<String>()
+        getAllAvailableSourcesForListing().mapTo(names) { it.name }
+        dao.findAll().mapTo(names) { it.source }
+        return names
+    }
+
     suspend fun setSourcesEnabledExclusive(sources: Set<ContentSource>) {
-        val allSources = queryAllSources(includeDisabledSources = true)
+        val allNames = getUnfilteredPoolNames()
         val enabledNames = sources.map { it.name }.toSet()
         val locks = lockStore?.locks?.value.orEmpty()
 
@@ -1079,12 +1090,12 @@ class ContentSourcesRepository @Inject constructor(
         val nativeSourcesToEnable = mutableListOf<String>()
         val nativeSourcesToDisable = mutableListOf<String>()
 
-        for (s in allSources) {
-            val isEnabled = locks[s.name] ?: (s.name in enabledNames)
-            if (s.name.startsWith("JSON_")) {
-                if (isEnabled) jsonSourcesToEnable.add(s.name) else jsonSourcesToDisable.add(s.name)
+        for (name in allNames) {
+            val isEnabled = locks[name] ?: (name in enabledNames)
+            if (name.startsWith("JSON_")) {
+                if (isEnabled) jsonSourcesToEnable.add(name) else jsonSourcesToDisable.add(name)
             } else {
-                if (isEnabled) nativeSourcesToEnable.add(s.name) else nativeSourcesToDisable.add(s.name)
+                if (isEnabled) nativeSourcesToEnable.add(name) else nativeSourcesToDisable.add(name)
             }
         }
 
@@ -1272,27 +1283,30 @@ class ContentSourcesRepository @Inject constructor(
     }
 
     private suspend fun materializeAllEnabledState() {
-        val allSources = queryAllSources(includeDisabledSources = true)
-        val nativeSources = mutableListOf<String>()
-        val jsonSources = mutableListOf<String>()
-        for (source in allSources) {
-            if (source.name.startsWith("JSON_")) {
-                jsonSources.add(source.name)
+        val allNames = getUnfilteredPoolNames()
+        val locks = lockStore?.locks?.value.orEmpty()
+        val nativeOn = mutableListOf<String>()
+        val nativeOff = mutableListOf<String>()
+        val jsonOn = mutableListOf<String>()
+        val jsonOff = mutableListOf<String>()
+        for (name in allNames) {
+            val isEnabled = locks[name] ?: true
+            val target = if (name.startsWith("JSON_")) {
+                if (isEnabled) jsonOn else jsonOff
             } else {
-                nativeSources.add(source.name)
+                if (isEnabled) nativeOn else nativeOff
             }
+            target.add(name)
         }
 
-        if (jsonSources.isNotEmpty()) {
-            jsonSourceManager.toggleSourcesBatch(jsonSources, true)
-        }
+        if (jsonOn.isNotEmpty()) jsonSourceManager.toggleSourcesBatch(jsonOn, true)
+        if (jsonOff.isNotEmpty()) jsonSourceManager.toggleSourcesBatch(jsonOff, false)
 
-        if (nativeSources.isNotEmpty()) {
+        if (nativeOn.isNotEmpty() || nativeOff.isNotEmpty()) {
             sourceStateModifiedStore.withLocalChanges(db) {
                 assimilateNewSources()
-                for (name in nativeSources) {
-                    dao.setEnabled(name, true, BuildConfig.VERSION_CODE)
-                }
+                for (name in nativeOn) dao.setEnabled(name, true, BuildConfig.VERSION_CODE)
+                for (name in nativeOff) dao.setEnabled(name, false, BuildConfig.VERSION_CODE)
             }
         }
 
