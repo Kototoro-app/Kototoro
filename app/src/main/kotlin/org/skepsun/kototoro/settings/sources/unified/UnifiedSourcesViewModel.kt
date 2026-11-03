@@ -251,6 +251,7 @@ class UnifiedSourcesViewModel @Inject constructor(
      * Each entry is retired once the authoritative rebuild reports the same value.
      */
     private val _enabledOverrides = MutableStateFlow<Map<String, Boolean>>(emptyMap())
+    private var pendingRepositoryEdit: Pair<UnifiedSourceRepositoryItem, UnifiedSourcesUiState.Ready>? = null
     private val _events = MutableSharedFlow<UnifiedSourcesEvent>(extraBufferCapacity = 1)
     val events: SharedFlow<UnifiedSourcesEvent> = _events.asSharedFlow()
     val updateAllInProgress: StateFlow<Boolean> = batchUpdateState.inProgress
@@ -1007,8 +1008,15 @@ class UnifiedSourcesViewModel @Inject constructor(
                 emptyList()
             }
             // Add the new repository first: if that fails the old one is left untouched.
+            val awaitsTrust = newKind.toExternalExtensionType() != null
+            // External repositories are only added after the trust dialog; keep the old one until then.
+            pendingRepositoryEdit = if (awaitsTrust) oldRepository to ready else null
             val added = addRepositoryFromUrlImpl(newKind, trimmedUrl, trimmedName.takeIf { it.isNotBlank() }, true)
-            if (!added) return@launchLoadingJob
+            if (!added) {
+                pendingRepositoryEdit = null
+                return@launchLoadingJob
+            }
+            if (awaitsTrust) return@launchLoadingJob
             deleteRepositoryImpl(oldRepository, ready)
             if (captured.isNotEmpty()) {
                 restoreCapturedSourceState(repositoryIdForAction(newKind, trimmedUrl), captured)
@@ -1073,10 +1081,17 @@ class UnifiedSourcesViewModel @Inject constructor(
         }
     }
 
+    fun cancelExternalRepository() {
+        pendingRepositoryEdit = null
+    }
+
     fun confirmExternalRepository(repo: ExternalExtensionRepo) {
+        val pendingEdit = pendingRepositoryEdit
+        pendingRepositoryEdit = null
         launchLoadingJob(Dispatchers.IO) {
             when (val result = extensionRepoRepository.confirmAddRepo(repo)) {
                 is ExternalExtensionRepoRepository.AddRepoResult.Success -> {
+                    pendingEdit?.let { (old, ready) -> deleteRepositoryImpl(old, ready) }
                     emitMessage(appContext.getString(R.string.extension_repo_added_message, result.repo.displayName))
                     extensionRepoRepository.refresh(repo.type)
                     refreshAvailableExternalPackages(listOf(repo.type))

@@ -566,7 +566,10 @@ fun UnifiedSourcesRoute(
 
         is UnifiedSourcesDialogState.TrustRepository -> UnifiedTrustRepositoryDialog(
             repo = dialog.repo,
-            onDismiss = { activeDialog = null },
+            onDismiss = {
+                viewModel.cancelExternalRepository()
+                activeDialog = null
+            },
             onConfirm = {
                 viewModel.confirmExternalRepository(dialog.repo)
                 activeDialog = null
