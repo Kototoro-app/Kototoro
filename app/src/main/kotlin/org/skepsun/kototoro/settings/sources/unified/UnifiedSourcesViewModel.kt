@@ -30,6 +30,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
@@ -92,6 +93,7 @@ import javax.inject.Inject
 private const val TAG = "UnifiedSourcesVM"
 private const val REFRESH_PACKAGES_TIMEOUT_MS = 30_000L
 private const val SOURCE_TEST_MAX_PARALLELISM = 3
+private const val REPOSITORY_SWAP_RESTORE_TIMEOUT_MS = 8_000L
 /** Coalesces bursts of catalog inputs into one rebuild (install progress ticks, DB churn). */
 private const val CATALOG_RECOMPOSE_COALESCE_MS = 150L
 /** Minimum gap between silent (non-user) catalog seeds; re-entering the screen reuses the snapshot. */
@@ -779,14 +781,14 @@ class UnifiedSourcesViewModel @Inject constructor(
         url: String,
         title: String?,
         enableImportedSources: Boolean,
-    ) {
+    ): Boolean {
         val cleanUrl = url.trim()
-        if (cleanUrl.isBlank()) return
-        when (kind) {
+        if (cleanUrl.isBlank()) return false
+        return when (kind) {
             UnifiedSourceKind.LEGADO -> {
                 if (settings.legadoRepoUrls.containsRepositoryUrl(cleanUrl)) {
                     emitMessage(appContext.getString(R.string.unified_sources_repository_already_exists))
-                    return
+                    return false
                 }
                 val packageItem = fetchAvailableLegadoPackage(cleanUrl, title)
                 settings.legadoRepoUrls = settings.legadoRepoUrls + cleanUrl
@@ -795,6 +797,7 @@ class UnifiedSourcesViewModel @Inject constructor(
                         .sortedBy { it.name.lowercase() }
                 }
                 emitMessage(appContext.getString(R.string.unified_sources_repository_added))
+                true
             }
             UnifiedSourceKind.JS -> {
                 importJsonRepository(
@@ -808,7 +811,7 @@ class UnifiedSourcesViewModel @Inject constructor(
             UnifiedSourceKind.TVBOX -> {
                 if (settings.tvBoxRepoUrls.containsRepositoryUrl(cleanUrl)) {
                     emitMessage(appContext.getString(R.string.unified_sources_repository_already_exists))
-                    return
+                    return false
                 }
                 val packageItem = fetchAvailableTvBoxPackage(cleanUrl, title)
                 settings.tvBoxRepoUrls = settings.tvBoxRepoUrls + cleanUrl
@@ -817,6 +820,7 @@ class UnifiedSourcesViewModel @Inject constructor(
                         .sortedBy { it.name.lowercase() }
                 }
                 emitMessage(appContext.getString(R.string.unified_sources_repository_added))
+                true
             }
             UnifiedSourceKind.LNREADER -> addLnReaderRepository(cleanUrl)
             UnifiedSourceKind.CLOUDSTREAM,
@@ -825,7 +829,10 @@ class UnifiedSourcesViewModel @Inject constructor(
             UnifiedSourceKind.IREADER,
             UnifiedSourceKind.JAR,
             UnifiedSourceKind.TSUNDOKU -> prepareExternalRepository(kind, cleanUrl)
-            UnifiedSourceKind.NATIVE -> emitMessage(appContext.getString(R.string.unified_sources_native_no_repository))
+            UnifiedSourceKind.NATIVE -> {
+                emitMessage(appContext.getString(R.string.unified_sources_native_no_repository))
+                false
+            }
         }
     }
 
@@ -984,12 +991,85 @@ class UnifiedSourcesViewModel @Inject constructor(
             return
         }
         val ready = uiState.value as? UnifiedSourcesUiState.Ready ?: return
-        // Delete and re-add must run in one sequential job: as two concurrent jobs, the add-side
-        // "already exists" check can still see the url the delete job has not removed yet (when the
-        // edit keeps the same url) and bail out after the delete — dropping the repository entirely.
+        // Everything runs in one sequential job so the add-side "already exists" check cannot race the delete.
         launchLoadingJob(Dispatchers.IO) {
+            if (oldRepository.kind == newKind &&
+                normalizeRepositoryUrlForAction(oldRepository.url) == normalizeRepositoryUrlForAction(trimmedUrl)
+            ) {
+                // Only the name changed: update it in place, never delete the repository.
+                renameRepositoryInPlace(oldRepository, trimmedName)
+                return@launchLoadingJob
+            }
+            // Capture per-source state (matched by source name) so it survives the repository swap.
+            val captured = if (newKind.isJsonBackedKind() && oldRepository.kind.isJsonBackedKind()) {
+                ready.allSources.filter { it.repositoryId == oldRepository.id }
+            } else {
+                emptyList()
+            }
+            // Add the new repository first: if that fails the old one is left untouched.
+            val added = addRepositoryFromUrlImpl(newKind, trimmedUrl, trimmedName.takeIf { it.isNotBlank() }, true)
+            if (!added) return@launchLoadingJob
             deleteRepositoryImpl(oldRepository, ready)
-            addRepositoryFromUrlImpl(newKind, trimmedUrl, trimmedName.takeIf { it.isNotBlank() }, true)
+            if (captured.isNotEmpty()) {
+                restoreCapturedSourceState(repositoryIdForAction(newKind, trimmedUrl), captured)
+            }
+        }
+    }
+
+    private suspend fun renameRepositoryInPlace(repository: UnifiedSourceRepositoryItem, newName: String) {
+        if (newName.isBlank()) return
+        when (repository.kind) {
+            UnifiedSourceKind.LEGADO,
+            UnifiedSourceKind.TVBOX -> {
+                val isUrlListRepo = if (repository.kind == UnifiedSourceKind.LEGADO) {
+                    settings.legadoRepoUrls.containsRepositoryUrl(repository.url)
+                } else {
+                    settings.tvBoxRepoUrls.containsRepositoryUrl(repository.url)
+                }
+                if (isUrlListRepo) {
+                    val packageItem = if (repository.kind == UnifiedSourceKind.LEGADO) {
+                        fetchAvailableLegadoPackage(repository.url, newName)
+                    } else {
+                        fetchAvailableTvBoxPackage(repository.url, newName)
+                    }
+                    availableJsonPackages.update { packages ->
+                        (packages.filterNot { it.repositoryId == repository.id } + packageItem)
+                            .sortedBy { it.name.lowercase() }
+                    }
+                } else {
+                    jsonSourceManager.observeAllJsonSources()
+                        .first()
+                        .filter { it.jsonRepositoryIdForAction() == repository.id }
+                        .forEach { entity ->
+                            val config = entity.withRepositoryTitle(newName)
+                            if (config != entity.config) {
+                                jsonSourceManager.updateSource(entity.copy(config = config))
+                            }
+                        }
+                }
+            }
+            else -> Unit // These repositories take their name from the remote index; nothing to rename in place.
+        }
+    }
+
+    private suspend fun restoreCapturedSourceState(newRepositoryId: String, captured: List<UnifiedSourceItem>) {
+        val fresh = withTimeoutOrNull(REPOSITORY_SWAP_RESTORE_TIMEOUT_MS) {
+            uiState
+                .filterIsInstance<UnifiedSourcesUiState.Ready>()
+                .first { state -> state.allSources.any { it.repositoryId == newRepositoryId } }
+        }?.allSources?.filter { it.repositoryId == newRepositoryId } ?: return
+        val oldByName = captured.associateBy { it.source.name }
+        val matches = fresh.mapNotNull { item -> oldByName[item.source.name]?.let { item to it } }
+        if (matches.isEmpty()) return
+        // Enabled state first: locked sources ignore enable changes, and the lock is re-applied last.
+        for (enabled in listOf(true, false)) {
+            val group = matches.filter { (_, old) -> old.isEnabled == enabled }.map { (item, _) -> item.source }
+            if (group.isNotEmpty()) contentSourcesRepository.setSourcesEnabled(group, enabled)
+        }
+        val pinned = matches.filter { (_, old) -> old.isPinned }.map { (item, _) -> item.source }
+        if (pinned.isNotEmpty()) contentSourcesRepository.setIsPinned(pinned, true)
+        for ((item, old) in matches) {
+            old.lock?.let { contentSourcesRepository.setSourceLock(item.source, it) }
         }
     }
 
@@ -1563,42 +1643,50 @@ class UnifiedSourcesViewModel @Inject constructor(
         val reloadExternalExtensionManagers: Boolean = false,
     )
 
-    private suspend fun prepareExternalRepository(kind: UnifiedSourceKind, url: String) {
+    private suspend fun prepareExternalRepository(kind: UnifiedSourceKind, url: String): Boolean {
         val type = kind.toExternalExtensionType()
             ?: throw IllegalArgumentException(
                 appContext.getString(R.string.unified_sources_unsupported_repository_kind, kind.name),
             )
-        when (val result = extensionRepoRepository.prepareAddRepo(type, url)) {
+        return when (val result = extensionRepoRepository.prepareAddRepo(type, url)) {
             is ExternalExtensionRepoRepository.PrepareAddRepoResult.Ready -> {
                 _events.emit(UnifiedSourcesEvent.TrustExternalRepository(result.repo))
+                true
             }
-            is ExternalExtensionRepoRepository.PrepareAddRepoResult.DuplicateFingerprint -> emitMessage(
-                appContext.getString(
-                    R.string.extension_repo_duplicate_fingerprint_message,
-                    result.existingRepo.displayName,
-                ),
-            )
-            is ExternalExtensionRepoRepository.PrepareAddRepoResult.FetchFailed -> emitMessage(
-                result.error.getDisplayMessage(appContext.resources),
-            )
-            ExternalExtensionRepoRepository.PrepareAddRepoResult.InvalidUrl -> emitMessage(
-                appContext.getString(R.string.extension_repo_invalid_url_message),
-            )
-            is ExternalExtensionRepoRepository.PrepareAddRepoResult.RepoAlreadyExists -> emitMessage(
-                appContext.getString(R.string.extension_repo_already_exists_message),
-            )
+            is ExternalExtensionRepoRepository.PrepareAddRepoResult.DuplicateFingerprint -> {
+                emitMessage(
+                    appContext.getString(
+                        R.string.extension_repo_duplicate_fingerprint_message,
+                        result.existingRepo.displayName,
+                    ),
+                )
+                false
+            }
+            is ExternalExtensionRepoRepository.PrepareAddRepoResult.FetchFailed -> {
+                emitMessage(result.error.getDisplayMessage(appContext.resources))
+                false
+            }
+            ExternalExtensionRepoRepository.PrepareAddRepoResult.InvalidUrl -> {
+                emitMessage(appContext.getString(R.string.extension_repo_invalid_url_message))
+                false
+            }
+            is ExternalExtensionRepoRepository.PrepareAddRepoResult.RepoAlreadyExists -> {
+                emitMessage(appContext.getString(R.string.extension_repo_already_exists_message))
+                false
+            }
         }
     }
 
-    private suspend fun addLnReaderRepository(url: String) {
+    private suspend fun addLnReaderRepository(url: String): Boolean {
         val current = settings.lnReaderRepoUrls
         if (url in current) {
             emitMessage(appContext.getString(R.string.unified_sources_repository_already_exists))
-            return
+            return false
         }
         settings.lnReaderRepoUrls = current + url
         refreshAvailableLnReaderPackages()
         emitMessage(appContext.getString(R.string.unified_sources_repository_added))
+        return true
     }
 
     private suspend fun refreshExternalRepository(repository: UnifiedSourceRepositoryItem) {
@@ -1641,7 +1729,7 @@ class UnifiedSourcesViewModel @Inject constructor(
         sourceLocator: String?,
         sourceTitle: String?,
         enableImportedSources: Boolean? = null,
-    ) {
+    ): Boolean {
         val result = when (kind) {
             UnifiedSourceKind.LEGADO -> jsonSourceManager.importLegadoJson(
                 jsonContent = content,
@@ -1677,6 +1765,7 @@ class UnifiedSourcesViewModel @Inject constructor(
                 emitMessage(appContext.getString(R.string.unified_sources_imported_sources, count))
             }
             .onFailure { error -> emitMessage(error.getDisplayMessage(appContext.resources)) }
+        return result.isSuccess
     }
 
     private suspend fun deleteImportedJsonRepositorySources(
@@ -2496,6 +2585,23 @@ private fun JsonSourceEntity.jsonPackageIdForAction(): String? {
         }
         JsonSourceType.JS -> packageIdForAction(UnifiedSourceKind.JS, id)
         JsonSourceType.LNREADER -> packageIdForAction(UnifiedSourceKind.LNREADER, id)
+    }
+}
+
+private fun JsonSourceEntity.withRepositoryTitle(title: String): String {
+    return when (type) {
+        JsonSourceType.LEGADO -> {
+            val meta = JsonSourceImportMetadata.parse(config) ?: return config
+            JsonSourceImportMetadata.attach(config, meta.sourceLocator, title, meta.importKind)
+        }
+        JsonSourceType.TVBOX -> runCatching {
+            val root = org.json.JSONObject(config)
+            val meta = root.optJSONObject("meta") ?: return@runCatching config
+            meta.put("sourceTitle", title)
+            root.toString()
+        }.getOrDefault(config)
+        JsonSourceType.JS,
+        JsonSourceType.LNREADER -> config
     }
 }
 
