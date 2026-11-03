@@ -128,7 +128,12 @@ class UnifiedSourceCatalogRepository @Inject constructor(
         return upstream
             .debounceAfterFirst(CATALOG_COALESCE_MS)
             .onStart { lastCatalogState?.let { emit(it) } }
-            .onEach { lastCatalogState = it }
+            .onEach { state ->
+                // Never cache an empty state (e.g. the catch fallback): it would flash an empty catalog on the next open.
+                if (state.repositories.isNotEmpty() || state.packages.isNotEmpty() || state.sources.isNotEmpty()) {
+                    lastCatalogState = state
+                }
+            }
             .distinctUntilChanged()
     }
 
