@@ -110,6 +110,7 @@ class ExtensionInstallService @Inject constructor(
                 lastError = e
             } finally {
                 activeCalls.remove(extension.pkgName)
+                lastProgressEmitNanos.remove(extension.pkgName)
                 _downloadStates.update { it - extension.pkgName }
             }
         }
@@ -196,7 +197,13 @@ class ExtensionInstallService @Inject constructor(
         activeCalls[packageName]?.cancel()
     }
 
-    private fun updateDownloadState(packageName: String, bytesRead: Long, contentLength: Long) {
+    private val lastProgressEmitNanos = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
+    private fun updateDownloadState(packageName: String, bytesRead: Long, contentLength: Long, done: Boolean = false) {
+        val now = System.nanoTime()
+        val last = lastProgressEmitNanos[packageName]
+        if (!done && last != null && now - last < 250_000_000L) return
+        lastProgressEmitNanos[packageName] = now
         _downloadStates.update { states ->
             states + (packageName to ExtensionInstallDownloadState(packageName, bytesRead, contentLength))
         }
@@ -207,7 +214,7 @@ class ExtensionInstallService @Inject constructor(
     ) : eu.kanade.tachiyomi.network.ProgressListener {
 
         override fun update(bytesRead: Long, contentLength: Long, done: Boolean) {
-            updateDownloadState(packageName, bytesRead, contentLength)
+            updateDownloadState(packageName, bytesRead, contentLength, done)
         }
     }
 }
