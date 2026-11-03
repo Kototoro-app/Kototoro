@@ -682,11 +682,10 @@ class BackupRepository @Inject constructor(
                                     getJsonSourceDao().setEnabled(it.source, it.isEnabled, now)
                                     getJsonSourceDao().setPinned(it.source, it.isPinned, now)
                                 }
-                            } else if (preserveLocalSources) {
+                            } else when (sourceRowRestoreAction(preserveLocalSources)) {
                                 // Automatic restore: never overwrite a local row (enabled, pin, order, Cloudflare state, last use).
-                                getSourcesDao().insertIfAbsent(listOf(it.toEntity()))
-                            } else {
-                                getSourcesDao().upsert(it.toEntity())
+                                SourceRowRestoreAction.INSERT_IF_ABSENT -> getSourcesDao().insertIfAbsent(listOf(it.toEntity()))
+                                SourceRowRestoreAction.UPSERT -> getSourcesDao().upsert(it.toEntity())
                             }
                             if (it.lock != SourceBackup.LOCK_UNKNOWN) restoredLocks[it.source] = it.lock
                         }
@@ -1338,3 +1337,8 @@ internal object LegacyJarRepoCompat {
         }
     }
 }
+
+internal enum class SourceRowRestoreAction { INSERT_IF_ABSENT, UPSERT }
+
+internal fun sourceRowRestoreAction(preserveLocalSources: Boolean): SourceRowRestoreAction =
+    if (preserveLocalSources) SourceRowRestoreAction.INSERT_IF_ABSENT else SourceRowRestoreAction.UPSERT

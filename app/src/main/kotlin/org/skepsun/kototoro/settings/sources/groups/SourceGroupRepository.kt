@@ -336,14 +336,11 @@ class SourceGroupRepository @Inject constructor(
 			runGuarded(errors, context.getString(R.string.source_groups_error_apply_state)) {
 				val lockStore = SourceLockStore.get(context)
 				val groupLocks = group.sourceStates.associate { contentSources.resolveSource(it.source) to it.locked }
-				val groupNames = groupLocks.keys.mapTo(HashSet()) { it.name }
-				val released = lockStore.groupAppliedNames().filterNot { it in groupNames }
-					.associate { contentSources.resolveSource(it) to null }
-				// A null lock means "the group has no lock opinion": only release it when an earlier group
-				// apply wrote that lock; a lock the user set by hand stays.
-				val previouslyApplied = lockStore.groupAppliedNames()
-				val effectiveGroupLocks = groupLocks.filter { (source, lock) -> lock != null || source.name in previouslyApplied }
-				contentSources.setSourceLocks(released + effectiveGroupLocks)
+				val lockPlan = groupLockPlan(
+					groupLocks = groupLocks.entries.associate { it.key.name to it.value },
+					previouslyApplied = lockStore.groupAppliedNames(),
+				)
+				contentSources.setSourceLocks(lockPlan.mapKeys { contentSources.resolveSource(it.key) })
 				lockStore.setGroupApplied(groupLocks.filterValues { it != null }.keys.mapTo(HashSet()) { it.name })
 			}
 
@@ -371,11 +368,8 @@ class SourceGroupRepository @Inject constructor(
 
 			runGuarded(errors, context.getString(R.string.source_groups_error_jar_priority)) {
 				val installed = installedJarNames()
-				val filtered = group.jarPriority.filter { it.trim().lowercase() in installed }
 				// A group without a JAR order leaves the user's own order alone.
-				if (filtered.isNotEmpty()) {
-					settings.jarPriorityOrder = filtered.joinToString(",")
-				}
+				groupJarPriorityToApply(group.jarPriority, installed)?.let { settings.jarPriorityOrder = it }
 			}
 			tick()
 		} finally {
