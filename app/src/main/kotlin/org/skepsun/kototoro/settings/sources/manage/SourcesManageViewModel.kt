@@ -5,6 +5,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.delay
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.db.removeObserverAsync
@@ -52,7 +53,11 @@ class SourcesManageViewModel @Inject constructor(
         launchJob(Dispatchers.Default) {
             database.invalidationTracker.addObserver(listProducer)
         }
-        checkForJarUpdates()
+        // Keep the network call off the screen-open path.
+        launchJob(Dispatchers.IO) {
+            delay(JAR_UPDATE_CHECK_DELAY_MS)
+            checkForJarUpdates()
+        }
     }
 
     fun checkForJarUpdates() {
@@ -207,3 +212,5 @@ class SourcesManageViewModel @Inject constructor(
         saveSourcesOrder(snapshot)
     }
 }
+
+private const val JAR_UPDATE_CHECK_DELAY_MS = 1500L

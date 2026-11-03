@@ -9,6 +9,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
@@ -44,8 +47,11 @@ class SourcesCatalogViewModel @Inject constructor(
 
     val onActionDone = MutableEventFlow<ReversibleAction>()
 
+    private val externalExtensionChanges: Flow<Unit> = repository.observeExternalExtensionChanges()
+        .shareIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, replay = 1)
+
     private val availableSources: Flow<List<ContentSource>> = combine(
-        repository.observeExternalExtensionChanges(),
+        externalExtensionChanges,
         settings.observeAsFlow(AppSettings.KEY_DISABLE_NSFW) { isNsfwContentDisabled },
     ) { _: Unit, isNsfwDisabled: Boolean ->
         isNsfwDisabled
@@ -78,10 +84,10 @@ class SourcesCatalogViewModel @Inject constructor(
         .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, emptyList())
 
     val content: StateFlow<List<ListModel>> = combine(
-        searchQuery,
+        searchQuery.debounce { if (it.isNullOrEmpty()) 0L else 150L },
         appliedFilter,
-        db.invalidationTrackerFlow(TABLE_SOURCES, org.skepsun.kototoro.core.db.TABLE_JSON_SOURCES),
-        repository.observeExternalExtensionChanges(),
+        db.invalidationTrackerFlow(TABLE_SOURCES, org.skepsun.kototoro.core.db.TABLE_JSON_SOURCES).conflate(),
+        externalExtensionChanges,
     ) { q, f, _, _ ->
         buildSourcesList(f, q)
     }.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, listOf(LoadingState))
