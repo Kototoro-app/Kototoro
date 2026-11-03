@@ -282,8 +282,14 @@ object GoogleDriveSyncMerger {
 
     private fun mergeExtensionPackages(items: List<SyncExtensionPackage>): SyncExtensionPackage {
         if (items.size == 1) return items.single()
-        val newestVersion = items.maxOf { it.versionCode ?: 0L }
-        val newest = items.filter { (it.versionCode ?: 0L) == newestVersion }
+        // A removal wins over every copy installed no later than it, including copies other devices
+        // restored from an older snapshot; only a reinstall after the removal brings the package back.
+        val tombstone = items.filter { it.isDeleted }.maxByOrNull { it.deletedAt }
+        val live = items.filterNot { it.isDeleted }
+            .filter { tombstone == null || it.installedAt > tombstone.deletedAt }
+        if (live.isEmpty()) return checkNotNull(tombstone)
+        val newestVersion = live.maxOf { it.versionCode ?: 0L }
+        val newest = live.filter { (it.versionCode ?: 0L) == newestVersion }
         return newest.firstOrNull { it.isPayloadIncluded && !it.payloadBase64.isNullOrBlank() } ?: newest.first()
     }
 }

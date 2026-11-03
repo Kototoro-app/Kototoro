@@ -29,6 +29,7 @@ import org.skepsun.kototoro.core.db.entity.JsonSourceEntity
 import org.skepsun.kototoro.core.db.entity.MangaEntity
 import org.skepsun.kototoro.core.db.entity.MangaSourceEntity
 import org.skepsun.kototoro.core.extensions.GlobalExtensionManager
+import org.skepsun.kototoro.core.extensions.jarPackageKey
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.extensions.runtime.ExternalExtensionLoaderSupport
 import org.skepsun.kototoro.extensions.runtime.LocalApkExtensionSupport
@@ -693,6 +694,7 @@ class GoogleDriveSyncRepository @Inject constructor(
                         sizeBytes = size,
                         isPayloadIncluded = isPayload && payload != null,
                         payloadBase64 = payload,
+                        installedAt = file.lastModified(),
                     ),
                 )
             }
@@ -725,6 +727,7 @@ class GoogleDriveSyncRepository @Inject constructor(
                         sizeBytes = size,
                         isPayloadIncluded = isPayload && payload != null,
                         payloadBase64 = payload,
+                        installedAt = file.lastModified(),
                     ),
                 )
             }
@@ -759,12 +762,31 @@ class GoogleDriveSyncRepository @Inject constructor(
                         sizeBytes = size,
                         isPayloadIncluded = isPayload && payload != null,
                         payloadBase64 = payload,
+                        installedAt = file.lastModified(),
                     ),
                 )
             }
         }
 
-        return results
+        return results + extensionTombstones(results)
+    }
+
+    /** Local removals not superseded by a later reinstall of the same package. */
+    private fun extensionTombstones(installed: List<SyncExtensionPackage>): List<SyncExtensionPackage> {
+        return ExtensionRemovalLog.entries(context).mapNotNull { (key, removedAt) ->
+            val (kind, packageId) = key
+            // A system install is not synced, but it still means the user wants the package back: keep the
+            // removal from deleting the managed copies of other devices.
+            val reinstalled = isReinstalledAfterRemoval(kind, packageId, removedAt, installed) ||
+                (kind in LOCAL_APK_SYNC_KINDS &&
+                    ExternalExtensionLoaderSupport.getPackageInfoOrNull(context.packageManager, packageId) != null)
+            if (reinstalled) {
+                ExtensionRemovalLog.forget(context, kind, packageId)
+                null
+            } else {
+                SyncExtensionPackage.tombstone(kind, packageId, removedAt)
+            }
+        }
     }
 
     private suspend fun MangaDatabase.restoreRepositories(snapshot: GoogleDriveSyncSnapshot) {
@@ -855,6 +877,23 @@ class GoogleDriveSyncRepository @Inject constructor(
         var hasTsundokuUpdated = false
 
         snapshot.extensions.forEach { ext ->
+            if (ext.isDeleted) {
+                val removed = runCatching { applyExtensionRemoval(ext) }.onFailure {
+                    if (it is CancellationException) throw it
+                    Log.e(TAG, "Failed to remove extension ${ext.packageId} deleted on another device", it)
+                }.getOrDefault(false)
+                if (removed) {
+                    when (ext.kind.lowercase()) {
+                        "jar" -> hasJarUpdated = true
+                        "cloudstream" -> hasCloudstreamUpdated = true
+                        "mihon" -> hasMihonUpdated = true
+                        "aniyomi" -> hasAniyomiUpdated = true
+                        "ireader" -> hasIReaderUpdated = true
+                        "tsundoku" -> hasTsundokuUpdated = true
+                    }
+                }
+                return@forEach
+            }
             if (!ext.isPayloadIncluded || ext.payloadBase64.isNullOrBlank()) {
                 if (!isExtensionInstalled(ext)) unrestored += ext.name
                 return@forEach
@@ -877,6 +916,7 @@ class GoogleDriveSyncRepository @Inject constructor(
                         val remoteVersion = ext.versionCode ?: 0L
                         if (!targetFile.exists() || targetFile.length() == 0L || remoteVersion > localVersion) {
                             writeSyncedExtension(targetFile, bytes, ext.sizeBytes)
+                            keepInstalledAt(targetFile, ext.installedAt)
                             jarPrefs.edit()
                                 .putLong(ext.packageId, remoteVersion)
                                 .apply {
@@ -904,6 +944,7 @@ class GoogleDriveSyncRepository @Inject constructor(
                         val remoteVersion = ext.versionCode ?: 0L
                         if (!targetFile.exists() || targetFile.length() == 0L || remoteVersion > localVersion) {
                             writeSyncedExtension(targetFile, bytes, ext.sizeBytes)
+                            keepInstalledAt(targetFile, ext.installedAt)
                             csPrefs.edit()
                                 .putLong(ext.packageId, remoteVersion)
                                 .putString("${ext.packageId}:name", ext.name)
@@ -948,6 +989,7 @@ class GoogleDriveSyncRepository @Inject constructor(
 
                         // 3. Publish a complete, read-only APK so startup scans never see a partial file.
                         writeSyncedExtension(targetFile, bytes, ext.sizeBytes, readOnly = true)
+                        keepInstalledAt(targetFile, ext.installedAt)
                         when (ecosystem) {
                             "mihon" -> hasMihonUpdated = true
                             "aniyomi" -> hasAniyomiUpdated = true
@@ -995,6 +1037,63 @@ class GoogleDriveSyncRepository @Inject constructor(
         return unrestored.distinct()
     }
 
+    /**
+     * Deletes the local copy of a package another device removed, unless this copy was installed after
+     * the removal. System-installed APKs are never touched: only managed copies take part in sync.
+     */
+    private fun applyExtensionRemoval(ext: SyncExtensionPackage): Boolean {
+        val removedAt = ext.deletedAt
+        return when (val kind = ext.kind.lowercase()) {
+            "jar" -> {
+                val pluginsDir = File(context.filesDir, "plugins")
+                val packageKey = ext.packageId.jarPackageKey()
+                val files = pluginsDir
+                    .listFiles { file -> file.isFile && file.extension.equals("jar", ignoreCase = true) }
+                    .orEmpty()
+                    .filter { it.name.jarPackageKey() == packageKey }
+                if (files.isEmpty() || files.any { it.lastModified() > removedAt }) return false
+                files.forEach { it.setWritable(true); it.delete() }
+                context.getSharedPreferences("jar_plugin_versions", Context.MODE_PRIVATE).edit()
+                    .remove(ext.packageId)
+                    .remove("${ext.packageId}:repo")
+                    .remove("${ext.packageId}:repoName")
+                    .apply()
+                true
+            }
+            "cloudstream" -> {
+                val prefs = context.getSharedPreferences("cloudstream_plugin_versions", Context.MODE_PRIVATE)
+                val archiveName = prefs.getString("${ext.packageId}:archive", null) ?: "${ext.packageId}.cs3"
+                val file = File(File(File(context.filesDir, "cloudstream"), "plugins"), archiveName)
+                if (!file.isFile || file.lastModified() > removedAt) return false
+                file.setWritable(true)
+                file.delete()
+                prefs.edit()
+                    .remove(ext.packageId)
+                    .remove("${ext.packageId}:name")
+                    .remove("${ext.packageId}:lang")
+                    .remove("${ext.packageId}:repo")
+                    .remove("${ext.packageId}:repoName")
+                    .remove("${ext.packageId}:archive")
+                    .remove("${ext.packageId}:icon")
+                    .apply()
+                true
+            }
+            "mihon", "aniyomi", "ireader", "tsundoku" -> {
+                val archive = LocalApkExtensionSupport.getLocalArchivePackageInfoOrNull(
+                    context, context.packageManager, kind, ext.packageId,
+                )?.applicationInfo?.sourceDir?.let(::File) ?: return false
+                if (archive.lastModified() > removedAt) return false
+                LocalApkExtensionSupport.deleteManagedLocalPackage(context, kind, ext.packageId)
+            }
+            else -> false
+        }
+    }
+
+    /** Restored files carry the original install time, so a removal made after it still wins later. */
+    private fun keepInstalledAt(file: File, installedAt: Long) {
+        if (installedAt > 0L) file.setLastModified(installedAt)
+    }
+
     private fun isExtensionInstalled(ext: SyncExtensionPackage): Boolean {
         val version = ext.versionCode ?: 0L
         val kind = ext.kind.lowercase()
@@ -1031,5 +1130,6 @@ class GoogleDriveSyncRepository @Inject constructor(
         const val SETTINGS_FILE_NAME = "kototoro_sync_settings_v1.json"
         private const val SqliteBindParameterChunkSize = 500
         private const val GOOGLE_ACCOUNT_TYPE = "com.google"
+        private val LOCAL_APK_SYNC_KINDS = setOf("mihon", "aniyomi", "ireader", "tsundoku")
     }
 }
