@@ -6,6 +6,9 @@ import android.util.Log
 import androidx.core.content.pm.PackageInfoCompat
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -42,6 +45,7 @@ import java.io.File
 import java.io.IOException
 import java.io.InputStream
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -87,6 +91,9 @@ class SourceGroupRepository @Inject constructor(
 
 	private val groupsDir: File
 		get() = File(context.filesDir, GROUPS_DIR)
+
+	private val applyScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+	private val applying = AtomicBoolean(false)
 
 	private val _progress = MutableStateFlow(ApplyProgress())
 	val progress: StateFlow<ApplyProgress> = _progress.asStateFlow()
@@ -210,10 +217,20 @@ class SourceGroupRepository @Inject constructor(
 	 * Applies the group to this device. Every step is isolated: a failing step is recorded in
 	 * the returned list and the remaining steps still run. Progress is published to [progress].
 	 */
-	suspend fun apply(id: String): List<String> = withContext(Dispatchers.IO) { applyGroup(id) }
+	suspend fun apply(id: String): List<String> {
+		check(applying.compareAndSet(false, true)) { "Another source group is being applied" }
+		// Runs in an application-level scope: closing the dialog (cancelling the caller) must not stop it half-way.
+		val job = applyScope.async {
+			try {
+				applyGroup(id)
+			} finally {
+				applying.set(false)
+			}
+		}
+		return job.await()
+	}
 
 	private suspend fun applyGroup(id: String): List<String> {
-		check(!_progress.value.running) { "Another source group is being applied" }
 		val group = list().firstOrNull { it.id == id }
 			?: throw IllegalArgumentException("Source group not found")
 		val notInstalled = group.packages.filterNot { isPackageInstalled(it) }
