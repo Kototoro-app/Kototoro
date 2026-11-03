@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.settings.sources.test
 
+import android.os.SystemClock
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -38,6 +39,7 @@ class SourceTestViewModel @Inject constructor(
 	private val lock = Any()
 	private val allResults = ArrayList<SourceTestResult>()
 	private val pendingAvailability = LinkedHashMap<String, ContentSourceAvailability>()
+	private var lastPublishAt = -1L
 
 	/** Tests [sources] with at most [SOURCE_TEST_MAX_PARALLELISM] running at once. Ignored while a run is active. */
 	fun testAll(sources: List<ContentSource>) {
@@ -48,8 +50,9 @@ class SourceTestViewModel @Inject constructor(
 		synchronized(lock) {
 			allResults.clear()
 			pendingAvailability.clear()
+			lastPublishAt = -1L
 		}
-		_progress.value = TestProgress(total = unique.size)
+		_progress.value =TestProgress(total = unique.size)
 		job = viewModelScope.launch(Dispatchers.IO) {
 			var completed = false
 			try {
@@ -88,8 +91,9 @@ class SourceTestViewModel @Inject constructor(
 	}
 
 	/**
-	 * Collects a result. Results are published and verdicts persisted in batches of
-	 * [RESULT_BATCH_SIZE] so a long run neither copies the whole list per result nor rewrites prefs per source.
+	 * Collects a result. The result list is published at most every [PUBLISH_INTERVAL_MS] so rows show up live
+	 * without copying the whole list per result; verdicts are persisted in batches of [RESULT_BATCH_SIZE]
+	 * so a long run does not rewrite prefs per source.
 	 */
 	private fun onResult(source: ContentSource, result: SourceTestResult) {
 		var published: List<SourceTestResult>? = null
@@ -98,9 +102,13 @@ class SourceTestViewModel @Inject constructor(
 			allResults += result
 			pendingAvailability[source.name] = result.toAvailability()
 			if (pendingAvailability.size >= RESULT_BATCH_SIZE) {
-				published = allResults.toList()
 				batch = LinkedHashMap(pendingAvailability)
 				pendingAvailability.clear()
+			}
+			val now = SystemClock.elapsedRealtime()
+			if (lastPublishAt < 0L || now - lastPublishAt >= PUBLISH_INTERVAL_MS) {
+				lastPublishAt = now
+				published = allResults.toList()
 			}
 		}
 		batch?.let(::flushAvailability)
@@ -185,6 +193,8 @@ class SourceTestViewModel @Inject constructor(
 	}
 
 	private companion object {
+		/** Batch size of persisted availability verdicts only. */
 		const val RESULT_BATCH_SIZE = 20
+		const val PUBLISH_INTERVAL_MS = 150L
 	}
 }

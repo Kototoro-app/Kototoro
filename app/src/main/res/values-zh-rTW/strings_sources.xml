@@ -35,6 +35,7 @@
     <string name="source_test_summary">可用：%1$d，不可用：%2$d，Cloudflare：%3$d</string>
     <string name="source_test_cancelled_note">測試已取消，僅列出已完成的源。</string>
     <string name="source_test_cancel">取消</string>
+    <string name="source_test_stop">停止</string>
     <string name="source_test_close">關閉</string>
     <string name="source_test_disable_failed">停用失敗的源</string>
     <string name="source_test_disabled">已停用</string>

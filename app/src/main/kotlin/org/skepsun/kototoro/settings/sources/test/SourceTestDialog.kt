@@ -94,7 +94,7 @@ internal fun SourceTestDialog(
 		confirmButton = {
 			when {
 				!progress.finished -> TvTextButton(onClick = viewModel::cancel) {
-					Text(stringResource(R.string.source_test_cancel))
+					Text(stringResource(R.string.source_test_stop))
 				}
 				failedCount > 0 -> TvTextButton(onClick = viewModel::disableFailed) {
 					Text(stringResource(R.string.source_test_disable_failed))
@@ -104,7 +104,7 @@ internal fun SourceTestDialog(
 				}
 			}
 		},
-		dismissButton = closeButton,
+		dismissButton = if (progress.finished) closeButton else null,
 		text = {
 			Column(modifier = Modifier.fillMaxWidth()) {
 				val passedCount = progress.results.count { it.overall == StepStatus.PASS }

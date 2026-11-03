@@ -39,6 +39,7 @@
     <string name="source_test_summary">Available: %1$d, unavailable: %2$d, Cloudflare: %3$d</string>
     <string name="source_test_cancelled_note">Test was cancelled. Only finished sources are listed.</string>
     <string name="source_test_cancel">Cancel</string>
+    <string name="source_test_stop">Stop</string>
     <string name="source_test_close">Close</string>
     <string name="source_test_disable_failed">Disable failed</string>
     <string name="source_test_disabled">Disabled</string>
