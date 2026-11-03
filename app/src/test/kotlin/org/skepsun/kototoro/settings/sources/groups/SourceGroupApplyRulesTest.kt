@@ -14,7 +14,8 @@ class SourceGroupApplyRulesTest {
 
 	@Test
 	fun `group jar priority keeps installed entries in group order`() {
-		assertEquals("b.jar,a.jar", groupJarPriorityToApply(listOf("b.jar", "gone.jar", " A.jar "), setOf("a.jar", "b.jar")))
+		// Entries are matched case/space-insensitively but stored as the group wrote them.
+		assertEquals("b.jar, A.jar ", groupJarPriorityToApply(listOf("b.jar", "gone.jar", " A.jar "), setOf("a.jar", "b.jar")))
 	}
 
 	@Test
