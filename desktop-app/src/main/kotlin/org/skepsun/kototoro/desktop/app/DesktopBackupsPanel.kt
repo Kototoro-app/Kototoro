@@ -24,7 +24,7 @@ internal fun DesktopBackupsPanel(controller: DesktopController, closing: Boolean
     val webDav by controller.webDavUi.collectAsState()
     val drive by controller.googleDriveUi.collectAsState()
     val enabled = !state.busy && !closing
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = LocalDesktopTopInset.current), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(desktopText("backups.title"), style = MaterialTheme.typography.titleLarge)
         Text(desktopText("backups.exportDetail"))
         Text(desktopText("backups.excluded"))

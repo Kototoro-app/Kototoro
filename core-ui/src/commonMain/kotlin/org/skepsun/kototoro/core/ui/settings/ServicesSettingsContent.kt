@@ -1,5 +1,7 @@
 package org.skepsun.kototoro.core.ui.settings
 
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -57,6 +59,8 @@ fun ServicesSettingsContent(
     onStatsEnabledChange: (Boolean) -> Unit,
     onReadingTimeChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
+    /** Space a floating top bar takes; the rows scroll beneath it. */
+    contentPadding: PaddingValues = PaddingValues(0.dp),
     enabled: Boolean = true,
     icons: ServicesSettingsRowIcons = ServicesSettingsRowIcons(),
     onBrowseTrackingChange: (Boolean) -> Unit = {},
@@ -66,7 +70,7 @@ fun ServicesSettingsContent(
     @Composable
     fun onOff(value: Boolean): String = if (value) uiString("enabled") else uiString("disabled")
     Column(
-        modifier.fillMaxWidth().verticalScroll(rememberScrollState()).testTag("services-settings-content"),
+        modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(contentPadding).testTag("services-settings-content"),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         SettingsSectionHeader(uiString("services"))

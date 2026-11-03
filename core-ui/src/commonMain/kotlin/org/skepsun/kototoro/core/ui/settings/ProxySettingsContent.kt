@@ -49,6 +49,8 @@ fun ProxySettingsContent(
     onTextChange: (ProxyTextField, String) -> Boolean,
     onTestConnection: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Space a floating top bar takes; the rows scroll beneath it. */
+    contentPadding: PaddingValues = PaddingValues(0.dp),
     enabled: Boolean = true,
     editMode: PreferenceEditMode = PreferenceEditMode.DIALOG,
     renderDialog: @Composable (PreferenceDialogContent) -> Unit = { PreferenceDialog(it) },
@@ -56,7 +58,7 @@ fun ProxySettingsContent(
     var choosingType by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<ProxyTextField?>(null) }
     val editable = enabled && state.proxyEnabled
-    Column(modifier.fillMaxWidth().verticalScroll(rememberScrollState()).testTag("proxy-settings-content"),
+    Column(modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(contentPadding).testTag("proxy-settings-content"),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
         SettingsSectionHeader(uiString("network"))
         SettingsGroup {

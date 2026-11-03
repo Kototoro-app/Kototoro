@@ -27,6 +27,7 @@ internal fun DesktopPlaybackSettingsPage(controller: DesktopController, state: D
     val active = !state.busy
     Column(Modifier.widthIn(max = 760.dp).fillMaxWidth()) {
         PlaybackSettingsContent(
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(top = LocalDesktopTopInset.current),
             state = PlaybackSettingsUiState(
                 background = settings.background.name,
                 decoderMode = settings.decoderMode.name,

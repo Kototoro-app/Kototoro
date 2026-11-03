@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.desktop.app
 
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -36,7 +37,7 @@ internal fun DesktopReplaceRulesPage(controller: DesktopController, state: Deskt
     // Null means the table has not been read yet: an empty list is a real answer, "not asked" is not.
     val rules = ui.rules
     Column(
-        Modifier.widthIn(max = 820.dp).fillMaxSize().verticalScroll(rememberScrollState()),
+        Modifier.widthIn(max = 820.dp).fillMaxSize().verticalScroll(rememberScrollState()).padding(top = LocalDesktopTopInset.current),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         ReplaceRulesContent(

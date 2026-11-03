@@ -455,8 +455,13 @@ Android 详情是可折叠头部 + 章节/页面/书签分页 + 底部 Dock，�
   提示放在阅读器上方），主页、订阅、收藏/历史、浏览（来源网格与结果）各自套一层，网格/列表用
   `contentPadding` 从栏下滚过；起点由 `LocalDesktopTopInset` 给出。`DesktopControlSurface` 优先用页面 backdrop。
   导航栏选中图标色随风格（iOS `primary`，Material `onSecondaryContainer`），与 `KototoroBottomNav` 一致。
-- 尚未收敛：Android 侧仍用 `SettingsTopBarScaffold`/`KototoroAppTopChrome`，未改为调用共享骨架；约 30 个设置/功能
-  页只是放在栏下（内容尚未从栏下滚过）；浏览页底部的“上一批/下一批”与播放器文字按钮仍是旧形态。
+- 通用顶栏页面中 17 个（更多、服务、阅读/来源/播放/代理/下载设置、存储、数据清理、导航配置、阅读统计、替换规则、
+  来源测试、设置向导、推荐设置、来源偏好、备份）登记在 `DesktopApp.ScrollUnderScreens`，滚动容器从
+  `LocalDesktopTopInset` 起排、从栏下滚过；共享的 `ServicesSettingsContent`、`PlaybackSettingsContent`、
+  `ProxySettingsContent` 为此新增默认 0 的 `contentPadding`（Android 调用方不变）。
+- 尚未收敛：Android 侧仍用 `SettingsTopBarScaffold`/`KototoroAppTopChrome`，未改为调用共享骨架；列表上方有固定行的
+  页面（更新、推荐、下载、扩展、书签、更新日志、崩溃日志、标签黑名单、字典规则）仍放在栏下；浏览页底部的
+  “上一批/下一批”与播放器文字按钮仍是旧形态。
 - 验证：`DesktopFloatingChromeTest`（Material/iOS × 浅/深，断言列表起点在栏下而非被推下、滚动后行进入栏下，并截图）。
 
 ### 第三批：设置与功能页面

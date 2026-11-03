@@ -27,6 +27,7 @@ internal fun DesktopProxySettingsPage(controller: DesktopController, state: Desk
     val test = state.proxyTest
     Column(Modifier.widthIn(max = 760.dp).fillMaxWidth()) {
         ProxySettingsContent(
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(top = LocalDesktopTopInset.current),
             state = ProxySettingsUiState(ProxyMode.valueOf(settings.type.name), settings.address, settings.port,
                 settings.login, settings.password, settings.isConfigured, test.running, test.message),
             enabled = !state.busy,

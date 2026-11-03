@@ -45,6 +45,7 @@ internal fun DesktopSourceSettingsPage(controller: DesktopController, state: Des
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         SourcesSettingsContent(
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(top = LocalDesktopTopInset.current),
             state = SourcesSettingsContentState(
                 sortOrder = settings.sort.name,
                 customSort = settings.sort == DesktopSourceSort.CUSTOM,

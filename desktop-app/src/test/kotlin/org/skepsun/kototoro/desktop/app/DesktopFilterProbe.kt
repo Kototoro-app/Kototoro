@@ -172,8 +172,22 @@ internal object DesktopFilterProbe {
                 check(controller.state.value.screen == DesktopScreen.LIBRARY && controller.state.value.error == null) {
                     "${controller.state.value.screen} ${controller.state.value.error}"
                 }
-                // Returning to the still slow source shows its browse page at once (loading), not the old shelf with
-                // only the progress bar running, and it can be left again.
+                System.clearProperty("fixture.filters.slow")
+                onNodeWithTag("nav:浏览").performClick()
+                waitUntil(timeoutMillis = 15_000) {
+                    !controller.state.value.busy && controller.state.value.screen == DesktopScreen.EXPLORE
+                }
+                settled()
+                check(controller.state.value.browseOrder != "UPDATED") { "The cancelled request was committed" }
+                // Returning to a source whose committed listing is slow shows its browse page at once (loading), not the
+                // old shelf with only the progress bar running, and it can be left again.
+                listing("latest")
+                received("latest:1")
+                System.setProperty("fixture.filters.slow", "true")
+                onNodeWithTag("nav:收藏").performClick()
+                waitUntil(timeoutMillis = 15_000) {
+                    !controller.state.value.busy && controller.state.value.screen == DesktopScreen.LIBRARY
+                }
                 onNodeWithTag("nav:浏览").performClick()
                 waitUntil(timeoutMillis = 3_000) { controller.state.value.screen == DesktopScreen.EXPLORE }
                 check(controller.state.value.busy && controller.state.value.items.isEmpty()) {
@@ -188,7 +202,6 @@ internal object DesktopFilterProbe {
                     !controller.state.value.busy && controller.state.value.screen == DesktopScreen.EXPLORE
                 }
                 settled()
-                check(controller.state.value.browseOrder != "UPDATED") { "The cancelled request was committed" }
                 listing("popular")
                 received("popular:1")
                 open()

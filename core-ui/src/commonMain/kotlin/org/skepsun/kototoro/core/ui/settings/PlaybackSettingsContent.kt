@@ -1,5 +1,7 @@
 package org.skepsun.kototoro.core.ui.settings
 
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -68,6 +70,8 @@ fun PlaybackSettingsContent(
     onControlsAlphaChange: (Int) -> Unit,
     onGradientAlphaChange: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    /** Space a floating top bar takes; the rows scroll beneath it. */
+    contentPadding: PaddingValues = PaddingValues(0.dp),
     enabled: Boolean = true,
     icons: PlaybackSettingsRowIcons = PlaybackSettingsRowIcons(),
     aiSettings: PlaybackSettingsAction? = null,
@@ -75,7 +79,7 @@ fun PlaybackSettingsContent(
 ) {
     var dialog by remember { mutableStateOf<PlaybackDialog?>(null) }
     Column(
-        modifier.fillMaxWidth().verticalScroll(rememberScrollState()).testTag("playback-settings-content"),
+        modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(contentPadding).testTag("playback-settings-content"),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         SettingsSectionHeader(uiString("playback_settings"))

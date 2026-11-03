@@ -153,9 +153,13 @@ fun DesktopApp(controller: DesktopController, closing: Boolean = false, fullscre
                     val inset = if (rootBar) inner.calculateTopPadding() else pagePadding
                     Box(Modifier.fillMaxSize().padding(start = pagePadding, end = pagePadding, bottom = pagePadding)
                         // A reader keeps its own floating toolbars, so a notice above it pushes it down instead.
-                        .padding(top = if (listState.screen in OwnChromeScreens) 0.dp else inset)) {
-                    CompositionLocalProvider(LocalDesktopTopInset provides
-                        if (listState.screen in OwnChromeScreens) inset else 0.dp) {
+                        .padding(top = if (listState.screen in OwnChromeScreens || listState.screen in ScrollUnderScreens) 0.dp
+                            else inset)) {
+                    CompositionLocalProvider(LocalDesktopTopInset provides when (listState.screen) {
+                        in OwnChromeScreens -> inset
+                        in ScrollUnderScreens -> if (rootBar) inner.calculateTopPadding() else 0.dp
+                        else -> 0.dp
+                    }) {
                     Box(Modifier.fillMaxSize()) {
                         when (listState.screen) {
                             DesktopScreen.HOME -> DesktopHomePanel(controller, listState, !closing)
@@ -259,6 +263,16 @@ internal fun DesktopSourcePane(controller: DesktopController, state: DesktopAppS
 /** Screens that draw their own floating top bar (Android's main shell pages); the rest use the generic [Header]. */
 private val OwnChromeScreens = setOf(DesktopScreen.LIBRARY, DesktopScreen.HISTORY, DesktopScreen.EXPLORE,
     DesktopScreen.HOME, DesktopScreen.FEED)
+
+/**
+ * Generic-header pages whose scrolling content starts at [LocalDesktopTopInset] itself, so their rows scroll beneath
+ * the floating bar. Pages with fixed rows above their list are still placed below the bar.
+ */
+private val ScrollUnderScreens = setOf(DesktopScreen.MORE, DesktopScreen.SERVICES, DesktopScreen.READER_SETTINGS,
+    DesktopScreen.SOURCE_SETTINGS, DesktopScreen.STORAGE, DesktopScreen.DATA_CLEANUP, DesktopScreen.PLAYBACK_SETTINGS,
+    DesktopScreen.PROXY_SETTINGS, DesktopScreen.DOWNLOAD_SETTINGS, DesktopScreen.NAV_CONFIG, DesktopScreen.READING_STATS,
+    DesktopScreen.REPLACE_RULES, DesktopScreen.SOURCE_TEST, DesktopScreen.SETUP_WIZARD, DesktopScreen.RECOMMENDATIONS,
+    DesktopScreen.PREFERENCES, DesktopScreen.BACKUPS)
 
 /**
  * Where a page with its own floating bar starts that bar: below the window's notices, or at the page margin. The page

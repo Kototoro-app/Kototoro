@@ -144,7 +144,7 @@ internal fun desktopNavItemLabel(item: DesktopNavItem): String = when (item) {
 internal fun DesktopMorePanel(controller: DesktopController, enabled: Boolean, onExitRequest: () -> Unit = {}) {
     val state by controller.state.collectAsState()
     var dialog by remember { mutableStateOf<DesktopMoreDialog?>(null) }
-    Column(Modifier.widthIn(max = 720.dp).fillMaxWidth().verticalScroll(rememberScrollState()),
+    Column(Modifier.widthIn(max = 720.dp).fillMaxWidth().verticalScroll(rememberScrollState()).padding(top = LocalDesktopTopInset.current),
         verticalArrangement = Arrangement.spacedBy(4.dp)) {
         SettingsSectionHeader(desktopText("more.features"))
         SettingsGroup {

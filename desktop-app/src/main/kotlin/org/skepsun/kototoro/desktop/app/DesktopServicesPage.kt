@@ -30,6 +30,7 @@ internal fun DesktopServicesPage(controller: DesktopController, state: DesktopAp
     val active = !state.busy
     Column(Modifier.widthIn(max = 760.dp).fillMaxWidth()) {
         ServicesSettingsContent(
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(top = LocalDesktopTopInset.current),
             state = ServicesSettingsUiState(
                 suggestionsEnabled = state.suggestionSettings.enabled,
                 relatedContent = settings.relatedContent,
