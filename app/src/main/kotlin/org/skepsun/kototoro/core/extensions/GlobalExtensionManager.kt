@@ -66,12 +66,34 @@ object GlobalExtensionManager {
     private val allLoadedContentSources = mutableListOf<PluginContentSource>()
     private var prefsListener: SharedPreferences.OnSharedPreferenceChangeListener? = null
 
-    @Synchronized
+    private val initLock = Any()
+    private val genLock = Any()
+    private var requestedGen = 0L
+    private var appliedStartGen = 0L
+
+    /**
+     * Serialised and conflated: concurrent callers wait for the running load, and a caller whose request
+     * was already covered by a load that started after it returns without reloading again.
+     * The heavy jar scan runs outside the registry monitor so parser lookups are not blocked.
+     */
     fun initialize(context: Context) {
+        val myGen = synchronized(genLock) { ++requestedGen }
+        synchronized(initLock) {
+            if (appliedStartGen >= myGen) return
+            val startGen = synchronized(genLock) { requestedGen }
+            doInitialize(context)
+            appliedStartGen = startGen
+        }
+    }
+
+    private fun doInitialize(context: Context) {
         val startedAt = android.os.SystemClock.elapsedRealtime()
         val pluginDir = File(context.filesDir, "plugins")
         val plugins = JarExtensionLoader.loadFromDirectory(context, pluginDir)
+        synchronized(this) { applyLoadedPlugins(context, plugins, startedAt) }
+    }
 
+    private fun applyLoadedPlugins(context: Context, plugins: List<LoadedJarPlugin>, startedAt: Long) {
         allLoadedMangaSources.clear()
         allLoadedContentSources.clear()
 
