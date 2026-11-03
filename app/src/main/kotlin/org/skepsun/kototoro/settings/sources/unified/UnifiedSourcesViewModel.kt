@@ -301,7 +301,9 @@ class UnifiedSourcesViewModel @Inject constructor(
         combine(
             catalogRepository.observeState(),
             availableExternalExtensions,
-            installService.downloadStates,
+            installService.downloadStates.distinctUntilChanged { a, b ->
+                a.size == b.size && a.all { (k, v) -> b[k]?.progressPercent == v.progressPercent }
+            },
             lnReaderPackageSnapshot,
         ) { catalog, availableExtensions, downloadStates, lnReaderSnapshot ->
             catalog
@@ -317,7 +319,7 @@ class UnifiedSourcesViewModel @Inject constructor(
     }
         // Bursts (install progress ticks, DB writes from reading history) collapse into one rebuild,
         // and an identical rebuild is not re-emitted downstream.
-        .debounce(CATALOG_RECOMPOSE_COALESCE_MS)
+        .debounceAfterFirst(CATALOG_RECOMPOSE_COALESCE_MS)
         .distinctUntilChanged()
         .flowOn(Dispatchers.Default).catch { e ->
         Log.e(TAG, "Error in fullCatalogState flow", e)
@@ -1156,7 +1158,10 @@ class UnifiedSourcesViewModel @Inject constructor(
                 appContext.getString(
                     R.string.source_test_completed_with_unverified,
                     results.count { it.second.isAvailable },
-                    results.count { it.second.availability == ContentSourceAvailability.EMPTY },
+                    results.count {
+                        it.second.availability == ContentSourceAvailability.EMPTY ||
+                            it.second.availability == ContentSourceAvailability.CLOUDFLARE
+                    },
                     results.count { it.second.availability == ContentSourceAvailability.UNKNOWN },
                 ),
             )
@@ -1182,7 +1187,7 @@ class UnifiedSourcesViewModel @Inject constructor(
         Log.w(
             TAG,
             "source_test_summary total=${results.size} available=${results.count { it.second.isAvailable }} " +
-                "unavailable=${results.count { it.second.availability == ContentSourceAvailability.EMPTY }} " +
+                "unavailable=${results.count { it.second.availability == ContentSourceAvailability.EMPTY || it.second.availability == ContentSourceAvailability.CLOUDFLARE }} " +
                 "unverified=${results.count { it.second.availability == ContentSourceAvailability.UNKNOWN }} " +
                 "failures=$failureCounts",
         )
@@ -1412,7 +1417,7 @@ class UnifiedSourcesViewModel @Inject constructor(
         enableAfterInstall: Boolean?,
     ) {
         if (item.kind.isHotReloadableExternalKind()) {
-            reloadExternalExtensionManagers()
+            reloadExternalExtensionManagers(item.kind.toExternalExtensionType())
             refreshPackageCatalog(
                 refreshRepositories = false,
                 showLoading = false,
@@ -1869,11 +1874,11 @@ class UnifiedSourcesViewModel @Inject constructor(
             }
     }
 
-    private suspend fun reloadExternalExtensionManagers() {
-        mihonExtensionManager.loadExtensions()
-        aniyomiExtensionManager.loadExtensions()
-        ireaderExtensionManager.loadExtensions()
-        tsundokuExtensionManager.loadExtensions()
+    private suspend fun reloadExternalExtensionManagers(only: ExternalExtensionType? = null) {
+        if (only == null || only == ExternalExtensionType.MIHON) mihonExtensionManager.loadExtensions()
+        if (only == null || only == ExternalExtensionType.ANIYOMI) aniyomiExtensionManager.loadExtensions()
+        if (only == null || only == ExternalExtensionType.IREADER) ireaderExtensionManager.loadExtensions()
+        if (only == null || only == ExternalExtensionType.TSUNDOKU) tsundokuExtensionManager.loadExtensions()
     }
 
     private fun UnifiedSourceCatalogState.withAvailableExternalPackages(
