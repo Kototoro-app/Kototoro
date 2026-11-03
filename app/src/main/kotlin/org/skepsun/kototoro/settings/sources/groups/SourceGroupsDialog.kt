@@ -61,6 +61,7 @@ fun SourceGroupsDialog(
 	val groups by viewModel.groups.collectAsStateWithLifecycle()
 	val applyState by viewModel.progress.collectAsStateWithLifecycle()
 	val message by viewModel.message.collectAsStateWithLifecycle()
+	val pendingApply by viewModel.pendingApply.collectAsStateWithLifecycle()
 	var showNameDialog by remember { mutableStateOf(false) }
 	var showCleanDialog by remember { mutableStateOf(false) }
 	var pendingDeleteGroup by remember { mutableStateOf<SourceGroup?>(null) }
@@ -183,7 +184,7 @@ fun SourceGroupsDialog(
 								modifier = Modifier.padding(top = 8.dp),
 							) {
 								FilledTonalButton(
-									onClick = { viewModel.applyGroup(group.id) },
+									onClick = { viewModel.requestApply(group.id) },
 									enabled = !applyState.running,
 								) {
 									Text(text = stringResource(R.string.source_groups_apply), maxLines = 1)
@@ -307,6 +308,61 @@ fun SourceGroupsDialog(
 		)
 	}
 
+	pendingApply?.let { (_, preview) ->
+		SettingsAlertDialog(
+			title = stringResource(R.string.source_groups_confirm_title, preview.groupName),
+			onDismissRequest = viewModel::cancelPendingApply,
+			confirmButton = {
+				SettingsDialogActionButton(
+					text = stringResource(R.string.source_groups_apply),
+					onClick = viewModel::confirmPendingApply,
+				)
+			},
+			dismissButton = {
+				SettingsDialogActionButton(
+					text = stringResource(R.string.cancel),
+					onClick = viewModel::cancelPendingApply,
+				)
+			},
+			text = {
+				val lines = buildList {
+					if (preview.reposToAdd.isNotEmpty()) {
+						add(stringResource(R.string.source_groups_confirm_repos))
+						addAll(preview.reposToAdd.map { "• $it" })
+					}
+					if (preview.packagesToInstall.isNotEmpty()) {
+						add(stringResource(R.string.source_groups_confirm_packages))
+						addAll(preview.packagesToInstall.map { "• $it" })
+					}
+				}
+				val shown = lines.take(CONFIRM_MAX_LINES)
+				Column(
+					verticalArrangement = Arrangement.spacedBy(4.dp),
+					modifier = Modifier.verticalScroll(rememberScrollState()),
+				) {
+					Text(
+						text = stringResource(R.string.source_groups_confirm_intro),
+						style = MaterialTheme.typography.bodyMedium,
+					)
+					shown.forEach { line ->
+						Text(
+							text = line,
+							style = MaterialTheme.typography.bodySmall,
+							maxLines = 2,
+							overflow = TextOverflow.Ellipsis,
+						)
+					}
+					if (lines.size > shown.size) {
+						Text(
+							text = stringResource(R.string.source_groups_confirm_more, lines.size - shown.size),
+							style = MaterialTheme.typography.bodySmall,
+						)
+					}
+				}
+			},
+		)
+	}
+
 	pendingDeleteGroup?.let { targetGroup ->
 		SettingsAlertDialog(
 			title = stringResource(R.string.delete),
@@ -335,6 +391,8 @@ fun SourceGroupsDialog(
 		)
 	}
 }
+
+private const val CONFIRM_MAX_LINES = 10
 
 @Composable
 private fun ApplyProgressSection(state: ApplyProgress) {

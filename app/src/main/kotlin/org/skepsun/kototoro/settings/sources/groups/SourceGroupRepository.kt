@@ -67,6 +67,20 @@ data class ApplyProgress(
 	val manualInstall: List<String> = emptyList(),
 )
 
+/** What applying a group would add to this device; shown for confirmation before [SourceGroupRepository.apply]. */
+data class SourceGroupApplyPreview(
+	val groupName: String,
+	/** Repository URLs of the group that are not registered yet. */
+	val reposToAdd: List<String> = emptyList(),
+	/** Package names that apply would download and install by itself. */
+	val packagesToInstall: List<String> = emptyList(),
+	/** Normal-APK packages the user has to install by hand. */
+	val manualPackages: List<String> = emptyList(),
+) {
+	val needsConfirmation: Boolean
+		get() = reposToAdd.isNotEmpty() || packagesToInstall.isNotEmpty()
+}
+
 /** [updated] is true when an imported group replaced a stored group with the same id. */
 data class SourceGroupImportResult(
 	val group: SourceGroup,
@@ -211,6 +225,25 @@ class SourceGroupRepository @Inject constructor(
 		val updated = groupFile(decoded.id).exists()
 		writeGroup(decoded)
 		SourceGroupImportResult(group = decoded, updated = updated)
+	}
+
+	/** Lists the repositories and packages [apply] would add, without changing anything. */
+	suspend fun previewApply(id: String): SourceGroupApplyPreview = withContext(Dispatchers.IO) {
+		val group = list().firstOrNull { it.id == id }
+			?: throw IllegalArgumentException("Source group not found")
+		val dao = database.getExternalExtensionRepoDao()
+		val reposToAdd = group.repos.filter { repo ->
+			val type = repo.type.toExternalTypeOrNull() ?: return@filter false
+			dao.get(type, repo.url) == null
+		}.map { it.url }.distinct()
+		val (manual, auto) = group.packages.filterNot { isPackageInstalled(it) }
+			.partition { it.installMode == SOURCE_GROUP_INSTALL_MODE_SYSTEM }
+		SourceGroupApplyPreview(
+			groupName = group.name,
+			reposToAdd = reposToAdd,
+			packagesToInstall = auto.map { it.pkg }.distinct(),
+			manualPackages = manual.map { it.pkg }.distinct(),
+		)
 	}
 
 	/**

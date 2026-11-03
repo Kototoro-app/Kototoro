@@ -65,7 +65,34 @@ class SourceGroupsViewModel @Inject constructor(
 		}
 	}
 
-	fun applyGroup(id: String) {
+	private val _pendingApply = MutableStateFlow<Pair<String, SourceGroupApplyPreview>?>(null)
+
+	/** Group waiting for the user to confirm the repositories and packages it would add. */
+	val pendingApply: StateFlow<Pair<String, SourceGroupApplyPreview>?> = _pendingApply.asStateFlow()
+
+	/** Applies right away when the group adds nothing; otherwise asks for confirmation first. */
+	fun requestApply(id: String) {
+		viewModelScope.launch {
+			var direct = false
+			runAction(null) {
+				val preview = repository.previewApply(id)
+				if (preview.needsConfirmation) _pendingApply.value = id to preview else direct = true
+			}
+			if (direct) applyGroup(id)
+		}
+	}
+
+	fun cancelPendingApply() {
+		_pendingApply.value = null
+	}
+
+	fun confirmPendingApply() {
+		val id = _pendingApply.value?.first ?: return
+		_pendingApply.value = null
+		applyGroup(id)
+	}
+
+	private fun applyGroup(id: String) {
 		viewModelScope.launch {
 			runAction(null) {
 				val errors = repository.apply(id)

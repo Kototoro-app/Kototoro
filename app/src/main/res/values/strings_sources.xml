@@ -8,6 +8,11 @@
     <string name="source_groups_name_hint">Group name</string>
     <string name="source_groups_default_name">Group %1$d</string>
     <string name="source_groups_apply">Apply</string>
+    <string name="source_groups_confirm_title">Apply \"%1$s\"?</string>
+    <string name="source_groups_confirm_intro">This group will add the following to your device.</string>
+    <string name="source_groups_confirm_repos">Repositories to add:</string>
+    <string name="source_groups_confirm_packages">Packages to install:</string>
+    <string name="source_groups_confirm_more">+%1$d more</string>
     <string name="source_groups_export">Export</string>
     <string name="source_groups_delete">Delete</string>
     <string name="source_groups_saved">Group saved</string>
