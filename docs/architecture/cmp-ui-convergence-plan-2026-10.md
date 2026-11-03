@@ -464,6 +464,20 @@ Android 详情是可折叠头部 + 章节/页面/书签分页 + 底部 Dock，�
   “上一批/下一批”与播放器文字按钮仍是旧形态。
 - 验证：`DesktopFloatingChromeTest`（Material/iOS × 浅/深，断言列表起点在栏下而非被推下、滚动后行进入栏下，并截图）。
 
+#### 第三批阶段记录：播放器控制条（2026-11-03）
+
+- Android 的 `VideoPlayerControls.kt`（`VideoPlayerControlState`/`VideoPlayerAction`、上下控制条、拇指与章节按钮）
+  原包名迁入 `core-ui/video/ui/compose`，Android `VideoPlayerActivity` 调用不变；`R.string` 改为 `uiString`，
+  `ic_comment`/`ic_screen_rotation` 走生成的 `ReaderPanelIcons`，Material 图标由 SDK `materialicons` 基线矢量照抄进
+  `VideoPlayerIcons`（不引入图标库）。状态新增默认保持 Android 现状的能力项（笔记、片头片尾、锁屏、更多、旋转/全屏）
+  与 `controlsAlpha`/`scrimAlpha`（默认 1 与 0.72，桌面传入 `video_controls_alpha`/`video_gradient_alpha`）。
+- 桌面 `DesktopVideoPlayer` 的上下浮层改为调用共享控制条：投屏、±10 秒、画质增强、静音与音量经插槽注入；
+  画质/倍速/字幕/音轨/增强菜单由 action 的窗口锚点换算为屏幕坐标后打开 `PlayerMenuWindow`；选集按钮打开侧栏。
+  投屏控制的按钮也换成同一组图标。
+- 验证：`DesktopVideoControlsTest`（离屏渲染，断言无文字播放/±10s、无 Android 专属按钮、全屏 action，截图）；
+  `-PlibmpvDirectory` 指向已安装 Kototoro.app 自带的 libmpv 跑通真实播放用例；`:app:compileDebugKotlin` 通过。
+  播放器窗口的屏幕截图在测试窗口被遮挡时会截到其他窗口，因此不作为界面依据。
+
 ### 第三批：设置与功能页面
 
 范围：07 的其余设置，以及 08–17。
