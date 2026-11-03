@@ -98,6 +98,8 @@ class SourceGroupRepository @Inject constructor(
 		val trimmed = name.trim()
 		require(trimmed.isNotEmpty()) { "Group name must not be blank" }
 		val group = withContext(Dispatchers.IO) {
+			// Installed sources that never got a row (fresh install) must be part of the saved states.
+			contentSources.syncSourceRows()
 			SourceGroup(
 				id = UUID.randomUUID().toString(),
 				name = trimmed,

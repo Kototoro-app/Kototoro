@@ -1252,6 +1252,11 @@ class ContentSourcesRepository @Inject constructor(
         return true
     }
 
+    /** Creates the db rows of every installed source that has none yet (public entry point of the assimilation). */
+    suspend fun syncSourceRows() {
+        assimilateNewSources(force = true)
+    }
+
     suspend fun isSetupRequired(): Boolean {
         return !settings.hasSeenPluginWelcome || (settings.sourcesVersion == 0 && dao.findAllEnabledNames().isEmpty())
     }
