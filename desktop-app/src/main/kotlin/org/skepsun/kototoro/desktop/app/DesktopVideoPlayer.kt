@@ -401,9 +401,6 @@ private fun PlayerContent(controller: DesktopController, state: DesktopAppState,
                 modifier = Modifier.screenAnchor(canvas) { castAnchor = it }.testTag("video-cast")) {
                 Text(if (state.cast != null) desktopText("video.casting") else desktopText("video.cast"), color = PlayerText)
             }
-            TextButton({ episodesOpen = !episodesOpen }, modifier = Modifier.testTag("video-episodes")) {
-                Text(desktopText("video.episodes"), color = PlayerText)
-            }
             TextButton(toggleFullscreen, enabled = onToggleFullscreen != null, modifier = Modifier.testTag("video-fullscreen")) {
                 Text(if (fullscreen) desktopText("video.exitFullscreen") else desktopText("video.fullscreen"), color = PlayerText)
             }
@@ -415,7 +412,8 @@ private fun PlayerContent(controller: DesktopController, state: DesktopAppState,
             CastControls(active, onEnd = { controller.endCast() })
         } else {
             Controls(canvas, video, mpv, failure ?: enhancementError, hasPrevious, hasNext, !closing && player != null,
-                controller, ::control, state.videoEnhancement, state.videoSettings, jump)
+                controller, ::control, state.videoEnhancement, state.videoSettings, jump,
+                episodesShown = episodesOpen, onEpisodes = { episodesOpen = !episodesOpen })
         }
     }
     // The seeking bubble sits in the middle of the picture, as on Android.
@@ -449,7 +447,8 @@ private fun EpisodeList(controller: DesktopController, state: DesktopAppState, v
 @Composable
 private fun Controls(host: java.awt.Component, video: DesktopVideo, mpv: MpvState, failure: String?, hasPrevious: Boolean,
     hasNext: Boolean, enabled: Boolean, controller: DesktopController, control: ((MpvPlayer) -> Unit) -> Unit,
-    enhancement: MpvEnhancement, settings: DesktopVideoSettings, jump: (Double) -> Unit) {
+    enhancement: MpvEnhancement, settings: DesktopVideoSettings, jump: (Double) -> Unit, episodesShown: Boolean,
+    onEpisodes: () -> Unit) {
     Column(Modifier.fillMaxWidth().testTag("video-controls")) {
         // Android draws a black gradient out of the control bar (`bg_video_bottom_gradient`), the second opacity.
         if (settings.gradientOpacity > 0f) {
@@ -464,7 +463,8 @@ private fun Controls(host: java.awt.Component, video: DesktopVideo, mpv: MpvStat
                     ),
             )
         }
-        ControlsBar(host, video, mpv, failure, hasPrevious, hasNext, enabled, controller, control, enhancement, settings, jump)
+        ControlsBar(host, video, mpv, failure, hasPrevious, hasNext, enabled, controller, control, enhancement, settings, jump,
+            episodesShown, onEpisodes)
     }
 }
 
@@ -473,7 +473,7 @@ private fun Controls(host: java.awt.Component, video: DesktopVideo, mpv: MpvStat
 private fun ControlsBar(host: java.awt.Component, video: DesktopVideo, mpv: MpvState, failure: String?,
     hasPrevious: Boolean, hasNext: Boolean, enabled: Boolean, controller: DesktopController,
     control: ((MpvPlayer) -> Unit) -> Unit, enhancement: MpvEnhancement, settings: DesktopVideoSettings,
-    jump: (Double) -> Unit) {
+    jump: (Double) -> Unit, episodesShown: Boolean, onEpisodes: () -> Unit) {
     var dragging by remember { mutableStateOf<Float?>(null) }
     Column(
         Modifier
@@ -507,6 +507,10 @@ private fun ControlsBar(host: java.awt.Component, video: DesktopVideo, mpv: MpvS
             PlayerButton(if (mpv.paused) desktopText("video.play") else desktopText("video.pause"), enabled, "video-play") { control { it.togglePause() } }
             PlayerButton("+10s", enabled, "video-forward") { jump(10.0) }
             PlayerButton(desktopText("video.nextEpisode"), enabled && hasNext) { controller.changeVideoEpisode(true) }
+            // Android's chapter button sits beside previous/next in the control row and opens the episode list.
+            TextButton(onEpisodes, modifier = Modifier.testTag("video-episodes")) {
+                Text(desktopText("video.episodes"), color = if (episodesShown) Color(0xFF7FD1B9) else PlayerText)
+            }
             Spacer(Modifier.weight(1f))
             Menu(host, desktopText("video.quality", video.label(video.selected)), video.streams.indices.map { video.label(it) to (it == video.selected) },
                 enabled && video.streams.size > 1, "video-quality") { controller.selectVideoStream(it) }
