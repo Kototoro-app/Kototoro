@@ -40,6 +40,7 @@ import org.skepsun.kototoro.extensions.repo.RepoAvailableExtension
 import org.skepsun.kototoro.extensions.runtime.ExternalExtensionLoaderSupport
 import org.skepsun.kototoro.extensions.runtime.LocalApkExtensionSupport
 import org.skepsun.kototoro.parsers.network.CloudFlareHelper
+import org.skepsun.kototoro.settings.sources.lock.SourceLockStore
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.IOException
@@ -329,14 +330,18 @@ class SourceGroupRepository @Inject constructor(
 				}
 			}
 
-			// The group's lock state replaces the device lock of every source it lists (null clears it):
-			// locks left by an earlier group apply or sync are not manual choices. Sources the group does
-			// not list keep their device lock. Locks are written before the exclusive batch, which keeps
-			// locked sources at their lock value.
+			// The group's lock state replaces the device lock of every source it lists (null clears it).
+			// Locks an earlier group apply wrote for sources this group does not list are released; locks
+			// the user set by hand (not in the applied set) stay. Locks are written before the exclusive
+			// batch, which keeps locked sources at their lock value.
 			runGuarded(errors, context.getString(R.string.source_groups_error_apply_state)) {
-				contentSources.setSourceLocks(
-					group.sourceStates.associate { contentSources.resolveSource(it.source) to it.locked },
-				)
+				val lockStore = SourceLockStore.get(context)
+				val groupLocks = group.sourceStates.associate { contentSources.resolveSource(it.source) to it.locked }
+				val groupNames = groupLocks.keys.mapTo(HashSet()) { it.name }
+				val released = lockStore.groupAppliedNames().filterNot { it in groupNames }
+					.associate { contentSources.resolveSource(it) to null }
+				contentSources.setSourceLocks(released + groupLocks)
+				lockStore.setGroupApplied(groupLocks.filterValues { it != null }.keys.mapTo(HashSet()) { it.name })
 			}
 
 			// Exclusive batch over the unfiltered db view: getEnabledSources() hides NSFW-disabled,

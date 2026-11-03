@@ -18,6 +18,9 @@ class SourceLockStore private constructor(context: Context) {
 	private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 	private val _locks = MutableStateFlow(read())
 
+	/** Device-local (never synced or backed up) set of sources whose current lock was written by a group apply. */
+	private val groupAppliedPrefs = context.getSharedPreferences(GROUP_APPLIED_PREFS_NAME, Context.MODE_PRIVATE)
+
 	/**
 	 * Bumped on every change of the prefs file, including writes by someone else (Google Drive settings sync
 	 * writes it directly); the repository then re-applies the locks to the DB, which is idempotent.
@@ -45,7 +48,25 @@ class SourceLockStore private constructor(context: Context) {
 	 */
 	@Synchronized
 	fun set(name: String, lockedEnabled: Boolean?) {
+		// A manual change makes the lock the user's own: a later group apply must not undo it.
+		forgetGroupApplied(listOf(name))
 		setAll(mapOf(name to lockedEnabled))
+	}
+
+	/** Sources whose lock was last written by a group apply. */
+	fun groupAppliedNames(): Set<String> = groupAppliedPrefs.all.keys.toSet()
+
+	@Synchronized
+	fun setGroupApplied(names: Set<String>) {
+		groupAppliedPrefs.edit {
+			clear()
+			names.forEach { putBoolean(it, true) }
+		}
+	}
+
+	private fun forgetGroupApplied(names: Collection<String>) {
+		if (names.none { groupAppliedPrefs.contains(it) }) return
+		groupAppliedPrefs.edit { names.forEach { remove(it) } }
 	}
 
 	/** [set] for many sources: one prefs edit and one [locks] update. */
@@ -68,6 +89,7 @@ class SourceLockStore private constructor(context: Context) {
 	@Synchronized
 	fun remove(names: Collection<String>) {
 		if (names.isEmpty()) return
+		forgetGroupApplied(names)
 		prefs.edit { names.forEach { remove(it) } }
 		_locks.value = _locks.value.toMutableMap().also { map -> names.forEach { map.remove(it) } }
 	}
@@ -96,6 +118,7 @@ class SourceLockStore private constructor(context: Context) {
 	companion object {
 
 		private const val PREFS_NAME = "source_locks"
+		private const val GROUP_APPLIED_PREFS_NAME = "group_applied_locks"
 		private const val UNLOCKED = "none"
 
 		@Volatile
