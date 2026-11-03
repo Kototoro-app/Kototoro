@@ -1109,9 +1109,11 @@ class DesktopController(
     }
 
     fun explore() = navigate {
-        if (state.value.selectedSource == null) mutableState.update {
-            it.copy(screen = DesktopScreen.EXPLORE, items = emptyList(), content = null)
-        } else browseOnIo(state.value.offset, state.value.query)
+        // Show the browse page before the source answers, as selectSource does: a slow or hanging source must not
+        // keep the window on the previous page with only the progress bar running. The rows belong to whichever
+        // shelf was shown last, so they go too.
+        mutableState.update { it.copy(screen = DesktopScreen.EXPLORE, items = emptyList(), content = null) }
+        if (state.value.selectedSource != null) browseOnIo(state.value.offset, state.value.query)
     }
 
     /** Leaves the opened source and returns to the browse page's source grid (Android's back from a source). */

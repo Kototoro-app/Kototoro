@@ -172,6 +172,16 @@ internal object DesktopFilterProbe {
                 check(controller.state.value.screen == DesktopScreen.LIBRARY && controller.state.value.error == null) {
                     "${controller.state.value.screen} ${controller.state.value.error}"
                 }
+                // Returning to the still slow source shows its browse page at once (loading), not the old shelf with
+                // only the progress bar running, and it can be left again.
+                onNodeWithTag("nav:浏览").performClick()
+                waitUntil(timeoutMillis = 3_000) { controller.state.value.screen == DesktopScreen.EXPLORE }
+                check(controller.state.value.busy && controller.state.value.items.isEmpty()) {
+                    "busy=${controller.state.value.busy} items=${controller.state.value.items.size}"
+                }
+                onNodeWithTag("nav:收藏").performClick()
+                waitUntil(timeoutMillis = 15_000) { !controller.state.value.busy }
+                check(controller.state.value.screen == DesktopScreen.LIBRARY)
                 System.clearProperty("fixture.filters.slow")
                 onNodeWithTag("nav:浏览").performClick()
                 waitUntil(timeoutMillis = 15_000) {
