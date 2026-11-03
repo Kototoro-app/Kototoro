@@ -24,7 +24,6 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.db.dao.SourceOriginsDao
 import org.skepsun.kototoro.core.db.entity.MangaSourceEntity
-import org.skepsun.kototoro.core.extensions.DEFAULT_JAR_PRIORITY_ORDER_VALUE
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.SourceSettings
@@ -340,7 +339,11 @@ class SourceGroupRepository @Inject constructor(
 				val groupNames = groupLocks.keys.mapTo(HashSet()) { it.name }
 				val released = lockStore.groupAppliedNames().filterNot { it in groupNames }
 					.associate { contentSources.resolveSource(it) to null }
-				contentSources.setSourceLocks(released + groupLocks)
+				// A null lock means "the group has no lock opinion": only release it when an earlier group
+				// apply wrote that lock; a lock the user set by hand stays.
+				val previouslyApplied = lockStore.groupAppliedNames()
+				val effectiveGroupLocks = groupLocks.filter { (source, lock) -> lock != null || source.name in previouslyApplied }
+				contentSources.setSourceLocks(released + effectiveGroupLocks)
 				lockStore.setGroupApplied(groupLocks.filterValues { it != null }.keys.mapTo(HashSet()) { it.name })
 			}
 
@@ -369,10 +372,9 @@ class SourceGroupRepository @Inject constructor(
 			runGuarded(errors, context.getString(R.string.source_groups_error_jar_priority)) {
 				val installed = installedJarNames()
 				val filtered = group.jarPriority.filter { it.trim().lowercase() in installed }
-				settings.jarPriorityOrder = if (filtered.isEmpty()) {
-					DEFAULT_JAR_PRIORITY_ORDER_VALUE
-				} else {
-					filtered.joinToString(",")
+				// A group without a JAR order leaves the user's own order alone.
+				if (filtered.isNotEmpty()) {
+					settings.jarPriorityOrder = filtered.joinToString(",")
 				}
 			}
 			tick()
