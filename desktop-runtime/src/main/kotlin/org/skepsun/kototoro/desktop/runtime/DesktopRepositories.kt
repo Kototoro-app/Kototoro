@@ -244,7 +244,7 @@ class DesktopRepositories(
         require(address.isNotBlank()) { DesktopRuntimeStrings.text("runtime.extension.parserNoDownload", "this parser plugin has no downloadable package") }
         return http.read(mirrored(address), JAR_LIMIT) { _, input ->
             stageParserPlugin(input, extension.packageName)
-        }
+        }.copy(versionCode = extension.versionCode)
     }
 
     suspend fun import(path: Path): DesktopManagedJar = withContext(Dispatchers.IO) {

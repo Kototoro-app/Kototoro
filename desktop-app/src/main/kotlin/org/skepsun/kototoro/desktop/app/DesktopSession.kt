@@ -600,7 +600,7 @@ class DesktopSession private constructor(
             context.ensureActive()
             val plugin = parsers.replace(managed.path, managed.id, managed.sha256) {
                 context.ensureActive()
-                val record = DesktopParserRecord(managed.id, managed.path.toString(), managed.sha256)
+                val record = DesktopParserRecord(managed.id, managed.path.toString(), managed.sha256, managed.versionCode)
                 persistRepositoryPreference(installed, PARSER_KEY_PREFIX + managed.id,
                     SourcePreferenceValue.Text(SourceProtocolJson.encodeToString(record)))
             }
@@ -638,10 +638,13 @@ class DesktopSession private constructor(
             DesktopInstalledEntry(DesktopInstalledKind.EXTENSION, metadata.packageName, metadata.displayName,
                 metadata.ecosystem, metadata.versionName, metadata.versionCode, extension.sources.size,
                 extension.sources.map { it.source.name })
-        } + parsers.installed().map { plugin ->
+        } + parsers.installed().let { plugins ->
+            val versions = parserVersions()
+            plugins.map { plugin -> plugin to versions[plugin.id] }
+        }.map { (plugin, versionCode) ->
             DesktopInstalledEntry(DesktopInstalledKind.PARSER, plugin.id, plugin.id,
                 plugin.sources.firstOrNull()?.let { parserListing(it).ecosystem } ?: SourceEcosystem.KOTOTORO,
-                plugin.metadata.sha256.take(8), null, plugin.sources.size,
+                versionCode?.let { "v$it" } ?: plugin.metadata.sha256.take(8), versionCode, plugin.sources.size,
                 plugin.sources.map { it.source.name })
         } + cloudstream.installed().map { plugin ->
             DesktopInstalledEntry(DesktopInstalledKind.CLOUDSTREAM, plugin.id, plugin.manifest.name ?: plugin.id,
@@ -725,7 +728,18 @@ class DesktopSession private constructor(
     /** Installed versions by package name (Cloudstream: plugin id and manifest version), for repository listings. */
     fun installedVersions(): Map<String, Long> =
         registry.installed().associate { it.metadata.packageName to it.metadata.versionCode } +
-            cloudstream.installed().associate { it.id to it.manifest.version.toLong() }
+            cloudstream.installed().associate { it.id to it.manifest.version.toLong() } +
+            // A parser plugin without a recorded version (file import, older record) counts as 0: the repository's
+            // build is offered as an update instead of the row claiming the listed version is installed.
+            parserVersions().let { versions -> parsers.installed().associate { it.id to (versions[it.id] ?: 0L) } }
+
+    /** Recorded repository versions of the installed parser plugins, by plugin id. */
+    private fun parserVersions(): Map<String, Long> = installed.snapshot().mapNotNull { (key, value) ->
+        if (!key.startsWith(PARSER_KEY_PREFIX)) return@mapNotNull null
+        val text = (value as? SourcePreferenceValue.Text)?.value ?: return@mapNotNull null
+        runCatching { SourceProtocolJson.decodeFromString<DesktopParserRecord>(text) }.getOrNull()
+            ?.let { record -> record.versionCode?.let { record.id to it } }
+    }.toMap()
 
     private fun restoreJars() {
         for ((key, value) in installed.snapshot()) {

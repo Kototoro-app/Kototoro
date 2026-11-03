@@ -187,9 +187,6 @@ private fun ExtensionCatalog(
                         val parserPlugin = repository.isParserPlugin(extension)
                         val cloudstreamPlugin = repository.isCloudstreamPlugin(extension)
                         val installed = state.installedExtensions[extension.packageName]
-                        val parserInstalled = state.installedEntries.any {
-                            it.kind == DesktopInstalledKind.PARSER && it.id == extension.packageName
-                        }
                         val anime = !parserPlugin && extension.packageName.contains(".animeextension.")
                         val compatible = parserPlugin || cloudstreamPlugin || extension.extensionLib.matches(
                             // Mihon 1.4-1.6, Tsundoku 1.4/1.6 (checked again on install), Aniyomi generations 12-16.
@@ -207,7 +204,6 @@ private fun ExtensionCatalog(
                         val label = when {
                             !hasPackage -> desktopText("extensions.noPackage")
                             !compatible -> desktopText("extensions.unsupportedApi")
-                            parserInstalled -> desktopText("extensions.installed")
                             installed != null && installed > extension.versionCode ->
                                 desktopText("extensions.newerLocal")
                             installed == extension.versionCode -> desktopText("extensions.installed")
@@ -225,7 +221,7 @@ private fun ExtensionCatalog(
                         ) {
                             Button(
                                 onClick = { controller.installExtension(extension) },
-                                enabled = enabled && hasPackage && compatible && !parserInstalled &&
+                                enabled = enabled && hasPackage && compatible &&
                                     (installed == null || installed < extension.versionCode),
                                 modifier = Modifier.testTag("extension-install:${extension.packageName}"),
                             ) { Text(label) }

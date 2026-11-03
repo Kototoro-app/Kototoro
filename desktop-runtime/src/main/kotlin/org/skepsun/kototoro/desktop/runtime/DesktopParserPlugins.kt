@@ -16,11 +16,16 @@ data class DesktopManagedParserPlugin(
     val id: String,
     val sha256: String,
     val conversion: DexConversionReport? = null,
+    /** The repository's version code; null for a plugin imported from a file. */
+    val versionCode: Long? = null,
 )
 
-/** Persisted install record, restored with the same id and hash on the next start. */
+/**
+ * Persisted install record, restored with the same id and hash on the next start. [versionCode] is the repository
+ * version it was installed from (null for file imports and records written before it was kept), so updates are found.
+ */
 @Serializable
-data class DesktopParserRecord(val id: String, val path: String, val sha256: String)
+data class DesktopParserRecord(val id: String, val path: String, val sha256: String, val versionCode: Long? = null)
 
 enum class DesktopExtensionKind {
     /**

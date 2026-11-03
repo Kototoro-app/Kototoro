@@ -171,8 +171,21 @@ class DesktopRepositoriesTest {
                 val managed = repos.downloadParserPlugin(catalog, extension)
                 assertEquals("org.skepsun.kototoro.parsers", managed.id)
                 assertEquals(DesktopExtensionKind.PARSER, DesktopExtensionFiles.kind(managed.path))
+                // The repository version travels with the plugin, so a later build is found as an update.
+                assertEquals(134L, managed.versionCode)
+                assertNull(repos.importParserPlugin(managed.path).versionCode)
             }
         }
+    }
+
+    @Test
+    fun `parser records written before versions were kept still decode`() {
+        val legacy = SourceProtocolJson.decodeFromString<DesktopParserRecord>(
+            """{"id":"org.skepsun.kototoro.parsers","path":"/plugins/a.jar","sha256":"abc"}""")
+        assertNull(legacy.versionCode)
+        val current = DesktopParserRecord("org.skepsun.kototoro.parsers", "/plugins/a.jar", "abc", 156)
+        assertEquals(current, SourceProtocolJson.decodeFromString<DesktopParserRecord>(
+            SourceProtocolJson.encodeToString(DesktopParserRecord.serializer(), current)))
     }
 
     @Test
