@@ -679,7 +679,26 @@ struct NovelReaderView: View {
             }
         }
         .background(style.colors.background.ignoresSafeArea())
-        .toolbar(.hidden, for: .navigationBar, .tabBar)
+        .toolbar(.hidden, for: .tabBar)
+        // The top controls live in the system navigation bar, as on the details page, so they sit where its controls
+        // do and the bar hands its back button over when the reader is popped. The more panel takes the top instead.
+        .toolbar(!chromeHidden && !showingMore ? .visible : .hidden, for: .navigationBar)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Button { perform(.chapters) } label: {
+                    Label(model.displayTitle, systemImage: "list.bullet").labelStyle(.titleAndIcon).font(.subheadline)
+                        .lineLimit(1).padding(.horizontal, 14).padding(.vertical, 10)
+                }
+                // The title item gets no glass of its own; keep it legible over any page, like the bar's buttons.
+                .buttonStyle(.plain).glassEffect(.regular.interactive(), in: .capsule)
+                .accessibilityIdentifier("novel.chapters")
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("更多", systemImage: "ellipsis") { moreTab = 0; showingMore = true }
+                    .accessibilityIdentifier("novel.more")
+            }
+        }
         .statusBarHidden(chromeHidden)
         .persistentSystemOverlays(chromeHidden ? .hidden : .automatic)
         .sheet(item: $activeSheet) { sheet in
@@ -763,23 +782,6 @@ struct NovelReaderView: View {
             VStack(spacing: 12) {
                 if showingMore {
                     morePanel.frame(maxHeight: min(400, max(100, height - 88)))
-                } else {
-                    HStack {
-                        Button("返回", systemImage: "chevron.left") { dismiss() }
-                            .labelStyle(.iconOnly).buttonStyle(.glass).buttonBorderShape(.circle).controlSize(.large)
-                            .frame(width: 44, height: 44).accessibilityIdentifier("novel.back")
-                        Spacer(minLength: 16)
-                        Button { perform(.chapters) } label: {
-                            Label(model.displayTitle, systemImage: "list.bullet").font(.subheadline).lineLimit(1)
-                                .padding(.horizontal, 14).padding(.vertical, 12)
-                        }.buttonStyle(.plain).glassEffect(.regular.interactive(), in: .capsule)
-                            .accessibilityIdentifier("novel.chapters")
-                        Spacer(minLength: 16)
-                        Button { moreTab = 0; showingMore = true } label: {
-                            Image(systemName: "ellipsis").frame(width: 44, height: 44)
-                        }.buttonStyle(.plain).glassEffect(.regular.interactive(), in: .circle)
-                            .accessibilityLabel("更多").accessibilityIdentifier("novel.more")
-                    }
                 }
                 Spacer(minLength: 0)
                 let actions = NovelReaderAction.selected(floatingActions)

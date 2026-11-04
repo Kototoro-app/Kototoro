@@ -34,14 +34,14 @@ final class LocalImportTests: XCTestCase {
         resume.tap()
         XCTAssertTrue(app.images["reader.image"].firstMatch.waitForExistence(timeout: 30), app.debugDescription)
         XCTAssertFalse(app.buttons["space.close"].exists)
-        app.buttons["reader.back"].tap()
+        app.readerBackButton.tap()
         app.buttons["continueReading.close"].tap()
         XCTAssertTrue(space.waitForExistence(timeout: 10))
         XCTAssertTrue(space.label.contains("漫画"))
         // The separate resume target retains its original one-tap action.
         app.buttons["continueReading"].tap()
         XCTAssertTrue(app.images["reader.image"].firstMatch.waitForExistence(timeout: 30), app.debugDescription)
-        app.buttons["reader.back"].tap()
+        app.readerBackButton.tap()
         app.buttons["continueReading.close"].tap()
     }
 
@@ -138,10 +138,10 @@ final class LocalImportTests: XCTestCase {
         read.tap()
         XCTAssertTrue(app.images["reader.image"].firstMatch.waitForExistence(timeout: 30), app.debugDescription)
         Thread.sleep(forTimeInterval: 6)
-        if !app.buttons["reader.back"].isHittable {
+        if !app.readerBackButton.isHittable {
             app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.35)).tap()
         }
-        app.buttons["reader.back"].tap()
+        app.readerBackButton.tap()
         openWorkStatistics()
         attach("单作品阅读统计")
         app.navigationBars.buttons["完成"].tap()
@@ -224,7 +224,7 @@ final class LocalImportTests: XCTestCase {
         read.tap()
         XCTAssertTrue(app.staticTexts["novel.firstParagraph"].waitForExistence(timeout: 30))
         Thread.sleep(forTimeInterval: 6)
-        app.buttons["novel.back"].tap()
+        app.readerBackButton.tap()
         openWorkStatistics()
         attach("小说阅读统计")
     }
@@ -501,7 +501,7 @@ final class LocalImportTests: XCTestCase {
         page.tap()
         XCTAssertTrue(app.images["reader.image"].firstMatch.waitForExistence(timeout: 20))
         XCTAssertEqual(app.staticTexts["reader.currentPage"].value as? String, "2")
-        app.buttons["reader.back"].tap()
+        app.readerBackButton.tap()
         XCTAssertTrue(app.navigationBars["页面预览"].waitForExistence(timeout: 10))
         app.navigationBars.buttons.element(boundBy: 0).tap()
         XCTAssertTrue(app.navigationBars["全部章节"].waitForExistence(timeout: 10))
@@ -546,7 +546,7 @@ final class LocalImportTests: XCTestCase {
         XCTAssertEqual(XCTWaiter.wait(for: [saved], timeout: 10), .completed)
         app.sliders["reader.progress"].adjust(toNormalizedSliderPosition: 1)
         waitForPage("2")
-        app.buttons["reader.back"].tap()
+        app.readerBackButton.tap()
         XCTAssertTrue(app.buttons["details.readOptions"].waitForExistence(timeout: 10))
         attach("详情页继续阅读按钮")
         let all = app.buttons["details.bookmarks.all"]
@@ -560,9 +560,51 @@ final class LocalImportTests: XCTestCase {
         savedPage.tap()
         XCTAssertTrue(app.images["reader.image"].firstMatch.waitForExistence(timeout: 20))
         waitForPage("1")
-        app.buttons["reader.back"].tap()
+        app.readerBackButton.tap()
         XCTAssertTrue(app.navigationBars["书签"].waitForExistence(timeout: 10))
         attach("书签精确恢复页面")
+    }
+
+    /// The readers' top controls sit in the details page's navigation bar: same height as its buttons, and popping
+    /// back keeps the bar instead of dropping a custom row.
+    @MainActor
+    func testComicReaderTopControlsShareTheDetailsNavigationBar() throws {
+        assertReaderTopControlsShareDetailsBar(source: "LOCAL", file: "fixture_comic", surface: "reader.image",
+                                               more: "reader.more")
+    }
+
+    @MainActor
+    func testNovelReaderTopControlsShareTheDetailsNavigationBar() throws {
+        assertReaderTopControlsShareDetailsBar(source: "LOCAL_NOVEL", file: "fixture_novel",
+                                               surface: "novel.firstParagraph", more: "novel.more")
+    }
+
+    private func assertReaderTopControlsShareDetailsBar(source: String, file: String, surface: String, more id: String) {
+        importFile(source: source, file: file, reuse: true)
+        let detailsMore = app.buttons["details.more"]
+        XCTAssertTrue(detailsMore.waitForExistence(timeout: 20), app.debugDescription)
+        let detailsY = detailsMore.frame.midY
+        app.detailsReadButton().tap()
+        XCTAssertTrue(app.descendants(matching: .any)[surface].firstMatch.waitForExistence(timeout: 30),
+                      app.debugDescription)
+        let more = app.buttons[id]
+        XCTAssertTrue(more.waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertEqual(more.frame.midY, detailsY, accuracy: 1, "reader controls must line up with the details bar")
+        XCTAssertEqual(app.readerBackButton.frame.midY, detailsY, accuracy: 1)
+        attach("阅读器顶栏 \(source)")
+        // A panel takes the bar's place; closing it brings back the whole bar, its title capsule included.
+        more.tap()
+        let close = app.buttons[source == "LOCAL" ? "reader.panel.close" : "novel.panel.close"]
+        XCTAssertTrue(close.waitForExistence(timeout: 5), app.debugDescription)
+        close.tap()
+        XCTAssertTrue(more.waitForExistence(timeout: 5), app.debugDescription)
+        let chapters = app.buttons[source == "LOCAL" ? "reader.chapters" : "novel.chapters"]
+        XCTAssertTrue(chapters.isHittable, app.debugDescription)
+        XCTAssertEqual(chapters.frame.midY, detailsY, accuracy: 1)
+        attach("阅读器顶栏 关闭面板后 \(source)")
+        app.readerBackButton.tap()
+        XCTAssertTrue(detailsMore.waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertEqual(detailsMore.frame.midY, detailsY, accuracy: 1)
     }
 
     @MainActor
@@ -621,10 +663,10 @@ final class LocalImportTests: XCTestCase {
         XCTAssertTrue(app.images["reader.image"].firstMatch.waitForExistence(timeout: 20))
         swipeFromEdge()
         XCTAssertTrue(app.images["reader.image"].firstMatch.exists, "The work must retain its gesture preference")
-        if !app.buttons["reader.back"].isHittable {
+        if !app.readerBackButton.isHittable {
             app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.35)).tap()
         }
-        app.buttons["reader.back"].tap()
+        app.readerBackButton.tap()
         XCTAssertTrue(app.detailsReadButton().waitForExistence(timeout: 10))
         // The normal details navigation must recover its system back gesture after leaving the reader.
         swipeFromEdge()
@@ -694,7 +736,7 @@ final class LocalImportTests: XCTestCase {
         XCTAssertEqual(XCTWaiter.wait(for: [added], timeout: 15), .completed)
         app.sliders["reader.progress"].adjust(toNormalizedSliderPosition: 0)
         waitForPage("1")
-        app.buttons["reader.back"].tap()
+        app.readerBackButton.tap()
         app.terminate(); app.launch()
         importFile(source: "LOCAL", file: "fixture_comic", reuse: true)
         let preview = app.scrollViews["details.bookmarks.preview"]
@@ -739,7 +781,7 @@ final class LocalImportTests: XCTestCase {
         XCTAssertEqual(app.buttons["novel.bookmark"].label, "取消书签")
         app.buttons["novel.panel.close"].tap()
         app.sliders["novel.progress"].adjust(toNormalizedSliderPosition: 0.8)
-        app.buttons["novel.back"].tap()
+        app.readerBackButton.tap()
         let all = app.buttons["details.bookmarks.all"]
         for _ in 0..<6 where !all.isHittable { app.collectionViews.firstMatch.swipeUp() }
         XCTAssertTrue(all.waitForExistence(timeout: 10), app.debugDescription)
@@ -775,7 +817,7 @@ final class LocalImportTests: XCTestCase {
         bookmark.tap()
         XCTAssertEqual(app.buttons["novel.bookmark"].label, "取消书签")
         app.buttons["novel.panel.close"].tap()
-        app.buttons["novel.back"].tap()
+        app.readerBackButton.tap()
         // Back at the tab root: the details page hides the tab bar.
         for _ in 0..<4 where !app.tabBars.firstMatch.exists {
             let back = app.navigationBars.buttons["BackButton"]
@@ -795,7 +837,7 @@ final class LocalImportTests: XCTestCase {
         attach("记录中的书签")
         item.tap()
         XCTAssertTrue(app.sliders["novel.progress"].waitForExistence(timeout: 20), app.debugDescription)
-        app.buttons["novel.back"].tap()
+        app.readerBackButton.tap()
 
         // Removing it from the timeline's menu takes it off the list.
         XCTAssertTrue(item.waitForExistence(timeout: 10), app.debugDescription)
@@ -936,7 +978,7 @@ final class LocalImportTests: XCTestCase {
         XCTAssertTrue(entry.waitForExistence(timeout: 10), app.debugDescription)
         entry.tap()
         waitForReaderChapter("02")
-        app.buttons["reader.back"].tap()
+        app.readerBackButton.tap()
         XCTAssertTrue(app.detailsReadButton().waitForExistence(timeout: 15))
         app.terminate()
     }
@@ -1749,7 +1791,7 @@ final class LocalImportTests: XCTestCase {
         app.buttons["下载本章"].tap()
         XCTAssertTrue(app.staticTexts["本章已下载，可离线阅读"].waitForExistence(timeout: 30), app.debugDescription)
         app.buttons["reader.panel.close"].tap()
-        app.buttons["reader.back"].tap()
+        app.readerBackButton.tap()
         XCTAssertTrue(app.detailsReadButton().waitForExistence(timeout: 10))
         app.terminate()
     }
@@ -1764,7 +1806,7 @@ final class LocalImportTests: XCTestCase {
         app.buttons["下载本章"].tap()
         XCTAssertTrue(app.staticTexts["本章已下载，可离线阅读"].waitForExistence(timeout: 30))
         app.buttons["reader.panel.close"].tap()
-        app.buttons["reader.back"].tap()
+        app.readerBackButton.tap()
         openStorageSettings()
         let row = storedChapter(title: "fixture_storage_comic")
         scrollStorageTo(row)
@@ -1797,7 +1839,7 @@ final class LocalImportTests: XCTestCase {
         app.buttons["reader.more"].tap()
         XCTAssertTrue(app.staticTexts["本章已下载，可离线阅读"].waitForExistence(timeout: 10))
         app.buttons["reader.panel.close"].tap()
-        app.buttons["reader.back"].tap()
+        app.readerBackButton.tap()
         openStorageSettings()
         scrollStorageTo(app.buttons[identifier])
         app.buttons[identifier].tap()
@@ -1816,7 +1858,7 @@ final class LocalImportTests: XCTestCase {
         app.buttons["reader.more"].tap()
         XCTAssertFalse(app.staticTexts["本章已下载，可离线阅读"].exists)
         app.buttons["reader.panel.close"].tap()
-        app.buttons["reader.back"].tap()
+        app.readerBackButton.tap()
     }
 
     @MainActor
@@ -1880,7 +1922,7 @@ final class LocalImportTests: XCTestCase {
         app.buttons["reader.more"].tap()
         XCTAssertTrue(app.staticTexts["本章已下载，可离线阅读"].waitForExistence(timeout: 10))
         app.buttons["reader.panel.close"].tap()
-        app.buttons["reader.back"].tap()
+        app.readerBackButton.tap()
         openStorageSettings()
         let row = storedChapter(title: "fixture_storage_tasks")
         scrollStorageTo(row)
@@ -1917,7 +1959,7 @@ final class LocalImportTests: XCTestCase {
         openFirstChapter(title: "fixture_reader_download")
         XCTAssertTrue(app.images["reader.image"].firstMatch.waitForExistence(timeout: 30), app.debugDescription)
         XCTAssertFalse(app.staticTexts["reader.pageError.0"].exists)
-        app.buttons["reader.back"].tap()
+        app.readerBackButton.tap()
         app.terminate()
     }
 
@@ -2245,7 +2287,7 @@ final class LocalImportTests: XCTestCase {
         attach("作品笔记")
         item.tap()
         XCTAssertTrue(app.images["reader.image"].firstMatch.waitForExistence(timeout: 30), app.debugDescription)
-        app.buttons["reader.back"].tap()
+        app.readerBackButton.tap()
         for _ in 0..<5 where item.waitForExistence(timeout: 3) {
             item.swipeLeft()
             app.buttons["删除"].tap()
@@ -2443,7 +2485,7 @@ final class LocalImportTests: XCTestCase {
         XCTAssertTrue(app.buttons["取消本段划线"].waitForExistence(timeout: 10), app.debugDescription)
         app.buttons["novel.panel.close"].tap()
         attach("小说划线")
-        app.buttons["novel.back"].tap()
+        app.readerBackButton.tap()
 
         app.terminate()
         app.launch()
@@ -2511,10 +2553,10 @@ final class LocalImportTests: XCTestCase {
             // A tap in the middle of plain text still toggles the reading controls.
             let center = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
             center.tap()
-            XCTAssertTrue(app.buttons["novel.back"].waitForNonExistence(timeout: 5), "\(mode): \(app.debugDescription)")
+            XCTAssertTrue(app.readerBackButton.waitForNonExistence(timeout: 5), "\(mode): \(app.debugDescription)")
             center.tap()
-            XCTAssertTrue(app.buttons["novel.back"].waitForExistence(timeout: 5), app.debugDescription)
-            app.buttons["novel.back"].tap()
+            XCTAssertTrue(app.readerBackButton.waitForExistence(timeout: 5), app.debugDescription)
+            app.readerBackButton.tap()
         }
     }
 
@@ -2668,7 +2710,7 @@ final class LocalImportTests: XCTestCase {
     @MainActor
     func testIncognitoReadingKeepsTheSavedPosition() throws {
         openNovelControls(mode: "SCROLL")
-        app.buttons["novel.back"].tap()
+        app.readerBackButton.tap()
 
         app.terminate()
         app.launchArguments += ["-incognito", "YES"]
@@ -2684,7 +2726,7 @@ final class LocalImportTests: XCTestCase {
         progress.adjust(toNormalizedSliderPosition: 0.65)
         Thread.sleep(forTimeInterval: 1.5)
         attach("无痕阅读")
-        app.buttons["novel.back"].tap()
+        app.readerBackButton.tap()
         openFirstChapter(title: "fixture_novel_controls")
         XCTAssertTrue(progress.waitForExistence(timeout: 30))
         wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in progress.isEnabled }, object: nil)],
@@ -2757,7 +2799,7 @@ final class LocalImportTests: XCTestCase {
     @MainActor
     func testNovelFloatingActionsPersistAndOperateFromTheMorePanel() throws {
         openNovelControls(mode: "SCROLL")
-        XCTAssertTrue(app.buttons["novel.back"].exists)
+        XCTAssertTrue(app.readerBackButton.exists)
         XCTAssertTrue(app.buttons["novel.chapters"].exists)
         XCTAssertTrue(app.buttons["novel.more"].exists)
         XCTAssertFalse(app.buttons["novel.typography"].exists)
@@ -2807,7 +2849,7 @@ final class LocalImportTests: XCTestCase {
             self.app.buttons["novel.chapters"].label.replacingOccurrences(of: " ", with: "").contains("第2章")
         }, object: nil)
         wait(for: [changed], timeout: 15)
-        app.buttons["novel.back"].tap()
+        app.readerBackButton.tap()
         app.terminate(); app.launch()
         importFile(source: "LOCAL_NOVEL", file: "fixture_novel_controls", reuse: true)
         openFirstChapter(title: "fixture_novel_controls")
@@ -2847,7 +2889,7 @@ final class LocalImportTests: XCTestCase {
         app.buttons["novel.typography"].tap()
         XCTAssertTrue(app.navigationBars["阅读设置"].waitForExistence(timeout: 10))
         app.buttons["完成"].firstMatch.tap()
-        app.buttons["novel.back"].tap()
+        app.readerBackButton.tap()
     }
 
     @MainActor
@@ -2862,7 +2904,7 @@ final class LocalImportTests: XCTestCase {
             XCTAssertEqual(footer.frame.minY - bounds.maxY, margin, accuracy: 1, app.debugDescription)
             // XCTest does not expose the system status-bar element on this simulator. The top controls are inset
             // 12 points from the same safe-area edge; use their measured bounds, not a hard-coded notch size.
-            let safeTop = app.buttons["novel.back"].frame.minY - 12
+            let safeTop = app.readerBackButton.frame.minY - 12
             XCTAssertEqual(bounds.minY - safeTop, margin, accuracy: 1,
                            "The top margin excludes the sensor/status-bar safe area")
             XCTAssertGreaterThanOrEqual(footer.frame.minY, bounds.maxY - 1)
@@ -2907,7 +2949,7 @@ final class LocalImportTests: XCTestCase {
     @MainActor
     func testContinueReadingDetailsDismissesWithEdgeSwipe() throws {
         openNovelControls(mode: "PAGED")
-        app.buttons["novel.back"].tap()
+        app.readerBackButton.tap()
         for _ in 0..<4 where !app.mainTab("作品库").exists {
             app.navigationBars.buttons["BackButton"].firstMatch.tap()
         }
@@ -2915,8 +2957,8 @@ final class LocalImportTests: XCTestCase {
         let accessory = app.buttons["continueReading"]
         XCTAssertTrue(accessory.waitForExistence(timeout: 10), app.debugDescription)
         accessory.tap()
-        XCTAssertTrue(app.buttons["novel.back"].waitForExistence(timeout: 30), app.debugDescription)
-        app.buttons["novel.back"].tap()
+        XCTAssertTrue(app.readerBackButton.waitForExistence(timeout: 30), app.debugDescription)
+        app.readerBackButton.tap()
         let close = app.buttons["continueReading.close"]
         XCTAssertTrue(close.waitForExistence(timeout: 10), app.debugDescription)
         let window = app.windows.firstMatch
