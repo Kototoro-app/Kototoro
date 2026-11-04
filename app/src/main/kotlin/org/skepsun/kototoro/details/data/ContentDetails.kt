@@ -18,7 +18,7 @@ import java.util.Locale
 data class ContentDetails(
     private val manga: Content,
     private val localContent: LocalContent?,
-    private val override: ContentOverride?,
+    val override: ContentOverride?,
     val description: CharSequence?,
     val isLoaded: Boolean,
 ) {
