@@ -2469,6 +2469,16 @@
         }
       }
     },
+    "全部已读": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mark all read"
+          }
+        }
+      }
+    },
     "全部开启": {
       "localizations": {
         "en": {

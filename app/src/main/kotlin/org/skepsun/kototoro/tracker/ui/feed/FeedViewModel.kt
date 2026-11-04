@@ -501,6 +501,13 @@ class FeedViewModel @Inject constructor(
         }
     }
 
+    /** Every unread update and new-chapter counter at once; history and the timeline stay. */
+    fun markAllAsRead() {
+        launchJob(Dispatchers.Default) {
+            repository.markAllUpdatesAsRead()
+        }
+    }
+
     private fun repositoryIdsForGroupedItems(ids: Collection<Long>): List<Long> =
         ids.flatMap { id -> (content.value.filterIsInstance<FeedItem>().firstOrNull { it.id == id })?.logIds ?: listOf(id) }
 

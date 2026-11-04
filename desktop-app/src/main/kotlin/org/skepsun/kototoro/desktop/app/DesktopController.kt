@@ -1,5 +1,7 @@
 package org.skepsun.kototoro.desktop.app
 
+import androidx.room.immediateTransaction
+import androidx.room.useWriterConnection
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -19,6 +21,7 @@ import org.skepsun.kototoro.details.domain.RelatedCandidate
 import org.skepsun.kototoro.details.domain.RelatedContentRules
 import org.skepsun.kototoro.core.replace.ReplaceRule
 import org.skepsun.kototoro.core.source.*
+import org.skepsun.kototoro.tracker.domain.completeAllPendingUpdates
 import org.skepsun.kototoro.tracker.domain.completePendingUpdates
 import org.skepsun.kototoro.stats.domain.ReadingStatsPeriod
 import org.skepsun.kototoro.stats.domain.StatsContentKind
@@ -1770,6 +1773,19 @@ class DesktopController(
         }
         loadFeedOnIo()
         mutableState.update { it.copy(message = desktopText("feed.cleared")) }
+    }
+
+    /**
+     * The subscriptions menu's "mark all read" (Android's `action_mark_all_read`): every unread reminder and
+     * new-chapter counter completes at once through the shared [completeAllPendingUpdates], keeping history,
+     * progress and the timeline's rows.
+     */
+    fun markAllFeedRead() = action {
+        val database = session.storage.database
+        database.useWriterConnection { connection ->
+            connection.immediateTransaction { database.completeAllPendingUpdates(System.currentTimeMillis()) }
+        }
+        loadFeedOnIo()
     }
 
     /** Android's "continue reading" on a feed entry: mark it read and resume from history. */

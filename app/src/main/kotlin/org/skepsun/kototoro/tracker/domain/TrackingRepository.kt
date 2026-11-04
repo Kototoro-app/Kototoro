@@ -197,7 +197,7 @@ class TrackingRepository @Inject constructor(
     }
 
     suspend fun markAllUpdatesAsRead() = db.withTransaction {
-        for (id in db.getTracksDao().findAllIds()) db.completePendingUpdates(id, System.currentTimeMillis())
+        db.completeAllPendingUpdates(System.currentTimeMillis())
     }
 
     suspend fun markUpdateAsRead(mangaId: Long) {

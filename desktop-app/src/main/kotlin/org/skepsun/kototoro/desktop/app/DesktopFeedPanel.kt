@@ -207,6 +207,15 @@ private fun FeedOverflowMenu(controller: DesktopController, state: DesktopAppSta
             DropdownMenuItem(
                 onClick = {
                     open = false
+                    controller.markAllFeedRead()
+                },
+                enabled = enabled,
+                modifier = Modifier.testTag("feed-menu-mark-all-read"),
+                text = { Text(AndroidStrings["updated_header_all_read"]) },
+            )
+            DropdownMenuItem(
+                onClick = {
+                    open = false
                     confirmClear = true
                 },
                 enabled = enabled,

@@ -19,6 +19,7 @@ import org.skepsun.kototoro.core.library.SourceLibrary
 import org.skepsun.kototoro.core.library.SourceTracker
 import org.skepsun.kototoro.history.domain.recoverHistoryChapterId
 import org.skepsun.kototoro.core.source.SourceRef
+import org.skepsun.kototoro.tracker.domain.completeAllPendingUpdates
 import kotlin.concurrent.atomics.AtomicReference
 import kotlin.concurrent.atomics.ExperimentalAtomicApi
 
@@ -364,6 +365,12 @@ class IosLibrary {
                 database.getTrackLogsDao().markAsRead(id)
             }
         }
+    }
+
+    /** The records page's "mark all read": every unread update and new-chapter counter completes at once. */
+    @Throws(Exception::class)
+    suspend fun markAllUpdatesRead() = database.useWriterConnection { connection ->
+        connection.immediateTransaction { database.completeAllPendingUpdates(kotlin.time.Clock.System.now().toEpochMilliseconds()) }
     }
 
     @Throws(Exception::class)

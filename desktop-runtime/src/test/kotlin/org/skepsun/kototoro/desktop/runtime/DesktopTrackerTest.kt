@@ -11,6 +11,7 @@ import org.skepsun.kototoro.core.source.*
 import org.skepsun.kototoro.tracker.data.TrackEntity
 import org.skepsun.kototoro.tracker.data.TrackLogEntity
 import org.skepsun.kototoro.tracker.data.mergeRestoredTrackLog
+import org.skepsun.kototoro.tracker.domain.completeAllPendingUpdates
 import org.skepsun.kototoro.tracker.domain.dailyUpdateGroups
 import org.skepsun.kototoro.tracker.domain.decodeUpdateChapters
 import org.skepsun.kototoro.tracker.domain.encodeUpdateChapters
@@ -128,6 +129,30 @@ class DesktopTrackerTest {
             assertNull(runtime.database.getTracksDao().find(10))
             tracker.enableTrackingForAllCategories()
             assertEquals(listOf(10L), tracker.syncAnchors())
+        }
+    }
+
+    @Test
+    fun `mark all read clears every counter and reminder but keeps the timeline`() = runBlocking<Unit> {
+        DesktopRuntime.open(directory).use { runtime ->
+            val library = DesktopLibrary(runtime.database) { source }
+            var remote = work(listOf(chapter(1)))
+            val tracker = DesktopTracker(runtime.database, library, { remote }, { null }, { 86_400_000L })
+            library.addFavourite(remote)
+            tracker.checkAll()
+            remote = work((1L..3L).map { chapter(it) })
+            tracker.checkAll()
+            assertEquals(2, runtime.database.getTracksDao().find(10)?.newChapters)
+            assertEquals(1, runtime.database.getTrackLogsDao().observeUnreadCount().first())
+
+            runtime.database.completeAllPendingUpdates(5_000L)
+
+            assertEquals(0, runtime.database.getTracksDao().find(10)?.newChapters)
+            assertTrue(runtime.database.getTracksDao().findUpdated().isEmpty())
+            assertEquals(0, runtime.database.getTrackLogsDao().observeUnreadCount().first())
+            assertEquals(1, runtime.database.getTrackLogsDao().count(), "the timeline keeps its rows")
+            val log = runtime.database.getTrackLogsDao().findByOwner(10).single()
+            assertTrue(decodeUpdateChapters(log.chapterMetadata).all { it.readAt == 5_000L })
         }
     }
 

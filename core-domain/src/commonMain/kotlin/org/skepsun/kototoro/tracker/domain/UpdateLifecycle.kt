@@ -109,6 +109,16 @@ suspend fun MangaDatabase.completePendingUpdates(mangaId: Long, now: Long) {
 }
 
 /**
+ * The subscriptions page's "mark all read": every tracked work's pending updates complete as in
+ * [completePendingUpdates], and reminders left by works no longer tracked stop counting as unread too. History and
+ * the timeline's rows stay. Callers run it in one write transaction.
+ */
+suspend fun MangaDatabase.completeAllPendingUpdates(now: Long) {
+    for (mangaId in getTracksDao().findAllIds()) completePendingUpdates(mangaId, now)
+    getTrackLogsDao().markAllAsSeen()
+}
+
+/**
  * Android's `TrackingRepository.updateReadChapter` fallback for counters written before v86: the badge counts
  * chapters but its log carries no identities, so there is nothing for [completeUpdateChapter] to complete and
  * reading could never lower it. The position in the branch stands in for those identities: the counter becomes the

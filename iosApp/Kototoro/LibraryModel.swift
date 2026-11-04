@@ -190,6 +190,12 @@ final class LibraryModel: ObservableObject {
         catch { self.error = error.localizedDescription }
     }
 
+    /// Android's feed "mark all read": clears every unread update and new-chapter badge, keeping history.
+    func markAllUpdatesRead() async {
+        do { try await library?.markAllUpdatesRead(); try await refreshRecords() }
+        catch { self.error = error.localizedDescription }
+    }
+
     func checkUpdates(_ sources: IosSources) async {
         _ = await checkUpdatesReport(sources)
     }

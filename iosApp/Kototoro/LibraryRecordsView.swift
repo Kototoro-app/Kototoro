@@ -225,6 +225,11 @@ private struct RecordsPage: View {
                         .disabled(library.isCheckingUpdates)
                         .accessibilityIdentifier("updates.check")
                 }
+                Menu("更多", systemImage: "ellipsis.circle") {
+                    Button("全部已读", systemImage: "checkmark.circle") { Task { await library.markAllUpdatesRead() } }
+                        .accessibilityIdentifier("records.markAllRead")
+                }
+                .accessibilityIdentifier("records.more")
             }
         }
         .refreshable {
