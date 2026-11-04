@@ -299,7 +299,7 @@ class DefaultRuleEngine @Inject constructor(
 
         // Apply regex replacement if specified (Legado ## format)
         val afterReplacement = if (rule.regexReplacement != null) {
-            result.replace(rule.regexReplacement, "")
+            SecurityValidator.replaceBounded(rule.regexReplacement, result, "") ?: ""
         } else {
             result
         }

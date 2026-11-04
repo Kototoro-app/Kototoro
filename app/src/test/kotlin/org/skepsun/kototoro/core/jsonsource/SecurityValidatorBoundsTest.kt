@@ -38,7 +38,7 @@ class SecurityValidatorBoundsTest {
     fun `findBounded gives up on catastrophic backtracking`() {
         val input = "a".repeat(64) + "!"
         val started = System.nanoTime()
-        val match = SecurityValidator.findBounded(Regex("^(a|aa)+$"), input, timeoutMs = 200)
+        val match = SecurityValidator.findBounded(Regex("^(a|aa)+\\1$"), input, timeoutMs = 200)
         val elapsedMs = (System.nanoTime() - started) / 1_000_000
         assertNull(match)
         assertTrue(elapsedMs < 5_000, "took $elapsedMs ms")
@@ -48,5 +48,21 @@ class SecurityValidatorBoundsTest {
     fun `findBounded returns ordinary matches with groups`() {
         val match = SecurityValidator.findBounded(Regex("<title>(.*?)</title>"), "<title>Kototoro</title>")
         assertEquals("Kototoro", match?.groupValues?.get(1))
+    }
+
+    @Test
+    fun `replaceBounded gives up on catastrophic backtracking`() {
+        val input = "a".repeat(64) + "!"
+        val started = System.nanoTime()
+        val replaced = SecurityValidator.replaceBounded(Regex("^(a|aa)+\\1$"), input, "", timeoutMs = 200)
+        val elapsedMs = (System.nanoTime() - started) / 1_000_000
+        assertNull(replaced)
+        assertTrue(elapsedMs < 5_000, "took $elapsedMs ms")
+    }
+
+    @Test
+    fun `replaceBounded keeps group references in the replacement`() {
+        val replaced = SecurityValidator.replaceBounded(Regex("(\\w+)\\s+(\\w+)"), "John Doe", "$2 $1")
+        assertEquals("Doe John", replaced)
     }
 }

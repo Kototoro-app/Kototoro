@@ -218,6 +218,26 @@ object SecurityValidator {
         }
     }
 
+    /**
+     * Runs [Regex.replace] under the same wall-clock budget as [findBounded], so a source rule's replacement
+     * pattern cannot pin a thread either.
+     *
+     * @return the replaced text, or null when the budget ran out
+     */
+    fun replaceBounded(
+        regex: Regex,
+        input: CharSequence,
+        replacement: String,
+        timeoutMs: Long = REGEX_TIMEOUT_MS,
+    ): String? {
+        val bounded = DeadlineCharSequence(input, System.nanoTime() + timeoutMs * 1_000_000L)
+        return try {
+            regex.replace(bounded, replacement)
+        } catch (_: RegexTimeoutException) {
+            null
+        }
+    }
+
     private const val REGEX_TIMEOUT_MS = 2_000L
 
     private class RegexTimeoutException : RuntimeException() {
