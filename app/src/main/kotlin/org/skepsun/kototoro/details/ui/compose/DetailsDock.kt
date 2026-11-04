@@ -1117,6 +1117,19 @@ private fun ExpandedPaneUtilityDock(
                             rowActions.setShowTranslate(!rowActions.showTranslate)
                         },
                     )
+                    CompactDropdownMenuItem(
+                        text = { Text(stringResource(R.string.chapter_show_thumbnails)) },
+                        leadingIcon = {
+                            DetailsMenuIcon(R.drawable.ic_images)
+                        },
+                        trailingIcon = {
+                            MenuSelectionIndicator(selected = rowActions.showThumbnails)
+                        },
+                        onClick = {
+                            expanded = false
+                            rowActions.setShowThumbnails(!rowActions.showThumbnails)
+                        },
+                    )
                 }
             }
         }

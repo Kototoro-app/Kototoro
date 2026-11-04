@@ -320,6 +320,7 @@ fun ChaptersScreenRoot(
         } else {
             null
         },
+        showFirstPageThumbnails = rowActions.showThumbnails,
         onItemTranslate = if (canTranslateChapters && rowActions.showTranslate) {
             { item, isRetranslation -> startTranslation(setOf(item.chapter.id), isRetranslation) }
         } else {

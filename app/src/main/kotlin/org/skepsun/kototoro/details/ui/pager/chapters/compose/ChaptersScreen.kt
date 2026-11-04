@@ -73,6 +73,8 @@ fun ChaptersScreen(
      * translating it again: the job must then ignore the renders of the previous run.
      */
     onItemTranslate: ((ChapterListItem, Boolean) -> Unit)? = null,
+    /** Shows each image chapter's first page when the source gives the chapter no artwork of its own. */
+    showFirstPageThumbnails: Boolean = false,
     onHeaderClick: (CollapsibleListHeader) -> Unit,
     onFilterChipClick: (ChipModel) -> Unit,
     onSelectionActionClick: (Int) -> Unit,
@@ -174,7 +176,8 @@ fun ChaptersScreen(
                 val focusRequester = defaultFocusRequester.takeIf { index == focusTargetIndex }
                 if (isGrid) {
                     ChapterGridCard(item, selectedItemIds.contains(item.chapter.id), onClick,
-                        onLongClick = { onItemLongClick(item) }, focusRequester = focusRequester)
+                        onLongClick = { onItemLongClick(item) }, focusRequester = focusRequester,
+                        showFirstPageThumbnail = showFirstPageThumbnails)
                 } else {
                     val isSelectionActive = selectedItemIds.isNotEmpty()
                     val canDownload = onItemDownload != null && !isSelectionActive &&
@@ -183,7 +186,8 @@ fun ChaptersScreen(
                     ChapterListCard(item, selectedItemIds.contains(item.chapter.id), onClick,
                         onLongClick = { onItemLongClick(item) }, focusRequester = focusRequester,
                         onDownload = if (canDownload) ({ onItemDownload?.invoke(item) }) else null,
-                        onTranslate = if (canTranslate) ({ requestTranslate(item) }) else null)
+                        onTranslate = if (canTranslate) ({ requestTranslate(item) }) else null,
+                        showFirstPageThumbnail = showFirstPageThumbnails)
                 }
             }
             is CollapsibleListHeader -> CollapsibleHeaderUI(item, onClick = { onHeaderClick(item) })

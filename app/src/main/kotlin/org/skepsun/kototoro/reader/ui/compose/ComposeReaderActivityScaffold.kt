@@ -437,6 +437,14 @@ private fun ReaderChapterPanelMoreMenu(
                 rowActions.setShowTranslate(!rowActions.showTranslate)
             },
         )
+        ReaderChapterPanelMenuItem(
+            text = stringResource(R.string.chapter_show_thumbnails),
+            selected = rowActions.showThumbnails,
+            onClick = {
+                onDismissRequest()
+                rowActions.setShowThumbnails(!rowActions.showThumbnails)
+            },
+        )
     }
 }
 

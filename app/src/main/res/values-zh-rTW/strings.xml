@@ -2919,6 +2919,7 @@ SHA-256 指紋:
     <string name="updates_check_too_soon">剛剛檢查過，請稍後再試</string>
     <string name="chapter_show_download_button">顯示下載按鈕</string>
     <string name="chapter_show_translate_button">顯示翻譯按鈕</string>
+    <string name="chapter_show_thumbnails">顯示章節縮圖</string>
     <string name="welcome_intro_title">設定 Kototoro</string>
     <string name="welcome_intro_summary">選擇你的閱讀和觀看方式。Kototoro 現在通過外掛化來源族群整合漫畫、小說和影片，支援 JAR、Mihon、Aniyomi、IReader、Legado、TVBox、LNReader 和 Cloudstream。</string>
     <string name="welcome_step_start">開始</string>
