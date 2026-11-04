@@ -97,6 +97,7 @@ import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
+import org.skepsun.kototoro.core.prefs.TabletUiMode
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.compose.KototoroPullToRefreshBox
 import org.skepsun.kototoro.core.ui.compose.KototoroSnackbarHost
@@ -436,7 +437,15 @@ private fun DetailsScreenContent(
         resolveAvailableDetailsTabIds(contentType, settings)
     }
     // Android and Windows share the expanded-window decision; Android supplies its tablet-mode preference.
-    val isWideAdaptiveLayout = isTvPresentation || rememberAndroidTabletLayoutClass(settings) == TabletLayoutClass.EXPANDED
+    // Relaxed tablet detection also splits medium windows (600dp+, e.g. foldable inner screens, #630);
+    // strict detection keeps portrait tablets single-column until the window is expanded.
+    val tabletLayoutClass = rememberAndroidTabletLayoutClass(settings)
+    val tabletUiMode by settings.observeAsState(AppSettings.KEY_TABLET_UI_MODE) { tabletUiMode }
+    val isWideAdaptiveLayout = isTvPresentation || when (tabletLayoutClass) {
+        TabletLayoutClass.EXPANDED -> true
+        TabletLayoutClass.MEDIUM -> tabletUiMode == TabletUiMode.RELAXED
+        TabletLayoutClass.COMPACT -> false
+    }
     val isModernDetailsDockEnabled by settings.observeAsState(AppSettings.KEY_MODERN_DETAILS_DOCK) {
         isModernDetailsDockEnabled
     }
