@@ -41,7 +41,6 @@ import org.skepsun.kototoro.core.ui.chapters.ChapterListCard as SharedChapterLis
 import org.skepsun.kototoro.details.domain.ChapterThumbnailResolver
 import org.skepsun.kototoro.details.ui.model.ChapterListItem
 import org.skepsun.kototoro.parsers.model.ContentChapter
-import org.skepsun.kototoro.parsers.model.ContentPage
 
 /** Android resource and TV-focus adapters for the shared chapter cards. */
 @Composable
@@ -201,18 +200,12 @@ private fun firstPageThumbnail(chapter: ContentChapter): (@Composable BoxScope.(
     }
     if (!resolver.supports(chapter)) return null
     return {
-        val page by produceState<ContentPage?>(null, chapter.id, chapter.url) {
-            value = resolver.firstPage(chapter)
+        val image by produceState<Any?>(null, chapter.id, chapter.url) {
+            value = resolver.thumbnail(chapter)
         }
-        page?.let { firstPage ->
-            val request = remember(context, firstPage) {
-                ImageRequest.Builder(context)
-                    .data(firstPage)
-                    .mangaSourceExtra(firstPage.source)
-                    .build()
-            }
+        image?.let { model ->
             AsyncImage(
-                model = request,
+                model = model,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),

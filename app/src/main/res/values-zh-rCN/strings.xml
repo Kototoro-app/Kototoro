@@ -168,6 +168,7 @@
     <string name="text_file_not_supported">必须选择一个 ZIP 或 CBZ 文件。</string>
     <string name="no_description">暂无简介</string>
     <string name="clear_pages_cache">清除页面缓存</string>
+    <string name="clear_chapter_thumbnails">清除章节缩略图</string>
     <string name="text_file_sizes">B|kB|MB|GB|TB</string>
     <string name="standard">默认</string>
     <string name="webtoon">条漫</string>

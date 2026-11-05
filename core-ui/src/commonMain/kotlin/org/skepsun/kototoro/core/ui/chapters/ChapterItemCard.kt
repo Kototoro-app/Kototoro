@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.core.ui.chapters
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
@@ -183,7 +184,12 @@ fun ChapterGridCard(
         shape = RoundedCornerShape(8.dp),
         colors = CardDefaults.cardColors(containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer
             else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .5f)),
-        border = if (!item.isUnread && !isSelected) null else CardDefaults.outlinedCardBorder(),
+        // A thumbnail covers the container colour, so selection also needs the bookmark cards' thick border.
+        border = when {
+            isSelected -> BorderStroke(4.dp, MaterialTheme.colorScheme.primary)
+            !item.isUnread -> null
+            else -> CardDefaults.outlinedCardBorder()
+        },
     ) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val titleStyle = when {
@@ -192,7 +198,12 @@ fun ChapterGridCard(
                 maxWidth < 88.dp -> MaterialTheme.typography.bodyMedium
                 else -> MaterialTheme.typography.titleMedium
             }
-            if (thumbnail != null) thumbnail() else {
+            if (thumbnail != null) {
+                thumbnail()
+                if (isSelected) {
+                    Box(Modifier.matchParentSize().background(MaterialTheme.colorScheme.primary.copy(alpha = .3f)))
+                }
+            } else {
                 Text(item.title, style = titleStyle, color = titleColor, maxLines = 1, textAlign = TextAlign.Center,
                     overflow = TextOverflow.Ellipsis, modifier = Modifier.align(Alignment.Center))
             }

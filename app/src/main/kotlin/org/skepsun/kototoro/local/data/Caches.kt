@@ -13,3 +13,7 @@ annotation class FaviconCache
 @Qualifier
 @Retention(AnnotationRetention.BINARY)
 annotation class NovelCache
+
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+annotation class ChapterThumbnailCache

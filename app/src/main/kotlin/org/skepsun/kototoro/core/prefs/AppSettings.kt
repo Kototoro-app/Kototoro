@@ -72,6 +72,7 @@ import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 import org.skepsun.kototoro.list.ui.compose.GridSizeRange
+import org.skepsun.kototoro.core.ui.chapters.ChapterGridSizeRange
 
 private const val PAGE_THUMBNAIL_ASPECT_RATIO_DEFAULT = 0.7f
 private const val PAGE_THUMBNAIL_ASPECT_RATIO_MIN = 0.35f
@@ -581,8 +582,8 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 
     /** The chapter grid's own size; until first changed it follows the page grid it used to share. */
     var gridSizeChapters: Int
-        get() = prefs.getSafeInt(KEY_GRID_SIZE_CHAPTERS, gridSizePages).coerceIn(50, 150)
-        set(value) = prefs.edit { putInt(KEY_GRID_SIZE_CHAPTERS, value.coerceIn(50, 150)) }
+        get() = prefs.getSafeInt(KEY_GRID_SIZE_CHAPTERS, gridSizePages).coerceIn(ChapterGridSizeRange)
+        set(value) = prefs.edit { putInt(KEY_GRID_SIZE_CHAPTERS, value.coerceIn(ChapterGridSizeRange)) }
 
     var pageThumbnailAspectRatio: Float
         get() = prefs.getSafeFloat(KEY_PAGE_THUMBNAIL_ASPECT_RATIO, PAGE_THUMBNAIL_ASPECT_RATIO_DEFAULT)
@@ -2980,6 +2981,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_TABLET_LIST_FILTER_PANEL_DEFAULT = "tablet_list_filter_panel_default"
         const val KEY_OFFLINE_DISABLED = "no_offline"
         const val KEY_PAGES_CACHE_CLEAR = "pages_cache_clear"
+        const val KEY_CHAPTER_THUMBS_CACHE_CLEAR = "chapter_thumbs_cache_clear"
         const val KEY_NOVEL_CACHE_CLEAR = "novel_cache_clear"
         const val KEY_VIDEO_CACHE_CLEAR = "video_cache_clear"
             const val KEY_VIDEO_PROXY_CACHE_CLEAR = "video_proxy_cache_clear"

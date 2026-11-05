@@ -12,5 +12,6 @@ enum class CacheDir(val dir: String) {
         DANMAKU("danmaku_cache"),
     HTTP("http"),
     SUPER_RESOLUTION("sr_cache"),
+    CHAPTER_THUMBS("chapter_thumbs"),
     TtsAudio("tts_audio");
 }

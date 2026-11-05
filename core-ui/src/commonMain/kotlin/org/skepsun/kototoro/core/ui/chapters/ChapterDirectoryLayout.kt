@@ -16,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.core.ui.gestures.mouseDragScroll
 import kotlin.math.roundToInt
@@ -57,8 +58,7 @@ fun <T> ChapterDirectoryLayout(
                 leadingContent == null && items.isEmpty() && (isLoading || emptyMessage != null) ->
                     ChapterDirectoryEmptyState(isLoading, emptyMessage, Modifier.fillMaxSize())
                 isGridView -> BoxWithConstraints(Modifier.fillMaxSize().then(contentModifier)) {
-                    val targetWidth = (gridScale * 80).dp.coerceIn(48.dp, 160.dp)
-                    val columns = (maxWidth / targetWidth).roundToInt().coerceAtLeast(2)
+                    val columns = chapterGridColumns(maxWidth, gridScale)
                     LazyVerticalGrid(
                         state = gridState,
                         columns = GridCells.Fixed(columns),
@@ -129,3 +129,15 @@ private fun ChapterDirectoryEmptyState(isLoading: Boolean, message: String?, mod
             modifier = Modifier.padding(16.dp))
     }
 }
+
+/**
+ * Columns of the chapter grid for [width]: a card is about 80dp at 100%. The top of [ChapterGridSizeRange] reaches one
+ * card per row on a phone, for chapters shown as their first page.
+ */
+fun chapterGridColumns(width: Dp, gridScale: Float): Int {
+    val targetWidth = (gridScale * 80).dp.coerceIn(48.dp, 320.dp)
+    return (width / targetWidth).roundToInt().coerceAtLeast(1)
+}
+
+/** Chapter grid size in percent; wider than the page-preview grid so page thumbnails can go one or two per row. */
+val ChapterGridSizeRange: IntRange = 50..400
