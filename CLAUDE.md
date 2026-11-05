@@ -122,9 +122,9 @@ npm run docs:build
 ## 技术栈
 
 - **Kotlin** 2.4.0 / **AGP** 9.3.1 / **Gradle** 9.7.0（使用 `gradle/libs.versions.toml` 版本目录）
-- **compileSdk** 37 / **minSdk** 26 / **targetSdk** 37
+- **compileSdk** 37.1（app；Compose ui 1.13 要求该小版本 SDK）/ **minSdk** 26 / **targetSdk** 37
 - **JVM 目标**: Java 11（开启 desugaring 以使用现代 API）
-- **UI**: Jetpack Compose（BOM 2026.08.00，ui 1.12.0）+ Material3（1.5.0-alpha26 覆盖 BOM 的 1.4.0）+ ViewBinding（混合过渡期）
+- **UI**: Jetpack Compose（BOM 2026.08.00；ui/runtime 1.13.0-rc01 覆盖 BOM 的 1.12.x，用于边缘渐进模糊的 `BlurRadiusSpec`）+ Material3（1.5.0-alpha26 覆盖 BOM 的 1.4.0）+ ViewBinding（混合过渡期）
 - **数据库**: Room 2.8.4，KSP 代码生成
 - **DI**: Hilt/Dagger（dagger 2.60.1，androidx.hilt 1.3.0）
 - **网络**: OkHttp 5.4.0
