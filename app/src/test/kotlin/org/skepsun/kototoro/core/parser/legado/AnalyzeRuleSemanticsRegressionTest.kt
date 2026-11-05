@@ -125,6 +125,20 @@ class AnalyzeRuleSemanticsRegressionTest : FunSpec({
         analyzer.getString("nomatch##foo(\\d+)##fallback##1", mContent = "plain text") shouldBe ""
     }
 
+    test("##regex##replacement 遇到灾难性回溯时在时限内放弃并保留原文") {
+        val analyzer = AnalyzeRule(
+            content = "<div>${"a".repeat(64)}!</div>",
+            runtimeContext = TestLegadoRuleRuntimeContext(),
+            baseUrl = "https://example.com",
+        )
+
+        analyzer.getString("div@text##a+##X") shouldBe "X!"
+        val started = System.nanoTime()
+        analyzer.getString("div@text##^(a|aa)+\\1\$##X") shouldBe "${"a".repeat(64)}!"
+        analyzer.getString("div@text##^(a|aa)+\\1\$##X###") shouldBe ""
+        ((System.nanoTime() - started) / 1_000_000 < 10_000) shouldBe true
+    }
+
     test("规则前缀包含 ## 时 {{}} 不应把整条规则切入 Regex 模式，最终仍按默认规则求值") {
         val runtimeContext = TestLegadoRuleRuntimeContext(
             jsEvaluator = { script, _ ->

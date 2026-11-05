@@ -516,7 +516,7 @@ class EnhancedRuleEngine @Inject constructor(
     private fun applyRegexExtraction(input: String, pattern: String): String {
         return try {
             val regex = Regex(pattern)
-            val match = regex.find(input)
+            val match = SecurityValidator.findBounded(regex, input)
 
             if (match != null) {
                 // 如果有捕获组，返回第一个捕获组

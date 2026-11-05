@@ -65,4 +65,16 @@ class SecurityValidatorBoundsTest {
         val replaced = SecurityValidator.replaceBounded(Regex("(\\w+)\\s+(\\w+)"), "John Doe", "$2 $1")
         assertEquals("Doe John", replaced)
     }
+
+    @Test
+    fun `replaceFirstBounded gives up on catastrophic backtracking`() {
+        val input = "a".repeat(64) + "!"
+        val replaced = SecurityValidator.replaceFirstBounded(Regex("^(a|aa)+\\1$"), input, "", timeoutMs = 200)
+        assertNull(replaced)
+    }
+
+    @Test
+    fun `replaceFirstBounded replaces only the first match`() {
+        assertEquals("X-2-3", SecurityValidator.replaceFirstBounded(Regex("\\d"), "1-2-3", "X"))
+    }
 }

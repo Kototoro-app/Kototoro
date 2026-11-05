@@ -238,6 +238,25 @@ object SecurityValidator {
         }
     }
 
+    /**
+     * Runs [Regex.replaceFirst] under the same wall-clock budget as [findBounded].
+     *
+     * @return the replaced text, or null when the budget ran out
+     */
+    fun replaceFirstBounded(
+        regex: Regex,
+        input: CharSequence,
+        replacement: String,
+        timeoutMs: Long = REGEX_TIMEOUT_MS,
+    ): String? {
+        val bounded = DeadlineCharSequence(input, System.nanoTime() + timeoutMs * 1_000_000L)
+        return try {
+            regex.replaceFirst(bounded, replacement)
+        } catch (_: RegexTimeoutException) {
+            null
+        }
+    }
+
     private const val REGEX_TIMEOUT_MS = 2_000L
 
     private class RegexTimeoutException : RuntimeException() {
