@@ -3265,6 +3265,13 @@ SHA-256 指纹:
     <string name="font_downloads">字体下载</string>
     <string name="pref_glass_immersive_strength">沉浸式着色强度</string>
     <string name="pref_glass_immersive_strength_summary">独立控制顶部和底部的沉浸式着色强度，不受预设影响</string>
+    <string name="pref_glass_edge_blur">边缘模糊</string>
+    <string name="pref_glass_edge_blur_summary">模糊顶栏与底栏下方的内容并渐隐过渡，需要 Android 12 及以上</string>
+    <string name="pref_glass_blur_quality">模糊画质</string>
+    <string name="pref_glass_blur_quality_summary">玻璃与边缘模糊的计算分辨率。越低越省 GPU 与电量，越高离开模糊区的文字越清晰</string>
+    <string name="pref_glass_blur_quality_performance">性能</string>
+    <string name="pref_glass_blur_quality_balanced">均衡</string>
+    <string name="pref_glass_blur_quality_quality">画质</string>
     <string name="glass_material_family_kototoro">Kototoro（推荐）</string>
     <string name="glass_material_family_haze">Haze 风格</string>
     <string name="glass_material_family_cupertino">Cupertino 风格</string>

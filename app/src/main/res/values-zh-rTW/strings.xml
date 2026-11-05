@@ -2621,6 +2621,13 @@ SHA-256 指紋:
     <string name="pref_glass_noise_strength_summary">設定目前玻璃預設應用的最終噪點量，範圍 0.00 至 1.00</string>
     <string name="pref_glass_immersive_strength">沉浸式着色強度</string>
     <string name="pref_glass_immersive_strength_summary">獨立控制頂部和底部的沉浸式著色強度，不受預設影響</string>
+    <string name="pref_glass_edge_blur">邊緣模糊</string>
+    <string name="pref_glass_edge_blur_summary">模糊頂欄與底欄下方的內容並漸隱過渡，需要 Android 12 以上</string>
+    <string name="pref_glass_blur_quality">模糊畫質</string>
+    <string name="pref_glass_blur_quality_summary">玻璃與邊緣模糊的計算解析度。越低越省 GPU 與電量，越高離開模糊區的文字越清晰</string>
+    <string name="pref_glass_blur_quality_performance">效能</string>
+    <string name="pref_glass_blur_quality_balanced">均衡</string>
+    <string name="pref_glass_blur_quality_quality">畫質</string>
     <string name="glass_material_kototoro">Kototoro（推薦）</string>
     <string name="glass_material_haze_ultra_thin">Haze 超薄</string>
     <string name="glass_material_haze_thin">Haze 薄</string>

@@ -64,11 +64,13 @@ fun rememberGlassPrefs(settings: AppSettings): GlassPrefs {
         AppSettings.KEY_GLASS_EFFECT_ENABLED,
         AppSettings.KEY_REDUCED_VISUAL_EFFECTS,
         AppSettings.KEY_GLASS_IMMERSIVE_STRENGTH,
+        AppSettings.KEY_GLASS_EDGE_BLUR,
     ) {
         GlassPrefs(
             isGlassEffectEnabled = isGlassEffectEnabled && !isReducedVisualEffectsEnabled,
             isReducedVisualEffectsEnabled = isReducedVisualEffectsEnabled,
             immersiveStrengthPercent = glassImmersiveStrengthPercent,
+            edgeBlurRadiusDp = if (isReducedVisualEffectsEnabled) 0 else glassEdgeBlurRadiusDp,
         )
     }
     return prefs

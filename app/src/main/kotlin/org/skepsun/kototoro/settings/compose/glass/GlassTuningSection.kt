@@ -61,9 +61,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.isRenderEffectSupported
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.kyant.shapes.Capsule
 import com.kyant.shapes.RoundedRectangle
+import org.skepsun.kototoro.core.prefs.AppSettings
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import org.skepsun.kototoro.core.prefs.GlassBlurQuality
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.adaptive.tvChipRing
@@ -100,6 +106,10 @@ fun GlassTuningSection(
     onGlassEffectEnabledChange: (Boolean) -> Unit,
     onReducedVisualEffectsChange: (Boolean) -> Unit,
     onImmersiveStrengthChange: (Int) -> Unit,
+    edgeBlurRadiusDp: Int,
+    onEdgeBlurRadiusChange: (Int) -> Unit,
+    blurQuality: GlassBlurQuality,
+    onBlurQualityChange: (GlassBlurQuality) -> Unit,
     onSetValue: (GlassTuningScope, GlassTuningParam, Float) -> Unit,
     onSetFollowGlobal: (GlassTuningScope, GlassTuningParam, Boolean) -> Unit,
     onApplyPreset: (GlassPreset) -> Unit,
@@ -137,6 +147,17 @@ fun GlassTuningSection(
         value = immersiveStrengthPercent,
         onValueChange = onImmersiveStrengthChange,
     )
+    if (isRenderEffectSupported()) {
+        GlassEdgeBlurSlider(
+            value = edgeBlurRadiusDp,
+            enabled = !isReducedVisualEffects,
+            onValueChange = onEdgeBlurRadiusChange,
+        )
+        GlassBlurQualityRow(
+            selected = blurQuality,
+            onSelected = onBlurQualityChange,
+        )
+    }
     HorizontalDivider()
     GlassPresetRow(
         tuning = tuning,
@@ -273,6 +294,96 @@ private fun GlassImmersiveSlider(
             onValueChangeFinished = { onValueChange(pendingValue) },
             valueRange = 0f..100f,
             steps = 9,
+        )
+    }
+}
+
+@Composable
+private fun GlassBlurQualityRow(
+    selected: GlassBlurQuality,
+    onSelected: (GlassBlurQuality) -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Column {
+            Text(
+                text = stringResource(R.string.pref_glass_blur_quality),
+                style = MaterialTheme.typography.bodyLarge,
+                maxLines = 1,
+            )
+            Text(
+                text = stringResource(R.string.pref_glass_blur_quality_summary),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        val qualities = GlassBlurQuality.entries
+        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+            qualities.forEachIndexed { index, quality ->
+                SegmentedButton(
+                    modifier = Modifier.weight(1f),
+                    selected = selected == quality,
+                    onClick = { onSelected(quality) },
+                    shape = SegmentedButtonDefaults.itemShape(index = index, count = qualities.size),
+                    label = {
+                        Text(
+                            text = stringResource(
+                                when (quality) {
+                                    GlassBlurQuality.PERFORMANCE -> R.string.pref_glass_blur_quality_performance
+                                    GlassBlurQuality.BALANCED -> R.string.pref_glass_blur_quality_balanced
+                                    GlassBlurQuality.QUALITY -> R.string.pref_glass_blur_quality_quality
+                                },
+                            ),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun GlassEdgeBlurSlider(
+    value: Int,
+    enabled: Boolean,
+    onValueChange: (Int) -> Unit,
+) {
+    var pendingValue by remember(value) { mutableStateOf(value) }
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.pref_glass_edge_blur),
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 1,
+                )
+                Text(
+                    text = stringResource(R.string.pref_glass_edge_blur_summary),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Text(
+                text = if (pendingValue == 0) stringResource(R.string.disabled) else "$pendingValue dp",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Slider(
+            value = pendingValue.toFloat(),
+            onValueChange = { pendingValue = it.toInt() },
+            onValueChangeFinished = { onValueChange(pendingValue) },
+            enabled = enabled,
+            valueRange = 0f..AppSettings.GLASS_EDGE_BLUR_MAX_DP.toFloat(),
+            steps = AppSettings.GLASS_EDGE_BLUR_MAX_DP / 4 - 1,
         )
     }
 }

@@ -94,6 +94,8 @@ class SettingsSearchHelper @Inject constructor(
             "glass_tuner" to R.string.appearance_group_glass_tuner,
             "glass_effect" to R.string.pref_glass_effect,
             "glass_immersive_strength" to R.string.pref_glass_immersive_strength,
+            "glass_edge_blur" to R.string.pref_glass_edge_blur,
+            "glass_blur_quality" to R.string.pref_glass_blur_quality,
             "reduce_visual_effects" to R.string.pref_reduce_visual_effects,
         ).forEach { (key, titleRes) ->
             result.add(

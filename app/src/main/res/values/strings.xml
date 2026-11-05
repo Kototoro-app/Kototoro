@@ -3436,6 +3436,13 @@
     <string name="pref_glass_noise_strength_summary">Sets the final noise amount applied to the current glass material preset, from 0.00 to 1.00</string>
     <string name="pref_glass_immersive_strength">Immersive tint strength</string>
     <string name="pref_glass_immersive_strength_summary">Controls the top and bottom immersive tint intensity independently of the selected material preset</string>
+    <string name="pref_glass_edge_blur">Edge blur</string>
+    <string name="pref_glass_edge_blur_summary">Blurs the content under the top and bottom bars and fades it out; requires Android 12 or later</string>
+    <string name="pref_glass_blur_quality">Blur quality</string>
+    <string name="pref_glass_blur_quality_summary">Resolution that glass and edge blur are computed from. Lower saves GPU and battery; higher keeps text that leaves the blur sharper</string>
+    <string name="pref_glass_blur_quality_performance">Performance</string>
+    <string name="pref_glass_blur_quality_balanced">Balanced</string>
+    <string name="pref_glass_blur_quality_quality">Quality</string>
     <string name="glass_material_family_kototoro">Kototoro (Recommended)</string>
     <string name="glass_material_family_haze">Haze</string>
     <string name="glass_material_family_cupertino">Cupertino</string>

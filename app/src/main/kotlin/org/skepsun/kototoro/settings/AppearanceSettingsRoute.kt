@@ -233,6 +233,10 @@ fun AppearanceSettingsRoute(
         settings.observeAsState(AppSettings.KEY_NAV_ACCENT_SAMPLE_BLUE) { isSampleBlueNavAccentEnabled }.value
     val glassImmersiveStrengthPercent =
         settings.observeAsState(AppSettings.KEY_GLASS_IMMERSIVE_STRENGTH) { glassImmersiveStrengthPercent }.value
+    val glassEdgeBlurRadiusDp =
+        settings.observeAsState(AppSettings.KEY_GLASS_EDGE_BLUR) { glassEdgeBlurRadiusDp }.value
+    val glassBlurQuality =
+        settings.observeAsState(AppSettings.KEY_GLASS_BLUR_QUALITY) { glassBlurQuality }.value
     val isGlassEffectEnabled =
         settings.observeAsState(AppSettings.KEY_GLASS_EFFECT_ENABLED) { isGlassEffectEnabled }.value
     // Glass Finish Tuner state (Global + 5 role scopes) and its live controller.
@@ -457,6 +461,8 @@ fun AppearanceSettingsRoute(
         isGlassEffectEnabled = isGlassEffectEnabled,
         isReducedVisualEffectsEnabled = isReducedVisualEffectsEnabled,
         glassImmersiveStrengthPercent = glassImmersiveStrengthPercent,
+        glassEdgeBlurRadiusDp = glassEdgeBlurRadiusDp,
+        glassBlurQuality = glassBlurQuality,
     )
 
     AppearanceSettingsScreen(
@@ -557,6 +563,8 @@ fun AppearanceSettingsRoute(
         onGlassEffectEnabledChange = { settings.isGlassEffectEnabled = it },
         onReducedVisualEffectsChange = { settings.isReducedVisualEffectsEnabled = it },
         onImmersiveStrengthChange = { settings.glassImmersiveStrengthPercent = it },
+        onEdgeBlurRadiusChange = { settings.glassEdgeBlurRadiusDp = it },
+        onBlurQualityChange = { settings.glassBlurQuality = it },
         glassTuning = glassTuning,
         onGlassTuningSetValue = { scope, param, value ->
             glassTuningController.setValue(scope, param, value)

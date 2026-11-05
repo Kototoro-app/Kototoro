@@ -74,6 +74,11 @@ import org.skepsun.kototoro.core.ui.compose.LocalNavAnimatedVisibilityScope
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassLayerBackdrop
 import org.skepsun.kototoro.core.ui.compose.RouteLiquidGlassBackdrop
+import org.skepsun.kototoro.core.ui.compose.LocalArtworkBackdrop
+import org.skepsun.kototoro.core.ui.compose.LocalImmersiveEdgeBackdrop
+import org.skepsun.kototoro.core.ui.compose.immersiveEdgeBlurRadius
+import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.prefs.ListToDetailsTransition
@@ -232,13 +237,31 @@ fun MainShellScene(
             ownerKey = shellBackdropOwnerKey,
             active = isMainShellRouteVisible,
         ) { layerBackdrop ->
+            // iOS already records the page for its glass; Material records it only for the edge blur.
+            val materialEdgeLayer = if (!useLiquidGlass && immersiveEdgeBlurRadius() > 0.dp) {
+                val backgroundColor = MaterialTheme.colorScheme.background
+                rememberLayerBackdrop {
+                    drawRect(backgroundColor)
+                    drawContent()
+                }
+            } else {
+                null
+            }
+            val artworkBackdrop = LocalArtworkBackdrop.current
+            val edgeBackdrop = when {
+                useLiquidGlass -> LocalLiquidGlassBackdrop.current
+                materialEdgeLayer == null -> null
+                artworkBackdrop != null -> rememberCombinedBackdrop(artworkBackdrop, materialEdgeLayer)
+                else -> materialEdgeLayer
+            }
+            val recordedLayer = if (useLiquidGlass) layerBackdrop else materialEdgeLayer
             Box(modifier = Modifier.fillMaxSize()) {
                 MainRouteScene(
                     landscapeStartPadding = landscapeStartPadding,
                     sourceModifier = Modifier
                         .then(
-                            if (useLiquidGlass && layerBackdrop != null) {
-                                Modifier.layerBackdrop(layerBackdrop)
+                            if (recordedLayer != null) {
+                                Modifier.layerBackdrop(recordedLayer)
                             } else {
                                 Modifier
                             },
@@ -278,7 +301,9 @@ fun MainShellScene(
                         }
                     }
                 }
-                mainShellChrome()
+                CompositionLocalProvider(LocalImmersiveEdgeBackdrop provides edgeBackdrop) {
+                    mainShellChrome()
+                }
                 CompositionLocalProvider(
                     LocalLiquidGlassBackdrop provides layerBackdrop,
                     LocalLiquidGlassLayerBackdrop provides layerBackdrop,

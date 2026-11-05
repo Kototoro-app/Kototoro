@@ -1561,6 +1561,19 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         ).coerceIn(0, 100)
         set(value) = prefs.edit { putInt(KEY_GLASS_IMMERSIVE_STRENGTH, value.coerceIn(0, 100)) }
 
+    /** Resolution of the backdrop that glass and edge blurs are computed from; lower is cheaper on the GPU. */
+    var glassBlurQuality: GlassBlurQuality
+        get() = prefs.getEnumValue(KEY_GLASS_BLUR_QUALITY, GlassBlurQuality.BALANCED)
+        set(value) = prefs.edit { putEnumValue(KEY_GLASS_BLUR_QUALITY, value) }
+
+    /** Blur radius (dp) of the main shell's top/bottom immersive edges; 0 keeps the plain tint gradient. */
+    var glassEdgeBlurRadiusDp: Int
+        get() = prefs.getSafeInt(
+            KEY_GLASS_EDGE_BLUR,
+            GLASS_EDGE_BLUR_DEFAULT_DP,
+        ).coerceIn(0, GLASS_EDGE_BLUR_MAX_DP)
+        set(value) = prefs.edit { putInt(KEY_GLASS_EDGE_BLUR, value.coerceIn(0, GLASS_EDGE_BLUR_MAX_DP)) }
+
     var isGlassEffectEnabled: Boolean
         get() = prefs.getBoolean(KEY_GLASS_EFFECT_ENABLED, true)
         set(value) = prefs.edit { putBoolean(KEY_GLASS_EFFECT_ENABLED, value) }
@@ -2798,6 +2811,8 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
             putBoolean(KEY_DETAILS_PANORAMA_SCROLL_LINKED, isDetailsPanoramaScrollLinkedEnabled)
             putString(KEY_POPUP_RADIUS, popupRadius.toString())
             putInt(KEY_GLASS_IMMERSIVE_STRENGTH, glassImmersiveStrengthPercent)
+            putInt(KEY_GLASS_EDGE_BLUR, glassEdgeBlurRadiusDp)
+            putEnumValue(KEY_GLASS_BLUR_QUALITY, glassBlurQuality)
             putBoolean(KEY_GLASS_EFFECT_ENABLED, isGlassEffectEnabled)
             putBoolean(KEY_REDUCED_VISUAL_EFFECTS, isReducedVisualEffectsEnabled)
             // Glass Finish Tuner scope configs (Global + 5 roles).
@@ -3365,6 +3380,10 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_LOADING_CIRCLE_STYLE = "loading_circle_style"
         const val KEY_POPUP_RADIUS = "popup_radius"
         const val KEY_GLASS_IMMERSIVE_STRENGTH = "glass_immersive_strength"
+        const val KEY_GLASS_EDGE_BLUR = "glass_edge_blur"
+        const val KEY_GLASS_BLUR_QUALITY = "glass_blur_quality"
+        const val GLASS_EDGE_BLUR_DEFAULT_DP = 16
+        const val GLASS_EDGE_BLUR_MAX_DP = 40
         const val KEY_GLASS_EFFECT_ENABLED = "glass_effect_enabled"
         const val KEY_REDUCED_VISUAL_EFFECTS = "reduced_visual_effects"
         const val KEY_DETAILS_PANORAMA_SCROLL_LINKED = "details_panorama_scroll_linked"

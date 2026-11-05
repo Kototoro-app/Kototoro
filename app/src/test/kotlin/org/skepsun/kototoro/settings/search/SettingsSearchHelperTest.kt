@@ -56,6 +56,8 @@ class SettingsSearchHelperTest {
 			"glass_tuner" to "string-${R.string.appearance_group_glass_tuner}",
 			"glass_effect" to "string-${R.string.pref_glass_effect}",
 			"glass_immersive_strength" to "string-${R.string.pref_glass_immersive_strength}",
+			"glass_edge_blur" to "string-${R.string.pref_glass_edge_blur}",
+			"glass_blur_quality" to "string-${R.string.pref_glass_blur_quality}",
 			"reduce_visual_effects" to "string-${R.string.pref_reduce_visual_effects}",
 		)
 		settings.map { it.breadcrumbs }.distinct() shouldBe listOf(

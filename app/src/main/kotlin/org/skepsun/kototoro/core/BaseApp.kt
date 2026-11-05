@@ -14,6 +14,7 @@ import coil3.SingletonImageLoader
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
+import com.kyant.backdrop.BackdropQuality
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
@@ -78,6 +79,7 @@ open class BaseApp : App(), Configuration.Provider, SingletonImageLoader.Factory
         entryPoint.settingsSyncStore()
         entryPoint.settings().reconcileAfterAppUpgrade(BuildConfig.VERSION_CODE)
         AppCompatDelegate.setDefaultNightMode(entryPoint.settings().theme)
+        bindBackdropQuality(entryPoint.settings())
         // TLS 1.3 support for Android < 10
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
             try {
@@ -189,6 +191,16 @@ open class BaseApp : App(), Configuration.Provider, SingletonImageLoader.Factory
         val tracker = entryPoint.database().get().invalidationTracker
         entryPoint.databaseObserversProvider().get().forEach {
             tracker.addObserver(it)
+        }
+    }
+
+    /** Every Backdrop surface reads [BackdropQuality]; keep it on the user's glass blur quality. */
+    private fun bindBackdropQuality(settings: AppSettings) {
+        BackdropQuality.inputScale = settings.glassBlurQuality.inputScale
+        processLifecycleScope.launch(Dispatchers.Main) {
+            settings.observe(AppSettings.KEY_GLASS_BLUR_QUALITY).collect {
+                BackdropQuality.inputScale = settings.glassBlurQuality.inputScale
+            }
         }
     }
 

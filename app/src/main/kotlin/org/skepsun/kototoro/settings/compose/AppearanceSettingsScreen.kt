@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.prefs.GlassBlurQuality
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.AppFontPreset
 import org.skepsun.kototoro.core.prefs.BackgroundArtworkSource
@@ -128,6 +129,8 @@ data class AppearanceSettingsUiState(
     val isGlassEffectEnabled: Boolean,
     val isReducedVisualEffectsEnabled: Boolean,
     val glassImmersiveStrengthPercent: Int,
+    val glassEdgeBlurRadiusDp: Int = 0,
+    val glassBlurQuality: GlassBlurQuality = GlassBlurQuality.BALANCED,
 )
 
 data class AppearanceSettingsOptions(
@@ -249,6 +252,8 @@ fun AppearanceSettingsScreen(
     onGlassEffectEnabledChange: (Boolean) -> Unit,
     onReducedVisualEffectsChange: (Boolean) -> Unit,
     onImmersiveStrengthChange: (Int) -> Unit,
+    onEdgeBlurRadiusChange: (Int) -> Unit = {},
+    onBlurQualityChange: (GlassBlurQuality) -> Unit = {},
     glassTuning: GlassTuningState,
     onGlassTuningSetValue: (GlassTuningScope, GlassTuningParam, Float) -> Unit,
     onGlassTuningFollowGlobal: (GlassTuningScope, GlassTuningParam, Boolean) -> Unit,
@@ -280,6 +285,8 @@ fun AppearanceSettingsScreen(
                 onGlassEffectEnabledChange = onGlassEffectEnabledChange,
                 onReducedVisualEffectsChange = onReducedVisualEffectsChange,
                 onImmersiveStrengthChange = onImmersiveStrengthChange,
+                onEdgeBlurRadiusChange = onEdgeBlurRadiusChange,
+                onBlurQualityChange = onBlurQualityChange,
                 onGlassTuningSetValue = onGlassTuningSetValue,
                 onGlassTuningFollowGlobal = onGlassTuningFollowGlobal,
                 onGlassTuningPreset = onGlassTuningPreset,
@@ -990,6 +997,8 @@ private fun AppearanceGlassSettingsScreen(
     onGlassEffectEnabledChange: (Boolean) -> Unit,
     onReducedVisualEffectsChange: (Boolean) -> Unit,
     onImmersiveStrengthChange: (Int) -> Unit,
+    onEdgeBlurRadiusChange: (Int) -> Unit = {},
+    onBlurQualityChange: (GlassBlurQuality) -> Unit = {},
     onGlassTuningSetValue: (GlassTuningScope, GlassTuningParam, Float) -> Unit,
     onGlassTuningFollowGlobal: (GlassTuningScope, GlassTuningParam, Boolean) -> Unit,
     onGlassTuningPreset: (GlassPreset) -> Unit,
@@ -1027,6 +1036,10 @@ private fun AppearanceGlassSettingsScreen(
                             onGlassEffectEnabledChange = onGlassEffectEnabledChange,
                             onReducedVisualEffectsChange = onReducedVisualEffectsChange,
                             onImmersiveStrengthChange = onImmersiveStrengthChange,
+                            edgeBlurRadiusDp = state.glassEdgeBlurRadiusDp,
+                            onEdgeBlurRadiusChange = onEdgeBlurRadiusChange,
+                            blurQuality = state.glassBlurQuality,
+                            onBlurQualityChange = onBlurQualityChange,
                             onSetValue = onGlassTuningSetValue,
                             onSetFollowGlobal = onGlassTuningFollowGlobal,
                             onApplyPreset = onGlassTuningPreset,
