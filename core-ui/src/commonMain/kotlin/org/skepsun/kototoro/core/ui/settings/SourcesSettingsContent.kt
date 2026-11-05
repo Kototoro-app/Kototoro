@@ -118,7 +118,7 @@ fun SourcesSettingsContent(
         Column {
             SettingsSectionHeader(titles.remote)
             SettingsGroup {
-                jarPriorityEditor()
+                SettingsGroupRow { jarPriorityEditor() }
                 SettingsRowDivider()
                 SettingsSwitchRow(uiString("show_broken_sources"), uiString("show_broken_sources_summary"),
                     state.showBrokenSources, enabled, onShowBrokenChange,
@@ -133,7 +133,7 @@ fun SourcesSettingsContent(
         Column {
             SettingsSectionHeader(titles.adult)
             SettingsGroup {
-                adultFilterEditor()
+                SettingsGroupRow { adultFilterEditor() }
                 SettingsRowDivider()
                 SettingsValueRow(uiString("incognito_for_nsfw"), null,
                     incognitoOptions.firstOrNull { it.value == state.incognitoMode }?.label, enabled,
