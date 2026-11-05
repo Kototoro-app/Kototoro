@@ -40,6 +40,10 @@ fun BackdropEffectScope.colorControls(
 
 private val VibrantColorFilter = colorControlsColorFilter(saturation = 1.5f)
 
+/**
+ * Saturation 1.5. When a [lens] follows, `lens(..., saturation = 1.5f)` gives the same look without the extra
+ * color filter pass over the backdrop.
+ */
 fun BackdropEffectScope.vibrancy() {
     colorFilter(VibrantColorFilter)
 }

@@ -263,12 +263,13 @@ fun SwipeableFilterChip(
                                     shape = { panelShape },
                                     effects = {
                                         val p = pressProgress.value
-                                        vibrancy()
                                         blur(4.dp.toPx())
+                                        // Vibrancy's 1.5 saturation inside the lens shader: one pass fewer.
                                         lens(
                                             refractionHeight = 10.dp.toPx(),
                                             refractionAmount = 14.dp.toPx(),
                                             chromaticAberration = true,
+                                            saturation = 1.5f,
                                         )
                                     },
                                     // The chip is an interactive control; its

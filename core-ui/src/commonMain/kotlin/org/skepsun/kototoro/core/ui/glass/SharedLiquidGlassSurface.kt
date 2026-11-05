@@ -40,6 +40,10 @@ import androidx.compose.ui.graphics.luminance
 private const val GlassStaticHighlightAngleDeg = 45f
 
 /** The Android liquid-glass renderer. Hosts resolve preferences and same-window availability before calling it. */
+
+/** `vibrancy()`'s saturation, applied by the lens shader when a lens is drawn. */
+private const val GlassLensVibrancySaturation = 1.5f
+
 @Composable
 fun SharedLiquidGlassSurface(
     backdrop: Backdrop,
@@ -119,25 +123,12 @@ fun SharedLiquidGlassSurface(
                     exportedBackdrop = exportedBackdrop,
                     shape = { shape },
                     effects = {
-                        if (tuning.isOn(tuningScope, GlassTuningParam.VIBRANCY)) {
-                            vibrancy()
-                        }
-                        // Independent color grading on top of the glass: saturation /
-                        // brightness as a colorControls pass (SimpMusic / SPICaWeather
-                        // recipe). Skipped at neutral values so it never stacks with
-                        // vibrancy's own saturation lift.
-                        val saturation = tuning.value(tuningScope, GlassTuningParam.SATURATION)
-                        val brightness = tuning.value(tuningScope, GlassTuningParam.BRIGHTNESS)
-                        if (saturation != 1f || brightness != 0f) {
-                            colorControls(brightness = brightness, saturation = saturation)
-                        }
-                        blur(tuning.value(tuningScope, GlassTuningParam.BLUR_RADIUS_DP).dp.toPx())
                         // lens() requires a CornerBasedShape or the kyant
                         // RoundedRectangularShape; guard so callers passing a
                         // plain RectangleShape (edge-to-edge top chrome) degrade
                         // to blur instead of crashing during composition.
-                        if (shape is CornerBasedShape || shape is RoundedRectangularShape) {
-                            val press = resolveGlassPressProgress(pressFeedbackEnabled, pressProgress.value)
+                        val press = resolveGlassPressProgress(pressFeedbackEnabled, pressProgress.value)
+                        val lensParams = if (shape is CornerBasedShape || shape is RoundedRectangularShape) {
                             val lensBoost = 1f +
                                 tuning.value(tuningScope, GlassTuningParam.PRESS_LENS_STRENGTH) * press
                             val lensHeightDp = tuning.value(
@@ -155,7 +146,7 @@ fun SharedLiquidGlassSurface(
                                 // documented library constraint). Unclamped values paint internal
                                 // arc artifacts and corner discontinuities on small surfaces —
                                 // compact tab rails, pills, group controls.
-                                val lensParams = resolveGlassLensParameters(
+                                resolveGlassLensParameters(
                                     shape = shape,
                                     size = size,
                                     layoutDirection = layoutDirection,
@@ -163,21 +154,43 @@ fun SharedLiquidGlassSurface(
                                     requestedHeight = lensHeightDp.dp.toPx(),
                                     requestedAmount = lensAmountDp.dp.toPx(),
                                 )
-                                if (lensParams != null) {
-                                    lens(
-                                        refractionHeight = lensParams.refractionHeight,
-                                        refractionAmount = lensParams.refractionAmount,
-                                        depthEffect = tuning.isOn(tuningScope, GlassTuningParam.DEPTH_EFFECT),
-                                        chromaticAberration = tuning.isOn(
-                                            tuningScope,
-                                            GlassTuningParam.CHROMATIC_ABERRATION,
-                                        ) || (press > 0f && tuning.isOn(
-                                            tuningScope,
-                                            GlassTuningParam.PRESS_CHROMATIC_ABERRATION,
-                                        )),
-                                    )
-                                }
+                            } else {
+                                null
                             }
+                        } else {
+                            null
+                        }
+                        // When the lens runs, it applies vibrancy's 1.5 saturation inside its
+                        // refraction shader (one render pass fewer); saturation is linear, so
+                        // doing it after the blur/color controls looks the same.
+                        val vibrancy = tuning.isOn(tuningScope, GlassTuningParam.VIBRANCY)
+                        if (vibrancy && lensParams == null) {
+                            vibrancy()
+                        }
+                        // Independent color grading on top of the glass: saturation /
+                        // brightness as a colorControls pass (SimpMusic / SPICaWeather
+                        // recipe). Skipped at neutral values so it never stacks with
+                        // vibrancy's own saturation lift.
+                        val saturation = tuning.value(tuningScope, GlassTuningParam.SATURATION)
+                        val brightness = tuning.value(tuningScope, GlassTuningParam.BRIGHTNESS)
+                        if (saturation != 1f || brightness != 0f) {
+                            colorControls(brightness = brightness, saturation = saturation)
+                        }
+                        blur(tuning.value(tuningScope, GlassTuningParam.BLUR_RADIUS_DP).dp.toPx())
+                        if (lensParams != null) {
+                            lens(
+                                refractionHeight = lensParams.refractionHeight,
+                                refractionAmount = lensParams.refractionAmount,
+                                depthEffect = tuning.isOn(tuningScope, GlassTuningParam.DEPTH_EFFECT),
+                                chromaticAberration = tuning.isOn(
+                                    tuningScope,
+                                    GlassTuningParam.CHROMATIC_ABERRATION,
+                                ) || (press > 0f && tuning.isOn(
+                                    tuningScope,
+                                    GlassTuningParam.PRESS_CHROMATIC_ABERRATION,
+                                )),
+                                saturation = if (vibrancy) GlassLensVibrancySaturation else 1f,
+                            )
                         }
                     },
                     highlight = {
