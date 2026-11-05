@@ -52,8 +52,6 @@ fun SourcesSettingsRoute(
     val resolvedJarPriorityOrder = remember(jarPriorityOrder, installedJarNames) {
         viewModel.resolveJarPriorityOrder(jarPriorityOrder)
     }
-    val isShowBrokenSources =
-        settings.observeAsState(AppSettings.KEY_SHOW_BROKEN_SOURCES) { isShowBrokenSources }.value
     val isNsfwContentDisabled =
         settings.observeAsState(AppSettings.KEY_DISABLE_NSFW) { isNsfwContentDisabled }.value
     val isHistoryExcludeNsfw =
@@ -123,7 +121,6 @@ fun SourcesSettingsRoute(
         isSourcesGridMode = isSourcesGridMode,
         isSourcesGroupedByLanguage = isSourcesGroupedByLanguage,
         jarPriorityOrder = resolvedJarPriorityOrder,
-        isShowBrokenSources = isShowBrokenSources,
         adultContentFilterTargets = buildSet {
             if (isNsfwContentDisabled) add(AdultContentFilterTarget.SOURCES_AND_BROWSE)
             if (isHistoryExcludeNsfw) add(AdultContentFilterTarget.HISTORY)
@@ -173,7 +170,6 @@ fun SourcesSettingsRoute(
         onSourcesGroupedByLanguageChange = { settings.isSourcesGroupedByLanguage = it },
         onSetupWizardClick = onSetupWizardClick,
         onJarPriorityOrderChange = viewModel::persistJarPriorityOrder,
-        onShowBrokenSourcesChange = { settings.isShowBrokenSources = it },
         onAdultContentFilterTargetsChange = { targets ->
             val hideFromSourcesAndBrowse = AdultContentFilterTarget.SOURCES_AND_BROWSE in targets
             val hideFromHistory = AdultContentFilterTarget.HISTORY in targets

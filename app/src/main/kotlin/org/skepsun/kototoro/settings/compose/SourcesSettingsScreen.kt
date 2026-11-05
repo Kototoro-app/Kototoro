@@ -42,7 +42,6 @@ data class SourcesSettingsUiState(
     val isSourcesGridMode: Boolean,
     val isSourcesGroupedByLanguage: Boolean,
     val jarPriorityOrder: List<String>,
-    val isShowBrokenSources: Boolean,
     val adultContentFilterTargets: Set<AdultContentFilterTarget>,
     val incognitoModeForNsfw: TriStateOption,
     val blacklistedTagCount: Int,
@@ -82,7 +81,6 @@ fun SourcesSettingsScreen(
     onSourcesGroupedByLanguageChange: (Boolean) -> Unit,
     onSetupWizardClick: () -> Unit,
     onJarPriorityOrderChange: (List<String>) -> Unit,
-    onShowBrokenSourcesChange: (Boolean) -> Unit,
     onAdultContentFilterTargetsChange: (Set<AdultContentFilterTarget>) -> Unit,
     onIncognitoModeForNsfwChange: (TriStateOption) -> Unit,
     onGlobalTagBlacklistClick: () -> Unit,
@@ -141,14 +139,11 @@ fun SourcesSettingsScreen(
         }
         if (page == SourcesSettingsPage.EXTENSIONS) {
             ExtensionSettingsContent(
-                showBrokenSources = state.isShowBrokenSources,
                 installBehaviorSummary = extensionInstallBehaviorSummary,
-                onShowBrokenChange = onShowBrokenSourcesChange,
                 onInstallBehaviorClick = { isExtensionInstallSheetVisible = true },
                 jarPriorityEditor = jarPriorityEditor,
                 modifier = Modifier.fillMaxWidth(),
                 title = remoteSourcesTitle,
-                brokenIcon = painterResource(R.drawable.ic_error_small),
                 installIcon = painterResource(R.drawable.ic_extension),
                 contentPadding = contentPadding,
             )
@@ -158,7 +153,7 @@ fun SourcesSettingsScreen(
                 customSort = state.sourcesSortOrder == SourcesSortOrder.MANUAL,
                 gridMode = null,
                 groupByLanguage = state.isSourcesGroupedByLanguage,
-                showBrokenSources = state.isShowBrokenSources,
+                showBrokenSources = false,
                 installBehaviorSummary = extensionInstallBehaviorSummary,
                 incognitoMode = state.incognitoModeForNsfw.name,
                 blacklistedTagCount = state.blacklistedTagCount,
@@ -174,7 +169,7 @@ fun SourcesSettingsScreen(
             onGroupByLanguageChange = onSourcesGroupedByLanguageChange,
             onReorderClick = onReorderSourcesClick,
             onWizardClick = onSetupWizardClick,
-            onShowBrokenChange = onShowBrokenSourcesChange,
+            onShowBrokenChange = {},
             onInstallBehaviorClick = { isExtensionInstallSheetVisible = true },
             onIncognitoChange = { onIncognitoModeForNsfwChange(TriStateOption.valueOf(it)) },
             onBlacklistClick = onGlobalTagBlacklistClick,
@@ -209,7 +204,7 @@ fun SourcesSettingsScreen(
                 )
             },
             renderDialog = { AndroidPreferenceDialog(it) },
-            // Plugin priority, broken sources and install behavior live in extension management.
+            // Plugin priority and install behavior live in extension management (ExtensionSettingsContent).
             showExtensionSection = false,
         )
 

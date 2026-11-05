@@ -784,7 +784,6 @@ class SettingsSearchHelper @Inject constructor(
         )
         listOf(
             "jar_priority_order" to R.string.jar_priority_order_title,
-            "show_broken_sources" to R.string.show_broken_sources,
             "extension_install_behavior" to R.string.extension_install_behavior,
         ).forEach { (key, titleRes) ->
             result.add(

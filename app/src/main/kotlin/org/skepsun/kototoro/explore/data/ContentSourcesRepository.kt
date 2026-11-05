@@ -265,9 +265,10 @@ class ContentSourcesRepository @Inject constructor(
                     if (settings.isAllSourcesEnabled || it.name !in disabledNames) list.add(it)
                 }
 
-                if (!settings.isShowBrokenSources) {
-                    list.retainAll { !it.isBroken }
-                }
+                // A parser its author marked broken only shows once the user enables it explicitly; "all sources
+                // enabled" does not count, since it never asked about this source.
+                val explicitlyEnabled = dao.findAll().filter { it.isEnabled }.mapToSet { it.source }
+                list.retainAll { !it.isBroken || it.name in explicitlyEnabled }
                 list.retainAll { it.isVisibleForTvBoxRepository(jsonSnapshot.activeRepositoryId) }
 
                 canonicalizeSourcesByName(list)
@@ -790,8 +791,7 @@ class ContentSourcesRepository @Inject constructor(
         observeIsNsfwDisabled(),
         observeAllEnabled(),
         observeSortOrder(),
-        settings.observeAsFlow(AppSettings.KEY_SHOW_BROKEN_SOURCES) { isShowBrokenSources }
-    ) { skipNsfw, allEnabled, order, showBroken ->
+    ) { skipNsfw, allEnabled, order ->
 
         combine(
             dao.observeAll(false, order),
@@ -803,10 +803,10 @@ class ContentSourcesRepository @Inject constructor(
             val disabledNames = if (!allEnabled) entities.filter { !it.isEnabled }.mapToSet { it.source } else emptySet<String>()
             val enabledNames = if (!allEnabled) entities.filter { it.isEnabled }.mapToSet { it.source } else emptySet<String>()
             val enabledEntities = if (!allEnabled) entities.filter { it.isEnabled } else entities
+            // Broken parsers need an explicit enable (see getEnabledSources); the entity flag, not "all enabled".
+            val explicitlyEnabled = entities.filter { it.isEnabled }.mapToSet { it.source }
             val sources = enabledEntities.toSources(skipNsfw, order).filter { info ->
-                val source = info.mangaSource
-                if (!showBroken && source.isBroken) return@filter false
-                true
+                !info.mangaSource.isBroken || info.mangaSource.name in explicitlyEnabled
             }
             EnabledSourcesSnapshot(
                 sources = sources,
@@ -1176,6 +1176,7 @@ class ContentSourcesRepository @Inject constructor(
         val startedAt = SystemClock.elapsedRealtime()
         traceBrowseSources { "assimilate started force=$force" }
         isNewSourcesAssimilated.set(true)
+        migrateBrokenSourceVisibility()
         val new = getNewSources()
         if (new.isEmpty()) {
             traceBrowseSources {
@@ -1188,7 +1189,9 @@ class ContentSourcesRepository @Inject constructor(
         val entities = new.map { x ->
             MangaSourceEntity(
                 source = x.name,
-                isEnabled = isAllEnabled,
+                // A parser marked broken starts disabled even under "all sources enabled"; the user can enable it in
+                // extension management.
+                isEnabled = isAllEnabled && !x.isBroken,
                 sortKey = ++maxSortKey,
                 addedIn = BuildConfig.VERSION_CODE,
                 lastUsedAt = 0,
@@ -1201,6 +1204,23 @@ class ContentSourcesRepository @Inject constructor(
             "assimilate completed force=$force new=${entities.size} durationMs=${SystemClock.elapsedRealtime() - startedAt}"
         }
         return true
+    }
+
+    /**
+     * Broken parsers used to be hidden by a global "show broken sources" switch whatever their own enabled flag said,
+     * so rows created under "all sources enabled" are enabled without the user ever choosing them. Now that the flag
+     * decides, disable those rows once for everyone who kept the switch off, so nothing that was hidden appears.
+     * Users who had the switch on keep seeing them. Retries until the plugins have loaded and report broken parsers.
+     */
+    private suspend fun migrateBrokenSourceVisibility() {
+        if (settings.isBrokenSourceVisibilityMigrated) return
+        val broken = allContentSources.filter { it.isBroken }.map { it.name }
+        if (broken.isEmpty()) return
+        if (!settings.isShowBrokenSources) {
+            broken.forEach { dao.setEnabled(it, false, BuildConfig.VERSION_CODE) }
+        }
+        settings.isBrokenSourceVisibilityMigrated = true
+        traceBrowseSources { "broken source visibility migrated broken=${broken.size} showBroken=${settings.isShowBrokenSources}" }
     }
 
     suspend fun isSetupRequired(): Boolean {

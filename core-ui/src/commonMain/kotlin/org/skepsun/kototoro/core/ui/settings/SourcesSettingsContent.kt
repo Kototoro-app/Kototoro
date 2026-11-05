@@ -201,7 +201,8 @@ fun ExtensionSettingsGroup(
     title: String,
     showBrokenSources: Boolean,
     installBehaviorSummary: String,
-    onShowBrokenChange: (Boolean) -> Unit,
+    /** Null hides the row: Android retired the global switch in favor of enabling a broken parser explicitly. */
+    onShowBrokenChange: ((Boolean) -> Unit)?,
     onInstallBehaviorClick: () -> Unit,
     jarPriorityEditor: @Composable () -> Unit,
     enabled: Boolean = true,
@@ -213,11 +214,13 @@ fun ExtensionSettingsGroup(
         SettingsGroup {
             SettingsGroupRow { jarPriorityEditor() }
             SettingsRowDivider()
-            SettingsSwitchRow(uiString("show_broken_sources"), uiString("show_broken_sources_summary"),
-                showBrokenSources, enabled, onShowBrokenChange,
-                testTag = "source-setting-show-broken", leadingIcon = brokenIcon,
-                modifier = Modifier.tvFocusable(enabled = enabled, addFocusTarget = false))
-            SettingsRowDivider()
+            if (onShowBrokenChange != null) {
+                SettingsSwitchRow(uiString("show_broken_sources"), uiString("show_broken_sources_summary"),
+                    showBrokenSources, enabled, onShowBrokenChange,
+                    testTag = "source-setting-show-broken", leadingIcon = brokenIcon,
+                    modifier = Modifier.tvFocusable(enabled = enabled, addFocusTarget = false))
+                SettingsRowDivider()
+            }
             SettingsValueRow(uiString("extension_install_behavior"), installBehaviorSummary, null, enabled,
                 onInstallBehaviorClick, testTag = "source-setting-install-behavior", leadingIcon = installIcon,
                 modifier = Modifier.tvFocusable(enabled = enabled, addFocusTarget = false))
@@ -228,12 +231,12 @@ fun ExtensionSettingsGroup(
 /** A page holding only [ExtensionSettingsGroup], opened from extension management. */
 @Composable
 fun ExtensionSettingsContent(
-    showBrokenSources: Boolean,
     installBehaviorSummary: String,
-    onShowBrokenChange: (Boolean) -> Unit,
     onInstallBehaviorClick: () -> Unit,
     jarPriorityEditor: @Composable () -> Unit,
     modifier: Modifier = Modifier,
+    showBrokenSources: Boolean = false,
+    onShowBrokenChange: ((Boolean) -> Unit)? = null,
     title: String = "",
     enabled: Boolean = true,
     brokenIcon: Painter? = null,
