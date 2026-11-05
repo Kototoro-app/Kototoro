@@ -203,7 +203,7 @@
     <string name="double_page_cover_page">首图作为封面（单独显示）</string>
     <string name="miscellaneous">杂项</string>
     <string name="grid_size">网格大小</string>
-    <string name="grid_size_columns_hint">每行约 %1$d 列</string>
+    <string name="grid_size_columns_hint">约 %1$d 列</string>
     <string name="home_rail_rows_per_page">每页行数</string>
     <string name="grid_aspect_ratio">网格比例</string>
     <string name="fit_page_thumbnails">完整显示缩略图</string>
@@ -2669,8 +2669,7 @@
     <string name="details_show_original">显示原文</string>
     <string name="details_show_translation">显示译文</string>
     <string name="simkl" translatable="false">Simkl</string>
-    <string name="show_extra_info_on_cards">在卡片上显示额外信息</string>
-    <string name="show_extra_info_on_cards_summary">在内容卡片上显示评分、连载状态、章节数和类别标签</string>
+    <string name="show_extra_info_on_cards">额外信息</string>
 
     <string name="_install">安装</string>
     <string name="add_extension_repository">添加仓库</string>

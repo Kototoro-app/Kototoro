@@ -11,10 +11,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -23,6 +27,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -37,6 +42,7 @@ import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
@@ -48,6 +54,7 @@ import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.compose.gridPosterCardStyle
 import org.skepsun.kototoro.core.ui.compose.KototoroSheetSurface
+import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.compose.SheetDragHandle
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.ui.adaptive.tvSliderDpad
@@ -56,6 +63,9 @@ import org.skepsun.kototoro.core.ui.compose.KototoroSlider
 import org.skepsun.kototoro.list.domain.ListSortOrder
 
 private const val DISPLAY_OPTIONS_SHEET_TAG = "DisplayOptionsSheet"
+
+/** Scrim of the display-options sheets: just enough to mark the sheet as modal, light enough to judge changes. */
+internal val DisplayOptionsScrimColor = Color.Black.copy(alpha = 0.08f)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -116,6 +126,8 @@ fun DisplayOptionsSheet(
         shape = RoundedCornerShape(0.dp),
         containerColor = androidx.compose.ui.graphics.Color.Transparent,
         tonalElevation = 0.dp,
+        // Every option applies live; a light scrim keeps the list behind readable while adjusting.
+        scrimColor = DisplayOptionsScrimColor,
     ) {
         DebugBoundsBox(
             label = "modal_content_slot",
@@ -130,117 +142,107 @@ fun DisplayOptionsSheet(
                     minimumContainerAlpha = 0.6f,
                 ),
             ) {
-                Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .tvTakeInitialFocus()
-                            .verticalScroll(rememberScrollState())
-                            .padding(horizontal = 24.dp)
-                            .padding(bottom = 24.dp, top = 6.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    SheetDragHandle(
-                        modifier = Modifier.align(Alignment.CenterHorizontally),
-                    )
-                    Text(
-                        text = stringResource(R.string.display_options),
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(bottom = 4.dp)
-                    )
-
-                    if (supportsDisplayModeMenu) {
-                        Text(
-                            text = stringResource(R.string.list_mode),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        DisplayModeSelector(
-                            currentListMode = currentListMode,
-                            onListModeSelected = onListModeSelected,
-                        )
-                    }
-
-                    if (supportsGridSizeSlider) {
-                        if (supportsDisplayModeMenu) {
-                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
-                        }
-                        GridSizeSlider(
-                            title = stringResource(R.string.grid_size),
-                            value = gridSize,
-                            onValueChange = onGridSizeChange,
-                            columnsHint = resolveGridColumnsHint(
-                                enabled = supportsGridColumnsHint,
-                                listMode = currentListMode,
-                                gridSize = gridSize,
-                            ),
-                        )
-                    }
-
-                    if (railRows != null && onRailRowsChange != null &&
-                        (currentListMode == ListMode.LIST || currentListMode == ListMode.DETAILED_LIST)
+                // The sheet covers the page the shell backdrop samples, so a glass slider thumb here would show
+                // that page through the sheet; draw the solid thumb instead.
+                CompositionLocalProvider(LocalLiquidGlassBackdrop provides null) {
+                    Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .tvTakeInitialFocus()
+                                .verticalScroll(rememberScrollState())
+                                .padding(horizontal = 24.dp)
+                                .padding(bottom = 16.dp, top = 6.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
-                        RailRowsSelector(
-                            railRows = railRows,
-                            onRailRowsChange = onRailRowsChange,
+                        SheetDragHandle(
+                            modifier = Modifier.align(Alignment.CenterHorizontally),
                         )
-                    }
-
-                    if (sortOrders.isNotEmpty()) {
-                        if (supportsDisplayModeMenu || supportsGridSizeSlider) {
-                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
-                        }
-                        SortOrderSection(
-                            sortOrders = sortOrders,
-                            selectedSortOrder = selectedSortOrder,
-                            onSortOrderSelected = onSortOrderSelected,
-                        )
-                    }
-
-                    if (supportsGrouping) {
-                        if (supportsDisplayModeMenu || supportsGridSizeSlider || sortOrders.isNotEmpty()) {
-                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
-                        }
-                        GroupingSection(
-                            enabled = isGroupingEnabled,
-                            available = isGroupingAvailable,
-                            onEnabledChange = onGroupingEnabledChange,
-                        )
-                    }
-
-                    if (supportsDisplayModeMenu || supportsGridSizeSlider || sortOrders.isNotEmpty() || supportsGrouping) {
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
-                    }
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
+                        // The extra-info toggle rides on the title row instead of taking a line of its own;
+                        // the cards behind the sheet show what it does.
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
                             Text(
-                                text = stringResource(R.string.show_extra_info_on_cards),
-                                style = MaterialTheme.typography.bodyMedium,
+                                text = stringResource(R.string.display_options),
+                                style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.weight(1f),
                             )
-                            Text(
-                                text = stringResource(R.string.show_extra_info_on_cards_summary),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            FilterChip(
+                                selected = showExtraInfo,
+                                onClick = { settings.showExtraInfoOnCards = !showExtraInfo },
+                                label = {
+                                    Text(
+                                        text = stringResource(R.string.show_extra_info_on_cards),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                },
+                                leadingIcon = if (showExtraInfo) {
+                                    {
+                                        Icon(
+                                            painter = painterResource(R.drawable.ic_check),
+                                            contentDescription = null,
+                                            modifier = Modifier.size(FilterChipDefaults.IconSize),
+                                        )
+                                    }
+                                } else null,
+                                modifier = Modifier
+                                    .widthIn(max = 200.dp)
+                                    .tvFocusable(shape = CircleShape, addFocusTarget = false),
                             )
                         }
-                        Switch(
-                            checked = showExtraInfo,
-                            onCheckedChange = { settings.showExtraInfoOnCards = it },
-                            modifier = Modifier.tvFocusable(shape = CircleShape, addFocusTarget = false),
-                        )
-                    }
 
-                    extraContent?.let {
-                        if (supportsDisplayModeMenu || supportsGridSizeSlider || sortOrders.isNotEmpty() || supportsGrouping) {
-                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                        if (supportsDisplayModeMenu) {
+                            DisplayModeSelector(
+                                currentListMode = currentListMode,
+                                onListModeSelected = onListModeSelected,
+                            )
                         }
-                        it()
+
+                        if (supportsGridSizeSlider) {
+                            GridSizeSlider(
+                                title = stringResource(R.string.grid_size),
+                                value = gridSize,
+                                onValueChange = onGridSizeChange,
+                                columnsHint = resolveGridColumnsHint(
+                                    enabled = supportsGridColumnsHint,
+                                    listMode = currentListMode,
+                                    gridSize = gridSize,
+                                ),
+                            )
+                        }
+
+                        if (railRows != null && onRailRowsChange != null &&
+                            (currentListMode == ListMode.LIST || currentListMode == ListMode.DETAILED_LIST)
+                        ) {
+                            RailRowsSelector(
+                                railRows = railRows,
+                                onRailRowsChange = onRailRowsChange,
+                            )
+                        }
+
+                        if (sortOrders.isNotEmpty()) {
+                            SortOrderSection(
+                                sortOrders = sortOrders,
+                                selectedSortOrder = selectedSortOrder,
+                                onSortOrderSelected = onSortOrderSelected,
+                            )
+                        }
+
+                        if (supportsGrouping) {
+                            GroupingSection(
+                                enabled = isGroupingEnabled,
+                                available = isGroupingAvailable,
+                                onEnabledChange = onGroupingEnabledChange,
+                            )
+                        }
+
+                        extraContent?.let {
+                            it()
+                        }
                     }
                 }
             }
@@ -276,21 +278,12 @@ private fun SortOrderSection(
     selectedSortOrder: ListSortOrder?,
     onSortOrderSelected: (ListSortOrder) -> Unit,
 ) {
-    Column(
+    SortOrderControl(
+        sortOrders = sortOrders,
+        selectedSortOrder = selectedSortOrder,
+        onSortOrderSelected = onSortOrderSelected,
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Text(
-            text = stringResource(R.string.sort_order),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        SortOrderControl(
-            sortOrders = sortOrders,
-            selectedSortOrder = selectedSortOrder,
-            onSortOrderSelected = onSortOrderSelected,
-        )
-    }
+    )
 }
 
 @Composable

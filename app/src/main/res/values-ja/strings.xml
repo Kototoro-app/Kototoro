@@ -2020,8 +2020,7 @@
     <string name="show_broken_sources_summary">破損とマークされたパーサー拡張機能の表示と使用を許可</string>
     <string name="show_extensions_in_grid">拡張機能を2列で表示</string>
     <string name="show_extensions_in_list">拡張機能を1列で表示</string>
-    <string name="show_extra_info_on_cards">カードに追加情報を表示</string>
-    <string name="show_extra_info_on_cards_summary">コンテンツカードに評価、ステータス、話数、タグを表示</string>
+    <string name="show_extra_info_on_cards">追加情報</string>
     <string name="show_less">表示を減らす</string>
     <string name="show_more">もっと表示</string>
     <string name="show_quick_filters_summary">特定のパラメータでマンガリストをフィルタリングする機能を提供します</string>

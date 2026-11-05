@@ -2027,8 +2027,7 @@
     <string name="show_broken_sources_summary">Permet de visualiser et d\'utiliser les extensions de parseur marquées comme cassées</string>
     <string name="show_extensions_in_grid">Afficher les extensions sur deux colonnes</string>
     <string name="show_extensions_in_list">Afficher les extensions sur une colonne</string>
-    <string name="show_extra_info_on_cards">Afficher des infos supplémentaires sur les cartes</string>
-    <string name="show_extra_info_on_cards_summary">Afficher la note, le statut, le nombre de chapitres et les tags sur les cartes de contenu</string>
+    <string name="show_extra_info_on_cards">Infos en plus</string>
     <string name="show_less">Afficher moins</string>
     <string name="show_more">Afficher plus</string>
     <string name="show_source_on_cards">Afficher l\'icône et la langue de la source sur les cartes</string>

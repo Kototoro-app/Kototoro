@@ -2111,8 +2111,7 @@
     <string name="show_broken_sources_summary">允許查看與使用被標記爲已損壞的源插件</string>
     <string name="show_extensions_in_grid">擴展以雙列顯示</string>
     <string name="show_extensions_in_list">擴展以單列顯示</string>
-    <string name="show_extra_info_on_cards">在卡片上顯示額外信息</string>
-    <string name="show_extra_info_on_cards_summary">在內容卡片上顯示評分、連載狀態、章節數和類別標籤</string>
+    <string name="show_extra_info_on_cards">額外資訊</string>
     <string name="show_floating_control_button">顯示浮動控制按鈕</string>
     <string name="show_less">收起</string>
     <string name="show_more">展開更多</string>
@@ -2826,7 +2825,7 @@ SHA-256 指紋:
     <string name="double_page_foldable">摺疊屏雙頁</string>
     <string name="double_page_cover_page">首圖作為封面（單獨顯示）</string>
     <string name="miscellaneous">雜項</string>
-    <string name="grid_size_columns_hint">每行約 %1$d 列</string>
+    <string name="grid_size_columns_hint">約 %1$d 列</string>
     <string name="home_rail_rows_per_page">每頁行數</string>
     <string name="replace_rules">文本替換規則</string>
     <string name="replace_rules_summary">使用按順序執行、相容來源匹配的規則清理小說正文</string>

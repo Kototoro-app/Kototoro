@@ -2020,8 +2020,7 @@
     <string name="show_broken_sources_summary">السماح بعرض واستخدام إضافات المحلل المميزة كمعطلة</string>
     <string name="show_extensions_in_grid">إظهار الإضافات في عمودين</string>
     <string name="show_extensions_in_list">إظهار الإضافات في عمود واحد</string>
-    <string name="show_extra_info_on_cards">إظهار معلومات إضافية على البطاقات</string>
-    <string name="show_extra_info_on_cards_summary">عرض التقييم والحالة وعدد الفصول والوسوم على بطاقات المحتوى</string>
+    <string name="show_extra_info_on_cards">معلومات إضافية</string>
     <string name="show_floating_control_button">إظهار زر التحكم العائم</string>
     <string name="show_less">إظهار أقل</string>
     <string name="show_more">إظهار المزيد</string>

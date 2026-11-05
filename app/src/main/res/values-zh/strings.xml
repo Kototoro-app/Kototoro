@@ -2270,8 +2270,7 @@
     <string name="show_all">显示全部</string>
     <string name="show_broken_sources">显示已损坏/不可用的源</string>
     <string name="show_broken_sources_summary">允许查看与使用被标记为已损坏的源插件</string>
-    <string name="show_extra_info_on_cards">在卡片上显示额外信息</string>
-    <string name="show_extra_info_on_cards_summary">在内容卡片上显示评分、连载状态、章节数和类别标签</string>
+    <string name="show_extra_info_on_cards">额外信息</string>
     <string name="show_floating_control_button">显示浮动控制按钮</string>
     <string name="show_in_grid_view">网格视图</string>
     <string name="show_labels_in_navbar">显示底部导航栏标签</string>

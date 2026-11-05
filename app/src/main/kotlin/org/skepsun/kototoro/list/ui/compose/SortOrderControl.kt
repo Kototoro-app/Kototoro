@@ -74,8 +74,10 @@ internal fun SortOrderControl(
         if (compact) expanded = false
     }
 
-    Column(modifier = modifier) {
-        Box {
+    // The sheet form keeps the direction chips on the dropdown's row, so sorting costs one line.
+    Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        Box(modifier = if (compact) Modifier else Modifier.weight(1f)) {
             if (compact) {
                 IconButton(
                     onClick = { expanded = true },
