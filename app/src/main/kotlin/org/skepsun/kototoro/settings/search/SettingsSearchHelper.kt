@@ -330,18 +330,13 @@ class SettingsSearchHelper @Inject constructor(
             )
         }
 
-        val sourcesBreadcrumbs = listOf(context.getString(R.string.remote_sources))
+        val sourcesBreadcrumbs = listOf(context.getString(R.string.source_preferences))
         val sourcesKeys = listOf(
             "sources_sort_order" to R.string.sort_order,
             "show_source_on_cards" to R.string.show_source_on_cards,
             "sources_grid" to R.string.show_in_grid_view,
             "sources_grouped_by_language" to R.string.group_sources_by_language,
             "setup_wizard" to R.string.setup_wizard,
-            "remote_sources" to R.string.manage_sources,
-            "json_sources" to R.string.json_sources_directory,
-            "extensions" to R.string.extensions,
-            "jar_priority_order" to R.string.jar_priority_order_title,
-            "show_broken_sources" to R.string.show_broken_sources,
             "no_nsfw" to R.string.disable_nsfw,
             "history_exclude_nsfw" to R.string.disable_history_nsfw,
             "favourites_exclude_nsfw" to R.string.disable_favourites_nsfw,
@@ -764,10 +759,13 @@ class SettingsSearchHelper @Inject constructor(
             )
         }
 
-        val extensionBreadcrumbs = listOf(context.getString(R.string.extensions))
+        val extensionBreadcrumbs = listOf(context.getString(R.string.extension_management))
         val extensionKeys = listOf(
             "extensions_update_all" to R.string.update_all_extensions,
-            "extensions_manage" to R.string.manage_extension_repositories
+            "extensions_manage" to R.string.manage_extension_repositories,
+            "remote_sources" to R.string.manage_sources,
+            "json_sources" to R.string.json_sources_directory,
+            "extensions" to R.string.extensions,
         )
         extensionKeys.forEach { (key, titleRes) ->
             result.add(
@@ -776,6 +774,25 @@ class SettingsSearchHelper @Inject constructor(
                     title = context.getString(titleRes),
                     breadcrumbs = extensionBreadcrumbs,
                     destination = SettingsDestination.UnifiedSources(),
+                ),
+            )
+        }
+
+        val extensionSettingsBreadcrumbs = listOf(
+            context.getString(R.string.extension_management),
+            context.getString(R.string.extension_settings),
+        )
+        listOf(
+            "jar_priority_order" to R.string.jar_priority_order_title,
+            "show_broken_sources" to R.string.show_broken_sources,
+            "extension_install_behavior" to R.string.extension_install_behavior,
+        ).forEach { (key, titleRes) ->
+            result.add(
+                SettingsItem(
+                    key = key,
+                    title = context.getString(titleRes),
+                    breadcrumbs = extensionSettingsBreadcrumbs,
+                    destination = SettingsDestination.ExtensionSettings,
                 ),
             )
         }

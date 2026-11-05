@@ -19,6 +19,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.settings.ExtensionSettingsContent
 import org.skepsun.kototoro.core.ui.settings.SourcesSettingsContent
 import org.skepsun.kototoro.core.ui.settings.SourcesSettingsContentState
 import org.skepsun.kototoro.core.ui.settings.SourcesSettingsTitles
@@ -61,8 +62,12 @@ enum class AdultContentFilterTarget {
     BOOKMARKS,
 }
 
+/** The two pages drawn from the source settings state: source preferences, or the extension rows. */
+enum class SourcesSettingsPage { PREFERENCES, EXTENSIONS }
+
 @Composable
 fun SourcesSettingsScreen(
+    page: SourcesSettingsPage = SourcesSettingsPage.PREFERENCES,
     overviewTitle: String,
     remoteSourcesTitle: String,
     adultFilteringTitle: String,
@@ -117,7 +122,37 @@ fun SourcesSettingsScreen(
             }
         } ?: stringResource(R.string.custom)
 
-        SourcesSettingsContent(
+        val contentPadding = PaddingValues(
+            start = SettingsContentHorizontalPadding,
+            end = SettingsContentHorizontalPadding,
+            top = settingsContentTopInset(),
+            bottom = innerPadding.calculateBottomPadding() +
+                WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 24.dp,
+        )
+        val jarPriorityEditor: @Composable () -> Unit = {
+            SettingsReorderPreference(
+                title = stringResource(R.string.jar_priority_order_title),
+                iconRes = R.drawable.ic_tap_reorder,
+                value = state.jarPriorityOrder,
+                summary = stringResource(R.string.jar_priority_order_summary),
+                emptyValueText = stringResource(R.string.not_specified),
+                onValueChange = onJarPriorityOrderChange,
+            )
+        }
+        if (page == SourcesSettingsPage.EXTENSIONS) {
+            ExtensionSettingsContent(
+                showBrokenSources = state.isShowBrokenSources,
+                installBehaviorSummary = extensionInstallBehaviorSummary,
+                onShowBrokenChange = onShowBrokenSourcesChange,
+                onInstallBehaviorClick = { isExtensionInstallSheetVisible = true },
+                jarPriorityEditor = jarPriorityEditor,
+                modifier = Modifier.fillMaxWidth(),
+                title = remoteSourcesTitle,
+                brokenIcon = painterResource(R.drawable.ic_error_small),
+                installIcon = painterResource(R.drawable.ic_extension),
+                contentPadding = contentPadding,
+            )
+        } else SourcesSettingsContent(
             state = SourcesSettingsContentState(
                 sortOrder = state.sourcesSortOrder.name,
                 customSort = state.sourcesSortOrder == SourcesSortOrder.MANUAL,
@@ -147,13 +182,7 @@ fun SourcesSettingsScreen(
             onMirrorChange = onMirrorSwitchingChange,
             onHandleLinksChange = onHandleLinksEnabledChange,
             modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(
-                start = SettingsContentHorizontalPadding,
-                end = SettingsContentHorizontalPadding,
-                top = settingsContentTopInset(),
-                bottom = innerPadding.calculateBottomPadding() +
-                    WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 24.dp,
-            ),
+            contentPadding = contentPadding,
             icons = SourcesSettingsIcons(
                 sort = painterResource(R.drawable.ic_sort),
                 reorder = painterResource(R.drawable.ic_reorder_handle),
@@ -168,16 +197,7 @@ fun SourcesSettingsScreen(
                 mirror = painterResource(R.drawable.ic_swap_vert),
                 links = painterResource(R.drawable.ic_open_external),
             ),
-            jarPriorityEditor = {
-                SettingsReorderPreference(
-                    title = stringResource(R.string.jar_priority_order_title),
-                    iconRes = R.drawable.ic_tap_reorder,
-                    value = state.jarPriorityOrder,
-                    summary = stringResource(R.string.jar_priority_order_summary),
-                    emptyValueText = stringResource(R.string.not_specified),
-                    onValueChange = onJarPriorityOrderChange,
-                )
-            },
+            jarPriorityEditor = jarPriorityEditor,
             adultFilterEditor = {
                 SettingsMultiChoicePreference(
                     title = stringResource(R.string.disable_nsfw),
@@ -189,6 +209,8 @@ fun SourcesSettingsScreen(
                 )
             },
             renderDialog = { AndroidPreferenceDialog(it) },
+            // Plugin priority, broken sources and install behavior live in extension management.
+            showExtensionSection = false,
         )
 
         if (isExtensionInstallSheetVisible) {

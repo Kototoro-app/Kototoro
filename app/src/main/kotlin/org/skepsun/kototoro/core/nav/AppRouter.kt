@@ -1498,6 +1498,10 @@ class AppRouter(
             Intent(context, SettingsActivity::class.java)
                 .setAction(ACTION_SOURCES)
 
+        fun extensionSettingsIntent(context: Context) =
+            Intent(context, SettingsActivity::class.java)
+                .setAction(ACTION_EXTENSION_SETTINGS)
+
         fun manageSourcesIntent(context: Context) =
             SettingsActivity.newUnifiedSourcesIntent(context)
 
@@ -1639,6 +1643,7 @@ class AppRouter(
         val ACTION_READER = "${BuildConfig.APPLICATION_ID}.action.MANAGE_READER_SETTINGS"
         val ACTION_SOURCE = "${BuildConfig.APPLICATION_ID}.action.MANAGE_SOURCE_SETTINGS"
         val ACTION_SOURCES = "${BuildConfig.APPLICATION_ID}.action.MANAGE_SOURCES"
+        val ACTION_EXTENSION_SETTINGS = "${BuildConfig.APPLICATION_ID}.action.MANAGE_EXTENSION_SETTINGS"
         val ACTION_MANAGE_DISCORD = "${BuildConfig.APPLICATION_ID}.action.MANAGE_DISCORD"
         val ACTION_SUGGESTIONS = "${BuildConfig.APPLICATION_ID}.action.MANAGE_SUGGESTIONS"
         val ACTION_SYNC_SETTINGS = "${BuildConfig.APPLICATION_ID}.action.MANAGE_SYNC_SETTINGS"

@@ -1223,7 +1223,7 @@
     <string name="extension_install_mode_local_apk">インストールモード：ローカルAPK</string>
     <string name="extension_install_mode_system">インストールモード：システム</string>
     <string name="extension_management">拡張機能管理</string>
-    <string name="extension_management_summary">リポジトリ、JSONソース、APK拡張機能、JARパーサーを管理</string>
+    <string name="extension_management_summary">ソースの有効化とテスト、リポジトリと拡張パッケージの管理</string>
     <string name="extension_repo_added_message">%1$s を追加しました</string>
     <string name="extension_repo_already_exists_message">リポジトリは既に存在します</string>
     <string name="extension_repo_count">%d 個のリポジトリ</string>

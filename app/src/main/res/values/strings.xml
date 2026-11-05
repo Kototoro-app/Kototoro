@@ -2659,7 +2659,7 @@
     <string name="aniyomi_extensions_summary">Manage Aniyomi extension sources</string>
     <string name="extensions">APK extension</string>
     <string name="extension_management">Extension management</string>
-    <string name="extension_management_summary">Manage repositories, JSON sources, APK extensions, and JAR parsers</string>
+    <string name="extension_management_summary">Enable and test sources, manage repositories and extension packages</string>
     <string name="extensions_summary_pattern">Mihon %1$d · Aniyomi %2$d · IReader %3$d</string>
     <string name="filter_extensions_by_language">Filter extensions by language</string>
     <string name="filter_extensions_by_language_summary">Only show Mihon and Aniyomi extensions that match your selected content languages</string>
@@ -4178,4 +4178,8 @@
     <string name="kitsu_dub_de">German dub</string>
     <string name="kitsu_dub_ko">Korean dub</string>
     <string name="kitsu_dub_it">Italian dub</string>
+    <string name="source_preferences">Source preferences &amp; content filters</string>
+    <string name="source_preferences_summary">Sorting, grouping, adult content filters and tag blacklist</string>
+    <string name="source_preferences_browsing">Browsing</string>
+    <string name="extension_settings">Extension settings</string>
 </resources>

@@ -24,6 +24,7 @@ import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.explore.data.SourcesSortOrder
 import org.skepsun.kototoro.explore.data.titleResId
 import org.skepsun.kototoro.settings.SettingsActivity
+import org.skepsun.kototoro.settings.compose.SourcesSettingsPage
 import org.skepsun.kototoro.settings.compose.AdultContentFilterTarget
 import org.skepsun.kototoro.settings.compose.SettingsChoiceOption
 import org.skepsun.kototoro.settings.compose.ExtensionInstallBehaviorItem
@@ -39,6 +40,7 @@ fun SourcesSettingsRoute(
     viewModel: SourcesSettingsViewModel,
     onSetupWizardClick: () -> Unit,
     onGlobalTagBlacklistClick: () -> Unit,
+    page: SourcesSettingsPage = SourcesSettingsPage.PREFERENCES,
 ) {
     val isLinksEnabled = viewModel.isLinksEnabled.collectAsStateWithLifecycle().value
     val installedJarNames by viewModel.installedJarNames.collectAsStateWithLifecycle()
@@ -140,8 +142,9 @@ fun SourcesSettingsRoute(
     )
 
     SourcesSettingsScreen(
-        overviewTitle = stringResource(R.string.remote_sources),
-        remoteSourcesTitle = stringResource(R.string.remote_sources),
+        page = page,
+        overviewTitle = stringResource(R.string.source_preferences_browsing),
+        remoteSourcesTitle = "",
         adultFilteringTitle = stringResource(R.string.adult_content_filtering),
         moreTitle = stringResource(R.string.more),
         state = state,

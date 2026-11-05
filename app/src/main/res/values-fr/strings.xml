@@ -1250,7 +1250,7 @@
     <string name="extension_install_mode_local_apk">Mode d\'installation : APK local</string>
     <string name="extension_install_mode_system">Mode d\'installation : système</string>
     <string name="extension_management">Gestion des extensions</string>
-    <string name="extension_management_summary">Gérer les dépôts, les sources JSON, les extensions APK et les analyseurs JAR</string>
+    <string name="extension_management_summary">Activer et tester les sources, gérer les dépôts et les paquets d’extensions</string>
     <string name="extension_repo_added_message">%1$s ajouté(e)</string>
     <string name="extension_repo_already_exists_message">Le dépôt existe déjà</string>
     <string name="extension_repo_count">%d dépôt(s)</string>

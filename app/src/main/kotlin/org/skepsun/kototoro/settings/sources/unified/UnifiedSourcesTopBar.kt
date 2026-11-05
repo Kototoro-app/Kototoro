@@ -27,6 +27,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.ui.draw.clip
@@ -204,6 +205,7 @@ fun UnifiedSourcesActionCapsule(
     onReorderClick: (() -> Unit)? = null,
     reorderEnabled: Boolean = true,
     onGroupsClick: (() -> Unit)? = null,
+    onSettingsClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val tokens = LocalInterfaceStyleTokens.current
@@ -234,7 +236,7 @@ fun UnifiedSourcesActionCapsule(
             // Reorder and groups share one overflow menu so the capsule stays narrow and the
             // tab capsule next to it keeps enough room.
             var menuExpanded by remember { mutableStateOf(false) }
-            val hasMenu = onReorderClick != null || onGroupsClick != null
+            val hasMenu = onReorderClick != null || onGroupsClick != null || onSettingsClick != null
             Box {
                 IconButton(
                     onClick = { menuExpanded = true },
@@ -277,6 +279,18 @@ fun UnifiedSourcesActionCapsule(
                             onGroupsClick?.invoke()
                         },
                     )
+                    if (onSettingsClick != null) {
+                        TvDropdownMenuItem(
+                            text = { Text(stringResource(R.string.extension_settings)) },
+                            leadingIcon = {
+                                Icon(imageVector = Icons.Outlined.Settings, contentDescription = null)
+                            },
+                            onClick = {
+                                menuExpanded = false
+                                onSettingsClick()
+                            },
+                        )
+                    }
                 }
             }
             // Search button

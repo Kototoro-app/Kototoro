@@ -179,6 +179,9 @@ class UnifiedSourcesActivity : BaseComposeActivity() {
                     onSearchClick = { searchActive = true },
                     onFilterClick = openFilter,
                     onGroupsClick = { showSourceGroups = true },
+                    onSettingsClick = {
+                        startActivity(org.skepsun.kototoro.core.nav.AppRouter.extensionSettingsIntent(this@UnifiedSourcesActivity))
+                    },
                     reorderEnabled = !(loadingOrder || readyState == null || readyState.filters.query.isNotBlank()),
                     onReorderClick = {
                         loadingOrder = true

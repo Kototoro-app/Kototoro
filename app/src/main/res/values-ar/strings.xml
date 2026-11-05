@@ -1216,7 +1216,7 @@
     <string name="extension_install_mode_local_apk">وضع التثبيت: ملف APK محلي</string>
     <string name="extension_install_mode_system">وضع التثبيت: النظام</string>
     <string name="extension_management">إدارة الإضافات</string>
-    <string name="extension_management_summary">إدارة المستودعات، مصادر JSON، إضافات APK، ومحللات JAR</string>
+    <string name="extension_management_summary">تفعيل المصادر واختبارها، وإدارة المستودعات وحزم الإضافات</string>
     <string name="extension_repo_added_message">تمت إضافة %1$s</string>
     <string name="extension_repo_already_exists_message">المستودع موجود بالفعل</string>
     <string name="extension_repo_count">%d مستودع/مستودعات</string>

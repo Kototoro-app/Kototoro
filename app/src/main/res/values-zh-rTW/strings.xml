@@ -1206,7 +1206,7 @@
     <string name="extension_install_mode_local_apk">安裝模式：本地 APK</string>
     <string name="extension_install_mode_system">安裝模式：系統安裝</string>
     <string name="extension_management">拓展管理</string>
-    <string name="extension_management_summary">管理倉庫、JSON 源、APK 拓展和 JAR 解析器</string>
+    <string name="extension_management_summary">啟用與測試源，管理倉庫與擴展包</string>
     <string name="extension_repo_added_message">已添加 %1$s</string>
     <string name="extension_repo_already_exists_message">倉庫已存在</string>
     <string name="extension_repo_count">%d 個倉庫</string>
@@ -4109,4 +4109,8 @@ SHA-256 指紋:
     <string name="kitsu_dub_it">意配</string>
     <string name="explore_tab_tracking_sites">追蹤網站</string>
     <string name="explore_tab_sources">內容源</string>
+    <string name="source_preferences">來源偏好與內容過濾</string>
+    <string name="source_preferences_summary">排序、分組、成人內容過濾與標籤黑名單</string>
+    <string name="source_preferences_browsing">瀏覽與排序</string>
+    <string name="extension_settings">拓展設定</string>
 </resources>

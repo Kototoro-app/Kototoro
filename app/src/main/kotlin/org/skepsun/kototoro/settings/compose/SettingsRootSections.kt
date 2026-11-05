@@ -3,20 +3,14 @@ package org.skepsun.kototoro.settings.compose
 import android.content.Context
 import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.R
-import org.skepsun.kototoro.core.util.ext.getQuantityStringSafe
 import org.skepsun.kototoro.settings.SettingsDestination
 
 fun buildSettingsRootSections(
     context: Context,
-    enabledSourcesCount: Int,
-    totalSourcesCount: Int,
     onOpenDestination: (SettingsDestination) -> Unit,
 ): List<SettingsRootSection> {
-    val contentSummary = if (enabledSourcesCount >= 0) {
-        context.getString(R.string.enabled_d_of_d, enabledSourcesCount, totalSourcesCount)
-    } else {
-        context.resources.getQuantityStringSafe(R.plurals.items, totalSourcesCount, totalSourcesCount)
-    }
+    // Source counts live in extension management, which can filter them; this page only holds preferences.
+    val sourcePreferencesSummary = context.getString(R.string.source_preferences_summary)
     val extensionManagementSummary = context.getString(R.string.extension_management_summary)
 
     val readingInterfaceSection = SettingsRootSection(
@@ -64,8 +58,8 @@ fun buildSettingsRootSections(
                 key = "remote_sources",
                 iconRes = R.drawable.ic_manga_source,
                 iosIconColor = SettingsRootIconColor.GREEN,
-                title = context.getString(R.string.remote_sources),
-                summary = contentSummary,
+                title = context.getString(R.string.source_preferences),
+                summary = sourcePreferencesSummary,
                 onClick = { onOpenDestination(SettingsDestination.SourcesSettings) },
             ),
             settingsRootItem(
