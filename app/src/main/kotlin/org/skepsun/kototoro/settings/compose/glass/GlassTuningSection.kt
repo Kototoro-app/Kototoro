@@ -102,14 +102,8 @@ fun GlassTuningSection(
     tuning: GlassTuningState,
     isGlassEffectEnabled: Boolean,
     isReducedVisualEffects: Boolean,
-    immersiveStrengthPercent: Int,
     onGlassEffectEnabledChange: (Boolean) -> Unit,
     onReducedVisualEffectsChange: (Boolean) -> Unit,
-    onImmersiveStrengthChange: (Int) -> Unit,
-    edgeBlurRadiusDp: Int,
-    onEdgeBlurRadiusChange: (Int) -> Unit,
-    blurQuality: GlassBlurQuality,
-    onBlurQualityChange: (GlassBlurQuality) -> Unit,
     onSetValue: (GlassTuningScope, GlassTuningParam, Float) -> Unit,
     onSetFollowGlobal: (GlassTuningScope, GlassTuningParam, Boolean) -> Unit,
     onApplyPreset: (GlassPreset) -> Unit,
@@ -143,21 +137,6 @@ fun GlassTuningSection(
         checked = isReducedVisualEffects,
         onCheckedChange = onReducedVisualEffectsChange,
     )
-    GlassImmersiveSlider(
-        value = immersiveStrengthPercent,
-        onValueChange = onImmersiveStrengthChange,
-    )
-    if (isRenderEffectSupported()) {
-        GlassEdgeBlurSlider(
-            value = edgeBlurRadiusDp,
-            enabled = !isReducedVisualEffects,
-            onValueChange = onEdgeBlurRadiusChange,
-        )
-        GlassBlurQualityRow(
-            selected = blurQuality,
-            onSelected = onBlurQualityChange,
-        )
-    }
     HorizontalDivider()
     GlassPresetRow(
         tuning = tuning,
@@ -224,7 +203,7 @@ fun GlassTuningSection(
 
 /** One-line master switch with an icon. */
 @Composable
-private fun GlassMasterSwitch(
+internal fun GlassMasterSwitch(
     title: String,
     summary: String,
     checked: Boolean,
@@ -261,7 +240,7 @@ private fun GlassMasterSwitch(
 }
 
 @Composable
-private fun GlassImmersiveSlider(
+internal fun GlassImmersiveSlider(
     value: Int,
     onValueChange: (Int) -> Unit,
 ) {
@@ -299,7 +278,7 @@ private fun GlassImmersiveSlider(
 }
 
 @Composable
-private fun GlassBlurQualityRow(
+internal fun GlassBlurQualityRow(
     selected: GlassBlurQuality,
     onSelected: (GlassBlurQuality) -> Unit,
 ) {
@@ -349,7 +328,7 @@ private fun GlassBlurQualityRow(
 }
 
 @Composable
-private fun GlassEdgeBlurSlider(
+internal fun GlassEdgeBlurSlider(
     value: Int,
     enabled: Boolean,
     onValueChange: (Int) -> Unit,

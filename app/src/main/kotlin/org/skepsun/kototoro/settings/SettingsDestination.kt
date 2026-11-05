@@ -11,6 +11,7 @@ sealed interface SettingsDestination {
     data object AppearanceHomeSettings : SettingsDestination
     data object AppearanceInterfaceSettings : SettingsDestination
     data object AppearanceGlassSettings : SettingsDestination
+    data object AppearanceImmersiveSettings : SettingsDestination
     data object AppearanceBadgesSettings : SettingsDestination
     data object AppearanceSearchFiltersSettings : SettingsDestination
     data object AppearanceNavigationSettings : SettingsDestination

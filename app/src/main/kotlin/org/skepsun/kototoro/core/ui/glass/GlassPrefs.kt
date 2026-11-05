@@ -9,6 +9,8 @@ data class GlassPrefs(
     val isReducedVisualEffectsEnabled: Boolean,
     val immersiveStrengthPercent: Int,
     val edgeBlurRadiusDp: Int = 0,
+    val isTopImmersiveEdgeEnabled: Boolean = true,
+    val isBottomImmersiveEdgeEnabled: Boolean = false,
 )
 
 val LocalGlassPrefs = staticCompositionLocalOf<GlassPrefs?> { null }

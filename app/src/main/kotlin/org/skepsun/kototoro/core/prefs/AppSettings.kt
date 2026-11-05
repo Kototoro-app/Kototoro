@@ -1566,6 +1566,16 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         get() = prefs.getEnumValue(KEY_GLASS_BLUR_QUALITY, GlassBlurQuality.BALANCED)
         set(value) = prefs.edit { putEnumValue(KEY_GLASS_BLUR_QUALITY, value) }
 
+    /** Whether the main shell draws its top immersive layer (tint and blur under the status bar and top bar). */
+    var isGlassImmersiveTopEnabled: Boolean
+        get() = prefs.getBoolean(KEY_GLASS_IMMERSIVE_TOP, true)
+        set(value) = prefs.edit { putBoolean(KEY_GLASS_IMMERSIVE_TOP, value) }
+
+    /** Whether the main shell draws its bottom immersive layer; the floating glass bottom bar does not need it. */
+    var isGlassImmersiveBottomEnabled: Boolean
+        get() = prefs.getBoolean(KEY_GLASS_IMMERSIVE_BOTTOM, false)
+        set(value) = prefs.edit { putBoolean(KEY_GLASS_IMMERSIVE_BOTTOM, value) }
+
     /** Blur radius (dp) of the main shell's top/bottom immersive edges; 0 keeps the plain tint gradient. */
     var glassEdgeBlurRadiusDp: Int
         get() = prefs.getSafeInt(
@@ -2812,6 +2822,8 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
             putString(KEY_POPUP_RADIUS, popupRadius.toString())
             putInt(KEY_GLASS_IMMERSIVE_STRENGTH, glassImmersiveStrengthPercent)
             putInt(KEY_GLASS_EDGE_BLUR, glassEdgeBlurRadiusDp)
+            putBoolean(KEY_GLASS_IMMERSIVE_TOP, isGlassImmersiveTopEnabled)
+            putBoolean(KEY_GLASS_IMMERSIVE_BOTTOM, isGlassImmersiveBottomEnabled)
             putEnumValue(KEY_GLASS_BLUR_QUALITY, glassBlurQuality)
             putBoolean(KEY_GLASS_EFFECT_ENABLED, isGlassEffectEnabled)
             putBoolean(KEY_REDUCED_VISUAL_EFFECTS, isReducedVisualEffectsEnabled)
@@ -3381,6 +3393,8 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_POPUP_RADIUS = "popup_radius"
         const val KEY_GLASS_IMMERSIVE_STRENGTH = "glass_immersive_strength"
         const val KEY_GLASS_EDGE_BLUR = "glass_edge_blur"
+        const val KEY_GLASS_IMMERSIVE_TOP = "glass_immersive_top"
+        const val KEY_GLASS_IMMERSIVE_BOTTOM = "glass_immersive_bottom"
         const val KEY_GLASS_BLUR_QUALITY = "glass_blur_quality"
         const val GLASS_EDGE_BLUR_DEFAULT_DP = 16
         const val GLASS_EDGE_BLUR_MAX_DP = 40

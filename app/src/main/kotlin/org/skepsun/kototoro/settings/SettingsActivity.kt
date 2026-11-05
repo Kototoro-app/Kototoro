@@ -555,6 +555,9 @@ class SettingsActivity :
                 SettingsDestination.AppearanceGlassSettings -> {
                     outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_APPEARANCE_GLASS_SETTINGS)
                 }
+                SettingsDestination.AppearanceImmersiveSettings -> {
+                    outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_APPEARANCE_IMMERSIVE_SETTINGS)
+                }
                 SettingsDestination.AppearanceBadgesSettings -> {
                     outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_APPEARANCE_BADGES_SETTINGS)
                 }
@@ -732,6 +735,7 @@ class SettingsActivity :
             SettingsDestination.AppearanceHomeSettings,
             SettingsDestination.AppearanceInterfaceSettings,
             SettingsDestination.AppearanceGlassSettings,
+            SettingsDestination.AppearanceImmersiveSettings,
             SettingsDestination.AppearanceBadgesSettings,
             SettingsDestination.AppearanceSearchFiltersSettings,
             SettingsDestination.AppearanceNavigationSettings,
@@ -898,6 +902,7 @@ class SettingsActivity :
             SettingsDestination.AppearanceHomeSettings -> COMPOSE_DESTINATION_APPEARANCE_HOME_SETTINGS
             SettingsDestination.AppearanceInterfaceSettings -> COMPOSE_DESTINATION_APPEARANCE_INTERFACE_SETTINGS
             SettingsDestination.AppearanceGlassSettings -> COMPOSE_DESTINATION_APPEARANCE_GLASS_SETTINGS
+            SettingsDestination.AppearanceImmersiveSettings -> COMPOSE_DESTINATION_APPEARANCE_IMMERSIVE_SETTINGS
             SettingsDestination.AppearanceBadgesSettings -> COMPOSE_DESTINATION_APPEARANCE_BADGES_SETTINGS
             SettingsDestination.AppearanceSearchFiltersSettings -> COMPOSE_DESTINATION_APPEARANCE_SEARCH_FILTERS_SETTINGS
             SettingsDestination.AppearanceNavigationSettings -> COMPOSE_DESTINATION_APPEARANCE_NAVIGATION_SETTINGS
@@ -946,6 +951,7 @@ class SettingsActivity :
             SettingsDestination.AppearanceInterfaceSettings ->
                 getString(R.string.appearance_group_interface_and_behavior)
             SettingsDestination.AppearanceGlassSettings -> getString(R.string.appearance_group_glass_tuner)
+            SettingsDestination.AppearanceImmersiveSettings -> getString(R.string.appearance_group_immersive)
             SettingsDestination.AppearanceBadgesSettings -> getString(R.string.badges_in_lists)
             SettingsDestination.AppearanceSearchFiltersSettings -> getString(R.string.search_bar_filters)
             SettingsDestination.AppearanceNavigationSettings -> getString(R.string.appearance_navigation_group)
@@ -1022,6 +1028,9 @@ class SettingsActivity :
             onOpenInterfaceSettings = {
                 openDestination(SettingsDestination.AppearanceInterfaceSettings, null, false)
             },
+            onOpenImmersiveSettings = {
+                openDestination(SettingsDestination.AppearanceImmersiveSettings, null, false)
+            },
         )
     }
 
@@ -1058,6 +1067,11 @@ class SettingsActivity :
                 title = getString(R.string.appearance_group_glass_tuner),
             ) {
                 RenderAppearanceSettings(AppearanceSettingsPage.GLASS)
+            }
+            SettingsDestination.AppearanceImmersiveSettings -> RenderComposeSection(
+                title = getString(R.string.appearance_group_immersive),
+            ) {
+                RenderAppearanceSettings(AppearanceSettingsPage.IMMERSIVE)
             }
             SettingsDestination.AppearanceBadgesSettings -> RenderComposeSection(
                 title = getString(R.string.badges_in_lists),
@@ -2196,6 +2210,7 @@ class SettingsActivity :
         private const val COMPOSE_DESTINATION_APPEARANCE_HOME_SETTINGS = "appearance_home_settings"
         private const val COMPOSE_DESTINATION_APPEARANCE_INTERFACE_SETTINGS = "appearance_interface_settings"
         private const val COMPOSE_DESTINATION_APPEARANCE_GLASS_SETTINGS = "appearance_glass_settings"
+        private const val COMPOSE_DESTINATION_APPEARANCE_IMMERSIVE_SETTINGS = "appearance_immersive_settings"
         private const val COMPOSE_DESTINATION_APPEARANCE_BADGES_SETTINGS = "appearance_badges_settings"
         private const val COMPOSE_DESTINATION_APPEARANCE_SEARCH_FILTERS_SETTINGS = "appearance_search_filters_settings"
         private const val COMPOSE_DESTINATION_APPEARANCE_NAVIGATION_SETTINGS = "appearance_navigation_settings"
@@ -2270,6 +2285,7 @@ class SettingsActivity :
             COMPOSE_DESTINATION_APPEARANCE_HOME_SETTINGS -> SettingsDestination.AppearanceHomeSettings
             COMPOSE_DESTINATION_APPEARANCE_INTERFACE_SETTINGS -> SettingsDestination.AppearanceInterfaceSettings
             COMPOSE_DESTINATION_APPEARANCE_GLASS_SETTINGS -> SettingsDestination.AppearanceGlassSettings
+            COMPOSE_DESTINATION_APPEARANCE_IMMERSIVE_SETTINGS -> SettingsDestination.AppearanceImmersiveSettings
             COMPOSE_DESTINATION_APPEARANCE_BADGES_SETTINGS -> SettingsDestination.AppearanceBadgesSettings
             COMPOSE_DESTINATION_APPEARANCE_SEARCH_FILTERS_SETTINGS ->
                 SettingsDestination.AppearanceSearchFiltersSettings

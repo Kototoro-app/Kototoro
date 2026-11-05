@@ -2619,8 +2619,14 @@ SHA-256 指紋:
     <string name="pref_glass_blur_strength_summary">設定目前玻璃預設使用的最終模糊半徑，單位 dp</string>
     <string name="pref_glass_noise_strength">玻璃噪點係數</string>
     <string name="pref_glass_noise_strength_summary">設定目前玻璃預設應用的最終噪點量，範圍 0.00 至 1.00</string>
+    <string name="appearance_group_immersive">沉浸層</string>
+    <string name="appearance_immersive_summary">頂欄與底欄下方的著色、邊緣模糊與模糊畫質</string>
     <string name="pref_glass_immersive_strength">沉浸式着色強度</string>
     <string name="pref_glass_immersive_strength_summary">獨立控制頂部和底部的沉浸式著色強度，不受預設影響</string>
+    <string name="pref_glass_immersive_top">頂部沉浸層</string>
+    <string name="pref_glass_immersive_top_summary">著色並模糊狀態列與頂欄下方的內容</string>
+    <string name="pref_glass_immersive_bottom">底部沉浸層</string>
+    <string name="pref_glass_immersive_bottom_summary">著色並模糊底欄周圍的內容；懸浮玻璃底欄不依賴它也清晰可讀</string>
     <string name="pref_glass_edge_blur">邊緣模糊</string>
     <string name="pref_glass_edge_blur_summary">模糊頂欄與底欄下方的內容並漸隱過渡，需要 Android 12 以上</string>
     <string name="pref_glass_blur_quality">模糊畫質</string>

@@ -1096,6 +1096,9 @@ fun KototoroApp(
             val mainShellChrome: @Composable BoxScope.() -> Unit = {
                 if (shouldShowChrome || isChromeVisible || chromeAlpha > 0f) {
                     if (!isImmersiveRoute) {
+                        val glassPrefs = LocalGlassPrefs.current
+                        val isTopImmersiveEdge = glassPrefs?.isTopImmersiveEdgeEnabled ?: true
+                        val isBottomImmersiveEdge = glassPrefs?.isBottomImmersiveEdgeEnabled ?: false
                         val edgeBackdrop = LocalImmersiveEdgeBackdrop.current
                         val edgeBlurRadius = if (edgeBackdrop != null) immersiveEdgeBlurRadius() else 0.dp
                         val isEdgeBlurred = edgeBlurRadius > 0.dp
@@ -1105,7 +1108,7 @@ fun KototoroApp(
                         // iOS keeps the top edge at alpha 0 until content slides under the chrome; skip the blur
                         // pass entirely there rather than rendering it transparent.
                         val isTopEdgeShown = surfaceStyle != SurfaceStyle.BACKDROP || chromeScrollOverlap > 0f
-                        if (edgeBackdrop != null && isEdgeBlurred && isTopEdgeShown) {
+                        if (edgeBackdrop != null && isEdgeBlurred && isTopImmersiveEdge && isTopEdgeShown) {
                             ImmersiveEdgeBlur(
                                 backdrop = edgeBackdrop,
                                 edge = ImmersiveEdge.TOP,
@@ -1124,7 +1127,7 @@ fun KototoroApp(
                                     },
                             )
                         }
-                        if (edgeBackdrop != null && isEdgeBlurred) {
+                        if (edgeBackdrop != null && isEdgeBlurred && isBottomImmersiveEdge) {
                             ImmersiveEdgeBlur(
                                 backdrop = edgeBackdrop,
                                 edge = ImmersiveEdge.BOTTOM,
@@ -1136,70 +1139,74 @@ fun KototoroApp(
                                     .fillMaxWidth(),
                             )
                         }
-                        ImmersiveEdgeGradient(
-                            modifier = Modifier
-                                .align(Alignment.TopCenter)
-                                .fillMaxWidth()
-                                .graphicsLayer {
-                                    val contentScrollAlpha = if (topBarHeightPx > 0) {
-                                        (-chromeScrollState.totalContentScrollOffset.floatValue / topBarHeightPx.toFloat())
-                                            .coerceIn(0f, 1f)
-                                    } else {
-                                        0f
-                                    }
-                                    alpha = if (surfaceStyle == SurfaceStyle.BACKDROP) {
-                                        // iOS: the edge fade is overlap-driven (0 at the top, 1 once
-                                        // content passes under the floating chrome), gated by chrome
-                                        // visibility. Never velocity-driven.
-                                        chromeScrollOverlap * chromeAlpha
-                                    } else {
-                                        resolveTopImmersiveAlpha(
-                                            contentScrollAlpha = contentScrollAlpha,
-                                            chromeAlpha = chromeAlpha,
-                                        )
-                                    }
-                                },
-                            height = topEdgeHeight,
-                            colors = if (surfaceStyle == SurfaceStyle.BACKDROP) {
-                                // iOS: backdrop strength ramps 0.65 → 1.0 and the scrim lifts
-                                // 0.02 → 0.08 as overlap grows under the floating chrome.
-                                val overlap = chromeScrollOverlap
-                                val backdropStrength = immersiveStrength * lerpFloat(0.65f, 1f, overlap)
-                                val scrimLift = lerpFloat(0.02f, 0.08f, overlap)
-                                listOf(
-                                    immersiveBaseColor.copy(alpha = (lerpFloat(0.72f, 0.98f, backdropStrength) + scrimLift).coerceIn(0f, 1f)),
-                                    immersiveBaseColor.copy(alpha = (lerpFloat(0.56f, 0.82f, backdropStrength) + scrimLift).coerceIn(0f, 1f)),
-                                    immersiveBaseColor.copy(alpha = (lerpFloat(0.32f, 0.52f, backdropStrength) + scrimLift).coerceIn(0f, 1f)),
-                                    immersiveBaseColor.copy(alpha = (lerpFloat(0.12f, 0.22f, backdropStrength) + scrimLift).coerceIn(0f, 1f)),
-                                    immersiveTransparent,
-                                )
-                            } else {
-                                // Material: stable tonal surface — strength and scrim stay put,
-                                // only whole-gradient alpha responds with the short chrome tween.
-                                listOf(
-                                    immersiveBaseColor.copy(alpha = lerpFloat(0.72f, 0.98f, immersiveStrength)),
-                                    immersiveBaseColor.copy(alpha = lerpFloat(0.56f, 0.82f, immersiveStrength)),
-                                    immersiveBaseColor.copy(alpha = lerpFloat(0.32f, 0.52f, immersiveStrength)),
-                                    immersiveBaseColor.copy(alpha = lerpFloat(0.12f, 0.22f, immersiveStrength)),
-                                    immersiveTransparent,
-                                )
-                            }.scaledImmersiveTint(edgeTintScale),
-                            stops = ImmersiveTopGradientStops,
-                        )
+                        if (isTopImmersiveEdge) {
+                            ImmersiveEdgeGradient(
+                                modifier = Modifier
+                                    .align(Alignment.TopCenter)
+                                    .fillMaxWidth()
+                                    .graphicsLayer {
+                                        val contentScrollAlpha = if (topBarHeightPx > 0) {
+                                            (-chromeScrollState.totalContentScrollOffset.floatValue / topBarHeightPx.toFloat())
+                                                .coerceIn(0f, 1f)
+                                        } else {
+                                            0f
+                                        }
+                                        alpha = if (surfaceStyle == SurfaceStyle.BACKDROP) {
+                                            // iOS: the edge fade is overlap-driven (0 at the top, 1 once
+                                            // content passes under the floating chrome), gated by chrome
+                                            // visibility. Never velocity-driven.
+                                            chromeScrollOverlap * chromeAlpha
+                                        } else {
+                                            resolveTopImmersiveAlpha(
+                                                contentScrollAlpha = contentScrollAlpha,
+                                                chromeAlpha = chromeAlpha,
+                                            )
+                                        }
+                                    },
+                                height = topEdgeHeight,
+                                colors = if (surfaceStyle == SurfaceStyle.BACKDROP) {
+                                    // iOS: backdrop strength ramps 0.65 → 1.0 and the scrim lifts
+                                    // 0.02 → 0.08 as overlap grows under the floating chrome.
+                                    val overlap = chromeScrollOverlap
+                                    val backdropStrength = immersiveStrength * lerpFloat(0.65f, 1f, overlap)
+                                    val scrimLift = lerpFloat(0.02f, 0.08f, overlap)
+                                    listOf(
+                                        immersiveBaseColor.copy(alpha = (lerpFloat(0.72f, 0.98f, backdropStrength) + scrimLift).coerceIn(0f, 1f)),
+                                        immersiveBaseColor.copy(alpha = (lerpFloat(0.56f, 0.82f, backdropStrength) + scrimLift).coerceIn(0f, 1f)),
+                                        immersiveBaseColor.copy(alpha = (lerpFloat(0.32f, 0.52f, backdropStrength) + scrimLift).coerceIn(0f, 1f)),
+                                        immersiveBaseColor.copy(alpha = (lerpFloat(0.12f, 0.22f, backdropStrength) + scrimLift).coerceIn(0f, 1f)),
+                                        immersiveTransparent,
+                                    )
+                                } else {
+                                    // Material: stable tonal surface — strength and scrim stay put,
+                                    // only whole-gradient alpha responds with the short chrome tween.
+                                    listOf(
+                                        immersiveBaseColor.copy(alpha = lerpFloat(0.72f, 0.98f, immersiveStrength)),
+                                        immersiveBaseColor.copy(alpha = lerpFloat(0.56f, 0.82f, immersiveStrength)),
+                                        immersiveBaseColor.copy(alpha = lerpFloat(0.32f, 0.52f, immersiveStrength)),
+                                        immersiveBaseColor.copy(alpha = lerpFloat(0.12f, 0.22f, immersiveStrength)),
+                                        immersiveTransparent,
+                                    )
+                                }.scaledImmersiveTint(edgeTintScale),
+                                stops = ImmersiveTopGradientStops,
+                            )
+                        }
 
-                        ImmersiveEdgeGradient(
-                            modifier = Modifier
-                                .align(Alignment.BottomCenter)
-                                .fillMaxWidth(),
-                            height = bottomEdgeHeight,
-                            colors = listOf(
-                                immersiveTransparent,
-                                immersiveBaseColor.copy(alpha = lerpFloat(0.14f, 0.24f, immersiveStrength)),
-                                immersiveBaseColor.copy(alpha = lerpFloat(0.34f, 0.54f, immersiveStrength)),
-                                immersiveBaseColor.copy(alpha = lerpFloat(0.60f, 0.90f, immersiveStrength)),
-                            ).scaledImmersiveTint(edgeTintScale),
-                            stops = ImmersiveBottomGradientStops,
-                        )
+                        if (isBottomImmersiveEdge) {
+                            ImmersiveEdgeGradient(
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .fillMaxWidth(),
+                                height = bottomEdgeHeight,
+                                colors = listOf(
+                                    immersiveTransparent,
+                                    immersiveBaseColor.copy(alpha = lerpFloat(0.14f, 0.24f, immersiveStrength)),
+                                    immersiveBaseColor.copy(alpha = lerpFloat(0.34f, 0.54f, immersiveStrength)),
+                                    immersiveBaseColor.copy(alpha = lerpFloat(0.60f, 0.90f, immersiveStrength)),
+                                ).scaledImmersiveTint(edgeTintScale),
+                                stops = ImmersiveBottomGradientStops,
+                            )
+                        }
                     }
 
                     if (shouldShowChrome && !isImmersiveRoute) {

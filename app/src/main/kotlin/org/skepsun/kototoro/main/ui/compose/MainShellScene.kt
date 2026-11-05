@@ -77,6 +77,7 @@ import org.skepsun.kototoro.core.ui.compose.RouteLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.compose.LocalArtworkBackdrop
 import org.skepsun.kototoro.core.ui.compose.LocalImmersiveEdgeBackdrop
 import org.skepsun.kototoro.core.ui.compose.immersiveEdgeBlurRadius
+import org.skepsun.kototoro.core.ui.glass.LocalGlassPrefs
 import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
@@ -238,7 +239,10 @@ fun MainShellScene(
             active = isMainShellRouteVisible,
         ) { layerBackdrop ->
             // iOS already records the page for its glass; Material records it only for the edge blur.
-            val materialEdgeLayer = if (!useLiquidGlass && immersiveEdgeBlurRadius() > 0.dp) {
+            val glassPrefs = LocalGlassPrefs.current
+            val isAnyEdgeBlurred = immersiveEdgeBlurRadius() > 0.dp &&
+                (glassPrefs?.isTopImmersiveEdgeEnabled != false || glassPrefs?.isBottomImmersiveEdgeEnabled == true)
+            val materialEdgeLayer = if (!useLiquidGlass && isAnyEdgeBlurred) {
                 val backgroundColor = MaterialTheme.colorScheme.background
                 rememberLayerBackdrop {
                     drawRect(backgroundColor)

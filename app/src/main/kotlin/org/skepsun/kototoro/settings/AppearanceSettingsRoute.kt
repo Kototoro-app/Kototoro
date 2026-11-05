@@ -104,6 +104,7 @@ fun AppearanceSettingsRoute(
     onOpenDetailsSettings: () -> Unit = {},
     onOpenHomeSettings: () -> Unit = {},
     onOpenInterfaceSettings: () -> Unit = {},
+    onOpenImmersiveSettings: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
@@ -235,6 +236,10 @@ fun AppearanceSettingsRoute(
         settings.observeAsState(AppSettings.KEY_GLASS_IMMERSIVE_STRENGTH) { glassImmersiveStrengthPercent }.value
     val glassEdgeBlurRadiusDp =
         settings.observeAsState(AppSettings.KEY_GLASS_EDGE_BLUR) { glassEdgeBlurRadiusDp }.value
+    val isGlassImmersiveTopEnabled =
+        settings.observeAsState(AppSettings.KEY_GLASS_IMMERSIVE_TOP) { isGlassImmersiveTopEnabled }.value
+    val isGlassImmersiveBottomEnabled =
+        settings.observeAsState(AppSettings.KEY_GLASS_IMMERSIVE_BOTTOM) { isGlassImmersiveBottomEnabled }.value
     val glassBlurQuality =
         settings.observeAsState(AppSettings.KEY_GLASS_BLUR_QUALITY) { glassBlurQuality }.value
     val isGlassEffectEnabled =
@@ -462,6 +467,8 @@ fun AppearanceSettingsRoute(
         isReducedVisualEffectsEnabled = isReducedVisualEffectsEnabled,
         glassImmersiveStrengthPercent = glassImmersiveStrengthPercent,
         glassEdgeBlurRadiusDp = glassEdgeBlurRadiusDp,
+        isGlassImmersiveTopEnabled = isGlassImmersiveTopEnabled,
+        isGlassImmersiveBottomEnabled = isGlassImmersiveBottomEnabled,
         glassBlurQuality = glassBlurQuality,
     )
 
@@ -564,6 +571,8 @@ fun AppearanceSettingsRoute(
         onReducedVisualEffectsChange = { settings.isReducedVisualEffectsEnabled = it },
         onImmersiveStrengthChange = { settings.glassImmersiveStrengthPercent = it },
         onEdgeBlurRadiusChange = { settings.glassEdgeBlurRadiusDp = it },
+        onImmersiveTopChange = { settings.isGlassImmersiveTopEnabled = it },
+        onImmersiveBottomChange = { settings.isGlassImmersiveBottomEnabled = it },
         onBlurQualityChange = { settings.glassBlurQuality = it },
         glassTuning = glassTuning,
         onGlassTuningSetValue = { scope, param, value ->
@@ -640,6 +649,7 @@ fun AppearanceSettingsRoute(
         onDetailsSettingsClick = onOpenDetailsSettings,
         onHomeSettingsClick = onOpenHomeSettings,
         onInterfaceSettingsClick = onOpenInterfaceSettings,
+        onImmersiveSettingsClick = onOpenImmersiveSettings,
     )
 }
 

@@ -3434,8 +3434,14 @@
     <string name="pref_glass_blur_strength_summary">Sets the final blur radius used by the current glass material preset, in dp</string>
     <string name="pref_glass_noise_strength">Glass noise factor</string>
     <string name="pref_glass_noise_strength_summary">Sets the final noise amount applied to the current glass material preset, from 0.00 to 1.00</string>
+    <string name="appearance_group_immersive">Immersive layers</string>
+    <string name="appearance_immersive_summary">Tint and blur under the top and bottom bars, and blur quality</string>
     <string name="pref_glass_immersive_strength">Immersive tint strength</string>
     <string name="pref_glass_immersive_strength_summary">Controls the top and bottom immersive tint intensity independently of the selected material preset</string>
+    <string name="pref_glass_immersive_top">Top immersive layer</string>
+    <string name="pref_glass_immersive_top_summary">Tint and blur the content under the status bar and top bar</string>
+    <string name="pref_glass_immersive_bottom">Bottom immersive layer</string>
+    <string name="pref_glass_immersive_bottom_summary">Tint and blur the content around the bottom bar; the floating glass bar reads fine without it</string>
     <string name="pref_glass_edge_blur">Edge blur</string>
     <string name="pref_glass_edge_blur_summary">Blurs the content under the top and bottom bars and fades it out; requires Android 12 or later</string>
     <string name="pref_glass_blur_quality">Blur quality</string>

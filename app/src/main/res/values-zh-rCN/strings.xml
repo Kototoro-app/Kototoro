@@ -3263,8 +3263,14 @@ SHA-256 指纹:
     <string name="font_download_ready">%1$s 字体已就绪</string>
     <string name="font_download_failed">无法下载 %1$s，将使用系统字体。</string>
     <string name="font_downloads">字体下载</string>
+    <string name="appearance_group_immersive">沉浸层</string>
+    <string name="appearance_immersive_summary">顶栏与底栏下方的着色、边缘模糊与模糊画质</string>
     <string name="pref_glass_immersive_strength">沉浸式着色强度</string>
     <string name="pref_glass_immersive_strength_summary">独立控制顶部和底部的沉浸式着色强度，不受预设影响</string>
+    <string name="pref_glass_immersive_top">顶部沉浸层</string>
+    <string name="pref_glass_immersive_top_summary">着色并模糊状态栏与顶栏下方的内容</string>
+    <string name="pref_glass_immersive_bottom">底部沉浸层</string>
+    <string name="pref_glass_immersive_bottom_summary">着色并模糊底栏周围的内容；悬浮玻璃底栏不依赖它也清晰可读</string>
     <string name="pref_glass_edge_blur">边缘模糊</string>
     <string name="pref_glass_edge_blur_summary">模糊顶栏与底栏下方的内容并渐隐过渡，需要 Android 12 及以上</string>
     <string name="pref_glass_blur_quality">模糊画质</string>

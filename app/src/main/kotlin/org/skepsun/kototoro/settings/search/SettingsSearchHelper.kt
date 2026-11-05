@@ -93,9 +93,6 @@ class SettingsSearchHelper @Inject constructor(
         listOf(
             "glass_tuner" to R.string.appearance_group_glass_tuner,
             "glass_effect" to R.string.pref_glass_effect,
-            "glass_immersive_strength" to R.string.pref_glass_immersive_strength,
-            "glass_edge_blur" to R.string.pref_glass_edge_blur,
-            "glass_blur_quality" to R.string.pref_glass_blur_quality,
             "reduce_visual_effects" to R.string.pref_reduce_visual_effects,
         ).forEach { (key, titleRes) ->
             result.add(
@@ -104,6 +101,28 @@ class SettingsSearchHelper @Inject constructor(
                     title = context.getString(titleRes),
                     breadcrumbs = glassBreadcrumbs,
                     destination = SettingsDestination.AppearanceGlassSettings,
+                ),
+            )
+        }
+
+        val immersiveBreadcrumbs = listOf(
+            context.getString(R.string.appearance),
+            context.getString(R.string.appearance_group_immersive),
+        )
+        listOf(
+            "appearance_immersive" to R.string.appearance_group_immersive,
+            "glass_immersive_top" to R.string.pref_glass_immersive_top,
+            "glass_immersive_bottom" to R.string.pref_glass_immersive_bottom,
+            "glass_immersive_strength" to R.string.pref_glass_immersive_strength,
+            "glass_edge_blur" to R.string.pref_glass_edge_blur,
+            "glass_blur_quality" to R.string.pref_glass_blur_quality,
+        ).forEach { (key, titleRes) ->
+            result.add(
+                SettingsItem(
+                    key = key,
+                    title = context.getString(titleRes),
+                    breadcrumbs = immersiveBreadcrumbs,
+                    destination = SettingsDestination.AppearanceImmersiveSettings,
                 ),
             )
         }
