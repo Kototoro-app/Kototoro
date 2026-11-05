@@ -99,6 +99,9 @@ internal fun DesktopExtensionsPanel(controller: DesktopController, closing: Bool
                 onTabClick = { tab = it },
             )
             androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
+            // Android keeps this in the top bar's overflow menu, reachable from every tab; same here, next to 添加.
+            TextButton({ controller.showExtensionSettings() }, enabled = enabled,
+                modifier = Modifier.testTag("extension-settings-open")) { Text(AndroidStrings["extension_settings"]) }
             Button({ addError = null; adding = true }, enabled = enabled, modifier = Modifier.testTag("extension-add")) {
                 Text(desktopText("extensions.add"))
             }

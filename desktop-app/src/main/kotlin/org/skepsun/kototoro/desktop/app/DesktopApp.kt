@@ -184,6 +184,7 @@ fun DesktopApp(controller: DesktopController, closing: Boolean = false, fullscre
                             DesktopScreen.SOURCE_SETTINGS -> DesktopSourceSettingsPage(controller, listState)
                             DesktopScreen.SETUP_WIZARD -> DesktopSetupWizard(controller, state)
                             DesktopScreen.SOURCE_TEST -> DesktopSourceTestPage(controller, state)
+                            DesktopScreen.EXTENSION_SETTINGS -> DesktopExtensionSettingsPage(controller, state)
                             DesktopScreen.TAG_BLACKLIST -> DesktopTagBlacklistPage(controller, listState)
                             DesktopScreen.READING_STATS -> DesktopReadingStatsPage(controller, listState)
                             DesktopScreen.STORAGE -> DesktopStorageSettingsPage(controller, state)
@@ -271,7 +272,7 @@ private val OwnChromeScreens = setOf(DesktopScreen.LIBRARY, DesktopScreen.HISTOR
 private val ScrollUnderScreens = setOf(DesktopScreen.MORE, DesktopScreen.SERVICES, DesktopScreen.READER_SETTINGS,
     DesktopScreen.SOURCE_SETTINGS, DesktopScreen.STORAGE, DesktopScreen.DATA_CLEANUP, DesktopScreen.PLAYBACK_SETTINGS,
     DesktopScreen.PROXY_SETTINGS, DesktopScreen.DOWNLOAD_SETTINGS, DesktopScreen.NAV_CONFIG, DesktopScreen.READING_STATS,
-    DesktopScreen.REPLACE_RULES, DesktopScreen.SOURCE_TEST, DesktopScreen.SETUP_WIZARD, DesktopScreen.RECOMMENDATIONS,
+    DesktopScreen.REPLACE_RULES, DesktopScreen.SOURCE_TEST, DesktopScreen.EXTENSION_SETTINGS, DesktopScreen.SETUP_WIZARD, DesktopScreen.RECOMMENDATIONS,
     DesktopScreen.PREFERENCES, DesktopScreen.BACKUPS, DesktopScreen.UPDATED, DesktopScreen.SUGGESTIONS,
     DesktopScreen.BOOKMARKS, DesktopScreen.DOWNLOADS, DesktopScreen.CHANGELOG, DesktopScreen.CRASH_LOGS,
     DesktopScreen.DICTIONARY_RULES, DesktopScreen.TAG_BLACKLIST)
@@ -311,9 +312,10 @@ private fun Header(state: DesktopAppState, controller: DesktopController, enable
         DesktopScreen.RECOMMENDATIONS -> desktopText("screens.recommendations")
         DesktopScreen.SERVICES -> AndroidStrings["services"]
         DesktopScreen.READER_SETTINGS -> desktopText("screens.readerSettings")
-        DesktopScreen.SOURCE_SETTINGS -> desktopText("screens.sourceSettings")
+        DesktopScreen.SOURCE_SETTINGS -> AndroidStrings["source_preferences"]
         DesktopScreen.SETUP_WIZARD -> AndroidStrings["setup_wizard"]
         DesktopScreen.SOURCE_TEST -> AndroidStrings["source_test_title"]
+        DesktopScreen.EXTENSION_SETTINGS -> AndroidStrings["extension_settings"]
         DesktopScreen.TAG_BLACKLIST -> desktopText("screens.tagBlacklist")
         DesktopScreen.READING_STATS -> AndroidStrings["reading_stats"]
         DesktopScreen.STORAGE -> AndroidStrings["storage_and_network"]

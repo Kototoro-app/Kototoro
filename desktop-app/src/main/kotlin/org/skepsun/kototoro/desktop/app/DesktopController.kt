@@ -110,7 +110,7 @@ enum class DesktopScreen {
     HOME, FEED, EXPLORE, LIBRARY, HISTORY, DETAILS, READER, NOVEL, VIDEO, PREFERENCES, BROWSER, DOWNLOADS, BACKUPS,
     RECOMMENDATIONS, EXTENSIONS, READER_SETTINGS, SOURCE_SETTINGS, TAG_BLACKLIST, READING_STATS, MORE, STORAGE,
     PLAYBACK_SETTINGS, PROXY_SETTINGS, CHANGELOG, CRASH_LOGS, REPLACE_RULES, DICTIONARY_RULES,
-    DOWNLOAD_SETTINGS, NAV_CONFIG, DATA_CLEANUP, SERVICES, SETUP_WIZARD, SOURCE_TEST, BOOKMARKS, UPDATED, SUGGESTIONS,
+    DOWNLOAD_SETTINGS, NAV_CONFIG, DATA_CLEANUP, SERVICES, SETUP_WIZARD, SOURCE_TEST, EXTENSION_SETTINGS, BOOKMARKS, UPDATED, SUGGESTIONS,
 }
 
 /**
@@ -135,6 +135,7 @@ internal val DesktopScreen.settingsBackTag: String?
         DesktopScreen.TAG_BLACKLIST -> "tag-blacklist-back"
         DesktopScreen.READING_STATS -> "stats-back"
         DesktopScreen.SOURCE_TEST -> "source-test-back"
+        DesktopScreen.EXTENSION_SETTINGS -> "extension-settings-back"
         DesktopScreen.EXTENSIONS -> "extensions-back"
         DesktopScreen.BACKUPS -> "backups-back"
         DesktopScreen.DOWNLOADS -> "downloads-back"
@@ -183,8 +184,6 @@ data class DesktopAppState(
      * ranks here; the settings page resolves the names against the installed plugins when it draws the row.
      */
     val jarPriorityOrder: String = "",
-    /** Android's `show_broken_sources`: `@Broken` parsers stay installed, this decides if the lists offer them. */
-    val showBrokenSources: Boolean = false,
     /** Android's `chapters_clear_auto`: sweep the chapters the history already passed at every app start. */
     val chaptersClearAuto: Boolean = false,
     /** Android's `extension_install_policies`, keyed by `UnifiedSourceKind` name; a kind nobody set asks every time. */
@@ -405,7 +404,6 @@ class DesktopController(
         disabledSources = session.disabledSources(),
         sourceNsfwOverrides = session.sourceNsfwOverrides(),
         jarPriorityOrder = session.jarPriorityOrder(),
-        showBrokenSources = session.showBrokenSources(),
         chaptersClearAuto = session.chaptersClearAuto(),
         extensionInstallPolicies = session.extensionInstallPolicies()))
     val state = mutableState.asStateFlow()
@@ -867,25 +865,6 @@ class DesktopController(
         mutableState.update { it.copy(chaptersClearAuto = session.chaptersClearAuto()) }
     }
 
-    /**
-     * Android's `show_broken_sources` switch: the parsers a plugin marked `@Broken` appear in (or leave) every source
-     * list. They stay installed either way and keep their stored works, downloads and settings, so this only
-     * republishes the offered sources and drops the browse selection if it was one of the hidden ones.
-     */
-    fun setShowBrokenSources(show: Boolean) = action {
-        session.setShowBrokenSources(show)
-        val descriptors = sourceDescriptors()
-        mutableState.update { previous ->
-            val hidden = previous.selectedSource?.takeIf { selected ->
-                descriptors.none { it.source.name == selected.source.name }
-            }
-            previous.copy(showBrokenSources = session.showBrokenSources(),
-                sources = descriptors,
-                selectedSource = if (hidden != null) null else previous.selectedSource,
-                descriptor = if (hidden != null) null else previous.descriptor,
-                items = if (hidden != null) emptyList() else previous.items)
-        }
-    }
 
     /**
      * A package the user picked. The install policy still decides the sources' switches, but it never asks here: the
@@ -1082,6 +1061,8 @@ class DesktopController(
         mutableState.update { previous -> previous.copy(screen = destination,
             sources = descriptors, installedExtensions = installedVersions(), repositories = session.repositories.saved(),
             installedEntries = session.installedEntries(),
+            // The install policy and the broken-parser rule both switch sources off while installing.
+            disabledSources = session.disabledSources(),
             extensionUpdates = previous.extensionUpdates.filter { update -> installedVersions()[update.extension.packageName]
                 ?.let { it < update.extension.versionCode } == true },
             selectedSource = previous.selectedSource?.let { selected -> descriptors.firstOrNull { it.source.name == selected.source.name } },
@@ -2527,6 +2508,11 @@ class DesktopController(
     /** Android's setup wizard, which 来源设置 opens from its overview group. */
     fun showSetupWizard() = navigate { mutableState.update { it.copy(screen = DesktopScreen.SETUP_WIZARD) } }
 
+    /** Android's extension settings (plugin priority, install behavior), opened from 扩展与仓库 like the source test. */
+    fun showExtensionSettings() = navigate {
+        mutableState.update { it.copy(screen = DesktopScreen.EXTENSION_SETTINGS) }
+    }
+
     /**
      * Android's "test all sources" page, reached from 扩展与仓库. Entering it forgets the previous run so a second visit
      * starts clean instead of showing verdicts from a source that has since been uninstalled.
@@ -3827,7 +3813,7 @@ class DesktopController(
         DesktopScreen.DICTIONARY_RULES -> backFromDictionaryRules()
         DesktopScreen.TAG_BLACKLIST, DesktopScreen.SETUP_WIZARD -> showSourceSettings()
         DesktopScreen.READING_STATS, DesktopScreen.RECOMMENDATIONS -> showServices()
-        DesktopScreen.SOURCE_TEST -> showExtensions()
+        DesktopScreen.SOURCE_TEST, DesktopScreen.EXTENSION_SETTINGS -> showExtensions()
         else -> more()
     }
 

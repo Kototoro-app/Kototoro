@@ -19,7 +19,7 @@ import java.nio.file.Path
 /**
  * Android's `jar_priority_order` over the real UI and through two JVMs, because the parser host ranks its plugins once
  * when the session opens. The write phase installs the two parser fixtures that both declare `FIXTURE_SHARED`, moves the
- * second plugin to the front on the source settings page and checks Android's comma separated value; the read phase
+ * second plugin to the front on the extension settings page and checks Android's comma separated value; the read phase
  * opens the same data root and checks the shared source actually changed hands.
  */
 internal object DesktopJarPriorityProbe {
@@ -56,8 +56,11 @@ internal object DesktopJarPriorityProbe {
                 onNodeWithTag("nav:更多").performClick()
                 waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.MORE }
                 idle()
-                onNodeWithTag("source-settings-open").performScrollTo().performClick()
-                waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.SOURCE_SETTINGS }
+                onNodeWithTag("nav:扩展与仓库").performScrollTo().performClick()
+                waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.EXTENSIONS }
+                waitForIdle()
+                onNodeWithTag("extension-settings-open").performClick()
+                waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.EXTENSION_SETTINGS }
                 idle()
                 fun snapshot(label: String) {
                     Image.makeFromBitmap(onRoot().captureToImage().asSkiaBitmap()).use { image ->
@@ -134,8 +137,11 @@ internal object DesktopJarPriorityProbe {
                 onNodeWithTag("nav:更多").performClick()
                 waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.MORE }
                 idle()
-                onNodeWithTag("source-settings-open").performScrollTo().performClick()
-                waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.SOURCE_SETTINGS }
+                onNodeWithTag("nav:扩展与仓库").performScrollTo().performClick()
+                waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.EXTENSIONS }
+                waitForIdle()
+                onNodeWithTag("extension-settings-open").performClick()
+                waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.EXTENSION_SETTINGS }
                 idle()
                 onNodeWithTag("source-setting-jar-priority").performScrollTo().assertExists()
                 onNodeWithText(order.joinToString(", ")).assertExists()

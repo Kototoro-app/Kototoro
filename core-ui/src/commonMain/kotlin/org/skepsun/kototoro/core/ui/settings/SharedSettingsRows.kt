@@ -119,8 +119,11 @@ private fun SettingsRowTile(content: @Composable () -> Unit) {
             shape = RoundedCornerShape(LocalInterfaceStyleTokens.current.settingsGroupInnerCornerRadius),
             color = settingsGroupContainerColor(),
         ) {
-            // A shared row inside a host row must not draw a second tile.
-            CompositionLocalProvider(LocalSettingsRowTiles provides false, content = content)
+            // A shared row inside a host row must not draw a second tile; a host slot may hold several rows, so they
+            // stack in a column instead of the Surface's box.
+            CompositionLocalProvider(LocalSettingsRowTiles provides false) {
+                Column(Modifier.fillMaxWidth()) { content() }
+            }
         }
     } else {
         content()

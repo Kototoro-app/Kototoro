@@ -157,7 +157,7 @@ internal fun DesktopMorePanel(controller: DesktopController, enabled: Boolean, o
                 { controller.showPlaybackSettings() }, testTag = "playback-settings-open",
                 leadingIcon = painterResource("icons/ic_content_video.svg"))
             SettingsRowDivider()
-            SettingsValueRow(desktopText("screens.sourceSettings"), desktopText("sources.sortSummary"), null, enabled,
+            SettingsValueRow(AndroidStrings["source_preferences"], AndroidStrings["source_preferences_summary"], null, enabled,
                 { controller.showSourceSettings() }, testTag = "source-settings-open",
                 leadingIcon = painterResource("icons/ic_source_builtin.svg"))
             SettingsRowDivider()
@@ -171,7 +171,7 @@ internal fun DesktopMorePanel(controller: DesktopController, enabled: Boolean, o
                 enabled, { controller.showServices() }, testTag = "services-open",
                 leadingIcon = painterResource("icons/ic_suggestion.svg"))
             SettingsRowDivider()
-            SettingsValueRow(desktopText("more.extensions"), desktopText("more.extensionsSummary"), null, enabled,
+            SettingsValueRow(desktopText("more.extensions"), AndroidStrings["extension_management_summary"], null, enabled,
                 { controller.showExtensions() }, testTag = "nav:${desktopText("more.extensions")}",
                 leadingIcon = painterResource("icons/ic_extension.svg"))
             SettingsRowDivider()

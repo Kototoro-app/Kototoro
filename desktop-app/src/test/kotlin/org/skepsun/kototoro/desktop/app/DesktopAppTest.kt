@@ -128,7 +128,7 @@ class DesktopAppTest {
     }
 
     @Test
-    fun `source settings reorder the parser deduplication priority and the next start serves the shared source`() {
+    fun `extension settings reorder the parser deduplication priority and the next start serves the shared source`() {
         val root = directory.resolve("中文 jar priority")
         probe("jarpriority-write", root, 150)
         probe("jarpriority-read", root, 150)
@@ -152,7 +152,7 @@ class DesktopAppTest {
     }
 
     @Test
-    fun `a parser marked broken stays installed and the show broken sources switch hides and offers it`() {
+    fun `a parser marked broken is listed switched off until the user switches it on`() {
         val root = directory.resolve("中文 broken sources")
         probe("brokensource-write", root, 150)
         probe("brokensource-read", root, 150)
