@@ -102,7 +102,10 @@ fun SourceTagDropdown(
             expanded = expanded,
             onDismissRequest = { expanded = false },
             offset = DpOffset(x = 0.dp, y = 4.dp),
-            style = GlassDefaults.subtleStyle(),
+            // A page's own filter panel is a block of controls, not a short list: give it the denser plate.
+            style = if (customMenuContent != null) GlassDefaults.prominentStyle() else GlassDefaults.subtleStyle(),
+            surfaceAlpha = if (customMenuContent != null) 0.72f else 0.42f,
+            blurRadius = if (customMenuContent != null) 16.dp else 6.dp,
             useRootOverlay = LocalInterfaceStyle.current == InterfaceStyle.IOS,
             // Keep the pill's press gloss when this button dismisses the menu.
             anchorTapThrough = true,

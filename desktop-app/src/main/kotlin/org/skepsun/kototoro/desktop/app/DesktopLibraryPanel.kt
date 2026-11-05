@@ -419,9 +419,9 @@ private fun LibraryDisplayOptions(display: DesktopLibraryDisplay, enabled: Boole
                     icon = { mode -> painterResource(when (mode) {
                         org.skepsun.kototoro.core.prefs.ListMode.LIST -> "icons/ic_list.svg"
                         org.skepsun.kototoro.core.prefs.ListMode.DETAILED_LIST -> "icons/ic_list_detailed.svg"
+                        org.skepsun.kototoro.core.prefs.ListMode.COMPACT_GRID -> "icons/ic_grid_compact.svg"
                         else -> "icons/ic_grid.svg"
                     }) },
-                    checkIcon = painterResource("icons/ic_check.svg"),
                     modes = DesktopLibraryDisplay.MODES,
                 )
                 if (display.listMode.isGrid) {

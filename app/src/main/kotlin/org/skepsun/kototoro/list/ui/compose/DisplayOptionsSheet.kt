@@ -317,7 +317,7 @@ private fun GroupingSection(
     }
 }
 
-/** Android's resources and TV focus around the shared chips (core-ui DisplayModeOptions). */
+/** Android's resources and TV focus around the shared mode buttons (core-ui DisplayModeOptions). */
 @Composable
 internal fun DisplayModeSelector(
     currentListMode: ListMode,
@@ -328,17 +328,19 @@ internal fun DisplayModeSelector(
         currentListMode = currentListMode,
         onListModeSelected = onListModeSelected,
         label = { labels[it.ordinal] },
+        // Unselected modes show only their icon, so each mode needs one of its own.
         icon = { mode ->
             painterResource(
-                when {
-                    mode == ListMode.LIST -> R.drawable.ic_list
-                    mode == ListMode.DETAILED_LIST -> R.drawable.ic_list_detailed
-                    mode.isMovieGrid -> R.drawable.ic_content_video
-                    else -> R.drawable.ic_grid
+                when (mode) {
+                    ListMode.LIST -> R.drawable.ic_list
+                    ListMode.DETAILED_LIST -> R.drawable.ic_list_detailed
+                    ListMode.GRID -> R.drawable.ic_grid
+                    ListMode.COMPACT_GRID -> R.drawable.ic_grid_compact
+                    ListMode.MOVIE_GRID -> R.drawable.ic_content_video
+                    ListMode.COMPACT_MOVIE_GRID -> R.drawable.ic_movie_compact
                 },
             )
         },
-        checkIcon = painterResource(R.drawable.ic_check),
         chipModifier = Modifier.tvFocusable(shape = CircleShape, addFocusTarget = false),
     )
 }

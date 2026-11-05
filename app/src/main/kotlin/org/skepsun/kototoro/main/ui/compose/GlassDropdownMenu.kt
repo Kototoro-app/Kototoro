@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.DpOffset
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.zIndex
@@ -81,6 +82,9 @@ internal class RootGlassMenuHost {
 
 internal val LocalRootGlassMenuHost = staticCompositionLocalOf<RootGlassMenuHost?> { null }
 
+private const val DefaultMenuSurfaceAlpha = 0.42f
+private val DefaultMenuBlurRadius = 6.dp
+
 internal data class RootGlassMenuRequest(
     val id: Any,
     val backdrop: Backdrop,
@@ -94,6 +98,10 @@ internal data class RootGlassMenuRequest(
     // there falls through to the toggle button (keeping its press gloss).
     // Defaults to false: the menu dismisses on any outside tap, as before.
     val anchorTapThrough: Boolean = false,
+    // Opacity of the glass tint and blur behind the content. Short menus keep the light defaults; a
+    // panel full of controls (the favourites filter) needs a denser plate to stay readable.
+    val surfaceAlpha: Float = DefaultMenuSurfaceAlpha,
+    val blurRadius: Dp = DefaultMenuBlurRadius,
     // The button that opened the menu. The root overlay is an in-window sibling of its anchor, so
     // when it disappears nothing hands the focus back and the ring falls to the first focusable of
     // the screen (the navigation rail) - on a remote that means losing your place in the top bar.
@@ -216,13 +224,13 @@ internal fun RootGlassMenuOverlay(
                     shape = { request.shape },
                     effects = {
                         vibrancy()
-                        blur(6.dp.toPx())
+                        blur(request.blurRadius.toPx())
                     },
                     // Menus are passive floating containers (not a press target
                     // themselves); like sheets they render without any highlight.
                     highlight = null,
                     onDrawSurface = {
-                        drawRect(surfaceColor.copy(alpha = 0.42f))
+                        drawRect(surfaceColor.copy(alpha = request.surfaceAlpha))
                     },
                 )
                 .border(1.dp, Color.White.copy(alpha = 0.22f), request.shape),
@@ -288,6 +296,8 @@ fun GlassDropdownMenu(
     shape: Shape = RoundedRectangle(20.dp),
     style: GlassStyle = GlassDefaults.prominentStyle(),
     anchorFocusRequester: FocusRequester? = null,
+    surfaceAlpha: Float = DefaultMenuSurfaceAlpha,
+    blurRadius: Dp = DefaultMenuBlurRadius,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val scrollState = rememberScrollState()
@@ -333,6 +343,8 @@ fun GlassDropdownMenu(
                 content = content,
                 anchorTapThrough = anchorTapThrough,
                 anchorFocusRequester = anchorFocusRequester,
+                surfaceAlpha = surfaceAlpha,
+                blurRadius = blurRadius,
             )
         }
     } else {

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Compact grid display mode: a denser 3x3 of cells than ic_grid's 2x2. -->
+<vector
+	xmlns:android="http://schemas.android.com/apk/res/android"
+	android:width="24dp"
+	android:height="24dp"
+	android:tint="?attr/colorControlNormal"
+	android:viewportWidth="24"
+	android:viewportHeight="24">
+	<path
+		android:fillColor="#000"
+		android:pathData="M3 3h5v5H3V3m6.5 0h5v5h-5V3M16 3h5v5h-5V3M3 9.5h5v5H3v-5m6.5 0h5v5h-5v-5m6.5 0h5v5h-5v-5M3 16h5v5H3v-5m6.5 0h5v5h-5v-5m6.5 0h5v5h-5v-5" />
+</vector>

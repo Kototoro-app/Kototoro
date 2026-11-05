@@ -33,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
@@ -46,21 +47,22 @@ import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 /** Ring shape for the chips and dropdown rows of a filter panel; M3 draws nothing of its own for their focus. */
 private val FilterControlRingShape = RoundedCornerShape(8.dp)
 
-/** A titled card holding one filter group. */
+/**
+ * One filter group: an optional small title over its controls. By default the group is a card; [card] = false lays it
+ * flat on the panel, for a panel that is already a glass plate (a card per group there reads as a stack of plates and
+ * costs a margin each).
+ */
 @Composable
 fun FilterPanelGroup(
     title: String? = null,
     modifier: Modifier = Modifier,
+    card: Boolean = true,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    Surface(
-        shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        modifier = modifier.fillMaxWidth(),
-    ) {
+    val body: @Composable () -> Unit = {
         Column(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = if (card) 10.dp else 4.dp),
+            verticalArrangement = Arrangement.spacedBy(if (card) 8.dp else 6.dp),
         ) {
             title?.let {
                 Text(
@@ -73,9 +75,22 @@ fun FilterPanelGroup(
             content()
         }
     }
+    if (card) {
+        Surface(
+            shape = MaterialTheme.shapes.medium,
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            modifier = modifier.fillMaxWidth(),
+            content = body,
+        )
+    } else {
+        Box(modifier = modifier.fillMaxWidth()) { body() }
+    }
 }
 
-/** The panel title with its "done" action, followed by the same faint rule Android draws under it. */
+/**
+ * The panel title, aligned with the groups, with its actions on the right: an optional reset (so clearing never
+ * needs a scroll to the foot of a long panel) and "done".
+ */
 @Composable
 fun FilterPanelHeader(
     title: String,
@@ -83,20 +98,29 @@ fun FilterPanelHeader(
     onDone: () -> Unit,
     modifier: Modifier = Modifier,
     doneModifier: Modifier = Modifier,
+    resetLabel: String? = null,
+    onReset: () -> Unit = {},
+    resetEnabled: Boolean = true,
+    resetModifier: Modifier = Modifier,
 ) {
-    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.weight(1f),
-            )
-            TvTextButton(onClick = onDone, modifier = doneModifier) {
-                Text(doneLabel)
+    Row(
+        modifier = modifier.fillMaxWidth().padding(start = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.weight(1f),
+        )
+        if (resetLabel != null) {
+            TvTextButton(onClick = onReset, modifier = resetModifier, enabled = resetEnabled) {
+                Text(resetLabel)
             }
         }
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+        TvTextButton(onClick = onDone, modifier = doneModifier) {
+            Text(doneLabel)
+        }
     }
 }
 
@@ -206,7 +230,7 @@ fun FilterFacetChip(
         leadingIcon = leadingIcon,
         trailingIcon = trailingIcon,
         label = {
-            Text(text = label, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+            Text(text = label, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
         },
     )
 }
