@@ -29,7 +29,7 @@ import org.skepsun.kototoro.core.ui.settings.SettingsSectionHeader
 import org.skepsun.kototoro.core.ui.settings.SettingsValueRow
 import org.skepsun.kototoro.desktop.runtime.DesktopNavItem
 
-/** Windows supplies destination actions and artwork to the shared Android tablet rail. */
+/** Windows supplies destination actions and artwork to the shared Android tablet bar. */
 @Composable
 internal fun DesktopNavigationRail(controller: DesktopController, state: DesktopAppState, enabled: Boolean) {
     // The configured order from 更多 -> 导航配置, then Windows' "more" pinned last so the exit never disappears.
@@ -68,9 +68,10 @@ internal fun DesktopNavigationRail(controller: DesktopController, state: Desktop
             navigate(id)
         }
     }
-    androidx.compose.material3.Surface(Modifier.width(80.dp).fillMaxHeight().testTag("tablet-navigation"),
-        color = androidx.compose.material3.NavigationRailDefaults.ContainerColor, tonalElevation = 3.dp) {
-        TabletNavigationRail(destinations, selected, navigate, reselect,
+    // Android's tablet bar (iPhone Duo's vertical bar): destinations grouped in one capsule along the window's right
+    // edge. Windows keeps the labels on, since a desktop window has the height and "更多" reads better named.
+    Box(Modifier.fillMaxHeight().testTag("tablet-navigation")) {
+        TabletVerticalBar(destinations, selected, navigate, reselect,
             icon = { id, isSelected ->
                 val resource = when (id) {
                     desktopNavItemId(DesktopNavItem.HOME) -> "ic_home"
@@ -95,15 +96,25 @@ internal fun DesktopNavigationRail(controller: DesktopController, state: Desktop
                         modifier = Modifier.size(24.dp))
                 }
             },
-            modifier = Modifier.fillMaxSize(), enabled = enabled,
-            // Android's rail (KototoroBottomNav): the accent on iOS, the indicator's content colour on Material.
-            selectedIconColor = if (LocalDesktopInterfaceStyle.current == DesktopInterfaceStyle.IOS) {
+            capsule = { capsuleModifier, content ->
+                DesktopControlSurface(capsuleModifier, RoundedCornerShape(percent = 50), content)
+            },
+            modifier = Modifier.padding(horizontal = DesktopVerticalBarEdgeGap, vertical = DesktopVerticalBarEdgeGap),
+            showLabels = true, enabled = enabled,
+            // Android's bar (KototoroBottomNav): the accent on iOS, the indicator's content colour on Material.
+            selectedContentColor = if (LocalDesktopInterfaceStyle.current == DesktopInterfaceStyle.IOS) {
                 androidx.compose.material3.MaterialTheme.colorScheme.primary
             } else androidx.compose.material3.MaterialTheme.colorScheme.onSecondaryContainer,
+            indicatorColor = if (LocalDesktopInterfaceStyle.current == DesktopInterfaceStyle.IOS) {
+                androidx.compose.material3.MaterialTheme.colorScheme.onSurface.copy(alpha = .10f)
+            } else androidx.compose.material3.MaterialTheme.colorScheme.secondaryContainer,
             itemModifier = { id -> Modifier.testTag("nav:${destinations.first { it.id == id }.title}") },
         )
     }
 }
+
+/** Gap between the vertical bar and the window edges; the bar is this much plus [TabletVerticalBarControlWidth] wide. */
+internal val DesktopVerticalBarEdgeGap = 12.dp
 
 /** The rail id of "更多"; the configured destinations use their own stable ids so navigation never re-maps. */
 internal const val DESKTOP_NAV_MORE_ID = 3

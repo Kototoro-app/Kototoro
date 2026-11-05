@@ -64,6 +64,8 @@ internal fun BoxScope.MainTopChrome(
     heroTransitionInProgress: Boolean,
     isDetailsChromeTransitionPending: Boolean,
     visibleStartInsetDp: androidx.compose.ui.unit.Dp,
+    navigationInsetEdge: NavigationInsetEdge,
+    verticalBarActions: VerticalBarActionsHost?,
     effectiveTopBarOffset: Float,
     chromeAlpha: Float,
     onChromeFocusChanged: (Boolean) -> Unit = {},
@@ -132,7 +134,7 @@ internal fun BoxScope.MainTopChrome(
                 heroTransitionInProgress || isDetailsChromeTransitionPending
             },
         )
-        .padding(start = visibleStartInsetDp)
+        .navigationEdgePadding(navigationInsetEdge, visibleStartInsetDp)
         .offset { androidx.compose.ui.unit.IntOffset(0, effectiveTopBarOffset.toInt()) }
         .onFocusChanged { focusState -> onChromeFocusChanged(focusState.hasFocus) }
         .graphicsLayer { alpha = chromeAlpha }
@@ -147,6 +149,7 @@ internal fun BoxScope.MainTopChrome(
         val topContent: @Composable (Modifier) -> Unit = { contentModifier ->
             KototoroTopBar(
                 query = query,
+                verticalBarActions = verticalBarActions,
                 titleRes = titleRes,
                 titleText = titleText,
                 subtitleText = subtitleText,

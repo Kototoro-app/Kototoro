@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -127,6 +128,7 @@ private fun BoxScope.ResumeActionArtwork(
 @Composable
 internal fun BoxScope.MainBottomChrome(
     isLandscapeNavigation: Boolean,
+    isNavBarOnLeft: Boolean,
     isLayeredSurface: Boolean,
     chromeSharedTransitionScope: SharedTransitionScope?,
     heroTransitionInProgress: Boolean,
@@ -140,14 +142,22 @@ internal fun BoxScope.MainBottomChrome(
     isResumeEnabled: Boolean,
     onResumeClick: () -> Unit,
     resumeAction: MainResumeAction,
-    resumeCoverModel: Any?,
     railHeaderContent: (@Composable () -> Unit)?,
+    railActionsContent: (@Composable () -> Unit)? = null,
     adjacentAction: (@Composable () -> Unit)?,
 ) {
     val isTvPresentation = LocalUiPresentationConfig.current.isTv
     Box(
         modifier = Modifier
-            .align(if (isLandscapeNavigation) Alignment.CenterStart else Alignment.BottomCenter)
+            .align(
+                when {
+                    !isLandscapeNavigation -> Alignment.BottomCenter
+                    isTvPresentation -> Alignment.CenterStart
+                    // The vertical bar follows the hardware edge, not the layout direction.
+                    isNavBarOnLeft -> AbsoluteAlignment.CenterLeft
+                    else -> AbsoluteAlignment.CenterRight
+                },
+            )
             .renderChromeInSharedTransitionOverlay(
                 sharedTransitionScope = chromeSharedTransitionScope,
                 zIndexInOverlay = 1f,
@@ -171,7 +181,8 @@ internal fun BoxScope.MainBottomChrome(
             )
             .offset {
                 if (isLandscapeNavigation) {
-                    androidx.compose.ui.unit.IntOffset((-effectiveBottomNavOffset).toInt(), 0)
+                    val towardsEdge = if (isTvPresentation || isNavBarOnLeft) -1 else 1
+                    androidx.compose.ui.unit.IntOffset((towardsEdge * effectiveBottomNavOffset).toInt(), 0)
                 } else {
                     androidx.compose.ui.unit.IntOffset(0, effectiveBottomNavOffset.toInt())
                 }
@@ -195,16 +206,12 @@ internal fun BoxScope.MainBottomChrome(
                 )
             } else {
                 KototoroBottomNav(
+                    railActionsContent = railActionsContent,
                     state = navStateFlow,
                     onItemSelected = onItemSelected,
                     onItemReselected = onItemReselected,
                     railHeaderContent = railHeaderContent,
                     adjacentAction = adjacentAction,
-                    showContinueReadingButton = isLandscapeNavigation && isResumeEnabled,
-                    onContinueReadingClick = onResumeClick,
-                    continueReadingIconRes = resumeAction.iconRes,
-                    continueReadingContentDescriptionRes = resumeAction.contentDescriptionRes,
-                    continueReadingCoverModel = resumeCoverModel,
                 )
             }
         }
@@ -221,6 +228,7 @@ internal fun BoxScope.MainBottomChrome(
             bottomNavContent()
         }
     }
+
 }
 
 @Preview(showBackground = true)

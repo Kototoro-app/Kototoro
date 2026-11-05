@@ -88,6 +88,8 @@ data class AppearanceSettingsUiState(
     val isQuickFilterEnabled: Boolean,
     val tabletListPreviewMode: TabletListPreviewMode,
     val isTabletListFilterPanelDefaultOpen: Boolean,
+    val isTabletNavBarOnLeft: Boolean = false,
+    val isTabletNavLabelsVisible: Boolean = false,
     val progressIndicatorMode: ProgressIndicatorMode,
     val cardProgressStyle: CardProgressStyle,
     val topBarStyle: TopBarStyle,
@@ -219,6 +221,8 @@ fun AppearanceSettingsScreen(
     onQuickFilterChange: (Boolean) -> Unit,
     onTabletListPreviewModeChange: (TabletListPreviewMode) -> Unit,
     onTabletListFilterPanelDefaultChange: (Boolean) -> Unit,
+    onTabletNavBarOnLeftChange: (Boolean) -> Unit = {},
+    onTabletNavLabelsVisibleChange: (Boolean) -> Unit = {},
     onProgressIndicatorModeChange: (ProgressIndicatorMode) -> Unit,
     onCardProgressStyleChange: (CardProgressStyle) -> Unit,
     onTopBarStyleChange: (TopBarStyle) -> Unit,
@@ -898,6 +902,24 @@ fun AppearanceSettingsScreen(
                         value = state.tabletUiMode,
                         options = options.tabletUiModes,
                         onValueChange = onTabletUiModeChange,
+                    )
+                }
+                item {
+                    SettingsSwitchPreference(
+                        title = stringResource(R.string.pref_tablet_nav_bar_left),
+                        iconRes = R.drawable.ic_view_column,
+                        checked = state.isTabletNavBarOnLeft,
+                        summary = stringResource(R.string.pref_tablet_nav_bar_left_summary),
+                        onCheckedChange = onTabletNavBarOnLeftChange,
+                    )
+                }
+                item {
+                    SettingsSwitchPreference(
+                        title = stringResource(R.string.pref_tablet_nav_labels),
+                        iconRes = R.drawable.ic_view_column,
+                        checked = state.isTabletNavLabelsVisible,
+                        summary = stringResource(R.string.pref_tablet_nav_labels_summary),
+                        onCheckedChange = onTabletNavLabelsVisibleChange,
                     )
                 }
                 item {

@@ -95,7 +95,6 @@ fun DesktopApp(controller: DesktopController, closing: Boolean = false, fullscre
         Box(Modifier.matchParentSize().layerBackdrop(backdrop).background(Canvas).background(desktopCanvasBrush()))
         CompositionLocalProvider(LocalDesktopWindowWidth provides maxWidth, LocalDesktopBackdrop provides backdrop) {
             Row(Modifier.fillMaxSize()) {
-                if (!reading) DesktopNavigationRail(controller, listState, !closing)
                 // Android's floating top chrome: the page draws under it and scrolls beneath it; the bar (the generic
                 // header, the challenge and failure notices, the progress line) floats over the page.
                 val pagePadding = if (reading || listState.screen == DesktopScreen.HOME) 0.dp else 24.dp
@@ -210,6 +209,8 @@ fun DesktopApp(controller: DesktopController, closing: Boolean = false, fullscre
                 // Over everything, at the top edge, without taking room from the bars below it.
                 if (state.busy || closing) LinearProgressIndicator(Modifier.fillMaxWidth().align(Alignment.TopStart))
                 }
+                // The vertical bar sits on the window's right edge, like Android's tablet bar.
+                if (!reading) DesktopNavigationRail(controller, listState, !closing)
             }
             // Android asks inside its reader; the question belongs to the window, not to one screen, so it overlays
             // whichever list or details page started the read.

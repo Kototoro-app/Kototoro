@@ -3354,6 +3354,10 @@ SHA-256 指纹:
     <string name="start_reading">开始阅读</string>
     <string name="pref_tablet_list_filter_panel">进入列表时默认打开过滤器面板</string>
     <string name="pref_tablet_list_filter_panel_summary">在平板横屏打开作品列表时，在右侧半屏显示过滤器面板。</string>
+    <string name="pref_tablet_nav_bar_left">导航栏靠左</string>
+    <string name="pref_tablet_nav_bar_left_summary">在平板上把竖向导航栏放在左侧边缘，而不是右侧</string>
+    <string name="pref_tablet_nav_labels">导航栏文字</string>
+    <string name="pref_tablet_nav_labels_summary">在平板的竖向导航栏中，于每个图标下方显示名称</string>
     <string name="appearance_group_list_interaction">列表交互与动效</string>
     <string name="appearance_group_list_information">列表信息</string>
     <string name="appearance_group_details_content">内容与操作</string>

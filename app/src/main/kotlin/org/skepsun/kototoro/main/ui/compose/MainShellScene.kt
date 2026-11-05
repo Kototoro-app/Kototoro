@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.main.ui.compose
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.absolutePadding
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -140,6 +141,15 @@ private data class FavoritesSelectionDialogState(
     val selectedIndices: Set<Int>,
 )
 
+/** The edge the landscape navigation occupies: TV's rail sits at the start, the tablet bar on a physical side. */
+enum class NavigationInsetEdge { START, LEFT, RIGHT }
+
+internal fun Modifier.navigationEdgePadding(edge: NavigationInsetEdge, inset: Dp): Modifier = when (edge) {
+    NavigationInsetEdge.START -> padding(start = inset)
+    NavigationInsetEdge.LEFT -> absolutePadding(left = inset)
+    NavigationInsetEdge.RIGHT -> absolutePadding(right = inset)
+}
+
 internal fun shouldApplyLandscapeNavigationInset(
     isLandscapeNavigation: Boolean,
     isMainShellRouteVisible: Boolean,
@@ -147,7 +157,8 @@ internal fun shouldApplyLandscapeNavigationInset(
 
 @Composable
 private fun MainRouteScene(
-    landscapeStartPadding: androidx.compose.ui.unit.Dp,
+    landscapeNavigationPadding: androidx.compose.ui.unit.Dp,
+    navigationInsetEdge: NavigationInsetEdge,
     sourceModifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
@@ -155,7 +166,7 @@ private fun MainRouteScene(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .padding(start = landscapeStartPadding)
+            .navigationEdgePadding(navigationInsetEdge, landscapeNavigationPadding)
             .then(sourceModifier),
     ) {
         content()
@@ -190,6 +201,7 @@ fun MainShellScene(
     onDetailsReturnTransitionRequested: () -> Unit = {},
     onDetailsBottomPanelStateChanged: (Float, Dp) -> Unit = { _, _ -> },
     isLandscapeNavigation: Boolean = false,
+    navigationInsetEdge: NavigationInsetEdge = NavigationInsetEdge.START,
     detailsTransitionStyle: ListToDetailsTransition = ListToDetailsTransition.HERO_EXPAND,
 ) {
     val activity = LocalContext.current as FragmentActivity
@@ -205,7 +217,7 @@ fun MainShellScene(
     val rootView = LocalView.current
     val isMainShellRouteVisible = mainNavState.currentStack().lastOrNull() is TopLevelNavKey
     val density = LocalDensity.current
-    val landscapeStartPadding = if (
+    val landscapeNavigationPadding = if (
         shouldApplyLandscapeNavigationInset(
             isLandscapeNavigation = isLandscapeNavigation,
             isMainShellRouteVisible = isMainShellRouteVisible,
@@ -261,7 +273,8 @@ fun MainShellScene(
             val recordedLayer = if (useLiquidGlass) layerBackdrop else materialEdgeLayer
             Box(modifier = Modifier.fillMaxSize()) {
                 MainRouteScene(
-                    landscapeStartPadding = landscapeStartPadding,
+                    landscapeNavigationPadding = landscapeNavigationPadding,
+                    navigationInsetEdge = navigationInsetEdge,
                     sourceModifier = Modifier
                         .then(
                             if (recordedLayer != null) {

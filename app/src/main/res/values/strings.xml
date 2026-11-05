@@ -3567,6 +3567,10 @@
     <string name="start_reading">Start reading</string>
     <string name="pref_tablet_list_filter_panel">Open filter panel on entering list</string>
     <string name="pref_tablet_list_filter_panel_summary">On tablets, open the filter drawer when opening a source list.</string>
+    <string name="pref_tablet_nav_bar_left">Navigation bar on the left</string>
+    <string name="pref_tablet_nav_bar_left_summary">On tablets, place the vertical navigation bar along the left edge instead of the right</string>
+    <string name="pref_tablet_nav_labels">Navigation bar labels</string>
+    <string name="pref_tablet_nav_labels_summary">On tablets, show a label under each destination in the vertical navigation bar</string>
     <string name="appearance_group_list_interaction">List interaction and motion</string>
     <string name="appearance_group_list_information">List information</string>
     <string name="appearance_group_details_content">Content and controls</string>

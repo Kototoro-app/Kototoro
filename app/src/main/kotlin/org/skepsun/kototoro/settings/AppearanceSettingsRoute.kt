@@ -174,6 +174,12 @@ fun AppearanceSettingsRoute(
     val tabletListPreviewMode = settings.observeAsState(AppSettings.KEY_TABLET_LIST_PREVIEW_MODE) {
         tabletListPreviewMode
     }.value
+    val isTabletNavBarOnLeft = settings.observeAsState(AppSettings.KEY_TABLET_NAV_BAR_LEFT) {
+        isTabletNavBarOnLeft
+    }.value
+    val isTabletNavLabelsVisible = settings.observeAsState(AppSettings.KEY_TABLET_NAV_LABELS) {
+        isTabletNavLabelsVisible
+    }.value
     val isTabletListFilterPanelDefaultOpen = settings.observeAsState(
         AppSettings.KEY_TABLET_LIST_FILTER_PANEL_DEFAULT,
     ) { isTabletListFilterPanelDefaultOpen }.value
@@ -421,6 +427,8 @@ fun AppearanceSettingsRoute(
         isQuickFilterEnabled = isQuickFilterEnabled,
         tabletListPreviewMode = tabletListPreviewMode,
         isTabletListFilterPanelDefaultOpen = isTabletListFilterPanelDefaultOpen,
+        isTabletNavBarOnLeft = isTabletNavBarOnLeft,
+        isTabletNavLabelsVisible = isTabletNavLabelsVisible,
         progressIndicatorMode = progressIndicatorMode,
         cardProgressStyle = cardProgressStyle,
         topBarStyle = topBarStyle,
@@ -520,6 +528,8 @@ fun AppearanceSettingsRoute(
         onQuickFilterChange = { settings.isQuickFilterEnabled = it },
         onTabletListPreviewModeChange = { settings.tabletListPreviewMode = it },
         onTabletListFilterPanelDefaultChange = { settings.isTabletListFilterPanelDefaultOpen = it },
+        onTabletNavBarOnLeftChange = { settings.isTabletNavBarOnLeft = it },
+        onTabletNavLabelsVisibleChange = { settings.isTabletNavLabelsVisible = it },
         onProgressIndicatorModeChange = { settings.progressIndicatorMode = it },
         onCardProgressStyleChange = { settings.cardProgressStyle = it },
         onTopBarStyleChange = { settings.topBarStyle = it },

@@ -65,6 +65,7 @@ import org.skepsun.kototoro.core.ui.compose.ImmersiveBottomGradientStops
 import org.skepsun.kototoro.core.ui.compose.ImmersiveEdgeFeatherExtension
 import org.skepsun.kototoro.core.ui.compose.ImmersiveTopGradientStops
 import org.skepsun.kototoro.core.prefs.SpaceSwitcherPosition
+import org.skepsun.kototoro.core.prefs.limitMainNavigationItems
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarHorizontalPadding
 import org.skepsun.kototoro.core.ui.compose.LocalScrollbarActive
 import org.skepsun.kototoro.core.ui.compose.resolveTopImmersiveAlpha
@@ -107,6 +108,11 @@ import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.space.ui.SpaceAction
 import org.skepsun.kototoro.space.ui.SpaceSidekick
 import org.skepsun.kototoro.space.ui.SpaceSwitcherRailButton
+import org.skepsun.kototoro.space.ui.SpaceSwitcherFab
+import org.skepsun.kototoro.core.ui.adaptive.tabletVerticalBarFitsActions
+import org.skepsun.kototoro.core.ui.adaptive.LocalTabletVerticalBarControlSize
+import org.skepsun.kototoro.core.ui.widgets.TabletVerticalBarEdgeGap
+import androidx.compose.ui.platform.LocalWindowInfo
 import org.skepsun.kototoro.space.ui.SpaceUiState
 import org.skepsun.kototoro.search.domain.LocalEntitySuggestion
 import org.skepsun.kototoro.core.prefs.FavoritesTabsPosition
@@ -476,6 +482,8 @@ fun KototoroApp(
     val globalTagBlacklist by prefs.globalTagBlacklist
     val isNavBarPinned by prefs.isNavBarPinned
     val tabletUiMode by prefs.tabletUiMode
+    val isTabletNavBarOnLeft by prefs.isTabletNavBarOnLeft
+    val isTabletNavLabelsVisible by prefs.isTabletNavLabelsVisible
     val mainNavItems by prefs.mainNavItems
     val isMainFabEnabled by prefs.isMainFabEnabled
     val sidekickPosition by prefs.sidekickPosition
@@ -520,6 +528,12 @@ fun KototoroApp(
         presentationConfig.effectiveMode,
     ) {
         presentationConfig.isTv || FoldableUtils.shouldUseTabletLayout(context, appSettings, configuration)
+    }
+    val isTabletVerticalBar = isLandscapeNavigation && !presentationConfig.isTv
+    val navigationInsetEdge = when {
+        presentationConfig.isTv -> NavigationInsetEdge.START
+        isTabletNavBarOnLeft -> NavigationInsetEdge.LEFT
+        else -> NavigationInsetEdge.RIGHT
     }
     val isLanguagePresetFilterVisibleSetting = filterVisibilityPrefs.isLanguagePresetFilterVisible
     val isContentTypeFilterVisibleSetting = filterVisibilityPrefs.isContentTypeFilterVisible
@@ -742,6 +756,24 @@ fun KototoroApp(
         activeSpaceResumeItem?.canResume == true
     } else {
         isResumeEnabled
+    }
+    // The top bar's filter and ⋮ group joins the vertical bar only when the window is tall enough for it
+    // next to the full-size controls; the inputs are settings and window size, so moving it cannot change them.
+    val windowHeightPx = LocalWindowInfo.current.containerSize.height
+    val tabletBarHeight = with(density) {
+        (windowHeightPx - statusBarHeightPx - navigationBarHeightPx).toDp() - TabletVerticalBarEdgeGap * 2
+    }
+    val tabletBarItemCount = mainNavItems.limitMainNavigationItems().size
+    val tabletBarFitsActions = isTabletVerticalBar && tabletVerticalBarFitsActions(
+        availableHeight = tabletBarHeight,
+        hasHeader = spaceUiState.switcherEnabled,
+        actionsHeight = interfaceStyleTokens.topBarButtonSize * 3 + 12.dp,
+        hasAccessory = isMainFabEnabled,
+        itemCount = tabletBarItemCount,
+        showLabels = isTabletNavLabelsVisible,
+    )
+    val verticalBarActions = remember(tabletBarFitsActions, isTabletNavBarOnLeft) {
+        if (tabletBarFitsActions) VerticalBarActionsHost(isBarOnLeft = isTabletNavBarOnLeft) else null
     }
     val effectiveResumeClick = if (spaceUiState.switcherEnabled) {
         { onSpaceResume(spaceUiState.activeSpaceId) }
@@ -1228,6 +1260,8 @@ fun KototoroApp(
                         heroTransitionInProgress = heroTransitionInProgress,
                         isDetailsChromeTransitionPending = isDetailsChromeTransitionPending,
                         visibleStartInsetDp = visibleStartInsetDp,
+                        navigationInsetEdge = navigationInsetEdge,
+                        verticalBarActions = verticalBarActions,
                         effectiveTopBarOffset = effectiveTopBarOffset,
                         chromeAlpha = chromeAlpha,
                         onChromeFocusChanged = { focused -> isChromeFocused = focused },
@@ -1328,6 +1362,8 @@ fun KototoroApp(
                     )
                     MainBottomChrome(
                         isLandscapeNavigation = isLandscapeNavigation,
+                        isNavBarOnLeft = isTabletNavBarOnLeft,
+                        railActionsContent = verticalBarActions?.content,
                         isLayeredSurface = isLayeredSurface,
                         chromeSharedTransitionScope = chromeSharedTransitionScope,
                         heroTransitionInProgress = heroTransitionInProgress,
@@ -1346,8 +1382,18 @@ fun KototoroApp(
                         isResumeEnabled = effectiveResumeEnabled,
                         onResumeClick = effectiveResumeClick,
                         resumeAction = effectiveResumeAction,
-                        resumeCoverModel = effectiveResumeCoverModel,
-                        railHeaderContent = if (presentationConfig.isTv && spaceUiState.switcherEnabled) {
+                        railHeaderContent = if (isTabletVerticalBar && spaceUiState.switcherEnabled) {
+                            {
+                                SpaceSwitcherFab(
+                                    activeSpaceId = spaceUiState.activeSpaceId,
+                                    activeSpace = spaceUiState.spaces.firstOrNull {
+                                        it.id == spaceUiState.activeSpaceId
+                                    },
+                                    onClick = { onSpaceAction(SpaceAction.OpenSwitcher) },
+                                    modifier = Modifier.size(LocalTabletVerticalBarControlSize.current),
+                                )
+                            }
+                        } else if (presentationConfig.isTv && spaceUiState.switcherEnabled) {
                             {
                                 SpaceSwitcherRailButton(
                                     activeSpaceId = spaceUiState.activeSpaceId,
@@ -1360,13 +1406,20 @@ fun KototoroApp(
                         } else {
                             null
                         },
-                        adjacentAction = if (!isLandscapeNavigation && effectiveResumeEnabled) {
+                        adjacentAction = if (
+                            (!isLandscapeNavigation || isTabletVerticalBar) && effectiveResumeEnabled
+                        ) {
                             {
                                 ContinueReadingFab(
                                     onClick = effectiveResumeClick,
                                     action = effectiveResumeAction,
                                     coverModel = effectiveResumeCoverModel,
-                                    size = prefs.navigationPrefs.value.adjacentFabSize,
+                                    // A short vertical bar shrinks its circular controls together.
+                                    size = if (isTabletVerticalBar) {
+                                        LocalTabletVerticalBarControlSize.current
+                                    } else {
+                                        prefs.navigationPrefs.value.adjacentFabSize
+                                    },
                                 )
                             }
                         } else null,
@@ -1388,7 +1441,7 @@ fun KototoroApp(
                         rootContentBounds = coordinates.boundsInRoot()
                     },
             ) {
-                if (shouldShowChrome && isLandscapeNavigation && displayCutoutStartDp > 0.dp) {
+                if (shouldShowChrome && isLandscapeNavigation && presentationConfig.isTv && displayCutoutStartDp > 0.dp) {
                     Surface(
                         modifier = Modifier
                             .align(Alignment.CenterStart)
@@ -1443,6 +1496,7 @@ fun KototoroApp(
                                         shellBackdropOwnerKey = "$MAIN_SHELL_BACKDROP_OWNER_PREFIX:${renderedSpaceId.value}",
                                         detailsTransitionStyle = detailsTransitionStyle,
                                         isLandscapeNavigation = isLandscapeNavigation,
+                                        navigationInsetEdge = navigationInsetEdge,
                                         contentPadding = contentPadding,
                                         bottomBarOffsetPx = effectiveBottomNavOffset,
                                         bottomBarHeightPx = bottomNavHeightPx,
@@ -1543,18 +1597,25 @@ fun KototoroApp(
                         }
                     }
                 }
-                val isSidekickOnRight = sidekickPosition == SpaceSwitcherPosition.TOP_RIGHT ||
+                val isSidekickOnRight = (isTabletVerticalBar && !isTabletNavBarOnLeft) ||
+                    sidekickPosition == SpaceSwitcherPosition.TOP_RIGHT ||
                     sidekickPosition == SpaceSwitcherPosition.CENTER_RIGHT
                 SpaceSidekick(
                     state = spaceUiState,
                     onAction = onSpaceAction,
                     resumeItems = spaceResumeUiState.items,
                     onResume = onSpaceResume,
-                    position = sidekickPosition,
+                    // The tablet bar carries the switcher button, so its panel opens from the bar's edge.
+                    position = when {
+                        !isTabletVerticalBar -> sidekickPosition
+                        isTabletNavBarOnLeft -> SpaceSwitcherPosition.TOP_LEFT
+                        else -> SpaceSwitcherPosition.TOP_RIGHT
+                    },
                     // The search overlay is modal and its input row sits where the handle docks (the
                     // handle outranks it with zIndex 20), so it would cover and steal taps from the
                     // search button; there is nothing to switch spaces for while typing anyway.
                     visible = spaceUiState.switcherEnabled &&
+                        !(isTabletVerticalBar && shouldShowChrome) &&
                         !isSearchOverlayMounted &&
                         (!isSidekickOnRight || !isScrollbarActive.value) &&
                         (shouldShowChrome || isImmersiveRoute || isSearchRoute) &&

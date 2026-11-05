@@ -468,6 +468,19 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         get() = prefs.getBoolean(KEY_NAV_LABELS_ALWAYS_VISIBLE, true)
         set(value) = prefs.edit { putBoolean(KEY_NAV_LABELS_ALWAYS_VISIBLE, value) }
 
+    /**
+     * Put the tablet's vertical navigation bar on the left edge. The bar follows the hardware edge like
+     * iPhone Duo's, so it stays on the chosen physical side in right-to-left languages too.
+     */
+    var isTabletNavBarOnLeft: Boolean
+        get() = prefs.getBoolean(KEY_TABLET_NAV_BAR_LEFT, false)
+        set(value) = prefs.edit { putBoolean(KEY_TABLET_NAV_BAR_LEFT, value) }
+
+    /** Show labels under the destinations of the tablet's vertical bar (symbol-only by default). */
+    var isTabletNavLabelsVisible: Boolean
+        get() = prefs.getBoolean(KEY_TABLET_NAV_LABELS, false)
+        set(value) = prefs.edit { putBoolean(KEY_TABLET_NAV_LABELS, value) }
+
     var isNavBarPinned: Boolean
         get() = prefs.getBoolean(KEY_NAV_PINNED, true)
         set(value) = prefs.edit { putBoolean(KEY_NAV_PINNED, value) }
@@ -3380,6 +3393,8 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_NAV_MAIN_LEGACY_THREE_MIGRATED = "nav_main_legacy_three_migrated"
         const val KEY_NAV_LABELS = "nav_labels"
         const val KEY_NAV_LABELS_ALWAYS_VISIBLE = "nav_labels_always_visible"
+        const val KEY_TABLET_NAV_BAR_LEFT = "tablet_nav_bar_left"
+        const val KEY_TABLET_NAV_LABELS = "tablet_nav_labels"
         const val KEY_NAV_PINNED = "nav_pinned"
         const val KEY_NAV_FLOATING = "nav_floating"
         const val KEY_NAV_LAYERED_SURFACE = "nav_layered_surface"
