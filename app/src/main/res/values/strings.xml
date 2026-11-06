@@ -1922,6 +1922,8 @@
     <string name="ask_for_dest_dir_every_time">Ask for the destination dir every time</string>
     <string name="pages_save_per_manga_folder">Create a folder for each manga</string>
     <string name="pages_save_per_manga_folder_summary">Pages saved to the default directory go into a subfolder named after the manga</string>
+    <string name="crop_include_previous_page">Add previous page</string>
+    <string name="crop_include_next_page">Add next page</string>
     <string name="default_page_save_dir">Default page save directory</string>
     <string name="remove_from_history">Remove from history</string>
     <string name="location">Location</string>

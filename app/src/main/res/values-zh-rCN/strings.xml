@@ -1143,6 +1143,8 @@
     <string name="ask_for_dest_dir_every_time">保存图片时总是询问保存目录</string>
     <string name="pages_save_per_manga_folder">为每部作品创建文件夹</string>
     <string name="pages_save_per_manga_folder_summary">保存到默认目录的页面会放进以作品名命名的子文件夹</string>
+    <string name="crop_include_previous_page">拼接上一页</string>
+    <string name="crop_include_next_page">拼接下一页</string>
     <string name="pages_saving">图片保存</string>
     <string name="default_page_save_dir">图片默认保存目录</string>
     <string name="remove_from_history">删除阅读历史</string>

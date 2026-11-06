@@ -17,6 +17,8 @@ import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -38,11 +40,13 @@ import org.skepsun.kototoro.core.util.MimeTypes
 import org.skepsun.kototoro.core.util.ext.isContentZipUri
 import org.skepsun.kototoro.core.util.ext.isFileUri
 import org.skepsun.kototoro.core.util.ext.isZipUri
+import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
 import org.skepsun.kototoro.core.util.ext.toExportFileName
 import org.skepsun.kototoro.core.util.ext.toFileOrNull
 import org.skepsun.kototoro.core.util.ext.writeAllCancellable
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentPage
+import org.skepsun.kototoro.parsers.util.runCatchingCancellable
 import org.skepsun.kototoro.reader.domain.PageLoader
 import java.io.File
 import javax.inject.Provider
@@ -95,7 +99,9 @@ class PageSaveHelper @AssistedInject constructor(
         val outputFormat = getOutputFormat(pageUrl, pageUri)
         val proposedName = task.getFileBaseName(context.resources, settings.pagesSaveMangaTitleLength) +
             "." + outputFormat.extension
+        deleteStaleTempFiles()
         val tempSource = saveToTempFile(task)
+        val adjacent = saveAdjacentToTempFiles(task)
         val tempOutput = createTempOutputFile(outputFormat.extension)
         val sourceBounds = getImageBounds(tempSource)
         return try {
@@ -107,6 +113,8 @@ class PageSaveHelper @AssistedInject constructor(
                     compressQuality = CROP_QUALITY,
                     sourceWidth = sourceBounds.first,
                     sourceHeight = sourceBounds.second,
+                    previousSource = adjacent.previous?.toUri(),
+                    nextSource = adjacent.next?.toUri(),
                 ),
             )
             val destination = getDefaultFileUri(task.manga, proposedName)?.uri ?: run {
@@ -120,6 +128,7 @@ class PageSaveHelper @AssistedInject constructor(
             destination
         } finally {
             tempSource.delete()
+            adjacent.delete()
             tempOutput.delete()
         }
     }
@@ -129,7 +138,9 @@ class PageSaveHelper @AssistedInject constructor(
         val pageUrl = pageLoader.getPageUrl(task.page).toUri()
         val pageUri = pageLoader.loadPage(task.page, force = false)
         val outputFormat = getOutputFormat(pageUrl, pageUri)
+        deleteStaleTempFiles()
         val tempSource = saveToTempFile(task)
+        val adjacent = saveAdjacentToTempFiles(task)
         val tempOutput = createTempOutputFile(outputFormat.extension)
         val sourceBounds = getImageBounds(tempSource)
         val chapterIndex = task.manga.chapters?.indexOfFirst { it.id == task.chapterId }?.coerceAtLeast(0) ?: 0
@@ -147,10 +158,13 @@ class PageSaveHelper @AssistedInject constructor(
                     chapterId = task.chapterId,
                     chapterIndex = chapterIndex,
                     page = task.pageNumber - 1,
+                    previousSource = adjacent.previous?.toUri(),
+                    nextSource = adjacent.next?.toUri(),
                 ),
             )
         } finally {
             tempSource.delete()
+            adjacent.delete()
             tempOutput.delete()
         }
     }
@@ -186,6 +200,31 @@ class PageSaveHelper @AssistedInject constructor(
         return result
     }
 
+    /**
+     * Copies the pages next to the task's one for the crop editor to stitch on. Either side is left out
+     * when the caller knows no such page or it fails to load; the page itself is saved regardless.
+     */
+    private suspend fun saveAdjacentToTempFiles(task: Task): AdjacentFiles = coroutineScope {
+        val previous = async { saveAdjacentToTempFile(task.previousPage) }
+        val next = async { saveAdjacentToTempFile(task.nextPage) }
+        AdjacentFiles(previous.await(), next.await())
+    }
+
+    private suspend fun saveAdjacentToTempFile(page: ContentPage?): File? {
+        page ?: return null
+        return runCatchingCancellable {
+            val pageUri = getPageLoader().loadPage(page, force = false)
+            val destination = createTempOutputFile(ADJACENT_EXTENSION)
+            try {
+                copyImpl(pageUri, destination.toUri())
+            } catch (e: Throwable) {
+                destination.delete()
+                throw e
+            }
+            destination
+        }.onFailure { it.printStackTraceDebug() }.getOrNull()
+    }
+
     private suspend fun getPageExtension(url: Uri, fileUri: Uri): String {
         val name = requireNotNull(
             if (url.isZipUri() || url.isContentZipUri()) {
@@ -207,6 +246,18 @@ class PageSaveHelper @AssistedInject constructor(
             OutputFormat("jpg", Bitmap.CompressFormat.JPEG)
         } else {
             OutputFormat("png", Bitmap.CompressFormat.PNG)
+        }
+    }
+
+    /**
+     * Drops what an editor session killed with the process left behind; a stitched page can be large.
+     * Anything this recent may still be in use, for example a page handed to a share sheet.
+     */
+    private suspend fun deleteStaleTempFiles() = runInterruptible(Dispatchers.IO) {
+        val dir = context.getExternalFilesDir(TEMP_DIR) ?: return@runInterruptible
+        val threshold = System.currentTimeMillis() - STALE_TEMP_FILE_AGE_MS
+        dir.listFiles()?.forEach { file ->
+            if (file.isFile && file.lastModified() < threshold) file.delete()
         }
     }
 
@@ -298,6 +349,14 @@ class PageSaveHelper @AssistedInject constructor(
         options.outWidth to options.outHeight
     }
 
+    private class AdjacentFiles(val previous: File?, val next: File?) {
+
+        fun delete() {
+            previous?.delete()
+            next?.delete()
+        }
+    }
+
     private data class OutputFormat(
         val extension: String,
         val compressFormat: Bitmap.CompressFormat,
@@ -308,6 +367,9 @@ class PageSaveHelper @AssistedInject constructor(
         val chapterId: Long,
         val pageNumber: Int,
         val page: ContentPage,
+        /** Neighbours in the same chapter that the crop editor offers to stitch on, when known. */
+        val previousPage: ContentPage? = null,
+        val nextPage: ContentPage? = null,
     ) {
 
         /** `Title - Chapter 105 - Page 14`; a name already taken gets a suffix from the document provider. */
@@ -346,5 +408,7 @@ class PageSaveHelper @AssistedInject constructor(
         private const val TEMP_DIR = "pages"
         private const val MANGA_FOLDER_NAME_LENGTH = 100
         private const val CHAPTER_TITLE_LENGTH = 48
+        private const val ADJACENT_EXTENSION = "tmp"
+        private const val STALE_TEMP_FILE_AGE_MS = 60 * 60 * 1000L
     }
 }

@@ -433,6 +433,8 @@
     <string name="ask_for_dest_dir_every_time">保存图片时总是询问保存目录</string>
     <string name="pages_save_per_manga_folder">为每部作品创建文件夹</string>
     <string name="pages_save_per_manga_folder_summary">保存到默认目录的页面会放进以作品名命名的子文件夹</string>
+    <string name="crop_include_previous_page">拼接上一页</string>
+    <string name="crop_include_next_page">拼接下一页</string>
     <string name="assembling_apk">正在组装增量更新包，请稍候…</string>
     <string name="auth_complete">授权</string>
     <string name="auth_not_supported_by">不支持在%s上登录</string>

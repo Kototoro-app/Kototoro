@@ -5,6 +5,8 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Bundle
+import androidx.annotation.WorkerThread
+import androidx.core.net.toFile
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
@@ -19,6 +21,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -39,6 +42,7 @@ import android.widget.Toast
 import androidx.lifecycle.lifecycleScope
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
@@ -48,6 +52,8 @@ import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import java.io.File
 import javax.inject.Inject
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
+import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
+import org.skepsun.kototoro.parsers.util.runCatchingCancellable
 
 @AndroidEntryPoint
 class PageCropActivity : BaseComposeActivity(), TransformImageView.TransformImageListener {
@@ -58,6 +64,17 @@ class PageCropActivity : BaseComposeActivity(), TransformImageView.TransformImag
     private lateinit var cropImageView: GestureCropImageView
     private lateinit var overlayView: OverlayView
     private lateinit var outputUri: Uri
+    private lateinit var sourceUri: Uri
+    /** What the editor shows: the page itself or the page stitched with its neighbours. */
+    private var editedUri by mutableStateOf(Uri.EMPTY)
+    private var sourceRatio: Float = CropImageView.SOURCE_IMAGE_ASPECT_RATIO
+    private var previousUri: Uri? = null
+    private var nextUri: Uri? = null
+    private var includePrevious by mutableStateOf(false)
+    private var includeNext by mutableStateOf(false)
+    private var isStitching by mutableStateOf(false)
+    private var stitchJob: Job? = null
+    private var stitchedFile: File? = null
     private lateinit var compressFormat: Bitmap.CompressFormat
     private var compressQuality: Int = DEFAULT_COMPRESS_QUALITY
     private var originalRatio: Float = CropImageView.SOURCE_IMAGE_ASPECT_RATIO
@@ -79,7 +96,11 @@ class PageCropActivity : BaseComposeActivity(), TransformImageView.TransformImag
             cancelCrop()
             return
         }
+        this.sourceUri = sourceUri
+        editedUri = sourceUri
         outputUri = destinationUri
+        previousUri = intent.getParcelableExtra(EXTRA_PREVIOUS_SOURCE_URI)
+        nextUri = intent.getParcelableExtra(EXTRA_NEXT_SOURCE_URI)
         compressFormat = parseCompressFormat(intent.getStringExtra(EXTRA_COMPRESS_FORMAT))
         compressQuality = intent.getIntExtra(EXTRA_COMPRESS_QUALITY, DEFAULT_COMPRESS_QUALITY)
         val sourceWidth = intent.getIntExtra(EXTRA_SOURCE_WIDTH, 0)
@@ -94,6 +115,7 @@ class PageCropActivity : BaseComposeActivity(), TransformImageView.TransformImag
         } else {
             CropImageView.SOURCE_IMAGE_ASPECT_RATIO
         }
+        sourceRatio = originalRatio
         selectedRatio = originalRatio
 
         // setComposeContent (not setContent) is what publishes LocalUiPresentationConfig: without it
@@ -119,31 +141,34 @@ class PageCropActivity : BaseComposeActivity(), TransformImageView.TransformImag
                         color = MaterialTheme.colorScheme.onSurface,
                         style = MaterialTheme.typography.titleMedium,
                     )
-                    TvTextButton(onClick = ::saveCrop, enabled = isImageLoaded && !isCropping) {
+                    TvTextButton(onClick = ::saveCrop, enabled = isImageLoaded && !isCropping && !isStitching) {
                         Text(stringResource(if (isAnnotationMode) R.string.save_note else R.string.save))
                     }
                 }
-                AndroidView(
-                    factory = { context ->
-                        UCropView(context, null).also { cropView ->
-                            cropImageView = cropView.cropImageView
-                            overlayView = cropView.overlayView
-                            overlayView.setFreestyleCropEnabled(true)
-                            cropImageView.setTransformImageListener(this@PageCropActivity)
-                            cropImageView.setImageToWrapCropBoundsAnimDuration(WRAP_ANIM_DURATION_MS)
-                            cropImageView.setMaxScaleMultiplier(MAX_SCALE_MULTIPLIER)
-                            // uCrop sizes the crop frame from the first layout only. When the window is still
-                            // settling (e.g. launched during a rotation), re-apply the ratio at the final size.
-                            cropView.addOnLayoutChangeListener { _, l, t, r, b, oldL, oldT, oldR, oldB ->
-                                val resized = r - l != oldR - oldL || b - t != oldB - oldT
-                                if (resized && isImageLoaded) cropView.post { applyAspectRatio(selectedRatio) }
+                // uCrop reports a load only for the first image a view lays out, so a new image needs a new view.
+                key(editedUri) {
+                    AndroidView(
+                        factory = { context ->
+                            UCropView(context, null).also { cropView ->
+                                cropImageView = cropView.cropImageView
+                                overlayView = cropView.overlayView
+                                overlayView.setFreestyleCropEnabled(true)
+                                cropImageView.setTransformImageListener(this@PageCropActivity)
+                                cropImageView.setImageToWrapCropBoundsAnimDuration(WRAP_ANIM_DURATION_MS)
+                                cropImageView.setMaxScaleMultiplier(MAX_SCALE_MULTIPLIER)
+                                // uCrop sizes the crop frame from the first layout only. When the window is still
+                                // settling (e.g. launched during a rotation), re-apply the ratio at the final size.
+                                cropView.addOnLayoutChangeListener { _, l, t, r, b, oldL, oldT, oldR, oldB ->
+                                    val resized = r - l != oldR - oldL || b - t != oldB - oldT
+                                    if (resized && isImageLoaded) cropView.post { applyAspectRatio(selectedRatio) }
+                                }
+                                runCatching { cropImageView.setImageUri(editedUri, destinationUri) }
+                                    .onFailure { cancelCrop() }
                             }
-                            runCatching { cropImageView.setImageUri(sourceUri, destinationUri) }
-                                .onFailure { cancelCrop() }
-                        }
-                    },
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
-                )
+                        },
+                        modifier = Modifier.weight(1f).fillMaxWidth(),
+                    )
+                }
                 if (isAnnotationMode) {
                     androidx.compose.material3.OutlinedTextField(
                         value = noteText,
@@ -173,6 +198,32 @@ class PageCropActivity : BaseComposeActivity(), TransformImageView.TransformImag
                             // and the ratio chips below it can never be reached.
                             .tvTextInputFocusEscape(),
                     )
+                }
+                if (previousUri != null || nextUri != null) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp),
+                    ) {
+                        val enabled = isImageLoaded && !isCropping && !isStitching
+                        if (previousUri != null) {
+                            TvFilterChip(
+                                selected = includePrevious,
+                                onClick = { setAdjacentPages(!includePrevious, includeNext) },
+                                label = stringResource(R.string.crop_include_previous_page),
+                                enabled = enabled,
+                            )
+                        }
+                        if (nextUri != null) {
+                            TvFilterChip(
+                                selected = includeNext,
+                                onClick = { setAdjacentPages(includePrevious, !includeNext) },
+                                label = stringResource(R.string.crop_include_next_page),
+                                enabled = enabled,
+                            )
+                        }
+                    }
                 }
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
@@ -207,6 +258,73 @@ class PageCropActivity : BaseComposeActivity(), TransformImageView.TransformImag
     }
 
     override fun onLoadFailure(e: Exception) = cancelCrop()
+
+    override fun onDestroy() {
+        super.onDestroy()
+        if (isFinishing) {
+            stitchedFile?.delete()
+        }
+    }
+
+    /**
+     * Reloads the editor with the neighbouring pages stacked above and below the page, so a crop can
+     * cover a panel the page boundary cuts in half. The crop frame restarts on the new image.
+     */
+    private fun setAdjacentPages(previous: Boolean, next: Boolean) {
+        if (!::cropImageView.isInitialized || isCropping) return
+        includePrevious = previous
+        includeNext = next
+        stitchJob?.cancel()
+        isStitching = true
+        isImageLoaded = false
+        stitchJob = lifecycleScope.launch {
+            val result = runCatchingCancellable {
+                withContext(Dispatchers.IO) { buildStitchedSource(previous, next) }
+            }
+            isStitching = false
+            result.onSuccess { (uri, ratio) ->
+                originalRatio = ratio
+                editedUri = uri
+            }.onFailure { error ->
+                error.printStackTraceDebug()
+                Toast.makeText(this@PageCropActivity, R.string.error_occurred, Toast.LENGTH_SHORT).show()
+                includePrevious = false
+                includeNext = false
+                originalRatio = sourceRatio
+                editedUri = sourceUri
+            }
+        }
+    }
+
+    @WorkerThread
+    private fun buildStitchedSource(previous: Boolean, next: Boolean): Pair<Uri, Float> {
+        stitchedFile?.delete()
+        stitchedFile = null
+        if (!previous && !next) {
+            return sourceUri to sourceRatio
+        }
+        val files = buildList {
+            if (previous) add(previousUri.requireFile())
+            add(sourceUri.requireFile())
+            if (next) add(nextUri.requireFile())
+        }
+        val extension = if (compressFormat == Bitmap.CompressFormat.JPEG) "jpg" else "png"
+        val output = File.createTempFile("stitch_", ".$extension", sourceUri.requireFile().parentFile)
+        stitchedFile = output
+        val (width, height) = stitchPages(
+            files = files,
+            baseIndex = if (previous) 1 else 0,
+            output = output,
+            format = if (compressFormat == Bitmap.CompressFormat.JPEG) {
+                Bitmap.CompressFormat.JPEG
+            } else {
+                Bitmap.CompressFormat.PNG
+            },
+        )
+        return Uri.fromFile(output) to width.toFloat() / height.toFloat()
+    }
+
+    private fun Uri?.requireFile(): File = checkNotNull(this?.toFile()) { "No page to stitch" }
 
     override fun onRotate(currentAngle: Float) = Unit
 
@@ -305,6 +423,8 @@ class PageCropActivity : BaseComposeActivity(), TransformImageView.TransformImag
         internal const val EXTRA_CHAPTER_ID = "page_crop_chapter_id"
         internal const val EXTRA_CHAPTER_INDEX = "page_crop_chapter_index"
         internal const val EXTRA_PAGE = "page_crop_page"
+        internal const val EXTRA_PREVIOUS_SOURCE_URI = "page_crop_previous_source_uri"
+        internal const val EXTRA_NEXT_SOURCE_URI = "page_crop_next_source_uri"
 
         private const val DEFAULT_COMPRESS_QUALITY = 95
         private const val WRAP_ANIM_DURATION_MS = 180L
