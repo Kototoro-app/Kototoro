@@ -11,7 +11,7 @@ class MainShellSceneTest {
         assertTrue(
             shouldApplyLandscapeNavigationInset(
                 isLandscapeNavigation = true,
-                isMainShellRouteVisible = true,
+                isTopLevelEntry = true,
             ),
         )
     }
@@ -21,7 +21,7 @@ class MainShellSceneTest {
         assertFalse(
             shouldApplyLandscapeNavigationInset(
                 isLandscapeNavigation = true,
-                isMainShellRouteVisible = false,
+                isTopLevelEntry = false,
             ),
         )
     }
@@ -31,7 +31,7 @@ class MainShellSceneTest {
         assertFalse(
             shouldApplyLandscapeNavigationInset(
                 isLandscapeNavigation = false,
-                isMainShellRouteVisible = true,
+                isTopLevelEntry = true,
             ),
         )
     }

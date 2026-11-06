@@ -59,6 +59,7 @@ import org.skepsun.kototoro.search.ui.compose.SearchNavigationRequest
 import org.skepsun.kototoro.search.ui.compose.SearchResultsRoute
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
@@ -152,24 +153,44 @@ internal fun Modifier.navigationEdgePadding(edge: NavigationInsetEdge, inset: Dp
 
 internal fun shouldApplyLandscapeNavigationInset(
     isLandscapeNavigation: Boolean,
-    isMainShellRouteVisible: Boolean,
-): Boolean = isLandscapeNavigation && isMainShellRouteVisible
+    isTopLevelEntry: Boolean,
+): Boolean = isLandscapeNavigation && isTopLevelEntry
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-private fun MainRouteScene(
-    landscapeNavigationPadding: androidx.compose.ui.unit.Dp,
+internal fun MainRouteScene(
+    navState: MainNavState,
+    isLandscapeNavigation: Boolean,
+    landscapeNavigationPadding: Dp,
     navigationInsetEdge: NavigationInsetEdge,
     sourceModifier: Modifier = Modifier,
-    content: @Composable () -> Unit,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    detailsTransitionStyle: ListToDetailsTransition = ListToDetailsTransition.HERO_EXPAND,
+    content: @Composable (MainNavKey) -> Unit,
 ) {
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .navigationEdgePadding(navigationInsetEdge, landscapeNavigationPadding)
             .then(sourceModifier),
     ) {
-        content()
+        MainTopLevelNavDisplay(
+            navState = navState,
+            modifier = Modifier.fillMaxSize(),
+            sharedTransitionScope = sharedTransitionScope,
+            detailsTransitionStyle = detailsTransitionStyle,
+        ) { key ->
+            // Keep each entry's width stable while both scenes are composed. Changing the
+            // NavDisplay's inset on push/pop reflows the outgoing grid and saves a different row.
+            val inset = if (shouldApplyLandscapeNavigationInset(isLandscapeNavigation, key is TopLevelNavKey)) {
+                landscapeNavigationPadding
+            } else {
+                0.dp
+            }
+            Box(Modifier.fillMaxSize().navigationEdgePadding(navigationInsetEdge, inset)) {
+                content(key)
+            }
+        }
     }
 }
 
@@ -217,16 +238,7 @@ fun MainShellScene(
     val rootView = LocalView.current
     val isMainShellRouteVisible = mainNavState.currentStack().lastOrNull() is TopLevelNavKey
     val density = LocalDensity.current
-    val landscapeNavigationPadding = if (
-        shouldApplyLandscapeNavigationInset(
-            isLandscapeNavigation = isLandscapeNavigation,
-            isMainShellRouteVisible = isMainShellRouteVisible,
-        )
-    ) {
-        with(density) { bottomBarHeightPx.toDp() }
-    } else {
-        0.dp
-    }
+    val landscapeNavigationPadding = with(density) { bottomBarHeightPx.toDp() }
     val mainNavigator: MainNavigator = remember(mainNavState, onDetailsTransitionRequested) {
         MainStateNavigator(
             mainNavState = mainNavState,
@@ -273,8 +285,12 @@ fun MainShellScene(
             val recordedLayer = if (useLiquidGlass) layerBackdrop else materialEdgeLayer
             Box(modifier = Modifier.fillMaxSize()) {
                 MainRouteScene(
+                    navState = mainNavState,
+                    isLandscapeNavigation = isLandscapeNavigation,
                     landscapeNavigationPadding = landscapeNavigationPadding,
                     navigationInsetEdge = navigationInsetEdge,
+                    sharedTransitionScope = LocalSharedTransitionScope.current,
+                    detailsTransitionStyle = detailsTransitionStyle,
                     sourceModifier = Modifier
                         .then(
                             if (recordedLayer != null) {
@@ -283,39 +299,32 @@ fun MainShellScene(
                                 Modifier
                             },
                         ),
-                ) {
-                    MainTopLevelNavDisplay(
-                        navState = mainNavState,
-                        modifier = Modifier.fillMaxSize(),
-                        sharedTransitionScope = LocalSharedTransitionScope.current,
-                        detailsTransitionStyle = detailsTransitionStyle,
-                    ) { key ->
-                        CompositionLocalProvider(
-                            LocalLiquidGlassBackdrop provides null,
-                            LocalLiquidGlassLayerBackdrop provides null,
-                        ) {
-                            MainShellTopLevelEntryContent(
-                                key = key,
-                                mainNavState = mainNavState,
-                                appRouter = appRouter,
-                                rootView = rootView,
-                                contentPadding = contentPadding,
-                                bottomBarOffsetPx = bottomBarOffsetPx,
-                                bottomBarHeightPx = bottomBarHeightPx,
-                                pageSaveHelper = pageSaveHelper,
-                                isLandscapeNavigation = isLandscapeNavigation,
-                                mainNavigator = mainNavigator,
-                                isRouteVisible = isMainShellRouteVisible &&
-                                    mainNavState.selectedTopLevel == org.skepsun.kototoro.main.ui.navigation3.HomeNavKey,
-                                onDetailsBottomPanelStateChanged = onDetailsBottomPanelStateChanged,
-                                onExploreSourceSelectionTopBarChanged = onExploreSourceSelectionTopBarChanged,
-                                onContextualMenuActionsChanged = onContextualMenuActionsChanged,
-                                onOpenSearch = onOpenSearch,
-                                onDetailsReturnTransitionRequested = onDetailsReturnTransitionRequested,
-                                navigateToDetailsWithContent = navigateToDetailsWithContent,
-                                navigateToDetailsWithOrigin = navigateToDetailsWithOrigin,
-                            )
-                        }
+                ) { key ->
+                    CompositionLocalProvider(
+                        LocalLiquidGlassBackdrop provides null,
+                        LocalLiquidGlassLayerBackdrop provides null,
+                    ) {
+                        MainShellTopLevelEntryContent(
+                            key = key,
+                            mainNavState = mainNavState,
+                            appRouter = appRouter,
+                            rootView = rootView,
+                            contentPadding = contentPadding,
+                            bottomBarOffsetPx = bottomBarOffsetPx,
+                            bottomBarHeightPx = bottomBarHeightPx,
+                            pageSaveHelper = pageSaveHelper,
+                            isLandscapeNavigation = isLandscapeNavigation,
+                            mainNavigator = mainNavigator,
+                            isRouteVisible = isMainShellRouteVisible &&
+                                mainNavState.selectedTopLevel == org.skepsun.kototoro.main.ui.navigation3.HomeNavKey,
+                            onDetailsBottomPanelStateChanged = onDetailsBottomPanelStateChanged,
+                            onExploreSourceSelectionTopBarChanged = onExploreSourceSelectionTopBarChanged,
+                            onContextualMenuActionsChanged = onContextualMenuActionsChanged,
+                            onOpenSearch = onOpenSearch,
+                            onDetailsReturnTransitionRequested = onDetailsReturnTransitionRequested,
+                            navigateToDetailsWithContent = navigateToDetailsWithContent,
+                            navigateToDetailsWithOrigin = navigateToDetailsWithOrigin,
+                        )
                     }
                 }
                 CompositionLocalProvider(LocalImmersiveEdgeBackdrop provides edgeBackdrop) {
