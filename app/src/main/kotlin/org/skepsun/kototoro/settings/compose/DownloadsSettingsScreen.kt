@@ -34,6 +34,7 @@ data class DownloadsSettingsUiState(
     val isDozeIgnoreVisible: Boolean,
     val pagesDirectorySummary: String,
     val isPagesSavingAskEnabled: Boolean,
+    val isPagesSavePerMangaFolder: Boolean,
     val downloadThreads: Int,
     val downloadMaxActiveSeries: Int,
     val downloadRequestDelayMs: Int,
@@ -57,6 +58,7 @@ fun DownloadsSettingsScreen(
     onIgnoreDozeClick: () -> Unit,
     onPagesDirectoryClick: () -> Unit,
     onPagesSavingAskChange: (Boolean) -> Unit,
+    onPagesSavePerMangaFolderChange: (Boolean) -> Unit,
     onDownloadThreadsChange: (Int) -> Unit,
     onDownloadMaxActiveSeriesChange: (Int) -> Unit,
     onDownloadRequestDelayChange: (Int) -> Unit,
@@ -188,6 +190,15 @@ fun DownloadsSettingsScreen(
                             iconRes = R.drawable.ic_data_privacy,
                             checked = state.isPagesSavingAskEnabled,
                             onCheckedChange = onPagesSavingAskChange,
+                        )
+                    }
+                    item {
+                        SettingsSwitchPreference(
+                            title = stringResource(R.string.pages_save_per_manga_folder),
+                            iconRes = R.drawable.ic_folder_file,
+                            summary = stringResource(R.string.pages_save_per_manga_folder_summary),
+                            checked = state.isPagesSavePerMangaFolder,
+                            onCheckedChange = onPagesSavePerMangaFolderChange,
                         )
                     }
                 }

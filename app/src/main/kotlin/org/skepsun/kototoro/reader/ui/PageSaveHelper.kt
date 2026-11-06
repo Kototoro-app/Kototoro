@@ -2,6 +2,7 @@ package org.skepsun.kototoro.reader.ui
 
 import android.content.ContentResolver
 import android.content.Context
+import android.content.res.Resources
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
@@ -27,6 +28,7 @@ import okio.buffer
 import okio.openZip
 import okio.sink
 import okio.source
+import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.LocalizedAppContext
 import org.skepsun.kototoro.core.image.BitmapDecoderCompat
 import org.skepsun.kototoro.core.os.OpenDocumentTreeHelper
@@ -43,8 +45,6 @@ import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentPage
 import org.skepsun.kototoro.reader.domain.PageLoader
 import java.io.File
-import java.text.SimpleDateFormat
-import java.util.Date
 import javax.inject.Provider
 import kotlin.coroutines.resume
 
@@ -81,7 +81,7 @@ class PageSaveHelper @AssistedInject constructor(
         val pageLoader = getPageLoader()
         val pageUrl = pageLoader.getPageUrl(task.page).toUri()
         val pageUri = pageLoader.loadPage(task.page, force = false)
-        val proposedName = task.getFileBaseName(settings.pagesSaveMangaTitleLength) + "." +
+        val proposedName = task.getFileBaseName(context.resources, settings.pagesSaveMangaTitleLength) + "." +
             getPageExtension(pageUrl, pageUri)
         val destination = File(checkNotNull(context.getExternalFilesDir(TEMP_DIR)), proposedName)
         copyImpl(pageUri, destination.toUri())
@@ -93,7 +93,8 @@ class PageSaveHelper @AssistedInject constructor(
         val pageUrl = pageLoader.getPageUrl(task.page).toUri()
         val pageUri = pageLoader.loadPage(task.page, force = false)
         val outputFormat = getOutputFormat(pageUrl, pageUri)
-        val proposedName = task.getFileBaseName(settings.pagesSaveMangaTitleLength) + "." + outputFormat.extension
+        val proposedName = task.getFileBaseName(context.resources, settings.pagesSaveMangaTitleLength) +
+            "." + outputFormat.extension
         val tempSource = saveToTempFile(task)
         val tempOutput = createTempOutputFile(outputFormat.extension)
         val sourceBounds = getImageBounds(tempSource)
@@ -108,8 +109,8 @@ class PageSaveHelper @AssistedInject constructor(
                     sourceHeight = sourceBounds.second,
                 ),
             )
-            val destination = getDefaultFileUri(proposedName)?.uri ?: run {
-                val defaultUri = settings.getPagesSaveDir(context)?.uri
+            val destination = getDefaultFileUri(task.manga, proposedName)?.uri ?: run {
+                val defaultUri = getMangaSaveDir(task.manga, create = false)?.uri
                     ?.buildUpon()
                     ?.appendPath(proposedName)
                     ?.toString()
@@ -156,16 +157,24 @@ class PageSaveHelper @AssistedInject constructor(
 
     private suspend fun saveImpl(tasks: Collection<Task>): Collection<Uri> {
         val pageLoader = getPageLoader()
-        val destinationDir = getDefaultFileUri(null) ?: run {
-            val defaultUri = settings.getPagesSaveDir(context)?.uri
+        // A picked directory takes every page as is; the default one may split them per manga.
+        val pickedDir = if (getDefaultSaveDir() == null) {
+            val defaultUri = getMangaSaveDir(tasks.first().manga, create = false)?.uri
             DocumentFile.fromTreeUri(context, pickDirectoryRequest.launchAndAwait(defaultUri))
-        } ?: throw IOException("Cannot get destination directory")
+                ?: throw IOException("Cannot get destination directory")
+        } else {
+            null
+        }
+        val mangaDirs = HashMap<Long, DocumentFile>()
 
         val result = ArrayList<Uri>(tasks.size)
         for (task in tasks) {
+            val destinationDir = pickedDir ?: mangaDirs.getOrPut(task.manga.id) {
+                getMangaSaveDir(task.manga, create = true) ?: throw IOException("Cannot get destination directory")
+            }
             val pageUrl = pageLoader.getPageUrl(task.page).toUri()
             val pageUri = pageLoader.loadPage(task.page, force = false)
-            val proposedName = task.getFileBaseName(settings.pagesSaveMangaTitleLength)
+            val proposedName = task.getFileBaseName(context.resources, settings.pagesSaveMangaTitleLength)
             val ext = getPageExtension(pageUrl, pageUri)
             val mime = requireNotNull(MimeTypes.getMimeTypeFromExtension("_.$ext")) {
                 "Unknown type of $proposedName"
@@ -224,17 +233,35 @@ class PageSaveHelper @AssistedInject constructor(
         pageLoaderProvider.get()
     }
 
-    private fun getDefaultFileUri(proposedName: String?): DocumentFile? {
-        if (settings.isPagesSavingAskEnabled) {
+    /** The configured directory, or null when the user is asked for a destination every time. */
+    private fun getDefaultSaveDir(): DocumentFile? = if (settings.isPagesSavingAskEnabled) {
+        null
+    } else {
+        settings.getPagesSaveDir(context)
+    }
+
+    private fun getDefaultFileUri(manga: Content, proposedName: String): DocumentFile? {
+        if (getDefaultSaveDir() == null) {
             return null
         }
-        val dir = settings.getPagesSaveDir(context) ?: return null
-        if (proposedName == null) {
-            return dir
-        } else {
-            val mime = MimeTypes.getMimeTypeFromExtension(proposedName)?.toString() ?: return null
-            return dir.createFile(mime, proposedName.substringBeforeLast('.'))
+        val dir = getMangaSaveDir(manga, create = true) ?: return null
+        val mime = MimeTypes.getMimeTypeFromExtension(proposedName)?.toString() ?: return null
+        return dir.createFile(mime, proposedName.substringBeforeLast('.'))
+    }
+
+    /**
+     * The configured directory, or its folder for [manga] when per-manga folders are on. Without
+     * [create] a missing folder falls back to the directory itself, so a picker opened there and then
+     * cancelled leaves no empty folder behind.
+     */
+    private fun getMangaSaveDir(manga: Content, create: Boolean): DocumentFile? {
+        val root = settings.getPagesSaveDir(context) ?: return null
+        if (!settings.isPagesSavePerMangaFolder) {
+            return root
         }
+        val name = manga.title.toExportFileName(MANGA_FOLDER_NAME_LENGTH)
+        return root.findFile(name)?.takeIf { it.isDirectory }
+            ?: if (create) root.createDirectory(name) else root
     }
 
     private fun getSource(uri: Uri): Source = when {
@@ -283,16 +310,26 @@ class PageSaveHelper @AssistedInject constructor(
         val page: ContentPage,
     ) {
 
-        fun getFileBaseName(mangaTitleLength: Int) = buildString {
-            append(manga.title.toExportFileName(mangaTitleLength.coerceAtLeast(0)))
-            manga.findChapterById(chapterId)?.let { chapter ->
-                append('-')
-                append(chapter.number)
+        /** `Title - Chapter 105 - Page 14`; a name already taken gets a suffix from the document provider. */
+        fun getFileBaseName(resources: Resources, mangaTitleLength: Int): String {
+            val chapter = manga.findChapterById(chapterId)
+            val chapterLabel = chapter?.let { ch ->
+                val number = ch.numberString()
+                val volume = ch.volumeString()
+                when {
+                    number != null && volume != null ->
+                        resources.getString(R.string.chapter_volume_number, volume, number)
+
+                    number != null -> resources.getString(R.string.chapter_number, number)
+                    !ch.title.isNullOrBlank() -> ch.title?.toExportFileName(CHAPTER_TITLE_LENGTH)
+                    else -> null
+                }
             }
-            append('-')
-            append(pageNumber)
-            append('_')
-            append(SimpleDateFormat("yyyy-MM-dd_HHmm").format(Date()))
+            return listOfNotNull(
+                manga.title.toExportFileName(mangaTitleLength.coerceAtLeast(0)),
+                chapterLabel,
+                resources.getString(R.string.reader_page_label, pageNumber),
+            ).joinToString(" - ").toExportFileName()
         }
     }
 
@@ -307,5 +344,7 @@ class PageSaveHelper @AssistedInject constructor(
         private const val CROP_QUALITY = 95
         private const val EXTENSION_FALLBACK = "png"
         private const val TEMP_DIR = "pages"
+        private const val MANGA_FOLDER_NAME_LENGTH = 100
+        private const val CHAPTER_TITLE_LENGTH = 48
     }
 }

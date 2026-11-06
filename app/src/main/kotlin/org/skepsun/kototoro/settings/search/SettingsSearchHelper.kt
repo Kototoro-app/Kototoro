@@ -597,7 +597,8 @@ class SettingsSearchHelper @Inject constructor(
             "downloads_video_quality" to R.string.download_video_quality,
             "downloads_novel_images" to R.string.download_novel_images,
             "downloads_metered_network" to R.string.download_over_cellular,
-            "pages_dir_ask" to R.string.ask_for_dest_dir_every_time
+            "pages_dir_ask" to R.string.ask_for_dest_dir_every_time,
+            "pages_dir_per_manga" to R.string.pages_save_per_manga_folder,
         )
         downloadsKeys.forEach { (key, titleRes) ->
             result.add(

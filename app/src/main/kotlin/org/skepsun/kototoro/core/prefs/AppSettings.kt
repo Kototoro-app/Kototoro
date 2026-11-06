@@ -2680,6 +2680,10 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         get() = prefs.getBoolean(KEY_PAGES_SAVE_ASK, true)
         set(value) = prefs.edit { putBoolean(KEY_PAGES_SAVE_ASK, value) }
 
+    var isPagesSavePerMangaFolder: Boolean
+        get() = prefs.getBoolean(KEY_PAGES_SAVE_PER_MANGA_FOLDER, false)
+        set(value) = prefs.edit { putBoolean(KEY_PAGES_SAVE_PER_MANGA_FOLDER, value) }
+
     var isStatsEnabled: Boolean
         get() = prefs.getBoolean(KEY_STATS_ENABLED, true)
         set(value) = prefs.edit { putBoolean(KEY_STATS_ENABLED, value) }
@@ -3436,6 +3440,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_READING_TIME = "reading_time"
         const val KEY_PAGES_SAVE_DIR = "pages_dir"
         const val KEY_PAGES_SAVE_ASK = "pages_dir_ask"
+        const val KEY_PAGES_SAVE_PER_MANGA_FOLDER = "pages_dir_per_manga"
         const val KEY_PAGES_SAVE_MANGA_TITLE_LENGTH = "pages_save_manga_title_length"
         const val DEFAULT_PAGES_SAVE_MANGA_TITLE_LENGTH = 24
         const val PAGES_SAVE_MANGA_TITLE_LENGTH_MIN = 12
