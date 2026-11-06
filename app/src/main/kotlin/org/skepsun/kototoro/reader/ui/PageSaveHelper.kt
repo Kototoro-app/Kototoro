@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.reader.ui
 
+import android.content.ContentResolver
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -30,7 +31,9 @@ import org.skepsun.kototoro.core.LocalizedAppContext
 import org.skepsun.kototoro.core.image.BitmapDecoderCompat
 import org.skepsun.kototoro.core.os.OpenDocumentTreeHelper
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.util.ContentZipArchive
 import org.skepsun.kototoro.core.util.MimeTypes
+import org.skepsun.kototoro.core.util.ext.isContentZipUri
 import org.skepsun.kototoro.core.util.ext.isFileUri
 import org.skepsun.kototoro.core.util.ext.isZipUri
 import org.skepsun.kototoro.core.util.ext.toExportFileName
@@ -176,7 +179,7 @@ class PageSaveHelper @AssistedInject constructor(
 
     private suspend fun getPageExtension(url: Uri, fileUri: Uri): String {
         val name = requireNotNull(
-            if (url.isZipUri()) {
+            if (url.isZipUri() || url.isContentZipUri()) {
                 url.fragment?.substringAfterLast(File.separatorChar)
             } else {
                 url.lastPathSegment
@@ -238,6 +241,10 @@ class PageSaveHelper @AssistedInject constructor(
         uri.isFileUri() -> uri.toFile().source()
         uri.isZipUri() -> FileSystem.SYSTEM.openZip(uri.schemeSpecificPart.toPath())
             .source(requireNotNull(uri.fragment).toPath())
+
+        uri.isContentZipUri() -> ContentZipArchive.openEntry(context.contentResolver, uri).source()
+        uri.scheme == ContentResolver.SCHEME_CONTENT -> context.contentResolver.openInputStream(uri)?.source()
+            ?: throw IOException("Input stream is null: $uri")
 
         else -> throw IllegalArgumentException("Bad uri $uri: unsupported scheme")
     }
