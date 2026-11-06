@@ -964,9 +964,6 @@ fun KototoroApp(
     val displayCutoutPadding = WindowInsets.displayCutout.asPaddingValues()
     val displayCutoutStartDp = displayCutoutPadding.calculateStartPadding(layoutDirection)
     val displayCutoutEndDp = displayCutoutPadding.calculateEndPadding(layoutDirection)
-    val applyRootDisplayCutoutPadding = !isDetailsRoute
-    val rootDisplayCutoutStartDp = if (applyRootDisplayCutoutPadding) displayCutoutStartDp else 0.dp
-    val rootDisplayCutoutEndDp = if (applyRootDisplayCutoutPadding) displayCutoutEndDp else 0.dp
     val extraPinnedBottomInsetPx = with(density) {
         if (isNavBarPinned && !isFloating) 12.dp.roundToPx() else 0
     }
@@ -1432,9 +1429,7 @@ fun KototoroApp(
                     ) {}
                 }
                 Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(start = rootDisplayCutoutStartDp, end = rootDisplayCutoutEndDp),
+                    modifier = Modifier.fillMaxSize(),
                 ) {
                     SharedTransitionLayout {
                     SideEffect {

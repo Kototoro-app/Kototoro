@@ -4,6 +4,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.absolutePadding
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -50,6 +56,7 @@ import org.skepsun.kototoro.main.ui.SearchBarFilterCallback
 import org.skepsun.kototoro.core.nav.router
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.geometry.Rect
 import androidx.fragment.app.FragmentActivity
@@ -109,6 +116,7 @@ import org.skepsun.kototoro.main.ui.compose.ContentSelectionTopBarOverrideState
 import org.skepsun.kototoro.main.ui.compose.LayeredTopBarOverrideState
 import org.skepsun.kototoro.main.ui.navigation3.MainNavigator
 import org.skepsun.kototoro.main.ui.navigation3.MainNavKey
+import org.skepsun.kototoro.main.ui.navigation3.DetailsNavKey
 import org.skepsun.kototoro.main.ui.navigation3.MainNavState
 import org.skepsun.kototoro.main.ui.navigation3.MainTopLevelNavDisplay
 import org.skepsun.kototoro.main.ui.navigation3.MainStateNavigator
@@ -163,6 +171,7 @@ internal fun MainRouteScene(
     isLandscapeNavigation: Boolean,
     landscapeNavigationPadding: Dp,
     navigationInsetEdge: NavigationInsetEdge,
+    horizontalCutoutPadding: PaddingValues = PaddingValues(0.dp),
     sourceModifier: Modifier = Modifier,
     sharedTransitionScope: SharedTransitionScope? = null,
     detailsTransitionStyle: ListToDetailsTransition = ListToDetailsTransition.HERO_EXPAND,
@@ -187,7 +196,10 @@ internal fun MainRouteScene(
             } else {
                 0.dp
             }
-            Box(Modifier.fillMaxSize().navigationEdgePadding(navigationInsetEdge, inset)) {
+            // Details owns its edge-to-edge background and pads its panes for the cutout.
+            // Keep the other entries' safe area throughout push, pop and predictive back.
+            val cutoutPadding = if (key is DetailsNavKey) PaddingValues(0.dp) else horizontalCutoutPadding
+            Box(Modifier.fillMaxSize().padding(cutoutPadding).navigationEdgePadding(navigationInsetEdge, inset)) {
                 content(key)
             }
         }
@@ -238,6 +250,12 @@ fun MainShellScene(
     val rootView = LocalView.current
     val isMainShellRouteVisible = mainNavState.currentStack().lastOrNull() is TopLevelNavKey
     val density = LocalDensity.current
+    val layoutDirection = LocalLayoutDirection.current
+    val displayCutoutPadding = WindowInsets.displayCutout.asPaddingValues()
+    val horizontalCutoutPadding = PaddingValues(
+        start = displayCutoutPadding.calculateStartPadding(layoutDirection),
+        end = displayCutoutPadding.calculateEndPadding(layoutDirection),
+    )
     val landscapeNavigationPadding = with(density) { bottomBarHeightPx.toDp() }
     val mainNavigator: MainNavigator = remember(mainNavState, onDetailsTransitionRequested) {
         MainStateNavigator(
@@ -289,6 +307,7 @@ fun MainShellScene(
                     isLandscapeNavigation = isLandscapeNavigation,
                     landscapeNavigationPadding = landscapeNavigationPadding,
                     navigationInsetEdge = navigationInsetEdge,
+                    horizontalCutoutPadding = horizontalCutoutPadding,
                     sharedTransitionScope = LocalSharedTransitionScope.current,
                     detailsTransitionStyle = detailsTransitionStyle,
                     sourceModifier = Modifier
@@ -328,7 +347,9 @@ fun MainShellScene(
                     }
                 }
                 CompositionLocalProvider(LocalImmersiveEdgeBackdrop provides edgeBackdrop) {
-                    mainShellChrome()
+                    Box(Modifier.fillMaxSize().padding(horizontalCutoutPadding)) {
+                        mainShellChrome()
+                    }
                 }
                 CompositionLocalProvider(
                     LocalLiquidGlassBackdrop provides layerBackdrop,
