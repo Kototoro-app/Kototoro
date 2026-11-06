@@ -103,8 +103,6 @@ import org.skepsun.kototoro.core.ui.compose.rememberResolvedSourceTitle
 import org.skepsun.kototoro.core.ui.util.ReversibleActionObserver
 import org.skepsun.kototoro.core.ui.compose.ImmersiveEdgeGradient
 import org.skepsun.kototoro.core.ui.compose.ImmersiveEdgeFeatherExtension
-import org.skepsun.kototoro.core.ui.compose.ImmersiveTopGradientStops
-import org.skepsun.kototoro.core.ui.compose.toTransparentImmersiveColor
 import org.skepsun.kototoro.core.ui.glass.LocalGlassPrefs
 import org.skepsun.kototoro.core.ui.glass.rememberGlassPrefsOrFallback
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle

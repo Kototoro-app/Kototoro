@@ -110,8 +110,7 @@ import org.skepsun.kototoro.core.ui.compose.rememberResolvedSourceTitle
 import org.skepsun.kototoro.core.ui.util.ReversibleActionObserver
 import org.skepsun.kototoro.core.ui.compose.ImmersiveEdgeGradient
 import org.skepsun.kototoro.core.ui.compose.ImmersiveEdgeFeatherExtension
-import org.skepsun.kototoro.core.ui.compose.ImmersiveTopGradientStops
-import org.skepsun.kototoro.core.ui.compose.toTransparentImmersiveColor
+import org.skepsun.kototoro.core.ui.compose.ImmersiveEdge
 import org.skepsun.kototoro.core.ui.glass.LocalGlassPrefs
 import org.skepsun.kototoro.core.ui.glass.rememberGlassPrefsOrFallback
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
@@ -1644,14 +1643,10 @@ private fun DetailsScreenContent(
                             }
                         },
                     height = detailsTopImmersiveHeight + ImmersiveEdgeFeatherExtension,
-                    colors = listOf(
-                        detailsImmersiveBase.copy(alpha = (0.72f + (0.98f - 0.72f) * detailsImmersiveStrength)),
-                        detailsImmersiveBase.copy(alpha = (0.56f + (0.82f - 0.56f) * detailsImmersiveStrength)),
-                        detailsImmersiveBase.copy(alpha = (0.32f + (0.52f - 0.32f) * detailsImmersiveStrength)),
-                        detailsImmersiveBase.copy(alpha = (0.12f + (0.22f - 0.12f) * detailsImmersiveStrength)),
-                        detailsImmersiveBase.toTransparentImmersiveColor(),
+                    color = detailsImmersiveBase.copy(
+                        alpha = 0.72f + (0.98f - 0.72f) * detailsImmersiveStrength,
                     ),
-                    stops = ImmersiveTopGradientStops,
+                    edge = ImmersiveEdge.TOP,
                 )
             }
             if (isWideAdaptiveLayout || compactPaneAnchor != CompactDetailsPaneAnchor.Full) {

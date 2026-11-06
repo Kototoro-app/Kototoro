@@ -55,6 +55,8 @@ RuntimeEffect, shaders and render effects from the original Skiko implementation
    `HazePerformanceMode` presets: `PERFORMANCE` 0.5, `BALANCED` sqrt(0.625) ~= 0.79 (default),
    `QUALITY` 1 (full resolution). Nodes read it while resolving effects, so live surfaces
    re-resolve and redraw.
+   Effects can set `BackdropEffectScope.requiresFullResolution` when a zero-radius region must meet
+   unfiltered content. The immersive progressive blur uses this to avoid a resampling seam at its content edge.
 
    Status: compiled, not yet measured or visually compared on device.
 

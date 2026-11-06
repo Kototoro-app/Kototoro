@@ -60,16 +60,12 @@ import org.skepsun.kototoro.core.ui.compose.ImmersiveEdgeBlur
 import org.skepsun.kototoro.core.ui.compose.ImmersiveEdgeBlurTintScale
 import org.skepsun.kototoro.core.ui.compose.LocalImmersiveEdgeBackdrop
 import org.skepsun.kototoro.core.ui.compose.immersiveEdgeBlurRadius
-import org.skepsun.kototoro.core.ui.compose.scaledImmersiveTint
-import org.skepsun.kototoro.core.ui.compose.ImmersiveBottomGradientStops
 import org.skepsun.kototoro.core.ui.compose.ImmersiveEdgeFeatherExtension
-import org.skepsun.kototoro.core.ui.compose.ImmersiveTopGradientStops
 import org.skepsun.kototoro.core.prefs.SpaceSwitcherPosition
 import org.skepsun.kototoro.core.prefs.limitMainNavigationItems
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarHorizontalPadding
 import org.skepsun.kototoro.core.ui.compose.LocalScrollbarActive
 import org.skepsun.kototoro.core.ui.compose.resolveTopImmersiveAlpha
-import org.skepsun.kototoro.core.ui.compose.toTransparentImmersiveColor
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.boundsInRoot
@@ -1065,12 +1061,9 @@ fun KototoroApp(
         ) {
             val immersiveStrength = ((LocalGlassPrefs.current?.immersiveStrengthPercent ?: 65).coerceIn(0, 100)) / 100f
             val immersiveBaseColor = MaterialTheme.colorScheme.surface.copy(alpha = 1f)
-            val immersiveTransparent = immersiveBaseColor.toTransparentImmersiveColor()
-            val topImmersiveOverflowPx = with(density) { 6.dp.roundToPx() }
+            // End at the page's content inset so in-content filter chips stay clear at rest.
             val topImmersiveHeight = with(density) {
-                (statusBarHeightPx + (topBarHeightPx - statusBarHeightPx) + topImmersiveOverflowPx)
-                    .coerceAtLeast(statusBarHeightPx + topImmersiveOverflowPx)
-                    .toDp()
+                contentTopInsetPx.coerceAtLeast(statusBarHeightPx).toDp()
             }
             val bottomImmersiveHeight = with(density) {
                 (
@@ -1135,28 +1128,26 @@ fun KototoroApp(
                         val edgeBlurRadius = if (edgeBackdrop != null) immersiveEdgeBlurRadius() else 0.dp
                         val isEdgeBlurred = edgeBlurRadius > 0.dp
                         val edgeTintScale = if (isEdgeBlurred) ImmersiveEdgeBlurTintScale else 1f
-                        val topEdgeHeight = topImmersiveHeight + ImmersiveEdgeFeatherExtension
+                        val topEdgeHeight = topImmersiveHeight
                         val bottomEdgeHeight = bottomImmersiveHeight + ImmersiveEdgeFeatherExtension
                         // iOS keeps the top edge at alpha 0 until content slides under the chrome; skip the blur
                         // pass entirely there rather than rendering it transparent.
                         val isTopEdgeShown = surfaceStyle != SurfaceStyle.BACKDROP || chromeScrollOverlap > 0f
-                        if (edgeBackdrop != null && isEdgeBlurred && isTopImmersiveEdge && isTopEdgeShown) {
+                        // Animate the radius, not the copy's opacity, so sharp text never bleeds through the blur.
+                        val topEdgeBlurRadius = edgeBlurRadius * if (surfaceStyle == SurfaceStyle.BACKDROP) {
+                            chromeScrollOverlap * chromeAlpha
+                        } else {
+                            chromeAlpha
+                        }
+                        if (edgeBackdrop != null && topEdgeBlurRadius > 0.dp && isTopImmersiveEdge && isTopEdgeShown) {
                             ImmersiveEdgeBlur(
                                 backdrop = edgeBackdrop,
                                 edge = ImmersiveEdge.TOP,
                                 height = topEdgeHeight,
-                                radius = edgeBlurRadius,
-                                fadeStart = topImmersiveHeight / topEdgeHeight,
+                                radius = topEdgeBlurRadius,
                                 modifier = Modifier
                                     .align(Alignment.TopCenter)
-                                    .fillMaxWidth()
-                                    .graphicsLayer {
-                                        alpha = if (surfaceStyle == SurfaceStyle.BACKDROP) {
-                                            chromeScrollOverlap * chromeAlpha
-                                        } else {
-                                            chromeAlpha
-                                        }
-                                    },
+                                    .fillMaxWidth(),
                             )
                         }
                         if (edgeBackdrop != null && isEdgeBlurred && isBottomImmersiveEdge) {
@@ -1165,7 +1156,6 @@ fun KototoroApp(
                                 edge = ImmersiveEdge.BOTTOM,
                                 height = bottomEdgeHeight,
                                 radius = edgeBlurRadius,
-                                fadeStart = bottomImmersiveHeight / bottomEdgeHeight,
                                 modifier = Modifier
                                     .align(Alignment.BottomCenter)
                                     .fillMaxWidth(),
@@ -1196,31 +1186,24 @@ fun KototoroApp(
                                         }
                                     },
                                 height = topEdgeHeight,
-                                colors = if (surfaceStyle == SurfaceStyle.BACKDROP) {
+                                color = if (surfaceStyle == SurfaceStyle.BACKDROP) {
                                     // iOS: backdrop strength ramps 0.65 → 1.0 and the scrim lifts
                                     // 0.02 → 0.08 as overlap grows under the floating chrome.
                                     val overlap = chromeScrollOverlap
                                     val backdropStrength = immersiveStrength * lerpFloat(0.65f, 1f, overlap)
                                     val scrimLift = lerpFloat(0.02f, 0.08f, overlap)
-                                    listOf(
-                                        immersiveBaseColor.copy(alpha = (lerpFloat(0.72f, 0.98f, backdropStrength) + scrimLift).coerceIn(0f, 1f)),
-                                        immersiveBaseColor.copy(alpha = (lerpFloat(0.56f, 0.82f, backdropStrength) + scrimLift).coerceIn(0f, 1f)),
-                                        immersiveBaseColor.copy(alpha = (lerpFloat(0.32f, 0.52f, backdropStrength) + scrimLift).coerceIn(0f, 1f)),
-                                        immersiveBaseColor.copy(alpha = (lerpFloat(0.12f, 0.22f, backdropStrength) + scrimLift).coerceIn(0f, 1f)),
-                                        immersiveTransparent,
+                                    immersiveBaseColor.copy(
+                                        alpha = (lerpFloat(0.72f, 0.98f, backdropStrength) + scrimLift)
+                                            .coerceIn(0f, 1f) * edgeTintScale,
                                     )
                                 } else {
                                     // Material: stable tonal surface — strength and scrim stay put,
                                     // only whole-gradient alpha responds with the short chrome tween.
-                                    listOf(
-                                        immersiveBaseColor.copy(alpha = lerpFloat(0.72f, 0.98f, immersiveStrength)),
-                                        immersiveBaseColor.copy(alpha = lerpFloat(0.56f, 0.82f, immersiveStrength)),
-                                        immersiveBaseColor.copy(alpha = lerpFloat(0.32f, 0.52f, immersiveStrength)),
-                                        immersiveBaseColor.copy(alpha = lerpFloat(0.12f, 0.22f, immersiveStrength)),
-                                        immersiveTransparent,
+                                    immersiveBaseColor.copy(
+                                        alpha = lerpFloat(0.72f, 0.98f, immersiveStrength) * edgeTintScale,
                                     )
-                                }.scaledImmersiveTint(edgeTintScale),
-                                stops = ImmersiveTopGradientStops,
+                                },
+                                edge = ImmersiveEdge.TOP,
                             )
                         }
 
@@ -1230,13 +1213,10 @@ fun KototoroApp(
                                     .align(Alignment.BottomCenter)
                                     .fillMaxWidth(),
                                 height = bottomEdgeHeight,
-                                colors = listOf(
-                                    immersiveTransparent,
-                                    immersiveBaseColor.copy(alpha = lerpFloat(0.14f, 0.24f, immersiveStrength)),
-                                    immersiveBaseColor.copy(alpha = lerpFloat(0.34f, 0.54f, immersiveStrength)),
-                                    immersiveBaseColor.copy(alpha = lerpFloat(0.60f, 0.90f, immersiveStrength)),
-                                ).scaledImmersiveTint(edgeTintScale),
-                                stops = ImmersiveBottomGradientStops,
+                                color = immersiveBaseColor.copy(
+                                    alpha = lerpFloat(0.60f, 0.90f, immersiveStrength) * edgeTintScale,
+                                ),
+                                edge = ImmersiveEdge.BOTTOM,
                             )
                         }
                     }

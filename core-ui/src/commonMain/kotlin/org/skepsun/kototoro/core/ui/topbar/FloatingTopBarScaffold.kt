@@ -19,12 +19,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
-import org.skepsun.kototoro.core.ui.compose.ImmersiveEdgeFeatherExtension
 import org.skepsun.kototoro.core.ui.compose.ImmersiveEdgeGradient
-import org.skepsun.kototoro.core.ui.compose.ImmersiveTopGradientStops
+import org.skepsun.kototoro.core.ui.compose.ImmersiveEdge
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassLayerBackdrop
-import org.skepsun.kototoro.core.ui.compose.toTransparentImmersiveColor
 import org.skepsun.kototoro.core.ui.theme.LocalIsIosInterfaceStyle
 
 /**
@@ -79,11 +77,10 @@ fun FloatingTopBarScaffold(
 @Composable
 private fun androidx.compose.foundation.layout.BoxScope.FloatingTopBarScrim(barHeight: Dp, base: Color) {
     val ios = LocalIsIosInterfaceStyle.current
-    val alphas = if (ios) listOf(.74f, .58f, .34f, .14f) else listOf(.96f, .80f, .50f, .20f)
     ImmersiveEdgeGradient(
-        height = barHeight + ImmersiveEdgeFeatherExtension,
-        colors = alphas.map { base.copy(alpha = it) } + base.toTransparentImmersiveColor(),
-        stops = ImmersiveTopGradientStops,
+        height = barHeight,
+        color = base.copy(alpha = if (ios) .74f else .96f),
+        edge = ImmersiveEdge.TOP,
         modifier = Modifier.align(Alignment.TopStart).fillMaxWidth(),
     )
 }

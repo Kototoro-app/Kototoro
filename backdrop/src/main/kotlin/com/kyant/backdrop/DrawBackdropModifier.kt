@@ -425,8 +425,11 @@ private class DrawBackdropNode(
         if (!isRenderEffectSupported()) return
 
         effectScope.apply(effects)
-        val wantedScale =
-            if (effectScope.renderEffect != null) 1f / BackdropQuality.inputScale.coerceIn(0.25f, 1f) else 1f
+        val wantedScale = if (effectScope.renderEffect != null && !effectScope.requiresFullResolution) {
+            1f / BackdropQuality.inputScale.coerceIn(0.25f, 1f)
+        } else {
+            1f
+        }
         if (wantedScale != resolutionScale) {
             // Effects were resolved against the other scale; resolve them again at the new one.
             effectScope.density = effectScope.density * resolutionScale / wantedScale

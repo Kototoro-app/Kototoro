@@ -44,7 +44,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.compose.ImmersiveEdgeGradient
-import org.skepsun.kototoro.core.ui.compose.toTransparentImmersiveColor
+import org.skepsun.kototoro.core.ui.compose.ImmersiveEdge
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderChapterTitleChip
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderChromeTopBar
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderProgressBar
@@ -59,8 +59,6 @@ object NovelReaderChromeLayout {
 
 private val TopGradientExtension = 72.dp
 private val BottomGradientExtension = 48.dp
-private val TopGradientStops = listOf(0f, 0.24f, 0.50f, 0.70f, 0.86f, 1f)
-private val BottomGradientStops = listOf(0f, 0.18f, 0.38f, 0.70f, 1f)
 
 /** Progress units belong to the engine: Android pages, desktop paragraph blocks. */
 @Immutable
@@ -148,12 +146,8 @@ fun NovelReaderTopChromeContent(
         Box(Modifier.fillMaxWidth().height(topHeight + TopGradientExtension).testTag("novel-top-chrome")) {
             ImmersiveEdgeGradient(
                 height = topHeight + TopGradientExtension,
-                colors = listOf(
-                    colors.background.copy(alpha = .86f), colors.background.copy(alpha = .62f),
-                    colors.background.copy(alpha = .32f), colors.background.copy(alpha = .12f),
-                    colors.background.copy(alpha = .035f), colors.background.toTransparentImmersiveColor(),
-                ),
-                stops = TopGradientStops,
+                color = colors.background.copy(alpha = .86f),
+                edge = ImmersiveEdge.TOP,
                 modifier = Modifier.fillMaxWidth(),
             )
             ReaderChromeTopBar(
@@ -208,12 +202,8 @@ fun NovelReaderBottomChromeContent(
                 if (progressAvailable || state.chapterTitleAtBottom) {
                     ImmersiveEdgeGradient(
                         height = bottomHeight,
-                        colors = listOf(
-                            colors.background.toTransparentImmersiveColor(), colors.background.copy(alpha = .035f),
-                            colors.background.copy(alpha = .16f), colors.background.copy(alpha = .42f),
-                            colors.background.copy(alpha = .78f),
-                        ),
-                        stops = BottomGradientStops,
+                        color = colors.background.copy(alpha = .78f),
+                        edge = ImmersiveEdge.BOTTOM,
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }

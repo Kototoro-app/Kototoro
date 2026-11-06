@@ -13,8 +13,17 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 val ImmersiveEdgeFeatherExtension = 24.dp
-val ImmersiveTopGradientStops = listOf(0f, 0.30f, 0.58f, 0.78f, 1f)
-val ImmersiveBottomGradientStops = listOf(0f, 0.34f, 0.70f, 1f)
+
+enum class ImmersiveEdge { TOP, BOTTOM }
+
+/** Two endpoints keep the tint opacity linear over the full height of the immersive band. */
+fun immersiveEdgeGradientColors(color: Color, edge: ImmersiveEdge): List<Color> {
+    val transparent = color.copy(alpha = 0f)
+    return when (edge) {
+        ImmersiveEdge.TOP -> listOf(color, transparent)
+        ImmersiveEdge.BOTTOM -> listOf(transparent, color)
+    }
+}
 
 fun resolveTopImmersiveAlpha(
     contentScrollAlpha: Float,
@@ -24,27 +33,19 @@ fun resolveTopImmersiveAlpha(
 @Composable
 fun BoxScope.ImmersiveEdgeGradient(
     height: Dp,
-    colors: List<Color>,
-    stops: List<Float>? = null,
+    color: Color,
+    edge: ImmersiveEdge,
     modifier: Modifier = Modifier,
 ) {
     Box(
         modifier = modifier
             .height(height)
             .drawWithCache {
-                val brush = if (stops != null && stops.size == colors.size) {
-                    Brush.verticalGradient(
-                        colorStops = Array(colors.size) { index -> stops[index] to colors[index] },
-                        startY = 0f,
-                        endY = size.height,
-                    )
-                } else {
-                    Brush.verticalGradient(
-                        colors = colors,
-                        startY = 0f,
-                        endY = size.height,
-                    )
-                }
+                val brush = Brush.verticalGradient(
+                    colors = immersiveEdgeGradientColors(color, edge),
+                    startY = 0f,
+                    endY = size.height,
+                )
                 onDrawBehind {
                     drawRect(
                         brush = brush,
@@ -54,5 +55,3 @@ fun BoxScope.ImmersiveEdgeGradient(
             },
     )
 }
-
-fun Color.toTransparentImmersiveColor(): Color = copy(alpha = 0f)
