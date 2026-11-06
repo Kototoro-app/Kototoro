@@ -594,6 +594,9 @@
     <string name="pages_save_per_manga_folder_summary">儲存到預設目錄的頁面會放進以作品名稱命名的子資料夾</string>
     <string name="crop_include_previous_page">拼接上一頁</string>
     <string name="crop_include_next_page">拼接下一頁</string>
+    <string name="crop_stitch_top_to_bottom">從上到下</string>
+    <string name="crop_stitch_left_to_right">從左到右</string>
+    <string name="crop_stitch_right_to_left">從右到左</string>
     <string name="default_page_save_dir">預設頁面儲存目錄</string>
     <string name="multiple_cbz_files">多個 CBZ 檔案</string>
     <string name="preferred_download_format">偏好的下載格式</string>

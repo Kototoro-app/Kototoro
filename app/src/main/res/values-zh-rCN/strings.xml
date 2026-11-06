@@ -1145,6 +1145,9 @@
     <string name="pages_save_per_manga_folder_summary">保存到默认目录的页面会放进以作品名命名的子文件夹</string>
     <string name="crop_include_previous_page">拼接上一页</string>
     <string name="crop_include_next_page">拼接下一页</string>
+    <string name="crop_stitch_top_to_bottom">从上到下</string>
+    <string name="crop_stitch_left_to_right">从左到右</string>
+    <string name="crop_stitch_right_to_left">从右到左</string>
     <string name="pages_saving">图片保存</string>
     <string name="default_page_save_dir">图片默认保存目录</string>
     <string name="remove_from_history">删除阅读历史</string>

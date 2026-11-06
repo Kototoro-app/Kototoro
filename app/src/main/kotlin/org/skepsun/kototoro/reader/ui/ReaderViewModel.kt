@@ -680,6 +680,10 @@ class ReaderViewModel @Inject constructor(
                 ?.toContentPage(),
             nextPage = pages.find { it.chapterId == page.chapterId && it.index == page.index + 1 }
                 ?.toContentPage(),
+            stitchDirection = StitchDirection.forReaderMode(
+                mode = readerMode.value,
+                isContinuousHorizontalReversed = settings.isContinuousHorizontalReversed,
+            ),
         )
     }
 

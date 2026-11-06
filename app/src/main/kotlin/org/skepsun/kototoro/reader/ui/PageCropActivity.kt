@@ -18,6 +18,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.Box
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.getValue
@@ -28,6 +32,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -72,6 +77,8 @@ class PageCropActivity : BaseComposeActivity(), TransformImageView.TransformImag
     private var nextUri: Uri? = null
     private var includePrevious by mutableStateOf(false)
     private var includeNext by mutableStateOf(false)
+    private var stitchDirection by mutableStateOf(StitchDirection.TOP_TO_BOTTOM)
+    private var isDirectionMenuOpen by mutableStateOf(false)
     private var isStitching by mutableStateOf(false)
     private var stitchJob: Job? = null
     private var stitchedFile: File? = null
@@ -81,6 +88,8 @@ class PageCropActivity : BaseComposeActivity(), TransformImageView.TransformImag
     private var isCropping by mutableStateOf(false)
     private var isImageLoaded by mutableStateOf(false)
     private var selectedRatio by mutableFloatStateOf(CropImageView.SOURCE_IMAGE_ASPECT_RATIO)
+    /** Kept apart from [selectedRatio]: a stitched image can be exactly square, like the 1:1 preset. */
+    private var isOriginalRatioSelected by mutableStateOf(true)
     private var isAnnotationMode = false
     private var mangaId = 0L
     private var chapterId = 0L
@@ -101,6 +110,9 @@ class PageCropActivity : BaseComposeActivity(), TransformImageView.TransformImag
         outputUri = destinationUri
         previousUri = intent.getParcelableExtra(EXTRA_PREVIOUS_SOURCE_URI)
         nextUri = intent.getParcelableExtra(EXTRA_NEXT_SOURCE_URI)
+        stitchDirection = intent.getStringExtra(EXTRA_STITCH_DIRECTION)
+            ?.let { name -> StitchDirection.entries.find { it.name == name } }
+            ?: StitchDirection.TOP_TO_BOTTOM
         compressFormat = parseCompressFormat(intent.getStringExtra(EXTRA_COMPRESS_FORMAT))
         compressQuality = intent.getIntExtra(EXTRA_COMPRESS_QUALITY, DEFAULT_COMPRESS_QUALITY)
         val sourceWidth = intent.getIntExtra(EXTRA_SOURCE_WIDTH, 0)
@@ -160,7 +172,9 @@ class PageCropActivity : BaseComposeActivity(), TransformImageView.TransformImag
                                 // settling (e.g. launched during a rotation), re-apply the ratio at the final size.
                                 cropView.addOnLayoutChangeListener { _, l, t, r, b, oldL, oldT, oldR, oldB ->
                                     val resized = r - l != oldR - oldL || b - t != oldB - oldT
-                                    if (resized && isImageLoaded) cropView.post { applyAspectRatio(selectedRatio) }
+                                    if (resized && isImageLoaded) {
+                                        cropView.post { applyAspectRatio(selectedRatio, isOriginalRatioSelected) }
+                                    }
                                 }
                                 runCatching { cropImageView.setImageUri(editedUri, destinationUri) }
                                     .onFailure { cancelCrop() }
@@ -210,7 +224,7 @@ class PageCropActivity : BaseComposeActivity(), TransformImageView.TransformImag
                         if (previousUri != null) {
                             TvFilterChip(
                                 selected = includePrevious,
-                                onClick = { setAdjacentPages(!includePrevious, includeNext) },
+                                onClick = { setAdjacentPages(!includePrevious, includeNext, stitchDirection) },
                                 label = stringResource(R.string.crop_include_previous_page),
                                 enabled = enabled,
                             )
@@ -218,10 +232,39 @@ class PageCropActivity : BaseComposeActivity(), TransformImageView.TransformImag
                         if (nextUri != null) {
                             TvFilterChip(
                                 selected = includeNext,
-                                onClick = { setAdjacentPages(includePrevious, !includeNext) },
+                                onClick = { setAdjacentPages(includePrevious, !includeNext, stitchDirection) },
                                 label = stringResource(R.string.crop_include_next_page),
                                 enabled = enabled,
                             )
+                        }
+                        Box {
+                            TvFilterChip(
+                                selected = false,
+                                onClick = { isDirectionMenuOpen = true },
+                                label = stringResource(stitchDirection.titleRes),
+                                enabled = enabled,
+                            )
+                            DropdownMenu(
+                                expanded = isDirectionMenuOpen,
+                                onDismissRequest = { isDirectionMenuOpen = false },
+                            ) {
+                                StitchDirection.entries.forEach { direction ->
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(direction.titleRes)) },
+                                        trailingIcon = if (direction == stitchDirection) {
+                                            { Icon(painterResource(R.drawable.ic_check), contentDescription = null) }
+                                        } else {
+                                            null
+                                        },
+                                        onClick = {
+                                            isDirectionMenuOpen = false
+                                            if (direction != stitchDirection) {
+                                                setAdjacentPages(includePrevious, includeNext, direction)
+                                            }
+                                        },
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -232,7 +275,11 @@ class PageCropActivity : BaseComposeActivity(), TransformImageView.TransformImag
                         .navigationBarsPadding()
                         .padding(8.dp),
                 ) {
-                    RatioChip(stringResource(com.yalantis.ucrop.R.string.ucrop_label_original), originalRatio)
+                    RatioChip(
+                        label = stringResource(com.yalantis.ucrop.R.string.ucrop_label_original),
+                        ratio = originalRatio,
+                        isOriginal = true,
+                    )
                     RatioChip("1:1", 1f)
                     RatioChip("4:3", 4f / 3f)
                     RatioChip("16:9", 16f / 9f)
@@ -242,19 +289,20 @@ class PageCropActivity : BaseComposeActivity(), TransformImageView.TransformImag
     }
 
     @androidx.compose.runtime.Composable
-    private fun RatioChip(label: String, ratio: Float) {
+    private fun RatioChip(label: String, ratio: Float, isOriginal: Boolean = false) {
         // On TV the crop frame itself cannot be dragged by a remote, so these presets are the only
         // way to change it and they have to be both reachable and visibly focused.
         TvFilterChip(
-            selected = selectedRatio == ratio,
-            onClick = { applyAspectRatio(ratio) },
+            selected = if (isOriginal) isOriginalRatioSelected else !isOriginalRatioSelected && selectedRatio == ratio,
+            onClick = { applyAspectRatio(ratio, isOriginal) },
             label = label,
         )
     }
 
     override fun onLoadComplete() {
-        applyAspectRatio(originalRatio)
         isImageLoaded = true
+        // uCrop lays out the image before its overlay: wait for both so the frame and the image agree.
+        cropImageView.post { applyAspectRatio(originalRatio, original = true) }
     }
 
     override fun onLoadFailure(e: Exception) = cancelCrop()
@@ -267,37 +315,48 @@ class PageCropActivity : BaseComposeActivity(), TransformImageView.TransformImag
     }
 
     /**
-     * Reloads the editor with the neighbouring pages stacked above and below the page, so a crop can
+     * Reloads the editor with the neighbouring pages lined up with the page in [direction], so a crop can
      * cover a panel the page boundary cuts in half. The crop frame restarts on the new image.
      */
-    private fun setAdjacentPages(previous: Boolean, next: Boolean) {
+    private fun setAdjacentPages(previous: Boolean, next: Boolean, direction: StitchDirection) {
         if (!::cropImageView.isInitialized || isCropping) return
         includePrevious = previous
         includeNext = next
+        stitchDirection = direction
+        if (!previous && !next && editedUri == sourceUri) return
         stitchJob?.cancel()
         isStitching = true
         isImageLoaded = false
         stitchJob = lifecycleScope.launch {
             val result = runCatchingCancellable {
-                withContext(Dispatchers.IO) { buildStitchedSource(previous, next) }
+                withContext(Dispatchers.IO) { buildStitchedSource(previous, next, direction) }
             }
             isStitching = false
             result.onSuccess { (uri, ratio) ->
                 originalRatio = ratio
-                editedUri = uri
+                showImage(uri)
             }.onFailure { error ->
                 error.printStackTraceDebug()
                 Toast.makeText(this@PageCropActivity, R.string.error_occurred, Toast.LENGTH_SHORT).show()
                 includePrevious = false
                 includeNext = false
                 originalRatio = sourceRatio
-                editedUri = sourceUri
+                showImage(sourceUri)
             }
         }
     }
 
+    /** A new image gets a new crop view; the one already shown just becomes usable again. */
+    private fun showImage(uri: Uri) {
+        if (uri == editedUri) {
+            isImageLoaded = true
+        } else {
+            editedUri = uri
+        }
+    }
+
     @WorkerThread
-    private fun buildStitchedSource(previous: Boolean, next: Boolean): Pair<Uri, Float> {
+    private fun buildStitchedSource(previous: Boolean, next: Boolean, direction: StitchDirection): Pair<Uri, Float> {
         stitchedFile?.delete()
         stitchedFile = null
         if (!previous && !next) {
@@ -314,6 +373,7 @@ class PageCropActivity : BaseComposeActivity(), TransformImageView.TransformImag
         val (width, height) = stitchPages(
             files = files,
             baseIndex = if (previous) 1 else 0,
+            direction = direction,
             output = output,
             format = if (compressFormat == Bitmap.CompressFormat.JPEG) {
                 Bitmap.CompressFormat.JPEG
@@ -325,6 +385,13 @@ class PageCropActivity : BaseComposeActivity(), TransformImageView.TransformImag
     }
 
     private fun Uri?.requireFile(): File = checkNotNull(this?.toFile()) { "No page to stitch" }
+
+    private val StitchDirection.titleRes: Int
+        get() = when (this) {
+            StitchDirection.TOP_TO_BOTTOM -> R.string.crop_stitch_top_to_bottom
+            StitchDirection.LEFT_TO_RIGHT -> R.string.crop_stitch_left_to_right
+            StitchDirection.RIGHT_TO_LEFT -> R.string.crop_stitch_right_to_left
+        }
 
     override fun onRotate(currentAngle: Float) = Unit
 
@@ -385,14 +452,21 @@ class PageCropActivity : BaseComposeActivity(), TransformImageView.TransformImag
         finish()
     }
 
-    private fun applyAspectRatio(ratio: Float) {
+    /**
+     * Fits the frame to [ratio] and the image into it in one step. uCrop answers every frame change with
+     * an animated fit aimed at the geometry of that moment and cancels only the latest one, so animated
+     * fits queued during a layout pass could finish last and leave the image off the frame.
+     */
+    private fun applyAspectRatio(ratio: Float, original: Boolean) {
         if (!::cropImageView.isInitialized || !::overlayView.isInitialized) return
         val targetRatio = if (ratio > 0f) ratio else CropImageView.SOURCE_IMAGE_ASPECT_RATIO
         selectedRatio = ratio
+        isOriginalRatioSelected = original
+        // The overlay pushes its new frame to the image view, which takes the ratio from it as well.
         overlayView.setTargetAspectRatio(targetRatio)
-        cropImageView.setTargetAspectRatio(targetRatio)
+        cropImageView.cancelAllAnimations()
         resetScaleToMin()
-        cropImageView.setImageToWrapCropBounds(true)
+        cropImageView.setImageToWrapCropBounds(false)
     }
 
     private fun resetScaleToMin() {
@@ -425,6 +499,7 @@ class PageCropActivity : BaseComposeActivity(), TransformImageView.TransformImag
         internal const val EXTRA_PAGE = "page_crop_page"
         internal const val EXTRA_PREVIOUS_SOURCE_URI = "page_crop_previous_source_uri"
         internal const val EXTRA_NEXT_SOURCE_URI = "page_crop_next_source_uri"
+        internal const val EXTRA_STITCH_DIRECTION = "page_crop_stitch_direction"
 
         private const val DEFAULT_COMPRESS_QUALITY = 95
         private const val WRAP_ANIM_DURATION_MS = 180L

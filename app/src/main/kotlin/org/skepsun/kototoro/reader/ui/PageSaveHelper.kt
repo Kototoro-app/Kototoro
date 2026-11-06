@@ -115,6 +115,7 @@ class PageSaveHelper @AssistedInject constructor(
                     sourceHeight = sourceBounds.second,
                     previousSource = adjacent.previous?.toUri(),
                     nextSource = adjacent.next?.toUri(),
+                    stitchDirection = task.stitchDirection,
                 ),
             )
             val destination = getDefaultFileUri(task.manga, proposedName)?.uri ?: run {
@@ -160,6 +161,7 @@ class PageSaveHelper @AssistedInject constructor(
                     page = task.pageNumber - 1,
                     previousSource = adjacent.previous?.toUri(),
                     nextSource = adjacent.next?.toUri(),
+                    stitchDirection = task.stitchDirection,
                 ),
             )
         } finally {
@@ -370,6 +372,7 @@ class PageSaveHelper @AssistedInject constructor(
         /** Neighbours in the same chapter that the crop editor offers to stitch on, when known. */
         val previousPage: ContentPage? = null,
         val nextPage: ContentPage? = null,
+        val stitchDirection: StitchDirection = StitchDirection.TOP_TO_BOTTOM,
     ) {
 
         /** `Title - Chapter 105 - Page 14`; a name already taken gets a suffix from the document provider. */
