@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.reader.ui
 
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Intent
 import android.graphics.Bitmap
@@ -7,6 +8,7 @@ import android.graphics.BitmapFactory
 import android.graphics.RectF
 import android.net.Uri
 import android.os.Bundle
+import android.view.MotionEvent
 import androidx.annotation.WorkerThread
 import androidx.core.net.toFile
 import androidx.compose.foundation.background
@@ -44,6 +46,7 @@ import com.yalantis.ucrop.view.GestureCropImageView
 import com.yalantis.ucrop.view.OverlayView
 import com.yalantis.ucrop.view.TransformImageView
 import com.yalantis.ucrop.view.UCropView
+import com.yalantis.ucrop.view.setCropFrame
 import org.skepsun.kototoro.R
 import android.widget.Toast
 import androidx.lifecycle.lifecycleScope
@@ -168,6 +171,7 @@ class PageCropActivity : BaseComposeActivity(), TransformImageView.TransformImag
                                 cropImageView = cropView.cropImageView
                                 overlayView = cropView.overlayView
                                 overlayView.setFreestyleCropEnabled(true)
+                                keepFrameOnImageWhileDragging()
                                 cropImageView.setTransformImageListener(this@PageCropActivity)
                                 cropImageView.setImageToWrapCropBoundsAnimDuration(WRAP_ANIM_DURATION_MS)
                                 cropImageView.setMaxScaleMultiplier(MAX_SCALE_MULTIPLIER)
@@ -351,6 +355,42 @@ class PageCropActivity : BaseComposeActivity(), TransformImageView.TransformImag
             }
         }
     }
+
+    /**
+     * uCrop lets the frame be dragged past the image and then scales the image up to fill it, which
+     * moves the part the reader was framing. Let uCrop drag the frame, then stop it at the image edges.
+     * The frame reaches the image view only on release, already inside the image, so the image stays.
+     */
+    @SuppressLint("ClickableViewAccessibility")
+    private fun keepFrameOnImageWhileDragging() {
+        overlayView.setOnTouchListener { view, event ->
+            val overlay = view as OverlayView
+            val before = overlay.cropViewRect.toFrameBox()
+            val handled = overlay.onTouchEvent(event)
+            if (handled && event.actionMasked == MotionEvent.ACTION_MOVE) {
+                val image = shownImageBounds()
+                val frame = overlay.cropViewRect.toFrameBox()
+                val kept = image?.let { keepFrameOnImage(frame, before, it) }
+                if (kept != null && kept != frame) {
+                    overlay.setCropFrame(RectF(kept.left, kept.top, kept.right, kept.bottom))
+                }
+            }
+            // Returning false hands the event to onTouchEvent once more, which ignores a touch it
+            // already declined: the image underneath then takes the pinch or pan.
+            handled
+        }
+    }
+
+    /** The image on screen in the overlay's coordinates, which include the image view's padding. */
+    private fun shownImageBounds(): FrameBox? {
+        val bitmap = cropImageView.viewBitmap ?: return null
+        val image = RectF(0f, 0f, bitmap.width.toFloat(), bitmap.height.toFloat())
+        cropImageView.imageMatrix.mapRect(image)
+        image.offset(cropImageView.paddingLeft.toFloat(), cropImageView.paddingTop.toFloat())
+        return image.toFrameBox()
+    }
+
+    private fun RectF.toFrameBox() = FrameBox(left, top, right, bottom)
 
     /** A new image gets a new crop view; the one already shown just becomes usable again. */
     private fun showImage(uri: Uri) {
