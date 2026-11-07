@@ -19,7 +19,11 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-/** Android's source quick-access grid tile. Icon resolution, badges and TV focus belong to the host. */
+/**
+ * Android's source quick-access grid tile. Icon resolution, badges and TV focus belong to the host. The tinted plate
+ * frames stand-in icons (a letter or a glyph); a host whose icon shows the source's own artwork turns [iconPlate] off
+ * and the artwork fills the plate's rounded slot instead of sitting in a second frame.
+ */
 @Composable
 fun TabletSourceTile(
     title: String,
@@ -38,6 +42,7 @@ fun TabletSourceTile(
     cardBackground: Color = MaterialTheme.colorScheme.background,
     focusModifier: Modifier = Modifier,
     supportingText: String? = null,
+    iconPlate: Boolean = true,
     badges: @Composable BoxScope.() -> Unit = {},
 ) {
     val colors = MaterialTheme.colorScheme
@@ -49,12 +54,19 @@ fun TabletSourceTile(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Top,
     ) {
+        val iconShape = RoundedCornerShape(14.dp)
         Box(
-            Modifier.size(iconContainerSize).clip(RoundedCornerShape(14.dp))
-                .background(colors.surfaceVariant.copy(alpha = if (expressive) 0.62f else 0.44f)),
+            Modifier.size(iconContainerSize).then(
+                if (iconPlate) {
+                    Modifier.clip(iconShape)
+                        .background(colors.surfaceVariant.copy(alpha = if (expressive) 0.62f else 0.44f))
+                } else {
+                    Modifier
+                },
+            ),
             contentAlignment = Alignment.Center,
         ) {
-            icon(Modifier.size(iconSize))
+            icon(if (iconPlate) Modifier.size(iconSize) else Modifier.fillMaxSize().clip(iconShape))
             badges()
         }
         Spacer(Modifier.height(6.dp))

@@ -78,14 +78,16 @@ internal fun DesktopSourceGrid(controller: DesktopController, state: DesktopAppS
                         SourceGroupHeader(language)
                     }
                     items(entries, key = { it.source.name }) { source ->
+                        var showsArtwork by remember(source.source.name) { mutableStateOf(false) }
                         TabletSourceTile(source.displayName, metrics.cardHeight + 18.dp, metrics.iconContainerSize,
                             metrics.iconSize, metrics.titleTextSize,
                             onClick = { controller.selectSource(source) },
                             modifier = Modifier.testTag("source:${source.source.name}"), enabled = enabled,
                             cardBackground = Color.Transparent,
                             supportingText = source.desktopSupportingText(),
+                            iconPlate = !showsArtwork,
                             icon = { iconModifier ->
-                                DesktopSourceIcon(controller, source, iconModifier, 48.sp)
+                                DesktopSourceIcon(controller, source, iconModifier, 48.sp) { showsArtwork = it }
                             },
                         )
                     }
@@ -109,10 +111,14 @@ internal fun DesktopSourceGrid(controller: DesktopController, state: DesktopAppS
 @Composable
 internal fun DesktopSourceRow(controller: DesktopController, source: SourceListing, enabled: Boolean, selected: Boolean,
     modifier: Modifier = Modifier) {
+    var showsArtwork by remember(source.source.name) { mutableStateOf(false) }
     SourceListRow(
         title = source.displayName,
         summary = source.desktopSupportingText(),
-        icon = { iconModifier -> DesktopSourceIcon(controller, source, iconModifier, 18.sp) },
+        iconPlate = !showsArtwork,
+        icon = { iconModifier ->
+            DesktopSourceIcon(controller, source, iconModifier, 18.sp) { showsArtwork = it }
+        },
         modifier = modifier.testTag("source:${source.source.name}"),
         selected = selected,
         expressive = LocalDesktopInterfaceStyle.current == DesktopInterfaceStyle.IOS,
@@ -130,19 +136,22 @@ private fun SourceGroupHeader(language: String) {
 /**
  * Android's source tile icon: the site's own favicon when [DesktopFavicons] can fetch one, the first letter of the
  * source name while it loads or when the site has nothing to offer. Both live in the same slot so a grid of tiles
- * does not shift when the icons arrive.
+ * does not shift when the icons arrive. [onArtworkChange] tells the host when the favicon is showing, so it can drop
+ * the plate that only frames the letter.
  */
 @Composable
 internal fun DesktopSourceIcon(controller: DesktopController, source: SourceListing, modifier: Modifier,
-    letterSize: TextUnit) {
+    letterSize: TextUnit, onArtworkChange: (Boolean) -> Unit = {}) {
     val icon by produceState<ImageBitmap?>(initialValue = null, source.source.name, source.iconUrl, source.siteUrl) {
         value = controller.session.favicons.load(source)
     }
+    val currentOnArtworkChange by rememberUpdatedState(onArtworkChange)
+    LaunchedEffect(icon != null) { currentOnArtworkChange(icon != null) }
     Box(modifier, contentAlignment = Alignment.Center) {
         val bitmap = icon
         if (bitmap != null) {
             Image(bitmap, source.displayName, contentScale = ContentScale.Fit,
-                modifier = Modifier.fillMaxSize().padding(4.dp).testTag("source-icon:${source.source.name}"))
+                modifier = Modifier.fillMaxSize().testTag("source-icon:${source.source.name}"))
         } else {
             Text(source.displayName.take(1), fontSize = letterSize, color = Accent)
         }

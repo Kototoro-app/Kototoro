@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -574,6 +575,8 @@ private fun SourceQuickAccessCard(
     val iconBackground = MaterialTheme.colorScheme.surfaceVariant.copy(
         alpha = if (expressive) 0.62f else if (isGridCard) 0.44f else 0.52f,
     )
+    // The plate only frames the letter/glyph stand-in; the source's own artwork is shown without a second frame.
+    var showsArtwork by remember(actualSource.name) { mutableStateOf(false) }
 
     if (isGridCard) {
         org.skepsun.kototoro.core.ui.source.TabletSourceTile(
@@ -589,6 +592,7 @@ private fun SourceQuickAccessCard(
             cardShape = cardShape,
             cardBackground = cardBackground,
             focusModifier = Modifier.tvFocusable(shape = cardShape, borderWidth = 3.dp, addFocusTarget = false),
+            iconPlate = !showsArtwork,
             icon = { iconModifier ->
                 ContentSourceResolvedIcon(
                     source = actualSource,
@@ -596,6 +600,7 @@ private fun SourceQuickAccessCard(
                     styleResId = R.style.FaviconDrawable_SourceIcon,
                     throttleNetworkLoad = true,
                     contentDescription = title,
+                    onArtworkChange = { showsArtwork = it },
                 )
             },
             badges = {
@@ -643,16 +648,16 @@ private fun SourceQuickAccessCard(
             Box(
                 modifier = Modifier
                     .size(40.dp)
-                    .clip(iconShape)
-                    .background(iconBackground),
+                    .then(if (showsArtwork) Modifier else Modifier.clip(iconShape).background(iconBackground)),
                 contentAlignment = Alignment.Center,
             ) {
                 ContentSourceResolvedIcon(
                     source = actualSource,
-                    modifier = Modifier.size(28.dp),
+                    modifier = if (showsArtwork) Modifier.fillMaxSize().clip(iconShape) else Modifier.size(28.dp),
                     styleResId = R.style.FaviconDrawable_SourceIcon,
                     throttleNetworkLoad = true,
                     contentDescription = title,
+                    onArtworkChange = { showsArtwork = it },
                 )
                 SourceAvailabilityBadge(
                     availability = source.source.availability,
