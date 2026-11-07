@@ -15,6 +15,20 @@ abstract class TracksDao : MangaQueryBuilder.ConditionCallback {
     @Query("SELECT * FROM tracks ORDER BY last_check_time ASC LIMIT :limit OFFSET :offset")
     abstract suspend fun findAll(offset: Int, limit: Int): List<TrackEntity>
 
+    /** Like [findAll], leaving out titles whose source reports [skippedState] (a `ContentState` name). */
+    @Query(
+        "SELECT tracks.* FROM tracks LEFT JOIN manga ON manga.manga_id = tracks.manga_id " +
+            "WHERE manga.state IS NULL OR manga.state != :skippedState " +
+            "ORDER BY tracks.last_check_time ASC LIMIT :limit OFFSET :offset",
+    )
+    abstract suspend fun findAllExceptState(skippedState: String, offset: Int, limit: Int): List<TrackEntity>
+
+    @Query(
+        "SELECT COUNT(*) FROM tracks LEFT JOIN manga ON manga.manga_id = tracks.manga_id " +
+            "WHERE manga.state IS NULL OR manga.state != :skippedState",
+    )
+    abstract suspend fun getTracksCountExceptState(skippedState: String): Int
+
     @Query("SELECT * FROM tracks ORDER BY last_check_time DESC")
     abstract fun observeAll(): Flow<List<TrackEntity>>
 

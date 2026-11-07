@@ -19,6 +19,7 @@ import org.skepsun.kototoro.core.util.ext.toInstantOrNull
 import org.skepsun.kototoro.details.domain.ProgressUpdateUseCase
 import org.skepsun.kototoro.list.domain.ListFilterOption
 import org.skepsun.kototoro.list.domain.toCriteria
+import org.skepsun.kototoro.parsers.model.ContentState
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.util.ifZero
 import org.skepsun.kototoro.tracker.data.TrackEntity
@@ -96,9 +97,25 @@ class TrackingRepository @Inject constructor(
             .onStart { gcIfNeeded() }
     }
 
+    /** Tracks to check, least recently checked first; finished titles are left out when the user asked to skip them. */
     suspend fun getTracks(offset: Int, limit: Int): List<ContentTracking> {
-        return db.getTracksDao().findAll(offset = offset, limit = limit)
-            .mapNotNull { it.toContentTracking() }
+        val dao = db.getTracksDao()
+        val tracks = if (settings.isTrackerSkipCompleted) {
+            dao.findAllExceptState(ContentState.FINISHED.name, offset = offset, limit = limit)
+        } else {
+            dao.findAll(offset = offset, limit = limit)
+        }
+        return tracks.mapNotNull { it.toContentTracking() }
+    }
+
+    /** How many tracks [getTracks] can return, which the check interval is spread over. */
+    suspend fun getCheckedTracksCount(): Int {
+        val dao = db.getTracksDao()
+        return if (settings.isTrackerSkipCompleted) {
+            dao.getTracksCountExceptState(ContentState.FINISHED.name)
+        } else {
+            dao.getTracksCount()
+        }
     }
 
     suspend fun getFavouriteUpdatesSummary(): FavouriteUpdatesSummary {

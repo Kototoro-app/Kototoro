@@ -25,6 +25,7 @@ data class TrackerSettingsUiState(
     val isTrackerWifiOnly: Boolean,
     val trackerFrequencyFactor: Float,
     val trackSources: Set<String>,
+    val isTrackerSkipCompleted: Boolean,
     val categoriesSummary: String,
     val isCategoriesEnabled: Boolean,
     val notificationsSummary: String,
@@ -46,6 +47,7 @@ fun TrackerSettingsScreen(
     onTrackerWifiOnlyChange: (Boolean) -> Unit,
     onTrackerFrequencyChange: (Float) -> Unit,
     onTrackSourcesChange: (Set<String>) -> Unit,
+    onTrackerSkipCompletedChange: (Boolean) -> Unit,
     onTrackCategoriesClick: () -> Unit,
     onNotificationsSettingsClick: () -> Unit,
     onTrackerDownloadStrategyChange: (TrackerDownloadStrategy) -> Unit,
@@ -112,6 +114,16 @@ fun TrackerSettingsScreen(
                             emptySelectionText = emptyTrackSourcesText,
                             enabled = state.isTrackerEnabled,
                             onValueChange = onTrackSourcesChange,
+                        )
+                    }
+                    item {
+                        SettingsSwitchPreference(
+                            title = stringResource(R.string.tracker_skip_completed),
+                            iconRes = R.drawable.ic_check,
+                            checked = state.isTrackerSkipCompleted,
+                            summary = stringResource(R.string.tracker_skip_completed_summary),
+                            enabled = state.isTrackerEnabled,
+                            onCheckedChange = onTrackerSkipCompletedChange,
                         )
                     }
                     item {

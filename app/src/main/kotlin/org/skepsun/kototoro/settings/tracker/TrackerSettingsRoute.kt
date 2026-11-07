@@ -56,6 +56,8 @@ fun TrackerSettingsRoute(
     val trackerFrequencyFactor =
         settings.observeAsState(AppSettings.KEY_TRACKER_FREQUENCY) { trackerFrequencyFactor }.value
     val trackSources = settings.observeAsState(AppSettings.KEY_TRACK_SOURCES) { trackSources }.value
+    val isTrackerSkipCompleted =
+        settings.observeAsState(AppSettings.KEY_TRACKER_SKIP_COMPLETED) { isTrackerSkipCompleted }.value
     val trackerDownloadStrategy =
         settings.observeAsState(AppSettings.KEY_TRACKER_DOWNLOAD) { trackerDownloadStrategy }.value
     val categoriesCount = viewModel.categoriesCount.collectAsStateWithLifecycle().value
@@ -94,6 +96,7 @@ fun TrackerSettingsRoute(
         isTrackerWifiOnly = isTrackerWifiOnly,
         trackerFrequencyFactor = trackerFrequencyFactor,
         trackSources = trackSources,
+        isTrackerSkipCompleted = isTrackerSkipCompleted,
         categoriesSummary = categoriesSummary,
         isCategoriesEnabled = isTrackerEnabled && AppSettings.TRACK_FAVOURITES in trackSources,
         notificationsSummary = notificationsSummary,
@@ -114,6 +117,7 @@ fun TrackerSettingsRoute(
         onTrackerWifiOnlyChange = { settings.isTrackerWifiOnly = it },
         onTrackerFrequencyChange = { settings.trackerFrequencyFactor = it },
         onTrackSourcesChange = { settings.trackSources = it },
+        onTrackerSkipCompletedChange = { settings.isTrackerSkipCompleted = it },
         onTrackCategoriesClick = onTrackCategoriesClick,
         onNotificationsSettingsClick = {
             onOpenNotificationsSettings {

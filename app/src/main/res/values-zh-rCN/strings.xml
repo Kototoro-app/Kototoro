@@ -840,6 +840,8 @@
     <string name="error_corrupted_file">回传的数据无效或文件已损坏</string>
     <string name="related_manga_summary">显示相关漫画，可能并不相关或没有相关漫画</string>
     <string name="tracker_wifi_only_summary">使用移动网络时停止检查新章节</string>
+    <string name="tracker_skip_completed">跳过已完结作品</string>
+    <string name="tracker_skip_completed_summary">不检查来源标记为已完结的作品</string>
     <string name="order_added">添加日期（降序）</string>
     <string name="on_device">本地</string>
     <string name="moved_to_top">已移动至顶部</string>

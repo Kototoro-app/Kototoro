@@ -451,6 +451,8 @@
     <string name="related_manga_summary">顯示相關漫畫的清單。在某些情況下它也許不準確或缺失</string>
     <string name="reader_zoom_buttons_summary">是否在右下角顯示縮放控制按鈕</string>
     <string name="tracker_wifi_only_summary">使用計量付費網路連線時不檢查新章節</string>
+    <string name="tracker_skip_completed">跳過已完結作品</string>
+    <string name="tracker_skip_completed_summary">不檢查來源標記為已完結的作品</string>
     <string name="order_added">加入日期</string>
     <string name="on_device">在裝置上</string>
     <string name="suggest_new_sources">在應用程式更新之後推薦新的來源</string>

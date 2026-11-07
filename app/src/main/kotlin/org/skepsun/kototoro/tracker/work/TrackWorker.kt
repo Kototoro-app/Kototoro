@@ -52,7 +52,6 @@ import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.R
-import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.exceptions.CloudFlareException
 import org.skepsun.kototoro.core.exceptions.resolve.CaptchaHandler
 import org.skepsun.kototoro.core.model.ids
@@ -77,6 +76,7 @@ import org.skepsun.kototoro.tracker.domain.CheckNewChaptersUseCase
 import org.skepsun.kototoro.tracker.domain.GetTracksUseCase
 import org.skepsun.kototoro.tracker.domain.SourceHealth
 import org.skepsun.kototoro.tracker.domain.SourceTurn
+import org.skepsun.kototoro.tracker.domain.TrackingRepository
 import org.skepsun.kototoro.tracker.domain.TRACK_GLOBAL_PARALLELISM
 import org.skepsun.kototoro.tracker.domain.TRACK_SOURCE_PARALLELISM
 import org.skepsun.kototoro.tracker.domain.interleaveBySource
@@ -390,7 +390,7 @@ class TrackWorker @AssistedInject constructor(
     class Scheduler @Inject constructor(
         private val workManager: WorkManager,
         private val settings: AppSettings,
-        private val dbProvider: Provider<MangaDatabase>,
+        private val trackingRepositoryProvider: Provider<TrackingRepository>,
     ) : PeriodicWorkScheduler {
 
         private val requestMutex = Mutex()
@@ -411,7 +411,7 @@ class TrackWorker @AssistedInject constructor(
             val frequency = settings.trackerFrequencyFactor
             // The interval rule is shared with the Windows scheduler (core-domain TrackRules).
             val interval = org.skepsun.kototoro.tracker.domain.trackerCheckIntervalHours(
-                trackCount = dbProvider.get().getTracksDao().getTracksCount(),
+                trackCount = trackingRepositoryProvider.get().getCheckedTracksCount(),
                 batchSize = BATCH_SIZE,
                 frequency = frequency,
             ) ?: return unschedule()

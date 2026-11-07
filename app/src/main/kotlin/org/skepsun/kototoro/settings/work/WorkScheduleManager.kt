@@ -25,7 +25,9 @@ class WorkScheduleManager @Inject constructor(
         when (key) {
             AppSettings.KEY_TRACKER_ENABLED,
             AppSettings.KEY_TRACKER_FREQUENCY,
-            AppSettings.KEY_TRACKER_WIFI_ONLY -> updateWorker(
+            AppSettings.KEY_TRACKER_WIFI_ONLY,
+            // Skipping finished titles changes how many a full cycle covers, and so the interval.
+            AppSettings.KEY_TRACKER_SKIP_COMPLETED -> updateWorker(
                 scheduler = trackerScheduler,
                 isEnabled = settings.isTrackerEnabled,
                 force = key != AppSettings.KEY_TRACKER_ENABLED,
