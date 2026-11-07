@@ -75,9 +75,15 @@ import org.skepsun.kototoro.parsers.util.toIntUp
 import org.skepsun.kototoro.settings.work.PeriodicWorkScheduler
 import org.skepsun.kototoro.tracker.domain.CheckNewChaptersUseCase
 import org.skepsun.kototoro.tracker.domain.GetTracksUseCase
+import org.skepsun.kototoro.tracker.domain.SourceHealth
+import org.skepsun.kototoro.tracker.domain.SourceTurn
+import org.skepsun.kototoro.tracker.domain.TRACK_GLOBAL_PARALLELISM
+import org.skepsun.kototoro.tracker.domain.TRACK_SOURCE_PARALLELISM
+import org.skepsun.kototoro.tracker.domain.interleaveBySource
 import org.skepsun.kototoro.tracker.domain.model.ContentTracking
 import org.skepsun.kototoro.tracker.domain.model.MangaUpdates
 import org.skepsun.kototoro.tracker.work.TrackerNotificationHelper.NotificationInfo
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Provider
@@ -171,25 +177,34 @@ class TrackWorker @AssistedInject constructor(
         return Result.success()
     }
 
+    /**
+     * Checks [tracks] taking sources in turn, with at most [TRACK_SOURCE_PARALLELISM] checks per source under
+     * [TRACK_GLOBAL_PARALLELISM] overall, so a library on a few sites does not put every request on one of them.
+     * A source that rate-limits is paused, and one that asks for a challenge or keeps refusing is skipped for
+     * the rest of the run; skipped titles are not checked, so they keep their place for the next run.
+     */
     @CheckResult
     private suspend fun checkUpdatesAsync(tracks: List<ContentTracking>): List<NotificationInfo> {
-        val semaphore = Semaphore(MAX_PARALLELISM)
-        return channelFlow {
-            for (track in tracks) {
+        val globalLimit = Semaphore(TRACK_GLOBAL_PARALLELISM)
+        val sourceLimits = HashMap<String, Semaphore>()
+        val sourceHealth = ConcurrentHashMap<String, SourceHealth>()
+        val ordered = interleaveBySource(tracks) { it.manga.source.name }
+        return channelFlow<MangaUpdates?> {
+            for (track in ordered) {
+                val source = track.manga.source.name
+                val sourceLimit = sourceLimits.getOrPut(source) { Semaphore(TRACK_SOURCE_PARALLELISM) }
                 launch {
-                    semaphore.withPermit {
-                        send(
-                            runCatchingCancellable {
-                                checkNewChaptersUseCase.invoke(track)
-                            }.getOrElse { error ->
-                                MangaUpdates.Failure(
-                                    manga = track.manga,
-                                    entityId = track.entityId,
-                                    anchorMangaId = track.anchorMangaId,
-                                    error = error,
-                                )
-                            },
-                        )
+                    sourceLimit.withPermit {
+                        if (!awaitSourceTurn(source, sourceHealth)) {
+                            send(null)
+                            return@withPermit
+                        }
+                        val updates = globalLimit.withPermit { checkTrack(track) }
+                        val error = (updates as? MangaUpdates.Failure)?.error
+                        sourceHealth.compute(source) { _, health ->
+                            (health ?: SourceHealth()).afterCheck(error, System.currentTimeMillis())
+                        }
+                        send(updates)
                     }
                 }
             }
@@ -198,6 +213,7 @@ class TrackWorker @AssistedInject constructor(
                 notificationManager.notify(WORKER_NOTIFICATION_ID, createWorkerNotification(tracks.size, index + 1))
             }
             when (it) {
+                null -> Unit
                 is MangaUpdates.Failure -> {
                     val e = it.error
                     if (e is CloudFlareException) {
@@ -210,7 +226,7 @@ class TrackWorker @AssistedInject constructor(
             }
         }.mapNotNull {
             when (it) {
-                is MangaUpdates.Failure -> null
+                null, is MangaUpdates.Failure -> null
                 is MangaUpdates.Success -> if (it.isValid && it.isNotEmpty()) {
                     notificationHelper.createNotification(
                         manga = it.manga,
@@ -221,6 +237,29 @@ class TrackWorker @AssistedInject constructor(
                 }
             }
         }.toList()
+    }
+
+    private suspend fun checkTrack(track: ContentTracking): MangaUpdates = runCatchingCancellable {
+        checkNewChaptersUseCase.invoke(track)
+    }.getOrElse { error ->
+        MangaUpdates.Failure(
+            manga = track.manga,
+            entityId = track.entityId,
+            anchorMangaId = track.anchorMangaId,
+            error = error,
+        )
+    }
+
+    /** Waits out a rate-limit pause on [source]; false when the source is skipped for the rest of the run. */
+    private suspend fun awaitSourceTurn(source: String, health: Map<String, SourceHealth>): Boolean {
+        while (true) {
+            val now = System.currentTimeMillis()
+            when (val turn = (health[source] ?: SourceHealth()).turn(now)) {
+                SourceTurn.Go -> return true
+                SourceTurn.Skip -> return false
+                is SourceTurn.WaitUntil -> delay(turn.time - now)
+            }
+        }
     }
 
     override suspend fun getForegroundInfo(): ForegroundInfo {
@@ -506,7 +545,6 @@ class TrackWorker @AssistedInject constructor(
         const val WORKER_NOTIFICATION_ID = 35
         const val TAG = "tracking"
         const val TAG_ONESHOT = "tracking_oneshot"
-        const val MAX_PARALLELISM = 6
         val BATCH_SIZE = if (BuildConfig.DEBUG) 20 else 46
         const val SETTINGS_ACTION_CODE = 5
 
