@@ -3,6 +3,8 @@ package org.skepsun.kototoro.reader.ui
 import android.app.Activity
 import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.RectF
 import android.net.Uri
 import android.os.Bundle
 import androidx.annotation.WorkerThread
@@ -55,6 +57,7 @@ import org.skepsun.kototoro.notes.domain.BookNotesRepository
 import org.skepsun.kototoro.core.ui.adaptive.TvFilterChip
 import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import java.io.File
+import kotlin.math.abs
 import javax.inject.Inject
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
@@ -168,6 +171,9 @@ class PageCropActivity : BaseComposeActivity(), TransformImageView.TransformImag
                                 cropImageView.setTransformImageListener(this@PageCropActivity)
                                 cropImageView.setImageToWrapCropBoundsAnimDuration(WRAP_ANIM_DURATION_MS)
                                 cropImageView.setMaxScaleMultiplier(MAX_SCALE_MULTIPLIER)
+                                // A pinch easily twists the page by accident and a page is never meant to be
+                                // turned; the crop is also taken from the source file, which assumes upright.
+                                cropImageView.isRotateEnabled = false
                                 // uCrop sizes the crop frame from the first layout only. When the window is still
                                 // settling (e.g. launched during a rotation), re-apply the ratio at the final size.
                                 cropView.addOnLayoutChangeListener { _, l, t, r, b, oldL, oldT, oldR, oldB ->
@@ -380,6 +386,7 @@ class PageCropActivity : BaseComposeActivity(), TransformImageView.TransformImag
             } else {
                 Bitmap.CompressFormat.PNG
             },
+            quality = compressQuality,
         )
         return Uri.fromFile(output) to width.toFloat() / height.toFloat()
     }
@@ -400,6 +407,64 @@ class PageCropActivity : BaseComposeActivity(), TransformImageView.TransformImag
     private fun saveCrop() {
         if (!isImageLoaded || isCropping) return
         isCropping = true
+        // Settle the image first, as uCrop does before its own crop: the frame must lie on the image.
+        cropImageView.cancelAllAnimations()
+        cropImageView.setImageToWrapCropBounds(false)
+        val viewBitmap = cropImageView.viewBitmap
+        val sourceFile = runCatching { editedUri.toFile() }.getOrNull()
+        if (viewBitmap == null || sourceFile == null || abs(cropImageView.currentAngle) > MAX_UPRIGHT_ANGLE) {
+            saveCropWithUCrop()
+            return
+        }
+        // The frame is in overlay coordinates and the image matrix in content ones: uCrop's own crop
+        // moves the frame in by the image view's padding the same way.
+        val crop = RectF(overlayView.cropViewRect).apply {
+            left -= cropImageView.paddingLeft
+            top -= cropImageView.paddingTop
+            right -= cropImageView.paddingRight
+            bottom -= cropImageView.paddingBottom
+        }
+        val image = RectF(0f, 0f, viewBitmap.width.toFloat(), viewBitmap.height.toFloat())
+        cropImageView.imageMatrix.mapRect(image)
+        val shownWidth = viewBitmap.width
+        val shownHeight = viewBitmap.height
+        lifecycleScope.launch {
+            val result = runCatchingCancellable {
+                withContext(Dispatchers.IO) {
+                    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                    BitmapFactory.decodeFile(sourceFile.absolutePath, bounds)
+                    if (!isSameOrientation(shownWidth, shownHeight, bounds.outWidth, bounds.outHeight)) {
+                        return@withContext false
+                    }
+                    val region = cropRegionInSource(
+                        cropLeft = crop.left, cropTop = crop.top, cropRight = crop.right, cropBottom = crop.bottom,
+                        imageLeft = image.left, imageTop = image.top, imageRight = image.right,
+                        imageBottom = image.bottom,
+                        sourceWidth = bounds.outWidth,
+                        sourceHeight = bounds.outHeight,
+                    ) ?: return@withContext false
+                    cropPageRegion(
+                        source = sourceFile,
+                        region = region,
+                        sourceMimeType = bounds.outMimeType,
+                        output = outputUri.toFile(),
+                        format = compressFormat,
+                        quality = compressQuality,
+                    )
+                    true
+                }
+            }
+            result.onFailure { it.printStackTraceDebug() }
+            if (result.getOrDefault(false)) {
+                onCropped(outputUri)
+            } else {
+                saveCropWithUCrop()
+            }
+        }
+    }
+
+    /** uCrop crops the downsampled copy it shows, so it is only the fallback for what the source path cannot do. */
+    private fun saveCropWithUCrop() {
         cropImageView.cropAndSaveImage(
             compressFormat,
             compressQuality,
@@ -410,41 +475,43 @@ class PageCropActivity : BaseComposeActivity(), TransformImageView.TransformImag
                     imageHeight: Int,
                     offsetX: Int,
                     offsetY: Int,
-                ) {
-                    if (isAnnotationMode) {
-                        lifecycleScope.launch(Dispatchers.IO) {
-                            val notesDir = File(filesDir, "notes").apply { mkdirs() }
-                            val noteFile = File(notesDir, "manga_${mangaId}_${System.currentTimeMillis()}.jpg")
-                            runCatching {
-                                contentResolver.openInputStream(resultUri)?.use { input ->
-                                    noteFile.outputStream().use { output ->
-                                        input.copyTo(output)
-                                    }
-                                }
-                                bookNotesRepository.saveMangaCropNote(
-                                    mangaId = mangaId,
-                                    chapterId = chapterId,
-                                    chapterIndex = chapterIndex,
-                                    page = page,
-                                    imagePath = noteFile.absolutePath,
-                                    note = noteText.ifBlank { null },
-                                )
-                            }
-                            withContext(Dispatchers.Main) {
-                                Toast.makeText(this@PageCropActivity, R.string.manga_note_saved, Toast.LENGTH_SHORT).show()
-                                setResult(Activity.RESULT_OK, Intent().setData(resultUri))
-                                finish()
-                            }
-                        }
-                    } else {
-                        setResult(Activity.RESULT_OK, Intent().setData(resultUri))
-                        finish()
-                    }
-                }
+                ) = onCropped(resultUri)
 
                 override fun onCropFailure(t: Throwable) = cancelCrop()
             },
         )
+    }
+
+    private fun onCropped(resultUri: Uri) {
+        if (isAnnotationMode) {
+            lifecycleScope.launch(Dispatchers.IO) {
+                val notesDir = File(filesDir, "notes").apply { mkdirs() }
+                val noteFile = File(notesDir, "manga_${mangaId}_${System.currentTimeMillis()}.jpg")
+                runCatching {
+                    contentResolver.openInputStream(resultUri)?.use { input ->
+                        noteFile.outputStream().use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                    bookNotesRepository.saveMangaCropNote(
+                        mangaId = mangaId,
+                        chapterId = chapterId,
+                        chapterIndex = chapterIndex,
+                        page = page,
+                        imagePath = noteFile.absolutePath,
+                        note = noteText.ifBlank { null },
+                    )
+                }
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@PageCropActivity, R.string.manga_note_saved, Toast.LENGTH_SHORT).show()
+                    setResult(Activity.RESULT_OK, Intent().setData(resultUri))
+                    finish()
+                }
+            }
+        } else {
+            setResult(Activity.RESULT_OK, Intent().setData(resultUri))
+            finish()
+        }
     }
 
     private fun cancelCrop() {
@@ -504,5 +571,6 @@ class PageCropActivity : BaseComposeActivity(), TransformImageView.TransformImag
         private const val DEFAULT_COMPRESS_QUALITY = 95
         private const val WRAP_ANIM_DURATION_MS = 180L
         private const val MAX_SCALE_MULTIPLIER = 20f
+        private const val MAX_UPRIGHT_ANGLE = 0.01f
     }
 }

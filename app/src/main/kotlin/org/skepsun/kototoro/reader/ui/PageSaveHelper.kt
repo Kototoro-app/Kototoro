@@ -4,6 +4,7 @@ import android.content.ContentResolver
 import android.content.Context
 import android.content.res.Resources
 import android.graphics.Bitmap
+import android.os.Build
 import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.activity.result.ActivityResultCallback
@@ -110,7 +111,7 @@ class PageSaveHelper @AssistedInject constructor(
                     source = tempSource.toUri(),
                     destination = tempOutput.toUri(),
                     compressFormat = outputFormat.compressFormat,
-                    compressQuality = CROP_QUALITY,
+                    compressQuality = cropQuality(outputFormat, tempSource),
                     sourceWidth = sourceBounds.first,
                     sourceHeight = sourceBounds.second,
                     previousSource = adjacent.previous?.toUri(),
@@ -151,7 +152,7 @@ class PageSaveHelper @AssistedInject constructor(
                     source = tempSource.toUri(),
                     destination = tempOutput.toUri(),
                     compressFormat = outputFormat.compressFormat,
-                    compressQuality = CROP_QUALITY,
+                    compressQuality = cropQuality(outputFormat, tempSource),
                     sourceWidth = sourceBounds.first,
                     sourceHeight = sourceBounds.second,
                     isAnnotationMode = true,
@@ -244,11 +245,32 @@ class PageSaveHelper @AssistedInject constructor(
 
     private suspend fun getOutputFormat(url: Uri, fileUri: Uri): OutputFormat {
         val ext = getPageExtension(url, fileUri)
-        return if (ext.equals("jpg", true) || ext.equals("jpeg", true)) {
-            OutputFormat("jpg", Bitmap.CompressFormat.JPEG)
-        } else {
-            OutputFormat("png", Bitmap.CompressFormat.PNG)
+        return when {
+            ext.equals("jpg", true) || ext.equals("jpeg", true) -> OutputFormat("jpg", Bitmap.CompressFormat.JPEG)
+            // Lossy pages written back as PNG come out several times larger than they arrived.
+            ext.equals("webp", true) -> OutputFormat("webp", webpCompressFormat())
+            else -> OutputFormat("png", Bitmap.CompressFormat.PNG)
         }
+    }
+
+    /**
+     * A JPEG is re-encoded at about the quality it came with, so a crop or a stitched strip stays about
+     * as large as its pages; a fixed high quality nearly doubles a typical webtoon page.
+     */
+    private suspend fun cropQuality(format: OutputFormat, source: File): Int = when (format.compressFormat) {
+        Bitmap.CompressFormat.JPEG -> runInterruptible(Dispatchers.IO) { estimateJpegQuality(source) }
+            ?.coerceIn(MIN_JPEG_QUALITY, CROP_QUALITY)
+            ?: CROP_QUALITY
+
+        Bitmap.CompressFormat.PNG -> CROP_QUALITY
+        else -> WEBP_QUALITY
+    }
+
+    @Suppress("DEPRECATION")
+    private fun webpCompressFormat(): Bitmap.CompressFormat = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        Bitmap.CompressFormat.WEBP_LOSSY
+    } else {
+        Bitmap.CompressFormat.WEBP
     }
 
     /**
@@ -407,6 +429,8 @@ class PageSaveHelper @AssistedInject constructor(
     private companion object {
 
         private const val CROP_QUALITY = 95
+        private const val MIN_JPEG_QUALITY = 60
+        private const val WEBP_QUALITY = 90
         private const val EXTENSION_FALLBACK = "png"
         private const val TEMP_DIR = "pages"
         private const val MANGA_FOLDER_NAME_LENGTH = 100

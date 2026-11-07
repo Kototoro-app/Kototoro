@@ -79,7 +79,8 @@ internal fun stitchLayout(
 
 /**
  * Writes [files], given in reading order with the page itself at [baseIndex], into [output] lined up in
- * [direction] at the page's size, in [format] at full quality, and returns the stitched size.
+ * [direction] at the page's size, in [format] at [quality], and returns the stitched size. A strip saved
+ * uncropped is this file as is, so a lossy [quality] should be the one the result is meant to have.
  */
 @WorkerThread
 internal fun stitchPages(
@@ -88,6 +89,7 @@ internal fun stitchPages(
     direction: StitchDirection,
     output: File,
     format: Bitmap.CompressFormat,
+    quality: Int = FULL_QUALITY,
 ): Pair<Int, Int> {
     val sizes = files.map { file ->
         val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
@@ -135,7 +137,7 @@ internal fun stitchPages(
             offset += extent
         }
         output.outputStream().buffered().use { out ->
-            if (!result.compress(format, FULL_QUALITY, out)) throw IOException("Cannot encode stitched page")
+            if (!result.compress(format, quality, out)) throw IOException("Cannot encode stitched page")
         }
     } finally {
         result.recycle()
@@ -153,7 +155,7 @@ private fun sampleSize(side: Int, target: Int): Int {
 }
 
 /** A quarter of the heap for the stitched bitmap, leaving room for the page decoded next to it. */
-private fun maxStitchedPixels(): Long =
+internal fun maxStitchedPixels(): Long =
     min(MAX_STITCHED_PIXELS, max(Runtime.getRuntime().maxMemory() / 4 / BYTES_PER_PIXEL, MIN_STITCHED_PIXELS))
 
 private const val BYTES_PER_PIXEL = 4
