@@ -41,7 +41,10 @@ fun Uri.isNetworkUri() = scheme.let {
     it == URI_SCHEME_HTTP || it == URI_SCHEME_HTTPS
 }
 
-fun File.toZipUri(entryPath: String): Uri = "$URI_SCHEME_ZIP://$absolutePath#$entryPath".toUri()
+fun File.toZipUri(entryPath: String): Uri = toUri().buildUpon()
+    .scheme(URI_SCHEME_ZIP)
+    .fragment(entryPath)
+    .build()
 
 fun File.toZipUri(entryPath: Path?): Uri =
     toZipUri(entryPath?.toString()?.removePrefix(Path.DIRECTORY_SEPARATOR).orEmpty())

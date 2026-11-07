@@ -99,6 +99,7 @@ import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassLayerBackdrop
 import org.skepsun.kototoro.local.epub.EpubError
 import org.skepsun.kototoro.local.epub.EpubException
 import org.skepsun.kototoro.local.epub.buildEpubChapterUrl
+import org.skepsun.kototoro.local.epub.resolveLocalEpubFile
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.core.util.ext.getParcelableExtraCompat
@@ -584,9 +585,12 @@ class NovelReaderActivity :
             // 再次兜底：直接用 LocalContentParser 解析目录/CBZ
             if (manga.chapters.isNullOrEmpty()) {
                 runCatching {
-                    val parser = org.skepsun.kototoro.local.data.input.LocalContentParser.getOrNull(
-                        java.io.File(java.net.URI(manga.url))
+                    val uri = Uri.parse(manga.url)
+                    val localTarget = resolveLocalEpubFile(
+                        manga.url,
+                        uri.path.takeIf { uri.fragment == null && '?' !in manga.url },
                     )
+                    val parser = localTarget?.let(org.skepsun.kototoro.local.data.input.LocalContentParser::getOrNull)
                     if (parser != null) {
                         manga = runBlocking { parser.getContent(withDetails = true).manga }
                         android.util.Log.d(

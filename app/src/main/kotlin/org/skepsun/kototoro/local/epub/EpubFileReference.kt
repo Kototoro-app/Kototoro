@@ -51,21 +51,89 @@ private const val ENCODED_CHAPTER_PREFIX = "chapter%2F"
 
 internal fun buildEpubChapterUrl(fileReference: String, chapterIndex: Int): String {
     require(chapterIndex >= 0) { "EPUB chapter index must not be negative" }
-    val normalizedFileReference = if (fileReference.substringBefore(':', missingDelimiterValue = "").isEmpty()) {
-        File(fileReference).toURI().toString()
-    } else {
-        fileReference
-    }
+    val normalizedFileReference = normalizeLocalEpubFileReference(fileReference)
     return "$normalizedFileReference#chapter/$chapterIndex"
 }
 
 internal fun resolveEpubFile(context: Context, reference: String): File? {
+    val scheme = extractUriScheme(reference) ?: return File(reference)
     val uri = Uri.parse(reference)
-    return when (uri.scheme?.lowercase()) {
-        null -> File(reference)
-        "file", "localepub" -> uri.path?.let(::File)
+    return when (scheme) {
+        "file", "localepub" -> resolveLocalEpubFile(
+            reference = reference,
+            decodedPath = uri.path.takeIf { uri.fragment == null && '?' !in reference },
+        )
         "content" -> materializeEpub(context, uri)
         else -> null
+    }
+}
+
+internal fun resolveLocalEpubFile(reference: String, decodedPath: String? = null): File? {
+    if (extractUriScheme(reference) == null) {
+        return File(reference)
+    }
+    val decodedCandidate = (decodedPath ?: runCatching { File(java.net.URI(reference)) }.getOrNull()?.path)
+        ?.let(::File)
+    if (decodedCandidate?.exists() == true) {
+        return decodedCandidate
+    }
+    val rawCandidate = extractRawLocalEpubPath(reference)?.let(::File)
+    if (rawCandidate?.exists() == true) {
+        return rawCandidate
+    }
+    return decodedCandidate ?: rawCandidate
+}
+
+private fun normalizeLocalEpubFileReference(fileReference: String): String {
+    return when (extractUriScheme(fileReference)) {
+        null -> File(fileReference).toURI().toString()
+        "localepub" -> resolveLocalEpubFile(fileReference)?.toURI()?.toString() ?: fileReference
+        "file" -> if (hasUnencodedFileUriCharacters(fileReference)) {
+            extractRawLocalEpubPath(fileReference)?.let(::File)?.toURI()?.toString() ?: fileReference
+        } else {
+            fileReference
+        }
+        else -> fileReference
+    }
+}
+
+private fun extractUriScheme(reference: String): String? {
+    val colon = reference.indexOf(':')
+    if (colon <= 0) return null
+    if (colon == 1 && (reference.getOrNull(2) == '\\' || reference.getOrNull(2) == '/')) {
+        return null
+    }
+    for (index in 0 until colon) {
+        val ch = reference[index]
+        val valid = if (index == 0) {
+            ch.isLetter()
+        } else {
+            ch.isLetterOrDigit() || ch == '+' || ch == '-' || ch == '.'
+        }
+        if (!valid) return null
+    }
+    return reference.substring(0, colon).lowercase()
+}
+
+private fun extractRawLocalEpubPath(reference: String): String? {
+    val afterScheme = when {
+        reference.startsWith("localepub://", ignoreCase = true) -> reference.substring("localepub://".length)
+        reference.startsWith("file://", ignoreCase = true) -> reference.substring("file://".length)
+        reference.startsWith("file:", ignoreCase = true) -> reference.substring("file:".length)
+        else -> return null
+    }
+    if (afterScheme.isEmpty()) return null
+    return if (afterScheme.startsWith('/')) {
+        "/" + afterScheme.trimStart('/')
+    } else {
+        afterScheme
+    }
+}
+
+private fun hasUnencodedFileUriCharacters(reference: String): Boolean {
+    return reference.any { ch ->
+        ch == ' ' || ch == '#' || ch == '?' || ch == '[' || ch == ']' ||
+            ch == '{' || ch == '}' || ch == '|' || ch == '\\' || ch == '^' || ch == '`'
     }
 }
 
