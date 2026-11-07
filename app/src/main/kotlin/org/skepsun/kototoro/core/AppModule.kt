@@ -332,10 +332,11 @@ interface AppModule {
         @ChapterThumbnailCache
         fun provideChapterThumbnailCache(
             @ApplicationContext context: Context,
+            settings: AppSettings,
         ) = LocalStorageCache(
             context = context,
             dir = CacheDir.CHAPTER_THUMBS,
-            defaultSize = FileSize.MEGABYTES.convert(64, FileSize.BYTES),
+            defaultSize = FileSize.MEGABYTES.convert(settings.chapterThumbsCacheSizeMb.toLong(), FileSize.BYTES),
             minSize = FileSize.MEGABYTES.convert(8, FileSize.BYTES),
         )
 

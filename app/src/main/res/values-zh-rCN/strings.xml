@@ -3083,6 +3083,7 @@
     <string name="tags">标签</string>
     <string name="thumbnails_cache">缩略图缓存</string>
     <string name="thumbnails_cache_limit">缩略图缓存限制</string>
+    <string name="chapter_thumbnails_cache_limit">章节缩略图缓存限制</string>
     <string name="title">标题</string>
     <string name="tracking_auto_match_action">打开推荐匹配</string>
     <string name="tracking_auto_match_text">推荐匹配: %1$s（%2$.0f%%）</string>

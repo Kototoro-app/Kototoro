@@ -2129,6 +2129,7 @@
     <string name="test_success">Test réussi</string>
     <string name="thumbnails_cache">Cache des vignettes</string>
     <string name="thumbnails_cache_limit">Limite du cache des vignettes</string>
+    <string name="chapter_thumbnails_cache_limit">Limite du cache des vignettes de chapitres</string>
     <string name="title">Titre</string>
     <string name="total_chapters">Total des chapitres</string>
     <string name="tracking_accounts">Comptes de suivi</string>

@@ -1339,6 +1339,10 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         get() = prefs.getSafeInt(KEY_THUMBS_CACHE_MB, 256)
         set(value) = prefs.edit { putInt(KEY_THUMBS_CACHE_MB, value.coerceIn(32, 2048)) }
 
+    var chapterThumbsCacheSizeMb: Int
+        get() = prefs.getSafeInt(KEY_CHAPTER_THUMBS_CACHE_MB, 64)
+        set(value) = prefs.edit { putInt(KEY_CHAPTER_THUMBS_CACHE_MB, value.coerceIn(16, 1024)) }
+
     var faviconCacheSizeMb: Int
         get() = prefs.getSafeInt(KEY_FAVICON_CACHE_MB, 8)
         set(value) = prefs.edit { putInt(KEY_FAVICON_CACHE_MB, value.coerceIn(4, 128)) }
@@ -3307,6 +3311,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
             const val KEY_VIDEO_PROXY_CACHE_MB = "video_proxy_cache_mb"
             const val KEY_TORRENT_CACHE_MB = "torrent_cache_mb"
         const val KEY_THUMBS_CACHE_MB = "thumbs_cache_mb"
+        const val KEY_CHAPTER_THUMBS_CACHE_MB = "chapter_thumbs_cache_mb"
         const val KEY_FAVICON_CACHE_MB = "favicon_cache_mb"
         const val KEY_PAGES_CACHE_MB = "pages_cache_mb"
         const val KEY_NOVEL_CACHE_MB = "novel_cache_mb"

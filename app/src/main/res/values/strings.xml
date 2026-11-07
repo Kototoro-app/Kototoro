@@ -1418,6 +1418,7 @@
     <string name="video_cache_size">Cache size (MB)</string>
     <string name="video_cache_size_summary">%1$d MB</string>
     <string name="thumbnails_cache_limit">Thumbnails cache limit</string>
+    <string name="chapter_thumbnails_cache_limit">Chapter thumbnails cache limit</string>
     <string name="favicons_cache_limit">Favicons cache limit</string>
     <string name="pages_cache_limit">Pages cache limit</string>
     <string name="novel_cache_limit">Novel cache limit</string>

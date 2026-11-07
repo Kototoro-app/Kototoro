@@ -2130,6 +2130,7 @@
     <string name="test_success">テスト成功</string>
     <string name="thumbnails_cache">サムネイルキャッシュ</string>
     <string name="thumbnails_cache_limit">サムネイルキャッシュ上限</string>
+    <string name="chapter_thumbnails_cache_limit">チャプターサムネイルキャッシュ上限</string>
     <string name="title">タイトル</string>
     <string name="total_chapters">全チャプター数</string>
     <string name="tracking_accounts">トラッキングアカウント</string>

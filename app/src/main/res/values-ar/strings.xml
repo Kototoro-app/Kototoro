@@ -2129,6 +2129,7 @@
     <string name="theme_name_totoro">Totoro</string>
     <string name="thumbnails_cache">ذاكرة تخزين الصور المصغرة</string>
     <string name="thumbnails_cache_limit">حد ذاكرة تخزين الصور المصغرة</string>
+    <string name="chapter_thumbnails_cache_limit">حد ذاكرة تخزين الصور المصغرة للفصول</string>
     <string name="title">العنوان</string>
     <string name="total_chapters">إجمالي الفصول</string>
     <string name="tracking_accounts">حسابات التتبع</string>
