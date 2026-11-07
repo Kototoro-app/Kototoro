@@ -257,6 +257,22 @@ object SecurityValidator {
         }
     }
 
+    /** A deadline for [withRegexDeadline], [timeoutMs] from now; pass one deadline to every step of one rule. */
+    fun regexDeadline(timeoutMs: Long = REGEX_TIMEOUT_MS): Long = System.nanoTime() + timeoutMs * 1_000_000L
+
+    /**
+     * Runs [block] on [input] wrapped so that any regex work the block does on it, however many
+     * [java.util.regex.Matcher.find] calls that takes, stops at [deadline]. Rules that match repeatedly
+     * or recurse share one deadline instead of getting the full budget per call.
+     *
+     * @return the block's result, or null when the deadline passed
+     */
+    fun <T> withRegexDeadline(input: CharSequence, deadline: Long, block: (CharSequence) -> T): T? = try {
+        block(DeadlineCharSequence(input, deadline))
+    } catch (_: RegexTimeoutException) {
+        null
+    }
+
     private const val REGEX_TIMEOUT_MS = 2_000L
 
     private class RegexTimeoutException : RuntimeException() {
