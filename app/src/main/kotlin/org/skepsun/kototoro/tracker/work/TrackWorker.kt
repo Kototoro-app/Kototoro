@@ -39,16 +39,13 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.R
@@ -74,16 +71,12 @@ import org.skepsun.kototoro.parsers.util.toIntUp
 import org.skepsun.kototoro.settings.work.PeriodicWorkScheduler
 import org.skepsun.kototoro.tracker.domain.CheckNewChaptersUseCase
 import org.skepsun.kototoro.tracker.domain.GetTracksUseCase
-import org.skepsun.kototoro.tracker.domain.SourceHealth
-import org.skepsun.kototoro.tracker.domain.SourceTurn
+import org.skepsun.kototoro.tracker.domain.SourceCheck
+import org.skepsun.kototoro.tracker.domain.checkBySource
 import org.skepsun.kototoro.tracker.domain.TrackingRepository
-import org.skepsun.kototoro.tracker.domain.TRACK_GLOBAL_PARALLELISM
-import org.skepsun.kototoro.tracker.domain.TRACK_SOURCE_PARALLELISM
-import org.skepsun.kototoro.tracker.domain.interleaveBySource
 import org.skepsun.kototoro.tracker.domain.model.ContentTracking
 import org.skepsun.kototoro.tracker.domain.model.MangaUpdates
 import org.skepsun.kototoro.tracker.work.TrackerNotificationHelper.NotificationInfo
-import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Provider
@@ -185,32 +178,25 @@ class TrackWorker @AssistedInject constructor(
      */
     @CheckResult
     private suspend fun checkUpdatesAsync(tracks: List<ContentTracking>): List<NotificationInfo> {
-        val globalLimit = Semaphore(TRACK_GLOBAL_PARALLELISM)
-        val sourceLimits = HashMap<String, Semaphore>()
-        val sourceHealth = ConcurrentHashMap<String, SourceHealth>()
-        val ordered = interleaveBySource(tracks) { it.manga.source.name }
-        return channelFlow<MangaUpdates?> {
-            for (track in ordered) {
-                val source = track.manga.source.name
-                val sourceLimit = sourceLimits.getOrPut(source) { Semaphore(TRACK_SOURCE_PARALLELISM) }
-                launch {
-                    sourceLimit.withPermit {
-                        if (!awaitSourceTurn(source, sourceHealth)) {
-                            send(null)
-                            return@withPermit
-                        }
-                        val updates = globalLimit.withPermit { checkTrack(track) }
-                        val error = (updates as? MangaUpdates.Failure)?.error
-                        sourceHealth.compute(source) { _, health ->
-                            (health ?: SourceHealth()).afterCheck(error, System.currentTimeMillis())
-                        }
-                        send(updates)
-                    }
-                }
+        var tally = CheckTally()
+        return checkBySource(
+            items = tracks,
+            sourceOf = { it.manga.source.name },
+            now = System::currentTimeMillis,
+            answerOf = { updates: MangaUpdates -> (updates as? MangaUpdates.Failure)?.error.toSourceAnswer() },
+            check = ::checkTrack,
+        ).map { check ->
+            when (check) {
+                is SourceCheck.Skipped -> null
+                is SourceCheck.Checked -> check.result
             }
         }.onEachIndexed { index, it ->
+            tally = tally.add(it)
             if (applicationContext.checkNotificationPermission(WORKER_CHANNEL_ID)) {
-                notificationManager.notify(WORKER_NOTIFICATION_ID, createWorkerNotification(tracks.size, index + 1))
+                notificationManager.notify(
+                    WORKER_NOTIFICATION_ID,
+                    createWorkerNotification(tracks.size, index + 1, tally),
+                )
             }
             when (it) {
                 null -> Unit
@@ -250,16 +236,16 @@ class TrackWorker @AssistedInject constructor(
         )
     }
 
-    /** Waits out a rate-limit pause on [source]; false when the source is skipped for the rest of the run. */
-    private suspend fun awaitSourceTurn(source: String, health: Map<String, SourceHealth>): Boolean {
-        while (true) {
-            val now = System.currentTimeMillis()
-            when (val turn = (health[source] ?: SourceHealth()).turn(now)) {
-                SourceTurn.Go -> return true
-                SourceTurn.Skip -> return false
-                is SourceTurn.WaitUntil -> delay(turn.time - now)
-            }
+    /** What the run has found so far, shown under the progress bar; null updates are titles skipped. */
+    private data class CheckTally(val newChapters: Int = 0, val failed: Int = 0, val skipped: Int = 0) {
+
+        fun add(updates: MangaUpdates?): CheckTally = when (updates) {
+            null -> copy(skipped = skipped + 1)
+            is MangaUpdates.Failure -> copy(failed = failed + 1)
+            is MangaUpdates.Success -> if (updates.isValid) copy(newChapters = newChapters + updates.newChapters.size) else this
         }
+
+        val isEmpty: Boolean get() = newChapters == 0 && failed == 0 && skipped == 0
     }
 
     override suspend fun getForegroundInfo(): ForegroundInfo {
@@ -283,11 +269,25 @@ class TrackWorker @AssistedInject constructor(
         }
     }
 
-    private fun createWorkerNotification(max: Int, progress: Int) = NotificationCompat.Builder(
+    private fun createWorkerNotification(
+        max: Int,
+        progress: Int,
+        tally: CheckTally = CheckTally(),
+    ) = NotificationCompat.Builder(
         applicationContext,
         WORKER_CHANNEL_ID,
     ).apply {
         setContentTitle(applicationContext.getString(R.string.check_for_new_chapters))
+        if (!tally.isEmpty) {
+            setContentText(
+                applicationContext.getString(
+                    R.string.tracker_progress_summary,
+                    tally.newChapters,
+                    tally.failed,
+                    tally.skipped,
+                ),
+            )
+        }
         setPriority(NotificationCompat.PRIORITY_MIN)
         setCategory(NotificationCompat.CATEGORY_SERVICE)
         setDefaults(0)

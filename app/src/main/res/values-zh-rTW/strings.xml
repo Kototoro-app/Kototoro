@@ -453,6 +453,7 @@
     <string name="tracker_wifi_only_summary">使用計量付費網路連線時不檢查新章節</string>
     <string name="tracker_skip_completed">跳過已完結作品</string>
     <string name="tracker_skip_completed_summary">不檢查來源標記為已完結的作品</string>
+    <string name="tracker_progress_summary">新章節：%1$d · 失敗：%2$d · 跳過：%3$d</string>
     <string name="order_added">加入日期</string>
     <string name="on_device">在裝置上</string>
     <string name="suggest_new_sources">在應用程式更新之後推薦新的來源</string>

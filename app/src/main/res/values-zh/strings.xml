@@ -2537,6 +2537,7 @@
     <string name="tracker_wifi_only_summary">使用移动网络时停止检查新章节</string>
     <string name="tracker_skip_completed">跳过已完结作品</string>
     <string name="tracker_skip_completed_summary">不检查来源标记为已完结的作品</string>
+    <string name="tracker_progress_summary">新章节：%1$d · 失败：%2$d · 跳过：%3$d</string>
     <string name="tracking">进度记录</string>
     <string name="tracking_accounts">追踪账号</string>
     <string name="tracking_auto_match_action">打开推荐匹配</string>

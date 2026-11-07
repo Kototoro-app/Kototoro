@@ -5,26 +5,26 @@ import org.jsoup.HttpStatusException
 import org.skepsun.kototoro.core.exceptions.CloudFlareException
 import org.skepsun.kototoro.core.exceptions.InteractiveActionRequiredException
 import org.skepsun.kototoro.parsers.exception.TooManyRequestExceptions
-import org.skepsun.kototoro.tracker.domain.SourceHealth
+import org.skepsun.kototoro.tracker.domain.SourceAnswer
 import org.koitharu.kotatsu.parsers.exception.TooManyRequestExceptions as LegacyTooManyRequestExceptions
 
 /**
- * The source's health after a check that failed with [error], or got an answer when it is null. Sources report
- * a rate limit in their own way: the app's interceptor and Kotatsu parsers raise TooManyRequestExceptions with the
+ * What a check that failed with this error, or answered when it is null, told about its source. Sources report a
+ * rate limit in their own way: the app's interceptor and Kotatsu parsers raise TooManyRequestExceptions with the
  * Retry-After delay, Mihon extensions an HttpException, Jsoup an HttpStatusException; all may come wrapped.
  */
-internal fun SourceHealth.afterCheck(error: Throwable?, now: Long): SourceHealth {
-    val causes = generateSequence(error) { e -> e.cause?.takeIf { it !== e } }
+internal fun Throwable?.toSourceAnswer(): SourceAnswer {
+    val causes = generateSequence(this) { e -> e.cause?.takeIf { it !== e } }
     for (e in causes) {
         when (e) {
-            is CloudFlareException, is InteractiveActionRequiredException -> return afterChallenge()
-            is TooManyRequestExceptions -> return afterRateLimit(now, e.getRetryDelay())
-            is LegacyTooManyRequestExceptions -> return afterRateLimit(now, e.getRetryDelay())
-            is HttpException -> if (e.code == HTTP_TOO_MANY_REQUESTS) return afterRateLimit(now, null)
-            is HttpStatusException -> if (e.statusCode == HTTP_TOO_MANY_REQUESTS) return afterRateLimit(now, null)
+            is CloudFlareException, is InteractiveActionRequiredException -> return SourceAnswer.Challenged
+            is TooManyRequestExceptions -> return SourceAnswer.RateLimited(e.getRetryDelay().takeIf { it > 0 })
+            is LegacyTooManyRequestExceptions -> return SourceAnswer.RateLimited(e.getRetryDelay().takeIf { it > 0 })
+            is HttpException -> if (e.code == HTTP_TOO_MANY_REQUESTS) return SourceAnswer.RateLimited(null)
+            is HttpStatusException -> if (e.statusCode == HTTP_TOO_MANY_REQUESTS) return SourceAnswer.RateLimited(null)
         }
     }
-    return afterAnswer()
+    return SourceAnswer.Answered
 }
 
 private const val HTTP_TOO_MANY_REQUESTS = 429

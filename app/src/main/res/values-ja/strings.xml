@@ -442,6 +442,7 @@
     <string name="tracker_wifi_only_summary">従量制ネットワーク接続を使用して新しいチャプターをチェックしないでください</string>
     <string name="tracker_skip_completed">完結済みの作品をスキップ</string>
     <string name="tracker_skip_completed_summary">ソースで完結と表示されている作品をチェックしない</string>
+    <string name="tracker_progress_summary">新しいチャプター：%1$d · 失敗：%2$d · スキップ：%3$d</string>
     <string name="manage_categories">カテゴリーの管理</string>
     <string name="captcha_required_summary">%sを正しく動作させるには、キャプチャを解決する必要があります</string>
     <string name="languages">言語</string>

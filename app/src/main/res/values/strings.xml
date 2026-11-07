@@ -1335,6 +1335,7 @@
     <string name="tracker_wifi_only_summary">Do not check for new chapters using metered network connections</string>
     <string name="tracker_skip_completed">Skip completed titles</string>
     <string name="tracker_skip_completed_summary">Don\'t check titles their source marks as completed</string>
+    <string name="tracker_progress_summary">New chapters: %1$d · Failed: %2$d · Skipped: %3$d</string>
     <string name="search_hint">Enter manga title, genre or source name</string>
     <string name="progress">Progress</string>
     <string name="reader_progress_template">Chapter %1$d/%2$d · %3$d%%</string>

@@ -43,6 +43,19 @@ sealed interface SourceTurn {
     data object Skip : SourceTurn
 }
 
+/** What one check told about its source. */
+sealed interface SourceAnswer {
+
+    /** The source answered, successfully or not, without pushing back. */
+    data object Answered : SourceAnswer
+
+    /** HTTP 429; [retryAfterMs] when the source said how long to wait. */
+    data class RateLimited(val retryAfterMs: Long?) : SourceAnswer
+
+    /** A Cloudflare or similar challenge that a background check cannot solve. */
+    data object Challenged : SourceAnswer
+}
+
 /** One source's state during a check run. */
 data class SourceHealth(
     val pausedUntil: Long = 0L,
@@ -75,6 +88,12 @@ data class SourceHealth(
 
     /** After an answer that was not a rate limit: the source is keeping up again. */
     fun afterAnswer(): SourceHealth = if (rateLimits == 0) this else copy(rateLimits = 0)
+
+    fun after(answer: SourceAnswer, now: Long): SourceHealth = when (answer) {
+        SourceAnswer.Answered -> afterAnswer()
+        is SourceAnswer.RateLimited -> afterRateLimit(now, answer.retryAfterMs)
+        SourceAnswer.Challenged -> afterChallenge()
+    }
 
     private companion object {
         const val RATE_LIMIT_BACKOFF_MS = 5_000L
