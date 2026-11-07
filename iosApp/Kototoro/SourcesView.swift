@@ -311,6 +311,8 @@ struct SourcesView: View {
     @State private var reordering = false
     @State private var migration: LibraryMigrationRequest?
     @State private var trackingPreview: TrackingPreviewSelection?
+    @State private var gridWidth: CGFloat = 0
+    @State private var tileHeight: CGFloat = 0
     @Environment(\.openGlobalSearch) private var openGlobalSearch
 
     private struct DisplaySources {
@@ -512,6 +514,17 @@ struct SourcesView: View {
         }
     }
 
+    private static let tileMinimum: CGFloat = 92
+    private static let tileSpacing: CGFloat = 10
+
+    /// Matches the adaptive grid's column count, so the frame equals the rows the grid lays out.
+    private func gridHeight(count: Int) -> CGFloat? {
+        guard gridWidth > 0, tileHeight > 0, count > 0 else { return nil }
+        let columns = max(1, Int((gridWidth + Self.tileSpacing) / (Self.tileMinimum + Self.tileSpacing)))
+        let rows = (count + columns - 1) / columns
+        return CGFloat(rows) * tileHeight + CGFloat(rows - 1) * Self.tileSpacing
+    }
+
     private func grid(_ display: DisplaySources) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
@@ -537,7 +550,8 @@ struct SourcesView: View {
                         Text("\(section.title) · \(section.sources.count)")
                             .font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
                             .padding(.horizontal, 20)
-                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 92), spacing: 10)], spacing: 10) {
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: Self.tileMinimum), spacing: Self.tileSpacing)],
+                                  spacing: Self.tileSpacing) {
                             ForEach(section.sources, id: \.name) { source in
                                 NavigationLink(value: SourceRoute(source: source)) {
                                     SourceTile(runtime: model.runtime, source: source)
@@ -545,8 +559,19 @@ struct SourcesView: View {
                                     .buttonStyle(.plain)
                                     .accessibilityIdentifier("source.\(source.name)")
                                     .contextMenu { sourceActions(source) }
+                                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+                                        if abs(tileHeight - height) > 0.5 { tileHeight = height }
+                                    }
                             }
                         }
+                        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
+                            if abs(gridWidth - width) > 0.5 { gridWidth = width }
+                        }
+                        // Lazy grids report estimated heights for rows out of view, and returning from a source or
+                        // the background re-estimates them, moving a deep position into another group. Neither one
+                        // grid with sections nor scrollPosition(id:) keeps it (both reproduced the jump), so each
+                        // section takes its exact height: tiles share one height and rows follow the column count.
+                        .frame(height: gridHeight(count: section.sources.count), alignment: .top)
                         .padding(.horizontal, 16)
                     }
                 }
