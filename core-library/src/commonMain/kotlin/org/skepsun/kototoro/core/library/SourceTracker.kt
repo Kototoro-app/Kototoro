@@ -4,17 +4,30 @@ import androidx.room.immediateTransaction
 import androidx.room.useWriterConnection
 import kotlinx.coroutines.CancellationException
 import org.skepsun.kototoro.core.db.MangaDatabase
+import org.skepsun.kototoro.core.source.SourceChallengeException
 import org.skepsun.kototoro.core.source.SourceChapter
 import org.skepsun.kototoro.core.source.SourceContent
+import org.skepsun.kototoro.core.source.SourceErrorCode
+import org.skepsun.kototoro.core.source.SourceRemoteException
 import org.skepsun.kototoro.tracker.data.TrackEntity
+import org.skepsun.kototoro.tracker.domain.SourceAnswer
+import org.skepsun.kototoro.tracker.domain.SourceCheck
 import org.skepsun.kototoro.tracker.domain.afterFailedCheck
 import org.skepsun.kototoro.tracker.domain.afterSuccessfulCheck
+import org.skepsun.kototoro.tracker.domain.checkBySource
 import org.skepsun.kototoro.tracker.domain.compareTrackedChapters
 import org.skepsun.kototoro.tracker.domain.recordUpdateBatch
 import org.skepsun.kototoro.tracker.domain.repairLegacyUpdateCounters
 import org.skepsun.kototoro.tracker.domain.trackedLastChapterDate
 
-data class SourceTrackReport(val checked: Int, val withUpdates: Int, val failed: Int, val newChapters: Int)
+/** [skipped] titles were not checked: their source asked for a browser challenge earlier in the run. */
+data class SourceTrackReport(
+    val checked: Int,
+    val withUpdates: Int,
+    val failed: Int,
+    val newChapters: Int,
+    val skipped: Int = 0,
+)
 
 /**
  * New-chapter tracking over the shared `tracks`/`track_logs` tables, with the comparison and row rules shared with
@@ -60,30 +73,55 @@ class SourceTracker(
         var withUpdates = 0
         var failed = 0
         var newChapters = 0
-        ids.forEachIndexed { index, id ->
-            when (val result = check(id)) {
-                null -> failed++
-                else -> if (result > 0) { withUpdates++; newChapters += result }
+        var skipped = 0
+        var done = 0
+        // Android's scheduling: sources in turn, a few checks per source, and a challenged source skipped for the
+        // rest of the run instead of failing every remaining title of it.
+        checkBySource(
+            items = ids.map { id -> id to library.find(id) },
+            sourceOf = { (_, stored) -> stored?.source?.name.orEmpty() },
+            now = now,
+            answerOf = { outcome: CheckOutcome ->
+                if (outcome.error.isChallenge()) SourceAnswer.Challenged else SourceAnswer.Answered
+            },
+        ) { (id, stored) -> checkStored(id, stored) }.collect { check ->
+            when (check) {
+                is SourceCheck.Skipped -> skipped++
+                is SourceCheck.Checked -> when (val count = check.result.newChapters) {
+                    null -> failed++
+                    else -> if (count > 0) { withUpdates++; newChapters += count }
+                }
             }
-            onProgress(index + 1, ids.size)
+            onProgress(++done, ids.size)
         }
-        return SourceTrackReport(ids.size, withUpdates, failed, newChapters)
+        return SourceTrackReport(ids.size, withUpdates, failed, newChapters, skipped)
     }
 
     /** Checks one tracked work; returns the new chapter count, or null when the check failed. */
-    suspend fun check(mangaId: Long): Int? {
-        val stored = library.find(mangaId) ?: return null
+    suspend fun check(mangaId: Long): Int? = checkStored(mangaId, library.find(mangaId)).newChapters
+
+    /** [newChapters] is null when the check failed, with [error] saying why when there was one. */
+    private class CheckOutcome(val newChapters: Int?, val error: Throwable? = null)
+
+    private suspend fun checkStored(mangaId: Long, stored: SourceContent?): CheckOutcome {
+        stored ?: return CheckOutcome(null)
         val track = database.getTracksDao().find(mangaId) ?: TrackEntity.create(mangaId)
         // Android turns any failure of a check into a failed result instead of aborting the whole run.
         return try {
-            checkFetched(mangaId, track, fetchDetails(stored).copy(id = mangaId))
+            CheckOutcome(checkFetched(mangaId, track, fetchDetails(stored).copy(id = mangaId)))
         } catch (e: CancellationException) {
             throw e
         } catch (e: Throwable) {
             database.getTracksDao().upsert(track.afterFailedCheck(e.toString(), now()))
-            null
+            CheckOutcome(null, e)
         }
     }
+
+    private fun Throwable?.isChallenge(): Boolean = generateSequence(this) { e -> e.cause?.takeIf { it !== e } }
+        .any { e ->
+            e is SourceChallengeException ||
+                (e is SourceRemoteException && e.error.code == SourceErrorCode.CHALLENGE_REQUIRED)
+        }
 
     private suspend fun checkFetched(mangaId: Long, track: TrackEntity, details: SourceContent): Int {
         val chapters = details.chapters.orEmpty()

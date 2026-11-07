@@ -1693,13 +1693,15 @@ class DesktopController(
             runTrackerOnIo { done, total -> mutableState.update { it.copy(message = desktopText("message.checkingUpdates", done, total)) } }
         }
         loadFeedOnIo()
+        // Titles skipped because their source wants a browser challenge were not checked either.
+        val notChecked = report.failed + report.skipped
         mutableState.update { it.copy(message = when {
             report.checked == 0 -> desktopText("message.nothingToCheck")
-            report.withUpdates == 0 -> if (report.failed > 0) {
-                desktopText("message.checkedNoNewFailed", report.checked, report.failed)
+            report.withUpdates == 0 -> if (notChecked > 0) {
+                desktopText("message.checkedNoNewFailed", report.checked, notChecked)
             } else desktopText("message.checkedNoNew", report.checked)
-            else -> if (report.failed > 0) {
-                desktopText("message.checkedNewFailed", report.withUpdates, report.newChapters, report.failed)
+            else -> if (notChecked > 0) {
+                desktopText("message.checkedNewFailed", report.withUpdates, report.newChapters, notChecked)
             } else desktopText("message.checkedNew", report.withUpdates, report.newChapters)
         }) }
     }

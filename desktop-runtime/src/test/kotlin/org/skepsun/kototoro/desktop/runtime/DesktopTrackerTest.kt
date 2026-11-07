@@ -72,6 +72,35 @@ class DesktopTrackerTest {
     }
 
     @Test
+    fun `a challenged source is skipped for the rest of the run while other sources are checked`() =
+        runBlocking<Unit> {
+            DesktopRuntime.open(directory).use { runtime ->
+                val other = SourceRef("MIHON_7", "zh", "MANGA")
+                val library = DesktopLibrary(runtime.database) { name -> if (name == other.name) other else source }
+                val challenged = (11L..13L).map { id -> work(listOf(chapter(1))).copy(id = id, url = "/w$id") }
+                val healthy = work(listOf(chapter(1))).copy(id = 20, url = "/w20", source = other)
+                (challenged + healthy).forEach { library.addFavourite(it) }
+                val fetched = ArrayList<Long>()
+                val tracker = DesktopTracker(runtime.database, library, fetchDetails = { stored ->
+                    fetched += stored.id
+                    if (stored.source == source) throw SourceChallengeException("https://fixture.invalid")
+                    stored
+                }, preferredBranch = { null }, now = { 5_000_000L })
+
+                val report = tracker.checkAll()
+
+                assertEquals(4, report.checked)
+                assertTrue(report.skipped >= 1, "report: $report")
+                assertEquals(3, report.failed + report.skipped, "report: $report")
+                assertTrue(20L in fetched)
+                assertEquals(report.failed, fetched.count { it != 20L })
+                // A skipped title is not marked as checked, so it keeps its place for the next run.
+                val unchecked = challenged.map { it.id }.filterNot { it in fetched }
+                assertTrue(unchecked.all { runtime.database.getTracksDao().find(it)?.lastCheckTime == 0L })
+            }
+        }
+
+    @Test
     fun `checks find new chapters with Android rules and feed the shared read model`() = runBlocking<Unit> {
         DesktopRuntime.open(directory).use { runtime ->
             val library = DesktopLibrary(runtime.database) { source }
