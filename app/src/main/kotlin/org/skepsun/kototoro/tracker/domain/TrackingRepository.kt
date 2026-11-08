@@ -13,9 +13,6 @@ import org.skepsun.kototoro.core.db.entity.TagEntity
 import org.skepsun.kototoro.core.db.entity.toContent
 import org.skepsun.kototoro.core.db.entity.toContentTags
 import org.skepsun.kototoro.core.db.entity.toEntities
-import org.skepsun.kototoro.core.model.LocalMangaSource
-import org.skepsun.kototoro.core.model.LocalNovelSource
-import org.skepsun.kototoro.core.model.LocalVideoSource
 import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
@@ -31,6 +28,7 @@ import org.skepsun.kototoro.tracker.data.TrackEntity
 import org.skepsun.kototoro.tracker.data.TrackLogEntity
 import org.skepsun.kototoro.tracker.data.TrackQueueEntry
 import org.skepsun.kototoro.tracker.data.TRACK_LOG_RETAINED_SIZE
+import org.skepsun.kototoro.tracker.data.clearUnrecordedTrackCounters
 import org.skepsun.kototoro.tracker.domain.model.ContentTracking
 import org.skepsun.kototoro.tracker.domain.model.MangaUpdates
 import org.skepsun.kototoro.tracker.domain.model.TrackingLogItem
@@ -39,7 +37,6 @@ import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 
 private const val NO_ID = 0L
-private val LOCAL_SOURCE_NAMES = listOf(LocalMangaSource.name, LocalNovelSource.name, LocalVideoSource.name)
 
 /**
  * Post-update-check summary scoped to tracked favourite works.
@@ -295,7 +292,7 @@ class TrackingRepository @Inject constructor(
     suspend fun gc() = db.withTransaction {
         db.getTracksDao().gc()
         db.getTrackLogsDao().deleteOrphans()
-        db.getTracksDao().clearUnrecordedCounters(LOCAL_SOURCE_NAMES)
+        db.clearUnrecordedTrackCounters()
     }
 
     suspend fun mergeWith(tracking: ContentTracking) {

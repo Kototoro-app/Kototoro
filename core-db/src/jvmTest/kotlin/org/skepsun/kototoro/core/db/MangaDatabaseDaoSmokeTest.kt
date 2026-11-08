@@ -90,10 +90,10 @@ class MangaDatabaseDaoSmokeTest {
             val tracks = db.getTracksDao()
             tracks.upsert(TrackEntity(1, 32, 2, 200, 999, TrackEntity.RESULT_HAS_UPDATE, null))
             assertEquals(1, tracks.observeUnreadWorkCount().first())
-            db.getTrackLogsDao().ensureUnreadUpdateLogs()
-            val event = db.getTrackLogsDao().dump().single()
-            assertEquals(200, event.createdAt, "publication dates cannot date a discovery event")
-            db.getTrackLogsDao().markAsRead(event.id)
+            val eventId = db.getTrackLogsDao().insert(TrackLogEntity(
+                mangaId = 1, chapters = "Chapter 33\nChapter 34", createdAt = 200, isUnread = true,
+            ))
+            db.getTrackLogsDao().markAsRead(eventId)
             assertEquals(0, tracks.observeUnreadWorkCount().first())
             assertEquals(2, tracks.find(1)!!.newChapters)
             assertEquals(1, db.getTrackLogsDao().count())

@@ -91,27 +91,6 @@ abstract class TrackLogsDao : MangaQueryBuilder.ConditionCallback {
     @Query("SELECT COUNT(*) FROM track_logs")
     abstract suspend fun count(): Int
 
-    @Query(
-        """
-        INSERT INTO track_logs(manga_id, chapters, created_at, unread)
-        SELECT tracks.manga_id,
-            CASE
-                WHEN tracks.chapters_new > 1 THEN 'New chapters x ' || tracks.chapters_new
-                ELSE 'New chapters'
-            END,
-            MAX(tracks.last_check_time, 0),
-            1
-        FROM tracks
-        WHERE tracks.chapters_new > 0
-            AND NOT EXISTS (
-                SELECT 1
-                FROM track_logs
-                WHERE track_logs.manga_id = tracks.manga_id
-            )
-        """,
-    )
-    abstract suspend fun ensureUnreadUpdateLogs()
-
     override fun getCondition(option: ListFilterCriteria): String? = when (option) {
         ListFilterCriteria.Macro.FAVORITE -> favouriteExistsExpr("track_logs.manga_id")
         is ListFilterCriteria.Favorite -> favouriteExistsExpr("track_logs.manga_id", option.categoryId)
