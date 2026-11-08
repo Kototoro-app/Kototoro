@@ -450,7 +450,6 @@ fun KototoroApp(
     val onNavDestinationChanged = mainAppState.onNavDestinationChanged
     val pendingSearchNavigation = mainAppState.pendingSearchNavigation
     val onSearchNavigationHandled = mainAppState.onSearchNavigationHandled
-    val onFeedRefresh = mainAppState.onFeedRefresh
     val isResumeEnabled = mainAppState.isResumeEnabled
     val onResumeClick = mainAppState.onResumeClick
     val spaceUiState = mainAppState.spaceUiState
@@ -484,7 +483,6 @@ fun KototoroApp(
     val isMainFabEnabled by prefs.isMainFabEnabled
     val sidekickPosition by prefs.sidekickPosition
     val globalFavoritesSortOrder by prefs.globalFavoritesSortOrder
-    val showAllUpdates by prefs.showAllUpdates
     val feedLimit by prefs.feedLimit
     val exitConfirmationEnabled by prefs.exitConfirmationEnabled
     val topBarStyle by prefs.topBarStyle
@@ -932,16 +930,10 @@ fun KototoroApp(
         }
     }
     val displayOptionsExtraContent: (@Composable (() -> Unit) -> Unit)? = if (chromeTopLevelKey == FeedNavKey) {
-        { dismiss ->
+        { _ ->
             FeedDisplayOptionsContent(
-                showAllUpdates = showAllUpdates,
-                onShowAllUpdatesChanged = { appSettings.showAllUpdates = it },
                 feedLimit = feedLimit,
                 onFeedLimitChanged = { appSettings.feedLimit = it },
-                onFeedRefresh = {
-                    onFeedRefresh()
-                    dismiss()
-                },
             )
         }
     } else {

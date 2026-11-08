@@ -19,8 +19,8 @@ import javax.inject.Singleton
  *
  * Interface contract (mirroring
  * [org.skepsun.kototoro.favourites.domain.library.FavouriteLibrarySnapshotStore]):
- * - [observe] takes no parameters: the feed limit window, showAllUpdates, quick
- *   filters and the feed scope are all derived in memory from the snapshot;
+ * - [observe] takes no parameters: the feed limit window, quick filters and the
+ *   feed scope are all derived in memory from the snapshot;
  * - every emission is complete and self-consistent (see [FeedSnapshot]);
  * - upstream changes that do not alter the snapshot do not re-emit;
  * - broken rows survive as rows instead of failing the flow;

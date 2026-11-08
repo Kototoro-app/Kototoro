@@ -80,7 +80,6 @@ import org.skepsun.kototoro.space.domain.SpaceSessionSnapshot
 import org.skepsun.kototoro.space.domain.SpaceRepository
 import org.skepsun.kototoro.space.data.SpaceRoutePreferencesController
 import org.skepsun.kototoro.space.data.SpaceSourcePresetController
-import org.skepsun.kototoro.tracker.work.TrackWorker
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -154,9 +153,6 @@ class MainActivity : BaseComposeActivity(), SystemInstallLauncherHost {
 
     @Inject
     lateinit var pageSaveHelperFactory: org.skepsun.kototoro.reader.ui.PageSaveHelper.Factory
-
-    @Inject
-    lateinit var trackWorkerScheduler: TrackWorker.Scheduler
 
     private val viewModel by viewModels<MainViewModel>()
     private val searchSuggestionViewModel by viewModels<SearchSuggestionViewModel>()
@@ -275,7 +271,6 @@ class MainActivity : BaseComposeActivity(), SystemInstallLauncherHost {
                     onSearchOverlayContentKindsChange = searchSuggestionViewModel::setContentKinds,
                     onSearchOverlayDismiss = topBarController::syncSearchSuggestionFilters,
                     query = topBarController.searchQuery,
-                    onFeedRefresh = trackWorkerScheduler::startNow,
                     isResumeEnabled = isResumeEnabled,
                     onResumeClick = viewModel::openLastReader,
                     spaceUiState = spaceUiState,

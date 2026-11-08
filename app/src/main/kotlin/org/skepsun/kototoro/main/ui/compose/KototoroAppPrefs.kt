@@ -35,7 +35,6 @@ internal class KototoroAppPrefs internal constructor(
     val isMainFabEnabled: State<Boolean>,
     val sidekickPosition: State<SpaceSwitcherPosition>,
     val globalFavoritesSortOrder: State<ListSortOrder>,
-    val showAllUpdates: State<Boolean>,
     val feedLimit: State<Int>,
     val exitConfirmationEnabled: State<Boolean>,
     val topBarStyle: State<TopBarStyle>,
@@ -121,9 +120,6 @@ internal fun rememberKototoroAppPrefs(appSettings: AppSettings): KototoroAppPref
     val globalFavoritesSortOrder = appSettings.observeAsState(keys = arrayOf(AppSettings.KEY_FAVORITES_ORDER)) {
         allFavoritesSortOrder
     }
-    val showAllUpdates = appSettings.observeAsState(keys = arrayOf(AppSettings.KEY_SHOW_ALL_UPDATES)) {
-        showAllUpdates
-    }
     val feedLimit = appSettings.observeAsState(keys = arrayOf(AppSettings.KEY_FEED_LIMIT)) {
         feedLimit
     }
@@ -151,7 +147,6 @@ internal fun rememberKototoroAppPrefs(appSettings: AppSettings): KototoroAppPref
         isMainFabEnabled = isMainFabEnabled,
         sidekickPosition = sidekickPosition,
         globalFavoritesSortOrder = globalFavoritesSortOrder,
-        showAllUpdates = showAllUpdates,
         feedLimit = feedLimit,
         exitConfirmationEnabled = exitConfirmationEnabled,
         topBarStyle = topBarStyle,

@@ -13,7 +13,7 @@ import org.skepsun.kototoro.parsers.model.ContentType
  * - every emission is complete: log rows (the bounded `track_logs` set) plus the
  *   tracked-with-updates set, with identity, pinned and display already resolved;
  * - rows are keyed by log id; `updateRowsByOwnerId` carries the `chapters_new > 0`
- *   set keyed by track owner id for the showAll branch and the header;
+ *   set keyed by track owner id;
  * - broken rows (dangling anchor, no manga) survive — the read model never drops
  *   data the maintenance layer kept;
  * - no filtering happened yet: quick filters, the feed scope, NSFW, the tag

@@ -16,7 +16,7 @@ import org.skepsun.kototoro.tracker.domain.encodeUpdateChapters
  * [FeedSnapshot] (history-updates-feed komikku-alignment plan, Phase F3).
  *
  * Everything that used to restart the paging chain is a re-derivation here:
- * the feed limit window, the showAllUpdates source switch, quick filters,
+ * the feed limit window, quick filters,
  * the feed scope (category / group tab / source tags / preset), NSFW
  * exclusion and the tag blacklist. The database is never re-queried.
  *
@@ -32,7 +32,6 @@ object FeedDeriver {
     /** Snapshot and value filters, plus a platform-resolved tag matcher. */
     data class Input(
         val snapshot: FeedSnapshot,
-        val showAllUpdates: Boolean = false,
         val feedLimit: Int = 200,
         val filters: Set<ListFilterCriteria> = emptySet(),
         val excludedNsfw: Boolean = false,
@@ -59,11 +58,7 @@ object FeedDeriver {
     )
 
     fun derive(input: Input): Derived {
-        val rows = if (input.showAllUpdates) {
-            deriveShowAllRows(input)
-        } else {
-            input.snapshot.rows
-        }
+        val rows = input.snapshot.rows
         val byLogId = rows.associateBy { it.logId }
         val grouped = dailyUpdateGroups(rows.filter { it.logId > 0 }.map { row ->
             TrackLogEntity(row.logId, row.ownerId, row.chapters.joinToString("\n"), row.createdAt,
@@ -100,51 +95,6 @@ object FeedDeriver {
         query.isEmpty || query.matches(
             sequenceOf(overrideTitle, title, altTitle, author) + tagTitles.asSequence() + chapters.asSequence(),
         )
-
-    /**
-     * The `showAllUpdates` source: pending-update tracks merged with (and
-     * de-duplicated against) the log rows. Mirrors the legacy combination of
-     * `resolveAllTrackingLogItems` with `ensureUnreadUpdateLogs`: a tracked
-     * work without a log yet shows up as a synthetic item dated by
-     * `last_check_time` (legacy fallback only).
-     */
-    private fun deriveShowAllRows(input: Input): List<FeedCardRow> {
-        val logRows = input.snapshot.rows
-        val logOwnerIds = logRows.mapTo(HashSet(logRows.size)) { it.ownerId }
-        val synthetic = input.snapshot.updateRowsByOwnerId.values
-            .filterNot { it.ownerId in logOwnerIds }
-            .map { update ->
-                FeedCardRow(
-                    logId = -update.mangaId,
-                    anchorMangaId = update.mangaId,
-                    ownerId = update.ownerId,
-                    entityId = update.entityId,
-                    preferredLocalMangaId = update.preferredLocalMangaId,
-                    chapters = List(update.newChapters.coerceAtLeast(1)) { "" },
-                    createdAt = update.lastCheckTime,
-                    unread = update.newChapters > 0,
-                    isPinned = update.isPinned,
-                    displayMangaId = update.displayMangaId,
-                    title = update.title,
-                    altTitle = null,
-                    coverUrl = update.coverUrl,
-                    author = null,
-                    sourceName = update.sourceName,
-                    displayUrl = "",
-                    contentType = null,
-                    publicationState = null,
-                    isNsfw = update.isNsfw,
-                    rating = -1f,
-                    tagIds = emptySet(),
-                    tagTitles = emptyList(),
-                    overrideTitle = null,
-                    overrideCoverUrl = null,
-                    sourceGroupFlags = 1 shl update.contentGroupOrdinal(),
-                    sourceOriginFlags = 1 shl update.originGroupOrdinal(),
-                )
-            }
-        return logRows + synthetic
-    }
 
     private fun FeedCardRow.isVisible(input: Input): Boolean {
         // preset scope
@@ -219,15 +169,6 @@ object FeedDeriver {
     private val FEED_ORDER = compareByDescending<FeedCardRow> { it.createdAt }
         .thenByDescending { it.logId }
 }
-
-private fun FeedUpdateRow.contentGroupOrdinal(): Int {
-    // The synthetic showAll row only needs a plausible flag; the group tab is
-    // derived from the display source elsewhere, and unknown sources resolve
-    // to the default group anyway.
-    return 0
-}
-
-private fun FeedUpdateRow.originGroupOrdinal(): Int = 0
 
 private fun FeedCardRow.matchesSourceTag(tag: SourceTag): Boolean {
     val contentMatched = ContentGroup.entries.any { group ->
