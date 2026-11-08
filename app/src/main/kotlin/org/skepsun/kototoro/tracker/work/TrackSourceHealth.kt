@@ -10,6 +10,7 @@ import org.skepsun.kototoro.parsers.exception.TooManyRequestExceptions
 import org.skepsun.kototoro.tracker.domain.SourceAnswer
 import org.skepsun.kototoro.tracker.domain.decodeSourceCooldowns
 import org.skepsun.kototoro.tracker.domain.encodeSourceCooldowns
+import org.skepsun.kototoro.tracker.domain.nextChallengedSources
 import org.koitharu.kotatsu.parsers.exception.TooManyRequestExceptions as LegacyTooManyRequestExceptions
 
 /**
@@ -32,8 +33,9 @@ internal fun Throwable?.toSourceAnswer(): SourceAnswer {
 }
 
 /**
- * Sources that rate-limited an earlier check run and should be left alone until their time is up. Kept in a
- * preferences file of their own: it is per-device state, not a setting to back up or sync.
+ * What earlier check runs learned about sources: those that rate-limited a run and should be left alone until
+ * their time is up, and those that answered with a challenge and only get a probe until they answer again. Kept
+ * in a preferences file of their own: it is per-device state, not a setting to back up or sync.
  */
 internal class TrackSourceCooldowns(context: Context) {
 
@@ -47,9 +49,19 @@ internal class TrackSourceCooldowns(context: Context) {
         prefs.edit { putStringSet(KEY_COOLDOWNS, encodeSourceCooldowns(cooldowns, now)) }
     }
 
+    fun readChallenged(): Set<String> = prefs.getStringSet(KEY_CHALLENGED, null).orEmpty().toSet()
+
+    /** After a run that heard a challenge from [challenged] and an answer from [answered]. */
+    @Synchronized
+    fun updateChallenged(challenged: Set<String>, answered: Set<String>) {
+        val next = nextChallengedSources(readChallenged(), challenged, answered)
+        prefs.edit { putStringSet(KEY_CHALLENGED, next) }
+    }
+
     private companion object {
         const val PREFS_NAME = "tracker_source_cooldowns"
         const val KEY_COOLDOWNS = "cooldowns"
+        const val KEY_CHALLENGED = "challenged"
     }
 }
 

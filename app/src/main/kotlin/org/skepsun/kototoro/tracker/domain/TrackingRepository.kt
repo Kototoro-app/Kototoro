@@ -24,6 +24,7 @@ import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.util.ifZero
 import org.skepsun.kototoro.tracker.data.TrackEntity
 import org.skepsun.kototoro.tracker.data.TrackLogEntity
+import org.skepsun.kototoro.tracker.data.TrackQueueEntry
 import org.skepsun.kototoro.tracker.data.TRACK_LOG_RETAINED_SIZE
 import org.skepsun.kototoro.tracker.domain.model.ContentTracking
 import org.skepsun.kototoro.tracker.domain.model.MangaUpdates
@@ -97,15 +98,25 @@ class TrackingRepository @Inject constructor(
             .onStart { gcIfNeeded() }
     }
 
-    /** Tracks to check, least recently checked first; finished titles are left out when the user asked to skip them. */
-    suspend fun getTracks(offset: Int, limit: Int): List<ContentTracking> {
+    /**
+     * Up to [limit] tracks to check, least recently checked first; finished titles are left out when the user asked
+     * to skip them. Sources still cooling down or challenged last time are kept from filling the batch
+     * ([selectTrackBatch]).
+     */
+    suspend fun getTracks(
+        limit: Int,
+        cooldowns: Map<String, Long>,
+        challenged: Set<String>,
+        now: Long = System.currentTimeMillis(),
+    ): List<ContentTracking> {
         val dao = db.getTracksDao()
-        val tracks = if (settings.isTrackerSkipCompleted) {
-            dao.findAllExceptState(ContentState.FINISHED.name, offset = offset, limit = limit)
+        val queue = if (settings.isTrackerSkipCompleted) {
+            dao.findQueueExceptState(ContentState.FINISHED.name)
         } else {
-            dao.findAll(offset = offset, limit = limit)
+            dao.findQueue()
         }
-        return tracks.mapNotNull { it.toContentTracking() }
+        return selectTrackBatch(queue, TrackQueueEntry::source, limit, cooldowns, challenged, now)
+            .mapNotNull { entry -> dao.find(entry.mangaId)?.toContentTracking() }
     }
 
     /** How many tracks [getTracks] can return, which the check interval is spread over. */

@@ -70,6 +70,11 @@ class MangaDatabaseDaoSmokeTest {
             assertEquals(listOf(4L), tracks.findAllExceptState("FINISHED", offset = 0, limit = 1).map { it.mangaId })
             assertEquals(3, tracks.getTracksCountExceptState("FINISHED"))
             assertEquals(4, tracks.getTracksCount())
+            assertEquals(
+                listOf(4L to "TEST", 3L to "TEST", 2L to "TEST", 1L to "TEST"),
+                tracks.findQueue().map { it.mangaId to it.source },
+            )
+            assertEquals(listOf(4L, 3L, 1L), tracks.findQueueExceptState("FINISHED").map { it.mangaId })
         } finally { db.close() }
     }
 

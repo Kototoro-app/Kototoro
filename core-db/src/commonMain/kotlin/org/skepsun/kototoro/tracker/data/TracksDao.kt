@@ -23,6 +23,22 @@ abstract class TracksDao : MangaQueryBuilder.ConditionCallback {
     )
     abstract suspend fun findAllExceptState(skippedState: String, offset: Int, limit: Int): List<TrackEntity>
 
+    /** Every track, least recently checked first, with its title's source; the run picks its batch from it. */
+    @Query(
+        "SELECT tracks.manga_id AS manga_id, manga.source AS source FROM tracks " +
+            "LEFT JOIN manga ON manga.manga_id = tracks.manga_id ORDER BY tracks.last_check_time ASC",
+    )
+    abstract suspend fun findQueue(): List<TrackQueueEntry>
+
+    /** Like [findQueue], leaving out titles whose source reports [skippedState] (a `ContentState` name). */
+    @Query(
+        "SELECT tracks.manga_id AS manga_id, manga.source AS source FROM tracks " +
+            "LEFT JOIN manga ON manga.manga_id = tracks.manga_id " +
+            "WHERE manga.state IS NULL OR manga.state != :skippedState " +
+            "ORDER BY tracks.last_check_time ASC",
+    )
+    abstract suspend fun findQueueExceptState(skippedState: String): List<TrackQueueEntry>
+
     @Query(
         "SELECT COUNT(*) FROM tracks LEFT JOIN manga ON manga.manga_id = tracks.manga_id " +
             "WHERE manga.state IS NULL OR manga.state != :skippedState",

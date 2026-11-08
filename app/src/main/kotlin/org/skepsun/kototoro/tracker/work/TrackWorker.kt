@@ -71,6 +71,7 @@ import org.skepsun.kototoro.parsers.util.toIntUp
 import org.skepsun.kototoro.settings.work.PeriodicWorkScheduler
 import org.skepsun.kototoro.tracker.domain.CheckNewChaptersUseCase
 import org.skepsun.kototoro.tracker.domain.GetTracksUseCase
+import org.skepsun.kototoro.tracker.domain.SourceAnswer
 import org.skepsun.kototoro.tracker.domain.SourceCheck
 import org.skepsun.kototoro.tracker.domain.checkBySource
 import org.skepsun.kototoro.tracker.domain.TrackingRepository
@@ -154,12 +155,17 @@ class TrackWorker @AssistedInject constructor(
         if (!settings.isTrackerEnabled) {
             return Result.success()
         }
-        val tracks = getTracksUseCase(if (isFullRun) Int.MAX_VALUE else BATCH_SIZE)
+        val sourceState = TrackSourceCooldowns(applicationContext)
+        val tracks = getTracksUseCase(
+            limit = if (isFullRun) Int.MAX_VALUE else BATCH_SIZE,
+            cooldowns = sourceState.read(),
+            challenged = sourceState.readChallenged(),
+        )
         if (tracks.isEmpty()) {
             return Result.success()
         }
 
-        val notifications = checkUpdatesAsync(tracks)
+        val notifications = checkUpdatesAsync(tracks, sourceState)
         if (notifications.isNotEmpty() && applicationContext.checkNotificationPermission(null)) {
             val groupNotification = notificationHelper.createGroupNotification(notifications)
             notifications.forEach { notificationManager.notify(it.tag, it.id, it.notification) }
@@ -175,24 +181,50 @@ class TrackWorker @AssistedInject constructor(
      * [TRACK_GLOBAL_PARALLELISM] overall, so a library on a few sites does not put every request on one of them.
      * A source that rate-limits is paused, and one that asks for a challenge or keeps refusing is skipped for
      * the rest of the run; skipped titles are not checked, so they keep their place for the next run. A source given
-     * up on because of rate limits cools down, and later runs skip it until then.
+     * up on because of rate limits cools down, and later runs skip it until then; a source that challenged the run
+     * is remembered, so the next batches give it only a probe until it answers again.
      */
     @CheckResult
-    private suspend fun checkUpdatesAsync(tracks: List<ContentTracking>): List<NotificationInfo> {
+    private suspend fun checkUpdatesAsync(
+        tracks: List<ContentTracking>,
+        sourceState: TrackSourceCooldowns,
+    ): List<NotificationInfo> {
+        val challenged = HashSet<String>()
+        val answered = HashSet<String>()
+        return try {
+            checkUpdatesBySource(tracks, sourceState, challenged, answered)
+        } finally {
+            // Also after a cancelled run: what it heard from sources holds either way.
+            sourceState.updateChallenged(challenged, answered)
+        }
+    }
+
+    private suspend fun checkUpdatesBySource(
+        tracks: List<ContentTracking>,
+        sourceState: TrackSourceCooldowns,
+        challenged: MutableSet<String>,
+        answered: MutableSet<String>,
+    ): List<NotificationInfo> {
         var tally = CheckTally()
-        val cooldowns = TrackSourceCooldowns(applicationContext)
         return checkBySource(
             items = tracks,
             sourceOf = { it.manga.source.name },
             now = System::currentTimeMillis,
             answerOf = { updates: MangaUpdates -> (updates as? MangaUpdates.Failure)?.error.toSourceAnswer() },
-            cooldowns = cooldowns.read(),
-            onCooldown = cooldowns::put,
+            cooldowns = sourceState.read(),
+            onCooldown = sourceState::put,
             check = ::checkTrack,
         ).map { check ->
             when (check) {
                 is SourceCheck.Skipped -> null
-                is SourceCheck.Checked -> check.result
+                is SourceCheck.Checked -> check.result.also { result ->
+                    val answer = (result as? MangaUpdates.Failure)?.error.toSourceAnswer()
+                    when (answer) {
+                        SourceAnswer.Challenged -> challenged += check.source
+                        SourceAnswer.Answered -> answered += check.source
+                        is SourceAnswer.RateLimited -> Unit
+                    }
+                }
             }
         }.onEachIndexed { index, it ->
             tally = tally.add(it)

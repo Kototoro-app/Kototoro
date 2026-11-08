@@ -113,4 +113,63 @@ class TrackSourceRulesTest {
             decodeSourceCooldowns(encoded + setOf("A=B=7", "=3", "broken", "X=notanumber")),
         )
     }
+
+    @Test
+    fun aBatchLeavesOutSourcesStillCoolingDownAndKeepsTheQueueOrder() {
+        val queue = listOf("a1", "a2", "b1", "a3", "c1", "b2", "c2")
+
+        assertEquals(
+            listOf("b1", "c1", "b2"),
+            selectTrackBatch(
+                queue = queue,
+                sourceOf = { it.take(1) },
+                limit = 3,
+                cooldowns = mapOf("a" to 2_000L, "c" to 500L),
+                challenged = emptySet(),
+                now = 1_000L,
+            ),
+        )
+    }
+
+    @Test
+    fun aChallengedSourceOnlyPutsAProbeIntoTheBatch() {
+        // Source "a" holds the oldest titles; without the probe limit it would fill the whole batch again.
+        val queue = listOf("a1", "a2", "a3", "a4", "b1", "b2")
+
+        assertEquals(
+            listOf("a1", "b1", "b2"),
+            selectTrackBatch(
+                queue = queue,
+                sourceOf = { it.take(1) },
+                limit = 4,
+                cooldowns = emptyMap(),
+                challenged = setOf("a"),
+                now = 0L,
+            ),
+        )
+    }
+
+    @Test
+    fun titlesWithoutASourceStayInTheBatch() {
+        assertEquals(
+            listOf("x", "b1"),
+            selectTrackBatch(
+                queue = listOf("x", "b1"),
+                sourceOf = { if (it == "x") null else it.take(1) },
+                limit = 10,
+                cooldowns = mapOf("b" to 0L),
+                challenged = emptySet(),
+                now = 1L,
+            ),
+        )
+        assertEquals(emptyList<String>(), selectTrackBatch(listOf("a1"), { "a" }, 0, emptyMap(), emptySet(), 0L))
+    }
+
+    @Test
+    fun aSourceStaysChallengedUntilItAnswersWithoutAChallenge() {
+        assertEquals(setOf("a", "b"), nextChallengedSources(setOf("a"), challenged = setOf("b"), answered = emptySet()))
+        assertEquals(setOf("b"), nextChallengedSources(setOf("a", "b"), challenged = emptySet(), answered = setOf("a")))
+        // One title answered while another was challenged: the source is still challenged.
+        assertEquals(setOf("a"), nextChallengedSources(emptySet(), challenged = setOf("a"), answered = setOf("a")))
+    }
 }
