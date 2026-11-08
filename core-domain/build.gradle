@@ -42,6 +42,8 @@ kotlin {
 				runtimeOnly 'org.junit.platform:junit-platform-launcher:1.8.2'
 				implementation libs.kotlinx.coroutines.test
 				implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:${libs.versions.serialization.get()}"
+				// In-memory MangaDatabase for the update lifecycle rules that read and write tables.
+				implementation 'androidx.sqlite:sqlite-bundled:2.6.2'
 			}
 		}
 		// One Jsoup adapter for Android/JVM; common policy and text anchors remain portable.

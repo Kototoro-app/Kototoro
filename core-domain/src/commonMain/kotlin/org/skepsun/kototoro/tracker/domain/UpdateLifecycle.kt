@@ -40,11 +40,19 @@ fun mergeUpdateChapters(groups: List<List<UpdateChapter>>): List<UpdateChapter> 
     }.sortedWith(compareBy<UpdateChapter> { it.discoveredAt }.thenBy { it.key })
 
 /** All database helpers in this file run inside the caller's write transaction. */
-suspend fun MangaDatabase.recordUpdateBatch(mangaId: Long, chapterIds: Set<Long>, now: Long): Int {
+suspend fun MangaDatabase.recordUpdateBatch(mangaId: Long, chapterIds: Set<Long>, now: Long): Int =
+    recordUpdateChapters(mangaId, getChaptersDao().findAll(mangaId).filter { it.chapterId in chapterIds }, now)
+
+/**
+ * [recordUpdateBatch] with the new [chapters] given rather than looked up in the work's stored chapter list. A local
+ * copy of a remote work has no stored list; its own chapters keep the remote source, URL and id, so the keys of the
+ * remote chapters given here are the keys its reading completes.
+ */
+suspend fun MangaDatabase.recordUpdateChapters(mangaId: Long, chapters: List<ChapterEntity>, now: Long): Int {
     val dao = getTrackLogsDao()
     val previous = dao.findByOwner(mangaId)
     val known = previous.flatMap { decodeUpdateChapters(it.chapterMetadata) }.mapTo(HashSet()) { it.key }
-    val added = getChaptersDao().findAll(mangaId).filter { it.chapterId in chapterIds }
+    val added = chapters
         .distinctBy { it.updateKey() }.filterNot { it.updateKey() in known }
         .map { UpdateChapter(it.updateKey(), it.chapterId, it.title, it.branch, it.uploadDate, now) }
     if (added.isNotEmpty()) {
@@ -78,9 +86,19 @@ suspend fun MangaDatabase.reconcileUpdateNotifications(mangaId: Long) {
     }
 }
 
-/** Reading a chapter's final page completes that chapter, without treating skipped chapters as read. */
-suspend fun MangaDatabase.completeUpdateChapter(mangaId: Long, chapterId: Long, now: Long) {
-    val chapter = getChaptersDao().findAll(mangaId).firstOrNull { it.chapterId == chapterId } ?: return
+/**
+ * Reading a chapter's final page completes that chapter, without treating skipped chapters as read. [chapters] is
+ * the reader's list, used when the work has no stored one (a local copy, see [recordUpdateChapters]).
+ */
+suspend fun MangaDatabase.completeUpdateChapter(
+    mangaId: Long,
+    chapterId: Long,
+    now: Long,
+    chapters: List<ChapterEntity> = emptyList(),
+) {
+    val chapter = getChaptersDao().findAll(mangaId).firstOrNull { it.chapterId == chapterId }
+        ?: chapters.firstOrNull { it.chapterId == chapterId }
+        ?: return
     val key = chapter.updateKey()
     val dao = getTrackLogsDao()
     var changed = false

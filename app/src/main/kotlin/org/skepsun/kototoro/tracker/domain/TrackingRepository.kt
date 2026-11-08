@@ -12,6 +12,10 @@ import org.skepsun.kototoro.core.db.entity.MangaTagsEntity
 import org.skepsun.kototoro.core.db.entity.TagEntity
 import org.skepsun.kototoro.core.db.entity.toContent
 import org.skepsun.kototoro.core.db.entity.toContentTags
+import org.skepsun.kototoro.core.db.entity.toEntities
+import org.skepsun.kototoro.core.model.LocalMangaSource
+import org.skepsun.kototoro.core.model.LocalNovelSource
+import org.skepsun.kototoro.core.model.LocalVideoSource
 import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
@@ -21,6 +25,7 @@ import org.skepsun.kototoro.list.domain.ListFilterOption
 import org.skepsun.kototoro.list.domain.toCriteria
 import org.skepsun.kototoro.parsers.model.ContentState
 import org.skepsun.kototoro.parsers.model.Content
+import org.skepsun.kototoro.parsers.model.ContentChapter
 import org.skepsun.kototoro.parsers.util.ifZero
 import org.skepsun.kototoro.tracker.data.TrackEntity
 import org.skepsun.kototoro.tracker.data.TrackLogEntity
@@ -34,6 +39,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 
 private const val NO_ID = 0L
+private val LOCAL_SOURCE_NAMES = listOf(LocalMangaSource.name, LocalNovelSource.name, LocalVideoSource.name)
 
 /**
  * Post-update-check summary scoped to tracked favourite works.
@@ -181,33 +187,50 @@ class TrackingRepository @Inject constructor(
     }
 
     suspend fun updateTrack(manga: Content, updates: MangaUpdates): TrackEntity = db.withTransaction {
-        if (updates is MangaUpdates.Success) {
-            val owner = contentDataRepository.findContentById(manga.id, withChapters = false)
-            if (owner != null && !owner.isLocal) {
-                // Feed and details must read the same committed snapshot. A remote check for a
-                // local owner carries its id, so never replace that owner's files/source.
-                contentDataRepository.updateContentSnapshotAtAnchor(updates.manga, manga.id)
-            }
+        // A remote check for a local owner carries its id, so never replace that owner's files/source; the owner
+        // then has no stored chapter list to find the new chapters in.
+        val owner = if (updates is MangaUpdates.Success) {
+            contentDataRepository.findContentById(manga.id, withChapters = false)
+        } else {
+            null
+        }
+        if (owner != null && !owner.isLocal) {
+            // Feed and details must read the same committed snapshot.
+            contentDataRepository.updateContentSnapshotAtAnchor(updates.manga, manga.id)
         }
         val prev = getOrCreateTrack(manga.id)
         val entity = prev.mergeWith(updates, manga.id)
         db.getTracksDao().upsert(entity)
         if (updates is MangaUpdates.Success) {
-            db.recordUpdateBatch(manga.id, updates.newChapters.mapTo(HashSet()) { it.id }, System.currentTimeMillis())
+            val now = System.currentTimeMillis()
+            if (owner?.isLocal == true) {
+                db.recordUpdateChapters(manga.id, updates.newChapters.withIndex().toEntities(manga.id), now)
+            } else {
+                db.recordUpdateBatch(manga.id, updates.newChapters.mapTo(HashSet()) { it.id }, now)
+            }
         }
         entity
     }
 
-    /** Returns false only for legacy logs that have no reliable chapter identities. */
-    suspend fun updateReadChapter(mangaId: Long, chapterId: Long, percent: Float? = null): Boolean = db.withTransaction {
+    /**
+     * Returns false only for legacy logs that have no reliable chapter identities. [readerChapters] is the list being
+     * read, used for a work without a stored chapter list (a local copy of a remote work).
+     */
+    suspend fun updateReadChapter(
+        mangaId: Long,
+        chapterId: Long,
+        percent: Float? = null,
+        readerChapters: List<ContentChapter>? = null,
+    ): Boolean = db.withTransaction {
         if (db.getTrackLogsDao().findByOwner(mangaId).none { it.chapterMetadata.isNotBlank() }) return@withTransaction false
         val chapters = db.getChaptersDao().findAll(mangaId)
+            .ifEmpty { readerChapters?.withIndex()?.toEntities(mangaId).orEmpty() }
         val current = chapters.firstOrNull { it.chapterId == chapterId } ?: return@withTransaction true
         val branch = chapters.filter { it.branch == current.branch }
         val index = branch.indexOfFirst { it.chapterId == chapterId }
         val progress = percent ?: db.getHistoryDao().find(mangaId)?.percent ?: return@withTransaction true
         if (progress * branch.size + 0.0001f >= index + 1) {
-            db.completeUpdateChapter(mangaId, chapterId, System.currentTimeMillis())
+            db.completeUpdateChapter(mangaId, chapterId, System.currentTimeMillis(), chapters)
         }
         true
     }
@@ -272,6 +295,7 @@ class TrackingRepository @Inject constructor(
     suspend fun gc() = db.withTransaction {
         db.getTracksDao().gc()
         db.getTrackLogsDao().deleteOrphans()
+        db.getTracksDao().clearUnrecordedCounters(LOCAL_SOURCE_NAMES)
     }
 
     suspend fun mergeWith(tracking: ContentTracking) {
