@@ -197,6 +197,11 @@ class DesktopSession private constructor(
             org.skepsun.kototoro.core.ui.chapters.resolvePreferredChapterBranch(content.chapters.orEmpty(),
                 SourceChapter::branch, SourceChapter::id, null, desktopChapterBranchLocales())
         },
+        fetchChapters = { content ->
+            if (mihonRuntime.owns(content.source.name)) {
+                sources.getDetails(content, SourceDetailsFetchMode.CHAPTERS_REFRESH)
+            } else null
+        },
     )
 
     /** Suggestions with Android's worker rules, from the installed sources, stored in the shared table. */

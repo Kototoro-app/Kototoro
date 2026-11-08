@@ -41,6 +41,13 @@ class IosLibrary {
     internal val database: MangaDatabase
     private val sourceRefs = AtomicReference<Map<String, SourceRef>>(emptyMap())
     internal val records by lazy { SourceLibrary(database) { sourceRefs.load()[it] } }
+    private val trackerSources = AtomicReference<IosSources?>(null)
+    private val tracker by lazy {
+        SourceTracker(database, records,
+            { requireNotNull(trackerSources.load()).refreshDetails(IosSourceContent(it)).value },
+            { it.chapters?.firstOrNull()?.branch },
+            fetchChapters = { requireNotNull(trackerSources.load()).refreshChaptersIfSupported(it) })
+    }
     val tracking by lazy { IosTracking(this) }
     /** Novel text replacement rules in the shared `replace_rules` table. */
     /** WebDAV backups (Android's uploader format), over the shared `WebDavLibrarySync`. */
@@ -444,16 +451,20 @@ class IosLibrary {
     }
 
     @Throws(Exception::class)
-    suspend fun checkUpdates(sources: IosSources): IosUpdateReport {
-        val tracker = SourceTracker(database, records,
-            { sources.refreshDetails(IosSourceContent(it)).value }, { it.chapters?.firstOrNull()?.branch })
-        val result = tracker.checkAll()
-        return IosUpdateReport(result.checked, result.withUpdates, result.failed, result.newChapters)
+    suspend fun checkUpdates(
+        sources: IosSources,
+        respectSchedule: Boolean = false,
+        skipCompleted: Boolean = false,
+    ): IosUpdateReport {
+        trackerSources.store(sources)
+        val result = tracker.checkAll(respectSchedule = respectSchedule, skipCompleted = skipCompleted)
+        return IosUpdateReport(result.checked, result.withUpdates, result.failed, result.newChapters, result.skipped)
     }
 
+    fun setMarkDuplicateChaptersRead(enabled: Boolean) { records.markDuplicateChaptersRead = enabled }
+
     @Throws(Exception::class)
-    suspend fun markUpdatesSeen(content: IosSourceContent) = SourceTracker(database, records,
-        { it }, { it.chapters?.firstOrNull()?.branch }).markSeen(content.value.id)
+    suspend fun markUpdatesSeen(content: IosSourceContent) = tracker.markSeen(content.value.id)
 
     private val backups by lazy { IosBackupService(this) }
 

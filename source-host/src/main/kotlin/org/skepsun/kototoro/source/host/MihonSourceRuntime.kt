@@ -81,6 +81,7 @@ class MihonSourceRuntime @JvmOverloads constructor(
             isPreferencesSupported = preferenceContext != null && (MihonNativePreferences.supports(lease) || isHttp(lease)),
             isCoverFetchingSupported = imageStore != null && isHttp(lease),
             isChapterContentSupported = isNovel(lease),
+            isChapterRefreshSupported = true,
             homepage = homepage(lease),
         )
     }
@@ -163,8 +164,9 @@ class MihonSourceRuntime @JvmOverloads constructor(
         execute(content.source.name) { lease, session ->
             val adapter = MihonModelAdapter(lease)
             val original = session.mangas[content.url]?.let(::snapshot) ?: adapter.manga(content)
+            val chaptersOnly = fetchMode == SourceDetailsFetchMode.CHAPTERS_REFRESH
             val update = requireNotNull(invoke(
-                lease, session, "getMangaUpdate", original, content.chapters.orEmpty().map(adapter::chapter), true, true,
+                lease, session, "getMangaUpdate", original, content.chapters.orEmpty().map(adapter::chapter), !chaptersOnly, true,
             ))
             val details = requireNotNull(MihonReflection.call(update, "getManga"))
             val parentUrl = MihonReflection.call(original, "getUrl") as String
@@ -181,9 +183,10 @@ class MihonSourceRuntime @JvmOverloads constructor(
                 }
             // Source order (oldest first), as Mihon lists them: extensions' numbers can be wrong (AllNovelFull reads
             // the last number of a title, so "Wedding Night 1" is 1), and the reading order follows the list.
+            if (chaptersOnly) return@execute content.copy(chapters = chapters)
             adapter.detailFallbacks(details, original)
             session.mangas[parentUrl] = snapshot(details)
-            // Both modes fetch fresh content. Snapshots retain opaque extension fields, not cached details responses.
+            // Snapshots retain opaque extension fields, not cached details responses.
             adapter.content(details, chapters).copy(id = content.id)
         }
 

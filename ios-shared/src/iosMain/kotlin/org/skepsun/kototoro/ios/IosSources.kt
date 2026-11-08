@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.ios
 
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -877,6 +878,18 @@ class IosSources(
     @Throws(Exception::class)
     suspend fun refreshDetails(content: IosSourceContent): IosSourceContent =
         IosSourceContent(runtime.getDetails(content.value, SourceDetailsFetchMode.FORCE_REFRESH))
+
+    /** Older source hosts do not advertise this capability and continue to receive full-detail requests. */
+    internal suspend fun refreshChaptersIfSupported(content: SourceContent): SourceContent? {
+        val supported = try {
+            descriptor(content.source.name).isChapterRefreshSupported
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            false
+        }
+        return if (supported) runtime.getDetails(content, SourceDetailsFetchMode.CHAPTERS_REFRESH) else null
+    }
 
     @Throws(Exception::class)
     suspend fun pages(chapter: IosSourceChapter): List<IosSourcePage> =

@@ -47,7 +47,9 @@ class MihonSourceRuntimeTest {
     fun `JSON executor exposes canonical sources query and stateless paging`() = runHost { _, client ->
         val source = client.getSources().single()
         assertEquals("MIHON_9007199254740993", source.name)
-        assertEquals(SourcePagingMode.PAGE_INDEX, client.describe(source.name).pagingMode)
+        val descriptor = client.describe(source.name)
+        assertEquals(SourcePagingMode.PAGE_INDEX, descriptor.pagingMode)
+        assertTrue(descriptor.isChapterRefreshSupported)
         val list = client.getList(source.name, 0, null, null).single()
         assertEquals("popular 1", list.title)
         assertEquals(MihonModelRules.contentId(list.url, source.name, list.title), list.id)
@@ -80,6 +82,14 @@ class MihonSourceRuntimeTest {
         assertNull(chapters[0].branch)
         assertEquals(MihonModelRules.chapterId(chapters[0].url, SOURCE, seed.url), chapters[0].id)
         assertEquals(details, client.getDetails(seed, SourceDetailsFetchMode.ALLOW_CACHE))
+    }
+
+    @Test
+    fun `chapter refresh preserves stored details and asks the source only for chapters`() = runHost { _, client ->
+        val seed = client.getList(SOURCE, 0, null, null).single().copy(description = "stored description")
+        val result = client.getDetails(seed, SourceDetailsFetchMode.CHAPTERS_REFRESH)
+        assertEquals(seed.copy(chapters = result.chapters), result)
+        assertEquals(listOf("old", "new"), result.chapters!!.map { it.title })
     }
 
     @Test

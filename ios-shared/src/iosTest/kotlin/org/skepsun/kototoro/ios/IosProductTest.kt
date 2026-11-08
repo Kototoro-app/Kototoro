@@ -96,6 +96,8 @@ class IosProductTest {
             val runtime = IosSources(object : IosSourceTransport {
                 override fun exchange(requestJson: String): String {
                     val request = SourceProtocolJson.decodeFromString<SourceRequest>(requestJson)
+                    if (request.call is SourceCall.Describe) return SourceProtocolJson.encodeToString(
+                        SourceResponse(1, request.requestId, error = SourceError(SourceErrorCode.UNSUPPORTED_OPERATION, "old host")))
                     assertTrue(request.call is SourceCall.Details)
                     assertEquals(SourceDetailsFetchMode.FORCE_REFRESH, (request.call as SourceCall.Details).fetchMode)
                     return SourceProtocolJson.encodeToString(SourceResponse(1, request.requestId, SourceResult.Details(fresh)))
@@ -107,8 +109,9 @@ class IosProductTest {
                 library.setFavourite(item, true)
                 library.recordPosition(item, IosSourceChapter(chapter), 0, 4, 0f)
                 assertEquals(0, library.checkUpdates(runtime).newChapters)
-                fresh = content.copy(chapters = listOf(chapter, otherBranch, chapter.copy(id = 333, number = 2f, url = "/chapter/333"),
-                    otherBranch.copy(id = 444, number = 2f, url = "/chapter/444")))
+                fresh = content.copy(chapters = listOf(chapter, otherBranch,
+                    chapter.copy(id = 333, number = 2f, url = "/chapter/333", uploadDate = 0),
+                    otherBranch.copy(id = 444, number = 2f, url = "/chapter/444", uploadDate = 0)))
                 assertEquals(1, library.checkUpdates(runtime).newChapters)
                 assertEquals(1, library.updates().single().newChapters)
                 library.markUpdatesSeen(item)
@@ -116,6 +119,98 @@ class IosProductTest {
                 val updated = IosSourceContent(fresh)
                 library.recordPosition(updated, updated.chapters.single { it.id == "333" }, 3, 4, 0f)
                 assertTrue(library.updates().isEmpty())
+            } finally { runtime.close(); library.close() }
+        }
+    }
+
+    @Test
+    fun backgroundChecksRespectScheduleButManualChecksIgnoreIt() = runBlocking {
+        withDatabase { path ->
+            val library = IosLibrary(path)
+            var calls = 0
+            val runtime = IosSources(object : IosSourceTransport {
+                override fun exchange(requestJson: String): String {
+                    val request = SourceProtocolJson.decodeFromString<SourceRequest>(requestJson)
+                    if (request.call is SourceCall.Describe) return SourceProtocolJson.encodeToString(
+                        SourceResponse(1, request.requestId, error = SourceError(SourceErrorCode.UNSUPPORTED_OPERATION, "old host")))
+                    calls++
+                    return SourceProtocolJson.encodeToString(SourceResponse(1, request.requestId, SourceResult.Details(content)))
+                }
+                override fun close() {}
+            })
+            try {
+                library.updateSources(listOf(IosSource(source.name, "漫画源", source.locale, source.contentType, "extension")))
+                library.setFavourite(IosSourceContent(content), true)
+                library.checkUpdates(runtime)
+                library.database.getTrackScheduleDao().upsert(org.skepsun.kototoro.tracker.data.TrackScheduleEntity(
+                    content.id, 7, Long.MAX_VALUE, 0))
+                assertEquals(0, library.checkUpdates(runtime, respectSchedule = true).checked)
+                assertEquals(1, calls)
+                assertEquals(1, library.checkUpdates(runtime).checked)
+                assertEquals(2, calls)
+            } finally { runtime.close(); library.close() }
+        }
+    }
+
+    @Test
+    fun sourceCooldownPersistsAcrossIosChecks() = runBlocking {
+        withDatabase { path ->
+            val library = IosLibrary(path)
+            var calls = 0
+            val runtime = IosSources(object : IosSourceTransport {
+                override fun exchange(requestJson: String): String {
+                    val request = SourceProtocolJson.decodeFromString<SourceRequest>(requestJson)
+                    calls++
+                    return SourceProtocolJson.encodeToString(SourceResponse(1, request.requestId, error = SourceError(
+                        SourceErrorCode.RATE_LIMITED, "rate limited", retryAfterMillis = 120_000L)))
+                }
+                override fun close() {}
+            })
+            try {
+                library.updateSources(listOf(IosSource(source.name, "漫画源", source.locale, source.contentType, "extension")))
+                library.setFavourite(IosSourceContent(content), true)
+                assertEquals(1, library.checkUpdates(runtime).failed)
+                assertEquals(1, library.checkUpdates(runtime).skipped)
+                assertEquals(1, calls)
+            } finally { runtime.close(); library.close() }
+        }
+    }
+
+    @Test
+    fun supportedSourcesRefreshOnlyChaptersUntilAnUpdateIsFound() = runBlocking {
+        withDatabase { path ->
+            val library = IosLibrary(path)
+            var remote = content.copy(chapters = listOf(chapter.copy(uploadDate = 0)))
+            val modes = mutableListOf<SourceDetailsFetchMode>()
+            val runtime = IosSources(object : IosSourceTransport {
+                override fun exchange(requestJson: String): String {
+                    val request = SourceProtocolJson.decodeFromString<SourceRequest>(requestJson)
+                    val result = when (val call = request.call) {
+                        is SourceCall.Describe -> SourceResult.Descriptor(SourceDescriptor(source, emptySet(), "",
+                            SourceFilterCapabilities(false, false, false, false, false, false, false, false),
+                            SourcePagingMode.OFFSET, isChapterRefreshSupported = true))
+                        is SourceCall.Details -> {
+                            modes += call.fetchMode
+                            SourceResult.Details(if (call.fetchMode == SourceDetailsFetchMode.CHAPTERS_REFRESH)
+                                call.content.copy(chapters = remote.chapters) else remote)
+                        }
+                        else -> error("Unexpected call: $call")
+                    }
+                    return SourceProtocolJson.encodeToString(SourceResponse(1, request.requestId, result))
+                }
+                override fun close() {}
+            })
+            try {
+                library.updateSources(listOf(IosSource(source.name, "漫画源", source.locale, source.contentType, "extension")))
+                library.setFavourite(IosSourceContent(remote), true)
+                library.checkUpdates(runtime)
+                library.checkUpdates(runtime)
+                remote = remote.copy(state = "FINISHED", chapters = remote.chapters!! +
+                    chapter.copy(id = 333, number = 2f, url = "/chapter/333", uploadDate = 0))
+                assertEquals(1, library.checkUpdates(runtime).newChapters)
+                assertEquals(listOf(SourceDetailsFetchMode.FORCE_REFRESH, SourceDetailsFetchMode.CHAPTERS_REFRESH,
+                    SourceDetailsFetchMode.CHAPTERS_REFRESH, SourceDetailsFetchMode.FORCE_REFRESH), modes)
+                assertEquals("FINISHED", library.storedDetails(IosSourceContent(remote))?.value?.state)
             } finally { runtime.close(); library.close() }
         }
     }

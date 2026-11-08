@@ -22,6 +22,7 @@ import org.skepsun.kototoro.tracker.domain.ChapterSnapshotResult
 import org.skepsun.kototoro.tracker.domain.IncompleteChapterListException
 import org.skepsun.kototoro.tracker.domain.refreshPendingUpdateCount
 import org.skepsun.kototoro.tracker.domain.isTrackDue
+import org.skepsun.kototoro.tracker.domain.isEmptyTrack
 import org.skepsun.kototoro.tracker.domain.updateTrackSchedule
 
 /** [skipped] titles were not checked: their source asked for a browser challenge earlier in the run. */
@@ -44,6 +45,8 @@ class SourceTracker(
     /** Android's preferred branch fallback for a work whose reading position is unknown. */
     private val preferredBranch: (SourceContent) -> String?,
     private val now: () -> Long = { kotlin.time.Clock.System.now().toEpochMilliseconds() },
+    /** Returns null for sources that cannot refresh chapters without also fetching details. */
+    private val fetchChapters: (suspend (SourceContent) -> SourceContent?)? = null,
 ) {
     /**
      * Sources a run gave up on because of rate limits, and until when later runs leave them alone. Android keeps this
@@ -81,6 +84,7 @@ class SourceTracker(
      */
     suspend fun checkAll(
         respectSchedule: Boolean = false,
+        skipCompleted: Boolean = false,
         onProgress: suspend (done: Int, total: Int) -> Unit = { _, _ -> },
     ): SourceTrackReport {
         val tracked = syncAnchors()
@@ -100,8 +104,10 @@ class SourceTracker(
         var done = 0
         // Android's scheduling: sources in turn, a few checks per source, and a challenged source skipped for the
         // rest of the run instead of failing every remaining title of it.
+        val items = ids.map { id -> id to library.find(id) }
+            .filterNot { (_, stored) -> skipCompleted && stored?.state == "FINISHED" }
         checkBySource(
-            items = ids.map { id -> id to library.find(id) },
+            items = items,
             sourceOf = { (_, stored) -> stored?.source?.name.orEmpty() },
             now = now,
             answerOf = { outcome: CheckOutcome ->
@@ -122,9 +128,9 @@ class SourceTracker(
                     else -> if (count > 0) { withUpdates++; newChapters += count }
                 }
             }
-            onProgress(++done, ids.size)
+            onProgress(++done, items.size)
         }
-        return SourceTrackReport(ids.size, withUpdates, failed, newChapters, skipped)
+        return SourceTrackReport(items.size, withUpdates, failed, newChapters, skipped)
     }
 
     /** Checks one tracked work; returns the new chapter count, or null when the check failed. */
@@ -138,7 +144,9 @@ class SourceTracker(
         val track = database.getTracksDao().find(mangaId) ?: TrackEntity.create(mangaId)
         // Android turns any failure of a check into a failed result instead of aborting the whole run.
         return try {
-            CheckOutcome(checkFetched(mangaId, track, fetchDetails(stored).copy(id = mangaId)))
+            val chapters = if (!isEmptyTrack(track.lastChapterId)) fetchChapters?.invoke(stored) else null
+            val details = (chapters ?: fetchDetails(stored)).copy(id = mangaId)
+            CheckOutcome(checkFetched(mangaId, track, details, refreshDetails = chapters != null))
         } catch (e: CancellationException) {
             throw e
         } catch (e: Throwable) {
@@ -159,7 +167,12 @@ class SourceTracker(
                 (e is SourceRemoteException && e.error.code == SourceErrorCode.CHALLENGE_REQUIRED)
         }
 
-    private suspend fun checkFetched(mangaId: Long, track: TrackEntity, details: SourceContent): Int {
+    private suspend fun checkFetched(
+        mangaId: Long,
+        track: TrackEntity,
+        details: SourceContent,
+        refreshDetails: Boolean,
+    ): Int {
         val chapters = details.chapters.orEmpty()
         val branch = branchOf(details, track.lastChapterId)
         val time = now()
@@ -167,6 +180,11 @@ class SourceTracker(
         val stored = library.save(details, fallbackBranch = branch, now = time)
         if (stored is ChapterSnapshotResult.Incomplete) throw IncompleteChapterListException()
         val reported = (stored as? ChapterSnapshotResult.Updated)?.reported.orEmpty()
+        if (refreshDetails && reported.isNotEmpty()) {
+            val refreshed = fetchDetails(details).copy(id = mangaId)
+            val result = library.save(refreshed, fallbackBranch = branch, now = time)
+            if (result is ChapterSnapshotResult.Incomplete) throw IncompleteChapterListException()
+        }
         val branchChapters = chapters.filter { it.branch == branch }
         return database.useWriterConnection { connection ->
             connection.immediateTransaction {

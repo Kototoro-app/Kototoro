@@ -53,7 +53,7 @@ struct SettingsView: View {
             Section {
                 NavigationLink { PrivacySettingsPage() } label: { Label("隐私与安全", systemImage: "hand.raised") }
                     .accessibilityIdentifier("settings.privacy")
-                NavigationLink { GeneralSettingsPage() } label: { Label("通用", systemImage: "gearshape") }
+                NavigationLink { GeneralSettingsPage(library: library) } label: { Label("通用", systemImage: "gearshape") }
                     .accessibilityIdentifier("settings.general")
                 NavigationLink { AboutSettingsPage(library: library) } label: {
                     Label("关于", systemImage: "info.circle")
@@ -118,10 +118,11 @@ struct PrivacySettingsPage: View {
 
 /// Background update checks and the GitHub mirror.
 struct GeneralSettingsPage: View {
+    @ObservedObject var library: LibraryModel
     var body: some View {
         Form {
             Section {
-                BackgroundUpdateSettingsRows()
+                BackgroundUpdateSettingsRows(library: library)
             } header: {
                 Text("作品更新")
             } footer: {

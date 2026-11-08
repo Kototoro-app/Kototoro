@@ -32,6 +32,72 @@ class DesktopTrackerTest {
     )
 
     @Test
+    fun `chapter only checks refresh full details only when updates are found`() = runBlocking<Unit> {
+        DesktopRuntime.open(directory).use { runtime ->
+            val library = DesktopLibrary(runtime.database) { source }
+            var remote = work(listOf(chapter(1)))
+            var fullCalls = 0
+            var chapterCalls = 0
+            val tracker = DesktopTracker(runtime.database, library,
+                fetchDetails = { fullCalls++; remote }, preferredBranch = { null }, now = { 86_400_000L },
+                fetchChapters = { chapterCalls++; it.copy(chapters = remote.chapters) })
+            library.addFavourite(remote)
+
+            tracker.checkAll()
+            tracker.checkAll()
+            assertEquals(1, fullCalls)
+            assertEquals(1, chapterCalls)
+            remote = work(listOf(chapter(1), chapter(2))).copy(state = "FINISHED")
+            assertEquals(1, tracker.checkAll().newChapters)
+            assertEquals(2, fullCalls)
+            assertEquals(2, chapterCalls)
+            assertEquals("FINISHED", library.find(remote.id)?.state)
+            assertEquals(1, runtime.database.getTracksDao().find(remote.id)?.newChapters)
+        }
+    }
+
+    @Test
+    fun `skip completed applies to manual and scheduled checks without removing their tracks`() = runBlocking<Unit> {
+        DesktopRuntime.open(directory).use { runtime ->
+            val library = DesktopLibrary(runtime.database) { source }
+            val finished = work(listOf(chapter(1))).copy(state = "FINISHED")
+            var calls = 0
+            val tracker = DesktopTracker(runtime.database, library, { calls++; it }, { null }, { 86_400_000L })
+            library.addFavourite(finished)
+
+            assertEquals(0, tracker.checkAll(skipCompleted = true).checked)
+            assertEquals(0, tracker.checkAll(respectSchedule = true, skipCompleted = true).checked)
+            assertEquals(0, calls)
+            assertNotNull(runtime.database.getTracksDao().find(finished.id))
+            assertEquals(1, tracker.checkAll().checked)
+            assertEquals(1, calls)
+        }
+    }
+
+    @Test
+    fun `duplicate policy also applies when details saves the chapter list`() = runBlocking<Unit> {
+        DesktopRuntime.open(directory).use { runtime ->
+            val library = DesktopLibrary(runtime.database) { source }
+            var remote = work((1L..3L).map { chapter(it) })
+            val tracker = DesktopTracker(runtime.database, library, { remote }, { null }, { 86_400_000L })
+            library.addFavourite(remote)
+            tracker.checkAll()
+            library.recordPage(remote, chapter(3), 1, 2)
+            library.markDuplicateChaptersRead = true
+            val duplicate = chapter(31).copy(number = 3f, title = "第 3 话", uploadDate = 3_000L)
+            remote = remote.copy(chapters = remote.chapters!! + duplicate + chapter(4))
+
+            library.save(remote, now = 86_400_000L)
+
+            assertEquals(1, runtime.database.getTracksDao().find(remote.id)?.newChapters)
+            val updates = runtime.database.getTrackLogsDao().findByOwner(remote.id)
+                .flatMap { decodeUpdateChapters(it.chapterMetadata) }
+            assertTrue(updates.single { it.chapterId == duplicate.id }.readAt > 0)
+            assertEquals(0, updates.single { it.chapterId == 4L }.readAt)
+        }
+    }
+
+    @Test
     fun `cross day pending updates accumulate by identity and stale sync cannot undo reading`() = runBlocking<Unit> {
         DesktopRuntime.open(directory).use { runtime ->
             val library = DesktopLibrary(runtime.database) { source }

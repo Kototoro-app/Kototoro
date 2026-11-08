@@ -155,3 +155,12 @@ Kotatsu-Redo（`CheckNewChaptersUseCase`、`GetTracksUseCase`、`StaleTrackPolic
   `SourceRateLimitException.find` 识别异常链中的限流（含 Mihon `HttpException` 与 Jsoup 的 429 消息）；
   Windows `SourceTracker` 据此退避，跨轮冷却保存在实例内存（桌面应用常驻）。iOS 错误文案补上。持续失败列表见 3.7。
   Windows 外壳（`desktop-app`）在本机缺少兼容 API 目录，未编译，只改了 `runTrackerOnIo` 的一个参数与调用。
+
+### 后续跨平台对齐
+
+- 桌面与 iOS 的 `SourceTracker` 支持跳过已完结作品；`SourceLibrary` 的所有章节快照写入都应用同号已读设置。
+  Android 与桌面的两项开关复用 `SettingsSwitchPreference`，各宿主仍负责自己的设置持久化。
+- Mihon/Tsundoku 宿主在来源描述中声明是否支持单独刷新章节。桌面与 iOS 在已有追踪锚点时先取章节，发现更新后
+  再刷新详情；旧版宿主没有该能力标志时回退完整详情。首次检查仍取完整详情。
+- iOS 后台检查使用共享到期规则，手动检查不受作品到期时间限制；同一 `IosLibrary` 生命周期内保留来源冷却。
+  iOS 系统仍决定后台运行时机，冷启动后台任务若没有来源运行时仍无法检查；冷却也不会跨应用重启持久化。

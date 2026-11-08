@@ -474,6 +474,7 @@ class DesktopController(
             ),
             ) }
         }
+        session.library.markDuplicateChaptersRead = state.value.trackerSettings.markDuplicatesRead
         // The proxy the SDK client already uses is what the page shows; changing it writes the same store.
         mutableState.update { it.copy(proxySettings = session.proxy.settings.value) }
         mutableState.update { it.copy(githubMirror = session.githubMirror.settings.value) }
@@ -1535,6 +1536,7 @@ class DesktopController(
 
     internal fun trackerSettings(settings: org.skepsun.kototoro.desktop.runtime.DesktopTrackerSettings) {
         mutableState.update { it.copy(trackerSettings = settings) }
+        session.library.markDuplicateChaptersRead = settings.markDuplicatesRead
         if (!backgroundPreferences.edit(SourcePreferenceEdit(changes = settings.toPreferences()))) {
             mutableState.update { it.copy(error = desktopText("settings.trackerSaveFailed")) }
         }
@@ -1579,7 +1581,8 @@ class DesktopController(
     private suspend fun runTrackerOnIo(
         respectSchedule: Boolean = false,
         onProgress: suspend (Int, Int) -> Unit = { _, _ -> },
-    ) = session.tracker.checkAll(respectSchedule, onProgress).also { recordRun(LAST_TRACKER_RUN) }
+    ) = session.tracker.checkAll(respectSchedule, state.value.trackerSettings.skipCompleted, onProgress)
+        .also { recordRun(LAST_TRACKER_RUN) }
 
     private fun recordRun(key: String) {
         backgroundPreferences.edit(SourcePreferenceEdit(changes = mapOf(

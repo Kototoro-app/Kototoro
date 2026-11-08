@@ -161,7 +161,7 @@ data class SourceFilterCapabilities(
 enum class SourcePagingMode { OFFSET, PAGE_INDEX }
 
 @Serializable
-enum class SourceDetailsFetchMode { ALLOW_CACHE, FORCE_REFRESH }
+enum class SourceDetailsFetchMode { ALLOW_CACHE, FORCE_REFRESH, CHAPTERS_REFRESH }
 
 @Serializable
 data class SourceDescriptor(
@@ -178,4 +178,6 @@ data class SourceDescriptor(
     val isChapterContentSupported: Boolean = false,
     /** The site's base address for presentation (source icon); null when the runtime has none. */
     val homepage: String? = null,
+    /** CHAPTERS_REFRESH skips the details request; absent in older runtimes. */
+    val isChapterRefreshSupported: Boolean = false,
 )

@@ -39,6 +39,14 @@ class SourceProtocolTest {
         source, linkedSetOf("POPULARITY", "RELEVANCE"), "POPULARITY",
         SourceFilterCapabilities(true, true, true, false, true, true, true, true), SourcePagingMode.PAGE_INDEX,
     )
+
+    @Test
+    fun `older descriptors default to full details for update checks`() {
+        val encoded = SourceProtocolJson.encodeToString(SourceDescriptor.serializer(), descriptor)
+        val oldDescriptor = encoded.replace(",\"isChapterRefreshSupported\":false", "")
+        assertTrue(oldDescriptor != encoded)
+        assertFalse(SourceProtocolJson.decodeFromString(SourceDescriptor.serializer(), oldDescriptor).isChapterRefreshSupported)
+    }
     private val options = SourceFilterOptions(
         content.tags, listOf(SourceTagGroup("分类", content.tags, true)), setOf("ONGOING"),
         setOf("SAFE"), setOf("MANGA"), setOf("SEINEN"), setOf("zh-Hant-TW"),

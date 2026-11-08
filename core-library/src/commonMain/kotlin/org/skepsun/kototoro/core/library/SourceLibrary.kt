@@ -49,6 +49,9 @@ class SourceLibrary(
      */
     var statsRecording: Boolean = true
 
+    /** Apply the same duplicate-chapter policy to every chapter-list write, including details and reader saves. */
+    var markDuplicateChaptersRead: Boolean = false
+
     suspend fun favourites(withChapters: Boolean = true): List<SourceContent> = database.getFavouritesDao()
         .findAllWithActiveCategory(0, Int.MAX_VALUE).distinctBy { it.manga.id }
         .map { content(it.manga, it.tags, withChapters) }
@@ -723,6 +726,7 @@ class SourceLibrary(
             },
             now = now,
             fallbackBranch = fallbackBranch,
+            markDuplicatesRead = markDuplicateChaptersRead,
         )
     }
 
