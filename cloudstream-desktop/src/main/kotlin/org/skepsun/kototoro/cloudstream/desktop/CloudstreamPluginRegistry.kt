@@ -130,13 +130,13 @@ class CloudstreamPluginRegistry(
         incompatibility?.let { logger.warning("Cloudstream plugin $id links against missing host API: ${it.reason}") }
         unload(id)
         Files.createDirectories(cache)
-        val converted = cache.resolve("$sha256-v${DexJarConverter.VERSION}-x${PluginExitRewriter.VERSION}.jar")
+        val converted = cache.resolve("$sha256-v${DexJarConverter.VERSION}-x${PluginBytecodeRewriter.VERSION}.jar")
         if (!Files.isRegularFile(converted)) {
-            // Converted, then with the plugin's process exits made to throw (see PluginExits): written once.
+            // Converted, then given the host's stand-ins for what Windows lacks (PluginBytecodeRewriter): written once.
             val classes = cache.resolve("$sha256.converting.jar")
             try {
                 DexJarConverter.convert(path, classes)
-                PluginExitRewriter.rewrite(classes, converted)
+                PluginBytecodeRewriter.rewrite(classes, converted)
             } catch (error: OutOfMemoryError) {
                 // dex2jar can need far more memory than a plugin's size for some methods; what it held is garbage once
                 // it has thrown, so this plugin fails and the app goes on.

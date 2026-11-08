@@ -28,7 +28,9 @@ internal class DesktopCloudstreamActivity private constructor() : MainActivity()
 
 	override fun getTheme(): Resources.Theme = baseContext.theme
 
-	override fun getSystemService(name: String): Any? = baseContext.getSystemService(name)
+	// Plugins size their work by the device's memory (StreamPlay); the other services stay the compatibility Context's.
+	override fun getSystemService(name: String): Any? =
+		if (name == Context.ACTIVITY_SERVICE) DesktopActivityManager.service() else baseContext.getSystemService(name)
 
 	override fun startActivity(intent: Intent?) = baseContext.startActivity(intent)
 

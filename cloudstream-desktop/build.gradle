@@ -132,8 +132,9 @@ dependencies {
 	implementation project(':parser-host')
 	implementation project(':parser-api')
 	implementation project(':dex-convert')
-	// Rewrites converted plugins' process exits (PluginExits); the version dex2jar already brings.
+	// Rewrites converted plugins (PluginBytecodeRewriter); the version dex2jar already brings.
 	implementation 'org.ow2.asm:asm:9.10.1'
+	implementation 'org.ow2.asm:asm-commons:9.10.1'
 	api cloudstreamRuntimeJar
 	implementation libs.okhttp
 	implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:${libs.versions.coroutines.get()}"
