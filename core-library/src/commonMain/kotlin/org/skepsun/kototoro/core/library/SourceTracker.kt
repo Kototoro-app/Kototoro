@@ -17,6 +17,7 @@ import org.skepsun.kototoro.tracker.domain.afterSuccessfulCheck
 import org.skepsun.kototoro.tracker.domain.checkBySource
 import org.skepsun.kototoro.tracker.domain.compareTrackedChapters
 import org.skepsun.kototoro.tracker.domain.recordUpdateBatch
+import org.skepsun.kototoro.tracker.domain.reportedNewChapters
 import org.skepsun.kototoro.tracker.domain.repairLegacyUpdateCounters
 import org.skepsun.kototoro.tracker.domain.trackedLastChapterDate
 
@@ -127,7 +128,7 @@ class SourceTracker(
         val chapters = details.chapters.orEmpty()
         val branch = branchOf(details, track.lastChapterId)
         val branchChapters = chapters.filter { it.branch == branch }
-        val comparison = compareTrackedChapters(
+        val compared = compareTrackedChapters(
             chapters = branchChapters,
             id = SourceChapter::id,
             lastChapterId = track.lastChapterId,
@@ -135,6 +136,14 @@ class SourceTracker(
             lastChapterDate = track.lastChapterDate,
         )
         val time = now()
+        val comparison = compared.copy(newChapters = reportedNewChapters(
+            newChapters = compared.newChapters,
+            branch = branchChapters,
+            id = SourceChapter::id,
+            uploadDate = SourceChapter::uploadDate,
+            readChapterId = database.getHistoryDao().find(mangaId)?.takeIf { it.deletedAt == 0L }?.chapterId ?: 0L,
+            now = time,
+        ))
         library.save(details)
         return database.useWriterConnection { connection ->
             connection.immediateTransaction {

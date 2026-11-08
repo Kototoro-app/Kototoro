@@ -48,6 +48,34 @@ private fun <C> chaptersUploadedAfter(chapters: List<C>, uploadDate: ((C) -> Lon
     return newer.takeIf { it.isNotEmpty() && it.size * 2 < chapters.size }
 }
 
+/** New chapters uploaded longer ago than this are not reported; see [reportedNewChapters]. */
+const val STALE_NEW_CHAPTER_DAYS = 90L
+
+/**
+ * The [newChapters] worth reporting, after Kotatsu-Redo: chapters at or before the reading position
+ * ([readChapterId] in [branch]) were read already, and chapters uploaded more than [STALE_NEW_CHAPTER_DAYS] before
+ * [now] are more likely back-filled by the source or the result of a wrong comparison than a release. Chapters
+ * without an upload date are kept. The filtered chapters still count as known.
+ */
+fun <C> reportedNewChapters(
+    newChapters: List<C>,
+    branch: List<C>,
+    id: (C) -> Long,
+    uploadDate: (C) -> Long,
+    readChapterId: Long,
+    now: Long,
+): List<C> {
+    if (newChapters.isEmpty()) return newChapters
+    val readIndex = if (readChapterId == 0L) -1 else branch.indexOfFirst { id(it) == readChapterId }
+    val positions = branch.withIndex().associate { (index, chapter) -> id(chapter) to index }
+    val staleBefore = now - STALE_NEW_CHAPTER_DAYS * 86_400_000L
+    return newChapters.filter { chapter ->
+        val position = positions[id(chapter)] ?: Int.MAX_VALUE
+        val date = uploadDate(chapter)
+        position > readIndex && (date <= 0L || date >= staleBefore)
+    }
+}
+
 /** Where a track's anchor and pending counter stand after reading, see [trackAfterReading]. */
 data class ReadingTrackState(val anchorIndex: Int, val pending: Int)
 

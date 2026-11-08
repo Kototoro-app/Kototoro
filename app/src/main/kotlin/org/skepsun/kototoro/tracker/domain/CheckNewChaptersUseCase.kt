@@ -119,6 +119,7 @@ class CheckNewChaptersUseCase @Inject constructor(
         // The persisted manga row owns its own tracking state, so the track's anchor
         // manga is the identity. There is no Work/entity to resolve.
         val ownerId = track.anchorMangaId
+        val historyChapterId = historyRepository.getOne(track.manga)?.chapterId ?: 0L
         suspend fun check(fetched: Content): MangaUpdates.Success {
             val details = fetched.copy(id = ownerId)
             return compare(
@@ -126,6 +127,7 @@ class CheckNewChaptersUseCase @Inject constructor(
                 entityId = ownerId,
                 manga = details,
                 branch = getBranch(details, track.lastChapterId),
+                historyChapterId = historyChapterId,
             )
         }
         val repo = mangaRepositoryFactory.create(track.manga.source)
@@ -184,6 +186,7 @@ class CheckNewChaptersUseCase @Inject constructor(
         entityId: Long,
         manga: Content,
         branch: String?,
+        historyChapterId: Long,
     ): MangaUpdates.Success {
         // The comparison rules are shared with the Windows tracker (core-domain TrackRules).
         val chapters = if (track.isEmpty()) emptyList() else requireNotNull(manga.getChapters(branch))
@@ -202,7 +205,14 @@ class CheckNewChaptersUseCase @Inject constructor(
             entityId = entityId,
             anchorMangaId = track.anchorMangaId,
             branch = branch,
-            newChapters = comparison.newChapters,
+            newChapters = reportedNewChapters(
+                newChapters = comparison.newChapters,
+                branch = chapters,
+                id = { it.id },
+                uploadDate = { it.uploadDate },
+                readChapterId = historyChapterId,
+                now = System.currentTimeMillis(),
+            ),
             isValid = comparison.isValid,
         )
     }

@@ -242,7 +242,8 @@ class DesktopTrackerTest {
         DesktopRuntime.open(directory).use { runtime ->
             val library = DesktopLibrary(runtime.database) { source }
             var remote = work(listOf(chapter(1, "A"), chapter(2, "B")))
-            val tracker = DesktopTracker(runtime.database, library, { remote }, preferredBranch = { "B" })
+            val tracker = DesktopTracker(runtime.database, library, { remote }, preferredBranch = { "B" },
+                now = { 86_400_000L })
             library.addFavourite(remote)
             tracker.checkAll()
             assertEquals(2L, runtime.database.getTracksDao().find(10)?.lastChapterId, "no history: the preferred branch")

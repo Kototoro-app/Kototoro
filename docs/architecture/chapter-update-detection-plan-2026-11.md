@@ -66,8 +66,8 @@ Kotatsu-Redo（`CheckNewChaptersUseCase`、`GetTracksUseCase`、`StaleTrackPolic
 
 - core-domain `ChapterNumberRules` 移植 `ChapterRecognition`：去作品名、`ch.xx`、去 `vol/season/version`
   干扰、`extra/omake/special` 与 `x.a` 小数后缀；识别不出返回 null。
-- 来源给的号仅在“不是按顺序编出来的”时可信：Mihon 仓库在扩展没给号时按顺序编号，匹配时一律以章节名识别结果
-  为准，识别不出再用来源号且要求该号在列表内不重复。
+- 与 Mihon 一样，来源给的号（大于 0 且在列表内不重复）优先；但整列恰好是 1..n 顺序编号时视为 Mihon 仓库按位置
+  编出来的号，改用章节名识别结果。识别补充了中日文：去掉“第N卷/巻/冊/部/季”，优先取“第”后的数字。
 - 用途只有两个：重新上传匹配（3.1）、同号已读（3.3）。“哪些算新”由差集决定，不由号决定。
 
 ### 3.3 防误报过滤
@@ -130,7 +130,9 @@ Kotatsu-Redo（`CheckNewChaptersUseCase`、`GetTracksUseCase`、`StaleTrackPolic
   `CheckNewChaptersUseCase` 的阅读路径与 Windows `recomputeLegacyUpdateCounter` 都改用它；阅读与读完都不再改写
   检查时间，作品不会因为被读过而排到检查队列末尾。没有做 Kotatsu-Redo 式的一次性补报：已被吞掉的章节与
   “还没读到的老章节”在数据上分不开，按阅读位置补报可能一次冒出大量老章节。
-- [ ] 阶段 2
+- [x] 阶段 2：`ChapterNumberRules`（移植 `ChapterRecognition` 并补中日文）与 `reportedNewChapters`
+  （阅读位置之前与 90 天前的章节不报，仍算已知），Android `CheckNewChaptersUseCase` 与 Windows `SourceTracker`
+  在锚点比较之后都过一遍。同号已读自动标已读需要写入点配合，并入阶段 3。
 - [ ] 阶段 3
 - [ ] 阶段 4
 - [ ] 阶段 5

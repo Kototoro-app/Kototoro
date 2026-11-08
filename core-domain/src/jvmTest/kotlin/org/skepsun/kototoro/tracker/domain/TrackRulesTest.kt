@@ -88,6 +88,23 @@ class TrackRulesTest {
 	}
 
 	@Test
+	fun `chapters already read or uploaded long ago are not reported`() {
+		data class Chapter(val id: Long, val uploadedAt: Long)
+		val day = 86_400_000L
+		val now = 200 * day
+		val branch = listOf(Chapter(1, 10 * day), Chapter(2, 50 * day), Chapter(3, 150 * day), Chapter(4, 0),
+			Chapter(5, 190 * day))
+		val new = branch.drop(1)
+
+		// Reading position at chapter 3: chapters 2 and 3 were read already.
+		assertEquals(listOf(4L, 5L), reportedNewChapters(new, branch, Chapter::id, Chapter::uploadedAt,
+			readChapterId = 3, now = now).map(Chapter::id))
+		// Without a position only the stale chapter 2 goes; chapter 4 has no date and stays.
+		assertEquals(listOf(3L, 4L, 5L), reportedNewChapters(new, branch, Chapter::id, Chapter::uploadedAt,
+			readChapterId = 0, now = now).map(Chapter::id))
+	}
+
+	@Test
 	fun `comparison follows Android's tracker cases`() {
 		assertEquals(TrackComparison(emptyList<Long>(), isValid = false), compareTrackedChapters(ids, { it }, 0L))
 		assertEquals(TrackComparison(emptyList<Long>(), isValid = true), compareTrackedChapters(ids, { it }, 4L))
