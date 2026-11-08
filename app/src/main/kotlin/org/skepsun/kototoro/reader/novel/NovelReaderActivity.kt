@@ -254,6 +254,10 @@ class NovelReaderActivity :
     @Inject
     lateinit var spaceSwitcherDelegate: SpaceSwitcherDelegate
 
+    @Inject
+    lateinit var scrollTimerFactory: org.skepsun.kototoro.reader.ui.ScrollTimer.Factory
+
+    private lateinit var scrollTimer: org.skepsun.kototoro.reader.ui.ScrollTimer
     private lateinit var manga: Content
 
     /** Chapters whose translation is stored for the current settings; drives the chapter panel badge. */
@@ -538,6 +542,34 @@ class NovelReaderActivity :
             isUiVisible = it.getBoolean(KEY_UI_VISIBLE, true)
         }
 
+        scrollTimer = scrollTimerFactory.create(resources, this, this)
+        val initialAutoScrollSpeed = settings.readerAutoscrollSpeed
+        val initialDelayMs = org.skepsun.kototoro.reader.core.ReaderAutoScroll.pageSwitchDelayMs(
+            initialAutoScrollSpeed,
+        )
+        composeReaderViewModel.updateAutoScroll {
+            copy(
+                speed = initialAutoScrollSpeed,
+                fabVisible = settings.isReaderAutoscrollFabVisible,
+                pauseOnUi = settings.isReaderAutoscrollPauseOnUi,
+                showPageDelay = readerSettings.readingMode == ReadingMode.PAGED,
+                pageDelaySeconds = (initialDelayMs / 1000L).coerceAtLeast(1L),
+            )
+        }
+        scrollTimer.isActive
+            .onEach { active -> composeReaderViewModel.updateAutoScroll { copy(active = active) } }
+            .launchIn(lifecycleScope)
+        scrollTimer.isManuallyPaused
+            .onEach { paused -> composeReaderViewModel.updateAutoScroll { copy(manuallyPaused = paused) } }
+            .launchIn(lifecycleScope)
+        kotlinx.coroutines.flow.combine(
+            settings.observeAsFlow(AppSettings.KEY_READER_SCREEN_ON) { isReaderKeepScreenOn },
+            scrollTimer.isActive,
+        ) { keep, timer -> keep || timer }
+            .distinctUntilChanged()
+            .onEach(::setKeepScreenOn)
+            .launchIn(lifecycleScope)
+
         val parcelable = intent.getParcelableExtraCompat<ParcelableContent>(AppRouter.KEY_MANGA)
         val mangaSeed = runBlocking {
             contentDataRepository.resolveIntent(ContentIntent(intent), withChapters = true)
@@ -768,6 +800,38 @@ class NovelReaderActivity :
             onOpenBookmark = ::openNovelBookmark,
             onDeleteBookmark = ::deleteNovelBookmark,
             onBookmark = ::onBookmarkClick,
+            onAutoScroll = { onScrollTimerClick(false) },
+            onAutoScrollLongClick = { onScrollTimerClick(true) },
+            autoScroll = org.skepsun.kototoro.reader.ui.compose.ReaderAutoScrollCallbacks(
+                onOpen = {
+                    setUiVisible(false)
+                    composeReaderViewModel.showAutoScroll()
+                },
+                onClose = composeReaderViewModel::dismissAutoScroll,
+                onActiveChanged = ::setAutoScrollActive,
+                onPausedChanged = {
+                    scrollTimer.setManuallyPaused(it)
+                    composeReaderViewModel.updateAutoScroll { copy(manuallyPaused = it) }
+                },
+                onSpeedChanged = {
+                    settings.readerAutoscrollSpeed = it
+                    val delayMs = org.skepsun.kototoro.reader.core.ReaderAutoScroll.pageSwitchDelayMs(it)
+                    composeReaderViewModel.updateAutoScroll {
+                        copy(
+                            speed = it,
+                            pageDelaySeconds = (delayMs / 1000L).coerceAtLeast(1L),
+                        )
+                    }
+                },
+                onFabChanged = {
+                    settings.isReaderAutoscrollFabVisible = it
+                    composeReaderViewModel.updateAutoScroll { copy(fabVisible = it) }
+                },
+                onPauseOnUiChanged = {
+                    settings.isReaderAutoscrollPauseOnUi = it
+                    composeReaderViewModel.updateAutoScroll { copy(pauseOnUi = it) }
+                },
+            ),
             onTts = ::onTtsClick,
             onClearTranslationCache = ::onClearTranslationCacheClick,
             onTtsPrevious = { ttsService?.seekPrev() },
@@ -835,6 +899,7 @@ class NovelReaderActivity :
                             onEditMarkingNote = ::editNovelMarkingNote,
                             onDeleteMarking = ::deleteNovelMarking,
                             onBookmark = ::onBookmarkClick,
+                            onAutoScroll = { onScrollTimerClick(false) },
                             onTts = ::onTtsClick,
                             onClearTranslationCache = ::onClearTranslationCacheClick,
                             onChapterSelected = ::onChapterSelected,
@@ -895,7 +960,8 @@ class NovelReaderActivity :
                                         readerState.markingsSheetVisible ||
                                         readerState.chaptersSheetVisible ||
                                         readerState.toolsSheetVisible ||
-                                        readerState.ttsControlsVisible
+                                        readerState.ttsControlsVisible ||
+                                        readerState.autoScroll.visible
                                 if (panelVisible) {
                                     composeReaderViewModel.dismissControlPanels()
                                     setUiVisible(false)
@@ -958,6 +1024,8 @@ class NovelReaderActivity :
                                     onShowReplaceRules = callbacks.onShowReplaceRules,
                                     onShowMarkings = callbacks.onShowMarkings,
                                     onBookmark = callbacks.onBookmark,
+                                    onAutoScroll = callbacks.onAutoScroll,
+                                    autoScrollActive = state.autoScroll.active,
                                     onTts = callbacks.onTts,
                                     onClearTranslationCache = callbacks.onClearTranslationCache,
                                     eInkMode = isEInkModeEnabled,
@@ -1168,6 +1236,19 @@ class NovelReaderActivity :
                                 .navigationBarsPadding()
                                 .padding(16.dp),
                         )
+                        if (state.autoScroll.active &&
+                            state.autoScroll.fabVisible &&
+                            !state.controlsVisible &&
+                            !state.autoScroll.visible
+                        ) {
+                            org.skepsun.kototoro.reader.ui.compose.ReaderAutoScrollFab(
+                                onClick = callbacks.autoScroll.onOpen,
+                                modifier = Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .navigationBarsPadding()
+                                    .padding(end = 16.dp, bottom = 16.dp),
+                            )
+                        }
 
                         }
                         EInkRefreshOverlay(eInkRefresh) { consumedId ->
@@ -1207,6 +1288,14 @@ class NovelReaderActivity :
 
     override fun switchPageBy(delta: Int) {
         if (readerSettings.readingMode == ReadingMode.SCROLL) {
+            if (delta > 0 && ::scrollTimer.isInitialized && scrollTimer.isActive.value) {
+                if (currentChapterIndex + 1 in chapters.indices) {
+                    switchChapterBy(1)
+                } else {
+                    scrollTimer.setActive(false)
+                }
+                return
+            }
             composeReaderViewModel.requestScrollByPage(delta)
             return
         }
@@ -1236,6 +1325,9 @@ class NovelReaderActivity :
             }
             loadChapter(currentChapterIndex)
         } else {
+            if (delta > 0 && ::scrollTimer.isInitialized && scrollTimer.isActive.value) {
+                scrollTimer.setActive(false)
+            }
             // 已经是第一章或最后一章
             contentRoot.performRejectHapticFeedback()
             val message = if (delta > 0) {
@@ -1266,6 +1358,7 @@ class NovelReaderActivity :
             uiState.chaptersSheetVisible ||
             uiState.toolsSheetVisible ||
             uiState.ttsControlsVisible ||
+            uiState.autoScroll.visible ||
             ttsVoiceDialogState != null ||
             noteSelection != null ||
             noteMarking != null ||
@@ -1297,7 +1390,8 @@ class NovelReaderActivity :
                 // 朗读条是独立可见层：它可见时必须让方向键进 Compose 焦点遍历，
                 // 否则会被下面的翻页分支全部吃掉，六个按钮永远拿不到焦点。
                 controlsVisible = isReaderControlsVisible ||
-                    composeReaderViewModel.uiState.value.ttsControlsVisible,
+                    composeReaderViewModel.uiState.value.ttsControlsVisible ||
+                    composeReaderViewModel.uiState.value.autoScroll.visible,
                 repeatCount = event.repeatCount,
             )
         ) {
@@ -1580,9 +1674,21 @@ class NovelReaderActivity :
             ?: composeReaderViewModel.uiState.value.content
     }
 
-    override fun scrollBy(delta: Int, smooth: Boolean): Boolean = false
+    override fun scrollBy(delta: Int, smooth: Boolean): Boolean {
+        return composeReaderViewModel.scrollByPixels(delta)
+    }
 
     override fun toggleUiVisibility() {
+        if (!isUiVisible &&
+            ::scrollTimer.isInitialized &&
+            scrollTimer.isActive.value &&
+            settings.isReaderAutoscrollPauseOnUi &&
+            !scrollTimer.isManuallyPaused.value
+        ) {
+            scrollTimer.setManuallyPaused(true)
+            composeReaderViewModel.showAutoScroll()
+            return
+        }
         android.util.Log.d(
             NOVEL_SCROLL_TAP_LOG_TAG,
             "toggleUiVisibility current=$isUiVisible target=${!isUiVisible}",
@@ -1590,7 +1696,18 @@ class NovelReaderActivity :
         setUiVisible(!isUiVisible)
     }
 
-    override fun isReaderResumed(): Boolean = true
+    override fun isReaderResumed(): Boolean {
+        if (!lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) {
+            return false
+        }
+        val state = composeReaderViewModel.uiState.value
+        if (state.loading) return false
+        return if (readerSettings.readingMode == ReadingMode.PAGED) {
+            (state.position?.pageCount ?: 0) > 0
+        } else {
+            state.continuousChapters.isNotEmpty()
+        }
+    }
 
     private fun onNovelTextSelectionAction(
         selection: NovelTextSelection,
@@ -2266,6 +2383,9 @@ class NovelReaderActivity :
     }
 
     private fun onTtsClick() {
+        if (::scrollTimer.isInitialized && scrollTimer.isActive.value) {
+            setAutoScrollActive(false)
+        }
         composeReaderViewModel.showTtsControls()
         val state = ttsService?.getState()?.value
         if (state == org.skepsun.kototoro.reader.novel.tts.TtsState.IDLE) {
@@ -2395,7 +2515,41 @@ class NovelReaderActivity :
 
     override fun onSavePageClick() {}
 
-    override fun onScrollTimerClick(isLongClick: Boolean) {}
+    override fun onScrollTimerClick(isLongClick: Boolean) {
+        if (!::scrollTimer.isInitialized) return
+        if (isLongClick) {
+            setAutoScrollActive(!scrollTimer.isActive.value)
+        } else {
+            setUiVisible(false)
+            composeReaderViewModel.updateAutoScroll {
+                copy(
+                    active = scrollTimer.isActive.value,
+                    manuallyPaused = scrollTimer.isManuallyPaused.value,
+                )
+            }
+            composeReaderViewModel.toggleAutoScroll()
+        }
+    }
+
+    private fun setAutoScrollActive(active: Boolean) {
+        if (!::scrollTimer.isInitialized) return
+        if (active && ttsService?.getState()?.value != null &&
+            ttsService?.getState()?.value != org.skepsun.kototoro.reader.novel.tts.TtsState.IDLE
+        ) {
+            onTtsStopClicked()
+            composeReaderViewModel.hideTtsControls()
+        }
+        scrollTimer.setActive(active)
+        composeReaderViewModel.updateAutoScroll { copy(active = active, manuallyPaused = false) }
+    }
+
+    private fun setKeepScreenOn(isKeep: Boolean) {
+        if (isKeep) {
+            window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
 
     override fun toggleScreenOrientation() {}
 
@@ -2407,9 +2561,18 @@ class NovelReaderActivity :
         }
     }
 
+    override fun dispatchTouchEvent(ev: android.view.MotionEvent?): Boolean {
+        if (ev != null && ::scrollTimer.isInitialized) {
+            scrollTimer.onTouchEvent(ev)
+        }
+        return super.dispatchTouchEvent(ev)
+    }
+
     override fun onUserInteraction() {
         super.onUserInteraction()
-        // 用户交互时的处理
+        if (::scrollTimer.isInitialized) {
+            scrollTimer.onUserInteraction()
+        }
     }
 
     /**
@@ -4066,6 +4229,9 @@ class NovelReaderActivity :
                     applyReaderPalette()
                     applyReaderBrightness(settings)
                     applyReadingModeToggles()
+                    composeReaderViewModel.updateAutoScroll {
+                        copy(showPageDelay = settings.readingMode == ReadingMode.PAGED)
+                    }
 
                     updateDualPageMode()
                     updateFullscreenMode()

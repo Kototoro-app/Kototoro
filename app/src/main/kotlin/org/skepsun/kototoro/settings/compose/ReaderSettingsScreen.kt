@@ -137,6 +137,7 @@ fun ReaderSettingsScreen(
         SettingsChoiceOption(ReaderControl.DOWNLOAD, stringResource(R.string.download)),
     )
     val novelReaderControlOptions = listOf(
+        SettingsChoiceOption(ReaderControl.TIMER, stringResource(R.string.automatic_scroll)),
         SettingsChoiceOption(ReaderControl.BOOKMARK, stringResource(R.string.bookmark_add)),
         SettingsChoiceOption(ReaderControl.TRANSLATE, stringResource(R.string.novel_translate)),
         SettingsChoiceOption(ReaderControl.TTS, stringResource(R.string.novel_read_aloud)),

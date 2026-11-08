@@ -37,6 +37,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.Animatable
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -696,6 +697,7 @@ fun ComposeNovelReaderRoute(
     onDeleteBookmark: (org.skepsun.kototoro.bookmarks.domain.Bookmark) -> Unit = {},
     onOpenBookmark: (org.skepsun.kototoro.bookmarks.domain.Bookmark) -> Unit = {},
     onBookmark: () -> Unit = {},
+    onAutoScroll: () -> Unit = {},
     onTts: () -> Unit = {},
     onClearTranslationCache: () -> Unit = {},
     onChapterSelected: (Int) -> Unit = {},
@@ -837,10 +839,19 @@ fun ComposeNovelReaderRoute(
                     if (target == null) onBookmarkPositionUnavailable()
                 }
             }
-            LaunchedEffect(listState, state.chapterIndex, state.bookmarkRequest?.id) {
+            DisposableEffect(viewModel, listState) {
+                viewModel.bindContinuousScrollDispatcher { deltaPx ->
+                    if (listState.canScrollForward) listState.dispatchRawDelta(deltaPx) else 0f
+                }
+                onDispose {
+                    viewModel.bindContinuousScrollDispatcher(null)
+                }
+            }
+            val isAutoScrolling = state.autoScroll.active && !state.autoScroll.manuallyPaused
+            LaunchedEffect(listState, state.chapterIndex, state.bookmarkRequest?.id, isAutoScrolling) {
                 if (state.bookmarkRequest != null) return@LaunchedEffect
                 snapshotFlow {
-                    if (listState.isScrollInProgress) {
+                    if (listState.isScrollInProgress || isAutoScrolling) {
                         null
                     } else {
                         NovelComposeScrollPosition(
@@ -1011,6 +1022,8 @@ fun ComposeNovelReaderRoute(
             onShowReplaceRules = { viewModel.showReplaceRules(); onShowReplaceRules() },
             onShowMarkings = { viewModel.showMarkings(); onShowMarkings() },
             onBookmark = onBookmark,
+            onAutoScroll = onAutoScroll,
+            autoScrollActive = state.autoScroll.active,
             onTts = onTts,
             onClearTranslationCache = onClearTranslationCache,
         )

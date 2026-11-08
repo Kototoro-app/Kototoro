@@ -45,6 +45,8 @@ import org.skepsun.kototoro.reader.novel.ReadingMode
 import org.skepsun.kototoro.reader.novel.annotation.NovelMarkingEntity
 import org.skepsun.kototoro.reader.novel.novelReaderPalette
 import org.skepsun.kototoro.reader.novel.tts.TtsState
+import org.skepsun.kototoro.reader.ui.compose.ReaderAutoScrollCallbacks
+import org.skepsun.kototoro.reader.ui.compose.ReaderAutoScrollPanel
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderFloatingControlButton
 
 internal data class NovelReaderChromeCallbacks(
@@ -73,6 +75,9 @@ internal data class NovelReaderChromeCallbacks(
     val onDismissReplaceRules: () -> Unit = {},
     val onReplaceRuleToggle: (ReplaceRule, Boolean) -> Unit = { _, _ -> },
     val onBookmark: () -> Unit = {},
+    val onAutoScroll: () -> Unit = {},
+    val onAutoScrollLongClick: () -> Unit = {},
+    val autoScroll: ReaderAutoScrollCallbacks = ReaderAutoScrollCallbacks(),
     val onTts: () -> Unit = {},
     val onClearTranslationCache: () -> Unit = {},
     val onTtsPrevious: () -> Unit = {},
@@ -105,6 +110,7 @@ private fun NovelFloatingControlButton(
     showLabel: Boolean,
 ) {
     val icon = when (control) {
+        ReaderControl.TIMER -> if (state.autoScroll.active) R.drawable.ic_timer_run else R.drawable.ic_timer
         ReaderControl.BOOKMARK -> if (state.isCurrentPageBookmarked) {
             R.drawable.ic_bookmark_added
         } else R.drawable.ic_bookmark
@@ -113,16 +119,25 @@ private fun NovelFloatingControlButton(
         else -> return
     }
     val label = when (control) {
+        ReaderControl.TIMER -> R.string.automatic_scroll
         ReaderControl.BOOKMARK -> if (state.isCurrentPageBookmarked) R.string.bookmark_remove else R.string.bookmark_add
         ReaderControl.TRANSLATE -> R.string.novel_translate
         ReaderControl.TTS -> R.string.novel_read_aloud
+        else -> return
     }
     val onClick = when (control) {
+        ReaderControl.TIMER -> callbacks.onAutoScroll
         ReaderControl.BOOKMARK -> callbacks.onBookmark
         ReaderControl.TRANSLATE -> callbacks.onToggleTranslation
         ReaderControl.TTS -> callbacks.onTts
+        else -> return
+    }
+    val onLongClick: (() -> Unit)? = when (control) {
+        ReaderControl.TIMER -> callbacks.onAutoScrollLongClick
+        else -> null
     }
     val active = when (control) {
+        ReaderControl.TIMER -> state.autoScroll.active
         ReaderControl.TRANSLATE -> state.settings?.isTranslationEnabled == true
         ReaderControl.TTS -> state.ttsState != TtsState.IDLE
         else -> false
@@ -134,6 +149,7 @@ private fun NovelFloatingControlButton(
         active = active,
         showLabel = showLabel,
         onClick = onClick,
+        onLongClick = onLongClick,
         contentColor = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
     )
 }
@@ -170,6 +186,7 @@ internal fun NovelReaderBottomChrome(
     // Settings and chapters handle back in their own sheet hosts.
     BackHandler(enabled = panelVisible && !state.settingsSheetVisible && !state.chaptersSheetVisible) {
         when {
+            state.autoScroll.visible -> callbacks.autoScroll.onClose()
             state.replaceRulesSheetVisible -> callbacks.onDismissReplaceRules()
             state.markingsSheetVisible -> callbacks.onDismissMarkings()
             toolsPanelVisible -> callbacks.onDismissTools()
@@ -220,11 +237,16 @@ internal fun NovelReaderBottomChrome(
             NovelToolsPanel(state, callbacks)
         }
     }
+    if (state.autoScroll.visible) {
+        TvModalBottomSheet(onDismissRequest = callbacks.autoScroll.onClose) {
+            ReaderAutoScrollPanel(state.autoScroll, callbacks.autoScroll)
+        }
+    }
 }
 
 private fun NovelComposeReaderUiState.chromePanelVisible(): Boolean =
     settingsSheetVisible || replaceRulesSheetVisible || markingsSheetVisible || chaptersSheetVisible ||
-        toolsSheetVisible || ttsControlsVisible
+        toolsSheetVisible || ttsControlsVisible || autoScroll.visible
 
 private fun NovelComposeReaderUiState.chromeState() = NovelReaderChromeState(
     workTitle = workTitle,

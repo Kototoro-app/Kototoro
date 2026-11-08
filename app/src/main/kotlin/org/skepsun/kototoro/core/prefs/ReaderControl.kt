@@ -28,6 +28,7 @@ enum class ReaderControl {
         )
 
         val NOVEL_FLOATING: Set<ReaderControl> = EnumSet.of(
+            TIMER,
             BOOKMARK,
             TRANSLATE,
             TTS,

@@ -75,6 +75,8 @@ internal fun ComposeNovelReaderOptionsSheet(
     onShowReplaceRules: () -> Unit = {},
     onShowMarkings: () -> Unit = {},
     onBookmark: () -> Unit = {},
+    onAutoScroll: () -> Unit = {},
+    autoScrollActive: Boolean = false,
     onTts: () -> Unit,
     onClearTranslationCache: () -> Unit,
     eInkMode: Boolean = false,
@@ -90,12 +92,14 @@ internal fun ComposeNovelReaderOptionsSheet(
         quickLayer = {
             NovelQuickLayer(
                 settings = settings,
+                autoScrollActive = autoScrollActive,
                 update = ::update,
                 onQuickAction = { id ->
                     when (id) {
                         NovelQuickActionId.TTS -> { onTts(); onDismiss() }
                         NovelQuickActionId.BOOKMARK -> { onBookmark(); onDismiss() }
                         NovelQuickActionId.MARKINGS -> { onShowMarkings(); onDismiss() }
+                        NovelQuickActionId.AUTO_SCROLL -> { onDismiss(); onAutoScroll() }
                         NovelQuickActionId.TRANSLATE -> onToggleTranslation()
                     }
                 },
@@ -120,6 +124,7 @@ internal fun ComposeNovelReaderOptionsSheet(
 @Composable
 private fun NovelQuickLayer(
     settings: NovelReaderSettings,
+    autoScrollActive: Boolean,
     update: NovelSettingsUpdate,
     onQuickAction: (NovelQuickActionId) -> Unit,
 ) {
@@ -157,7 +162,10 @@ private fun NovelQuickLayer(
         },
         actions = {
             ReaderQuickActionGrid(
-                actions = novelQuickActions(settings.isTranslationEnabled),
+                actions = novelQuickActions(
+                    translationEnabled = settings.isTranslationEnabled,
+                    autoScrollActive = autoScrollActive,
+                ),
                 onClick = { onQuickAction(NovelQuickActionId.valueOf(it.id)) },
                 icon = { painterResource(NovelQuickActionId.valueOf(it.id).iconResId) },
                 label = { stringResource(NovelQuickActionId.valueOf(it.id).labelResId) },

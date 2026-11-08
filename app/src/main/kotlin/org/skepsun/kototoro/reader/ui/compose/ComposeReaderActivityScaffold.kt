@@ -245,28 +245,6 @@ internal data class ReaderMessage(
     val actionLabel: String? = null,
 )
 
-@Immutable
-internal data class ReaderAutoScrollUiState(
-    val visible: Boolean = false,
-    val active: Boolean = false,
-    val manuallyPaused: Boolean = false,
-    val speed: Float = AppSettings.DEFAULT_READER_AUTOSCROLL_SPEED,
-    val fabVisible: Boolean = false,
-    val pauseOnUi: Boolean = true,
-    val showPageDelay: Boolean = false,
-    val pageDelaySeconds: Long = 0L,
-)
-
-internal data class ReaderAutoScrollCallbacks(
-    val onOpen: () -> Unit = {},
-    val onClose: () -> Unit = {},
-    val onActiveChanged: (Boolean) -> Unit = {},
-    val onPausedChanged: (Boolean) -> Unit = {},
-    val onSpeedChanged: (Float) -> Unit = {},
-    val onFabChanged: (Boolean) -> Unit = {},
-    val onPauseOnUiChanged: (Boolean) -> Unit = {},
-)
-
 internal data class ComposeReaderChromeCallbacks(
     val onNavigateBack: () -> Unit = {},
     val onZoomIn: () -> Unit = {},
@@ -850,29 +828,13 @@ internal fun ComposeReaderActivityScaffold(
         )
 
         if (state.autoScroll.active && state.autoScroll.fabVisible && !state.controlsVisible && !state.autoScroll.visible) {
-            // Auto-scroll affordance: a floating glass pill (like the reader's
-            // other pill chrome) — uniform hairline + press gloss, no resting
-            // highlight.
-            GlassSurface(
+            ReaderAutoScrollFab(
+                onClick = callbacks.autoScroll.onOpen,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .navigationBarsPadding()
-                    .padding(end = 16.dp, bottom = 16.dp)
-                    .size(48.dp),
-                shape = CircleShape,
-                style = GlassDefaults.topBarChromeStyle(),
-                componentRole = GlassComponentRole.PillControl,
-            ) {
-                IconButton(
-                    onClick = callbacks.autoScroll.onOpen,
-                    modifier = Modifier.fillMaxSize().tvIconButtonRing(),
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_timer_run),
-                        contentDescription = stringResource(R.string.automatic_scroll),
-                    )
-                }
-            }
+                    .padding(end = 16.dp, bottom = 16.dp),
+            )
         }
 
         EInkRefreshOverlay(state.eInkRefresh, callbacks.onEInkRefreshConsumed)
@@ -925,72 +887,6 @@ private fun ReaderProgressControl(
         nextEnabled = state.nextEnabled,
         isIosStyle = isIosStyle,
     )
-}
-
-@Composable
-@OptIn(ExperimentalMaterial3Api::class)
-private fun ReaderAutoScrollPanel(state: ReaderAutoScrollUiState, callbacks: ReaderAutoScrollCallbacks) {
-    var startSwitchHasFocus by remember { mutableStateOf(false) }
-    val startSwitchRequester = rememberTvSheetStartFocus { startSwitchHasFocus }
-    Column(
-        // A television draws this sheet in landscape, where the stack of rows is taller than the
-        // screen: without a scroll the last switches are off-screen and a remote cannot drag the
-        // sheet up. Focus inside the column brings its row into view on its own.
-        modifier = Modifier
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 10.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.reader_autoscroll), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-            IconButton(
-                onClick = callbacks.onClose,
-                modifier = Modifier.tvFocusable(shape = CircleShape, addFocusTarget = false),
-            ) { Text("×", style = MaterialTheme.typography.titleLarge) }
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.reader_autoscroll), modifier = Modifier.weight(1f))
-            Switch(
-                checked = state.active,
-                onCheckedChange = callbacks.onActiveChanged,
-                modifier = Modifier
-                    .focusRequester(startSwitchRequester)
-                    .onFocusChanged { startSwitchHasFocus = it.isFocused }
-                    .tvFocusable(shape = CircleShape, addFocusTarget = false),
-            )
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(if (state.manuallyPaused) stringResource(R.string.play) else stringResource(R.string.pause), modifier = Modifier.weight(1f))
-            Switch(
-                checked = !state.manuallyPaused,
-                onCheckedChange = { callbacks.onPausedChanged(!it) },
-                modifier = Modifier.tvFocusable(shape = CircleShape, addFocusTarget = false),
-            )
-        }
-        ReaderAutoScrollSpeedControl(
-            speed = state.speed,
-            onSpeedChange = callbacks.onSpeedChanged,
-            commitOnRelease = false,
-        )
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.reader_autoscroll_fab), modifier = Modifier.weight(1f))
-            Switch(
-                checked = state.fabVisible,
-                onCheckedChange = callbacks.onFabChanged,
-                modifier = Modifier.tvFocusable(shape = CircleShape, addFocusTarget = false),
-            )
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.reader_autoscroll_pause_on_ui), modifier = Modifier.weight(1f))
-            Switch(
-                checked = state.pauseOnUi,
-                onCheckedChange = callbacks.onPauseOnUiChanged,
-                modifier = Modifier.tvFocusable(shape = CircleShape, addFocusTarget = false),
-            )
-        }
-        if (state.showPageDelay) {
-            Text(stringResource(R.string.page_switch_timer, state.pageDelaySeconds), style = MaterialTheme.typography.bodySmall)
-        }
-    }
 }
 
 @Composable
