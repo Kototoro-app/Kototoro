@@ -288,7 +288,19 @@ fun ComposeSceneWebtoonReader(
         if (lowerId != null && upperId != null && activeId != null && hasAppliedInitialPosition) {
             val lowerKey = lowerId.value
             val upperKey = upperId.value
-            val activeKey = activeId.value
+            // The progress anchor stays on the first visible page (its intra-page offset is relative to
+            // that page); the page reported as current is the one under the viewport's center line.
+            val activeKey = resolveCenterWebtoonPageKey(
+                items = frame.visibleNodes.map { node ->
+                    WebtoonVisibleItem(
+                        pageKey = node.pageId.value,
+                        offsetPx = (node.sceneBounds.top - currentY).roundToInt(),
+                        sizePx = node.sceneBounds.height.roundToInt(),
+                    )
+                },
+                viewportStartPx = 0,
+                viewportEndPx = viewportHeightPx.roundToInt(),
+            ) ?: activeId.value
 
             val newReported = Triple(lowerKey, upperKey, activeKey)
             if (lastReportedPages != newReported) {
