@@ -48,6 +48,30 @@ private fun <C> chaptersUploadedAfter(chapters: List<C>, uploadDate: ((C) -> Lon
     return newer.takeIf { it.isNotEmpty() && it.size * 2 < chapters.size }
 }
 
+/** Where a track's anchor and pending counter stand after reading, see [trackAfterReading]. */
+data class ReadingTrackState(val anchorIndex: Int, val pending: Int)
+
+/**
+ * The track after reading chapter [readIndex] of a branch whose chapters run to [lastIndex], for a counter whose
+ * chapters carry no identities: the [pending] counted chapters are taken as the tail of the branch, as they always
+ * were, so reading inside that tail counts down to the chapters after it.
+ *
+ * The anchor, the track's last chapter at [anchorIndex] (-1 when it is not in the branch), only moves forward to what
+ * was read. Chapters after it that the tracker has not seen yet stay after it, so the next check still reports them;
+ * moving the anchor to the end of the list the reader happened to load would swallow them. Without an anchor in the
+ * branch nothing keeps them apart, and the anchor goes to the end as before.
+ */
+fun trackAfterReading(readIndex: Int, anchorIndex: Int, lastIndex: Int, pending: Int): ReadingTrackState {
+    val anchor = if (anchorIndex >= 0) maxOf(anchorIndex, readIndex) else lastIndex
+    val left = when {
+        pending <= 0 -> 0
+        readIndex < 0 -> pending
+        readIndex >= lastIndex - pending + 1 -> lastIndex - readIndex
+        else -> pending
+    }
+    return ReadingTrackState(anchorIndex = anchor, pending = left)
+}
+
 /**
  * The row after a successful check. An invalid comparison resets the counter; a valid one without new chapters keeps
  * the unread counter that is still pending.

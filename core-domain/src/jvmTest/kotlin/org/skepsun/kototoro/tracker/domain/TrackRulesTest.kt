@@ -65,6 +65,29 @@ class TrackRulesTest {
 	}
 
 	@Test
+	fun `reading does not move the anchor past chapters the tracker has not seen`() {
+		// Chapters 0..9; the tracker last saw chapter 7; 8 and 9 appeared since and were loaded by the reader.
+		assertEquals(7, trackAfterReading(3, anchorIndex = 7, lastIndex = 9, pending = 0).anchorIndex)
+		assertEquals(7, trackAfterReading(7, anchorIndex = 7, lastIndex = 9, pending = 0).anchorIndex)
+		// Reading past the anchor moves it to what was read, not to the end of the list.
+		assertEquals(8, trackAfterReading(8, anchorIndex = 7, lastIndex = 9, pending = 0).anchorIndex)
+	}
+
+	@Test
+	fun `reading counts down a counter over the tail of the branch`() {
+		assertEquals(ReadingTrackState(anchorIndex = 2, pending = 1), trackAfterReading(2, 1, 3, pending = 2))
+		assertEquals(ReadingTrackState(anchorIndex = 3, pending = 0), trackAfterReading(3, 1, 3, pending = 2))
+		assertEquals(ReadingTrackState(anchorIndex = 1, pending = 2), trackAfterReading(0, 1, 3, pending = 2))
+		assertEquals(ReadingTrackState(anchorIndex = 1, pending = 2), trackAfterReading(-1, 1, 3, pending = 2))
+	}
+
+	@Test
+	fun `reading without an anchor in the branch falls back to the end of the list`() {
+		assertEquals(ReadingTrackState(anchorIndex = 9, pending = 1), trackAfterReading(8, -1, 9, pending = 3))
+		assertEquals(ReadingTrackState(anchorIndex = 9, pending = 3), trackAfterReading(2, -1, 9, pending = 3))
+	}
+
+	@Test
 	fun `comparison follows Android's tracker cases`() {
 		assertEquals(TrackComparison(emptyList<Long>(), isValid = false), compareTrackedChapters(ids, { it }, 0L))
 		assertEquals(TrackComparison(emptyList<Long>(), isValid = true), compareTrackedChapters(ids, { it }, 4L))

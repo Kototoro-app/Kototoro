@@ -117,7 +117,7 @@ Kotatsu-Redo（`CheckNewChaptersUseCase`、`GetTracksUseCase`、`StaleTrackPolic
 
 | 阶段 | 内容 | 迁移 | 风险 |
 |---|---|---|---|
-| 1 | 修阅读时吞章节；一次性补报被吞章节 | 否 | 低 |
+| 1 | 修阅读时吞章节 | 否 | 低 |
 | 2 | `ChapterNumberRules` 与防误报过滤，先用于现有锚点模型 | 否 | 低 |
 | 3 | 写入点差集、本地作品锚点链、首次/恢复处理；追更检查改为只拉取 | 否 | 高 |
 | 4 | 智能调度与失败退避 | 86 → 87 | 中 |
@@ -125,7 +125,11 @@ Kotatsu-Redo（`CheckNewChaptersUseCase`、`GetTracksUseCase`、`StaleTrackPolic
 
 ## 5. 进度
 
-- [ ] 阶段 1
+- [x] 阶段 1：共享规则 `trackAfterReading`（core-domain `TrackRules`）。没有带章节信息的记录时，阅读只把锚点
+  前移到读到的那章，不再跳到阅读器列表的末尾；计数仍按“覆盖分支末尾”扣减，兼容老数据。Android
+  `CheckNewChaptersUseCase` 的阅读路径与 Windows `recomputeLegacyUpdateCounter` 都改用它；阅读与读完都不再改写
+  检查时间，作品不会因为被读过而排到检查队列末尾。没有做 Kotatsu-Redo 式的一次性补报：已被吞掉的章节与
+  “还没读到的老章节”在数据上分不开，按阅读位置补报可能一次冒出大量老章节。
 - [ ] 阶段 2
 - [ ] 阶段 3
 - [ ] 阶段 4

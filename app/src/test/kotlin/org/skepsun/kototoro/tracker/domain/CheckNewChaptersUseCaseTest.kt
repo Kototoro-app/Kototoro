@@ -8,6 +8,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import org.skepsun.kototoro.core.model.TestContentSource
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.parser.ContentRepository.DetailsFetchMode
@@ -59,11 +60,14 @@ class CheckNewChaptersUseCaseTest : StringSpec({
         newChapters = 0,
     )
 
-    fun useCase(repository: ContentRepository): CheckNewChaptersUseCase {
+    fun useCase(
+        repository: ContentRepository,
+        tracking: TrackingRepository = mockk(relaxed = true),
+    ): CheckNewChaptersUseCase {
         val factory = mockk<ContentRepository.Factory> { every { create(any()) } returns repository }
         val history = mockk<HistoryRepository> { coEvery { getOne(any()) } returns null }
         return CheckNewChaptersUseCase(
-            repository = mockk(relaxed = true),
+            repository = tracking,
             historyRepository = history,
             mangaRepositoryFactory = factory,
             localContentRepository = mockk(relaxed = true),
@@ -118,5 +122,20 @@ class CheckNewChaptersUseCaseTest : StringSpec({
 
         useCase(repository)(track(lastChapterId = 0L)).shouldBeInstanceOf<MangaUpdates.Success>()
         coVerify(exactly = 0) { repository.getDetails(any(), DetailsFetchMode.CHAPTERS_REFRESH) }
+    }
+
+    "reading an older chapter keeps chapters the tracker has not seen after the anchor" {
+        val checkedAt = java.time.Instant.ofEpochMilli(5_000L)
+        val saved = slot<ContentTracking>()
+        val tracking = mockk<TrackingRepository>(relaxed = true) {
+            coEvery { updateReadChapter(any(), any(), any(), any()) } returns false
+            coEvery { getTrackOrNull(any()) } returns track(lastChapterId = 2L).copy(lastCheck = checkedAt)
+            coEvery { mergeWith(capture(saved)) } returns Unit
+        }
+        // The reader loaded chapters 3 and 4, which appeared after the last check.
+        useCase(mockk(), tracking)(manga(listOf(1L, 2L, 3L, 4L)), currentChapterId = 1L)
+
+        saved.captured.lastChapterId shouldBe 2L
+        saved.captured.lastCheck shouldBe checkedAt
     }
 })

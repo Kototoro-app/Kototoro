@@ -159,14 +159,18 @@ suspend fun MangaDatabase.recomputeLegacyUpdateCounter(
     val branch = chapters.filter { it.branch == current.branch }
     val index = branch.indexOfFirst { it.chapterId == chapterId }
     if (index < 0) return null
-    // The counter covers the tail of the branch, so a chapter inside that tail is what the badge is about.
-    if (index < branch.size - track.newChapters) return null
-    val last = branch.last()
-    val pending = branch.lastIndex - index
-    if (pending == track.newChapters && last.chapterId == track.lastChapterId) return null
+    val state = trackAfterReading(
+        readIndex = index,
+        anchorIndex = branch.indexOfFirst { it.chapterId == track.lastChapterId },
+        lastIndex = branch.lastIndex,
+        pending = track.newChapters,
+    )
+    val anchor = branch[state.anchorIndex]
+    val pending = state.pending
+    if (pending == track.newChapters && anchor.chapterId == track.lastChapterId) return null
     getTracksDao().upsert(TrackEntity(
         mangaId = track.mangaId,
-        lastChapterId = last.chapterId,
+        lastChapterId = anchor.chapterId,
         newChapters = pending,
         lastCheckTime = track.lastCheckTime,
         lastChapterDate = track.lastChapterDate,

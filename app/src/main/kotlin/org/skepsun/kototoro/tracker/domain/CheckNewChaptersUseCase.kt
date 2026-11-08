@@ -16,7 +16,6 @@ import org.skepsun.kototoro.parsers.util.findById
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
 import org.skepsun.kototoro.tracker.domain.model.ContentTracking
 import org.skepsun.kototoro.tracker.domain.model.MangaUpdates
-import java.time.Instant
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -62,23 +61,29 @@ class CheckNewChaptersUseCase @Inject constructor(
             val track = repository.getTrackOrNull(manga) ?: return@withLock
             val branch = checkNotNull(details.chapters?.findById(currentChapterId)).branch
             val chapters = details.getChapters(branch)
-            val chapterIndex = chapters.indexOfFirst { x -> x.id == currentChapterId }
-            val lastNewChapterIndex = chapters.size - track.newChapters
-            val lastChapter = chapters.lastOrNull()
+            if (chapters.isEmpty()) return@withLock
+            // Reading is not a check: the anchor only moves to what was read, so chapters the tracker has not seen
+            // yet are still reported, and the check time stays, so the title keeps its place in the queue.
+            val state = trackAfterReading(
+                readIndex = chapters.indexOfFirst { x -> x.id == currentChapterId },
+                anchorIndex = chapters.indexOfFirst { x -> x.id == track.lastChapterId },
+                lastIndex = chapters.lastIndex,
+                pending = track.newChapters,
+            )
+            val anchor = chapters[state.anchorIndex]
             val tracking = ContentTracking(
                 anchorMangaId = track.anchorMangaId,
                 entityId = track.entityId,
                 preferredLocalMangaId = track.preferredLocalMangaId,
                 manga = details,
-                lastChapterId = lastChapter?.id ?: 0L,
-                lastCheck = Instant.now(),
-                lastChapterDate = lastChapter?.uploadDate?.toInstantOrNull() ?: track.lastChapterDate,
-                newChapters = when {
-                    track.newChapters == 0 -> 0
-                    chapterIndex < 0 -> track.newChapters
-                    chapterIndex >= lastNewChapterIndex -> chapters.lastIndex - chapterIndex
-                    else -> track.newChapters
+                lastChapterId = anchor.id,
+                lastCheck = track.lastCheck,
+                lastChapterDate = if (anchor.id == track.lastChapterId) {
+                    track.lastChapterDate
+                } else {
+                    anchor.uploadDate.toInstantOrNull() ?: track.lastChapterDate
                 },
+                newChapters = state.pending,
             )
             repository.mergeWith(tracking)
         }.onFailure { e ->
@@ -99,7 +104,7 @@ class CheckNewChaptersUseCase @Inject constructor(
                 preferredLocalMangaId = track.preferredLocalMangaId,
                 manga = details,
                 lastChapterId = lastChapter?.id ?: track.lastChapterId,
-                lastCheck = Instant.now(),
+                lastCheck = track.lastCheck,
                 lastChapterDate = lastChapter?.uploadDate?.toInstantOrNull() ?: track.lastChapterDate,
                 newChapters = 0,
             )
