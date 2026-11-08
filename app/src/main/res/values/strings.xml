@@ -4198,4 +4198,5 @@
     <string name="source_preferences_summary">Sorting, grouping, adult content filters and tag blacklist</string>
     <string name="source_preferences_browsing">Browsing</string>
     <string name="extension_settings">Extension settings</string>
+    <string name="cloudstream_plugin_reloaded">%1$s was reloaded to apply its settings</string>
 </resources>

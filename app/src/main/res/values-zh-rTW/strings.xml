@@ -4129,4 +4129,5 @@ SHA-256 指紋:
     <string name="source_preferences_summary">排序、分組、成人內容過濾與標籤黑名單</string>
     <string name="source_preferences_browsing">瀏覽與排序</string>
     <string name="extension_settings">拓展設定</string>
+    <string name="cloudstream_plugin_reloaded">已重新載入 %1$s，設定已生效</string>
 </resources>

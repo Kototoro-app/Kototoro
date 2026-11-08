@@ -3387,4 +3387,5 @@ SHA-256 指纹:
     <string name="source_preferences_summary">排序、分组、成人内容过滤与标签黑名单</string>
     <string name="source_preferences_browsing">浏览与排序</string>
     <string name="extension_settings">拓展设置</string>
+    <string name="cloudstream_plugin_reloaded">已重新加载 %1$s，设置已生效</string>
 </resources>

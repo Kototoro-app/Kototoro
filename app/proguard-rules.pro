@@ -506,6 +506,11 @@
 -keep interface androidx.fragment.app.** { *; }
 -keep class androidx.appcompat.app.** { *; }
 -keep interface androidx.appcompat.app.** { *; }
+# Lifecycle too: plugins read LiveData of the Cloudstream models Kototoro stands in for (HomeViewModel), make them
+# with ViewModelProvider and launch in lifecycleScope; Coil's request builder for the images in their screens.
+-keep class androidx.lifecycle.** { *; }
+-keep interface androidx.lifecycle.** { *; }
+-keep class coil3.request.ImageRequest** { *; }
 
 
 # ONNX Runtime JNI classes

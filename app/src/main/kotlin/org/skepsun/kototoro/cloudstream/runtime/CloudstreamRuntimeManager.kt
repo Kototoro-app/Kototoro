@@ -1,12 +1,19 @@
 package org.skepsun.kototoro.cloudstream.runtime
 
+import android.app.Activity
+import android.app.Application
 import android.content.Context
 import android.content.res.AssetManager
 import android.content.res.Resources
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
+import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
 import com.lagradost.api.setContext
 import com.lagradost.cloudstream3.APIHolder
 import com.lagradost.cloudstream3.CloudStreamApp
+import com.lagradost.cloudstream3.CommonActivity
 import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.actions.VideoClickActionHolder
@@ -22,9 +29,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.json.JSONObject
+import org.skepsun.kototoro.R
 import org.skepsun.kototoro.cloudstream.model.CloudstreamSource
 import org.skepsun.kototoro.core.network.ContentHttpClient
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.ui.DefaultActivityLifecycleCallbacks
 import org.skepsun.kototoro.core.ui.adaptive.resolveUiPresentationConfig
 import org.skepsun.kototoro.core.network.webview.CloudflareSolveCoordinator
 import org.skepsun.kototoro.core.network.webview.WebViewClearanceSolver
@@ -40,6 +49,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.zip.ZipFile
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.concurrent.thread
 import okhttp3.OkHttpClient
 import org.schabi.newpipe.extractor.NewPipe
 
@@ -65,6 +75,27 @@ class CloudstreamRuntimeManager @Inject constructor(
     private val optimizedDexDir by lazy(LazyThreadSafetyMode.NONE) {
         File(context.codeCacheDir, "cloudstream/dex")
     }
+    private val deferredPluginPaths = LinkedHashSet<String>()
+
+    init {
+        // The backup agent builds its own manager, possibly without an Application; it never shows activities.
+        val application = context.applicationContext as? Application
+        if (application != null) {
+            CloudstreamPluginGuard.install(pluginOf = ::pluginBehind, onRestartRequested = ::onPluginRestartRequested)
+        }
+        application?.registerActivityLifecycleCallbacks(
+            object : DefaultActivityLifecycleCallbacks {
+                override fun onActivityResumed(activity: Activity) {
+                    if (activity is AppCompatActivity && synchronized(this@CloudstreamRuntimeManager) {
+                            deferredPluginPaths.isNotEmpty()
+                        }
+                    ) {
+                        thread(name = "cloudstream-deferred-plugins") { loadDeferredPlugins(activity) }
+                    }
+                }
+            },
+        )
+    }
 
     @Synchronized
     fun initialize() {
@@ -86,15 +117,87 @@ class CloudstreamRuntimeManager @Inject constructor(
             .filter { it !in activePaths }
             .forEach(::unloadPlugin)
 
+        deferredPluginPaths.clear()
         pluginFiles.forEach { file ->
             val compatibility = CloudstreamPluginCompatibilityChecker.inspect(file, context.classLoader)
             if (compatibility is CloudstreamPluginCompatibility.Incompatible) {
-                quarantinePlugin(file, compatibility.reason)
-                return@forEach
+                if (!compatibility.isLinkageGap) {
+                    quarantinePlugin(file, compatibility.reason)
+                    return@forEach
+                }
+                // Android links lazily: the plugin loads, and only code reaching the missing API fails.
+                writeDiagnostic("load:linkage-gap file=${file.name} ${compatibility.reason}")
             }
-            runCatching { loadPlugin(file) }
+            val host = pluginHost()
+            runCatching { loadPlugin(file, host = host) }
                 .onFailure { error ->
-                    Log.e(TAG, "Failed to load Cloudstream plugin ${file.name}", error)
+                    writeDiagnostic("load:failed file=${file.name} error=${error.javaClass.name}:${error.message}")
+                    if (host is AppCompatActivity) {
+                        Log.e(TAG, "Failed to load Cloudstream plugin ${file.name}", error)
+                        quarantinePlugin(
+                            file = file,
+                            reason = "Plugin load failed: ${error.javaClass.name}:${error.message}",
+                        )
+                    } else {
+                        // Plugins load with Cloudstream's activity and may cast to it (CNC Verse: `context as
+                        // AppCompatActivity`); at cold start there is none yet, so retry once one resumes.
+                        deferredPluginPaths += file.absolutePath
+                        writeDiagnostic("load:deferred file=${file.name} until an activity resumes")
+                    }
+                }
+        }
+        publishSources()
+        writeDiagnostic(
+            "initialize:done loaded=${loadedPlugins.size} sources=${_sources.value.joinToString(",") { "${it.pluginPackageName}/${it.name}" }}",
+        )
+    }
+
+    /** A plugin asked to restart the app to apply its settings: loading it again applies them (on the main thread). */
+    private fun onPluginRestartRequested(archiveName: String) {
+        thread(name = "cloudstream-plugin-reload") {
+            writeDiagnostic("restart:intercepted file=$archiveName")
+            val reloaded = runCatching { reloadPluginArchive(archiveName) }
+                .onFailure { Log.e(TAG, "Failed to reload Cloudstream plugin $archiveName", it) }
+                .getOrDefault(false)
+            if (reloaded) {
+                Handler(Looper.getMainLooper()).post {
+                    Toast.makeText(
+                        context,
+                        context.getString(R.string.cloudstream_plugin_reloaded, archiveName.substringBeforeLast('.')),
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                }
+            }
+        }
+    }
+
+    /** The archive of the loaded plugin whose code is on [error]'s stack, if any. */
+    private fun pluginBehind(error: Throwable): String? {
+        val plugins = loadedPlugins.values.toList()
+        if (plugins.isEmpty()) return null
+        generateSequence(error) { it.cause }.take(MAX_CAUSE_DEPTH).flatMap { it.stackTrace.asSequence() }
+            .map(StackTraceElement::getClassName)
+            .distinct()
+            .forEach { className ->
+                plugins.firstOrNull { loaded ->
+                    runCatching { loaded.classLoader.loadClass(className).classLoader === loaded.classLoader }
+                        .getOrDefault(false)
+                }?.let { return File(it.filePath).name }
+            }
+        return null
+    }
+
+    /** Retries the plugins [initialize] could not load without an activity; failing now quarantines them. */
+    @Synchronized
+    private fun loadDeferredPlugins(activity: AppCompatActivity) {
+        if (deferredPluginPaths.isEmpty()) return
+        val paths = deferredPluginPaths.toList()
+        deferredPluginPaths.clear()
+        configureCloudstreamEnvironment()
+        paths.map(::File).filter(File::isFile).forEach { file ->
+            runCatching { loadPlugin(file, host = activity) }
+                .onFailure { error ->
+                    Log.e(TAG, "Failed to load deferred Cloudstream plugin ${file.name}", error)
                     writeDiagnostic("load:failed file=${file.name} error=${error.javaClass.name}:${error.message}")
                     quarantinePlugin(
                         file = file,
@@ -103,9 +206,15 @@ class CloudstreamRuntimeManager @Inject constructor(
                 }
         }
         publishSources()
-        writeDiagnostic(
-            "initialize:done loaded=${loadedPlugins.size} sources=${_sources.value.joinToString(",") { "${it.pluginPackageName}/${it.name}" }}",
-        )
+    }
+
+    /**
+     * Cloudstream hands plugins its `MainActivity`, which Kototoro's base activities extend; the last resumed one
+     * stands in for it when there is one.
+     */
+    private fun pluginHost(): Context {
+        val activity = CommonActivity.INSTANCE.activity as? AppCompatActivity
+        return activity?.takeUnless { it.isFinishing || it.isDestroyed } ?: context
     }
 
     private fun quarantinePlugin(
@@ -159,6 +268,54 @@ class CloudstreamRuntimeManager @Inject constructor(
         )
     }
 
+    /** Whether the plugin providing [source] has a settings screen of its own. */
+    fun hasPluginSettings(source: CloudstreamSource): Boolean =
+        (loadedPluginOf(source)?.plugin as? Plugin)?.openSettings != null
+
+    /**
+     * Readies the settings of the plugin providing [source] to open over [activity]. Plugins keep the activity they
+     * loaded with and open their dialogs through its fragment manager (CNC Verse), as Cloudstream has a single
+     * activity; here that one may be stopped or gone, so a plugin loaded with another context is loaded again with
+     * [activity] first. Runs off the main thread; open the returned callback on it.
+     */
+    @Synchronized
+    fun preparePluginSettings(source: CloudstreamSource, activity: AppCompatActivity): ((Context) -> Unit)? {
+        var loaded = loadedPluginOf(source) ?: return null
+        if (loaded.host.get() !== activity) {
+            val file = File(loaded.filePath)
+            configureCloudstreamEnvironment()
+            unloadPlugin(loaded.filePath)
+            try {
+                loadPlugin(file, loaded.packageName, activity)
+            } finally {
+                publishSources()
+            }
+            loaded = loadedPlugins[file.absolutePath] ?: return null
+        }
+        return (loaded.plugin as? Plugin)?.openSettings
+    }
+
+    /** Loads the plugin providing [source] again, so settings that decide its providers take effect. */
+    fun reloadPlugin(source: CloudstreamSource) {
+        reloadPluginArchive(source.pluginFileName)
+    }
+
+    @Synchronized
+    private fun reloadPluginArchive(archiveName: String): Boolean {
+        val loaded = loadedPlugins.values.firstOrNull { File(it.filePath).name == archiveName } ?: return false
+        configureCloudstreamEnvironment()
+        unloadPlugin(loaded.filePath)
+        try {
+            loadPlugin(File(loaded.filePath), loaded.packageName, pluginHost())
+        } finally {
+            publishSources()
+        }
+        return true
+    }
+
+    private fun loadedPluginOf(source: CloudstreamSource): LoadedCloudstreamPlugin? =
+        loadedPlugins.values.firstOrNull { File(it.filePath).name == source.pluginFileName }
+
     fun findSourceByName(name: String): CloudstreamSource? {
         return _sources.value.firstOrNull { it.name == name }
     }
@@ -172,7 +329,7 @@ class CloudstreamRuntimeManager @Inject constructor(
         configureCloudstreamEnvironment()
         try {
             replaceCloudstreamPluginArchive(download, target) {
-                loadPlugin(target, packageName)
+                loadPlugin(target, packageName, pluginHost())
                 check(loadedPlugins.containsKey(target.absolutePath)) { "Cloudstream plugin did not load: $archiveName" }
             }
         } catch (error: Throwable) {
@@ -183,7 +340,7 @@ class CloudstreamRuntimeManager @Inject constructor(
         publishSources()
     }
 
-    private fun loadPlugin(file: File, packageName: String = file.inferPackageName()) {
+    private fun loadPlugin(file: File, packageName: String = file.inferPackageName(), host: Context) {
         val manifest = requireNotNull(readManifest(file)) { "Missing Cloudstream plugin manifest: ${file.name}" }
         writeDiagnostic(
             "load:start file=${file.name} class=${manifest.pluginClassName} version=${manifest.version} requiresResources=${manifest.requiresResources}",
@@ -214,7 +371,7 @@ class CloudstreamRuntimeManager @Inject constructor(
                 plugin.resources = loadPluginResources(preparedFile)
             }
             if (plugin is Plugin) {
-                plugin.load(context)
+                plugin.load(host)
             } else {
                 plugin.load()
             }
@@ -241,6 +398,7 @@ class CloudstreamRuntimeManager @Inject constructor(
             extractors = registeredExtractors,
             manifest = manifest,
             packageName = packageName,
+            host = WeakReference(host),
         )
         Log.i(
             TAG,
@@ -399,9 +557,12 @@ class CloudstreamRuntimeManager @Inject constructor(
         val extractors: List<ExtractorApi>,
         val manifest: PluginManifest,
         val packageName: String,
+        /** The context the plugin's `load` got, which it may keep for its dialogs. */
+        val host: WeakReference<Context>,
     )
 
     companion object {
         private const val TAG = "CloudstreamRuntime"
+        private const val MAX_CAUSE_DEPTH = 8
     }
 }

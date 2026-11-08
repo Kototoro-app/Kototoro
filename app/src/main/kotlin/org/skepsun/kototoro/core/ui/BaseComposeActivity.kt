@@ -21,10 +21,11 @@ import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.core.view.WindowCompat
-import androidx.appcompat.app.AppCompatActivity
+import com.lagradost.cloudstream3.MainActivity as CloudstreamHostActivity
 import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
+import org.skepsun.kototoro.cloudstream.runtime.CloudstreamPluginGuard
 import org.skepsun.kototoro.core.exceptions.resolve.ExceptionResolver
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsState
@@ -39,8 +40,16 @@ import org.skepsun.kototoro.core.ui.util.configureSafeAreaWindow
 import org.skepsun.kototoro.main.ui.protect.ScreenshotPolicyHelper
 
 abstract class BaseComposeActivity :
-    AppCompatActivity(),
+    // Cloudstream plugins cast the context they load with to its activity.
+    CloudstreamHostActivity(),
     ScreenshotPolicyHelper.ContentContainer {
+
+    // Cloudstream plugins restart the app through the activity they loaded with; see CloudstreamPluginGuard.
+    // `startActivity(Intent)` lands here too.
+    override fun startActivity(intent: Intent?, options: Bundle?) {
+        CloudstreamPluginGuard.checkRestart(this, intent)
+        super.startActivity(intent, options)
+    }
 
     data class ComposeModal(
         val key: String,
