@@ -11,8 +11,9 @@ class GetTracksUseCase @Inject constructor(
         limit: Int,
         cooldowns: Map<String, Long>,
         challenged: Set<String>,
+        respectSchedule: Boolean,
     ): List<ContentTracking> {
         repository.updateTracks()
-        return repository.getTracks(limit, cooldowns, challenged)
+        return repository.getTracks(limit, cooldowns, challenged, respectSchedule)
     }
 }

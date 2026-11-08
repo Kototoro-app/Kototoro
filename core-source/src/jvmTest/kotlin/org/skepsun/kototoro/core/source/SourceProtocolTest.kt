@@ -291,6 +291,35 @@ class SourceProtocolTest {
     }
 
     @Test
+    fun `rate limits cross the wire with the wait the site asked for`() = runTest {
+        val limited = object : SourceRuntime by runtime {
+            override suspend fun getSources(): List<SourceRef> =
+                throw IllegalStateException("wrapped", SourceRateLimitException(retryAfterMillis = 30_000L))
+            // Mihon's HttpException only names the status in its message.
+            override suspend fun describe(sourceName: String): SourceDescriptor =
+                throw IllegalStateException("HTTP error 429")
+        }
+        var reported = false
+        val client = SourceProtocolClient(SourceEndpoint(limited, { _, _ -> reported = true })) { "limited" }
+        val first = expectFailure<SourceRemoteException> { client.getSources() }
+        assertEquals(SourceErrorCode.RATE_LIMITED, first.error.code)
+        assertEquals(30_000L, first.error.retryAfterMillis)
+        assertEquals(30_000L, SourceRateLimitException.find(first)?.retryAfterMillis)
+        val second = expectFailure<SourceRemoteException> { client.describe(source.name) }
+        assertEquals(SourceErrorCode.RATE_LIMITED, second.error.code)
+        assertNull(second.error.retryAfterMillis)
+        assertFalse(reported)
+    }
+
+    @Test
+    fun `rate limits are recognized in library messages but not in other numbers`() {
+        assertTrue(SourceRateLimitException.find(java.io.IOException("x", IllegalStateException("HTTP error 429"))) != null)
+        assertTrue(SourceRateLimitException.find(Exception("HTTP error fetching URL. Status=429, URL=[x]")) != null)
+        assertNull(SourceRateLimitException.find(IllegalStateException("HTTP error 404")))
+        assertNull(SourceRateLimitException.find(IllegalStateException("Chapter 429 not found")))
+    }
+
+    @Test
     fun `browser sessions and cookie imports round-trip and default from the homepage`() = runTest {
         val imported = mutableListOf<String>()
         val browser = object : SourceRuntime by runtime {

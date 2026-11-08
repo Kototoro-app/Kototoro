@@ -255,4 +255,25 @@ class DesktopTrackerTest {
             assertEquals(1, runtime.database.getTracksDao().find(10)?.newChapters)
         }
     }
+
+    @Test
+    fun `a rate limiting source cools down and is left alone by the next run`() = runBlocking<Unit> {
+        DesktopRuntime.open(directory).use { runtime ->
+            val library = DesktopLibrary(runtime.database) { source }
+            val remote = work((1L..2L).map { chapter(it) })
+            var calls = 0
+            // A wait longer than a minute gives the source up for the run and cools it down for later runs.
+            val tracker = DesktopTracker(runtime.database, library, fetchDetails = {
+                calls++
+                throw SourceRateLimitException(retryAfterMillis = 120_000L)
+            }, preferredBranch = { null }, now = { 86_400_000L })
+            library.addFavourite(remote)
+
+            assertEquals(1, tracker.checkAll().failed)
+            assertEquals(1, calls)
+            val second = tracker.checkAll()
+            assertEquals(1, calls, "the cooling source is not asked again")
+            assertEquals(1, second.skipped)
+        }
+    }
 }

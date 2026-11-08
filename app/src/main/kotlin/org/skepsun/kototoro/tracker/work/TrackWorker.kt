@@ -160,6 +160,8 @@ class TrackWorker @AssistedInject constructor(
             limit = if (isFullRun) Int.MAX_VALUE else BATCH_SIZE,
             cooldowns = sourceState.read(),
             challenged = sourceState.readChallenged(),
+            // A run the user asked for checks everything; background runs only works due at their release pace.
+            respectSchedule = !isFullRun,
         )
         if (tracks.isEmpty()) {
             return Result.success()

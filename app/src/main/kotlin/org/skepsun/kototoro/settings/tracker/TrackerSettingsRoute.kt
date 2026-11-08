@@ -63,6 +63,7 @@ fun TrackerSettingsRoute(
     val trackerDownloadStrategy =
         settings.observeAsState(AppSettings.KEY_TRACKER_DOWNLOAD) { trackerDownloadStrategy }.value
     val categoriesCount = viewModel.categoriesCount.collectAsStateWithLifecycle().value
+    val failingCount = viewModel.failingCount.collectAsStateWithLifecycle().value
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
 
@@ -100,6 +101,7 @@ fun TrackerSettingsRoute(
         trackSources = trackSources,
         isTrackerSkipCompleted = isTrackerSkipCompleted,
         isTrackerMarkDuplicatesRead = isTrackerMarkDuplicatesRead,
+        failingCount = failingCount,
         categoriesSummary = categoriesSummary,
         isCategoriesEnabled = isTrackerEnabled && AppSettings.TRACK_FAVOURITES in trackSources,
         notificationsSummary = notificationsSummary,

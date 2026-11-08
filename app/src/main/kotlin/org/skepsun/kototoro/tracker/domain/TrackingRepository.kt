@@ -110,6 +110,7 @@ class TrackingRepository @Inject constructor(
         limit: Int,
         cooldowns: Map<String, Long>,
         challenged: Set<String>,
+        respectSchedule: Boolean,
         now: Long = System.currentTimeMillis(),
     ): List<ContentTracking> {
         val dao = db.getTracksDao()
@@ -118,7 +119,15 @@ class TrackingRepository @Inject constructor(
         } else {
             dao.findQueue()
         }
-        return selectTrackBatch(queue, TrackQueueEntry::source, limit, cooldowns, challenged, now)
+        return selectTrackBatch(
+            queue = queue,
+            sourceOf = TrackQueueEntry::source,
+            limit = limit,
+            cooldowns = cooldowns,
+            challenged = challenged,
+            now = now,
+            due = { entry -> !respectSchedule || isTrackDue(entry.nextCheckTime, now) },
+        )
             .mapNotNull { entry -> dao.find(entry.mangaId)?.toContentTracking() }
     }
 
@@ -204,8 +213,9 @@ class TrackingRepository @Inject constructor(
         val prev = getOrCreateTrack(manga.id)
         val entity = prev.mergeWith(updates, manga.id)
         db.getTracksDao().upsert(entity)
+        val now = System.currentTimeMillis()
+        db.updateTrackSchedule(manga.id, succeeded = updates is MangaUpdates.Success, now = now)
         if (updates is MangaUpdates.Success) {
-            val now = System.currentTimeMillis()
             if (owner?.isLocal == true) {
                 db.recordUpdateChapters(manga.id, updates.newChapters.withIndex().toEntities(manga.id), now)
             } else {
@@ -298,6 +308,7 @@ class TrackingRepository @Inject constructor(
     suspend fun gc() = db.withTransaction {
         db.getTracksDao().gc()
         db.getTrackLogsDao().deleteOrphans()
+        db.getTrackScheduleDao().gc()
         db.clearUnrecordedTrackCounters()
     }
 
@@ -404,8 +415,10 @@ class TrackingRepository @Inject constructor(
             return emptyList()
         }
         val fallbackByAnchorId = buildFallbackContentByAnchorId(tracks.map(TrackEntity::mangaId))
+        val schedules = db.getTrackScheduleDao().findByIds(tracks.map(TrackEntity::mangaId)).associateBy { it.mangaId }
         return tracks.mapNotNull { track ->
             val fallbackContent = fallbackByAnchorId[track.mangaId] ?: return@mapNotNull null
+            val schedule = schedules[track.mangaId]
             TrackDebugItem(
                 manga = fallbackContent,
                 lastChapterId = track.lastChapterId,
@@ -414,7 +427,12 @@ class TrackingRepository @Inject constructor(
                 lastChapterDate = track.lastChapterDate.toInstantOrNull(),
                 lastResult = track.lastResult,
                 lastError = track.lastError,
+                failCount = schedule?.failCount ?: 0,
+                nextCheckTime = schedule?.nextCheckTime?.toInstantOrNull(),
             )
+        }.sortedByDescending { item ->
+            // Works that keep failing first, the rest in check order.
+            if (item.failCount >= PERSISTENT_FAILURE_COUNT) item.failCount else 0
         }
     }
 

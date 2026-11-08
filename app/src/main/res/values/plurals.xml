@@ -56,4 +56,12 @@
 		<item quantity="one">%1$d minute</item>
 		<item quantity="other">%1$d minutes</item>
 	</plurals>
+	<plurals name="tracker_failing_titles_summary">
+		<item quantity="one">%1$d title failed %2$d checks or more in a row</item>
+		<item quantity="other">%1$d titles failed %2$d checks or more in a row</item>
+	</plurals>
+	<plurals name="tracker_failed_in_a_row">
+		<item quantity="one">Failed %1$d time in a row</item>
+		<item quantity="other">Failed %1$d times in a row</item>
+	</plurals>
 </resources>

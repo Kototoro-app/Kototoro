@@ -39,8 +39,8 @@ const val CHALLENGED_SOURCE_PROBES = 1
  * The titles a run checks, out of [queue] (least recently checked first). Skipped titles are not marked as
  * checked, so a source that keeps being skipped would otherwise keep its titles at the head of the queue and fill
  * every run with titles that are skipped again: sources still in [cooldowns] (epoch millis, compared with [now])
- * are left out, and a source in [challenged] puts in only [probes] titles until it answers. The order of the
- * queue is kept.
+ * are left out, and a source in [challenged] puts in only [probes] titles until it answers. Titles that are not
+ * [due] yet (see [isTrackDue]) are left out too. The order of the queue is kept.
  */
 fun <T> selectTrackBatch(
     queue: List<T>,
@@ -50,11 +50,13 @@ fun <T> selectTrackBatch(
     challenged: Set<String>,
     now: Long,
     probes: Int = CHALLENGED_SOURCE_PROBES,
+    due: (T) -> Boolean = { true },
 ): List<T> {
     if (limit <= 0) return emptyList()
     val taken = HashMap<String, Int>()
     val result = ArrayList<T>(minOf(limit, queue.size))
     for (item in queue) {
+        if (!due(item)) continue
         val source = sourceOf(item)
         if (source != null) {
             if ((cooldowns[source] ?: 0L) > now) continue

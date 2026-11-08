@@ -1576,8 +1576,10 @@ class DesktopController(
         mutableState.update { it.copy(suggestionNotice = null) }
     }
 
-    private suspend fun runTrackerOnIo(onProgress: suspend (Int, Int) -> Unit = { _, _ -> }) =
-        session.tracker.checkAll(onProgress).also { recordRun(LAST_TRACKER_RUN) }
+    private suspend fun runTrackerOnIo(
+        respectSchedule: Boolean = false,
+        onProgress: suspend (Int, Int) -> Unit = { _, _ -> },
+    ) = session.tracker.checkAll(respectSchedule, onProgress).also { recordRun(LAST_TRACKER_RUN) }
 
     private fun recordRun(key: String) {
         backgroundPreferences.edit(SourcePreferenceEdit(changes = mapOf(
@@ -1637,7 +1639,8 @@ class DesktopController(
     internal suspend fun runDueBackgroundWork(now: Long = System.currentTimeMillis()): Set<DesktopBackgroundTask> {
         val due = dueTasks(now, backgroundSchedules())
         if (DesktopBackgroundTask.TRACKER in due) {
-            val report = backgroundMutex.withLock { runTrackerOnIo() }
+            // Background runs check only works due at their release pace; "check for updates" checks all of them.
+            val report = backgroundMutex.withLock { runTrackerOnIo(respectSchedule = true) }
             val feed = session.feed.observe(session.storage.database).first()
             val contents = feedContentsOnIo(feed)
             mutableState.update { it.copy(feed = feed, feedContents = contents,

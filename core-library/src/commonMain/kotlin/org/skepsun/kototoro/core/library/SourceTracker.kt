@@ -8,6 +8,7 @@ import org.skepsun.kototoro.core.source.SourceChallengeException
 import org.skepsun.kototoro.core.source.SourceChapter
 import org.skepsun.kototoro.core.source.SourceContent
 import org.skepsun.kototoro.core.source.SourceErrorCode
+import org.skepsun.kototoro.core.source.SourceRateLimitException
 import org.skepsun.kototoro.core.source.SourceRemoteException
 import org.skepsun.kototoro.tracker.data.TrackEntity
 import org.skepsun.kototoro.tracker.domain.SourceAnswer
@@ -20,6 +21,8 @@ import org.skepsun.kototoro.tracker.domain.trackedLastChapterDate
 import org.skepsun.kototoro.tracker.domain.ChapterSnapshotResult
 import org.skepsun.kototoro.tracker.domain.IncompleteChapterListException
 import org.skepsun.kototoro.tracker.domain.refreshPendingUpdateCount
+import org.skepsun.kototoro.tracker.domain.isTrackDue
+import org.skepsun.kototoro.tracker.domain.updateTrackSchedule
 
 /** [skipped] titles were not checked: their source asked for a browser challenge earlier in the run. */
 data class SourceTrackReport(
@@ -42,6 +45,12 @@ class SourceTracker(
     private val preferredBranch: (SourceContent) -> String?,
     private val now: () -> Long = { kotlin.time.Clock.System.now().toEpochMilliseconds() },
 ) {
+    /**
+     * Sources a run gave up on because of rate limits, and until when later runs leave them alone. Android keeps this
+     * in preferences; the desktop app runs for long, so this instance's memory is enough there.
+     */
+    private val sourceCooldowns = HashMap<String, Long>()
+
     suspend fun trackedCategoryCount(): Int = database.getFavouriteCategoriesDao().findAll().count { it.track }
 
     suspend fun enableTrackingForAllCategories() = database.useWriterConnection { connection ->
@@ -66,8 +75,21 @@ class SourceTracker(
         }
     }
 
-    suspend fun checkAll(onProgress: suspend (done: Int, total: Int) -> Unit = { _, _ -> }): SourceTrackReport {
-        val ids = syncAnchors()
+    /**
+     * Checks the tracked works; a background run ([respectSchedule]) only those due at their release pace
+     * ([isTrackDue]), a run the user asked for all of them.
+     */
+    suspend fun checkAll(
+        respectSchedule: Boolean = false,
+        onProgress: suspend (done: Int, total: Int) -> Unit = { _, _ -> },
+    ): SourceTrackReport {
+        val tracked = syncAnchors()
+        val time = now()
+        val ids = if (respectSchedule) {
+            tracked.filter { id -> isTrackDue(database.getTrackScheduleDao().find(id)?.nextCheckTime ?: 0L, time) }
+        } else {
+            tracked
+        }
         database.useWriterConnection { connection ->
             connection.immediateTransaction { database.repairLegacyUpdateCounters() }
         }
@@ -83,8 +105,15 @@ class SourceTracker(
             sourceOf = { (_, stored) -> stored?.source?.name.orEmpty() },
             now = now,
             answerOf = { outcome: CheckOutcome ->
-                if (outcome.error.isChallenge()) SourceAnswer.Challenged else SourceAnswer.Answered
+                when {
+                    outcome.error.isChallenge() -> SourceAnswer.Challenged
+                    else -> SourceRateLimitException.find(outcome.error)
+                        ?.let { SourceAnswer.RateLimited(it.retryAfterMillis) }
+                        ?: SourceAnswer.Answered
+                }
             },
+            cooldowns = sourceCooldowns.toMap(),
+            onCooldown = { source, until -> sourceCooldowns[source] = until },
         ) { (id, stored) -> checkStored(id, stored) }.collect { check ->
             when (check) {
                 is SourceCheck.Skipped -> skipped++
@@ -113,7 +142,13 @@ class SourceTracker(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Throwable) {
-            database.getTracksDao().upsert(track.afterFailedCheck(e.toString(), now()))
+            val time = now()
+            database.useWriterConnection { connection ->
+                connection.immediateTransaction {
+                    database.getTracksDao().upsert(track.afterFailedCheck(e.toString(), time))
+                    database.updateTrackSchedule(mangaId, succeeded = false, now = time)
+                }
+            }
             CheckOutcome(null, e)
         }
     }
@@ -145,6 +180,7 @@ class SourceTracker(
                     now = time,
                 ))
                 database.refreshPendingUpdateCount(mangaId)
+                database.updateTrackSchedule(mangaId, succeeded = true, now = time)
                 reported.size
             }
         }

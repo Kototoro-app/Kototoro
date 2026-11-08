@@ -9180,6 +9180,17 @@
         }
       }
     },
+    "来源访问过于频繁，请稍后再试": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The source is limiting requests; try again later"
+          }
+        }
+      }
+    },
     "来源详情": {
       "localizations": {
         "en": {

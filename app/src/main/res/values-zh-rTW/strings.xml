@@ -682,6 +682,8 @@
     <string name="disable_connectivity_check">停用連線檢查</string>
     <string name="disable_nsfw_notifications_summary">不顯示有關 NSFW 漫畫更新的通知</string>
     <string name="tracker_debug_info">檢查新章節日誌</string>
+    <string name="tracker_failing_titles">持續檢查失敗的作品</string>
+    <string name="tracker_next_check">下次檢查 %s</string>
     <string name="tracker_debug_info_summary">有關背景檢查新章節的偵錯資訊</string>
     <string name="sources_disabled">來源已停用</string>
     <string name="disable">停用</string>

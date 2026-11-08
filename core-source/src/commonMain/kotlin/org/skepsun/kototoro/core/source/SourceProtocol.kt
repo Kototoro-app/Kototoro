@@ -91,6 +91,8 @@ enum class SourceErrorCode {
     RUNTIME_FAILURE,
     /** The site answered with a browser challenge (Cloudflare and the like); pass it in a browser, then retry. */
     CHALLENGE_REQUIRED,
+    /** The site answered HTTP 429; wait [SourceError.retryAfterMillis] when given before asking it again. */
+    RATE_LIMITED,
 }
 
 @Serializable
@@ -99,6 +101,8 @@ data class SourceError(
     val message: String,
     /** [SourceErrorCode.CHALLENGE_REQUIRED] only: the challenged site's origin (scheme and host, no path or query). */
     val url: String? = null,
+    /** [SourceErrorCode.RATE_LIMITED] only: how long the site asked to wait, when it said. */
+    val retryAfterMillis: Long? = null,
 )
 
 @Serializable

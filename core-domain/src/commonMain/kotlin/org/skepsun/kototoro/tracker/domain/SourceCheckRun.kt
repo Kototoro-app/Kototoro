@@ -28,7 +28,8 @@ sealed interface SourceCheck<out T, out R> {
  * a challenge or repeated refusals skip the rest of it, which is emitted without calling [check].
  *
  * A source whose entry in [cooldowns] (epoch millis) is still in the future is skipped from the start. When rate
- * limits make the run give up on a source, [onCooldown] gets the time until which later runs should skip it.
+ * limits make the run give up on a source, [onCooldown] gets the time until which later runs should skip it; it is
+ * called under the run's lock, one call at a time.
  *
  * [now] is the clock in epoch millis the pauses are measured on; tests pass the virtual one.
  */
@@ -74,13 +75,12 @@ fun <T, R> checkBySource(
                 }
                 val result = globalLimit.withPermit { check(item) }
                 val answer = answerOf(result)
-                val cooldown = healthLock.withLock {
+                healthLock.withLock {
                     val before = health[source] ?: SourceHealth()
                     val after = before.after(answer, now())
                     health[source] = after
-                    after.cooldownUntil.takeIf { it > before.cooldownUntil }
+                    if (after.cooldownUntil > before.cooldownUntil) onCooldown(source, after.cooldownUntil)
                 }
-                if (cooldown != null) onCooldown(source, cooldown)
                 send(SourceCheck.Checked(item, source, result))
             }
         }

@@ -93,21 +93,23 @@ Kotatsu-Redo（`CheckNewChaptersUseCase`、`GetTracksUseCase`、`StaleTrackPolic
 
 ### 3.6 智能调度
 
-- `tracks` 新增 `fetch_interval`（天）、`next_check_time`。算法同 `FetchInterval`：取最近 3–10 个不同上传日，
+- `track_schedule`（3.8）记录 `fetch_interval`（天）、`next_check_time`。算法同 `FetchInterval`：取最近 3–10 个不同上传日，
   相邻间隔取中位数，限制 1–28 天；无上传日期用发现时间；都没有默认 7 天；长期无更新时间隔倍增至 28 天。
 - 选批：先取到期的，再按最久未查；保留按来源交错、冷却、挑战试探。
 - 兜底：任何作品至少每 7 天检查一次。手动“检查更新”不受限。“跳过已完结”保留。
 
 ### 3.7 失败处理
 
-- `tracks` 新增 `fail_count`：连续失败按 1/2/4/7 天推迟，成功清零。
-- 更新页提供“持续失败”（连续 5 次及以上）列表与换源入口。
+- `track_schedule.fail_count`：连续失败按 1/2/4/7 天推迟，成功清零。
+- 追更设置页在有作品连续失败 5 次及以上时显示“持续检查失败的作品”，打开检查日志；日志把这些作品排在最前，
+  标出连续失败次数与下次检查时间，点进详情可换源。
 
 ### 3.8 数据库
 
-一次迁移 86 → 87：`tracks` 增加 `fetch_interval INTEGER NOT NULL DEFAULT 0`、
-`next_check_time INTEGER NOT NULL DEFAULT 0`、`fail_count INTEGER NOT NULL DEFAULT 0`。
-按 CLAUDE.md 的迁移流程：commonMain 迁移 + Android 子类 + schema JSON + 两类迁移测试。
+一次迁移 86 → 87：新表 `track_schedule(manga_id, fetch_interval, next_check_time, fail_count)`，外键级联到
+`manga`。没有加在 `tracks` 上：许多写入方会重建整行 `TrackEntity`（检查结果、阅读、写入点），任何一处漏带新列都会把
+调度清零；调度又是本机状态，不应随 `tracks` 进入备份与同步。按 CLAUDE.md 的迁移流程：commonMain 迁移 + Android
+子类 + schema JSON + 两类迁移测试。
 
 ### 3.9 Windows
 
@@ -142,5 +144,12 @@ Kotatsu-Redo（`CheckNewChaptersUseCase`、`GetTracksUseCase`、`StaleTrackPolic
   `SourceTracker`）只负责拉取，新章节以写入点结果为准；本地作品保留锚点链，并按 3.4 加了阅读位置兜底。
   同号已读自动标已读是设置项 `tracker_mark_duplicates_read`（默认关，Android 追更设置页）。
   单元/数据库测试覆盖写入点各分支；尚未在真机上用真实来源验证。
-- [ ] 阶段 4
-- [ ] 阶段 5
+- [x] 阶段 4：core-domain `TrackSchedule.kt`（`fetchIntervalDays` 移植 `FetchInterval` 并按 UTC 日计；
+  `nextCheckAfterSuccess` 含十个空周期翻倍与 7 天上限；`nextCheckAfterFailure`；`isTrackDue` 一天宽限；
+  `updateTrackSchedule`）。Android 后台批次与 Windows 后台运行只取到期作品，手动“检查更新”不受限；每次检查后
+  两端都记录调度。迁移 86 → 87 在 bundled 驱动（`SharedMigrationTest`）与 Android（`MangaDatabaseSnapshotChainTest`，
+  模拟器）上都验证过。
+- [x] 阶段 5：来源协议新增 `SourceErrorCode.RATE_LIMITED` 与 `SourceError.retryAfterMillis`，
+  `SourceRateLimitException.find` 识别异常链中的限流（含 Mihon `HttpException` 与 Jsoup 的 429 消息）；
+  Windows `SourceTracker` 据此退避，跨轮冷却保存在实例内存（桌面应用常驻）。iOS 错误文案补上。持续失败列表见 3.7。
+  Windows 外壳（`desktop-app`）在本机缺少兼容 API 目录，未编译，只改了 `runTrackerOnIo` 的一个参数与调用。

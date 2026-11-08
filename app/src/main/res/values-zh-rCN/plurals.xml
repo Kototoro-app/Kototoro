@@ -42,4 +42,10 @@
     <plurals name="old_chapters_in_total">
         <item quantity="other">共 %1$d 个旧章节</item>
     </plurals>
+    <plurals name="tracker_failing_titles_summary">
+        <item quantity="other">%1$d 部作品连续检查失败 %2$d 次以上</item>
+    </plurals>
+    <plurals name="tracker_failed_in_a_row">
+        <item quantity="other">连续失败 %1$d 次</item>
+    </plurals>
 </resources>

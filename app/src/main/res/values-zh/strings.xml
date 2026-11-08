@@ -2529,6 +2529,8 @@
     <string name="total_chapters">总章节数</string>
     <string name="track_sources">章节更新范围</string>
     <string name="tracker_debug_info">章节检查更新日志</string>
+    <string name="tracker_failing_titles">持续检查失败的作品</string>
+    <string name="tracker_next_check">下次检查 %s</string>
     <string name="tracker_debug_info_summary">记录漫画后台更新时的调试日志</string>
     <string name="tracker_warning">不同设备及不同的系统调度可能会杀掉本应用的后台任务</string>
     <string name="tracker_wifi_only_summary">使用移动网络时停止检查新章节</string>

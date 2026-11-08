@@ -814,6 +814,8 @@
     <string name="sources_disabled">無効なソース</string>
     <string name="disable_connectivity_check">接続チェックを無効にする</string>
     <string name="tracker_debug_info">新しいチャプターログの確認</string>
+    <string name="tracker_failing_titles">チェックに失敗し続けている作品</string>
+    <string name="tracker_next_check">次回のチェック %s</string>
     <string name="tracker_debug_info_summary">新規チャプター向けバックグラウンドチェックに関するデバッグ情報</string>
     <string name="_new">新しい</string>
     <string name="image_server">優先画像サーバ</string>
