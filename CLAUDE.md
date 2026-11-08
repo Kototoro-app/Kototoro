@@ -672,8 +672,8 @@ KMP/iOS 方案与进度见 `docs/architecture/kmp-ios-plan-2026-10.md`。KMP 模
 - 自动回退到完整 APK 下载
 
 **数据库**：
-- Room 数据库（`MangaDatabase`）在 KMP 模块 `core-db/`，DATABASE_VERSION = 85（`core-db/src/commonMain/.../core/db/MangaDatabase.kt`）；导出的 schema 仍位于 `app/schemas/org.skepsun.kototoro.core.db.MangaDatabase/`（已提交，由 `core-db` 的 Room 插件导出，`app` 的 androidTest 以 assets 读取）
-- 迁移文件 `core-db/src/androidMain/kotlin/org/skepsun/kototoro/core/db/migrations/Migration1To2.kt` 到 `Migration83To84.kt`（另含历史遗留的降级迁移 `Migration24To23.kt`，仍保留在 `getDatabaseMigrations` 列表中，位于 `core-db` 的 `MangaDatabaseMigrations.kt`）；84→85 起的迁移在 commonMain（`Migration84To85.kt` 与 `sharedDatabaseMigrations()`），Android/Windows/iOS 三端共用
+- Room 数据库（`MangaDatabase`）在 KMP 模块 `core-db/`，DATABASE_VERSION = 87（`core-db/src/commonMain/.../core/db/MangaDatabase.kt`）；导出的 schema 仍位于 `app/schemas/org.skepsun.kototoro.core.db.MangaDatabase/`（已提交，由 `core-db` 的 Room 插件导出，`app` 的 androidTest 以 assets 读取）
+- 迁移文件 `core-db/src/androidMain/kotlin/org/skepsun/kototoro/core/db/migrations/Migration1To2.kt` 到 `Migration83To84.kt`（另含历史遗留的降级迁移 `Migration24To23.kt`，仍保留在 `getDatabaseMigrations` 列表中，位于 `core-db` 的 `MangaDatabaseMigrations.kt`）；84→85 起的迁移在 commonMain（`Migration84To85.kt` 到 `Migration86To87.kt`，注册在 `sharedDatabaseMigrations()`），Android/Windows/iOS 三端共用
 - Android 必须继续使用框架 SQLite 驱动：旧迁移实现的是 `migrate(SupportSQLiteDatabase)`，换成 `BundledSQLiteDriver` 会抛 `NotImplementedError`
 - DAO 的过滤条件使用数据类型 `ListFilterCriteria`（`core-db`）；应用层的 `ListFilterOption`（带资源 id 与图标）在 Repository 边界用 `toCriteria()` 转换
 - 用户状态（收藏/历史/统计/偏好/追踪）直接挂在 `manga` 行上；实体图谱与 work 表已在 v84 移除（`Migration83To84` → `ProjectionOwnershipMigrationResolver`）
