@@ -3,7 +3,8 @@ package org.skepsun.kototoro.tracker.domain
 /*
  * How one check run spreads its requests over sources. Most libraries sit on a few sources, so a plain global
  * limit can put every request on one site; these rules interleave sources, cap each one, and back a source off
- * for the rest of the run when it answers with a rate limit or a challenge.
+ * for the rest of the run when it answers with a rate limit or a challenge. A source given up on because of rate
+ * limits also gets a cooldown that the next runs respect, so it is not asked again as soon as the next run starts.
  */
 
 /** Checks running at once in one run. */
@@ -56,11 +57,15 @@ sealed interface SourceAnswer {
     data object Challenged : SourceAnswer
 }
 
-/** One source's state during a check run. */
+/**
+ * One source's state during a check run. [cooldownUntil] (epoch millis) is set when rate limits made the run give
+ * up on the source: until then later runs skip it too.
+ */
 data class SourceHealth(
     val pausedUntil: Long = 0L,
     val rateLimits: Int = 0,
     val skipped: Boolean = false,
+    val cooldownUntil: Long = 0L,
 ) {
 
     fun turn(now: Long): SourceTurn = when {
@@ -71,19 +76,25 @@ data class SourceHealth(
 
     /**
      * After a 429. Honours [retryAfterMs] when the source sent one, else backs off exponentially. A source that
-     * keeps refusing, or asks for a long wait, is skipped: holding a run open for it helps no other source.
+     * keeps refusing, or asks for a long wait, is skipped: holding a run open for it helps no other source. It
+     * then cools down for at least [RATE_LIMIT_COOLDOWN_MS], longer when the source asked for it, up to
+     * [MAX_COOLDOWN_MS].
      */
     fun afterRateLimit(now: Long, retryAfterMs: Long?): SourceHealth {
         val count = rateLimits + 1
         val pause = retryAfterMs?.takeIf { it > 0 }
             ?: (RATE_LIMIT_BACKOFF_MS shl (count - 1).coerceAtMost(MAX_BACKOFF_SHIFT))
         if (count >= MAX_RATE_LIMITS || pause > MAX_PAUSE_MS) {
-            return copy(rateLimits = count, skipped = true)
+            val cooldown = pause.coerceIn(RATE_LIMIT_COOLDOWN_MS, MAX_COOLDOWN_MS)
+            return copy(rateLimits = count, skipped = true, cooldownUntil = maxOf(cooldownUntil, now + cooldown))
         }
         return copy(pausedUntil = maxOf(pausedUntil, now + pause), rateLimits = count)
     }
 
-    /** After a Cloudflare or similar challenge: background checks cannot solve it, so the rest would fail too. */
+    /**
+     * After a Cloudflare or similar challenge: background checks cannot solve it, so the rest would fail too. No
+     * cooldown: the next run spends one request to find out whether the user has passed the check meanwhile.
+     */
     fun afterChallenge(): SourceHealth = copy(skipped = true)
 
     /** After an answer that was not a rate limit: the source is keeping up again. */
@@ -95,10 +106,31 @@ data class SourceHealth(
         SourceAnswer.Challenged -> afterChallenge()
     }
 
-    private companion object {
-        const val RATE_LIMIT_BACKOFF_MS = 5_000L
-        const val MAX_BACKOFF_SHIFT = 4
-        const val MAX_PAUSE_MS = 60_000L
-        const val MAX_RATE_LIMITS = 3
+    companion object {
+
+        /** Shortest cooldown after a run gave up on a rate-limiting source. */
+        const val RATE_LIMIT_COOLDOWN_MS = 30 * 60_000L
+
+        /** Longest cooldown, whatever Retry-After asked for. */
+        const val MAX_COOLDOWN_MS = 6 * 60 * 60_000L
+
+        private const val RATE_LIMIT_BACKOFF_MS = 5_000L
+        private const val MAX_BACKOFF_SHIFT = 4
+        private const val MAX_PAUSE_MS = 60_000L
+        private const val MAX_RATE_LIMITS = 3
     }
 }
+
+/**
+ * Source cooldowns as stored between runs: one "<source>=<epoch millis>" string each, the format Android keeps in
+ * preferences. Malformed entries are dropped.
+ */
+fun decodeSourceCooldowns(entries: Set<String>): Map<String, Long> = entries.mapNotNull { entry ->
+    val separator = entry.lastIndexOf('=')
+    if (separator <= 0) return@mapNotNull null
+    entry.substring(separator + 1).toLongOrNull()?.let { until -> entry.substring(0, separator) to until }
+}.toMap()
+
+/** [cooldowns] still running at [now], encoded for storage; expired ones are left out. */
+fun encodeSourceCooldowns(cooldowns: Map<String, Long>, now: Long): Set<String> =
+    cooldowns.filterValues { it > now }.mapTo(LinkedHashSet()) { (source, until) -> "$source=$until" }

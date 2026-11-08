@@ -112,4 +112,51 @@ class SourceCheckRunTest {
         )
         assertEquals(5, results.size)
     }
+
+    @Test
+    fun aSourceStillCoolingDownIsSkippedAndAnExpiredOneIsChecked() = runTest {
+        val checked = ArrayList<String>()
+
+        val results = checkBySource(
+            items = listOf("a1", "a2", "b1", "c1"),
+            sourceOf = ::sourceOf,
+            now = { testScheduler.currentTime + 10_000L },
+            answerOf = { _: String -> SourceAnswer.Answered },
+            cooldowns = mapOf("a" to 20_000L, "b" to 10_000L),
+        ) { item ->
+            checked += item
+            item
+        }.toList()
+
+        assertEquals(listOf("b1", "c1"), checked.sorted())
+        assertEquals(
+            setOf("a1", "a2"),
+            results.filterIsInstance<SourceCheck.Skipped<String>>().map { it.item }.toSet(),
+        )
+    }
+
+    @Test
+    fun givingUpOnARateLimitingSourceReportsItsCooldownOnce() = runTest {
+        val reported = ArrayList<Pair<String, Long>>()
+
+        val results = checkBySource(
+            items = listOf("a1", "a2", "a3", "b1"),
+            sourceOf = ::sourceOf,
+            now = { testScheduler.currentTime },
+            answerOf = { item: String ->
+                if (item.startsWith("a")) SourceAnswer.RateLimited(2 * 3_600_000L) else SourceAnswer.Answered
+            },
+            sourceParallelism = 1,
+            onCooldown = { source, until -> reported += source to until },
+        ) { item ->
+            delay(100)
+            item
+        }.toList()
+
+        assertEquals(listOf("a" to 100L + 2 * 3_600_000L), reported)
+        assertEquals(
+            setOf("a2", "a3"),
+            results.filterIsInstance<SourceCheck.Skipped<String>>().map { it.item }.toSet(),
+        )
+    }
 }

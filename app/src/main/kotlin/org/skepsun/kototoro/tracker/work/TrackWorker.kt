@@ -174,16 +174,20 @@ class TrackWorker @AssistedInject constructor(
      * Checks [tracks] taking sources in turn, with at most [TRACK_SOURCE_PARALLELISM] checks per source under
      * [TRACK_GLOBAL_PARALLELISM] overall, so a library on a few sites does not put every request on one of them.
      * A source that rate-limits is paused, and one that asks for a challenge or keeps refusing is skipped for
-     * the rest of the run; skipped titles are not checked, so they keep their place for the next run.
+     * the rest of the run; skipped titles are not checked, so they keep their place for the next run. A source given
+     * up on because of rate limits cools down, and later runs skip it until then.
      */
     @CheckResult
     private suspend fun checkUpdatesAsync(tracks: List<ContentTracking>): List<NotificationInfo> {
         var tally = CheckTally()
+        val cooldowns = TrackSourceCooldowns(applicationContext)
         return checkBySource(
             items = tracks,
             sourceOf = { it.manga.source.name },
             now = System::currentTimeMillis,
             answerOf = { updates: MangaUpdates -> (updates as? MangaUpdates.Failure)?.error.toSourceAnswer() },
+            cooldowns = cooldowns.read(),
+            onCooldown = cooldowns::put,
             check = ::checkTrack,
         ).map { check ->
             when (check) {

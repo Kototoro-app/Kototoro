@@ -1,11 +1,15 @@
 package org.skepsun.kototoro.tracker.work
 
+import android.content.Context
+import androidx.core.content.edit
 import eu.kanade.tachiyomi.network.HttpException
 import org.jsoup.HttpStatusException
 import org.skepsun.kototoro.core.exceptions.CloudFlareException
 import org.skepsun.kototoro.core.exceptions.InteractiveActionRequiredException
 import org.skepsun.kototoro.parsers.exception.TooManyRequestExceptions
 import org.skepsun.kototoro.tracker.domain.SourceAnswer
+import org.skepsun.kototoro.tracker.domain.decodeSourceCooldowns
+import org.skepsun.kototoro.tracker.domain.encodeSourceCooldowns
 import org.koitharu.kotatsu.parsers.exception.TooManyRequestExceptions as LegacyTooManyRequestExceptions
 
 /**
@@ -25,6 +29,28 @@ internal fun Throwable?.toSourceAnswer(): SourceAnswer {
         }
     }
     return SourceAnswer.Answered
+}
+
+/**
+ * Sources that rate-limited an earlier check run and should be left alone until their time is up. Kept in a
+ * preferences file of their own: it is per-device state, not a setting to back up or sync.
+ */
+internal class TrackSourceCooldowns(context: Context) {
+
+    private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+    fun read(): Map<String, Long> = decodeSourceCooldowns(prefs.getStringSet(KEY_COOLDOWNS, null).orEmpty())
+
+    @Synchronized
+    fun put(source: String, until: Long, now: Long = System.currentTimeMillis()) {
+        val cooldowns = read() + (source to until)
+        prefs.edit { putStringSet(KEY_COOLDOWNS, encodeSourceCooldowns(cooldowns, now)) }
+    }
+
+    private companion object {
+        const val PREFS_NAME = "tracker_source_cooldowns"
+        const val KEY_COOLDOWNS = "cooldowns"
+    }
 }
 
 private const val HTTP_TOO_MANY_REQUESTS = 429

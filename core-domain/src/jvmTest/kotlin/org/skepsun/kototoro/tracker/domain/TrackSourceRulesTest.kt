@@ -74,4 +74,43 @@ class TrackSourceRulesTest {
     fun aChallengeSkipsTheSource() {
         assertEquals(SourceTurn.Skip, SourceHealth().afterChallenge().turn(now = 0L))
     }
+
+    @Test
+    fun aSourceGivenUpOnForRateLimitsCoolsDownForAtLeastHalfAnHour() {
+        val health = SourceHealth()
+            .afterRateLimit(now = 0L, retryAfterMs = null)
+            .afterRateLimit(now = 0L, retryAfterMs = null)
+            .afterRateLimit(now = 1_000L, retryAfterMs = null)
+
+        assertEquals(1_000L + SourceHealth.RATE_LIMIT_COOLDOWN_MS, health.cooldownUntil)
+    }
+
+    @Test
+    fun aLongRetryAfterSetsTheCooldownUpToTheCap() {
+        assertEquals(
+            3_600_000L,
+            SourceHealth().afterRateLimit(now = 0L, retryAfterMs = 3_600_000L).cooldownUntil,
+        )
+        assertEquals(
+            SourceHealth.MAX_COOLDOWN_MS,
+            SourceHealth().afterRateLimit(now = 0L, retryAfterMs = 7 * 24 * 3_600_000L).cooldownUntil,
+        )
+    }
+
+    @Test
+    fun pausesAndChallengesDoNotCoolDown() {
+        assertEquals(0L, SourceHealth().afterRateLimit(now = 0L, retryAfterMs = 20_000L).cooldownUntil)
+        assertEquals(0L, SourceHealth().afterChallenge().cooldownUntil)
+    }
+
+    @Test
+    fun cooldownsRoundTripAndDropExpiredOrMalformedEntries() {
+        val encoded = encodeSourceCooldowns(mapOf("MIHON_1" to 5_000L, "OLD" to 900L), now = 1_000L)
+
+        assertEquals(setOf("MIHON_1=5000"), encoded)
+        assertEquals(
+            mapOf("MIHON_1" to 5_000L, "A=B" to 7L),
+            decodeSourceCooldowns(encoded + setOf("A=B=7", "=3", "broken", "X=notanumber")),
+        )
+    }
 }
