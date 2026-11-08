@@ -10,9 +10,10 @@ import java.util.concurrent.TimeUnit
 
 /**
  * NewPipeExtractor's HTTP layer on the app's content client (proxy, DNS, cookies), mirroring the official Cloudstream
- * app's `DownloaderTestImpl`: Cloudstream's YouTube extractor and YouTube plugins fetch every page through it.
+ * app's `DownloaderTestImpl`: Cloudstream's YouTube extractor and YouTube plugins fetch every page through it. Android
+ * and Windows both install it at start-up.
  */
-internal class CloudstreamNewPipeDownloader(client: OkHttpClient) : Downloader() {
+class CloudstreamNewPipeDownloader(client: OkHttpClient) : Downloader() {
 
     private val client = client.newBuilder()
         .readTimeout(READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)

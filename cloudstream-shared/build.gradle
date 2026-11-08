@@ -25,6 +25,7 @@ dependencies {
 	compileOnly files(cloudstreamLibrary)
 	compileOnly project(':parser-api')
 	compileOnly libs.okhttp
+	compileOnly libs.newpipe.extractor
 	implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:${libs.versions.coroutines.get()}"
 	implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:${libs.versions.serialization.get()}"
 }

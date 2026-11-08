@@ -23,6 +23,8 @@ import java.util.Random
 import java.util.TreeMap
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.locks.ReadWriteLock
+import java.util.concurrent.locks.ReentrantReadWriteLock
 import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
 import java.util.zip.ZipOutputStream
@@ -226,8 +228,9 @@ object DexJarConverter {
         val workers = if (clzs.size < PARALLEL_MINIMUM_CLASSES) 1 else Runtime.getRuntime().availableProcessors().coerceIn(1, MAXIMUM_WORKERS)
         val next = AtomicInteger()
         val failure = AtomicReference<Throwable>()
+        val methods = ReentrantReadWriteLock()
         fun work() {
-            val translator = Translator(handler)
+            val translator = Translator(handler, methods)
             while (failure.get() == null) {
                 val index = next.getAndIncrement()
                 if (index >= clzs.size) return
@@ -249,8 +252,45 @@ object DexJarConverter {
     private const val PARALLEL_MINIMUM_CLASSES = 64
     private const val MAXIMUM_WORKERS = 4
 
-    private class Translator(handler: DexExceptionHandler) : ExDex2Asm(handler) {
-        override fun optimize(irMethod: IrMethod) {
+    /**
+     * Statements past which a method translates alone. dex2jar's passes over one method need memory that grows with its
+     * statements times its values: Kotlin coroutine state machines of tens of thousands of statements (StreamPlay's
+     * extractors) take gigabytes, and sharing the heap with three other workers then fails them all.
+     */
+    private const val LARGE_METHOD_STATEMENTS = 5_000
+
+    /** A method whose translation ran out of memory; dex2jar replaces it by a throwing stub, as any failed method. */
+    private class MethodOutOfMemoryException(cause: OutOfMemoryError) :
+        RuntimeException("Not enough memory to translate this method", cause)
+
+    /**
+     * [methods] lets ordinary methods translate in parallel and a large one alone. A method that still runs out of
+     * memory is degraded like any method dex2jar cannot translate (its body is buffered, so nothing half-written
+     * remains), instead of failing the whole conversion: the rest of the plugin stays usable.
+     */
+    private class Translator(handler: DexExceptionHandler, private val methods: ReadWriteLock) : ExDex2Asm(handler) {
+        override fun convertCode(methodNode: DexMethodNode, mv: MethodVisitor, clzCtx: ClzCtx) {
+            val large = (methodNode.codeNode?.stmts?.size ?: 0) > LARGE_METHOD_STATEMENTS
+            val lock = if (large) methods.writeLock() else methods.readLock()
+            lock.lock()
+            try {
+                super.convertCode(methodNode, mv, clzCtx)
+            } finally {
+                lock.unlock()
+            }
+        }
+
+        override fun dex2ir(methodNode: DexMethodNode): IrMethod = degradingOutOfMemory { super.dex2ir(methodNode) }
+
+        override fun optimize(irMethod: IrMethod) = degradingOutOfMemory { optimizeIr(irMethod) }
+
+        private inline fun <T> degradingOutOfMemory(block: () -> T): T = try {
+            block()
+        } catch (error: OutOfMemoryError) {
+            throw MethodOutOfMemoryException(error)
+        }
+
+        private fun optimizeIr(irMethod: IrMethod) {
             T_CLEAN_LABEL.transform(irMethod)
             T_DEAD_CODE.transform(irMethod)
             REMOVE_LOCAL.transform(irMethod)
@@ -276,7 +316,7 @@ object DexJarConverter {
             T_TRIM_EX.transform(irMethod)
         }
 
-        override fun ir2j(irMethod: IrMethod, mv: MethodVisitor, clzCtx: ClzCtx) {
+        override fun ir2j(irMethod: IrMethod, mv: MethodVisitor, clzCtx: ClzCtx) = degradingOutOfMemory {
             IR2JConverter().optimizeSynchronized(false).clzCtx(clzCtx).ir(irMethod).asm(mv).convert()
         }
 

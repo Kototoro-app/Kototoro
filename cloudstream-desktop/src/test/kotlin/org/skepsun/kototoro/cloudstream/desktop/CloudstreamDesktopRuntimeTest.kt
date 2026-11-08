@@ -1,7 +1,13 @@
 package org.skepsun.kototoro.cloudstream.desktop
 
 import com.lagradost.cloudstream3.network.WebViewResolver
+import com.lagradost.cloudstream3.plugins.Plugin
 import com.sun.net.httpserver.HttpServer
+import java.io.File
+import java.net.InetSocketAddress
+import java.nio.file.Files
+import java.nio.file.Path
+import java.security.MessageDigest
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -16,11 +22,6 @@ import org.skepsun.kototoro.core.source.SourceFilter
 import org.skepsun.kototoro.desktop.compat.MihonDesktopPlatform
 import org.skepsun.kototoro.source.host.FileSourcePreferenceStore
 import org.skepsun.kototoro.source.host.SourceImageStore
-import java.io.File
-import java.net.InetSocketAddress
-import java.nio.file.Files
-import java.nio.file.Path
-import java.security.MessageDigest
 
 /**
  * Cloudstream plugins in the Windows host's real environment: the Android compatibility runtime Mihon extensions use,
@@ -58,6 +59,8 @@ class CloudstreamDesktopRuntimeTest {
         assumeTrue(Files.isRegularFile(plugin), "Android SDK with d8 is required to build the fixture plugin")
         val loaded = registry.load(plugin, "FixtureRepo", sha256(Files.readAllBytes(plugin)))
         assertEquals(listOf("Fixture Stream"), loaded.sources.map { it.displayName })
+        // The plugin cast its context to Cloudstream's activity and kept it for its settings.
+        assertTrue((loaded.plugin as Plugin).openSettings != null)
         val name = loaded.sources.single().name
         assertEquals("CLOUDSTREAM_FixtureRepo_Fixture Stream", name)
         assertEquals(listOf(name), runtime.getSources().map { it.name })
@@ -103,20 +106,42 @@ class CloudstreamDesktopRuntimeTest {
         assertTrue(runtime.getSources().isEmpty())
     }
 
-    /** Official repository plugins (`-PcloudstreamPlugins=<dir of .cs3>`); with `-PcloudstreamOnline`, a live round trip. */
+    /**
+     * Repository plugins (`-PcloudstreamPlugins=<dir of .cs3>`), each loaded and reported in
+     * `build/reports/cloudstream-real-plugins.tsv` (loaded with its providers, or the reason it failed); utility plugins
+     * register no provider and are reported as such. Fails when any plugin fails to load. With `-PcloudstreamOnline`,
+     * a live round trip as well.
+     */
     @Test
     fun `real repository plugins load and register their providers`() = runBlocking {
         val directory = System.getProperty("kototoro.cloudstream.real")?.let(Path::of)
         assumeTrue(directory != null && Files.isDirectory(directory), "Pass -PcloudstreamPlugins=<directory of .cs3>")
         val plugins = Files.list(directory!!).use { files -> files.filter { it.toString().endsWith(".cs3") }.sorted().toList() }
         assumeTrue(plugins.isNotEmpty())
+        val report = StringBuilder("plugin\tresult\tdetail\n")
+        val failed = mutableListOf<String>()
         for (file in plugins) {
             val id = file.fileName.toString().removeSuffix(".cs3")
-            val loaded = registry.load(file, id, sha256(Files.readAllBytes(file)))
-            println("cloudstream: $id -> ${loaded.sources.map { "${it.displayName} (${it.contentType}, ${it.locale})" }}")
-            assertTrue(loaded.sources.isNotEmpty(), "$id registered no provider")
-            loaded.sources.forEach { runtime.describe(it.name) }
+            val loaded = runCatching { registry.load(file, id, sha256(Files.readAllBytes(file))) }
+            loaded.onSuccess { plugin ->
+                val sources = plugin.sources.map { "${it.displayName} (${it.contentType}, ${it.locale})" }
+                println("cloudstream: $id -> $sources")
+                plugin.sources.forEach { runtime.describe(it.name) }
+                // Hundreds of plugins stay within the test heap only when each goes again; the live check needs them.
+                if (System.getProperty("kototoro.cloudstream.online") != "true") registry.unload(id)
+                report.append(id).append(if (sources.isEmpty()) "\tloaded, no provider\t" else "\tloaded\t")
+                    .append(sources.joinToString("; ")).append('\n')
+            }.onFailure { error ->
+                val reason = generateSequence(error) { it.cause }.joinToString(" <- ") { "${it.javaClass.simpleName}: ${it.message}" }
+                println("cloudstream: $id FAILED $reason")
+                failed += id
+                report.append(id).append("\tfailed\t").append(reason.replace('\t', ' ').replace('\n', ' ')).append('\n')
+            }
         }
+        val reportFile = Path.of("build/reports/cloudstream-real-plugins.tsv")
+        Files.createDirectories(reportFile.parent)
+        Files.writeString(reportFile, report)
+        println("cloudstream: ${plugins.size - failed.size}/${plugins.size} loaded; report at ${reportFile.toAbsolutePath()}")
         if (System.getProperty("kototoro.cloudstream.online") == "true") {
             val archive = registry.sources().firstOrNull { it.displayName.contains("Archive", ignoreCase = true) }
             assumeTrue(archive != null, "InternetArchiveProvider.cs3 is needed for the online check")
@@ -130,6 +155,7 @@ class CloudstreamDesktopRuntimeTest {
             assertTrue(streams.isNotEmpty())
         }
         plugins.forEach { registry.unload(it.fileName.toString().removeSuffix(".cs3")) }
+        assertTrue(failed.isEmpty(), "${failed.size} plugins failed to load: $failed")
     }
 
     /** 40 of 517 community plugins resolve a stream with WebViewResolver; the official JVM class finds nothing. */

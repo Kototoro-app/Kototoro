@@ -1,6 +1,7 @@
 package fixture.cloudstream
 
 import android.content.Context
+import androidx.appcompat.app.AppCompatActivity
 import com.lagradost.cloudstream3.CommonActivity
 import com.lagradost.cloudstream3.HomePageResponse
 import com.lagradost.cloudstream3.LoadResponse
@@ -19,6 +20,7 @@ import com.lagradost.cloudstream3.newTvSeriesLoadResponse
 import com.lagradost.cloudstream3.newTvSeriesSearchResponse
 import com.lagradost.cloudstream3.plugins.Plugin
 import com.lagradost.cloudstream3.utils.ExtractorLink
+import com.lagradost.cloudstream3.utils.DataStoreHelper
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.newExtractorLink
 
@@ -31,7 +33,18 @@ class FixturePlugin : Plugin() {
         // Real plugins compiled against the Cloudstream application emit exactly this bridge call; it keeps the
         // host's Java `CommonActivity` shim (and its `showToast$default`) on the compatibility check.
         CommonActivity.`showToast$default`(CommonActivity.INSTANCE, "Fixture Stream ready", null, 2, null)
-        registerMainAPI(FixtureProvider())
+        // As CNC Verse does: Cloudstream hands plugins its activity, so they cast to it, keep it for their settings
+        // dialog and read their preferences through it.
+        val activity = context as AppCompatActivity
+        val preferences = activity.getSharedPreferences("fixture_stream", Context.MODE_PRIVATE)
+        checkNotNull(context.applicationContext)
+        // Plugins read the device's build fields (BingeCloud), which initializes the class: the compatibility runtime
+        // must allow that (the values themselves may be null on Windows).
+        Class.forName("android.os.Build", true, javaClass.classLoader)
+        openSettings = { activity.toString() }
+        // Plugins read the app's library records (sync and statistics plugins); a fresh install has none.
+        check(DataStoreHelper.getAllBookmarkedData().isEmpty())
+        if (preferences.getBoolean("enabled", true)) registerMainAPI(FixtureProvider())
     }
 }
 
