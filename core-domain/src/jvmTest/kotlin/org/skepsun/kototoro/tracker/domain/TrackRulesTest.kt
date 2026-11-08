@@ -38,6 +38,33 @@ class TrackRulesTest {
 	}
 
 	@Test
+	fun `a vanished last chapter falls back to chapters uploaded after it`() {
+		data class Chapter(val id: Long, val uploadedAt: Long)
+		// The source moved to new chapter URLs: every id changed, and chapter 11 is new.
+		val chapters = (101L..110L).map { Chapter(it, uploadedAt = it) } + Chapter(111L, uploadedAt = 500L)
+
+		val comparison = compareTrackedChapters(chapters, Chapter::id, lastChapterId = 10L,
+			uploadDate = Chapter::uploadedAt, lastChapterDate = 110L)
+
+		assertTrue(comparison.isValid)
+		assertEquals(listOf(111L), comparison.newChapters.map(Chapter::id))
+	}
+
+	@Test
+	fun `a vanished last chapter re-anchors when dates cannot tell what is new`() {
+		data class Chapter(val id: Long, val uploadedAt: Long)
+		val redated = (101L..110L).map { Chapter(it, uploadedAt = 900L) }
+		val undated = (101L..110L).map { Chapter(it, uploadedAt = 0L) }
+		val reAnchored = TrackComparison(emptyList<Chapter>(), isValid = false)
+
+		// The source re-dated every chapter: reporting all of them would be wrong.
+		assertEquals(reAnchored, compareTrackedChapters(redated, Chapter::id, 10L, Chapter::uploadedAt, 110L))
+		assertEquals(reAnchored, compareTrackedChapters(undated, Chapter::id, 10L, Chapter::uploadedAt, 110L))
+		// No date was ever recorded for the track.
+		assertEquals(reAnchored, compareTrackedChapters(redated, Chapter::id, 10L, Chapter::uploadedAt, 0L))
+	}
+
+	@Test
 	fun `comparison follows Android's tracker cases`() {
 		assertEquals(TrackComparison(emptyList<Long>(), isValid = false), compareTrackedChapters(ids, { it }, 0L))
 		assertEquals(TrackComparison(emptyList<Long>(), isValid = true), compareTrackedChapters(ids, { it }, 4L))

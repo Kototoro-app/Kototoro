@@ -185,7 +185,13 @@ class CheckNewChaptersUseCase @Inject constructor(
         if (BuildConfig.DEBUG && !track.isEmpty() && chapters.findById(track.lastChapterId) == null) {
             Log.e("Tracker", "Chapter ${track.lastChapterId} not found")
         }
-        val comparison = compareTrackedChapters(chapters, { it.id }, track.lastChapterId)
+        val comparison = compareTrackedChapters(
+            chapters = chapters,
+            id = { it.id },
+            lastChapterId = track.lastChapterId,
+            uploadDate = { it.uploadDate },
+            lastChapterDate = track.lastChapterDate?.toEpochMilli() ?: 0L,
+        )
         return MangaUpdates.Success(
             manga = manga,
             entityId = entityId,

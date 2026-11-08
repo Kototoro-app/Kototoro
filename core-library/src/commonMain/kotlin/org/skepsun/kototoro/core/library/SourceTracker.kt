@@ -127,7 +127,13 @@ class SourceTracker(
         val chapters = details.chapters.orEmpty()
         val branch = branchOf(details, track.lastChapterId)
         val branchChapters = chapters.filter { it.branch == branch }
-        val comparison = compareTrackedChapters(branchChapters, SourceChapter::id, track.lastChapterId)
+        val comparison = compareTrackedChapters(
+            chapters = branchChapters,
+            id = SourceChapter::id,
+            lastChapterId = track.lastChapterId,
+            uploadDate = SourceChapter::uploadDate,
+            lastChapterDate = track.lastChapterDate,
+        )
         val time = now()
         library.save(details)
         return database.useWriterConnection { connection ->

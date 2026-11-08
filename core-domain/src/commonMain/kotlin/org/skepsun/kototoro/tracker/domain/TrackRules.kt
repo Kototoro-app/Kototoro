@@ -14,16 +14,38 @@ data class TrackComparison<C>(val newChapters: List<C>, val isValid: Boolean)
 /** A track with no last chapter has never been checked successfully (or the work had no chapters then). */
 fun isEmptyTrack(lastChapterId: Long): Boolean = lastChapterId == 0L
 
-/** Chapters after the track's last chapter, in the branch the reader follows. */
-fun <C> compareTrackedChapters(chapters: List<C>, id: (C) -> Long, lastChapterId: Long): TrackComparison<C> {
+/**
+ * Chapters after the track's last chapter, in the branch the reader follows.
+ *
+ * When the last known chapter is gone (the source changed its chapter URLs, or the chapter was taken down and
+ * re-uploaded), chapters uploaded after [lastChapterDate] are reported instead, given [uploadDate]. That is only
+ * trusted while it is a minority of the list: a source that re-dated everything would otherwise report every
+ * chapter as new, so then the track is re-anchored silently.
+ */
+fun <C> compareTrackedChapters(
+    chapters: List<C>,
+    id: (C) -> Long,
+    lastChapterId: Long,
+    uploadDate: ((C) -> Long)? = null,
+    lastChapterDate: Long = 0L,
+): TrackComparison<C> {
     if (isEmptyTrack(lastChapterId)) return TrackComparison(emptyList(), isValid = false)
     val newChapters = chapters.takeLastWhile { id(it) != lastChapterId }
     return when {
         newChapters.isEmpty() -> TrackComparison(emptyList(), isValid = chapters.lastOrNull()?.let(id) == lastChapterId)
-        // The last known chapter is gone: re-anchor silently instead of reporting every chapter as new.
-        newChapters.size == chapters.size -> TrackComparison(emptyList(), isValid = false)
+        // The last known chapter is gone: fall back to upload dates, else re-anchor silently instead of reporting
+        // every chapter as new.
+        newChapters.size == chapters.size -> chaptersUploadedAfter(chapters, uploadDate, lastChapterDate)
+            ?.let { TrackComparison(it, isValid = true) }
+            ?: TrackComparison(emptyList(), isValid = false)
         else -> TrackComparison(newChapters, isValid = true)
     }
+}
+
+private fun <C> chaptersUploadedAfter(chapters: List<C>, uploadDate: ((C) -> Long)?, lastChapterDate: Long): List<C>? {
+    if (uploadDate == null || lastChapterDate <= 0L) return null
+    val newer = chapters.filter { uploadDate(it) > lastChapterDate }
+    return newer.takeIf { it.isNotEmpty() && it.size * 2 < chapters.size }
 }
 
 /**
