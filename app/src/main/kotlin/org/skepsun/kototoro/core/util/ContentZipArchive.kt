@@ -130,6 +130,22 @@ class ContentZipArchive private constructor(
             return ContentZipArchive(descriptor, channel)
         }
 
+        /** Opens [uri] only if it is seekable and begins with a 4-byte PK ZIP signature. */
+        @Blocking
+        fun openIfZip(resolver: ContentResolver, uri: Uri): ContentZipArchive? {
+            val archive = open(resolver, uri) ?: return null
+            val header = ByteArray(4)
+            val isZip = runCatching {
+                val read = archive.channel.read(ByteBuffer.wrap(header), 0L)
+                org.skepsun.kototoro.local.data.hasZipMagicBytes(header, read)
+            }.getOrDefault(false)
+            if (!isZip) {
+                archive.close()
+                return null
+            }
+            return archive
+        }
+
         /** Runs [block] with the stream of the entry a `zip+content` [uri] points at. */
         @Blocking
         inline fun <T> withEntry(resolver: ContentResolver, uri: Uri, block: (InputStream) -> T): T =

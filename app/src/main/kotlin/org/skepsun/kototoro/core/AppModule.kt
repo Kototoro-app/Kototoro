@@ -40,6 +40,7 @@ import org.skepsun.kototoro.core.image.AvifAnimationPool
 import org.skepsun.kototoro.core.image.AvifImageDecoder
 import org.skepsun.kototoro.core.image.JxlImageDecoder
 import org.skepsun.kototoro.core.image.CbzFetcher
+import org.skepsun.kototoro.core.image.PdfPageFetcher
 import org.skepsun.kototoro.core.image.ContentSourceHeaderInterceptor
 import org.skepsun.kototoro.core.image.TVBoxSearchCoverFetcher
 import org.skepsun.kototoro.core.image.ImageFailureSuppressingInterceptor
@@ -236,6 +237,7 @@ interface AppModule {
                     }
                     add(SvgDecoder.Factory())
                     add(CbzFetcher.Factory())
+                    add(PdfPageFetcher.Factory())
                     add(AvifImageDecoder.Factory(avifAnimationPool) { settings.avifAnimationPolicy })
                     add(JxlImageDecoder.Factory())
                     add(faviconFetcherFactory)

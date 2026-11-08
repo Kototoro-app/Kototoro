@@ -256,10 +256,10 @@ class ReaderActivity :
         }
         if (manga != null) {
             val source = manga.source.unwrap()
-            val contentType = if (manga.looksLikeLocalVideoContent()) {
-                ContentType.VIDEO
-            } else {
-                source.getContentType()
+            val contentType = when {
+                manga.looksLikeLocalVideoContent() -> ContentType.VIDEO
+                org.skepsun.kototoro.core.model.isLikelyLocalNovelContent(manga) -> ContentType.NOVEL
+                else -> source.getContentType()
             }
             if (contentType == ContentType.NOVEL || contentType == ContentType.HENTAI_NOVEL ||
                 contentType == ContentType.VIDEO || contentType == ContentType.HENTAI_VIDEO

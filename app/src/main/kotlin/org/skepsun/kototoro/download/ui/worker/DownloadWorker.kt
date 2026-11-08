@@ -83,8 +83,10 @@ import org.skepsun.kototoro.core.util.ext.ensureSuccess
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
 import org.skepsun.kototoro.core.util.ext.getWorkInputData
 import org.skepsun.kototoro.core.util.ext.getWorkSpec
+import org.skepsun.kototoro.core.util.ext.isContentZipUri
 import org.skepsun.kototoro.core.util.ext.isFileUri
 import org.skepsun.kototoro.core.util.ext.isZipUri
+import org.skepsun.kototoro.local.data.isPdfPageUri
 import org.skepsun.kototoro.core.util.ext.openSource
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
 import org.skepsun.kototoro.core.util.ext.toFileOrNull
@@ -931,6 +933,9 @@ class DownloadWorker @AssistedInject constructor(
         return url.startsWith("file:") ||
             url.startsWith("zip:") ||
             url.startsWith("file+zip:") ||
+            url.startsWith("content+zip:") ||
+            url.startsWith("file+pdf:") ||
+            url.startsWith("content+pdf:") ||
             url.startsWith("content:") ||
             url.startsWith("epub:") ||
             url.startsWith("localepub:")
@@ -941,6 +946,8 @@ class DownloadWorker @AssistedInject constructor(
         return when {
             uri.isFileUri() -> uri
             uri.isZipUri() -> cacheZipPage(uri)
+            uri.isContentZipUri() -> cacheContentZipPage(uri)
+            uri.isPdfPageUri() -> cachePdfPage(uri)
             uri.scheme == "content" || uri.scheme == "android.resource" -> cacheContentUri(page.url, uri)
             uri.scheme == "data" -> cacheDataUri(page.url)
             else -> null
@@ -962,6 +969,43 @@ class DownloadWorker @AssistedInject constructor(
                 )
             }.use { image ->
                 cache.set(uri.toString(), image).toUri()
+            }
+        }.onFailure {
+            it.printStackTraceDebug()
+        }.getOrNull()
+    }
+
+    private suspend fun cacheContentZipPage(uri: Uri): Uri? {
+        cache[uri.toString()]?.let { return it.toUri() }
+        val entryName = uri.fragment?.takeIf(String::isNotEmpty) ?: return null
+        return runCatching {
+            org.skepsun.kototoro.core.util.ContentZipArchive.withEntry(
+                applicationContext.contentResolver,
+                uri,
+            ) { stream ->
+                BitmapDecoderCompat.decode(
+                    stream,
+                    MimeTypes.getMimeTypeFromExtension(entryName),
+                )
+            }.use { image ->
+                cache.set(uri.toString(), image).toUri()
+            }
+        }.onFailure {
+            it.printStackTraceDebug()
+        }.getOrNull()
+    }
+
+    private suspend fun cachePdfPage(uri: Uri): Uri? {
+        cache[uri.toString()]?.let { return it.toUri() }
+        return runCatching {
+            val bitmap = org.skepsun.kototoro.local.data.LocalPdfPages.renderPage(
+                contentResolver = applicationContext.contentResolver,
+                pageUri = uri,
+            )
+            try {
+                cache.set(uri.toString(), bitmap).toUri()
+            } finally {
+                bitmap.recycle()
             }
         }.onFailure {
             it.printStackTraceDebug()
@@ -1075,7 +1119,7 @@ class DownloadWorker @AssistedInject constructor(
                     isIndeterminate = false
                 ))
 
-                val result = runFailsafe {
+                val savedEbookFile = runFailsafe {
                     downloadEbookToStorage(
                         manga = mangaDetails,
                         chapter = chapter,
@@ -1085,9 +1129,8 @@ class DownloadWorker @AssistedInject constructor(
                         repo = repo,
                         format = ebookFormat,
                     )
-                    true
                 }
-                if (result == true) {
+                if (savedEbookFile != null) {
                     publishState(currentState.copy(
                         downloadedChapters = currentState.downloadedChapters + 1,
                         currentChapter = chapterIndex + 1,
@@ -1097,8 +1140,15 @@ class DownloadWorker @AssistedInject constructor(
 
                     if (chapter.value.isTextEbookChapter(pages)) {
                         expandTextEbookChapters(mangaDetails, chapter, ebookFormat, output)
+                    } else if (chapter.value.isPageEbookChapter(pages)) {
+                        persistPageEbookToLocalOutput(
+                            chapter = chapter,
+                            savedFile = savedEbookFile,
+                            format = ebookFormat,
+                            destination = destination,
+                            output = output,
+                        )
                     }
-                    // 页面模态（PDF/DJVU）：文件已存，阅读时由 PdfRenderer 按页渲染
                     android.util.Log.i("DownloadWorker", "Ebook format=$ebookFormat textModality=${chapter.value.isTextEbookChapter(pages)} pageModality=${chapter.value.isPageEbookChapter(pages)}")
                 }
                 continue
@@ -1950,7 +2000,7 @@ class DownloadWorker @AssistedInject constructor(
         destination: File,
         repo: ContentRepository,
         format: EbookFormat?,
-    ) {
+    ): File {
         val ext = format?.extension?.takeIf { it.isNotEmpty() } ?: "epub"
         android.util.Log.i("DownloadWorker", "========================================")
         android.util.Log.i("DownloadWorker", "downloadEbookToStorage: Starting NEW ARCHITECTURE ebook download (format=$format, ext=$ext)")
@@ -1995,11 +2045,77 @@ class DownloadWorker @AssistedInject constructor(
 
             android.util.Log.i("DownloadWorker", "downloadEbookToStorage: Completed successfully")
             android.util.Log.i("DownloadWorker", "========================================")
-
+            return savedFile
         } catch (e: Exception) {
             android.util.Log.e("DownloadWorker", "downloadEbookToStorage: Error during save", e)
             tempFile.deleteAwait()
             throw e
+        }
+    }
+
+    private suspend fun persistPageEbookToLocalOutput(
+        chapter: IndexedValue<ContentChapter>,
+        savedFile: File,
+        format: EbookFormat?,
+        destination: File,
+        output: LocalContentOutput,
+    ) {
+        val ext = format?.extension?.takeIf(String::isNotEmpty) ?: "pdf"
+        runCatching {
+            when {
+                output is LocalContentDirOutput && (format == EbookFormat.PDF || format == EbookFormat.CBZ) -> {
+                    output.addPageEbookChapter(chapter, savedFile, ext)
+                    localStorageChanges.emit(
+                        LocalContentParser(output.rootFile, destination).getContent(withDetails = false),
+                    )
+                }
+
+                format == EbookFormat.CBZ -> {
+                    val tempExtractDir = File(destination, "tmp_cbz_${chapter.value.id}").apply { mkdirs() }
+                    try {
+                        val extractedPages = runInterruptible(Dispatchers.IO) {
+                            val nameComparator = org.skepsun.kototoro.core.util.AlphanumComparator()
+                            ZipFile(savedFile).use { zip ->
+                                zip.entries().asSequence()
+                                    .filter { !it.isDirectory }
+                                    .sortedWith { a, b -> nameComparator.compare(a.name, b.name) }
+                                    .mapIndexedNotNull { idx, entry ->
+                                        val entryExt = entry.name.substringAfterLast('.', "").lowercase()
+                                        if (entryExt.isEmpty()) return@mapIndexedNotNull null
+                                        val pageMime = MimeTypes.getMimeTypeFromExtension(entry.name)
+                                        if (pageMime?.toString()?.startsWith("image/") != true) {
+                                            return@mapIndexedNotNull null
+                                        }
+                                        val pageFile = File(tempExtractDir, "%05d.%s".format(idx, entryExt))
+                                        zip.getInputStream(entry).use { input ->
+                                            pageFile.outputStream().use(input::copyTo)
+                                        }
+                                        Triple(idx, pageFile, pageMime)
+                                    }
+                                    .toList()
+                            }
+                        }
+                        if (extractedPages.isNotEmpty()) {
+                            for ((pageIndex, pageFile, pageMime) in extractedPages) {
+                                output.addPage(chapter, pageFile, pageIndex, pageMime)
+                            }
+                            if (output.flushChapter(chapter.value)) {
+                                localStorageChanges.emit(
+                                    LocalContentParser(output.rootFile, destination).getContent(withDetails = false),
+                                )
+                            }
+                        }
+                    } finally {
+                        tempExtractDir.deleteRecursively()
+                    }
+                }
+            }
+        }.onFailure { e ->
+            android.util.Log.w(
+                "DownloadWorker",
+                "persistPageEbookToLocalOutput: Failed for chapter ${chapter.value.id}",
+                e,
+            )
         }
     }
 

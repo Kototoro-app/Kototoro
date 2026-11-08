@@ -37,7 +37,7 @@ class CbzFetcher(
                 dataSource = DataSource.DISK,
             )
         }
-        val filePath = uri.schemeSpecificPart.toPath()
+        val filePath = (uri.path ?: uri.schemeSpecificPart).toPath()
         val fs = options.fileSystem.openZip(filePath)
         SourceFetchResult(
             source = ImageSource(entryName.toPath(), fs),

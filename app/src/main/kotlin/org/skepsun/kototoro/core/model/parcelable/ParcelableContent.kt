@@ -5,11 +5,13 @@ import android.os.Parcelable
 import kotlinx.parcelize.Parceler
 import kotlinx.parcelize.Parcelize
 import org.skepsun.kototoro.core.model.ContentSource
+import org.skepsun.kototoro.core.model.getContentType
 import org.skepsun.kototoro.core.util.ext.readParcelableCompat
 import org.skepsun.kototoro.core.util.ext.readSerializableCompat
 import org.skepsun.kototoro.core.util.ext.readStringSet
 import org.skepsun.kototoro.core.util.ext.writeStringSet
 import org.skepsun.kototoro.parsers.model.Content
+import org.skepsun.kototoro.parsers.model.ContentType
 
 @Parcelize
 data class ParcelableContent(
@@ -35,6 +37,7 @@ data class ParcelableContent(
             parcel.writeSerializable(state)
             parcel.writeStringSet(authors)
             parcel.writeString(source.name)
+            parcel.writeSerializable(source.getContentType())
             // Write chapters if requested
             val chaptersToWrite = if (withChapters) chapters else null
             parcel.writeInt(chaptersToWrite?.size ?: -1)
@@ -65,6 +68,8 @@ data class ParcelableContent(
             val state = parcel.readSerializableCompat<org.skepsun.kototoro.parsers.model.ContentState>()
             val authors = parcel.readStringSet()
             val sourceName = requireNotNull(parcel.readString())
+            val sourceContentType = parcel.readSerializableCompat<ContentType>()
+            val resolvedSource = ContentSource(sourceName, sourceContentType)
 
             // Read chapters if present
             val chaptersSize = parcel.readInt()
@@ -79,7 +84,7 @@ data class ParcelableContent(
                         scanlator = parcel.readString(),
                         uploadDate = parcel.readLong(),
                         branch = parcel.readString(),
-                        source = ContentSource(sourceName),
+                        source = resolvedSource,
                     )
                 }
             } else {
@@ -102,7 +107,7 @@ data class ParcelableContent(
                     state = state,
                     authors = authors,
                     chapters = chapters,
-                    source = ContentSource(sourceName),
+                    source = resolvedSource,
                 ),
                 withDescription = true,
                 withChapters = chapters != null,

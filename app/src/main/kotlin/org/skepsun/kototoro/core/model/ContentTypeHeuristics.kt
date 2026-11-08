@@ -45,6 +45,53 @@ fun Content.looksLikeLocalVideoContent(): Boolean {
     return chapters?.any { it.looksLikeVideoChapter() } == true
 }
 
+private val localNovelSchemes = setOf("file:", "content:", "zip:", "file+zip:", "content+zip:", "epub:", "localepub:")
+private val localNovelExtensions = setOf(".epub", ".txt", ".html", ".xhtml")
+
+fun String?.looksLikeNovelUrl(): Boolean {
+    val normalized = this?.trim()?.lowercase(Locale.ROOT).orEmpty()
+    if (normalized.isBlank()) {
+        return false
+    }
+    if (
+        normalized.startsWith("localepub:") ||
+        normalized.startsWith("epub:") ||
+        normalized.contains("#chapter/") ||
+        normalized.contains("#chapter%2f") ||
+        normalized.endsWith("#text")
+    ) {
+        return true
+    }
+    if (localNovelSchemes.any(normalized::startsWith)) {
+        val withoutQuery = normalized.substringBefore('?')
+        val fragment = withoutQuery.substringAfter('#', "")
+        val base = withoutQuery.substringBefore('#')
+        if (localNovelExtensions.any { base.endsWith(it) || fragment.endsWith(it) }) {
+            return true
+        }
+    }
+    return false
+}
+
+fun ContentChapter.looksLikeNovelChapter(): Boolean {
+    if (source.getContentType().let { it == ContentType.NOVEL || it == ContentType.HENTAI_NOVEL }) {
+        return true
+    }
+    return url.looksLikeNovelUrl()
+}
+
+fun Content.looksLikeLocalNovelContent(): Boolean {
+    if (source.getContentType().let { it == ContentType.NOVEL || it == ContentType.HENTAI_NOVEL }) {
+        return true
+    }
+    if (url.looksLikeNovelUrl() || publicUrl.looksLikeNovelUrl()) {
+        return true
+    }
+    return chapters?.any { it.looksLikeNovelChapter() } == true
+}
+
+fun isLikelyLocalNovelContent(content: Content): Boolean = content.looksLikeLocalNovelContent()
+
 /**
  * Replacement for the former Work-level content-type rule.
  *

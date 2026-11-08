@@ -73,6 +73,16 @@ class EpubStorageManager @Inject constructor(
         return if (epubFile.exists()) epubFile else null
     }
 
+    fun findPageEbookFile(mangaId: Long, chapterId: Long): File? {
+        val epubDir = File(resolveEpubRootDir(), mangaId.toString())
+        if (!epubDir.exists()) {
+            return null
+        }
+        return PAGE_EBOOK_EXTENSIONS.firstNotNullOfOrNull { ext ->
+            File(epubDir, "chapter_${chapterId}.$ext").takeIf { it.isFile && it.length() > 0L }
+        }
+    }
+
     /**
      * 保存EPUB文件
      *
@@ -234,5 +244,9 @@ class EpubStorageManager @Inject constructor(
                 }
             }
             ?: emptyList()
+    }
+
+    private companion object {
+        val PAGE_EBOOK_EXTENSIONS = listOf("pdf", "cbz", "zip")
     }
 }

@@ -56,7 +56,9 @@ data object TestContentSource : ContentSource {
     override val contentType = ContentType.OTHER
 }
 
-fun ContentSource(name: String?): ContentSource {
+fun ContentSource(name: String?): ContentSource = ContentSource(name, null)
+
+fun ContentSource(name: String?, fallbackContentType: ContentType?): ContentSource {
     when (name ?: return UnknownContentSource) {
     UnknownContentSource.name -> return UnknownContentSource
     LocalMangaSource.name -> return LocalMangaSource
@@ -74,7 +76,7 @@ fun ContentSource(name: String?): ContentSource {
 
     // Fallbacks: If not loaded yet, return stable AnonymousContentSource
     // Keep the original name so it isn't lost if the source loads later
-    return AnonymousContentSource(name)
+    return AnonymousContentSource(name, fallbackContentType)
 }
 
 fun Collection<String>.toContentSources() = map(::ContentSource)
@@ -374,7 +376,10 @@ fun SpannableStringBuilder.appendIcon(textView: TextView, @DrawableRes resId: In
     return inSpans(ImageSpan(icon, alignment)) { append(' ') }
 }
 
-private class AnonymousContentSource(override val name: String) : ContentSource {
+private class AnonymousContentSource(
+    override val name: String,
+    private val fallbackContentType: ContentType? = null,
+) : ContentSource {
     override val locale: String = ""
     override val contentType: ContentType get() = when {
         name.startsWith("CLOUDSTREAM_") -> ContentType.VIDEO
@@ -386,6 +391,7 @@ private class AnonymousContentSource(override val name: String) : ContentSource 
         name.startsWith("MIHON_") -> ContentType.MANGA
         name.startsWith("IREADER_") -> ContentType.NOVEL
         name.startsWith("TSUNDOKU_") -> ContentType.NOVEL
+        fallbackContentType != null && fallbackContentType != ContentType.OTHER -> fallbackContentType
         else -> ContentType.OTHER
     }
 

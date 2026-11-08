@@ -33,6 +33,10 @@ import okio.source
 import okio.use
 import org.jetbrains.annotations.Blocking
 import org.skepsun.kototoro.core.util.ContentZipArchive
+import org.skepsun.kototoro.local.data.LocalPdfPages
+import org.skepsun.kototoro.local.data.isFilePdfUri
+import org.skepsun.kototoro.local.data.isPdfPageUri
+import org.skepsun.kototoro.local.data.toSourceContentPdfUri
 import org.skepsun.kototoro.core.LocalizedAppContext
 import org.skepsun.kototoro.core.image.BitmapDecoderCompat
 import org.skepsun.kototoro.core.network.CommonHeaders
@@ -220,7 +224,12 @@ class PageLoader @Inject constructor(
 
     @CheckResult
     suspend fun convertBimap(uri: Uri): Uri = convertLock.withLock {
-        if (uri.isZipUri() || uri.isContentZipUri()) {
+        if (uri.isPdfPageUri()) {
+            val image = LocalPdfPages.renderPage(context.contentResolver, uri)
+            image.use {
+                cache.set(uri.toString(), image).toUri()
+            }
+        } else if (uri.isZipUri() || uri.isContentZipUri()) {
             val image = decodeZipBitmap(uri)
             image.use {
                 cache.set(uri.toString(), image).toUri()
@@ -247,8 +256,9 @@ class PageLoader @Inject constructor(
             }
             return BitmapDecoderCompat.decode(bytes.inputStream(), mimeType)
         }
+        val zipPath = requireNotNull(uri.path ?: uri.schemeSpecificPart)
         val svgBytes = runInterruptible(Dispatchers.IO) {
-            ZipFile(uri.schemeSpecificPart).use { zip ->
+            ZipFile(zipPath).use { zip ->
                 val entry = checkNotNull(zip.getEntry(uri.fragment)) {
                     "Zip entry not found: ${uri.fragment}"
                 }
@@ -264,7 +274,7 @@ class PageLoader @Inject constructor(
             return decodeSvgBitmap(svgBytes)
         }
         return runInterruptible(Dispatchers.IO) {
-            ZipFile(uri.schemeSpecificPart).use { zip ->
+            ZipFile(zipPath).use { zip ->
                 val entry = checkNotNull(zip.getEntry(uri.fragment)) {
                     "Zip entry not found: ${uri.fragment}"
                 }
@@ -304,7 +314,7 @@ class PageLoader @Inject constructor(
     suspend fun getPageUrl(page: ContentPage): String {
         val uri = page.url.toUri()
         if (
-            uri.isZipUri() || uri.isContentZipUri() || uri.isFileUri() ||
+            uri.isZipUri() || uri.isContentZipUri() || uri.isPdfPageUri() || uri.isFileUri() ||
             uri.scheme == "data" || uri.scheme == "content"
         ) {
             return page.url
@@ -489,6 +499,13 @@ class PageLoader @Inject constructor(
                 null
             } ?: run {
                 when {
+                    uri.isPdfPageUri() -> {
+                        val bitmap = LocalPdfPages.renderPage(context.contentResolver, uri)
+                        bitmap.use {
+                            cache.set(pageUrl, bitmap).toUri()
+                        }
+                    }
+
                     uri.scheme == "data" -> {
                         val dataUrl = pageUrl
                         val commaIndex = dataUrl.indexOf(',')
@@ -562,11 +579,18 @@ class PageLoader @Inject constructor(
     private fun Uri.isExistingNonEmptyTarget(): Boolean = when {
         isFileUri() -> toFile().isNotEmpty()
         isZipUri() -> {
-            val file = File(requireNotNull(schemeSpecificPart))
+            val file = File(requireNotNull(path ?: schemeSpecificPart))
             file.exists() && ZipFile(file).use { (it.getEntry(fragment)?.size ?: 0L) != 0L }
         }
 
         isContentZipUri() -> findContentZipEntrySize()?.let { it != 0L } == true
+        isPdfPageUri() -> if (isFilePdfUri()) {
+            File(requireNotNull(path ?: schemeSpecificPart)).isNotEmpty()
+        } else {
+            runCatching {
+                context.contentResolver.openAssetFileDescriptor(toSourceContentPdfUri(), "r")?.use { it.length != 0L }
+            }.getOrNull() == true
+        }
         scheme == "content" -> runCatching {
             context.contentResolver.openAssetFileDescriptor(this, "r")?.use { it.length != 0L }
         }.getOrNull() == true
