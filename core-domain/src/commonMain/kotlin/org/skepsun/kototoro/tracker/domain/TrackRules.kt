@@ -15,12 +15,14 @@ data class TrackComparison<C>(val newChapters: List<C>, val isValid: Boolean)
 fun isEmptyTrack(lastChapterId: Long): Boolean = lastChapterId == 0L
 
 /**
- * Chapters after the track's last chapter, in the branch the reader follows.
+ * Chapters after the track's last chapter, in the branch the reader follows. Remote works find their new chapters
+ * where the list is stored ([storeChapterSnapshot]); this anchor comparison is for local copies, which store none.
  *
  * When the last known chapter is gone (the source changed its chapter URLs, or the chapter was taken down and
- * re-uploaded), chapters uploaded after [lastChapterDate] are reported instead, given [uploadDate]. That is only
- * trusted while it is a minority of the list: a source that re-dated everything would otherwise report every
- * chapter as new, so then the track is re-anchored silently.
+ * re-uploaded), chapters uploaded after [lastChapterDate] are reported instead, given [uploadDate]; failing that,
+ * the chapters after the reading position, [historyChapterId], as in Kotatsu-Redo. Either is only trusted while it
+ * is a minority of the list: a source that re-dated everything would otherwise report every chapter as new, so then
+ * the track is re-anchored silently.
  */
 fun <C> compareTrackedChapters(
     chapters: List<C>,
@@ -28,18 +30,28 @@ fun <C> compareTrackedChapters(
     lastChapterId: Long,
     uploadDate: ((C) -> Long)? = null,
     lastChapterDate: Long = 0L,
+    historyChapterId: Long = 0L,
 ): TrackComparison<C> {
     if (isEmptyTrack(lastChapterId)) return TrackComparison(emptyList(), isValid = false)
     val newChapters = chapters.takeLastWhile { id(it) != lastChapterId }
     return when {
         newChapters.isEmpty() -> TrackComparison(emptyList(), isValid = chapters.lastOrNull()?.let(id) == lastChapterId)
-        // The last known chapter is gone: fall back to upload dates, else re-anchor silently instead of reporting
-        // every chapter as new.
-        newChapters.size == chapters.size -> chaptersUploadedAfter(chapters, uploadDate, lastChapterDate)
-            ?.let { TrackComparison(it, isValid = true) }
+        // The last known chapter is gone: fall back to upload dates, then the reading position, else re-anchor
+        // silently instead of reporting every chapter as new.
+        newChapters.size == chapters.size -> (
+            chaptersUploadedAfter(chapters, uploadDate, lastChapterDate)
+                ?: chaptersAfterReading(chapters, id, historyChapterId)
+            )?.let { TrackComparison(it, isValid = true) }
             ?: TrackComparison(emptyList(), isValid = false)
         else -> TrackComparison(newChapters, isValid = true)
     }
+}
+
+private fun <C> chaptersAfterReading(chapters: List<C>, id: (C) -> Long, historyChapterId: Long): List<C>? {
+    if (historyChapterId == 0L) return null
+    val index = chapters.indexOfFirst { id(it) == historyChapterId }
+    if (index < 0) return null
+    return chapters.drop(index + 1).takeIf { it.isNotEmpty() && it.size * 2 < chapters.size }
 }
 
 private fun <C> chaptersUploadedAfter(chapters: List<C>, uploadDate: ((C) -> Long)?, lastChapterDate: Long): List<C>? {

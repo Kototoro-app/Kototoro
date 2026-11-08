@@ -58,6 +58,8 @@ fun TrackerSettingsRoute(
     val trackSources = settings.observeAsState(AppSettings.KEY_TRACK_SOURCES) { trackSources }.value
     val isTrackerSkipCompleted =
         settings.observeAsState(AppSettings.KEY_TRACKER_SKIP_COMPLETED) { isTrackerSkipCompleted }.value
+    val isTrackerMarkDuplicatesRead =
+        settings.observeAsState(AppSettings.KEY_TRACKER_MARK_DUPLICATES_READ) { isTrackerMarkDuplicatesRead }.value
     val trackerDownloadStrategy =
         settings.observeAsState(AppSettings.KEY_TRACKER_DOWNLOAD) { trackerDownloadStrategy }.value
     val categoriesCount = viewModel.categoriesCount.collectAsStateWithLifecycle().value
@@ -97,6 +99,7 @@ fun TrackerSettingsRoute(
         trackerFrequencyFactor = trackerFrequencyFactor,
         trackSources = trackSources,
         isTrackerSkipCompleted = isTrackerSkipCompleted,
+        isTrackerMarkDuplicatesRead = isTrackerMarkDuplicatesRead,
         categoriesSummary = categoriesSummary,
         isCategoriesEnabled = isTrackerEnabled && AppSettings.TRACK_FAVOURITES in trackSources,
         notificationsSummary = notificationsSummary,
@@ -118,6 +121,7 @@ fun TrackerSettingsRoute(
         onTrackerFrequencyChange = { settings.trackerFrequencyFactor = it },
         onTrackSourcesChange = { settings.trackSources = it },
         onTrackerSkipCompletedChange = { settings.isTrackerSkipCompleted = it },
+        onTrackerMarkDuplicatesReadChange = { settings.isTrackerMarkDuplicatesRead = it },
         onTrackCategoriesClick = onTrackCategoriesClick,
         onNotificationsSettingsClick = {
             onOpenNotificationsSettings {

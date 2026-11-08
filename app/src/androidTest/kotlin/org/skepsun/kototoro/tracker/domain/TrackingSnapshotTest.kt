@@ -88,6 +88,7 @@ class TrackingSnapshotTest {
             Provider { error("Link resolution is outside this test") },
             Provider { error("Shortcuts are outside this test") },
             StoredContentIdentityResolver(db),
+            settings,
         )
         repository = TrackingRepository(db, settings, progressUpdateUseCase, contentRepository)
     }

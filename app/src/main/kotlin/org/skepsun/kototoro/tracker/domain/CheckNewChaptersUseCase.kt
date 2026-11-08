@@ -119,26 +119,42 @@ class CheckNewChaptersUseCase @Inject constructor(
         // The persisted manga row owns its own tracking state, so the track's anchor
         // manga is the identity. There is no Work/entity to resolve.
         val ownerId = track.anchorMangaId
-        val historyChapterId = historyRepository.getOne(track.manga)?.chapterId ?: 0L
-        suspend fun check(fetched: Content): MangaUpdates.Success {
-            val details = fetched.copy(id = ownerId)
-            return compare(
+        if (track.manga.isLocal) {
+            // A local copy has no stored chapter list to compare with, so it keeps comparing with its anchor.
+            val details = getFullContent(track.manga, forceFetch = true).copy(id = ownerId)
+            return@runCatchingCancellable compare(
                 track = track,
                 entityId = ownerId,
                 manga = details,
                 branch = getBranch(details, track.lastChapterId),
-                historyChapterId = historyChapterId,
+                historyChapterId = historyRepository.getOne(track.manga)?.chapterId ?: 0L,
             )
         }
-        val repo = mangaRepositoryFactory.create(track.manga.source)
-        if (track.isEmpty() || track.manga.isLocal || !repo.refreshesChaptersAlone) {
-            return@runCatchingCancellable check(getFullContent(track.manga, forceFetch = true))
-        }
+        // Storing the fetched list finds the new chapters (storeChapterSnapshot), as it does for the details page.
         // Most checks find nothing new, so they only ask for the chapter list. When there is something new the
         // details are refreshed too: a series usually turns finished with its last chapter, which "skip completed
         // titles" relies on.
-        val updates = check(repo.getDetails(track.manga, ContentRepository.DetailsFetchMode.CHAPTERS_REFRESH))
-        if (updates.newChapters.isEmpty()) updates else check(fetchDetails(track.manga))
+        val repo = mangaRepositoryFactory.create(track.manga.source)
+        val chaptersOnly = !track.isEmpty() && repo.refreshesChaptersAlone
+        val fetched = if (chaptersOnly) {
+            repo.getDetails(track.manga, ContentRepository.DetailsFetchMode.CHAPTERS_REFRESH)
+        } else {
+            fetchDetails(track.manga)
+        }
+        var (details, stored) = repository.storeCheckedSnapshot(fetched, ownerId)
+        if (stored is ChapterSnapshotResult.Incomplete) throw IncompleteChapterListException()
+        val reported = (stored as? ChapterSnapshotResult.Updated)?.reported.orEmpty().mapTo(HashSet()) { it.chapterId }
+        if (chaptersOnly && reported.isNotEmpty()) {
+            details = repository.storeCheckedSnapshot(fetchDetails(track.manga), ownerId).first
+        }
+        MangaUpdates.Success(
+            manga = details,
+            entityId = ownerId,
+            anchorMangaId = ownerId,
+            branch = getBranch(details, track.lastChapterId),
+            newChapters = details.chapters.orEmpty().filter { it.id in reported },
+            isValid = stored is ChapterSnapshotResult.Updated,
+        )
     }.getOrElse { error ->
         MangaUpdates.Failure(
             manga = track.manga,
@@ -199,6 +215,7 @@ class CheckNewChaptersUseCase @Inject constructor(
             lastChapterId = track.lastChapterId,
             uploadDate = { it.uploadDate },
             lastChapterDate = track.lastChapterDate?.toEpochMilli() ?: 0L,
+            historyChapterId = historyChapterId,
         )
         return MangaUpdates.Success(
             manga = manga,

@@ -105,6 +105,16 @@ class TrackRulesTest {
 	}
 
 	@Test
+	fun `a vanished anchor without usable dates falls back to the reading position`() {
+		val ids = (101L..110L).toList()
+		assertEquals(listOf(109L, 110L), compareTrackedChapters(ids, { it }, lastChapterId = 5,
+			historyChapterId = 108).newChapters)
+		// Most of the list after the reading position: not trusted.
+		assertEquals(TrackComparison(emptyList<Long>(), isValid = false),
+			compareTrackedChapters(ids, { it }, lastChapterId = 5, historyChapterId = 102))
+	}
+
+	@Test
 	fun `comparison follows Android's tracker cases`() {
 		assertEquals(TrackComparison(emptyList<Long>(), isValid = false), compareTrackedChapters(ids, { it }, 0L))
 		assertEquals(TrackComparison(emptyList<Long>(), isValid = true), compareTrackedChapters(ids, { it }, 4L))

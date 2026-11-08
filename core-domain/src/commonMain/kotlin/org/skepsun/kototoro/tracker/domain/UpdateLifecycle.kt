@@ -63,6 +63,24 @@ suspend fun MangaDatabase.recordUpdateChapters(mangaId: Long, chapters: List<Cha
     return added.size
 }
 
+/**
+ * A chapter re-uploaded under a new identity keeps its update: the recorded chapters that are keys of [moves] take
+ * the identity of the chapter they moved to, with their discovery and read times unchanged.
+ */
+suspend fun MangaDatabase.rekeyUpdateChapters(mangaId: Long, moves: Map<ChapterEntity, ChapterEntity>) {
+    val targets = moves.entries.associate { (from, to) -> from.updateKey() to to }
+    val dao = getTrackLogsDao()
+    for (log in dao.findByOwner(mangaId)) {
+        val chapters = decodeUpdateChapters(log.chapterMetadata)
+        if (chapters.none { it.key in targets }) continue
+        dao.updateChapterMetadata(log.id, encodeUpdateChapters(chapters.map { chapter ->
+            targets[chapter.key]?.let { to ->
+                chapter.copy(key = to.updateKey(), chapterId = to.chapterId, title = to.title)
+            } ?: chapter
+        }))
+    }
+}
+
 /** Known chapter identities, rather than notification flags or historic event totals, own the badge. */
 suspend fun MangaDatabase.refreshPendingUpdateCount(mangaId: Long) {
     val chapters = getTrackLogsDao().findByOwner(mangaId).flatMap { decodeUpdateChapters(it.chapterMetadata) }

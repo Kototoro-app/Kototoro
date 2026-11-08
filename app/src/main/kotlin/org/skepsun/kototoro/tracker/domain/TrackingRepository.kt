@@ -183,17 +183,23 @@ class TrackingRepository @Inject constructor(
         )
     }
 
+    /**
+     * Stores a remote work's checked details and chapter list at [anchorMangaId], so feed and details read the same
+     * committed snapshot; storing the list records its new chapters ([storeChapterSnapshot]).
+     */
+    suspend fun storeCheckedSnapshot(manga: Content, anchorMangaId: Long): Pair<Content, ChapterSnapshotResult?> =
+        contentDataRepository.storeCheckedSnapshot(manga, anchorMangaId)
+
+    /**
+     * Records the outcome of a check. A remote work's snapshot and new chapters were stored by
+     * [storeCheckedSnapshot] already; a remote check for a local owner carries its id, so that owner's files/source
+     * are never replaced, and it has no stored chapter list to find the new chapters in.
+     */
     suspend fun updateTrack(manga: Content, updates: MangaUpdates): TrackEntity = db.withTransaction {
-        // A remote check for a local owner carries its id, so never replace that owner's files/source; the owner
-        // then has no stored chapter list to find the new chapters in.
         val owner = if (updates is MangaUpdates.Success) {
             contentDataRepository.findContentById(manga.id, withChapters = false)
         } else {
             null
-        }
-        if (owner != null && !owner.isLocal) {
-            // Feed and details must read the same committed snapshot.
-            contentDataRepository.updateContentSnapshotAtAnchor(updates.manga, manga.id)
         }
         val prev = getOrCreateTrack(manga.id)
         val entity = prev.mergeWith(updates, manga.id)

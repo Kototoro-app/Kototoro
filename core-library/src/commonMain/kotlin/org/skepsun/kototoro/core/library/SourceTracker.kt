@@ -15,11 +15,11 @@ import org.skepsun.kototoro.tracker.domain.SourceCheck
 import org.skepsun.kototoro.tracker.domain.afterFailedCheck
 import org.skepsun.kototoro.tracker.domain.afterSuccessfulCheck
 import org.skepsun.kototoro.tracker.domain.checkBySource
-import org.skepsun.kototoro.tracker.domain.compareTrackedChapters
-import org.skepsun.kototoro.tracker.domain.recordUpdateBatch
-import org.skepsun.kototoro.tracker.domain.reportedNewChapters
 import org.skepsun.kototoro.tracker.domain.repairLegacyUpdateCounters
 import org.skepsun.kototoro.tracker.domain.trackedLastChapterDate
+import org.skepsun.kototoro.tracker.domain.ChapterSnapshotResult
+import org.skepsun.kototoro.tracker.domain.IncompleteChapterListException
+import org.skepsun.kototoro.tracker.domain.refreshPendingUpdateCount
 
 /** [skipped] titles were not checked: their source asked for a browser challenge earlier in the run. */
 data class SourceTrackReport(
@@ -127,36 +127,25 @@ class SourceTracker(
     private suspend fun checkFetched(mangaId: Long, track: TrackEntity, details: SourceContent): Int {
         val chapters = details.chapters.orEmpty()
         val branch = branchOf(details, track.lastChapterId)
-        val branchChapters = chapters.filter { it.branch == branch }
-        val compared = compareTrackedChapters(
-            chapters = branchChapters,
-            id = SourceChapter::id,
-            lastChapterId = track.lastChapterId,
-            uploadDate = SourceChapter::uploadDate,
-            lastChapterDate = track.lastChapterDate,
-        )
         val time = now()
-        val comparison = compared.copy(newChapters = reportedNewChapters(
-            newChapters = compared.newChapters,
-            branch = branchChapters,
-            id = SourceChapter::id,
-            uploadDate = SourceChapter::uploadDate,
-            readChapterId = database.getHistoryDao().find(mangaId)?.takeIf { it.deletedAt == 0L }?.chapterId ?: 0L,
-            now = time,
-        ))
-        library.save(details)
+        // Storing the list finds the new chapters, as on Android (storeChapterSnapshot).
+        val stored = library.save(details, fallbackBranch = branch, now = time)
+        if (stored is ChapterSnapshotResult.Incomplete) throw IncompleteChapterListException()
+        val reported = (stored as? ChapterSnapshotResult.Updated)?.reported.orEmpty()
+        val branchChapters = chapters.filter { it.branch == branch }
         return database.useWriterConnection { connection ->
             connection.immediateTransaction {
-                database.getTracksDao().upsert(track.afterSuccessfulCheck(
+                database.getTracksDao().upsert((database.getTracksDao().find(mangaId) ?: track).afterSuccessfulCheck(
                     anchorMangaId = mangaId,
                     lastChapterId = branchChapters.lastOrNull()?.id ?: 0L,
-                    newChapterCount = comparison.newChapters.size,
-                    isValid = comparison.isValid,
-                    lastChapterDate = trackedLastChapterDate(comparison.newChapters.map { it.uploadDate },
+                    newChapterCount = reported.size,
+                    isValid = stored is ChapterSnapshotResult.Updated,
+                    lastChapterDate = trackedLastChapterDate(reported.map { it.uploadDate },
                         chapters.lastOrNull()?.uploadDate, time),
                     now = time,
                 ))
-                database.recordUpdateBatch(mangaId, comparison.newChapters.mapTo(HashSet()) { it.id }, time)
+                database.refreshPendingUpdateCount(mangaId)
+                reported.size
             }
         }
     }

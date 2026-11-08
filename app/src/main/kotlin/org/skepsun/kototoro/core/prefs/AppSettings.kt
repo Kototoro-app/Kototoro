@@ -1141,6 +1141,10 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         get() = prefs.getBoolean(KEY_TRACKER_SKIP_COMPLETED, false)
         set(value) = prefs.edit { putBoolean(KEY_TRACKER_SKIP_COMPLETED, value) }
 
+    var isTrackerMarkDuplicatesRead: Boolean
+        get() = prefs.getBoolean(KEY_TRACKER_MARK_DUPLICATES_READ, false)
+        set(value) = prefs.edit { putBoolean(KEY_TRACKER_MARK_DUPLICATES_READ, value) }
+
     var isTrackerNsfwDisabled: Boolean
         get() = prefs.getBoolean(KEY_TRACKER_NO_NSFW, false)
         set(value) = prefs.edit { putBoolean(KEY_TRACKER_NO_NSFW, value) }
@@ -3092,6 +3096,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_PREFERRED_TRACKING_SITE = "preferred_tracking_site"
         const val KEY_TRACKER_NO_NSFW = "tracker_no_nsfw"
         const val KEY_TRACKER_SKIP_COMPLETED = "tracker_skip_completed"
+        const val KEY_TRACKER_MARK_DUPLICATES_READ = "tracker_mark_duplicates_read"
         const val KEY_TRACKER_DOWNLOAD = "tracker_download"
         const val KEY_NOTIFICATIONS_SETTINGS = "notifications_settings"
         const val KEY_NOTIFICATIONS_SOUND = "notifications_sound"

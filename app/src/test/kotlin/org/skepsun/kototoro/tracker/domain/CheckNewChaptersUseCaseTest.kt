@@ -9,6 +9,7 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
+import org.skepsun.kototoro.core.db.entity.ChapterEntity
 import org.skepsun.kototoro.core.model.TestContentSource
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.parser.ContentRepository.DetailsFetchMode
@@ -74,31 +75,45 @@ class CheckNewChaptersUseCaseTest : StringSpec({
         )
     }
 
+    fun entity(id: Long) = ChapterEntity(id, 24L, "Chapter $id", id.toFloat(), 0, "/c/$id", null, 0L, null, "TEST", 0)
+
+    /** Storing reports [results] in turn, the way storeChapterSnapshot would for the lists given. */
+    fun tracking(vararg results: ChapterSnapshotResult?): TrackingRepository {
+        val queue = ArrayDeque(results.toList())
+        return mockk(relaxed = true) {
+            coEvery { storeCheckedSnapshot(any(), any()) } answers {
+                firstArg<Content>().copy(id = secondArg()) to queue.removeFirstOrNull()
+            }
+        }
+    }
+
     "a check without new chapters only asks for the chapter list" {
         val repository = mockk<ContentRepository> {
             every { refreshesChaptersAlone } returns true
             coEvery { getDetails(any(), DetailsFetchMode.CHAPTERS_REFRESH) } returns manga(listOf(1L, 2L))
         }
 
-        val updates = useCase(repository)(track(lastChapterId = 2L))
+        val updates = useCase(repository, tracking(ChapterSnapshotResult.Updated(emptyList())))(track(2L))
 
         updates.shouldBeInstanceOf<MangaUpdates.Success>().newChapters shouldHaveSize 0
         coVerify(exactly = 0) { repository.getDetails(any(), DetailsFetchMode.FORCE_REFRESH) }
     }
 
-    "new chapters refresh the details too, so a finished series is noticed" {
+    "the chapters storing the list recorded are the new ones, and the details are refreshed for them" {
         val repository = mockk<ContentRepository> {
             every { refreshesChaptersAlone } returns true
             coEvery { getDetails(any(), DetailsFetchMode.CHAPTERS_REFRESH) } returns manga(listOf(1L, 2L, 3L))
             coEvery { getDetails(any(), DetailsFetchMode.FORCE_REFRESH) } returns
                 manga(listOf(1L, 2L, 3L), state = ContentState.FINISHED)
         }
+        val stores = tracking(ChapterSnapshotResult.Updated(listOf(entity(3))), ChapterSnapshotResult.Updated(emptyList()))
 
-        val updates = useCase(repository)(track(lastChapterId = 2L))
+        val updates = useCase(repository, stores)(track(lastChapterId = 2L))
 
         val success = updates.shouldBeInstanceOf<MangaUpdates.Success>()
         success.newChapters.map { it.id } shouldBe listOf(3L)
         success.manga.state shouldBe ContentState.FINISHED
+        success.manga.id shouldBe 24L
     }
 
     "a source that cannot fetch chapters alone is refreshed once" {
@@ -107,21 +122,34 @@ class CheckNewChaptersUseCaseTest : StringSpec({
             coEvery { getDetails(any(), DetailsFetchMode.FORCE_REFRESH) } returns manga(listOf(1L, 2L, 3L))
         }
 
-        val updates = useCase(repository)(track(lastChapterId = 2L))
+        val updates = useCase(repository, tracking(ChapterSnapshotResult.Updated(listOf(entity(3)))))(track(2L))
 
         updates.shouldBeInstanceOf<MangaUpdates.Success>().newChapters.map { it.id } shouldBe listOf(3L)
         coVerify(exactly = 1) { repository.getDetails(any(), DetailsFetchMode.FORCE_REFRESH) }
         coVerify(exactly = 0) { repository.getDetails(any(), DetailsFetchMode.CHAPTERS_REFRESH) }
     }
 
-    "the first check of a title fetches its details" {
+    "the first check of a title fetches its details and only sets the baseline" {
         val repository = mockk<ContentRepository> {
             every { refreshesChaptersAlone } returns true
             coEvery { getDetails(any(), DetailsFetchMode.FORCE_REFRESH) } returns manga(listOf(1L))
         }
 
-        useCase(repository)(track(lastChapterId = 0L)).shouldBeInstanceOf<MangaUpdates.Success>()
+        val updates = useCase(repository, tracking(ChapterSnapshotResult.Stored))(track(lastChapterId = 0L))
+
+        updates.shouldBeInstanceOf<MangaUpdates.Success>().isValid shouldBe false
         coVerify(exactly = 0) { repository.getDetails(any(), DetailsFetchMode.CHAPTERS_REFRESH) }
+    }
+
+    "a list too short to be complete fails the check" {
+        val repository = mockk<ContentRepository> {
+            every { refreshesChaptersAlone } returns true
+            coEvery { getDetails(any(), DetailsFetchMode.CHAPTERS_REFRESH) } returns manga(listOf(1L))
+        }
+
+        val updates = useCase(repository, tracking(ChapterSnapshotResult.Incomplete))(track(lastChapterId = 2L))
+
+        updates.shouldBeInstanceOf<MangaUpdates.Failure>().error.shouldBeInstanceOf<IncompleteChapterListException>()
     }
 
     "reading an older chapter keeps chapters the tracker has not seen after the anchor" {

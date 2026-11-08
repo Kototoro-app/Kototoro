@@ -26,6 +26,7 @@ data class TrackerSettingsUiState(
     val trackerFrequencyFactor: Float,
     val trackSources: Set<String>,
     val isTrackerSkipCompleted: Boolean,
+    val isTrackerMarkDuplicatesRead: Boolean,
     val categoriesSummary: String,
     val isCategoriesEnabled: Boolean,
     val notificationsSummary: String,
@@ -48,6 +49,7 @@ fun TrackerSettingsScreen(
     onTrackerFrequencyChange: (Float) -> Unit,
     onTrackSourcesChange: (Set<String>) -> Unit,
     onTrackerSkipCompletedChange: (Boolean) -> Unit,
+    onTrackerMarkDuplicatesReadChange: (Boolean) -> Unit,
     onTrackCategoriesClick: () -> Unit,
     onNotificationsSettingsClick: () -> Unit,
     onTrackerDownloadStrategyChange: (TrackerDownloadStrategy) -> Unit,
@@ -124,6 +126,16 @@ fun TrackerSettingsScreen(
                             summary = stringResource(R.string.tracker_skip_completed_summary),
                             enabled = state.isTrackerEnabled,
                             onCheckedChange = onTrackerSkipCompletedChange,
+                        )
+                    }
+                    item {
+                        SettingsSwitchPreference(
+                            title = stringResource(R.string.tracker_mark_duplicates_read),
+                            iconRes = R.drawable.ic_check,
+                            checked = state.isTrackerMarkDuplicatesRead,
+                            summary = stringResource(R.string.tracker_mark_duplicates_read_summary),
+                            enabled = state.isTrackerEnabled,
+                            onCheckedChange = onTrackerMarkDuplicatesReadChange,
                         )
                     }
                     item {

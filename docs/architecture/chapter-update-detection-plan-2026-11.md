@@ -133,6 +133,14 @@ Kotatsu-Redo（`CheckNewChaptersUseCase`、`GetTracksUseCase`、`StaleTrackPolic
 - [x] 阶段 2：`ChapterNumberRules`（移植 `ChapterRecognition` 并补中日文）与 `reportedNewChapters`
   （阅读位置之前与 90 天前的章节不报，仍算已知），Android `CheckNewChaptersUseCase` 与 Windows `SourceTracker`
   在锚点比较之后都过一遍。同号已读自动标已读需要写入点配合，并入阶段 3。
-- [ ] 阶段 3
+- [x] 阶段 3：core-domain `storeChapterSnapshot`（`ChapterSnapshot.kt`）是唯一的章节列表写入点：Android
+  `ContentDataRepository` 的 `storeContentAndReturn` / `updateContentSnapshot` / `storeCheckedSnapshot` 与 Windows
+  `SourceLibrary.saveInTransaction` 都经过它，所以追更检查、详情页、阅读器存下的列表都会把被追踪作品的新章节记为
+  更新。按 key 求差集；同分支同可信章节号的增删配对视为重新上传，`rekeyUpdateChapters` 把更新状态迁到新身份；
+  缩水过半（旧列表至少 10 章）不替换并返回 `Incomplete`，检查记为 `IncompleteChapterListException` 失败；新章节
+  超过 10 且过半视为整列重建，静默建基线。远程作品的检查（Android `CheckNewChaptersUseCase`、Windows
+  `SourceTracker`）只负责拉取，新章节以写入点结果为准；本地作品保留锚点链，并按 3.4 加了阅读位置兜底。
+  同号已读自动标已读是设置项 `tracker_mark_duplicates_read`（默认关，Android 追更设置页）。
+  单元/数据库测试覆盖写入点各分支；尚未在真机上用真实来源验证。
 - [ ] 阶段 4
 - [ ] 阶段 5
