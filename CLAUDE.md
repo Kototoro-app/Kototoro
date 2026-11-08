@@ -710,7 +710,7 @@ RELEASE_KEY_PASSWORD=***
 - `dandanplay.appId` / `dandanplay.appSecret` - 弹弹 Play API 凭证
 
 ### 版本管理
-当前版本：`versionName 2.3.12` / `versionCode 1256`（`app/build.gradle`）。
+当前版本：`versionName 2.4.0` / `versionCode 1257`（`app/build.gradle`）。
 在 `app/build.gradle` 中更新：
 - `versionCode` - 每次发布递增
 - `versionName` - 语义化版本号（如 "1.0.0.prev"）
