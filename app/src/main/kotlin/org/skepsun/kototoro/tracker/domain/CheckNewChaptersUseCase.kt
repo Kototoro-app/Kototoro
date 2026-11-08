@@ -114,13 +114,24 @@ class CheckNewChaptersUseCase @Inject constructor(
         // The persisted manga row owns its own tracking state, so the track's anchor
         // manga is the identity. There is no Work/entity to resolve.
         val ownerId = track.anchorMangaId
-        val details = getFullContent(track.manga, forceFetch = true).copy(id = ownerId)
-        compare(
-            track = track,
-            entityId = ownerId,
-            manga = details,
-            branch = getBranch(details, track.lastChapterId),
-        )
+        suspend fun check(fetched: Content): MangaUpdates.Success {
+            val details = fetched.copy(id = ownerId)
+            return compare(
+                track = track,
+                entityId = ownerId,
+                manga = details,
+                branch = getBranch(details, track.lastChapterId),
+            )
+        }
+        val repo = mangaRepositoryFactory.create(track.manga.source)
+        if (track.isEmpty() || track.manga.isLocal || !repo.refreshesChaptersAlone) {
+            return@runCatchingCancellable check(getFullContent(track.manga, forceFetch = true))
+        }
+        // Most checks find nothing new, so they only ask for the chapter list. When there is something new the
+        // details are refreshed too: a series usually turns finished with its last chapter, which "skip completed
+        // titles" relies on.
+        val updates = check(repo.getDetails(track.manga, ContentRepository.DetailsFetchMode.CHAPTERS_REFRESH))
+        if (updates.newChapters.isEmpty()) updates else check(fetchDetails(track.manga))
     }.getOrElse { error ->
         MangaUpdates.Failure(
             manga = track.manga,

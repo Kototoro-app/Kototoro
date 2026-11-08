@@ -136,6 +136,32 @@ class MihonMangaRepository(
     }
 
     override suspend fun getDetailsImpl(manga: Content): Content = withContext(Dispatchers.IO) {
+        val (details, chapters) = fetchUpdate(manga, fetchDetails = true)
+
+        // Legacy sources may return a partial SManga whose required lateinit fields are unset.
+        details.applyDetailFallbacks(mangaSnapshots[manga.url]?.copy() ?: manga.toMihonManga())
+        rememberMihonManga(details)
+
+        android.util.Log.d("MihonMangaRepository", "Final details thumbnail: ${try { details.thumbnail_url } catch (e: Exception) { "uninitialized" }}")
+
+        val publicUrl = (mihonSource as? HttpSource)?.getPublicContentUrl(details) ?: ""
+
+        details.toKotoContent(
+            source = source,
+            chapters = chapters,
+            publicUrl = publicUrl,
+        ).copy(id = manga.id)
+    }
+
+    /** Only the chapter list: the details request is skipped and [manga]'s own details are kept as they are. */
+    override val refreshesChaptersAlone: Boolean get() = true
+
+    override suspend fun getChaptersImpl(manga: Content): Content = withContext(Dispatchers.IO) {
+        manga.copy(chapters = fetchUpdate(manga, fetchDetails = false).second)
+    }
+
+    /** The source's details (the given ones when not [fetchDetails]) and its chapters mapped to Kototoro's. */
+    private suspend fun fetchUpdate(manga: Content, fetchDetails: Boolean): Pair<SManga, List<ContentChapter>> {
         val sContent = mangaSnapshots[manga.url]?.copy() ?: manga.toMihonManga()
 
         suspend fun fetchUpdate() = rethrowMihonWrappedExceptions {
@@ -143,7 +169,7 @@ class MihonMangaRepository(
                 mihonSource.getMangaUpdate(
                     manga = sContent,
                     chapters = manga.chapters.orEmpty().map(ContentChapter::toMihonChapter),
-                    fetchDetails = true,
+                    fetchDetails = fetchDetails,
                     fetchChapters = true,
                 )
             }
@@ -195,19 +221,7 @@ class MihonMangaRepository(
                 else list.map { if (it.branch == null) it else it.copy(branch = null) }
             }
 
-        // Legacy sources may return a partial SManga whose required lateinit fields are unset.
-        details.applyDetailFallbacks(sContent)
-        rememberMihonManga(details)
-
-        android.util.Log.d("MihonMangaRepository", "Final details thumbnail: ${try { details.thumbnail_url } catch (e: Exception) { "uninitialized" }}")
-
-        val publicUrl = (mihonSource as? HttpSource)?.getPublicContentUrl(details) ?: ""
-
-        details.toKotoContent(
-            source = source,
-            chapters = chapters,
-            publicUrl = publicUrl,
-        ).copy(id = manga.id)
+        return details to chapters
     }
 
     override suspend fun getPagesImpl(chapter: ContentChapter, nextChapterUrl: String?): List<ContentPage> = withContext(Dispatchers.IO) {
