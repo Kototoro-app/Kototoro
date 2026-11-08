@@ -153,4 +153,26 @@ class ChapterSnapshotTest {
         assertTrue(db.getTrackLogsDao().findByOwner(1).flatMap { decodeUpdateChapters(it.chapterMetadata) }
             .single { it.chapterId == 31L }.readAt > 0)
     }
+
+    @Test
+    fun `a restored track without a stored list reports the chapters after its last chapter`() = withDb { db ->
+        // A backup restores the track with its last chapter, but no chapter list.
+        db.work(tracked = false)
+        db.getTracksDao().upsert(TrackEntity(1, 30, 0, 0, now - 40 * day, TrackEntity.RESULT_NO_UPDATE, null))
+
+        val result = db.store((1..5).map { chapter(it.toFloat()) })
+
+        assertEquals(listOf(40L, 50L), result.reportedIds())
+        assertEquals(2, db.getTracksDao().find(1)?.newChapters)
+        assertEquals(50L, db.getTracksDao().find(1)?.lastChapterId)
+    }
+
+    @Test
+    fun `a restored track whose last chapter is gone falls back to its date`() = withDb { db ->
+        db.work(tracked = false)
+        db.getTracksDao().upsert(TrackEntity(1, 999, 0, 0, now - 10 * day, TrackEntity.RESULT_NO_UPDATE, null))
+
+        val chapters = (1..9).map { chapter(it.toFloat(), uploadDate = now - 30 * day) } + chapter(10f)
+        assertEquals(listOf(100L), db.store(chapters).reportedIds())
+    }
 }

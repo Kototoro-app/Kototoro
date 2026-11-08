@@ -98,7 +98,10 @@ suspend fun MangaDatabase.storeChapterSnapshot(
     val chaptersDao = getChaptersDao()
     val old = chaptersDao.findAll(mangaId)
     val track = getTracksDao().find(mangaId)
-    if (track == null || old.isEmpty() || chapters.isEmpty()) {
+    // Without a stored list a track may still know its last chapter: a restored backup carries tracks but no
+    // chapter lists, and the chapters released since the backup are found from that anchor instead.
+    val anchored = track != null && old.isEmpty() && !isEmptyTrack(track.lastChapterId)
+    if (track == null || (old.isEmpty() && !anchored) || chapters.isEmpty()) {
         if (track != null && old.isNotEmpty() && isIncompleteChapterList(old, chapters)) {
             return ChapterSnapshotResult.Incomplete
         }
@@ -107,21 +110,42 @@ suspend fun MangaDatabase.storeChapterSnapshot(
     }
     if (isIncompleteChapterList(old, chapters)) return ChapterSnapshotResult.Incomplete
 
-    val diff = diffChapterSnapshots(old, chapters, workTitle)
-    if (diff.reuploads.isNotEmpty()) rekeyUpdateChapters(mangaId, diff.reuploads)
-    val anchorId = diff.reuploads.entries.firstOrNull { it.key.chapterId == track.lastChapterId }?.value?.chapterId
-        ?: track.lastChapterId
-    if (diff.fresh.size > REIDENTIFIED_LIST_MIN_FRESH && diff.fresh.size * 2 > chapters.size) {
-        chaptersDao.replaceAll(mangaId, chapters)
-        return ChapterSnapshotResult.Stored
-    }
-
     val history = getHistoryDao().find(mangaId)?.takeIf { it.deletedAt == 0L }
     val readChapterId = history?.chapterId ?: 0L
+    val fresh: List<ChapterEntity>
+    val anchorId: Long
+    if (anchored) {
+        anchorId = track.lastChapterId
+        val anchorBranch = branchBeingRead(chapters, old, readChapterId, anchorId, fallbackBranch)
+        val comparison = compareTrackedChapters(
+            chapters = chapters.filter { it.branch == anchorBranch },
+            id = ChapterEntity::chapterId,
+            lastChapterId = track.lastChapterId,
+            uploadDate = ChapterEntity::uploadDate,
+            lastChapterDate = track.lastChapterDate,
+            historyChapterId = readChapterId,
+        )
+        if (!comparison.isValid) {
+            chaptersDao.replaceAll(mangaId, chapters)
+            return ChapterSnapshotResult.Stored
+        }
+        fresh = comparison.newChapters
+    } else {
+        val diff = diffChapterSnapshots(old, chapters, workTitle)
+        if (diff.reuploads.isNotEmpty()) rekeyUpdateChapters(mangaId, diff.reuploads)
+        anchorId = diff.reuploads.entries.firstOrNull { it.key.chapterId == track.lastChapterId }?.value?.chapterId
+            ?: track.lastChapterId
+        if (diff.fresh.size > REIDENTIFIED_LIST_MIN_FRESH && diff.fresh.size * 2 > chapters.size) {
+            chaptersDao.replaceAll(mangaId, chapters)
+            return ChapterSnapshotResult.Stored
+        }
+        fresh = diff.fresh
+    }
+
     val branch = branchBeingRead(chapters, old, readChapterId, anchorId, fallbackBranch)
     val branchChapters = chapters.filter { it.branch == branch }
     val reported = reportedNewChapters(
-        newChapters = diff.fresh.filter { it.branch == branch },
+        newChapters = fresh.filter { it.branch == branch },
         branch = branchChapters,
         id = ChapterEntity::chapterId,
         uploadDate = ChapterEntity::uploadDate,
