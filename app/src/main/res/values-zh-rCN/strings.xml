@@ -1569,6 +1569,10 @@
     <!-- 播放设置 -->
     <string name="playback_settings">播放</string>
     <string name="video_decoder_mode">视频解码方式</string>
+    <string name="video_orientation">播放器方向</string>
+    <string name="video_orientation_last_used">上次的方向</string>
+    <string name="reverse_landscape">反向横屏</string>
+    <string name="reverse_portrait">反向竖屏</string>
     <string name="video_decoder_hardware">硬件解码</string>
     <string name="video_decoder_software">软件解码</string>
     <string name="video_fallback_super_res_disabled">已临时关闭视频超分，以提升播放稳定性</string>

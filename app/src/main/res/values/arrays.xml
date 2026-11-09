@@ -112,6 +112,14 @@
 		<item>@string/color_white</item>
 		<item>@string/color_black</item>
 	</string-array>
+	<string-array name="video_orientations" translatable="false">
+		<item>@string/automatic</item>
+		<item>@string/video_orientation_last_used</item>
+		<item>@string/landscape</item>
+		<item>@string/portrait</item>
+		<item>@string/reverse_landscape</item>
+		<item>@string/reverse_portrait</item>
+	</string-array>
 	<string-array name="video_decoder_modes" translatable="false">
 		<item>@string/video_decoder_hardware_only</item>
 		<item>@string/video_decoder_hardware_preferred</item>

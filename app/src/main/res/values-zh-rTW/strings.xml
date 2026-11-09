@@ -2435,6 +2435,10 @@ SHA-256 指紋:
     <string name="video_danmaku_stroke">彈幕描邊</string>
     <string name="video_decoder_hardware">硬件解碼</string>
     <string name="video_decoder_mode">視頻解碼方式</string>
+    <string name="video_orientation">播放器方向</string>
+    <string name="video_orientation_last_used">上次的方向</string>
+    <string name="reverse_landscape">反向橫屏</string>
+    <string name="reverse_portrait">反向豎屏</string>
     <string name="video_decoder_software">軟件解碼</string>
     <string name="video_default_speed">默認倍速</string>
     <string name="video_detail">視頻詳情</string>

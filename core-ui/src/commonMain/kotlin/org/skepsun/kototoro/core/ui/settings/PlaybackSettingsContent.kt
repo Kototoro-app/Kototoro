@@ -40,6 +40,7 @@ data class PlaybackSettingsRowIcons(
     val controlsAlpha: Painter? = null,
     val gradientAlpha: Painter? = null,
     val aiSettings: Painter? = null,
+    val orientation: Painter? = null,
 )
 
 /** Android's extra door to the AI settings page; hosts without that screen leave it out. */
@@ -47,6 +48,17 @@ data class PlaybackSettingsAction(
     val title: String,
     val summary: String?,
     val onClick: () -> Unit,
+)
+
+/**
+ * Android's choice of the orientation the player opens in; desktop windows have no orientation and leave it out.
+ * The title and labels come from the host like [PlaybackSettingsAction]'s.
+ */
+data class PlaybackSettingsChoice(
+    val title: String,
+    val selected: String,
+    val options: List<PreferenceChoice<String>>,
+    val onSelect: (String) -> Unit,
 )
 
 /**
@@ -58,7 +70,7 @@ object PlaybackSettingsRanges {
     val gradientAlpha: IntRange = 0..100
 }
 
-private enum class PlaybackDialog { BACKGROUND, DECODER }
+private enum class PlaybackDialog { BACKGROUND, DECODER, ORIENTATION }
 
 @Composable
 fun PlaybackSettingsContent(
@@ -75,6 +87,7 @@ fun PlaybackSettingsContent(
     enabled: Boolean = true,
     icons: PlaybackSettingsRowIcons = PlaybackSettingsRowIcons(),
     aiSettings: PlaybackSettingsAction? = null,
+    orientation: PlaybackSettingsChoice? = null,
     renderDialog: @Composable (PreferenceDialogContent) -> Unit = { PreferenceDialog(it) },
 ) {
     var dialog by remember { mutableStateOf<PlaybackDialog?>(null) }
@@ -93,6 +106,13 @@ fun PlaybackSettingsContent(
                 decoderOptions.firstOrNull { it.value == state.decoderMode }?.label, enabled,
                 { dialog = PlaybackDialog.DECODER }, testTag = "playback-setting-decoder",
                 leadingIcon = icons.decoderMode)
+            if (orientation != null) {
+                SettingsRowDivider()
+                SettingsValueRow(orientation.title, null,
+                    orientation.options.firstOrNull { it.value == orientation.selected }?.label, enabled,
+                    { dialog = PlaybackDialog.ORIENTATION }, testTag = "playback-setting-orientation",
+                    leadingIcon = icons.orientation)
+            }
             if (aiSettings != null) {
                 SettingsRowDivider()
                 SettingsValueRow(aiSettings.title, aiSettings.summary, null, enabled, aiSettings.onClick,
@@ -123,6 +143,14 @@ fun PlaybackSettingsContent(
             onDismiss = { dialog = null }, enabled = enabled,
             tagPrefix = "playback-decoder", renderDialog = renderDialog,
         )
+        PlaybackDialog.ORIENTATION -> if (orientation != null) {
+            PreferenceChoiceDialog(
+                title = orientation.title, selected = orientation.selected,
+                options = orientation.options, onSelect = orientation.onSelect,
+                onDismiss = { dialog = null }, enabled = enabled,
+                tagPrefix = "playback-orientation", renderDialog = renderDialog,
+            )
+        }
         null -> Unit
     }
 }

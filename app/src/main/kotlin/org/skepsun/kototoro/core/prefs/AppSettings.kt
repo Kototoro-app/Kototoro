@@ -1340,6 +1340,15 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         get() = prefs.getBoolean(KEY_VIDEO_LANDSCAPE_SENSOR, false)
         set(value) = prefs.edit { putBoolean(KEY_VIDEO_LANDSCAPE_SENSOR, value) }
 
+    var videoOrientation: VideoOrientation
+        get() = prefs.getEnumValue(KEY_VIDEO_ORIENTATION, VideoOrientation.AUTO)
+        set(value) = prefs.edit { putEnumValue(KEY_VIDEO_ORIENTATION, value) }
+
+    /** The rotate button's last state, which [VideoOrientation.LAST_USED] reopens the player in. */
+    var videoLastOrientationLandscape: Boolean
+        get() = prefs.getBoolean(KEY_VIDEO_LAST_ORIENTATION_LANDSCAPE, true)
+        set(value) = prefs.edit { putBoolean(KEY_VIDEO_LAST_ORIENTATION_LANDSCAPE, value) }
+
     var videoCacheSizeMb: Int
         get() = prefs.getSafeInt(KEY_VIDEO_CACHE_MB, 1024)
         set(value) = prefs.edit { putInt(KEY_VIDEO_CACHE_MB, value) }
@@ -3314,6 +3323,8 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_VIDEO_VOLUME_BOOST = "video_volume_boost"
         const val KEY_VIDEO_AUTO_NEXT = "video_auto_next"
         const val KEY_VIDEO_LANDSCAPE_SENSOR = "video_landscape_sensor"
+        const val KEY_VIDEO_ORIENTATION = "video_orientation"
+        const val KEY_VIDEO_LAST_ORIENTATION_LANDSCAPE = "video_last_orientation_landscape"
         const val KEY_VIDEO_CACHE_MB = "video_cache_mb"
             const val KEY_VIDEO_PROXY_CACHE_MB = "video_proxy_cache_mb"
             const val KEY_TORRENT_CACHE_MB = "torrent_cache_mb"

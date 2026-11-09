@@ -1069,7 +1069,9 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             }
             is VideoPlayerAction.OpenMore -> showOverflowMenu(action.anchorBounds)
             VideoPlayerAction.ToggleFullscreen -> {
-                orientationHelper.isLandscape = !orientationHelper.isLandscape
+                val landscape = !orientationHelper.isLandscape
+                orientationHelper.isLandscape = landscape
+                appSettings.videoLastOrientationLandscape = landscape
             }
             VideoPlayerAction.ToggleScreenLock -> {
                 if (isScreenLocked) exitScreenLock() else enterScreenLock()
@@ -1169,8 +1171,10 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             pendingInitialSeekPositionMs = targetPos
         }
 
-        // Apply default orientation: portrait when foldable unfolded in portrait; else landscape
-        observeFoldableStateForOrientation()
+        // A chosen orientation wins; AUTO is portrait when a foldable is unfolded in portrait, else landscape
+        if (!orientationHelper.applyVideoOrientation(appSettings.videoOrientation)) {
+            observeFoldableStateForOrientation()
+        }
 
         spaceSwitcherDelegate.bind(
             activity = this,

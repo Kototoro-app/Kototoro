@@ -13,8 +13,10 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ReaderBackground
 import org.skepsun.kototoro.core.prefs.VideoDecoderMode
+import org.skepsun.kototoro.core.prefs.VideoOrientation
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.settings.PlaybackSettingsAction
+import org.skepsun.kototoro.core.ui.settings.PlaybackSettingsChoice
 import org.skepsun.kototoro.core.ui.settings.PlaybackSettingsContent
 import org.skepsun.kototoro.core.ui.settings.PlaybackSettingsRowIcons
 import org.skepsun.kototoro.core.ui.settings.PlaybackSettingsUiState
@@ -31,13 +33,17 @@ fun PlaybackSettingsScreen(
     val decoderMode by settings.observeAsState(AppSettings.KEY_VIDEO_DECODER_MODE) { videoDecoderMode }
     val controlsAlpha by settings.observeAsState(AppSettings.KEY_VIDEO_CONTROLS_ALPHA) { videoControlsAlpha }
     val gradientAlpha by settings.observeAsState(AppSettings.KEY_VIDEO_GRADIENT_ALPHA) { videoGradientAlpha }
+    val orientation by settings.observeAsState(AppSettings.KEY_VIDEO_ORIENTATION) { videoOrientation }
 
-    // The array order matches ReaderBackground/VideoDecoderMode; the values stay the persisted enum names.
+    // The array order matches ReaderBackground/VideoDecoderMode/VideoOrientation; the values stay the persisted enum names.
     val backgroundOptions = stringArrayResource(R.array.video_backgrounds).mapIndexed { index, label ->
         PreferenceChoice(ReaderBackground.entries[index].name, label)
     }
     val decoderOptions = stringArrayResource(R.array.video_decoder_modes).mapIndexed { index, label ->
         PreferenceChoice(VideoDecoderMode.entries[index].name, label)
+    }
+    val orientationOptions = stringArrayResource(R.array.video_orientations).mapIndexed { index, label ->
+        PreferenceChoice(VideoOrientation.entries[index].name, label)
     }
 
     PlaybackSettingsContent(
@@ -63,11 +69,18 @@ fun PlaybackSettingsScreen(
             controlsAlpha = painterResource(R.drawable.ic_eye),
             gradientAlpha = painterResource(R.drawable.ic_bar_chart),
             aiSettings = painterResource(R.drawable.ic_auto_fix),
+            orientation = painterResource(R.drawable.ic_screen_rotation),
         ),
         aiSettings = PlaybackSettingsAction(
             title = stringResource(R.string.ai_settings),
             summary = stringResource(R.string.ai_settings_entry_summary),
             onClick = onAiSettingsClick,
+        ),
+        orientation = PlaybackSettingsChoice(
+            title = stringResource(R.string.video_orientation),
+            selected = orientation.name,
+            options = orientationOptions,
+            onSelect = { settings.videoOrientation = VideoOrientation.valueOf(it) },
         ),
         renderDialog = { AndroidPreferenceDialog(it) },
     )

@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.onStart
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.prefs.VideoOrientation
 import javax.inject.Inject
 
 @ActivityScoped
@@ -68,6 +69,26 @@ class ScreenOrientationHelper @Inject constructor(
             // https://developer.android.com/reference/android/R.attr.html#screenOrientation
             activity.requestedOrientation = settings.readerScreenOrientation
         }
+    }
+
+    /**
+     * Opens the video player in [orientation]. Returns false for [VideoOrientation.AUTO], whose foldable-aware
+     * choice the player keeps making itself.
+     */
+    fun applyVideoOrientation(orientation: VideoOrientation): Boolean {
+        when (orientation) {
+            VideoOrientation.AUTO -> return false
+            VideoOrientation.LAST_USED -> isLandscape = settings.videoLastOrientationLandscape
+            VideoOrientation.LANDSCAPE -> isLandscape = true
+            VideoOrientation.PORTRAIT -> isLandscape = false
+            VideoOrientation.REVERSE_LANDSCAPE -> if (!isLargeScreen) {
+                activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE
+            }
+            VideoOrientation.REVERSE_PORTRAIT -> if (!isLargeScreen) {
+                activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT
+            }
+        }
+        return true
     }
 
     fun observeAutoOrientation() = callbackFlow {
