@@ -2,7 +2,9 @@ package org.skepsun.kototoro.video.ui.compose
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -47,10 +49,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
@@ -83,6 +87,9 @@ internal fun VideoChapterDialog(
     onDismissRequest: () -> Unit,
     onChapterSelected: (ContentChapter) -> Unit,
     onGridViewChanged: (Boolean) -> Unit,
+    /** Episodes with a bookmark; long-pressing an episode, or its list row's bookmark button, toggles one. */
+    bookmarkedChapterIds: Set<Long> = emptySet(),
+    onBookmarkToggle: ((ContentChapter) -> Unit)? = null,
 ) {
     if (state.groups.isEmpty()) return
 
@@ -220,7 +227,9 @@ internal fun VideoChapterDialog(
                                         chapter = chapter,
                                         index = index,
                                         checked = chapter.id == state.currentChapterId,
+                                        bookmarked = chapter.id in bookmarkedChapterIds,
                                         onClick = { onChapterSelected(chapter) },
+                                        onBookmarkToggle = onBookmarkToggle?.let { toggle -> { toggle(chapter) } },
                                         modifier = if (isTvPresentation) {
                                             Modifier
                                                 .then(
@@ -259,7 +268,9 @@ internal fun VideoChapterDialog(
                                         chapter = chapter,
                                         index = index,
                                         checked = chapter.id == state.currentChapterId,
+                                        bookmarked = chapter.id in bookmarkedChapterIds,
                                         onClick = { onChapterSelected(chapter) },
+                                        onBookmarkToggle = onBookmarkToggle?.let { toggle -> { toggle(chapter) } },
                                         modifier = if (isTvPresentation) {
                                             Modifier
                                                 .then(
@@ -333,12 +344,15 @@ private fun CompactGroupTabs(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ChapterRow(
     chapter: ContentChapter,
     index: Int,
     checked: Boolean,
+    bookmarked: Boolean,
     onClick: () -> Unit,
+    onBookmarkToggle: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     val chapterRowTextStyle = playerMenuRowTextStyle(compact = false)
@@ -348,8 +362,8 @@ private fun ChapterRow(
             .fillMaxWidth()
             .heightIn(min = playerMenuRowMinHeight(44.dp))
             .tvFocusable(shape = RoundedCornerShape(8.dp), addFocusTarget = false)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 10.dp),
+            .combinedClickable(onClick = onClick, onLongClick = onBookmarkToggle)
+            .padding(start = 14.dp, top = 10.dp, bottom = 10.dp, end = if (onBookmarkToggle != null) 4.dp else 14.dp),
     ) {
         Text(
             text = (index + 1).toString(),
@@ -372,15 +386,33 @@ private fun ChapterRow(
                 modifier = Modifier.size(20.dp),
             )
         }
+        if (onBookmarkToggle != null) {
+            IconButton(
+                onClick = onBookmarkToggle,
+                modifier = Modifier
+                    .size(36.dp)
+                    .tvFocusable(shape = RoundedCornerShape(12.dp), addFocusTarget = false),
+            ) {
+                Icon(
+                    painter = painterResource(if (bookmarked) R.drawable.ic_bookmark_checked else R.drawable.ic_bookmark),
+                    contentDescription = stringResource(if (bookmarked) R.string.bookmark_remove else R.string.bookmark_add),
+                    tint = Color.White.copy(alpha = if (bookmarked) 1f else 0.6f),
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ChapterGridItem(
     chapter: ContentChapter,
     index: Int,
     checked: Boolean,
+    bookmarked: Boolean,
     onClick: () -> Unit,
+    onBookmarkToggle: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     val gridTitleTextStyle = if (isTvPlayerMenu()) {
@@ -388,12 +420,14 @@ private fun ChapterGridItem(
     } else {
         MaterialTheme.typography.labelSmall
     }
+    // Not Surface(onClick): a grid cell has no room for a button, so long-press is how it toggles the bookmark.
     Surface(
-        onClick = onClick,
         modifier = modifier
             .fillMaxWidth()
             .height(56.dp)
-            .tvFocusable(shape = RoundedCornerShape(6.dp), addFocusTarget = false),
+            .tvFocusable(shape = RoundedCornerShape(6.dp), addFocusTarget = false)
+            .clip(RoundedCornerShape(6.dp))
+            .combinedClickable(onClick = onClick, onLongClick = onBookmarkToggle),
         shape = RoundedCornerShape(6.dp),
         color = Color.White.copy(alpha = if (checked) 0.18f else 0.08f),
         contentColor = Color.White,
@@ -421,6 +455,14 @@ private fun ChapterGridItem(
                     contentDescription = null,
                     tint = Color.White,
                     modifier = Modifier.align(Alignment.TopEnd).size(16.dp),
+                )
+            }
+            if (bookmarked) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_bookmark_checked),
+                    contentDescription = stringResource(R.string.bookmark_added),
+                    tint = Color.White,
+                    modifier = Modifier.align(Alignment.BottomEnd).size(14.dp),
                 )
             }
         }

@@ -481,7 +481,8 @@ abstract class ChaptersPagesViewModel(
     fun setBookmarksForChapters(chapterIds: Set<Long>, removeExisting: Boolean) {
         launchJob(Dispatchers.Default) {
             val manga = mangaDetails.value?.toContent() ?: return@launchJob
-            val chapterItems = chapters.value.filter { it.chapter.id in chapterIds }
+            // Every branch counts: the video player's episode panel lists them all, not only the selected one.
+            val bookmarkableIds = chapterIds.filter { manga.findChapterById(it) != null }
             val bookmarksByChapter = bookmarks.value
                 .filter { it.chapterId in chapterIds }
                 .groupBy { it.chapterId }
@@ -494,14 +495,14 @@ abstract class ChaptersPagesViewModel(
                 }
                 return@launchJob
             }
-            for (item in chapterItems) {
-                if (item.chapter.id in bookmarksByChapter) {
+            for (chapterId in bookmarkableIds) {
+                if (chapterId in bookmarksByChapter) {
                     continue
                 }
                 val bookmark = Bookmark(
                     manga = manga,
-                    pageId = item.chapter.id,
-                    chapterId = item.chapter.id,
+                    pageId = chapterId,
+                    chapterId = chapterId,
                     page = 0,
                     scroll = 0,
                     imageUrl = manga.coverUrl.orEmpty(),

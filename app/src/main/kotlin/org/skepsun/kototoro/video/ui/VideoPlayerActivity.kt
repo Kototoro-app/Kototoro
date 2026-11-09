@@ -159,6 +159,7 @@ import kotlin.math.roundToInt
 import androidx.activity.viewModels
 import androidx.activity.OnBackPressedCallback
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -827,6 +828,10 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                         )
                     }
                     chapterDialogState?.let { state ->
+                        val bookmarks by chaptersViewModel.bookmarks.collectAsState()
+                        // Bookmarks belong to the loaded details; before they load there is nothing to attach one to.
+                        val detailsLoaded = chaptersViewModel.mangaDetails.collectAsState().value != null
+                        val bookmarkedChapterIds = remember(bookmarks) { bookmarks.mapTo(HashSet()) { it.chapterId } }
                         VideoChapterDialog(
                             state = state,
                             onDismissRequest = { chapterDialogState = null },
@@ -835,6 +840,12 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                                 onChapterSelected(chapter)
                             },
                             onGridViewChanged = chaptersViewModel::setChaptersInGridView,
+                            bookmarkedChapterIds = bookmarkedChapterIds,
+                            onBookmarkToggle = { chapter: ContentChapter ->
+                                val bookmarked = chapter.id in bookmarkedChapterIds
+                                chaptersViewModel.setBookmarksForChapters(setOf(chapter.id), removeExisting = bookmarked)
+                                showPlayerMessage(if (bookmarked) R.string.bookmark_removed else R.string.bookmark_added)
+                            }.takeIf { detailsLoaded },
                         )
                     }
                     videoInfoDialogText?.let { details ->
