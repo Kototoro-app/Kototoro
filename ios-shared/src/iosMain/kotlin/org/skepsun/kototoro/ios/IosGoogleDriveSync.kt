@@ -19,7 +19,7 @@ class IosDriveSyncReport(val success: Boolean, val authorizationRequired: Boolea
 
 /** OAuth stays in Swift/Keychain. No credential is persisted in shared code or the database. */
 class IosGoogleDriveSync internal constructor(library: IosLibrary) {
-    private val store = LibraryDriveSync(library.database)
+    private val store = LibraryDriveSync(library.database, library.sourceEdits)
     private val coordinator = GoogleDriveSyncCoordinator(store::merge)
     private val mutex = Mutex()
 

@@ -16,6 +16,7 @@ import org.skepsun.kototoro.parsers.network.CloudFlareProtection
 import org.skepsun.kototoro.favourites.data.FavouriteCategoryEntity
 import org.skepsun.kototoro.list.domain.ListSortOrder
 import org.skepsun.kototoro.core.library.SourceLibrary
+import org.skepsun.kototoro.core.library.SourceStateEdits
 import org.skepsun.kototoro.core.library.SourceTracker
 import org.skepsun.kototoro.history.domain.recoverHistoryChapterId
 import org.skepsun.kototoro.core.source.SourceRef
@@ -39,6 +40,8 @@ data class IosSourceSetting(
 @OptIn(ExperimentalAtomicApi::class)
 class IosLibrary {
     internal val database: MangaDatabase
+    /** When each source switch/pin/order was last changed, so Google Drive sync knows which device's wins. */
+    internal val sourceEdits: SourceStateEdits
     private val sourceRefs = AtomicReference<Map<String, SourceRef>>(emptyMap())
     internal val records by lazy { SourceLibrary(database) { sourceRefs.load()[it] } }
     private val trackerSources = AtomicReference<IosSources?>(null)
@@ -82,10 +85,12 @@ class IosLibrary {
             .addMigrations(*sharedDatabaseMigrations())
             .setQueryCoroutineContext(Dispatchers.IO)
             .build()
+        sourceEdits = iosSourceStateEdits(databasePath)
     }
 
     internal constructor(database: MangaDatabase) {
         this.database = database
+        sourceEdits = SourceStateEdits({ emptyMap() }, {})
     }
 
     val schemaVersion: Int get() = DATABASE_VERSION
@@ -228,8 +233,9 @@ class IosLibrary {
     }
 
     @Throws(Exception::class)
-    suspend fun setSourcePinned(name: String, pinned: Boolean) =
+    suspend fun setSourcePinned(name: String, pinned: Boolean) = sourceEdits.localChange(database) {
         database.getSourcesDao().setPinned(name, pinned, SOURCE_APP_VERSION)
+    }
 
     /**
      * Saves a manual order. Sources without a row yet get one carrying [enabled] (their current effective state),
@@ -238,7 +244,7 @@ class IosLibrary {
     @Throws(Exception::class)
     suspend fun setSourceOrder(names: List<String>, enabled: List<Boolean>) {
         require(names.size == enabled.size && names.distinct().size == names.size)
-        database.useWriterConnection { connection ->
+        sourceEdits.localChange(database) { database.useWriterConnection { connection ->
             connection.immediateTransaction {
                 val dao = database.getSourcesDao()
                 dao.insertIfAbsent(names.mapIndexed { index, name ->
@@ -247,17 +253,17 @@ class IosLibrary {
                 })
                 names.forEachIndexed { index, name -> dao.setSortKey(name, index) }
             }
-        }
+        } }
     }
 
     @Throws(Exception::class)
     suspend fun setSourcesEnabled(names: List<String>, enabled: Boolean) {
-        database.useWriterConnection { connection ->
+        sourceEdits.localChange(database) { database.useWriterConnection { connection ->
             connection.immediateTransaction {
                 val dao = database.getSourcesDao()
                 for (name in names.distinct()) dao.setEnabled(name, enabled, SOURCE_APP_VERSION)
             }
-        }
+        } }
     }
 
     @Throws(Exception::class)

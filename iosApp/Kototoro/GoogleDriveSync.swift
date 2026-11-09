@@ -90,7 +90,7 @@ final class GoogleDriveSyncModel: ObservableObject {
             message = String(localized: "同步已取消，可稍后重试")
         } catch { message = error.localizedDescription }
         // Downloads may already have been applied even if the subsequent upload failed.
-        await model.refresh()
+        await model.refreshAfterMerge()
     }
 
     private var deviceID: String {

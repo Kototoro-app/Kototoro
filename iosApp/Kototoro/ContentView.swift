@@ -78,6 +78,10 @@ struct ContentView: View {
         .task(id: library.library != nil) {
             await library.googleDrive.sync(library, automatic: true)
         }
+        .task(id: library.mergeRevision) {
+            guard library.mergeRevision > 0 else { return }
+            await sources.refreshSettings()
+        }
         .task(id: "\(library.recordsRevision)|\(sources.isLoading)|\(sources.catalogRevision)") {
             guard sources.runtime != nil, !sources.isLoading else { return }
             await library.refreshMissingSources(installed: sources.sources.map(\.name))

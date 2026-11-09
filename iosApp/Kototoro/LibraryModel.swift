@@ -66,6 +66,8 @@ final class LibraryModel: ObservableObject {
     @Published private(set) var isCheckingUpdates = false
     @Published private(set) var updateSummary: String?
     @Published private(set) var recordsRevision = 0
+    /// Bumped after a backup or sync merge, which may also change source switches, pins and order.
+    @Published private(set) var mergeRevision = 0
     @Published private(set) var missingSources: [IosMissingSource] = []
 
     func refreshMissingSources(installed: [String]) async {
@@ -161,6 +163,12 @@ final class LibraryModel: ObservableObject {
     func refresh() async {
         do { try await refreshRecords() }
         catch { self.error = error.localizedDescription }
+    }
+
+    /// Reloads everything a restore or sync merge can change, source settings included (see `mergeRevision`).
+    func refreshAfterMerge() async {
+        await refresh()
+        mergeRevision += 1
     }
 
     private func refreshRecords() async throws {

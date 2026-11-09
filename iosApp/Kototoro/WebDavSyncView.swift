@@ -208,7 +208,7 @@ struct WebDavSyncView: View {
             let restored = try await database.restoreBackup(preview: archive)
             preview = nil
             message = String(localized: "已合并 \(restored) 条记录")
-            await library.refresh()
+            await library.refreshAfterMerge()
         } catch { self.error = error.localizedDescription }
     }
 }

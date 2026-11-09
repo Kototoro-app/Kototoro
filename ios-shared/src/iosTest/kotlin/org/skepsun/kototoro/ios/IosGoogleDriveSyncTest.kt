@@ -76,6 +76,46 @@ class IosGoogleDriveSyncTest {
     }
 
     @Test
+    fun sourcePinsSyncBothWaysWithTheNewestEditWinning() = runBlocking {
+        withLibrary { library ->
+            val store = LibraryDriveSync(library.database, library.sourceEdits)
+            fun remote(vararg states: SyncSourceState) = GoogleDriveSyncSnapshot(deviceId = "android", sourceStates = states.toList())
+            // An Android pin reaches a source iOS has never stored, then one it has.
+            library.setSourceOrder(listOf("MIHON_2"), listOf(true))
+            store.merge(remote(SyncSourceState("MIHON_1", true, isPinned = true, sortKey = 3, modifiedAt = 100),
+                SyncSourceState("MIHON_2", true, isPinned = true, modifiedAt = Long.MAX_VALUE / 2)), "ios", 1000)
+            val settings = library.sourceSettings().associateBy { it.name }
+            assertTrue(settings.getValue("MIHON_1").pinned)
+            assertEquals(3, settings.getValue("MIHON_1").sortKey)
+            assertTrue(settings.getValue("MIHON_2").pinned)
+            // An iOS unpin made after Android's edit survives the stale remote copy and is uploaded with its time.
+            library.setSourcePinned("MIHON_1", false)
+            val upload = store.merge(remote(SyncSourceState("MIHON_1", true, isPinned = true, sortKey = 3,
+                modifiedAt = 100)), "ios", 2000)
+            assertFalse(library.sourceSettings().single { it.name == "MIHON_1" }.pinned)
+            val uploaded = upload.sourceStates.single { it.source == "MIHON_1" }
+            assertFalse(uploaded.isPinned)
+            assertTrue(uploaded.modifiedAt > 100)
+            // Android's merger prefers that newer state over the old remote one.
+            val android = GoogleDriveSyncMerger.mergeSnapshots(upload,
+                remote(SyncSourceState("MIHON_1", true, isPinned = true, sortKey = 3, modifiedAt = 100)))
+            assertFalse(android.sourceStates.single { it.source == "MIHON_1" }.isPinned)
+            // A later Android pin wins again, and the edit times survive reopening the library.
+            library.close()
+            val reopened = IosLibrary(path)
+            try {
+                LibraryDriveSync(reopened.database, reopened.sourceEdits).merge(remote(SyncSourceState("MIHON_1", true,
+                    isPinned = true, modifiedAt = uploaded.modifiedAt + 1)), "ios", 3000)
+                assertTrue(reopened.sourceSettings().single { it.name == "MIHON_1" }.pinned)
+                reopened.setSourcePinned("MIHON_2", false)
+                val kept = LibraryDriveSync(reopened.database, reopened.sourceEdits).merge(remote(SyncSourceState(
+                    "MIHON_2", true, isPinned = true, modifiedAt = 100)), "ios", 4000)
+                assertFalse(kept.sourceStates.single { it.source == "MIHON_2" }.isPinned)
+            } finally { reopened.close() }
+        }
+    }
+
+    @Test
     fun deletingCategoryWithWorksTombstonesEveryMembershipAndSurvivesStaleSnapshot() = runBlocking {
         withLibrary { library ->
             val source = SourceRef("MIHON_123", "zh", "MANGA")
