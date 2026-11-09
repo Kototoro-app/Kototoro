@@ -300,9 +300,9 @@ class SourceGroupRepository @Inject constructor(
 		val total = group.repos.size + missing.size + group.sourceStates.size + 1
 		val errors = mutableListOf<String>()
 		var step = 0
-		fun tick() {
+		fun tick(publish: Boolean = true) {
 			step++
-			_progress.update { it.copy(step = step, errors = errors.toList()) }
+			if (publish) _progress.update { it.copy(step = step, errors = errors.toList()) }
 		}
 		_progress.value = ApplyProgress(
 			running = true,
@@ -347,9 +347,11 @@ class SourceGroupRepository @Inject constructor(
 				reloadManagers(installedTypes)
 			}
 
-			group.sourceStates.forEach { state ->
-				stateStep(context.getString(R.string.source_groups_error_source, state.source)) {
-					ensureSourceRow(state)
+			database.withTransaction {
+				group.sourceStates.forEach { state ->
+					stateStep(context.getString(R.string.source_groups_error_source, state.source)) {
+						ensureSourceRow(state)
+					}
 				}
 			}
 
@@ -379,11 +381,13 @@ class SourceGroupRepository @Inject constructor(
 			}
 
 			val knownNames = knownGroupSourceNames(group)
-			for (state in group.sourceStates) {
-				stateStep(context.getString(R.string.source_groups_error_source, state.source)) {
-					applySourceDetails(state, knownNames)
+			database.withTransaction {
+				group.sourceStates.forEachIndexed { index, state ->
+					stateStep(context.getString(R.string.source_groups_error_source, state.source)) {
+						applySourceDetails(state, knownNames)
+					}
+					tick(publish = (index + 1) % PROGRESS_BATCH == 0 || index == group.sourceStates.lastIndex)
 				}
-				tick()
 			}
 
 			// Applying is a sync: per-source state the group does not mention is reset, never kept.
@@ -779,6 +783,7 @@ class SourceGroupRepository @Inject constructor(
 
 	private companion object {
 		const val TAG = "SourceGroups"
+		const val PROGRESS_BATCH = 50
 		const val GROUPS_DIR = "source_groups"
 		const val GROUP_APPLIED_PINS_PREFS = "group_applied_pins"
 		val LOCAL_APK_ECOSYSTEMS = listOf("mihon", "aniyomi", "ireader", "tsundoku")
