@@ -5,6 +5,7 @@ import android.net.Uri
 import android.util.Log
 import androidx.core.content.pm.PackageInfoCompat
 import dagger.hilt.android.qualifiers.ApplicationContext
+import androidx.room.withTransaction
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
@@ -23,6 +24,7 @@ import org.skepsun.kototoro.tsundoku.TsundokuExtensionManager
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.db.dao.SourceOriginsDao
+import org.skepsun.kototoro.core.db.entity.JsonSourceEntity
 import org.skepsun.kototoro.core.db.entity.MangaSourceEntity
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
@@ -308,7 +310,13 @@ class SourceGroupRepository @Inject constructor(
 			groupName = group.name,
 			manualInstall = manualPackages.map { it.pkg },
 		)
+		var snapshot: GroupStateSnapshot? = null
+		var stateFailed = false
+		suspend fun stateStep(label: String, block: suspend () -> Unit) {
+			if (!runGuarded(errors, label, block)) stateFailed = true
+		}
 		try {
+			snapshot = takeSnapshot(group)
 			val failedRepoUrls = mutableSetOf<String>()
 			for (repo in group.repos) {
 				val ok = runGuarded(errors, context.getString(R.string.source_groups_error_repo, repo.url)) {
@@ -340,7 +348,7 @@ class SourceGroupRepository @Inject constructor(
 			}
 
 			group.sourceStates.forEach { state ->
-				runGuarded(errors, context.getString(R.string.source_groups_error_source, state.source)) {
+				stateStep(context.getString(R.string.source_groups_error_source, state.source)) {
 					ensureSourceRow(state)
 				}
 			}
@@ -349,7 +357,7 @@ class SourceGroupRepository @Inject constructor(
 			// Locks an earlier group apply wrote for sources this group does not list are released; locks
 			// the user set by hand (not in the applied set) stay. Locks are written before the exclusive
 			// batch, which keeps locked sources at their lock value.
-			runGuarded(errors, context.getString(R.string.source_groups_error_apply_state)) {
+			stateStep(context.getString(R.string.source_groups_error_apply_state)) {
 				val lockStore = SourceLockStore.get(context)
 				val groupLocks = group.sourceStates.associate { contentSources.resolveSource(it.source) to it.locked }
 				val lockPlan = groupLockPlan(
@@ -366,29 +374,37 @@ class SourceGroupRepository @Inject constructor(
 			// all-sources-enabled flag it just made irrelevant.
 			val groupEnabled = group.sourceStates.filter { it.enabled }
 				.mapTo(mutableSetOf()) { contentSources.resolveSource(it.source) }
-			runGuarded(errors, context.getString(R.string.source_groups_error_apply_state)) {
+			stateStep(context.getString(R.string.source_groups_error_apply_state)) {
 				contentSources.setSourcesEnabledExclusive(groupEnabled)
 			}
 
 			val knownNames = knownGroupSourceNames(group)
 			for (state in group.sourceStates) {
-				runGuarded(errors, context.getString(R.string.source_groups_error_source, state.source)) {
+				stateStep(context.getString(R.string.source_groups_error_source, state.source)) {
 					applySourceDetails(state, knownNames)
 				}
 				tick()
 			}
 
 			// Applying is a sync: per-source state the group does not mention is reset, never kept.
-			runGuarded(errors, context.getString(R.string.source_groups_error_apply_state)) {
-				syncOutsideGroup(group)
+			stateStep(context.getString(R.string.source_groups_error_apply_state)) {
+				syncOutsideGroup(group, snapshot)
 			}
 
-			runGuarded(errors, context.getString(R.string.source_groups_error_jar_priority)) {
+			stateStep(context.getString(R.string.source_groups_error_jar_priority)) {
 				val installed = installedJarNames()
 				// A group without a JAR order leaves the user's own order alone.
 				groupJarPriorityToApply(group.jarPriority, installed)?.let { settings.jarPriorityOrder = it }
 			}
 			tick()
+			if (stateFailed) rollback(snapshot, group, errors)
+		} catch (e: CancellationException) {
+			rollback(snapshot, group, errors)
+			throw e
+		} catch (e: Exception) {
+			Log.w(TAG, "Source group apply failed", e)
+			errors += "${e.localizedMessage ?: e.javaClass.simpleName}"
+			rollback(snapshot, group, errors)
 		} finally {
 			_progress.update {
 				it.copy(running = false, finished = true, step = total, errors = errors.toList())
@@ -479,19 +495,24 @@ class SourceGroupRepository @Inject constructor(
 	}
 
 	/**
-	 * Resets the per-source state of everything the group does not mention: pins are removed (manual domain
-	 * overrides are user data and kept), and the manual order becomes the group order followed by the remaining rows.
+	 * Resets the per-source state of everything the group does not mention: pins an earlier group apply wrote are
+	 * removed (hand-set pins and manual domain overrides are user data and kept), and the manual order becomes the group order followed by the remaining rows.
 	 */
-	private suspend fun syncOutsideGroup(group: SourceGroup) {
+	private suspend fun syncOutsideGroup(group: SourceGroup, snapshot: GroupStateSnapshot?) {
 		val inGroup = group.sourceStates.mapTo(HashSet()) { it.source }
 		val rows = database.getSourcesDao().findAll()
 		val jsonRows = database.getJsonSourceDao().findAll()
 
-		val pinned = rows.filter { it.isPinned && it.source !in inGroup }.map { it.source } +
-			jsonRows.filter { it.isPinned && it.id !in inGroup }.map { it.id }
+		val currentlyPinned = rows.filter { it.isPinned }.mapTo(HashSet()) { it.source } +
+			jsonRows.filter { it.isPinned }.map { it.id }
+		val previousPins = pinStore().all.keys.toSet()
+		val pinned = groupPinsToRemove(previousPins, inGroup, currentlyPinned)
 		if (pinned.isNotEmpty()) {
 			contentSources.setIsPinned(pinned.map(contentSources::resolveSource), false)
 		}
+		val groupPinned = group.sourceStates.filter { it.pinned }.mapTo(HashSet()) { it.source }
+		val appliedPins = groupAppliedPinsToStore(groupPinned, previousPins, snapshot?.pinnedNames.orEmpty())
+		storePins(appliedPins)
 
 		contentSources.applySourceOrder(
 			group.sourceStates
@@ -521,6 +542,84 @@ class SourceGroupRepository @Inject constructor(
 		return sourcePrefs(sourceKey).getString(SourceSettings.KEY_DOMAIN, null)
 			?.trim()
 			?.takeIf { it.isNotEmpty() }
+	}
+
+	private fun storePins(names: Set<String>) {
+		val editor = pinStore().edit()
+		editor.clear()
+		names.forEach { editor.putBoolean(it, true) }
+		editor.commit()
+	}
+
+	private fun pinStore(): android.content.SharedPreferences =
+		context.getSharedPreferences(GROUP_APPLIED_PINS_PREFS, Context.MODE_PRIVATE)
+
+	/** Everything a group apply writes, captured before the first write so a failed apply can be undone. */
+	private class GroupStateSnapshot(
+		val sources: List<MangaSourceEntity>,
+		val jsonSources: List<JsonSourceEntity>,
+		val locks: Map<String, Boolean>,
+		val lockApplied: Set<String>,
+		val pinApplied: Set<String>,
+		val domains: Map<String, String?>,
+		val jarPriority: String,
+	) {
+		val pinnedNames: Set<String> =
+			sources.filter { it.isPinned }.mapTo(HashSet()) { it.source } +
+				jsonSources.filter { it.isPinned }.map { it.id }
+	}
+
+	private suspend fun takeSnapshot(group: SourceGroup): GroupStateSnapshot {
+		val lockStore = SourceLockStore.get(context)
+		return GroupStateSnapshot(
+			sources = database.getSourcesDao().findAll(),
+			jsonSources = database.getJsonSourceDao().findAll(),
+			locks = lockStore.locks.value,
+			lockApplied = lockStore.groupAppliedNames(),
+			pinApplied = pinStore().all.keys.toSet(),
+			domains = group.sourceStates.map { it.source }.distinct().associateWith { currentDomainOverride(it) },
+			jarPriority = settings.jarPriorityOrder,
+		)
+	}
+
+	private suspend fun rollback(snapshot: GroupStateSnapshot?, group: SourceGroup, errors: MutableList<String>) {
+		if (snapshot == null) return
+		val failures = mutableListOf<String>()
+		runGuarded(failures, "rollback sources") {
+			val dao = database.getSourcesDao()
+			database.withTransaction {
+				dao.deleteAll()
+				dao.insertIfAbsent(snapshot.sources)
+				val jsonDao = database.getJsonSourceDao()
+				snapshot.jsonSources.forEach { jsonDao.update(it) }
+			}
+		}
+		runGuarded(failures, "rollback locks") {
+			val lockStore = SourceLockStore.get(context)
+			val restore = HashMap<String, Boolean?>()
+			lockStore.locks.value.keys.forEach { restore[it] = null }
+			restore.putAll(snapshot.locks)
+			lockStore.setAll(restore)
+			lockStore.setGroupApplied(snapshot.lockApplied)
+		}
+		runGuarded(failures, "rollback pins") {
+			storePins(snapshot.pinApplied)
+		}
+		for ((key, domain) in snapshot.domains) {
+			runGuarded(failures, "rollback domain $key") {
+				if (currentDomainOverride(key) == domain) return@runGuarded
+				val editor = sourcePrefs(key).edit()
+				if (domain == null) editor.remove(SourceSettings.KEY_DOMAIN) else editor.putString(SourceSettings.KEY_DOMAIN, domain)
+				editor.commit()
+				repositoryFactory.invalidate(contentSources.resolveSource(key))
+			}
+		}
+		runGuarded(failures, "rollback jar priority") {
+			settings.jarPriorityOrder = snapshot.jarPriority
+		}
+		errors += "Rolled back to the state before apply"
+		errors += failures
+		_progress.update { it.copy(errors = errors.toList()) }
 	}
 
 	/** Runs [block]; a failure is recorded in [errors] and reported as false so dependent steps can be skipped. */
@@ -681,6 +780,7 @@ class SourceGroupRepository @Inject constructor(
 	private companion object {
 		const val TAG = "SourceGroups"
 		const val GROUPS_DIR = "source_groups"
+		const val GROUP_APPLIED_PINS_PREFS = "group_applied_pins"
 		val LOCAL_APK_ECOSYSTEMS = listOf("mihon", "aniyomi", "ireader", "tsundoku")
 	}
 }

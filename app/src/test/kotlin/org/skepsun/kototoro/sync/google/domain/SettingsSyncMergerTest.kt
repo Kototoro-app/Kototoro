@@ -94,4 +94,28 @@ class SettingsSyncMergerTest : StringSpec({
 		val remote = mapOf("theme" to SettingEntry("s", "dark", 50L))
 		SettingsSyncMerger.merge(local, remote)["theme"]?.v shouldBe "dark"
 	}
+
+	"higher logical version wins despite a skewed wall clock" {
+		val local = mapOf("theme" to SettingEntry("s", "local", at = 900L, version = 3L))
+		val remote = mapOf("theme" to SettingEntry("s", "remote", at = 5000L, version = 2L))
+		val merged = SettingsSyncMerger.merge(local, remote)["theme"]
+		merged?.v shouldBe "local"
+		merged?.version shouldBe 3L
+		SettingsSyncMerger.merge(remote, local)["theme"]?.v shouldBe "local"
+	}
+
+	"equal version and time resolves deterministically regardless of side" {
+		val a = mapOf("theme" to SettingEntry("s", "alpha", at = 100L, version = 4L))
+		val b = mapOf("theme" to SettingEntry("s", "beta", at = 100L, version = 4L))
+		SettingsSyncMerger.merge(a, b)["theme"]?.v shouldBe "beta"
+		SettingsSyncMerger.merge(b, a)["theme"]?.v shouldBe "beta"
+	}
+
+	"legacy record without version falls back to wall clock" {
+		val legacyLocal = mapOf("theme" to SettingEntry("s", "legacy", at = 100L))
+		val versionedRemote = mapOf("theme" to SettingEntry("s", "new", at = 50L, version = 7L))
+		SettingsSyncMerger.merge(legacyLocal, versionedRemote)["theme"]?.v shouldBe "legacy"
+		val newerRemote = mapOf("theme" to SettingEntry("s", "new", at = 200L, version = 1L))
+		SettingsSyncMerger.merge(legacyLocal, newerRemote)["theme"]?.v shouldBe "new"
+	}
 })

@@ -14,6 +14,20 @@ internal fun groupLockPlan(
 	return released + effective
 }
 
+/** Pins to remove: only those an earlier group apply wrote, still set, and not listed by this group. */
+internal fun groupPinsToRemove(
+	previouslyApplied: Set<String>,
+	inGroup: Set<String>,
+	currentlyPinned: Set<String>,
+): Set<String> = previouslyApplied.filterTo(HashSet()) { it !in inGroup && it in currentlyPinned }
+
+/** Pins this apply owns afterwards: group pins the user had not set by hand (or that an earlier apply already owned). */
+internal fun groupAppliedPinsToStore(
+	groupPinned: Set<String>,
+	previouslyApplied: Set<String>,
+	pinnedBefore: Set<String>,
+): Set<String> = groupPinned.filterTo(HashSet()) { it !in pinnedBefore || it in previouslyApplied }
+
 /** The JAR priority string to store, or null when the user's own order must stay untouched. */
 internal fun groupJarPriorityToApply(groupJarPriority: List<String>, installedJarNames: Set<String>): String? {
 	val filtered = groupJarPriority.filter { it.trim().lowercase() in installedJarNames }

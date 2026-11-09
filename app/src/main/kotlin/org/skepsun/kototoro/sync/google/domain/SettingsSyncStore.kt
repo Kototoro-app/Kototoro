@@ -49,16 +49,16 @@ class SettingsSyncStore @Inject constructor(
 		for (changedKey in keys) {
 			if (!SettingsSyncMerger.isSyncableKey(changedKey)) continue
 			val metaKey = "$store/$changedKey"
-			val stored = meta.getString(metaKey, null)
+			val stored = parseMeta(meta.getString(metaKey, null))
 			val encoded = encode(current[changedKey])
 			if (encoded == null) {
-				if (!current.containsKey(changedKey) && stored != null && !stored.startsWith(DELETED_PREFIX)) {
-					updates[metaKey] = "$DELETED_PREFIX$now"
+				if (!current.containsKey(changedKey) && stored != null && !stored.deleted) {
+					updates[metaKey] = "$DELETED_PREFIX$now|${stored.version + 1}"
 				}
 			} else {
 				val hash = hashOf(encoded)
-				if (stored?.substringBefore('|')?.toIntOrNull() != hash) {
-					updates[metaKey] = "$hash|$now"
+				if (stored?.hash != hash) {
+					updates[metaKey] = "$hash|$now|${(stored?.version ?: 0L) + 1}"
 				}
 			}
 		}
@@ -80,35 +80,40 @@ class SettingsSyncStore @Inject constructor(
 				val encoded = encode(value) ?: continue
 				val metaKey = "$store/$key"
 				val hash = hashOf(encoded)
-				val stored = metaAll[metaKey] as? String
-				val storedHash = stored?.substringBefore('|')?.toIntOrNull()
-				val storedAt = stored?.substringAfter('|', "")?.toLongOrNull()
+				val storedRaw = metaAll[metaKey] as? String
+				val stored = parseMeta(storedRaw)
+				var version = 0L
 				val at = when {
-					stored == null -> {
+					storedRaw == null -> {
 						val initial = 0L
 						metaUpdates[metaKey] = "$hash|$initial"
 						initial
 					}
-					storedHash == hash && storedAt != null -> storedAt
+					stored?.hash == hash && stored.at != null -> {
+						version = stored.version
+						stored.at
+					}
 					else -> {
 						// No matching edit metadata: do not invent an edit time during sync.
 						metaUpdates[metaKey] = "$hash|0"
 						0L
 					}
 				}
-				entries[key] = SettingEntry(t = encoded.first, v = encoded.second, at = at)
+				entries[key] = SettingEntry(t = encoded.first, v = encoded.second, at = at, version = version)
 			}
 			val prefix = "$store/"
 			for ((metaKey, stored) in metaAll) {
 				if (!metaKey.startsWith(prefix) || stored !is String) continue
 				val key = metaKey.removePrefix(prefix)
 				if (key in current || !SettingsSyncMerger.isSyncableKey(key)) continue
-				val deletedAt = if (stored.startsWith(DELETED_PREFIX)) {
-					stored.removePrefix(DELETED_PREFIX).toLongOrNull() ?: 0L
+				val parsed = parseMeta(stored)
+				val deletedAt = if (parsed != null && parsed.deleted) {
+					parsed.at ?: 0L
 				} else {
 					0L.also { metaUpdates[metaKey] = "${DELETED_PREFIX}0" }
 				}
-				entries[key] = SettingEntry.deleted(deletedAt)
+				val deletedVersion = if (parsed != null && parsed.deleted) parsed.version else 0L
+				entries[key] = SettingEntry.deleted(deletedAt, deletedVersion)
 			}
 			result[store] = entries
 		}
@@ -137,16 +142,20 @@ class SettingsSyncStore @Inject constructor(
 			val removals = ArrayList<String>()
 			for ((key, entry) in entries) {
 				if (!SettingsSyncMerger.isSyncableKey(key)) continue
-				val storedAt = meta.getString("$store/$key", null)?.substringAfter('|', "")?.toLongOrNull() ?: 0L
-				if (storedAt > entry.at) continue
+				val stored = parseMeta(meta.getString("$store/$key", null))
+				if (stored != null &&
+					SettingsSyncMerger.compareStamp(stored.version, stored.at ?: 0L, entry.version, entry.at) > 0
+				) {
+					continue
+				}
 				if (entry.isDeleted) {
 					if (localValues.containsKey(key)) removals += key
-					metaUpdates["$store/$key"] = "$DELETED_PREFIX${entry.at}"
+					metaUpdates["$store/$key"] = "$DELETED_PREFIX${entry.at}|${entry.version}"
 					continue
 				}
 				val value = decode(entry) ?: continue
 				val encoded = encode(value) ?: continue
-				metaUpdates["$store/$key"] = "${hashOf(encoded)}|${entry.at}"
+				metaUpdates["$store/$key"] = "${hashOf(encoded)}|${entry.at}|${entry.version}"
 				if (encode(localValues[key]) != encoded) writes[key] = value
 			}
 			if (writes.isEmpty() && removals.isEmpty()) continue
@@ -199,6 +208,19 @@ class SettingsSyncStore @Inject constructor(
 			else -> null
 		}
 	}.getOrNull()
+
+	private class StoredMeta(val hash: Int?, val at: Long?, val version: Long, val deleted: Boolean)
+
+	private fun parseMeta(raw: String?): StoredMeta? {
+		if (raw == null) return null
+		val parts = raw.split('|')
+		val version = parts.getOrNull(2)?.toLongOrNull() ?: 0L
+		return if (parts[0] == "d") {
+			StoredMeta(null, parts.getOrNull(1)?.toLongOrNull(), version, true)
+		} else {
+			StoredMeta(parts[0].toIntOrNull(), parts.getOrNull(1)?.toLongOrNull(), version, false)
+		}
+	}
 
 	private fun hashOf(encoded: Pair<String, String>): Int = (encoded.first + ":" + encoded.second).hashCode()
 

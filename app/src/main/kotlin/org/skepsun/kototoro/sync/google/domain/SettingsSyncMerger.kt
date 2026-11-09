@@ -7,6 +7,7 @@ data class SettingEntry(
 	val t: String,
 	val v: String,
 	val at: Long,
+	val version: Long = 0L,
 ) {
 	val isDeleted: Boolean get() = t == TYPE_DELETED
 
@@ -14,7 +15,7 @@ data class SettingEntry(
 		/** Type tag of a tombstone: the key was removed (reset to default) at [at]. */
 		const val TYPE_DELETED = "d"
 
-		fun deleted(at: Long) = SettingEntry(t = TYPE_DELETED, v = "", at = at)
+		fun deleted(at: Long, version: Long = 0L) = SettingEntry(t = TYPE_DELETED, v = "", at = at, version = version)
 	}
 }
 
@@ -69,12 +70,30 @@ object SettingsSyncMerger {
 			val winner = when {
 				localEntry == null -> remoteEntry
 				remoteEntry == null -> localEntry
-				remoteEntry.at >= localEntry.at -> remoteEntry
+				compareEntries(remoteEntry, localEntry) > 0 -> remoteEntry
 				else -> localEntry
 			} ?: continue
-			result[key] = winner
+			result[key] = if (localEntry != null && remoteEntry != null) {
+				winner.copy(version = maxOf(localEntry.version, remoteEntry.version))
+			} else {
+				winner
+			}
 		}
 		return result
+	}
+
+	/** Orders by logical version (when both sides have one), then wall clock, then content as a deterministic tie-break. */
+	fun compareEntries(a: SettingEntry, b: SettingEntry): Int {
+		val stamp = compareStamp(a.version, a.at, b.version, b.at)
+		if (stamp != 0) return stamp
+		val type = a.t.compareTo(b.t)
+		return if (type != 0) type else a.v.compareTo(b.v)
+	}
+
+	/** Records without a version (0, legacy) fall back to the wall clock. */
+	fun compareStamp(versionA: Long, atA: Long, versionB: Long, atB: Long): Int {
+		if (versionA > 0L && versionB > 0L && versionA != versionB) return versionA.compareTo(versionB)
+		return atA.compareTo(atB)
 	}
 
 	fun mergeStores(

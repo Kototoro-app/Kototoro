@@ -37,6 +37,26 @@ class SourceGroupApplyRulesTest {
 	}
 
 	@Test
+	fun `hand-set pins outside the group are kept`() {
+		val removed = groupPinsToRemove(
+			previouslyApplied = setOf("applied"),
+			inGroup = emptySet(),
+			currentlyPinned = setOf("applied", "manual"),
+		)
+		assertEquals(setOf("applied"), removed)
+	}
+
+	@Test
+	fun `previously applied pin still listed by the group or already unpinned is not removed`() {
+		val removed = groupPinsToRemove(
+			previouslyApplied = setOf("listed", "gone", "applied"),
+			inGroup = setOf("listed"),
+			currentlyPinned = setOf("listed", "applied"),
+		)
+		assertEquals(setOf("applied"), removed)
+	}
+
+	@Test
 	fun `source name must match pattern and be known`() {
 		val known = setOf("MIHON_1", "a.b:c-d_e", "../x", "a/b")
 		assertEquals(true, isValidGroupSourceName("MIHON_1", known))

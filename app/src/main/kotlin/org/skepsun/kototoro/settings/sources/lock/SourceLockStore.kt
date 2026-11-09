@@ -19,7 +19,7 @@ class SourceLockStore private constructor(context: Context) {
 	private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 	private val _locks = MutableStateFlow(read())
 
-	/** Device-local (never synced or backed up) set of sources whose current lock was written by a group apply. */
+	/** Pre-sync storage of the group-applied marks; migrated into [prefs] as `group_applied:<source>` keys. */
 	private val groupAppliedPrefs = context.getSharedPreferences(GROUP_APPLIED_PREFS_NAME, Context.MODE_PRIVATE)
 
 	/**
@@ -34,6 +34,7 @@ class SourceLockStore private constructor(context: Context) {
 	// Held strongly: SharedPreferences keeps listeners weakly.
 	private val changeListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
 		// A batch publishes [locks] and bumps the revision once itself instead of once per key.
+		if (key != null && key.startsWith(GROUP_APPLIED_PREFIX)) return@OnSharedPreferenceChangeListener
 		if (key == null || !pendingBatchKeys.remove(key)) {
 			applyKeyChange(key)
 			externalRevision.incrementAndGet()
@@ -42,6 +43,18 @@ class SourceLockStore private constructor(context: Context) {
 
 	init {
 		prefs.registerOnSharedPreferenceChangeListener(changeListener)
+		migrateLegacyGroupApplied()
+	}
+
+	private fun migrateLegacyGroupApplied() {
+		val legacy = groupAppliedPrefs.all.keys
+		if (legacy.isEmpty()) return
+		prefs.edit {
+			for (name in legacy) {
+				if (!prefs.contains(GROUP_APPLIED_PREFIX + name)) putBoolean(GROUP_APPLIED_PREFIX + name, true)
+			}
+		}
+		groupAppliedPrefs.edit { clear() }
 	}
 
 	/** Source name to locked enabled state. */
@@ -60,20 +73,25 @@ class SourceLockStore private constructor(context: Context) {
 		setAll(mapOf(name to lockedEnabled))
 	}
 
-	/** Sources whose lock was last written by a group apply. */
-	fun groupAppliedNames(): Set<String> = groupAppliedPrefs.all.keys.toSet()
+	/** Sources whose lock was last written by a group apply (synced together with the locks). */
+	fun groupAppliedNames(): Set<String> = prefs.all.mapNotNullTo(HashSet()) { (key, value) ->
+		if (key.startsWith(GROUP_APPLIED_PREFIX) && value == true) key.removePrefix(GROUP_APPLIED_PREFIX) else null
+	}
 
 	@Synchronized
 	fun setGroupApplied(names: Set<String>) {
-		groupAppliedPrefs.edit {
-			clear()
-			names.forEach { putBoolean(it, true) }
+		val current = groupAppliedNames()
+		if (current == names) return
+		prefs.edit {
+			for (name in current - names) remove(GROUP_APPLIED_PREFIX + name)
+			for (name in names - current) putBoolean(GROUP_APPLIED_PREFIX + name, true)
 		}
 	}
 
 	private fun forgetGroupApplied(names: Collection<String>) {
-		if (names.none { groupAppliedPrefs.contains(it) }) return
-		groupAppliedPrefs.edit { names.forEach { remove(it) } }
+		val stored = prefs.all
+		if (names.none { stored.containsKey(GROUP_APPLIED_PREFIX + it) }) return
+		prefs.edit { names.forEach { remove(GROUP_APPLIED_PREFIX + it) } }
 	}
 
 	/** [set] for many sources: one prefs edit and one [locks] update. */
@@ -109,6 +127,7 @@ class SourceLockStore private constructor(context: Context) {
 	/** Mirrors a single changed key (own or external write) into [locks] without re-reading the whole file. */
 	@Synchronized
 	private fun applyKeyChange(key: String?) {
+		if (key != null && key.startsWith(GROUP_APPLIED_PREFIX)) return
 		if (key == null) {
 			_locks.value = read()
 			return
@@ -124,6 +143,7 @@ class SourceLockStore private constructor(context: Context) {
 	}
 
 	private fun read(): Map<String, Boolean> = prefs.all.mapNotNull { (key, value) ->
+		if (key.startsWith(GROUP_APPLIED_PREFIX)) return@mapNotNull null
 		(value as? Boolean)?.let { key to it }
 	}.toMap()
 
@@ -131,6 +151,7 @@ class SourceLockStore private constructor(context: Context) {
 
 		private const val PREFS_NAME = "source_locks"
 		private const val GROUP_APPLIED_PREFS_NAME = "group_applied_locks"
+		private const val GROUP_APPLIED_PREFIX = "group_applied:"
 		private const val UNLOCKED = "none"
 
 		@Volatile
