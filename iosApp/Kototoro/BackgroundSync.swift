@@ -9,7 +9,7 @@ import Foundation
 final class BackgroundSync {
     static let shared = BackgroundSync()
     /// Listed in `BGTaskSchedulerPermittedIdentifiers`.
-    static let identifier = "org.skepsun.kototoro.ios.sync"
+    static let identifier = permittedTaskIdentifier("sync")
     /// When the last scheduled Drive sync started; a failed one waits half an hour before the next.
     private static let driveAttemptKey = "googleDrive.backgroundAttempt"
 
@@ -63,6 +63,17 @@ final class BackgroundSync {
             connected: drive.connected, lastSync: drive.lastSync,
             lastAttempt: UserDefaults.standard.object(forKey: Self.driveAttemptKey) as? Date)
     }
+}
+
+/// The scheduler identifier `BGTaskSchedulerPermittedIdentifiers` lists under [suffix], such as `sync` or `continued.*`.
+/// The system only accepts identifiers the installed Info.plist lists, and a sideloading tool that re-signs the app
+/// under another bundle identifier rewrites the listed ones to match (`org.skepsun.kototoro.ios.<team>.sync`), so the
+/// names are looked up instead of written out. An entry under the running bundle identifier wins.
+func permittedTaskIdentifier(_ suffix: String, excluding excluded: String? = nil) -> String {
+    let bundle = Bundle.main.bundleIdentifier ?? "org.skepsun.kototoro.ios"
+    let listed = Bundle.main.object(forInfoDictionaryKey: "BGTaskSchedulerPermittedIdentifiers") as? [String] ?? []
+    let matches = listed.filter { $0.hasSuffix("." + suffix) && $0 != excluded }
+    return matches.first { $0.hasPrefix(bundle + ".") } ?? matches.first ?? bundle + "." + suffix
 }
 
 /// Runs [work] for a background task the system launched. Kotlin calls do not stop for Swift cancellation, so when

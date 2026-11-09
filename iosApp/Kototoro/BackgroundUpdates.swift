@@ -11,11 +11,11 @@ import UserNotifications
 @MainActor
 final class BackgroundUpdates {
     static let shared = BackgroundUpdates()
-    /// The processing task; listed in `BGTaskSchedulerPermittedIdentifiers`.
-    static let identifier = "org.skepsun.kototoro.ios.updates"
     /// The app refresh earlier versions asked for: about thirty seconds, too short to start the runtime and check.
     /// A request left from before an update still launches it, so it only moves the check to the processing task.
     static let legacyIdentifier = "org.skepsun.kototoro.updates"
+    /// The processing task; listed in `BGTaskSchedulerPermittedIdentifiers`.
+    static let identifier = permittedTaskIdentifier("updates", excluding: legacyIdentifier)
     static let enabledKey = "updates_background_enabled"
     static let intervalKey = "updates_background_interval_hours"
 

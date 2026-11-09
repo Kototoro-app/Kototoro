@@ -1,5 +1,6 @@
 import BackgroundTasks
 import KototoroShared
+import os
 import SwiftUI
 import UIKit
 
@@ -12,11 +13,13 @@ import UIKit
 /// operation's next checkpoint ([isStopped], [onStop]); the task itself is completed at once, as the system requires.
 @MainActor
 final class ContinuedWork {
-    /// Must match the wildcard entry in `BGTaskSchedulerPermittedIdentifiers`.
-    static let identifierPrefix = "org.skepsun.kototoro.ios.continued."
+    /// The wildcard entry in `BGTaskSchedulerPermittedIdentifiers`, without its `*`.
+    static let identifierPrefix = String(permittedTaskIdentifier("continued.*").dropLast())
     /// Leases still running; the idle timer comes back only when the last one ends.
     private static var running = 0
     private static var idleTimerWasDisabled = false
+    /// Whether the system took each request: its progress shows nowhere else when it does not.
+    private static let log = Logger(subsystem: "org.skepsun.kototoro.ios", category: "ContinuedWork")
 
     private let identifier: String
     private var title: String
@@ -145,24 +148,33 @@ final class ContinuedWork {
                 self.attach(task)
             }
         }
-        guard registered else { return }
+        guard registered else {
+            Self.log.error("\(self.identifier, privacy: .public): launch handler not registered")
+            return
+        }
         let request = BGContinuedProcessingTaskRequest(identifier: identifier, title: title, subtitle: subtitle)
         // The work starts now either way; a queued request would only show the progress after it is over.
         request.strategy = .fail
         do {
             try BGTaskScheduler.shared.submit(request)
             submitted = true
+            Self.log.info("\(self.identifier, privacy: .public): submitted")
         } catch {
+            Self.log.error("\(self.identifier, privacy: .public): refused: \(String(describing: error), privacy: .public)")
             // Refused (busy system, too many tasks, simulator): the background-time lease still covers a short switch.
         }
     }
 
     private func attach(_ task: BGContinuedProcessingTask) {
         self.task = task
+        Self.log.info("\(self.identifier, privacy: .public): launched")
         task.expirationHandler = { [weak self] in
             DispatchQueue.main.async { self?.stop() }
         }
         publish(text: true)
+        // The task covers the work from here; holding the short lease as well past its 30 seconds risks the app
+        // being terminated in the background.
+        endBackground()
     }
 
     private func publish(text: Bool) {
@@ -174,6 +186,7 @@ final class ContinuedWork {
 
     private func stop() {
         guard let task else { return }
+        Self.log.info("\(self.identifier, privacy: .public): expired")
         self.task = nil
         task.setTaskCompleted(success: false)
         isStopped = true
