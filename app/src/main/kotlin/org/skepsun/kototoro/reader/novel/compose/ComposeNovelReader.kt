@@ -46,6 +46,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.graphics.Color
@@ -839,19 +840,37 @@ fun ComposeNovelReaderRoute(
                     if (target == null) onBookmarkPositionUnavailable()
                 }
             }
+            val currentWindowBlocks by rememberUpdatedState(windowBlocks)
             DisposableEffect(viewModel, listState) {
-                viewModel.bindContinuousScrollDispatcher { deltaPx ->
-                    if (listState.canScrollForward) listState.dispatchRawDelta(deltaPx) else 0f
-                }
+                viewModel.bindContinuousScrollDispatcher(
+                    dispatcher = { deltaPx ->
+                        if (listState.canScrollForward) listState.dispatchRawDelta(deltaPx) else 0f
+                    },
+                    flushPosition = {
+                        val position = NovelComposeScrollPosition(
+                            firstVisibleBlock = listState.firstVisibleItemIndex,
+                            firstVisibleBlockOffsetPx = listState.firstVisibleItemScrollOffset,
+                        )
+                        viewModel.publishScrollPosition(position)
+                        currentWindowBlocks.getOrNull(position.firstVisibleBlock)?.let { visible ->
+                            viewModel.publishBookmarkText(
+                                visible.chapter.chapterId,
+                                (visible.block as? NovelDocumentBlock.Text)?.original.orEmpty(),
+                            )
+                        }
+                    },
+                )
                 onDispose {
                     viewModel.bindContinuousScrollDispatcher(null)
                 }
             }
             val isAutoScrolling = state.autoScroll.active && !state.autoScroll.manuallyPaused
+            val autoScrollPositionPublishIntervalMs = 1000L
             LaunchedEffect(listState, state.chapterIndex, state.bookmarkRequest?.id, isAutoScrolling) {
                 if (state.bookmarkRequest != null) return@LaunchedEffect
+                var lastPublishTime = 0L
                 snapshotFlow {
-                    if (listState.isScrollInProgress || isAutoScrolling) {
+                    if (listState.isScrollInProgress) {
                         null
                     } else {
                         NovelComposeScrollPosition(
@@ -860,10 +879,16 @@ fun ComposeNovelReaderRoute(
                         )
                     }
                 }.filterNotNull().distinctUntilChanged().collect { position ->
-                    viewModel.publishScrollPosition(position)
-                    windowBlocks.getOrNull(position.firstVisibleBlock)?.let { visible ->
-                        viewModel.publishBookmarkText(visible.chapter.chapterId,
-                            (visible.block as? NovelDocumentBlock.Text)?.original.orEmpty())
+                    val now = System.currentTimeMillis()
+                    if (!isAutoScrolling || now - lastPublishTime >= autoScrollPositionPublishIntervalMs) {
+                        lastPublishTime = now
+                        viewModel.publishScrollPosition(position)
+                        windowBlocks.getOrNull(position.firstVisibleBlock)?.let { visible ->
+                            viewModel.publishBookmarkText(
+                                visible.chapter.chapterId,
+                                (visible.block as? NovelDocumentBlock.Text)?.original.orEmpty(),
+                            )
+                        }
                     }
                 }
             }

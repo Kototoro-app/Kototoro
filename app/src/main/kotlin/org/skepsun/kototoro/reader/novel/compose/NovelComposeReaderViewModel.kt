@@ -169,9 +169,18 @@ class NovelComposeReaderViewModel @Inject constructor() : ViewModel() {
     private var nextScrollRequestId = 0L
     private var nextBookmarkRequestId = 0L
     private var continuousScrollDispatcher: ((Float) -> Float)? = null
+    private var continuousScrollPositionFlusher: (() -> Unit)? = null
 
-    fun bindContinuousScrollDispatcher(dispatcher: ((Float) -> Float)?) {
+    fun bindContinuousScrollDispatcher(
+        dispatcher: ((Float) -> Float)?,
+        flushPosition: (() -> Unit)? = null,
+    ) {
         continuousScrollDispatcher = dispatcher
+        continuousScrollPositionFlusher = flushPosition
+    }
+
+    fun flushContinuousScrollPosition() {
+        continuousScrollPositionFlusher?.invoke()
     }
 
     fun scrollByPixels(delta: Int): Boolean {

@@ -471,6 +471,9 @@ class NovelReaderActivity :
     override fun onPause() {
         tvKeyDispatcher.reset()
         super.onPause()
+        if (::scrollTimer.isInitialized && scrollTimer.isActive.value) {
+            setAutoScrollActive(false)
+        }
     }
 
     override fun onStop() {
@@ -2541,6 +2544,9 @@ class NovelReaderActivity :
         }
         scrollTimer.setActive(active)
         composeReaderViewModel.updateAutoScroll { copy(active = active, manuallyPaused = false) }
+        if (!active) {
+            composeReaderViewModel.flushContinuousScrollPosition()
+        }
     }
 
     private fun setKeepScreenOn(isKeep: Boolean) {

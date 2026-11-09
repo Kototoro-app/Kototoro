@@ -105,4 +105,21 @@ class NovelReaderAutoScrollTest {
         viewModel.dismissAutoScroll()
         assertFalse(viewModel.uiState.value.hasOverlay)
     }
+
+    @Test
+    fun `flushContinuousScrollPosition invokes bound flusher and clears on unbind`() {
+        val viewModel = NovelComposeReaderViewModel()
+        var flushed = 0
+        viewModel.bindContinuousScrollDispatcher(
+            dispatcher = { it },
+            flushPosition = { flushed++ },
+        )
+
+        viewModel.flushContinuousScrollPosition()
+        assertEquals(1, flushed)
+
+        viewModel.bindContinuousScrollDispatcher(null)
+        viewModel.flushContinuousScrollPosition()
+        assertEquals(1, flushed)
+    }
 }
