@@ -4,6 +4,9 @@ import KototoroShared
 
 @MainActor
 final class LibraryModel: ObservableObject {
+    /// The app's one library: the scene and the background sync share it, so the database is opened once.
+    static let shared = LibraryModel()
+
     let trackingAccounts = TrackingAccountsModel()
     let googleDrive = GoogleDriveSyncModel()
     @Published private(set) var categories: [IosCategory] = []
@@ -64,8 +67,12 @@ final class LibraryModel: ObservableObject {
         }
     }
     @Published private(set) var isCheckingUpdates = false
+    /// The running check's counts (Android's checking notification); nil before the first report and when idle.
+    @Published private(set) var updateProgress: IosUpdateProgress?
     @Published private(set) var updateSummary: String?
     @Published private(set) var recordsRevision = 0
+    /// Bumped after a backup or sync merge, which may also change source switches, pins and order.
+    @Published private(set) var mergeRevision = 0
     @Published private(set) var missingSources: [IosMissingSource] = []
 
     func refreshMissingSources(installed: [String]) async {
@@ -79,22 +86,26 @@ final class LibraryModel: ObservableObject {
         catch { self.error = error.localizedDescription }
     }
 
+    /// Opens the database once; a background launch syncs through it without loading the UI's records.
+    func open() throws {
+        guard library == nil else { return }
+        let directory = try FileManager.default.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        ).appendingPathComponent("Kototoro", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        library = try IosLibrary(databasePath: directory.appendingPathComponent("library.db").path)
+        library?.setMarkDuplicateChaptersRead(enabled: UserDefaults.standard.bool(forKey: "tracker_mark_duplicates_read"))
+    }
+
     func load() async {
         isLoading = true
         error = nil
         defer { isLoading = false }
         do {
-            if library == nil {
-                let directory = try FileManager.default.url(
-                    for: .applicationSupportDirectory,
-                    in: .userDomainMask,
-                    appropriateFor: nil,
-                    create: true
-                ).appendingPathComponent("Kototoro", isDirectory: true)
-                try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-                library = try IosLibrary(databasePath: directory.appendingPathComponent("library.db").path)
-                library?.setMarkDuplicateChaptersRead(enabled: UserDefaults.standard.bool(forKey: "tracker_mark_duplicates_read"))
-            }
+            try open()
             guard let library else { return }
             categories = try await library.categories()
             schemaVersion = library.schemaVersion
@@ -163,6 +174,12 @@ final class LibraryModel: ObservableObject {
         catch { self.error = error.localizedDescription }
     }
 
+    /// Reloads everything a restore or sync merge can change, source settings included (see `mergeRevision`).
+    func refreshAfterMerge() async {
+        await refresh()
+        mergeRevision += 1
+    }
+
     private func refreshRecords() async throws {
         guard let library else { return }
         favourites = try await library.favourites()
@@ -205,10 +222,22 @@ final class LibraryModel: ObservableObject {
     func checkUpdatesReport(_ sources: IosSources, respectSchedule: Bool = false) async -> IosUpdateReport? {
         guard let library, !isCheckingUpdates else { return nil }
         isCheckingUpdates = true
-        defer { isCheckingUpdates = false }
+        updateProgress = nil
+        defer { isCheckingUpdates = false; updateProgress = nil }
         do {
-            let report = try await library.checkUpdates(sources: sources, respectSchedule: respectSchedule,
-                                                        skipCompleted: UserDefaults.standard.bool(forKey: "tracker_skip_completed"))
+            // A check the user asked for goes on in the background with the system's progress; the scheduled
+            // refresh already runs in the system's background time and may not ask for more.
+            let report = try await ContinuedWork.run("updates-check", title: String(localized: "正在检查更新"),
+                                                     userInitiated: !respectSchedule) { work in
+                let listener = MainThreadUpdateProgress { [weak self] progress in
+                    guard let self, self.isCheckingUpdates else { return }
+                    self.updateProgress = progress
+                    work.progress(progress.checked, of: progress.total, subtitle: Self.updateCounts(progress))
+                }
+                return try await library.checkUpdates(sources: sources, respectSchedule: respectSchedule,
+                                                      skipCompleted: UserDefaults.standard.bool(forKey: "tracker_skip_completed"),
+                                                      listener: listener)
+            }
             updateSummary = String(localized: "已检查 \(report.checked) 部，\(report.withUpdates) 部有更新，\(report.failed) 部失败")
             if report.skipped > 0 {
                 updateSummary = (updateSummary ?? "") + String(localized: "，\(report.skipped) 部已跳过")
@@ -217,4 +246,11 @@ final class LibraryModel: ObservableObject {
             return report
         } catch { self.error = error.localizedDescription; return nil }
     }
+
+    /// Android's checking line: works checked so far, then new chapters, failures and skipped works.
+    static func updateCounts(_ progress: IosUpdateProgress) -> String {
+        String(localized: "\(progress.checked)/\(progress.total) · 新章节：\(progress.newChapters) · 失败：\(progress.failed) · 跳过：\(progress.skipped)")
+    }
+
+    func dismissUpdateSummary() { updateSummary = nil }
 }

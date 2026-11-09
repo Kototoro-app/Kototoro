@@ -2,7 +2,9 @@ package org.skepsun.kototoro.core
 
 import android.app.Application.ActivityLifecycleCallbacks
 import android.content.Context
+import android.content.Intent
 import android.os.Build
+import android.os.Bundle
 import androidx.annotation.WorkerThread
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.hilt.work.HiltWorkerFactory
@@ -26,6 +28,7 @@ import org.acra.data.StringFormat
 import kotlinx.coroutines.withContext
 import org.acra.ktx.initAcra
 import org.conscrypt.Conscrypt
+import org.skepsun.kototoro.cloudstream.runtime.CloudstreamPluginGuard
 import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.R
 import com.github.tvbox.osc.base.App
@@ -152,6 +155,17 @@ open class BaseApp : App(), Configuration.Provider, SingletonImageLoader.Factory
                 e.printStackTrace()
             }
         }
+    }
+
+    // Cloudstream plugins restart the app through `applicationContext.startActivity`; see CloudstreamPluginGuard.
+    override fun startActivity(intent: Intent?) {
+        CloudstreamPluginGuard.checkRestart(this, intent)
+        super.startActivity(intent)
+    }
+
+    override fun startActivity(intent: Intent?, options: Bundle?) {
+        CloudstreamPluginGuard.checkRestart(this, intent)
+        super.startActivity(intent, options)
     }
 
     override fun attachBaseContext(base: Context) {

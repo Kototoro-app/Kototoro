@@ -921,6 +921,12 @@ private fun DetailsScreenContent(
         null
     }
     val detailsContentBackdrop = if (isIosStyle) rememberLayerBackdrop() else null
+    // The compact dock floats over the scrolling content, so its glass samples that content as well as the background.
+    val detailsDockBackdrop = if (detailsBackgroundBackdrop != null && detailsContentBackdrop != null) {
+        rememberCombinedBackdrop(detailsBackgroundBackdrop, detailsContentBackdrop)
+    } else {
+        detailsBackgroundBackdrop
+    }
     // The top edge blur samples the background and the panes beneath it, never the top bar drawn above them.
     val detailsEdgeBlurRadius = if (effectiveGlassPrefs.isTopImmersiveEdgeEnabled) immersiveEdgeBlurRadius() else 0.dp
     val detailsEdgeBackgroundLayer = detailsBackgroundBackdrop ?: if (detailsEdgeBlurRadius > 0.dp) {
@@ -1575,7 +1581,7 @@ private fun DetailsScreenContent(
                             .zIndex(1f),
                     ) {
                                 CompositionLocalProvider(
-                                    LocalLiquidGlassBackdrop provides detailsBackgroundBackdrop,
+                                    LocalLiquidGlassBackdrop provides detailsDockBackdrop,
                                     LocalLiquidGlassLayerBackdrop provides detailsBackgroundBackdrop,
                                 ) {
                             DetailsPaneContent(

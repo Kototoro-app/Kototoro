@@ -163,22 +163,31 @@ class ExtensionInstallService @Inject constructor(
 
         if (extension.type == ExternalExtensionType.CLOUDSTREAM) {
             val compatibility = CloudstreamPluginCompatibilityChecker.inspect(outputFile, context.classLoader)
-            if (compatibility is CloudstreamPluginCompatibility.Incompatible) {
+            val incompatibility = compatibility as? CloudstreamPluginCompatibility.Incompatible
+            if (incompatibility != null && !incompatibility.isLinkageGap) {
                 outputFile.delete()
-                if (compatibility.missingHostClasses.isNotEmpty()) {
-                    throw MissingPluginHostClassesException(
-                        pluginName = extension.name,
-                        hostName = "Cloudstream",
-                        missingClassNames = compatibility.missingHostClasses,
-                    )
-                }
                 throw IncompatiblePluginException(
                     name = extension.name,
-                    cause = IllegalStateException(compatibility.reason),
+                    cause = IllegalStateException(incompatibility.reason),
                 )
             }
+            // A plugin linking against host API Kototoro lacks still loads on Android, as in Cloudstream; only its
+            // load decides. Should it fail, the missing classes are the likelier explanation than its stack trace.
             try {
                 cloudstreamRuntimeManager.installPlugin(outputFile, extension.archiveName, extension.pkgName)
+            } catch (error: Throwable) {
+                val missingClasses = incompatibility?.missingHostClasses.orEmpty()
+                when {
+                    error is CancellationException -> throw error
+                    missingClasses.isNotEmpty() -> throw MissingPluginHostClassesException(
+                        pluginName = extension.name,
+                        hostName = "Cloudstream",
+                        missingClassNames = missingClasses,
+                    ).apply { initCause(error) }
+                    // A plugin's load can end in a LinkageError; report it as an incompatible plugin, not a crash.
+                    error is LinkageError -> throw IncompatiblePluginException(name = extension.name, cause = error)
+                    else -> throw error
+                }
             } finally {
                 outputFile.delete()
             }

@@ -124,6 +124,11 @@
 		F80000000000000000000003 /* BackupFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F80000000000000000000004 /* BackupFlowTests.swift */; };
 		F80000000000000000000005 /* SourceIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = F80000000000000000000006 /* SourceIcon.swift */; };
 		F80000000000000000000024 /* ExtensionArtwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = F80000000000000000000025 /* ExtensionArtwork.swift */; };
+		F80000000000000000000026 /* ContinuedWork.swift in Sources */ = {isa = PBXBuildFile; fileRef = F80000000000000000000027 /* ContinuedWork.swift */; };
+		F80000000000000000000028 /* BackgroundSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = F80000000000000000000029 /* BackgroundSync.swift */; };
+		F8000000000000000000002A /* BackgroundSyncSchedule.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8000000000000000000002C /* BackgroundSyncSchedule.swift */; };
+		F8000000000000000000002B /* BackgroundSyncSchedule.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8000000000000000000002C /* BackgroundSyncSchedule.swift */; };
+		F8000000000000000000002D /* BackgroundSyncScheduleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8000000000000000000002E /* BackgroundSyncScheduleTests.swift */; };
 		F80000000000000000000007 /* SourceFilterSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = F80000000000000000000008 /* SourceFilterSheet.swift */; };
 		F80000000000000000000009 /* DetailsPanorama.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8000000000000000000000A /* DetailsPanorama.swift */; };
 		F8000000000000000000000B /* ContentCollection.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8000000000000000000000C /* ContentCollection.swift */; };
@@ -287,6 +292,10 @@
 		F80000000000000000000004 /* BackupFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupFlowTests.swift; sourceTree = "<group>"; };
 		F80000000000000000000006 /* SourceIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceIcon.swift; sourceTree = "<group>"; };
 		F80000000000000000000025 /* ExtensionArtwork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtensionArtwork.swift; sourceTree = "<group>"; };
+		F80000000000000000000027 /* ContinuedWork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContinuedWork.swift; sourceTree = "<group>"; };
+		F80000000000000000000029 /* BackgroundSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundSync.swift; sourceTree = "<group>"; };
+		F8000000000000000000002C /* BackgroundSyncSchedule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundSyncSchedule.swift; sourceTree = "<group>"; };
+		F8000000000000000000002E /* BackgroundSyncScheduleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundSyncScheduleTests.swift; sourceTree = "<group>"; };
 		F80000000000000000000008 /* SourceFilterSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceFilterSheet.swift; sourceTree = "<group>"; };
 		F8000000000000000000000A /* DetailsPanorama.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailsPanorama.swift; sourceTree = "<group>"; };
 		F8000000000000000000000C /* ContentCollection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentCollection.swift; sourceTree = "<group>"; };
@@ -361,6 +370,9 @@
 				F80000000000000000000002 /* BackupView.swift */,
 				F80000000000000000000006 /* SourceIcon.swift */,
 				F80000000000000000000025 /* ExtensionArtwork.swift */,
+				F80000000000000000000027 /* ContinuedWork.swift */,
+				F80000000000000000000029 /* BackgroundSync.swift */,
+				F8000000000000000000002C /* BackgroundSyncSchedule.swift */,
 				F80000000000000000000008 /* SourceFilterSheet.swift */,
 				F8000000000000000000000A /* DetailsPanorama.swift */,
 				F8000000000000000000000E /* LibraryView.swift */,
@@ -461,6 +473,7 @@
 				B21000000000000000000012 /* LibraryCollectionIndexTests.swift */,
 				F50000000000000000000003 /* ExtensionPresentationTests.swift */,
 				F30000000000000000000003 /* ReaderDownloadQueueTests.swift */,
+				F8000000000000000000002E /* BackgroundSyncScheduleTests.swift */,
 				FB0000000000000000000002 /* ImageLoadPolicyTests.swift */,
 				FB0000000000000000000099 /* UITestSupport.swift */,
 				F10000000000000000000009 /* RepositoryLinkTests.swift */,
@@ -718,6 +731,9 @@
 				C0FFEE000000000000000015 /* GitHubMirror.swift in Sources */,
 				C0FFEE000000000000000017 /* AppLock.swift in Sources */,
 				C0FFEE000000000000000019 /* BackgroundUpdates.swift in Sources */,
+				F80000000000000000000026 /* ContinuedWork.swift in Sources */,
+				F80000000000000000000028 /* BackgroundSync.swift in Sources */,
+				F8000000000000000000002A /* BackgroundSyncSchedule.swift in Sources */,
 				C0FFEE00000000000000001B /* CustomSpaces.swift in Sources */,
 				C0FFEE00000000000000001D /* LibraryFilter.swift in Sources */,
 				C0FFEE00000000000000001F /* PdfImport.swift in Sources */,
@@ -784,6 +800,8 @@
 				F40000000000000000000004 /* ExtensionPresentationTests.swift in Sources */,
 				F20000000000000000000003 /* ReaderDownloadQueueTests.swift in Sources */,
 				F20000000000000000000004 /* ReaderDownloadQueue.swift in Sources */,
+				F8000000000000000000002B /* BackgroundSyncSchedule.swift in Sources */,
+				F8000000000000000000002D /* BackgroundSyncScheduleTests.swift in Sources */,
 				FA0000000000000000000002 /* ImageLoadPolicy.swift in Sources */,
 				FA0000000000000000000003 /* ImageLoadPolicyTests.swift in Sources */,
 				FA0000000000000000000099 /* UITestSupport.swift in Sources */,

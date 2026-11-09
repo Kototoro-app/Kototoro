@@ -86,6 +86,8 @@ class SourceTracker(
         respectSchedule: Boolean = false,
         skipCompleted: Boolean = false,
         onProgress: suspend (done: Int, total: Int) -> Unit = { _, _ -> },
+        /** The running counts (checked so far) out of [total]: once before the first work, then after each one. */
+        onCounts: suspend (counts: SourceTrackReport, total: Int) -> Unit = { _, _ -> },
     ): SourceTrackReport {
         val tracked = syncAnchors()
         val time = now()
@@ -106,6 +108,7 @@ class SourceTracker(
         // rest of the run instead of failing every remaining title of it.
         val items = ids.map { id -> id to library.find(id) }
             .filterNot { (_, stored) -> skipCompleted && stored?.state == "FINISHED" }
+        onCounts(SourceTrackReport(0, 0, 0, 0, 0), items.size)
         checkBySource(
             items = items,
             sourceOf = { (_, stored) -> stored?.source?.name.orEmpty() },
@@ -129,6 +132,7 @@ class SourceTracker(
                 }
             }
             onProgress(++done, items.size)
+            onCounts(SourceTrackReport(done, withUpdates, failed, newChapters, skipped), items.size)
         }
         return SourceTrackReport(items.size, withUpdates, failed, newChapters, skipped)
     }

@@ -194,7 +194,9 @@ def replace_once(path, old, new, what):
         target.write(text.replace(old, new))
 replace_once(sys.argv[1], sys.argv[2], '"1790898154"', "build timestamp expression")
 stubs = "https://github.com/Suwayomi/Suwayomi-Server/raw/"
-replace_once(sys.argv[3], stubs + 'android-jar/"', stubs + sys.argv[4] + '/"', "android-jar repository")
+# Limited to the stubs module: GitHub answers missing paths there with 504, which stops Gradle from trying jitpack.
+replace_once(sys.argv[3], stubs + 'android-jar/")', stubs + sys.argv[4] + '/") '
+             '{ content { includeModule("com.github.Suwayomi", "android-jar") } }', "android-jar repository")
 PY
     (
         cd "$work"

@@ -186,6 +186,22 @@ extension ReaderDownloadQueue {
     }
 
     func attach(runtime: IosSources) {
+        // Downloads go on in the background under the system's progress; see ContinuedWork.
+        leaseFactory = { userInitiated, ended in
+            let work = ContinuedWork.begin("downloads", title: String(localized: "正在下载"), userInitiated: userInitiated)
+            work.onStop = { ended(false) }
+            work.onTimeUp = { ended(true) }
+            return ReaderDownloadLease(progress: { completed, total, subtitle in
+                work.progress(completed, of: total, subtitle: subtitle)
+            }, end: { work.end(succeeded: true) })
+        }
+        // An episode's transfer belongs to the system; the user's pause or removal stops it there as well.
+        onUserStop = { request in
+            guard request.isVideo, let decoded = try? IosDownloadArchive().decode(json: request.payload),
+                  let directory = try? VideoDownloads.directory(content: decoded.content, chapter: decoded.chapter)
+            else { return }
+            VideoTransfers.shared.cancel(directory: directory)
+        }
         attach { request, progress in
             let decoded = try IosDownloadArchive().decode(json: request.payload)
             guard decoded.content.sourceName == request.source, decoded.content.id == request.contentID,

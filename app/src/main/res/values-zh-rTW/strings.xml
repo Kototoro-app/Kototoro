@@ -2406,7 +2406,7 @@ SHA-256 指紋:
     <string name="video_aspect_ratio_4_3">4:3</string>
     <string name="video_aspect_ratio_fill">填充</string>
     <string name="video_aspect_ratio_fit">適應</string>
-    <string name="video_aspect_ratio_stretch">拉伸鋪滿</string>
+    <string name="video_aspect_ratio_stretch">拉伸</string>
     <string name="video_audio_track">音軌</string>
     <string name="video_auto_next">自動續播</string>
     <string name="video_background">播放背景</string>
@@ -2435,6 +2435,10 @@ SHA-256 指紋:
     <string name="video_danmaku_stroke">彈幕描邊</string>
     <string name="video_decoder_hardware">硬件解碼</string>
     <string name="video_decoder_mode">視頻解碼方式</string>
+    <string name="video_orientation">播放器方向</string>
+    <string name="video_orientation_last_used">上次的方向</string>
+    <string name="reverse_landscape">反向橫屏</string>
+    <string name="reverse_portrait">反向豎屏</string>
     <string name="video_decoder_software">軟件解碼</string>
     <string name="video_default_speed">默認倍速</string>
     <string name="video_detail">視頻詳情</string>
@@ -4129,4 +4133,5 @@ SHA-256 指紋:
     <string name="source_preferences_summary">排序、分組、成人內容過濾與標籤黑名單</string>
     <string name="source_preferences_browsing">瀏覽與排序</string>
     <string name="extension_settings">拓展設定</string>
+    <string name="cloudstream_plugin_reloaded">已重新載入 %1$s，設定已生效</string>
 </resources>

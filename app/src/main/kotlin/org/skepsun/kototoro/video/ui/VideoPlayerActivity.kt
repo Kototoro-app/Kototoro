@@ -20,6 +20,7 @@ import android.util.Base64
 import android.view.PixelCopy
 import android.view.Surface
 import android.view.WindowManager
+import android.widget.Toast
 import android.util.Log
 import org.skepsun.kototoro.R
 import dagger.hilt.android.AndroidEntryPoint
@@ -159,6 +160,7 @@ import kotlin.math.roundToInt
 import androidx.activity.viewModels
 import androidx.activity.OnBackPressedCallback
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -341,6 +343,14 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     private var unlockButtonVisible by mutableStateOf(false)
     private var seekFeedbackState by mutableStateOf<VideoSeekFeedbackState?>(null)
     private var seekFeedbackDismissJob: Job? = null
+    private var aspectRatioToast: Toast? = null
+    private val aspectRatioOptions = intArrayOf(
+        R.string.video_aspect_ratio_fit,
+        R.string.video_aspect_ratio_fill,
+        R.string.video_aspect_ratio_16_9,
+        R.string.video_aspect_ratio_4_3,
+        R.string.video_aspect_ratio_stretch,
+    )
     private var actionDialogState by mutableStateOf<VideoActionDialogState?>(null)
     private var videoAnnotationState by mutableStateOf<VideoAnnotationState?>(null)
 
@@ -827,6 +837,10 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                         )
                     }
                     chapterDialogState?.let { state ->
+                        val bookmarks by chaptersViewModel.bookmarks.collectAsState()
+                        // Bookmarks belong to the loaded details; before they load there is nothing to attach one to.
+                        val detailsLoaded = chaptersViewModel.mangaDetails.collectAsState().value != null
+                        val bookmarkedChapterIds = remember(bookmarks) { bookmarks.mapTo(HashSet()) { it.chapterId } }
                         VideoChapterDialog(
                             state = state,
                             onDismissRequest = { chapterDialogState = null },
@@ -835,6 +849,12 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                                 onChapterSelected(chapter)
                             },
                             onGridViewChanged = chaptersViewModel::setChaptersInGridView,
+                            bookmarkedChapterIds = bookmarkedChapterIds,
+                            onBookmarkToggle = { chapter: ContentChapter ->
+                                val bookmarked = chapter.id in bookmarkedChapterIds
+                                chaptersViewModel.setBookmarksForChapters(setOf(chapter.id), removeExisting = bookmarked)
+                                showPlayerMessage(if (bookmarked) R.string.bookmark_removed else R.string.bookmark_added)
+                            }.takeIf { detailsLoaded },
                         )
                     }
                     videoInfoDialogText?.let { details ->
@@ -1048,6 +1068,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             }
             VideoPlayerAction.PreviousChapter -> navigateChapter(-1)
             VideoPlayerAction.NextChapter -> navigateChapter(1)
+            VideoPlayerAction.CycleAspectRatio -> cycleAspectRatio()
             is VideoPlayerAction.OpenSubtitles -> {
                 lastSettingsAnchorBounds = action.anchorBounds
                 showSubtitleSettingsDialog()
@@ -1069,7 +1090,9 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             }
             is VideoPlayerAction.OpenMore -> showOverflowMenu(action.anchorBounds)
             VideoPlayerAction.ToggleFullscreen -> {
-                orientationHelper.isLandscape = !orientationHelper.isLandscape
+                val landscape = !orientationHelper.isLandscape
+                orientationHelper.isLandscape = landscape
+                appSettings.videoLastOrientationLandscape = landscape
             }
             VideoPlayerAction.ToggleScreenLock -> {
                 if (isScreenLocked) exitScreenLock() else enterScreenLock()
@@ -1112,6 +1135,9 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             chapterGroupLabel = currentChapter?.branch?.trim()?.takeIf(String::isNotEmpty),
             playbackSpeedLabel = "%.2fx".format(appSettings.videoPlaybackSpeed),
             qualityLabel = availableVideos.takeIf { it.isNotEmpty() }?.let { buildQualityButtonLabel() },
+            aspectRatioLabel = getString(
+                aspectRatioOptions[appSettings.videoAspectRatio.coerceIn(0, aspectRatioOptions.lastIndex)],
+            ),
         )
     }
 
@@ -1169,8 +1195,10 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             pendingInitialSeekPositionMs = targetPos
         }
 
-        // Apply default orientation: portrait when foldable unfolded in portrait; else landscape
-        observeFoldableStateForOrientation()
+        // A chosen orientation wins; AUTO is portrait when a foldable is unfolded in portrait, else landscape
+        if (!orientationHelper.applyVideoOrientation(appSettings.videoOrientation)) {
+            observeFoldableStateForOrientation()
+        }
 
         spaceSwitcherDelegate.bind(
             activity = this,
@@ -2866,11 +2894,6 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                     onClick = ::openVideoAnnotation,
                 ),
                 VideoActionDialogItem(
-                    title = getString(R.string.video_aspect_ratio),
-                    iconRes = R.drawable.ic_aspect_ratio,
-                    onClick = ::showAspectRatioDialog,
-                ),
-                VideoActionDialogItem(
                     title = getString(R.string.save_manga_video),
                     iconRes = R.drawable.ic_download,
                     onClick = ::downloadCurrentChapter,
@@ -3780,20 +3803,12 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         videoSizeProbeJob = null
     }
 
-    private fun showAspectRatioDialog() {
-        val options = arrayOf(
-            R.string.video_aspect_ratio_fit,
-            R.string.video_aspect_ratio_fill,
-            R.string.video_aspect_ratio_16_9,
-            R.string.video_aspect_ratio_4_3,
-            R.string.video_aspect_ratio_stretch,
-        )
-        val labels = options.map(::getString).toTypedArray()
-        val checked = appSettings.videoAspectRatio.coerceIn(0, options.lastIndex)
-        showSelectionDialog(R.string.video_aspect_ratio, labels.asList(), checked) { which ->
-            appSettings.videoAspectRatio = which
-            applyAspectRatio()
-        }
+    private fun cycleAspectRatio() {
+        val next = (appSettings.videoAspectRatio.coerceIn(0, aspectRatioOptions.lastIndex) + 1) % aspectRatioOptions.size
+        appSettings.videoAspectRatio = next
+        applyAspectRatio()
+        aspectRatioToast?.cancel()
+        aspectRatioToast = Toast.makeText(this, getString(aspectRatioOptions[next]), Toast.LENGTH_SHORT).also(Toast::show)
     }
 
     private fun showPlaybackSpeedDialog() {

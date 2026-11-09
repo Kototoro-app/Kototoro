@@ -386,6 +386,7 @@ fun KototoroBottomNav(
                         labelsAlwaysVisible = labelsAlwaysVisible,
                         capsuleEnabled = isCapsuleEnabled,
                         itemSpacing = layoutSpec.itemSpacing,
+                        horizontalPadding = layoutSpec.horizontalPadding,
                         labelScale = layoutSpec.labelScale,
                         labelMaxWidth = layoutSpec.labelMaxWidth,
                         accentOverride = sampleAccent,
@@ -395,8 +396,7 @@ fun KototoroBottomNav(
                         barShape = RoundedRectangle(28.dp),
                         modifier = Modifier
                             .wrapContentWidth()
-                            .height(currentExplicitHeight)
-                            .padding(horizontal = layoutSpec.horizontalPadding),
+                            .height(currentExplicitHeight),
                     )
                     adjacentAction?.invoke()
                 }
@@ -667,6 +667,7 @@ private fun FloatingBottomNavRow(
     capsuleEnabled: Boolean,
     accentOverride: Color? = null,
     itemSpacing: Dp,
+    horizontalPadding: Dp,
     labelScale: Float,
     labelMaxWidth: Dp?,
     onItemSelected: (Int) -> Unit,
@@ -868,6 +869,7 @@ private fun FloatingBottomNavRow(
         Row(
             modifier = Modifier
                 .align(Alignment.Center)
+                .padding(horizontal = horizontalPadding)
                 .layerBackdrop(navigationContentBackdrop),
             horizontalArrangement = Arrangement.spacedBy(itemSpacing, Alignment.CenterHorizontally),
             verticalAlignment = Alignment.CenterVertically,
@@ -1062,7 +1064,10 @@ private fun FloatingBottomNavRow(
                     Column(
                     modifier = Modifier
                         .then(itemModifier.fillMaxHeight())
-                        .padding(horizontal = 1.dp, vertical = 6.dp),
+                        .padding(
+                            horizontal = if (isSelected && useSharedLiquidGlassPill) 8.dp else 1.dp,
+                            vertical = 6.dp,
+                        ),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
                 ) {

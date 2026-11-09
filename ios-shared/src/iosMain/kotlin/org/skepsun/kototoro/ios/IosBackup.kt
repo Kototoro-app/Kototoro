@@ -27,15 +27,27 @@ class IosBackupPreview internal constructor(
     /** Android sections such as settings or tracker accounts, which iOS keeps unchanged. */
     val skippedSections: List<String>,
 ) : LibraryBackupInput {
+    /** Set only while a restore reads the rows; counts them against [counts] for its progress. */
+    internal var progress: ProgressThrottle? = null
+    private var consumed = 0L
+
     override suspend fun <T> rows(section: BackupSection, serializer: DeserializationStrategy<T>,
         consume: suspend (T) -> Unit) {
         val entry = zip.entries.firstOrNull { BackupSection.of(it.name) == section } ?: return
         val rows = LibraryBackupJson.parseToJsonElement(zip.read(entry).decodeToString()) as? JsonArray
             ?: throw IllegalArgumentException(localized("备份节格式无效：%@", entry.name))
+        val total = counts.sumOf { it.count.toLong() }
         for (row in rows) {
             currentCoroutineContext().ensureActive()
             consume(LibraryBackupJson.decodeFromJsonElement(serializer, row))
+            progress?.report(section.entryName, ++consumed, maxOf(total, consumed))
         }
+    }
+
+    internal suspend fun <T> reading(listener: IosProgressListener?, block: suspend () -> T): T {
+        progress = ProgressThrottle(listener)
+        consumed = 0
+        try { return block() } finally { progress = null }
     }
 }
 
@@ -62,12 +74,19 @@ internal class IosBackupService(private val library: IosLibrary) {
             })
     }
 
-    suspend fun restore(preview: IosBackupPreview): Int = withContext(Dispatchers.IO) { backup.restore(preview) }
+    suspend fun restore(preview: IosBackupPreview, listener: IosProgressListener?): Int = withContext(Dispatchers.IO) {
+        preview.reading(listener) { backup.restore(preview) }
+    }
 
-    suspend fun export(path: String, now: Long) = withContext(Dispatchers.IO) {
+    /** [progress] hears each section as it starts, counting sections; the export does not know their number. */
+    suspend fun export(path: String, now: Long, progress: ProgressThrottle) = withContext(Dispatchers.IO) {
+        var sections = 0L
         BackupZipWriter(path).use { zip ->
             backup.export(object : LibraryBackupOutput {
-                override fun beginSection(section: BackupSection) = zip.begin(section.entryName)
+                override fun beginSection(section: BackupSection) {
+                    progress.report(section.entryName, sections++, 0)
+                    zip.begin(section.entryName)
+                }
                 override fun write(text: String) = zip.write(text.encodeToByteArray())
                 override fun endSection() = zip.end()
             }, "org.skepsun.kototoro", 1, now)

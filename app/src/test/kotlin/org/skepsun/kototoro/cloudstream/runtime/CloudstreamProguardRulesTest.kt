@@ -17,6 +17,7 @@ class CloudstreamProguardRulesTest : FunSpec({
         val content = rulesFile!!.readText()
         content shouldContain "-keep class androidx.fragment.app.** { *; }"
         content shouldContain "-keep class androidx.appcompat.app.** { *; }"
+        content shouldContain "-keep class androidx.lifecycle.** { *; }"
     }
 
     test("proguard rules keep NewPipeExtractor whole for YouTube plugins") {

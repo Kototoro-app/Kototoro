@@ -2,10 +2,14 @@ import SwiftUI
 
 @main
 struct KototoroApp: App {
-    @StateObject private var library = LibraryModel()
+    @UIApplicationDelegateAdaptor private var delegate: AppDelegate
+    @StateObject private var library = LibraryModel.shared
 
     init() {
         ReaderHitchMetrics.shared.start()
+        BackgroundSync.shared.register()
+        BackgroundUpdates.shared.register()
+        VideoTransfers.shared.reconnect()
     }
 
     var body: some Scene {
@@ -15,6 +19,15 @@ struct KototoroApp: App {
                 .modifier(AppLockGate())
                 .task { await library.load() }
         }
-        .backgroundTask(.appRefresh(BackgroundUpdates.identifier)) { await BackgroundUpdates.shared.run() }
+        // A refresh asked for before checks moved to a processing task: ask for that one instead.
+        .backgroundTask(.appRefresh(BackgroundUpdates.legacyIdentifier)) { await BackgroundUpdates.shared.schedule() }
+    }
+}
+
+/// Episode transfers finish in the system's background sessions; the system relaunches the app to hand them over.
+final class AppDelegate: NSObject, UIApplicationDelegate {
+    func application(_ application: UIApplication, handleEventsForBackgroundURLSession identifier: String,
+                     completionHandler: @escaping () -> Void) {
+        VideoTransfers.shared.handleEvents(identifier, done: completionHandler)
     }
 }

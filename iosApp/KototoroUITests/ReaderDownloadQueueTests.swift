@@ -136,6 +136,131 @@ final class ReaderDownloadQueueTests: XCTestCase {
         XCTAssertEqual(calls, ["1", "2"])
     }
 
+    /// A stand-in for the app's continued processing: records what the queue reports and lets a test end it.
+    @MainActor
+    private final class FakeLeases {
+        var started: [Bool] = []
+        var ended = 0
+        var reports: [(Int, Int, String)] = []
+        var stop: ((Bool) -> Void)?
+
+        func install(on queue: ReaderDownloadQueue) {
+            queue.leaseFactory = { [unowned self] userInitiated, ended in
+                started.append(userInitiated)
+                stop = ended
+                return ReaderDownloadLease(progress: { [unowned self] in reports.append(($0, $1, $2)) },
+                                           end: { [unowned self] in self.ended += 1 })
+            }
+        }
+    }
+
+    func testLeaseKeepsDownloadingInBackgroundAndEndsWhenTheQueueRunsDry() async throws {
+        let queue = ReaderDownloadQueue(file: try file())
+        let leases = FakeLeases()
+        leases.install(on: queue)
+        var unfinished: CheckedContinuation<Void, Never>?
+        queue.attach { request, progress in
+            if request.chapterID == "1" {
+                try await progress(1, 2)
+                await withCheckedContinuation { unfinished = $0 }
+            }
+            try await progress(2, 2)
+        }
+        try await queue.enqueue([request("1"), request("2")])
+        try await eventually { unfinished != nil }
+        XCTAssertEqual(leases.started, [true])
+        await queue.setForeground(false)
+        XCTAssertEqual(queue.entries.map(\.state), [.running, .queued])
+        unfinished?.resume()
+        try await eventually { queue.entries.allSatisfy { $0.state == .completed } }
+        try await eventually { leases.ended == 1 }
+        XCTAssertEqual(leases.started, [true])
+        // Two entries, so two hundred units; the second chapter is reported as the second of two.
+        XCTAssertEqual(leases.reports.first?.1, 200)
+        XCTAssertEqual(leases.reports.first?.0, 0)
+        XCTAssertEqual(leases.reports.last?.0, 200)
+        XCTAssertTrue(leases.reports.last?.2.hasPrefix("2/2 · 漫画 章节 2") == true)
+    }
+
+    func testTimeUpPausesUntilTheAppReturnsButAStopStaysPaused() async throws {
+        let queue = ReaderDownloadQueue(file: try file())
+        let leases = FakeLeases()
+        leases.install(on: queue)
+        var waiting: [String: CheckedContinuation<Void, Never>] = [:]
+        var calls: [String] = []
+        queue.attach { request, progress in
+            calls.append(request.chapterID)
+            // The first call of chapters 1 and 3 holds until the test lets it go.
+            if calls.filter({ $0 == request.chapterID }).count == 1 && ["1", "3"].contains(request.chapterID) {
+                await withCheckedContinuation { waiting[request.chapterID] = $0 }
+            }
+            try await progress(1, 1)
+        }
+        try await queue.enqueue([request("1"), request("2")])
+        try await eventually { waiting["1"] != nil }
+        await queue.setForeground(false)
+        leases.stop?(true)
+        try await eventually { queue.entries.allSatisfy { $0.state == .paused } }
+        waiting["1"]?.resume()
+        try await eventually { !queue.hasActiveWorker }
+        XCTAssertEqual(calls, ["1"])
+        await queue.setForeground(true)
+        try await eventually { queue.entries.allSatisfy { $0.state == .completed } }
+        // Resuming on return is the app's own doing, not a tap.
+        XCTAssertEqual(leases.started, [true, false])
+
+        try await queue.enqueue([request("3")])
+        try await eventually { waiting["3"] != nil }
+        XCTAssertEqual(leases.started, [true, false, true])
+        await queue.setForeground(false)
+        leases.stop?(false)
+        try await eventually { queue.entries.last?.state == .paused }
+        waiting["3"]?.resume()
+        try await eventually { !queue.hasActiveWorker }
+        await queue.setForeground(true)
+        try await Task.sleep(for: .milliseconds(100))
+        // The user stopped it from the system's progress: it stays paused.
+        XCTAssertEqual(queue.entries.last?.state, .paused)
+        XCTAssertEqual(calls, ["1", "1", "2", "3"])
+    }
+
+    func testUserStopsReachTheOperationButRunningOutOfTimeDoesNot() async throws {
+        let queue = ReaderDownloadQueue(file: try file())
+        let leases = FakeLeases()
+        leases.install(on: queue)
+        var stops: [String] = []
+        queue.onUserStop = { stops.append($0.chapterID) }
+        var waiting: [String: CheckedContinuation<Void, Never>] = [:]
+        queue.attach { request, progress in
+            await withCheckedContinuation { waiting[request.chapterID] = $0 }
+            try await progress(1, 1)
+        }
+        try await queue.enqueue([request("1"), request("2")])
+        try await eventually { waiting["1"] != nil }
+        // Out of background time: the transfer is left to the system.
+        await queue.setForeground(false)
+        leases.stop?(true)
+        try await eventually { queue.entries.allSatisfy { $0.state == .paused } }
+        XCTAssertEqual(stops, [])
+        waiting.removeValue(forKey: "1")?.resume()
+        try await eventually { !queue.hasActiveWorker }
+
+        await queue.setForeground(true)
+        try await eventually { waiting["1"] != nil }
+        try await queue.pause(request("1").id)
+        XCTAssertEqual(stops, ["1"])
+        waiting.removeValue(forKey: "1")?.resume()
+        try await eventually { waiting["2"] != nil }
+        // The user's stop from the system's progress.
+        await queue.setForeground(false)
+        leases.stop?(false)
+        try await eventually { stops == ["1", "2"] }
+        waiting.removeValue(forKey: "2")?.resume()
+        try await eventually { !queue.hasActiveWorker }
+        try await queue.remove(request("2").id)
+        XCTAssertEqual(stops, ["1", "2", "2"])
+    }
+
     func testCorruptArchiveAndFailedPersistenceDoNotOverwriteUserState() async throws {
         let location = try file()
         let corrupt = Data("broken archive".utf8)

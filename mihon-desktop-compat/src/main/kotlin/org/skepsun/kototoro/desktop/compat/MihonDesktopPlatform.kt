@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.desktop.compat
 
 import android.webkit.WebView
+import com.typesafe.config.ConfigFactory
 import eu.kanade.tachiyomi.createAppModule
 import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.network.PersistentCookieStore
@@ -9,6 +10,8 @@ import org.koin.core.context.GlobalContext
 import org.koin.dsl.module
 import okhttp3.Authenticator
 import okhttp3.OkHttpClient
+import xyz.nulldev.androidcompat.config.SystemConfigModule
+import xyz.nulldev.ts.config.GlobalConfigManager
 import org.skepsun.kototoro.core.source.SourcePreferenceStore
 import org.skepsun.kototoro.source.host.FileSourcePreferenceStore
 import org.skepsun.kototoro.source.host.MihonPreferenceBridge
@@ -54,6 +57,16 @@ class MihonDesktopPlatform(
 
     override fun initialize(): ClassLoader = error("Persistent preferences must be supplied before source construction")
 
+    /**
+     * `android.os.Build` reads AndroidCompat's system configuration when it initializes, and extensions read its
+     * fields (`Build.MODEL`, `Build.VERSION`); without the module every such class fails to initialize. Release builds
+     * are not debuggable, which is all the module holds. Registered once per JVM.
+     */
+    private fun registerSystemConfig() {
+        if (SystemConfigModule::class.java in GlobalConfigManager.loadedModules) return
+        GlobalConfigManager.registerModule(SystemConfigModule { ConfigFactory.parseString("isDebuggable = false") })
+    }
+
     @Synchronized
     override fun initialize(preferences: SourcePreferenceStore): ClassLoader {
         check(!closed && application == null) { "Desktop platform is already initialized or closed" }
@@ -69,6 +82,7 @@ class MihonDesktopPlatform(
             val absolute = root.toAbsolutePath().normalize()
             Files.createDirectories(absolute)
             require(Files.isDirectory(absolute, NOFOLLOW_LINKS)) { "Compatibility data must be a real directory" }
+            registerSystemConfig()
             val loop = DesktopCompatibilityLooper().also { main = it }
             val bridge = MihonPreferenceBridge(javaClass.classLoader, preferences, dispatchListener = loop::dispatch)
                 .also { this.preferences = it }

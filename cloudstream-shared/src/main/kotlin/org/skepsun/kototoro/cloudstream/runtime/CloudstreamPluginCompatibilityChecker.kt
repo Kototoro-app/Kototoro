@@ -54,6 +54,7 @@ object CloudstreamPluginCompatibilityChecker {
                 } else {
                     CloudstreamPluginCompatibility.Incompatible(
                         reason = "Requires unsupported Cloudstream host methods: ${missingMethods.joinToString()}",
+                        missingHostMethods = missingMethods.map(DexMethodReference::toString),
                     )
                 }
             }
@@ -84,7 +85,15 @@ sealed interface CloudstreamPluginCompatibility {
     data class Incompatible(
         val reason: String,
         val missingHostClasses: List<String> = emptyList(),
-    ) : CloudstreamPluginCompatibility
+        val missingHostMethods: List<String> = emptyList(),
+    ) : CloudstreamPluginCompatibility {
+        /**
+         * Whether the plugin only links against host API this app lacks, as opposed to not being a plugin at all.
+         * Android links lazily, as Cloudstream relies on: such a plugin still loads, and only the code reaching the
+         * missing API fails, so the host tries loading it rather than refusing it.
+         */
+        val isLinkageGap: Boolean get() = missingHostClasses.isNotEmpty() || missingHostMethods.isNotEmpty()
+    }
 }
 
 internal data class DexExecutableReferences(
@@ -166,6 +175,19 @@ object DexExecutableTypeDescriptorReader {
             val declaredTypeIndex = data.uint(classDefinitionOffset)
             require(declaredTypeIndex in typeDescriptors.indices) { "Invalid DEX class index" }
             declaredTypes += typeDescriptors[declaredTypeIndex]
+            // A missing superclass or interface fails the class itself when it loads, not just code using it.
+            val superclassIndex = data.uint(classDefinitionOffset + SUPERCLASS_OFFSET)
+            if (superclassIndex != NO_INDEX) data.addTypeDescriptor(superclassIndex, typeDescriptors, referencedTypes)
+            val interfacesOffset = data.uint(classDefinitionOffset + INTERFACES_OFFSET)
+            if (interfacesOffset != 0) {
+                val count = data.uint(interfacesOffset)
+                require(count >= 0 && count.toLong() * 2 + interfacesOffset + 4 <= data.size) {
+                    "Invalid DEX interface list"
+                }
+                repeat(count) {
+                    data.addTypeDescriptor(data.ushort(interfacesOffset + 4 + it * 2), typeDescriptors, referencedTypes)
+                }
+            }
             val classDataOffset = data.uint(classDefinitionOffset + CLASS_DATA_OFFSET)
             if (classDataOffset != 0) {
                 data.readClassData(
@@ -390,6 +412,9 @@ object DexExecutableTypeDescriptorReader {
     private const val METHOD_IDS_OFFSET = 0x5c
     private const val CLASS_DEFS_SIZE_OFFSET = 0x60
     private const val CLASS_DEFS_OFFSET = 0x64
+    private const val SUPERCLASS_OFFSET = 8
+    private const val INTERFACES_OFFSET = 12
+    private const val NO_INDEX = -1
     private const val CLASS_DATA_OFFSET = 24
     private const val CODE_ITEM_HEADER_SIZE = 16
     private const val INSNS_SIZE_OFFSET = 12

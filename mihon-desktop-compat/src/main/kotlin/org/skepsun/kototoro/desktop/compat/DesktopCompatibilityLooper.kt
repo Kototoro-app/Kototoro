@@ -6,6 +6,8 @@ import java.io.Closeable
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
+import java.util.logging.Level
+import java.util.logging.Logger
 
 /** Owns a stoppable JVM compatibility main loop, not an Android device's unquittable application main loop. */
 internal class DesktopCompatibilityLooper : Closeable {
@@ -20,7 +22,7 @@ internal class DesktopCompatibilityLooper : Closeable {
             // These are public APIs of this pinned desktop compatibility implementation.
             Looper.setMainLooperForTest(current)
             ready.countDown()
-            Looper.loop()
+            runLoop()
         } catch (error: Throwable) { failure.set(error); ready.countDown() }
     }, "Kototoro compatibility main").apply { isDaemon = true }
     private val handler: Handler
@@ -38,6 +40,23 @@ internal class DesktopCompatibilityLooper : Closeable {
         }
     }
 
+    /**
+     * Runs the loop until it is quit. A callback that throws would end `Looper.loop()` and with it the process's only
+     * main loop, so every later main-thread call of every extension would fail; as on Android, where Kototoro keeps
+     * its main loop going past a plugin's crash, the error is logged and the loop resumes.
+     */
+    private fun runLoop() {
+        while (true) {
+            try {
+                Looper.loop()
+                return
+            } catch (error: Throwable) {
+                if (error is VirtualMachineError) throw error
+                logger.log(Level.WARNING, "A callback on the compatibility main loop failed; the loop continues", error)
+            }
+        }
+    }
+
     fun dispatch(action: () -> Unit) {
         val current = requireNotNull(loop.get())
         check(thread.isAlive) { "Compatibility main Looper has stopped" }
@@ -52,5 +71,9 @@ internal class DesktopCompatibilityLooper : Closeable {
         if (Thread.currentThread() !== thread) thread.join(10000)
         check(!thread.isAlive) { "Compatibility main Looper did not stop" }
         if (current != null && Looper.getMainLooper() === current) Looper.clearMainLooperForTest()
+    }
+
+    private companion object {
+        val logger: Logger = Logger.getLogger("DesktopCompatibility")
     }
 }

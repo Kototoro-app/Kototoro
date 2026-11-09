@@ -29,7 +29,7 @@ class CloudstreamPluginCompatibilityCheckerTest : FunSpec({
 
 	test("plugin executing an instruction against an unavailable Cloudstream class is rejected") {
 		val pluginFile = createPluginArchive(
-			createExecutableReferenceDex("Lcom/lagradost/cloudstream3/ui/home/HomeViewModel;"),
+			createExecutableReferenceDex("Lcom/lagradost/cloudstream3/ui/player/IPlayer;"),
 		)
 
 		val result = CloudstreamPluginCompatibilityChecker.inspect(
@@ -37,7 +37,8 @@ class CloudstreamPluginCompatibilityCheckerTest : FunSpec({
 			hostClassLoader = CloudstreamPluginCompatibilityChecker::class.java.classLoader!!,
 		).shouldBeInstanceOf<CloudstreamPluginCompatibility.Incompatible>()
 
-		result.missingHostClasses shouldContainExactly listOf("com.lagradost.cloudstream3.ui.home.HomeViewModel")
+		result.missingHostClasses shouldContainExactly listOf("com.lagradost.cloudstream3.ui.player.IPlayer")
+		result.isLinkageGap shouldBe true
 	}
 
 	test("plugin referencing only available Cloudstream runtime classes is accepted") {
@@ -68,6 +69,7 @@ class CloudstreamPluginCompatibilityCheckerTest : FunSpec({
 		).shouldBeInstanceOf<CloudstreamPluginCompatibility.Incompatible>()
 
 		result.missingHostClasses shouldBe emptyList()
+		result.isLinkageGap shouldBe false
 	}
 
     test("existing host class with a missing method is rejected before plugin activation") {
@@ -149,7 +151,7 @@ class CloudstreamPluginCompatibilityCheckerTest : FunSpec({
 
     test("a missing host class is still rejected next to the plugin's own Cloudstream-namespace classes") {
         val provider = "Lcom/lagradost/cloudstream3/ar/youtube/YoutubeProvider;"
-        val missing = "Lcom/lagradost/cloudstream3/ui/home/HomeViewModel;"
+        val missing = "Lcom/lagradost/cloudstream3/ui/player/IPlayer;"
 
         val result = CloudstreamPluginCompatibilityChecker.inspect(
             createPluginArchive(
@@ -162,9 +164,35 @@ class CloudstreamPluginCompatibilityCheckerTest : FunSpec({
             CloudstreamPluginCompatibilityChecker::class.java.classLoader!!,
         ).shouldBeInstanceOf<CloudstreamPluginCompatibility.Incompatible>()
 
-        result.missingHostClasses shouldContainExactly listOf("com.lagradost.cloudstream3.ui.home.HomeViewModel")
+        result.missingHostClasses shouldContainExactly listOf("com.lagradost.cloudstream3.ui.player.IPlayer")
+    }
+
+    // A class whose superclass is missing fails to load itself, even when no instruction names that superclass.
+    test("a missing host superclass is reported") {
+        val dex = createExecutableReferenceDex("Lcom/lagradost/cloudstream3/ui/player/AbstractPlayerFragment;")
+        dex.writeShort(EXECUTABLE_REFERENCE_INSTRUCTION_TYPE_OFFSET, 0)
+        dex.writeInt(EXECUTABLE_REFERENCE_CLASS_DEF_OFFSET + 8, 1)
+
+        val result = CloudstreamPluginCompatibilityChecker.inspect(
+            createPluginArchive(dex),
+            CloudstreamPluginCompatibilityChecker::class.java.classLoader!!,
+        ).shouldBeInstanceOf<CloudstreamPluginCompatibility.Incompatible>()
+
+        result.missingHostClasses shouldContainExactly
+            listOf("com.lagradost.cloudstream3.ui.player.AbstractPlayerFragment")
+    }
+
+    test("host app classes plugins reach for are available") {
+        CloudstreamPluginCompatibilityChecker.inspect(
+            createPluginArchive(createExecutableReferenceDex("Lcom/lagradost/cloudstream3/ui/home/HomeViewModel;")),
+            CloudstreamPluginCompatibilityChecker::class.java.classLoader!!,
+        ) shouldBe CloudstreamPluginCompatibility.Compatible
     }
 })
+
+/** Where [createExecutableReferenceDex] puts its class definition and its instruction's type index. */
+private const val EXECUTABLE_REFERENCE_CLASS_DEF_OFFSET = 140
+private const val EXECUTABLE_REFERENCE_INSTRUCTION_TYPE_OFFSET = 210
 
 private fun createExecutableMethodDex(
     owner: String,

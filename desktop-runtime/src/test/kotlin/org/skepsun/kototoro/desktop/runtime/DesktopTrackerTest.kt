@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import org.skepsun.kototoro.core.jsonsource.ContentGroup
 import org.skepsun.kototoro.core.jsonsource.OriginGroup
+import org.skepsun.kototoro.core.library.SourceTrackReport
 import org.skepsun.kototoro.core.source.*
 import org.skepsun.kototoro.tracker.data.TrackEntity
 import org.skepsun.kototoro.tracker.data.TrackLogEntity
@@ -53,6 +54,33 @@ class DesktopTrackerTest {
             assertEquals(2, chapterCalls)
             assertEquals("FINISHED", library.find(remote.id)?.state)
             assertEquals(1, runtime.database.getTracksDao().find(remote.id)?.newChapters)
+        }
+    }
+
+    @Test
+    fun `running counts start from the total and follow every checked work`() = runBlocking<Unit> {
+        DesktopRuntime.open(directory).use { runtime ->
+            val library = DesktopLibrary(runtime.database) { source }
+            val updated = work(listOf(chapter(1)))
+            val broken = work(listOf(chapter(1))).copy(id = 11, url = "/broken", publicUrl = "https://fixture.invalid/broken")
+            library.addFavourite(updated)
+            library.addFavourite(broken)
+            var remote = updated
+            val tracker = DesktopTracker(runtime.database, library, { stored ->
+                if (stored.id == broken.id) throw IOException("offline")
+                remote
+            }, { null }, { 86_400_000L })
+            tracker.checkAll()
+            remote = work(listOf(chapter(1), chapter(2)))
+
+            val counts = mutableListOf<Pair<SourceTrackReport, Int>>()
+            tracker.checkAll(onCounts = { report, total -> counts += report to total })
+            assertEquals(listOf(0, 1, 2), counts.map { it.first.checked })
+            assertTrue(counts.all { it.second == 2 })
+            val last = counts.last().first
+            assertEquals(1, last.failed)
+            assertEquals(1, last.withUpdates)
+            assertEquals(1, last.newChapters)
         }
     }
 

@@ -53,6 +53,7 @@ def sharedKotlinShims = [
 	'com/lagradost/cloudstream3/utils/DataStore.kt',
 	// App-shell stand-ins plugins link against (plugin events and manager, sync providers, layout flags); plain
 	// Kotlin, so Windows takes the Android files as they are. AppContextUtils stays Android-only (AppCompat dialogs).
+	// MainActivity extends AppCompatActivity, which this module stands in for (androidx/appcompat in its sources).
 	'com/lagradost/cloudstream3/MainActivity.kt',
 	'com/lagradost/cloudstream3/utils/Event.kt',
 	'com/lagradost/cloudstream3/utils/DataStoreHelper.kt',
@@ -64,6 +65,14 @@ def sharedKotlinShims = [
 	'com/lagradost/cloudstream3/syncproviders/providers/OpenSubtitlesApi.kt',
 	'com/lagradost/cloudstream3/ui/settings/Globals.kt',
 	'com/lagradost/cloudstream3/ui/settings/extensions/RepositoryData.kt',
+	// Cloudstream app records and models plugins read (library, resume points, repositories, quality priorities).
+	// HomeViewModel, UIHelper and ImageLoader stay Android-only: they need AndroidX lifecycle, fragments and Coil.
+	'com/lagradost/cloudstream3/ui/WatchType.kt',
+	'com/lagradost/cloudstream3/ui/APIRepository.kt',
+	'com/lagradost/cloudstream3/ui/result/ResultViewModel2.kt',
+	'com/lagradost/cloudstream3/ui/player/source_priority/QualityDataHelper.kt',
+	'com/lagradost/cloudstream3/utils/downloader/DownloadObjects.kt',
+	'com/lagradost/cloudstream3/plugins/RepositoryManager.kt',
 ]
 // Kotlin cannot declare `showToast$default`, so Cloudstream's activity bridge is Java and lives in `app/src/main/java`.
 // Copying it from its own source set keeps Windows at parity with Android, where plugins calling `showToast("…")` load.
@@ -80,14 +89,10 @@ def copySharedShims = tasks.register('copySharedCloudstreamShims', Sync) {
 	from(rootProject.file('app/src/main/kotlin')) { includeShims(delegate, sharedKotlinShims) }
 	from(rootProject.file('app/src/main/java')) { includeShims(delegate, sharedJavaShims) }
 	into sharedShimDirectory
-	// The runtime has no androidx.core / androidx.preference: `edit {}` comes from DesktopSharedPreferences.kt in the
-	// same package, and the default preferences are a named store.
+	// The runtime has no androidx.core: `edit {}` comes from DesktopSharedPreferences.kt in the same package. The
+	// default preferences come from this module's androidx.preference stand-in, which plugins use as well.
 	filesMatching('**/utils/DataStore.kt') {
-		filter { String line ->
-			if (line == 'import androidx.core.content.edit' || line == 'import androidx.preference.PreferenceManager') return ''
-			line.replace('PreferenceManager.getDefaultSharedPreferences(this)',
-				'getSharedPreferences("cloudstream_default_preferences", Context.MODE_PRIVATE)')
-		}
+		filter { String line -> line == 'import androidx.core.content.edit' ? '' : line }
 	}
 }
 sourceSets.main.kotlin.srcDir(copySharedShims)
@@ -101,8 +106,6 @@ def cloudstreamDesktopJar = tasks.register('prepareCloudstreamDesktopJar', Jar) 
 	preserveFileTimestamps = false
 	reproducibleFileOrder = true
 	from(zipTree(cloudstreamLibrary)) {
-		// The Windows host has no NewPipe; a compatibility stub in this module's sources takes their place.
-		exclude 'com/lagradost/cloudstream3/extractors/Youtube*.class'
 		// The JVM resolver resolves nothing; this module's one drives the platform browser.
 		exclude 'com/lagradost/cloudstream3/network/WebViewResolver*.class'
 		// The JVM context helper always answers null; the host's returns the compatibility Context.
@@ -129,6 +132,9 @@ dependencies {
 	implementation project(':parser-host')
 	implementation project(':parser-api')
 	implementation project(':dex-convert')
+	// Rewrites converted plugins (PluginBytecodeRewriter); the version dex2jar already brings.
+	implementation 'org.ow2.asm:asm:9.10.1'
+	implementation 'org.ow2.asm:asm-commons:9.10.1'
 	api cloudstreamRuntimeJar
 	implementation libs.okhttp
 	implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:${libs.versions.coroutines.get()}"
@@ -141,6 +147,9 @@ dependencies {
 	// Android gets ksoup through IReader; plugins (StreamPlay, AnimePahe, …) need the official library's release here.
 	implementation libs.ksoup.cloudstream
 	implementation libs.rhino
+	// Cloudstream's YouTube extractor and YouTube plugins resolve streams with it, as on Android (it runs YouTube's
+	// player JavaScript on Rhino).
+	implementation libs.newpipe.extractor
 	implementation libs.gson
 	implementation libs.ktor.http
 	implementation libs.kotlinx.datetime
@@ -220,6 +229,9 @@ def fixtureCs3 = tasks.register('fixtureCs3') {
 tasks.withType(Test).configureEach {
 	useJUnitPlatform()
 	javaLauncher = compatibilityLauncher
+	// The desktop app runs on the JVM's default heap (a quarter of the memory); converting large plugins with dex2jar
+	// needs more than Gradle's 512 MB test default.
+	maxHeapSize = '2g'
 	dependsOn fixtureCs3
 	systemProperty 'kototoro.cloudstream.fixture.cs3', fixtureCs3File.get().asFile.absolutePath
 	// Optional real plugins (not committed): a directory of `.cs3` files, e.g. from the official repository.

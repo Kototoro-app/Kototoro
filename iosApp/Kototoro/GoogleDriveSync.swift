@@ -2,6 +2,7 @@ import AuthenticationServices
 import Combine
 import KototoroShared
 import SwiftUI
+import UserNotifications
 
 @MainActor
 final class GoogleDriveSyncModel: ObservableObject {
@@ -15,6 +16,14 @@ final class GoogleDriveSyncModel: ObservableObject {
     private var lastAttempt = Date.distantPast
     private let defaults = UserDefaults.standard
     static let onStartKey = "googleDrive.syncOnStart"
+    /// Hours between background syncs (Android's periodic sync); 0 turns them off.
+    static let backgroundIntervalKey = "googleDrive.backgroundIntervalHours"
+
+    /// Who asked: a tap may ask for continued processing; the launch sync follows its switch; the scheduled one
+    /// runs in the system's background time and tells the user when it needs them.
+    enum Trigger { case manual, launch, schedule }
+
+    var connected: Bool { credential != nil && !needsAuthorization }
 
     var configured: Bool { GoogleDriveOAuth.configured != nil }
 
@@ -43,6 +52,7 @@ final class GoogleDriveSyncModel: ObservableObject {
             lastSync = nil
             defaults.removeObject(forKey: "googleDrive.lastSync")
             message = String(localized: "已连接。点击“立即同步”合并此设备与云端的数据。")
+            BackgroundSync.shared.schedule()
         } catch let error as ASWebAuthenticationSessionError where error.code == .canceledLogin {
         } catch is CancellationError {
         } catch { message = error.localizedDescription }
@@ -58,24 +68,30 @@ final class GoogleDriveSyncModel: ObservableObject {
             needsAuthorization = false
             defaults.removeObject(forKey: "googleDrive.lastSync")
             defaults.set(false, forKey: Self.onStartKey)
+            BackgroundSync.shared.schedule()
             message = String(localized: "已断开连接，本地与云端数据均保留")
         } catch { message = error.localizedDescription }
     }
 
-    func sync(_ model: LibraryModel, automatic: Bool = false) async {
+    func sync(_ model: LibraryModel, trigger: Trigger = .manual) async {
         guard !busy, credential != nil, !needsAuthorization, let library = model.library else { return }
-        if automatic && (!defaults.bool(forKey: Self.onStartKey) || Date().timeIntervalSince(lastAttempt) < 60) { return }
+        if trigger == .launch && (!defaults.bool(forKey: Self.onStartKey) || Date().timeIntervalSince(lastAttempt) < 60) { return }
         busy = true
         lastAttempt = Date()
         message = String(localized: "正在合并 Google Drive 数据…")
         defer { busy = false }
         do {
-            var token = try await accessToken(forceRefresh: false)
-            var result = try await library.googleDriveSync.sync(accessToken: token, deviceId: deviceID)
-            if result.authorizationRequired {
-                token = try await accessToken(forceRefresh: true)
-                result = try await library.googleDriveSync.sync(accessToken: token, deviceId: deviceID)
-                if result.authorizationRequired { throw GoogleDriveError.authorizationRequired }
+            // Sync on launch is not a tap: only a tap may ask for continued processing.
+            let result = try await ContinuedWork.run("google-drive-sync", title: String(localized: "正在同步 Google Drive"),
+                                                     userInitiated: trigger == .manual) { _ in
+                var token = try await accessToken(forceRefresh: false)
+                var result = try await library.googleDriveSync.sync(accessToken: token, deviceId: deviceID)
+                if result.authorizationRequired {
+                    token = try await accessToken(forceRefresh: true)
+                    result = try await library.googleDriveSync.sync(accessToken: token, deviceId: deviceID)
+                    if result.authorizationRequired { throw GoogleDriveError.authorizationRequired }
+                }
+                return result
             }
             message = result.message
             // Non-authorization failures (e.g. missing Drive scope) must not advance the success timestamp.
@@ -86,11 +102,21 @@ final class GoogleDriveSyncModel: ObservableObject {
         } catch GoogleDriveError.authorizationRequired {
             needsAuthorization = true
             message = GoogleDriveError.authorizationRequired.localizedDescription
+            // Nobody is looking at the page: say so once, since background syncs stop until the account reconnects.
+            if trigger == .schedule { await Self.notifyAuthorizationNeeded() }
         } catch is CancellationError {
             message = String(localized: "同步已取消，可稍后重试")
         } catch { message = error.localizedDescription }
         // Downloads may already have been applied even if the subsequent upload failed.
-        await model.refresh()
+        await model.refreshAfterMerge()
+    }
+
+    private static func notifyAuthorizationNeeded() async {
+        let content = UNMutableNotificationContent()
+        content.title = String(localized: "Google Drive 同步已暂停")
+        content.body = String(localized: "Google 授权已失效，打开 Kototoro 重新连接账号后继续同步。")
+        try? await UNUserNotificationCenter.current().add(
+            UNNotificationRequest(identifier: "googleDrive.authorization", content: content, trigger: nil))
     }
 
     private var deviceID: String {
@@ -114,6 +140,7 @@ struct GoogleDriveSyncView: View {
     @ObservedObject var model: GoogleDriveSyncModel
     @EnvironmentObject private var library: LibraryModel
     @AppStorage(GoogleDriveSyncModel.onStartKey) private var syncOnStart = false
+    @AppStorage(GoogleDriveSyncModel.backgroundIntervalKey) private var backgroundInterval = 0
 
     var body: some View {
         Form {
@@ -130,10 +157,25 @@ struct GoogleDriveSyncView: View {
                         .disabled(model.busy || model.needsAuthorization || library.library == nil)
                         .accessibilityIdentifier("googleDrive.sync")
                     Toggle("打开应用时同步", isOn: $syncOnStart).disabled(model.busy)
+                    Picker("后台定期同步", selection: Binding(get: { backgroundInterval }, set: { value in
+                        backgroundInterval = value
+                        // Only a failed authorization is announced, and only if the user allows notifications.
+                        if value > 0 {
+                            Task { _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) }
+                        }
+                        BackgroundSync.shared.schedule()
+                    })) {
+                        Text("关闭").tag(0)
+                        Text("每 6 小时").tag(6)
+                        Text("每 12 小时").tag(12)
+                        Text("每天").tag(24)
+                    }
+                    .disabled(model.busy)
+                    .accessibilityIdentifier("googleDrive.backgroundInterval")
                     Button("断开连接", role: .destructive) { model.disconnect() }.disabled(model.busy)
                 }
             } footer: {
-                Text("使用与安卓相同的 Google 账号，双向合并收藏、分类、阅读进度、阅读统计和更新记录。首次同步会合并已有数据。")
+                Text("使用与安卓相同的 Google 账号，双向合并收藏、分类、阅读进度、阅读统计和更新记录。首次同步会合并已有数据。后台定期同步的时机由系统决定，通常在设备空闲且联网时进行，间隔只是最短间隔。")
             }
             Section {
                 if model.busy { ProgressView("正在处理…") }

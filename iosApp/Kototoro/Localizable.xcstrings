@@ -186,6 +186,16 @@
         }
       }
     },
+    "%d/%d · 新章节：%d · 失败：%d · 跳过：%d": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$d/%2$d · New chapters: %3$d · Failed: %4$d · Skipped: %5$d"
+          }
+        }
+      }
+    },
     "%lld": {
       "shouldTranslate": false
     },
@@ -567,6 +577,16 @@
         }
       }
     },
+    "Google Drive 同步已暂停": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Google Drive sync paused"
+          }
+        }
+      }
+    },
     "Google Drive 拒绝访问，请检查授权范围及 Drive API 配置": {
       "extractionState": "manual",
       "localizations": {
@@ -605,6 +625,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Google authorization failed (HTTP %lld). Check your network and client configuration."
+          }
+        }
+      }
+    },
+    "Google 授权已失效，打开 Kototoro 重新连接账号后继续同步。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Google authorization has expired. Open Kototoro and reconnect your account to resume syncing."
           }
         }
       }
@@ -1968,12 +1998,12 @@
         }
       }
     },
-    "使用与安卓相同的 Google 账号，双向合并收藏、分类、阅读进度、阅读统计和更新记录。首次同步会合并已有数据。": {
+    "使用与安卓相同的 Google 账号，双向合并收藏、分类、阅读进度、阅读统计和更新记录。首次同步会合并已有数据。后台定期同步的时机由系统决定，通常在设备空闲且联网时进行，间隔只是最短间隔。": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Use the same Google account as on Android to merge favorites, categories, reading progress, statistics and update records both ways. The first sync merges existing data."
+            "value": "Use the same Google account as on Android to merge favorites, categories, reading progress, statistics and update records both ways. The first sync merges existing data. Background syncs run when the system decides, usually while the device is idle and online; the interval is only the shortest gap."
           }
         }
       }
@@ -4102,6 +4132,16 @@
         }
       }
     },
+    "后台定期同步": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Background sync"
+          }
+        }
+      }
+    },
     "后台检查更新": {
       "localizations": {
         "en": {
@@ -4650,6 +4690,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "The backup data exceeds the size limit; no backup file was created"
+          }
+        }
+      }
+    },
+    "备份索引": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Backup index"
           }
         }
       }
@@ -5287,12 +5337,42 @@
         }
       }
     },
+    "已上传 %@ / %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uploaded %1$@ of %2$@"
+          }
+        }
+      }
+    },
     "已下载": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Downloaded"
+          }
+        }
+      }
+    },
+    "已下载 %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Downloaded %@"
+          }
+        }
+      }
+    },
+    "已下载 %@ / %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Downloaded %1$@ of %2$@"
           }
         }
       }
@@ -9544,6 +9624,26 @@
         }
       }
     },
+    "正在上传备份": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uploading backup"
+          }
+        }
+      }
+    },
+    "正在下载": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Downloading"
+          }
+        }
+      }
+    },
     "正在下载 %@…": {
       "localizations": {
         "en": {
@@ -9560,6 +9660,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Downloading %1$lld/%2$lld%3$@"
+          }
+        }
+      }
+    },
+    "正在下载备份": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Downloading backup"
           }
         }
       }
@@ -9624,6 +9734,16 @@
         }
       }
     },
+    "正在同步 Google Drive": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Syncing Google Drive"
+          }
+        }
+      }
+    },
     "正在同步…": {
       "localizations": {
         "en": {
@@ -9674,12 +9794,52 @@
         }
       }
     },
+    "正在安装扩展": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Installing extensions"
+          }
+        }
+      }
+    },
     "正在寻找推荐作品…": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Finding recommendations…"
+          }
+        }
+      }
+    },
+    "正在导入备份": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importing backup"
+          }
+        }
+      }
+    },
+    "正在导出备份": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exporting backup"
+          }
+        }
+      }
+    },
+    "正在恢复备份": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restoring backup"
           }
         }
       }
@@ -9744,6 +9904,16 @@
         }
       }
     },
+    "正在更新扩展": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Updating extensions"
+          }
+        }
+      }
+    },
     "正在更新章节…": {
       "localizations": {
         "en": {
@@ -9780,6 +9950,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Checking favorites for updates…"
+          }
+        }
+      }
+    },
+    "正在检查更新": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checking for updates"
           }
         }
       }
@@ -9880,6 +10060,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Loading categories…"
+          }
+        }
+      }
+    },
+    "正在读取备份": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reading backup"
           }
         }
       }
@@ -10214,6 +10404,36 @@
           "stringUnit": {
             "state": "translated",
             "value": "Indent paragraphs"
+          }
+        }
+      }
+    },
+    "每 12 小时": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Every 12 hours"
+          }
+        }
+      }
+    },
+    "每 6 小时": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Every 6 hours"
+          }
+        }
+      }
+    },
+    "每天": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Daily"
           }
         }
       }
@@ -12243,6 +12463,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Automatic double page (landscape or wide window)"
+          }
+        }
+      }
+    },
+    "自动备份在打开应用时检查，也会在后台进行；后台的时机由系统决定，通常在设备空闲且联网时。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatic backups are checked when the app opens and also run in the background; the system decides when, usually while the device is idle and online."
           }
         }
       }

@@ -1,5 +1,7 @@
 package org.skepsun.kototoro.settings.sources
 
+import androidx.appcompat.app.AppCompatActivity
+import org.skepsun.kototoro.core.util.ext.findActivity
 import android.content.Context
 import android.content.SharedPreferences
 import android.widget.Toast
@@ -288,6 +290,22 @@ private class SourceSettingsRouteController(
         }
 
         buildExternalPreferenceSection(externalPreferenceScreen)?.let(sections::add)
+
+        if (viewModel.hasCloudstreamPluginSettings) {
+            sections += SourceSettingsSectionUiState(
+                id = "cloudstream_plugin",
+                title = context.getString(R.string.source_type_cloudstream),
+                rows = listOf(
+                    SourceSettingsActionRowUiState(
+                        id = "cloudstream_plugin_settings",
+                        title = context.getString(R.string.extension_settings),
+                        onClick = {
+                            (context.findActivity() as? AppCompatActivity)?.let(viewModel::openCloudstreamPluginSettings)
+                        },
+                    ),
+                ),
+            )
+        }
 
         buildTvBoxRows(repository).takeIf { it.isNotEmpty() }?.let { rows ->
             sections += SourceSettingsSectionUiState(

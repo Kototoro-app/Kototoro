@@ -6,7 +6,7 @@ import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
-import androidx.appcompat.app.AppCompatActivity
+import com.lagradost.cloudstream3.MainActivity as CloudstreamHostActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.Composable
@@ -19,6 +19,7 @@ import androidx.core.content.ContextCompat
 import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
+import org.skepsun.kototoro.cloudstream.runtime.CloudstreamPluginGuard
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.exceptions.resolve.ExceptionResolver
 import org.skepsun.kototoro.core.nav.AppRouter
@@ -29,8 +30,16 @@ import org.skepsun.kototoro.core.ui.util.SystemUiController
 import org.skepsun.kototoro.main.ui.protect.ScreenshotPolicyHelper
 
 abstract class BaseComposeFullscreenActivity :
-    AppCompatActivity(),
+    // Cloudstream plugins cast the context they load with to its activity.
+    CloudstreamHostActivity(),
     ScreenshotPolicyHelper.ContentContainer {
+
+    // Cloudstream plugins restart the app through the activity they loaded with; see CloudstreamPluginGuard.
+    // `startActivity(Intent)` lands here too.
+    override fun startActivity(intent: Intent?, options: Bundle?) {
+        CloudstreamPluginGuard.checkRestart(this, intent)
+        super.startActivity(intent, options)
+    }
 
     protected lateinit var systemUiController: SystemUiController
         private set

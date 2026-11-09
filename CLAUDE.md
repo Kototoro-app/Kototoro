@@ -710,7 +710,7 @@ RELEASE_KEY_PASSWORD=***
 - `dandanplay.appId` / `dandanplay.appSecret` - 弹弹 Play API 凭证
 
 ### 版本管理
-当前版本：`versionName 2.4.0` / `versionCode 1257`（`app/build.gradle`）。
+当前版本：`versionName 2.4.1` / `versionCode 1258`（`app/build.gradle`）。
 在 `app/build.gradle` 中更新：
 - `versionCode` - 每次发布递增
 - `versionName` - 语义化版本号（如 "1.0.0.prev"）
@@ -741,6 +741,30 @@ RELEASE_KEY_PASSWORD=***
 2. 创建 Git 标签（如 `v1.0.0`）
 3. 推送标签触发 GitHub Actions 自动构建
 4. CI 自动生成 APK 和增量补丁并创建 Release
+
+### 更新日志格式
+GitHub Release 正文按最近版本（如 v2.4.0）的固定格式手写，CI 自动生成的提交列表只作为末尾附录：
+
+1. 标题 `## Kototoro X.Y.Z`（不带 `v`）。
+2. 按平台分 `###` 节，节名一律“中文 / English”，没有内容的节省略，顺序固定：
+   `跨平台 / Across platforms`（Android、桌面、iOS 都生效）→ `Android 与桌面 / Android & desktop` →
+   `Android` → `桌面 / Desktop`（Windows/macOS/Linux 共用 `desktop-app`；仅单个桌面系统时写具体系统名）→
+   `iOS / iPadOS` → `下载与安装 / Downloads & installation`（永远最后）。
+3. 每条变更是一项双语条目：先中文，换行后两个空格缩进写英文，二者内容对等：
+   ```markdown
+   - **中文短标题（#652）**：中文说明。
+     **English short title (#652):** English description.
+   ```
+   中文用全角冒号/括号，界面名称用「」；英文标题以 `:` 结尾放在粗体内，界面名称用 `*斜体*`，路径用 `→`。
+   有关联 issue 时把编号放进标题括号里。
+4. 写给用户看：说明可感知的行为、修复后的效果、新设置的位置与默认值（默认关闭要写明原因），不写类名、模块名或实现细节；
+   同一功能的多个提交合并为一条；纯 `docs`/`chore`/`refactor`/`test` 不单列；不得夸大，未完成或有前提的要如实注明。
+5. `下载与安装` 节固定为五行表格（Android、Windows x64、Linux x64、macOS、iOS / iPadOS），沿用上一版措辞并替换版本号；
+   某平台产物未发布时在该行如实说明原因。
+6. 表格后依次是 `**完整变更 / Full changelog:** [vPREV...vCUR](https://github.com/Kototoro-app/Kototoro/compare/vPREV...vCUR)`，
+   以及折叠的提交列表：`<details><summary>完整提交列表 / Full commit list</summary>`，内容为
+   `git log --no-merges --pretty='- %s (%h)' vPREV..vCUR`（新→旧，含版本号提交）。
+7. 写之前用 `gh release view <上一版本>` 对照最近一版的措辞与表格，保持一致。
 
 ## 重要文档
 

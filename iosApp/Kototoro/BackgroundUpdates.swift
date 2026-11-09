@@ -3,38 +3,57 @@ import KototoroShared
 import SwiftUI
 import UserNotifications
 
-/// Android's scheduled favourite update checks, as far as iOS allows: when the app goes to the background an app
-/// refresh is requested no earlier than the chosen interval; when the system grants it (its own schedule, never
-/// guaranteed) and the app's state is still alive, favourites are checked and new chapters announced with a local
-/// notification. A cold background launch has no extension runtime, so it only schedules the next request.
+/// Android's scheduled favourite update checks, as far as iOS allows: when the app goes to the background a processing
+/// task is requested no earlier than the chosen interval; when the system grants it (its own schedule, usually while
+/// the phone is idle on a network, never guaranteed) favourites due at their release pace are checked and new
+/// chapters announced with a local notification. A cold background launch opens the library and starts the extension
+/// runtime on its own, without the UI.
 @MainActor
 final class BackgroundUpdates {
     static let shared = BackgroundUpdates()
-    static let identifier = "org.skepsun.kototoro.updates"
+    /// The app refresh earlier versions asked for: about thirty seconds, too short to start the runtime and check.
+    /// A request left from before an update still launches it, so it only moves the check to the processing task.
+    static let legacyIdentifier = "org.skepsun.kototoro.updates"
+    /// The processing task; listed in `BGTaskSchedulerPermittedIdentifiers`.
+    static let identifier = permittedTaskIdentifier("updates", excluding: legacyIdentifier)
     static let enabledKey = "updates_background_enabled"
     static let intervalKey = "updates_background_interval_hours"
-
-    weak var library: LibraryModel?
-    weak var sources: SourcesModel?
 
     static var enabled: Bool { UserDefaults.standard.bool(forKey: enabledKey) }
     static var intervalHours: Int { max(1, UserDefaults.standard.object(forKey: intervalKey) as? Int ?? 6) }
 
+    private var registered = false
+
+    /// Must run before the app finishes launching, as the scheduler requires.
+    func register() {
+        guard !registered else { return }
+        registered = BGTaskScheduler.shared.register(forTaskWithIdentifier: Self.identifier, using: .main) { task in
+            MainActor.assumeIsolated { runBackgroundTask(task) { await BackgroundUpdates.shared.run() } }
+        }
+    }
+
     func schedule() {
+        BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: Self.legacyIdentifier)
         guard Self.enabled else {
             BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: Self.identifier)
             return
         }
-        let request = BGAppRefreshTaskRequest(identifier: Self.identifier)
+        let request = BGProcessingTaskRequest(identifier: Self.identifier)
+        request.requiresNetworkConnectivity = true
         request.earliestBeginDate = Date(timeIntervalSinceNow: Double(Self.intervalHours) * 3600)
         try? BGTaskScheduler.shared.submit(request)
     }
 
-    /// The refresh itself; also run by the UI tests through `KOTOTORO_RUN_UPDATE_REFRESH`.
+    /// The check itself; also run by the UI tests through `KOTOTORO_RUN_UPDATE_REFRESH`.
     func run() async {
-        schedule()
-        guard Self.enabled, let library, let runtime = sources?.runtime,
-              let report = await library.checkUpdatesReport(runtime, respectSchedule: true), report.newChapters > 0 else { return }
+        defer { schedule() }
+        guard Self.enabled else { return }
+        let library = LibraryModel.shared
+        do { try library.open() } catch { return }
+        guard let database = library.library, let runtime = await SourcesModel.shared.prepared(database),
+              !Task.isCancelled,
+              let report = await library.checkUpdatesReport(runtime, respectSchedule: true), report.newChapters > 0
+        else { return }
         let content = UNMutableNotificationContent()
         content.title = String(localized: "作品有更新")
         content.body = String(localized: "\(report.withUpdates) 部收藏作品共有 \(report.newChapters) 个新章节")

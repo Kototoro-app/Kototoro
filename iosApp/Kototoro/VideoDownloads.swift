@@ -82,7 +82,7 @@ enum VideoDownloads {
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         try await progress(0, 100)
         // Media takes the first 90% of the bar; subtitle files are small and finish it.
-        let media = try await MediaFile.fetch(stream, into: dir) { percent in
+        let media = try await MediaFile.fetch(stream, into: dir, title: "\(content.title) · \(chapter.title)") { percent in
             try await progress(Int(Double(percent) * 0.9), 100)
         }
         try Task.checkCancellation()
@@ -110,28 +110,38 @@ enum VideoDownloads {
         /// Fetch the stream into `directory`, choosing a single file or the HLS package from the address, and for an
         /// address that does not say, from the first bytes of the body.
         @MainActor
-        static func fetch(_ stream: IosSourcePage, into directory: URL,
+        static func fetch(_ stream: IosSourcePage, into directory: URL, title: String,
                           progress: @escaping (Int) async throws -> Void) async throws -> MediaFile {
             guard let url = URL(string: stream.url) else { throw URLError(.badURL) }
-            discardMedia(in: directory)
+            let partial = directory.appendingPathComponent(partialName)
+            // A transfer that finished in the background while the app was away is used as it is.
+            if VideoTransfers.shared.takeFinished(hlsPartial(directory)) {
+                return try hlsResult(directory)
+            }
+            let finished = VideoTransfers.shared.takeFinished(partial)
+            if !finished { discardMedia(in: directory) }
             if url.isFileURL {
                 return try await copyLocal(url, into: directory)
             }
-            if url.absoluteString.range(of: ".m3u8", options: .caseInsensitive) != nil {
-                return try await downloadHLS(url, headers: stream.headers, into: directory, progress: progress)
+            if !finished && url.absoluteString.range(of: ".m3u8", options: .caseInsensitive) != nil {
+                return try await downloadHLS(url, headers: stream.headers, into: directory, title: title, progress: progress)
             }
-            let partial = directory.appendingPathComponent(partialName)
             do {
-                let transfer = VideoFileDownloader().fetch(url: url, headers: stream.headers, to: partial)
-                for try await percent in transfer {
+                if !finished {
+                    let transfer = VideoTransfers.shared.fetch(url: url, headers: stream.headers, to: partial, hls: false,
+                                                               title: title)
+                    for try await percent in transfer {
+                        try Task.checkCancellation()
+                        try await progress(percent)
+                    }
                     try Task.checkCancellation()
-                    try await progress(percent)
+                    _ = VideoTransfers.shared.takeFinished(partial)
                 }
                 let downloaded = partial
                 // A playlist served under a neutral address must not be saved as if it were the video.
                 if try looksLikePlaylist(downloaded) {
                     try? FileManager.default.removeItem(at: downloaded)
-                    return try await downloadHLS(url, headers: stream.headers, into: directory, progress: progress)
+                    return try await downloadHLS(url, headers: stream.headers, into: directory, title: title, progress: progress)
                 }
                 let name = "video" + mediaExtension(url)
                 let target = directory.appendingPathComponent(name)
@@ -164,19 +174,29 @@ enum VideoDownloads {
         }
 
         @MainActor
-        private static func downloadHLS(_ url: URL, headers: [String: String], into directory: URL,
+        private static func downloadHLS(_ url: URL, headers: [String: String], into directory: URL, title: String,
                                         progress: @escaping (Int) async throws -> Void) async throws -> MediaFile {
-            let partial = directory.appendingPathComponent(partialName + ".movpkg")
+            let partial = hlsPartial(directory)
             try? FileManager.default.removeItem(at: partial)
-            let transfer = VideoHLSDownloader().fetch(url: url, headers: headers, to: partial)
+            let transfer = VideoTransfers.shared.fetch(url: url, headers: headers, to: partial, hls: true, title: title)
             for try await percent in transfer {
                 try Task.checkCancellation()
                 try await progress(percent)
             }
-            let downloaded = partial
+            try Task.checkCancellation()
+            _ = VideoTransfers.shared.takeFinished(partial)
+            return try hlsResult(directory)
+        }
+
+        private static func hlsPartial(_ directory: URL) -> URL {
+            directory.appendingPathComponent(partialName + ".movpkg")
+        }
+
+        /// The finished package, moved to the name the manifest records.
+        private static func hlsResult(_ directory: URL) throws -> MediaFile {
             let name = "video.movpkg"
             let target = directory.appendingPathComponent(name)
-            try replace(downloaded, with: target)
+            try replace(hlsPartial(directory), with: target)
             return MediaFile(file: name, kind: "hls", bytes: directorySize(target))
         }
 
@@ -248,166 +268,195 @@ enum VideoDownloadError: LocalizedError {
     }
 }
 
-/// One file per stream, straight to disk. Progress arrives as a stream of percents, so the queue stays on the main
-/// actor while the transfer runs on URLSession's own queue; cancelling the stream cancels the transfer.
-final class VideoFileDownloader: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
-    private let lock = NSLock()
-    private var transfers: [Int: AsyncThrowingStream<Int, Error>.Continuation] = [:]
-    private var destinations: [Int: URL] = [:]
-    private var reported: [Int: Int] = [:]
-    private lazy var session = URLSession(configuration: .default, delegate: self, delegateQueue: nil)
+/// Episode transfers in the system's background sessions: they go on while the app is suspended, and after the
+/// system ends it, so a long episode finishes without the app on screen. Each transfer is labelled with where its
+/// result goes (relative to Application Support, since the container path may change between launches). A transfer
+/// that finishes with nobody listening (the app was suspended or relaunched in the background) is moved there with a
+/// `.finished` marker next to it; the download picks it up from the marker the next time it runs instead of
+/// starting over, and one still running is joined instead of started again.
+final class VideoTransfers: NSObject, URLSessionDownloadDelegate, AVAssetDownloadDelegate, @unchecked Sendable {
+    static let shared = VideoTransfers()
+    static let fileSessionID = "org.skepsun.kototoro.ios.video.files"
+    static let hlsSessionID = "org.skepsun.kototoro.ios.video.hls"
+    private static let finishedSuffix = ".finished"
 
-    func fetch(url: URL, headers: [String: String], to destination: URL) -> AsyncThrowingStream<Int, Error> {
-        var request = URLRequest(url: url, timeoutInterval: 60)
-        headers.forEach { request.setValue($0.value, forHTTPHeaderField: $0.key) }
-        let task = session.downloadTask(with: request)
-        let id = task.taskIdentifier
+    private struct Listener {
+        let token: UUID
+        let continuation: AsyncThrowingStream<Int, Error>.Continuation
+        var reported = -1
+    }
+
+    private let lock = NSLock()
+    private var listeners: [String: Listener] = [:]
+    private var eventHandlers: [String: () -> Void] = [:]
+
+    private lazy var files = URLSession(configuration: Self.configuration(Self.fileSessionID), delegate: self,
+                                        delegateQueue: nil)
+    private lazy var hls = AVAssetDownloadURLSession(configuration: Self.configuration(Self.hlsSessionID),
+                                                     assetDownloadDelegate: self, delegateQueue: nil)
+
+    private static func configuration(_ identifier: String) -> URLSessionConfiguration {
+        let configuration = URLSessionConfiguration.background(withIdentifier: identifier)
+        configuration.sessionSendsLaunchEvents = true
+        configuration.isDiscretionary = false
+        return configuration
+    }
+
+    /// Reconnects both sessions at launch, so transfers that finished while the app was away are handed over.
+    func reconnect() {
+        _ = files
+        _ = hls
+    }
+
+    /// The system relaunched the app for a session's events; [done] is called once they are all delivered.
+    func handleEvents(_ identifier: String, done: @escaping () -> Void) {
+        lock.withLock { eventHandlers[identifier] = done }
+        reconnect()
+    }
+
+    /// Percent of the transfer into [destination]; ending the stream leaves the transfer to the system ([cancel]
+    /// stops it). [hls] downloads a playlist into an offline package; the system shows its progress under [title].
+    func fetch(url: URL, headers: [String: String], to destination: URL, hls: Bool,
+               title: String) -> AsyncThrowingStream<Int, Error> {
+        let key = Self.key(destination)
+        let token = UUID()
         return AsyncThrowingStream { continuation in
-            self.lock.lock()
-            self.transfers[id] = continuation
-            self.destinations[id] = destination
-            self.reported[id] = 0
-            self.lock.unlock()
-            continuation.onTermination = { [session = self.session] termination in
-                if case .finished = termination { return }
-                task.cancel()
-                session.invalidateAndCancel()
+            let previous = self.lock.withLock { () -> Listener? in
+                defer { self.listeners[key] = Listener(token: token, continuation: continuation) }
+                return self.listeners[key]
             }
-            task.resume()
+            previous?.continuation.finish(throwing: CancellationError())
+            continuation.onTermination = { [weak self] _ in
+                self?.lock.withLock {
+                    if self?.listeners[key]?.token == token { self?.listeners[key] = nil }
+                }
+            }
+            self.tasks { tasks in
+                if let running = tasks.first(where: { $0.taskDescription == key && $0.state != .completed }) {
+                    running.resume()
+                    return
+                }
+                let task: URLSessionTask?
+                if hls {
+                    let asset = AVURLAsset(url: url, options: headers.isEmpty ? nil : ["AVURLAssetHTTPHeaderFieldsKey": headers])
+                    task = self.hls.makeAssetDownloadTask(asset: asset, assetTitle: title, assetArtworkData: nil,
+                                                          options: nil)
+                } else {
+                    var request = URLRequest(url: url)
+                    headers.forEach { request.setValue($0.value, forHTTPHeaderField: $0.key) }
+                    task = self.files.downloadTask(with: request)
+                }
+                guard let task else { continuation.finish(throwing: URLError(.unsupportedURL)); return }
+                task.taskDescription = key
+                task.resume()
+            }
         }
     }
 
-    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask,
-                    didWriteData bytesWritten: Int64, totalBytesWritten: Int64,
-                    totalBytesExpectedToWrite: Int64) {
-        guard totalBytesExpectedToWrite > 0 else { return }
-        let percent = min(99, Int(Double(totalBytesWritten) / Double(totalBytesExpectedToWrite) * 100))
-        lock.lock()
-        defer { lock.unlock() }
-        guard let continuation = transfers[downloadTask.taskIdentifier], reported[downloadTask.taskIdentifier] != percent
-        else { return }
-        reported[downloadTask.taskIdentifier] = percent
-        continuation.yield(percent)
+    /// Whether a transfer into [destination] finished while nobody listened; the marker is consumed.
+    func takeFinished(_ destination: URL) -> Bool {
+        let marker = URL(fileURLWithPath: destination.path + Self.finishedSuffix)
+        guard FileManager.default.fileExists(atPath: marker.path) else { return false }
+        try? FileManager.default.removeItem(at: marker)
+        return FileManager.default.fileExists(atPath: destination.path)
     }
 
-    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask,
-                    didFinishDownloadingTo location: URL) {
-        // The delegate must move the temporary file before it returns.
-        lock.lock()
-        let destination = destinations[downloadTask.taskIdentifier]
-        lock.unlock()
-        guard let destination else { return }
+    /// Stops every transfer into [directory] (the user paused or removed the episode).
+    func cancel(directory: URL) {
+        let prefix = Self.key(directory) + "/"
+        tasks { tasks in
+            for task in tasks where task.taskDescription?.hasPrefix(prefix) == true { task.cancel() }
+        }
+    }
+
+    private func tasks(_ body: @escaping ([URLSessionTask]) -> Void) {
+        files.getAllTasks { fileTasks in
+            self.hls.getAllTasks { hlsTasks in body(fileTasks + hlsTasks) }
+        }
+    }
+
+    private static var base: URL { URL.applicationSupportDirectory }
+
+    private static func key(_ url: URL) -> String {
+        let path = url.standardizedFileURL.path
+        let root = base.standardizedFileURL.path + "/"
+        return path.hasPrefix(root) ? String(path.dropFirst(root.count)) : path
+    }
+
+    private static func destination(_ key: String) -> URL {
+        key.hasPrefix("/") ? URL(fileURLWithPath: key) : base.appendingPathComponent(key)
+    }
+
+    private func report(_ task: URLSessionTask, _ fraction: Double) {
+        guard let key = task.taskDescription else { return }
+        let percent = min(99, Int(min(1, fraction) * 100))
+        lock.withLock {
+            guard var listener = listeners[key], listener.reported != percent else { return }
+            listener.reported = percent
+            listeners[key] = listener
+            listener.continuation.yield(percent)
+        }
+    }
+
+    /// Moves the result into place before the delegate returns (the system deletes [location] afterwards) and marks it.
+    private func deliver(_ task: URLSessionTask, from location: URL) {
+        guard let key = task.taskDescription else { return }
+        let target = Self.destination(key)
         do {
-            if FileManager.default.fileExists(atPath: destination.path) {
-                try FileManager.default.removeItem(at: destination)
-            }
-            try FileManager.default.moveItem(at: location, to: destination)
+            try FileManager.default.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
+            if FileManager.default.fileExists(atPath: target.path) { try FileManager.default.removeItem(at: target) }
+            try FileManager.default.moveItem(at: location, to: target)
+            FileManager.default.createFile(atPath: target.path + Self.finishedSuffix, contents: nil)
         } catch {
-            finish(downloadTask.taskIdentifier, with: .failure(error))
+            finish(key, throwing: error)
         }
     }
 
-    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-        let destination = destinations[task.taskIdentifier]
-        if let error { finish(task.taskIdentifier, with: .failure(error)); return }
-        guard let destination, FileManager.default.fileExists(atPath: destination.path) else {
-            finish(task.taskIdentifier, with: .failure(URLError(.cannotCreateFile)))
-            return
-        }
-        finish(task.taskIdentifier, with: .success(()))
+    private func finish(_ key: String, throwing error: Error?) {
+        let listener = lock.withLock { listeners.removeValue(forKey: key) }
+        listener?.continuation.finish(throwing: error)
     }
 
-    private func finish(_ id: Int, with result: Result<Void, Error>) {
-        // Nothing else uses this one-shot transfer: retire the session so its delegate cycle ends.
-        session.finishTasksAndInvalidate()
-        lock.lock()
-        let continuation = transfers.removeValue(forKey: id)
-        destinations.removeValue(forKey: id)
-        reported.removeValue(forKey: id)
-        lock.unlock()
-        continuation?.finish(throwing: result.failureValue)
-    }
-}
+    // MARK: Files
 
-/// Offline HLS through AVAssetDownloadURLSession: the system fetches the playlist, its segments and any keys, and
-/// hands back a package the player reopens later with no network. Progress is the share of the running time loaded.
-final class VideoHLSDownloader: NSObject, AVAssetDownloadDelegate, @unchecked Sendable {
-    private let lock = NSLock()
-    private var transfers: [Int: AsyncThrowingStream<Int, Error>.Continuation] = [:]
-    private var destinations: [Int: URL] = [:]
-    private var reported: [Int: Int] = [:]
-    private lazy var session = AVAssetDownloadURLSession(configuration: .default, assetDownloadDelegate: self,
-                                                         delegateQueue: nil)
-
-    func fetch(url: URL, headers: [String: String], to destination: URL) -> AsyncThrowingStream<Int, Error> {
-        let asset = AVURLAsset(url: url, options: headers.isEmpty ? nil : ["AVURLAssetHTTPHeaderFieldsKey": headers])
-        guard let task = session.makeAssetDownloadTask(asset: asset, assetTitle: "video", assetArtworkData: nil,
-                                                       options: nil) else {
-            return AsyncThrowingStream { $0.finish(throwing: URLError(.unsupportedURL)) }
-        }
-        let id = task.taskIdentifier
-        return AsyncThrowingStream { continuation in
-            self.lock.lock()
-            self.transfers[id] = continuation
-            self.destinations[id] = destination
-            self.reported[id] = 0
-            self.lock.unlock()
-            continuation.onTermination = { [session = self.session] termination in
-                if case .finished = termination { return }
-                task.cancel()
-                session.invalidateAndCancel()
-            }
-            task.resume()
-        }
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64,
+                    totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
+        guard totalBytesExpectedToWrite > 0 else { return }
+        report(downloadTask, Double(totalBytesWritten) / Double(totalBytesExpectedToWrite))
     }
 
-    func urlSession(_ session: URLSession, assetDownloadTask: AVAssetDownloadTask,
-                    didLoad timeRange: CMTimeRange, totalTimeRangesLoaded loaded: [NSValue],
-                    timeRangeExpectedToLoad: CMTimeRange) {
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
+        deliver(downloadTask, from: location)
+    }
+
+    // MARK: HLS
+
+    func urlSession(_ session: URLSession, assetDownloadTask: AVAssetDownloadTask, didLoad timeRange: CMTimeRange,
+                    totalTimeRangesLoaded loaded: [NSValue], timeRangeExpectedToLoad: CMTimeRange) {
         let expected = timeRangeExpectedToLoad.duration.seconds
         guard expected.isFinite, expected > 0 else { return }
-        let done = loaded.reduce(0.0) { $0 + $1.timeRangeValue.duration.seconds }
-        let percent = min(99, Int(min(1, done / expected) * 100))
-        lock.lock()
-        defer { lock.unlock() }
-        let id = assetDownloadTask.taskIdentifier
-        guard let continuation = transfers[id], reported[id] != percent else { return }
-        reported[id] = percent
-        continuation.yield(percent)
+        report(assetDownloadTask, loaded.reduce(0.0) { $0 + $1.timeRangeValue.duration.seconds } / expected)
     }
 
-    func urlSession(_ session: URLSession, assetDownloadTask: AVAssetDownloadTask,
-                    didFinishDownloadingTo location: URL) {
-        lock.lock()
-        let destination = destinations[assetDownloadTask.taskIdentifier]
-        lock.unlock()
-        guard let destination else { return }
-        do {
-            if FileManager.default.fileExists(atPath: destination.path) {
-                try FileManager.default.removeItem(at: destination)
-            }
-            // The package is a directory; the player reopens it by this path, with no session involved.
-            try FileManager.default.moveItem(at: location, to: destination)
-            finish(assetDownloadTask.taskIdentifier, with: .success(()))
-        } catch {
-            finish(assetDownloadTask.taskIdentifier, with: .failure(error))
+    func urlSession(_ session: URLSession, assetDownloadTask: AVAssetDownloadTask, didFinishDownloadingTo location: URL) {
+        deliver(assetDownloadTask, from: location)
+    }
+
+    // MARK: Both
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        guard let key = task.taskDescription else { return }
+        if error == nil, !FileManager.default.fileExists(atPath: Self.destination(key).path) {
+            finish(key, throwing: URLError(.cannotCreateFile))
+        } else {
+            finish(key, throwing: error)
         }
     }
 
-    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-        guard let error else { return }
-        finish(task.taskIdentifier, with: .failure(error))
-    }
-
-    private func finish(_ id: Int, with result: Result<Void, Error>) {
-        // Nothing else uses this one-shot transfer: retire the session so its delegate cycle ends.
-        session.finishTasksAndInvalidate()
-        lock.lock()
-        let continuation = transfers.removeValue(forKey: id)
-        destinations.removeValue(forKey: id)
-        reported.removeValue(forKey: id)
-        lock.unlock()
-        continuation?.finish(throwing: result.failureValue)
+    func urlSessionDidFinishEvents(forBackgroundURLSession session: URLSession) {
+        guard let identifier = session.configuration.identifier else { return }
+        let done = lock.withLock { eventHandlers.removeValue(forKey: identifier) }
+        if let done { DispatchQueue.main.async(execute: done) }
     }
 }
 

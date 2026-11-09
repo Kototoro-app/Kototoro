@@ -200,6 +200,10 @@
     <!-- 播放设置 -->
     <string name="playback_settings">播放</string>
     <string name="video_decoder_mode">视频解码方式</string>
+    <string name="video_orientation">播放器方向</string>
+    <string name="video_orientation_last_used">上次的方向</string>
+    <string name="reverse_landscape">反向横屏</string>
+    <string name="reverse_portrait">反向竖屏</string>
     <string name="video_decoder_hardware">硬件解码</string>
     <string name="video_decoder_software">软件解码</string>
     <string name="video_decoder_hardware_only">仅硬件解码</string>
@@ -2720,7 +2724,7 @@ SHA-256 指纹:
     <string name="video_aspect_ratio_4_3">4:3</string>
     <string name="video_aspect_ratio_fill">填充</string>
     <string name="video_aspect_ratio_fit">适应</string>
-    <string name="video_aspect_ratio_stretch">拉伸铺满</string>
+    <string name="video_aspect_ratio_stretch">拉伸</string>
     <string name="video_audio_track">音轨</string>
     <string name="video_auto_next">自动续播</string>
     <string name="video_brightness">亮度 %1$s%%</string>
@@ -3387,4 +3391,5 @@ SHA-256 指纹:
     <string name="source_preferences_summary">排序、分组、成人内容过滤与标签黑名单</string>
     <string name="source_preferences_browsing">浏览与排序</string>
     <string name="extension_settings">拓展设置</string>
+    <string name="cloudstream_plugin_reloaded">已重新加载 %1$s，设置已生效</string>
 </resources>

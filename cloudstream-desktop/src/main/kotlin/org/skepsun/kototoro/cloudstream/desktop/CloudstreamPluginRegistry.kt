@@ -15,8 +15,10 @@ import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.OkHttpClient
+import org.schabi.newpipe.extractor.NewPipe
 import org.skepsun.kototoro.cloudstream.model.CloudstreamSource
 import org.skepsun.kototoro.cloudstream.runtime.CloudstreamCatalog
+import org.skepsun.kototoro.cloudstream.runtime.CloudstreamNewPipeDownloader
 import org.skepsun.kototoro.cloudstream.runtime.CloudstreamPlatform
 import org.skepsun.kototoro.cloudstream.runtime.CloudstreamPluginCompatibility
 import org.skepsun.kototoro.cloudstream.runtime.CloudstreamPluginCompatibilityChecker
@@ -87,6 +89,9 @@ class CloudstreamPluginRegistry(
     private val catalogs = ConcurrentHashMap<String, CloudstreamCatalog>()
     private val context = context as? Context
 
+    /** Cloudstream hands plugins its activity, and plugins cast to it; this one stands in for it over [context]. */
+    private val pluginHost: Context? by lazy { this.context?.let(DesktopCloudstreamActivity::over) }
+
     init {
         CloudstreamDesktopEnvironment.install(this.context, client)
     }
@@ -116,19 +121,36 @@ class CloudstreamPluginRegistry(
     fun load(path: Path, id: String, sha256: String): CloudstreamPlugin {
         val manifest = CloudstreamPluginManifest.read(path) ?: throw IOException("不是有效的 Cloudstream 插件（.cs3）")
         val compatibility = CloudstreamPluginCompatibilityChecker.inspect(path.toFile(), javaClass.classLoader)
-        if (compatibility is CloudstreamPluginCompatibility.Incompatible) {
-            throw IOException("插件与当前 Cloudstream 运行时不兼容：${compatibility.reason}")
+        val incompatibility = compatibility as? CloudstreamPluginCompatibility.Incompatible
+        if (incompatibility != null && !incompatibility.isLinkageGap) {
+            throw IOException("插件与当前 Cloudstream 运行时不兼容：${incompatibility.reason}")
         }
+        // As on Android: a plugin linking against host API Windows lacks still loads, and only code reaching that API
+        // fails; its load decides.
+        incompatibility?.let { logger.warning("Cloudstream plugin $id links against missing host API: ${it.reason}") }
         unload(id)
         Files.createDirectories(cache)
-        val converted = cache.resolve("$sha256-v${DexJarConverter.VERSION}.jar")
-        if (!Files.isRegularFile(converted)) DexJarConverter.convert(path, converted)
+        val converted = cache.resolve("$sha256-v${DexJarConverter.VERSION}-x${PluginBytecodeRewriter.VERSION}.jar")
+        if (!Files.isRegularFile(converted)) {
+            // Converted, then given the host's stand-ins for what Windows lacks (PluginBytecodeRewriter): written once.
+            val classes = cache.resolve("$sha256.converting.jar")
+            try {
+                DexJarConverter.convert(path, classes)
+                PluginBytecodeRewriter.rewrite(classes, converted)
+            } catch (error: OutOfMemoryError) {
+                // dex2jar can need far more memory than a plugin's size for some methods; what it held is garbage once
+                // it has thrown, so this plugin fails and the app goes on.
+                throw IOException("插件转换时内存不足（${Runtime.getRuntime().maxMemory() / (1024 * 1024)} MB 堆）", error)
+            } finally {
+                Files.deleteIfExists(classes)
+            }
+        }
         val loader = URLClassLoader(arrayOf(converted.toUri().toURL()), javaClass.classLoader)
         try {
             val instance = loader.loadClass(manifest.pluginClassName).getDeclaredConstructor().newInstance() as BasePlugin
             // Providers and extractors are attributed to this name; it must be unique per loaded plugin.
             instance.filename = path.toAbsolutePath().toString()
-            if (instance is Plugin) instance.load(requireNotNull(context) { "Cloudstream 插件需要兼容运行时" })
+            if (instance is Plugin) instance.load(requireNotNull(pluginHost) { "Cloudstream 插件需要兼容运行时" })
             else instance.load()
             val providers = synchronized(APIHolder.allProviders) {
                 APIHolder.allProviders.filter { it.sourcePlugin == instance.filename }
@@ -142,7 +164,13 @@ class CloudstreamPluginRegistry(
         } catch (error: Throwable) {
             forget(instanceFilename = path.toAbsolutePath().toString())
             loader.close()
-            throw if (error is IOException) error else IOException("插件加载失败：${error.javaClass.simpleName}: ${error.message}", error)
+            if (error is IOException) throw error
+            val missing = incompatibility?.missingHostClasses.orEmpty()
+            throw IOException(
+                if (missing.isEmpty()) "插件加载失败：${error.javaClass.simpleName}: ${error.message}"
+                else "插件加载失败，它依赖当前 Cloudstream 运行时没有的类：${missing.joinToString()}",
+                error,
+            )
         }
     }
 
@@ -165,6 +193,10 @@ class CloudstreamPluginRegistry(
     override fun close() {
         plugins.keys.toList().forEach(::unload)
     }
+
+    private companion object {
+        val logger: Logger = Logger.getLogger("Cloudstream")
+    }
 }
 
 /** Process-wide Cloudstream setup: the library's HTTP client and context are globals, as in the official app. */
@@ -176,6 +208,8 @@ internal object CloudstreamDesktopEnvironment {
         // The platform client: shared cookies and the automatic Cloudflare solver, plus Cloudstream's source headers.
         app.baseClient = client.newBuilder().apply { interceptors().add(0, CloudstreamRequestScope.interceptor()) }.build()
         app.defaultHeaders = mapOf("User-Agent" to USER_AGENT)
+        // As the official app does at start-up: the library's YouTube extractor and YouTube plugins need it.
+        NewPipe.init(CloudstreamNewPipeDownloader(client))
     }
 }
 

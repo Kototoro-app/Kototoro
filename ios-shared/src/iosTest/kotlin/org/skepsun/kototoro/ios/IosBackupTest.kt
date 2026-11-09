@@ -56,6 +56,47 @@ class IosBackupTest {
         }
     }
 
+    private class Reports : IosProgressListener {
+        val all = mutableListOf<Triple<String, Long, Long>>()
+        override fun onProgress(stage: String, completed: Long, total: Long) { all += Triple(stage, completed, total) }
+    }
+
+    @Test
+    fun exportAndRestoreReportTheirProgress() = runBlocking {
+        withDirectory { dir ->
+            val item = IosSourceContent(content)
+            val first = IosLibrary("$dir/a.db")
+            val exported = Reports()
+            try {
+                first.setFavourite(item, true)
+                first.recordPosition(item, IosSourceChapter(chapter), 2, 4, 12f)
+                first.exportBackup("$dir/backup.zip", exported)
+            } finally { first.close() }
+            // One report per section as it starts, counted from the first; the export does not know the total.
+            assertEquals("index", exported.all.first().first)
+            assertEquals(exported.all.indices.map { it.toLong() }, exported.all.map { it.second })
+            assertTrue(exported.all.all { it.third == 0L })
+            assertTrue("favourites" in exported.all.map { it.first })
+
+            val second = IosLibrary("$dir/b.db")
+            val restored = Reports()
+            try {
+                val preview = second.previewBackup("$dir/backup.zip")
+                second.restoreBackup(preview, restored)
+                val total = preview.counts.sumOf { it.count.toLong() }
+                assertTrue(restored.all.isNotEmpty())
+                assertEquals(restored.all.sortedBy { it.second }, restored.all)
+                assertEquals(total, restored.all.last().second)
+                assertEquals(total, restored.all.last().third)
+                // A later restore without a listener reports nothing and starts its count again.
+                second.restoreBackup(preview)
+                val again = Reports()
+                second.restoreBackup(preview, again)
+                assertEquals(total, again.all.last().second)
+            } finally { second.close() }
+        }
+    }
+
     @Test
     fun androidStreamedArchiveRestoresAndReportsSkippedSections() = runBlocking {
         withDirectory { dir ->

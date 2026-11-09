@@ -1569,6 +1569,10 @@
     <!-- 播放设置 -->
     <string name="playback_settings">播放</string>
     <string name="video_decoder_mode">视频解码方式</string>
+    <string name="video_orientation">播放器方向</string>
+    <string name="video_orientation_last_used">上次的方向</string>
+    <string name="reverse_landscape">反向横屏</string>
+    <string name="reverse_portrait">反向竖屏</string>
     <string name="video_decoder_hardware">硬件解码</string>
     <string name="video_decoder_software">软件解码</string>
     <string name="video_fallback_super_res_disabled">已临时关闭视频超分，以提升播放稳定性</string>
@@ -2216,7 +2220,7 @@
     <string name="you_may_like">猜你喜欢</string>
     <string name="reverse_order">反转顺序</string>
     <string name="video_aspect_ratio">视频画面比例</string>
-    <string name="video_aspect_ratio_stretch">拉伸铺满</string>
+    <string name="video_aspect_ratio_stretch">拉伸</string>
     <string name="sort_by_ranking">排名</string>
     <string name="sort_by_popularity_label">热度</string>
     <string name="sort_by_collection">收藏</string>
@@ -4087,4 +4091,5 @@ SHA-256 指纹:
     <string name="source_preferences_summary">排序、分组、成人内容过滤与标签黑名单</string>
     <string name="source_preferences_browsing">浏览与排序</string>
     <string name="extension_settings">拓展设置</string>
+    <string name="cloudstream_plugin_reloaded">已重新加载 %1$s，设置已生效</string>
 </resources>

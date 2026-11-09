@@ -5,18 +5,27 @@ import androidx.room.useWriterConnection
 import kotlinx.coroutines.flow.toList
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.db.entity.MangaEntity
+import org.skepsun.kototoro.core.db.entity.MangaSourceEntity
+import org.skepsun.kototoro.parsers.network.CloudFlareProtection
 import org.skepsun.kototoro.sync.google.data.model.*
 import org.skepsun.kototoro.sync.google.domain.SyncContentStore
 import org.skepsun.kototoro.sync.google.domain.importSyncContent
 import org.skepsun.kototoro.tracker.data.mergeRestoredTrack
 import org.skepsun.kototoro.tracker.data.mergeRestoredTrackLog
 
-/** Applies Android's library protocol atomically. Platform-specific sections remain in the upload unchanged. */
-class LibraryDriveSync(private val database: MangaDatabase) {
-    suspend fun merge(remote: GoogleDriveSyncSnapshot?, deviceId: String, now: Long): GoogleDriveSyncSnapshot =
-        database.useWriterConnection { connection -> connection.immediateTransaction {
+/**
+ * Applies Android's library protocol atomically. Platform-specific sections remain in the upload unchanged.
+ * With [sourceEdits] the host's `sources` table (switches, pins, order) syncs too, newest edit winning as on
+ * Android; without it source states pass through untouched.
+ */
+class LibraryDriveSync(private val database: MangaDatabase, private val sourceEdits: SourceStateEdits? = null) {
+    suspend fun merge(remote: GoogleDriveSyncSnapshot?, deviceId: String, now: Long): GoogleDriveSyncSnapshot {
+        val applied = mutableListOf<Pair<MangaSourceEntity, Long>>()
+        val upload = database.useWriterConnection { connection -> connection.immediateTransaction {
+            applied.clear()
             val snapshot = remote?.normalizeToContentV3()
             if (snapshot != null) apply(snapshot)
+            if (snapshot != null && sourceEdits != null) applySourceStates(snapshot.sourceStates, sourceEdits, applied)
             val history = database.getHistoryDao().findAllEntriesIncludingDeleted()
             val favourites = database.getFavouritesDao().findAllEntriesIncludingDeleted()
             val stats = database.getStatsDao().dump().toList()
@@ -35,11 +44,44 @@ class LibraryDriveSync(private val database: MangaDatabase) {
                 feed = SyncFeedState(tracks.map(::SyncTrack), logs.map(::SyncTrackLog)),
                 config = snapshot?.config,
                 repositories = snapshot?.repositories.orEmpty(),
-                sourceStates = snapshot?.sourceStates.orEmpty(),
+                sourceStates = if (sourceEdits == null) snapshot?.sourceStates.orEmpty() else {
+                    val sources = database.getSourcesDao().findAll()
+                    // Applied states carry the remote edit time; it is recorded only after the commit.
+                    val modified = sourceEdits.modifiedAt(sources) + applied.associate { it.first.source to it.second }
+                    sources.map { SyncSourceState(it, modified[it.source] ?: 0L) }
+                },
                 jsonSources = snapshot?.jsonSources.orEmpty(),
                 extensions = snapshot?.extensions.orEmpty(),
             )
         } }
+        sourceEdits?.record(applied)
+        return upload
+    }
+
+    /** Android's `restoreSourceStates`: a local state edited after the remote one keeps its switches and order. */
+    private suspend fun applySourceStates(
+        states: List<SyncSourceState>,
+        edits: SourceStateEdits,
+        applied: MutableList<Pair<MangaSourceEntity, Long>>,
+    ) {
+        val dao = database.getSourcesDao()
+        for (state in states) {
+            val existing = dao.find(state.source)
+            if (existing != null && edits.modifiedAt(listOf(existing)).getValue(existing.source) > state.modifiedAt) {
+                if (state.usedAt > existing.lastUsedAt) dao.setLastUsed(state.source, state.usedAt)
+                continue
+            }
+            val entity = existing?.copy(
+                isEnabled = state.isEnabled,
+                isPinned = state.isPinned,
+                sortKey = state.sortKey,
+                lastUsedAt = maxOf(existing.lastUsedAt, state.usedAt),
+            ) ?: MangaSourceEntity(state.source, state.isEnabled, state.sortKey, 0, state.usedAt, state.isPinned,
+                CloudFlareProtection.NOT_DETECTED)
+            dao.upsert(entity)
+            applied += entity to state.modifiedAt
+        }
+    }
 
     private suspend fun apply(snapshot: GoogleDriveSyncSnapshot) {
         require(snapshot.categories.all { it.id in Int.MIN_VALUE.toLong()..Int.MAX_VALUE.toLong() }) {

@@ -67,7 +67,11 @@ enum WebDavConfig {
         guard settings.isDue(lastUploadAt: last.map { KotlinLong(value: Int64($0 * 1000)) }, now: Int64(now * 1000)),
               now - failed > 600 else { return }
         do {
-            _ = try await library.webDav.upload(settings: settings, timestamp: timestamp())
+            // Started by returning to the app, not by a tap: only the short background-time lease covers it.
+            _ = try await ContinuedWork.run("webdav-upload", title: String(localized: "正在上传备份"),
+                                            userInitiated: false) { work in
+                try await library.webDav.upload(settings: settings, timestamp: timestamp(), listener: work.listener())
+            }
             UserDefaults.standard.set(now, forKey: lastUploadKey)
         } catch {
             UserDefaults.standard.set(now, forKey: lastFailureKey)
@@ -86,6 +90,7 @@ struct WebDavSyncView: View {
     @State private var password = WebDavConfig.password
     @State private var files: [IosWebDavFile] = []
     @State private var busy = false
+    @State private var status: ContinuedWork.Status?
     @State private var message: String?
     @State private var error: String?
     @State private var preview: IosBackupPreview?
@@ -108,7 +113,7 @@ struct WebDavSyncView: View {
                     .onChange(of: password) { _, value in WebDavConfig.password = value }
                     .accessibilityIdentifier("webdav.password")
             } header: { Text("服务器") } footer: { Text("密码保存在钥匙串中。备份文件名与 Android、Windows 相同，可互相恢复。") }
-            Section("备份") {
+            Section {
                 Stepper("云端保留 \(maxCount == 0 ? String(localized: "全部") : "\(maxCount)") 份", value: $maxCount, in: 0...20)
                 Picker("自动备份", selection: $interval) {
                     Text("关闭").tag(0)
@@ -116,6 +121,7 @@ struct WebDavSyncView: View {
                     Text("每天").tag(24)
                     Text("每周").tag(168)
                 }
+                .onChange(of: interval) { _, _ in BackgroundSync.shared.schedule() }
                 .accessibilityIdentifier("webdav.interval")
                 if lastUpload > 0 {
                     LabeledContent("上次上传", value: Date(timeIntervalSince1970: lastUpload).formatted(date: .abbreviated, time: .shortened))
@@ -126,10 +132,12 @@ struct WebDavSyncView: View {
                 Button("立即上传", systemImage: "icloud.and.arrow.up") { Task { await upload() } }
                 .disabled(server.isEmpty || busy)
                 .accessibilityIdentifier("webdav.upload")
+            } header: { Text("备份") } footer: {
+                Text("自动备份在打开应用时检查，也会在后台进行；后台的时机由系统决定，通常在设备空闲且联网时。")
             }
             if let message { Text(message).accessibilityIdentifier("webdav.message") }
             if let error { Text(error).foregroundStyle(.red).accessibilityIdentifier("webdav.error") }
-            if busy { ProgressView().frame(maxWidth: .infinity) }
+            if busy { ContinuedWorkProgress(status: status) }
             if let pending = preview {
                 Section {
                     Text("“\(pending.filename)”：\(pending.counts.map { "\($0.count)" }.joined(separator: " / ")) 条记录，以合并方式恢复。")
@@ -155,6 +163,7 @@ struct WebDavSyncView: View {
             } header: { Text("云端备份") } footer: { Text("点选一份备份查看内容并合并恢复。") }
         }
         .navigationTitle("WebDAV 备份")
+        .onChange(of: busy) { _, running in if !running { status = nil } }
     }
 
     private func begin() -> IosWebDav? {
@@ -176,7 +185,10 @@ struct WebDavSyncView: View {
         guard let webDav = begin() else { return }
         defer { busy = false }
         do {
-            let result = try await webDav.upload(settings: WebDavConfig.current, timestamp: WebDavConfig.timestamp())
+            let result = try await ContinuedWork.run("webdav-upload", title: String(localized: "正在上传备份")) { work in
+                try await webDav.upload(settings: WebDavConfig.current, timestamp: WebDavConfig.timestamp(),
+                                        listener: work.listener { status = $0 })
+            }
             lastUpload = Date().timeIntervalSince1970
             message = String(localized: "已上传 \(result.name)")
             files = try await webDav.list(settings: WebDavConfig.current)
@@ -195,9 +207,15 @@ struct WebDavSyncView: View {
         guard let webDav = begin(), let database = library.library else { busy = false; return }
         defer { busy = false }
         do {
-            let path = try await webDav.download(settings: WebDavConfig.current, name: file.name)
-            defer { try? FileManager.default.removeItem(atPath: path) }
-            preview = try await database.previewBackup(path: path)
+            preview = try await ContinuedWork.run("webdav-download", title: String(localized: "正在下载备份"),
+                                                  subtitle: file.name) { work in
+                let path = try await webDav.download(settings: WebDavConfig.current, name: file.name, size: file.size,
+                                                     listener: work.listener { status = $0 })
+                defer { try? FileManager.default.removeItem(atPath: path) }
+                status = ContinuedWork.Status(fraction: nil, text: String(localized: "正在读取备份"))
+                work.update(subtitle: String(localized: "正在读取备份"))
+                return try await database.previewBackup(path: path)
+            }
         } catch { self.error = error.localizedDescription }
     }
 
@@ -205,10 +223,12 @@ struct WebDavSyncView: View {
         guard begin() != nil, let database = library.library else { busy = false; return }
         defer { busy = false }
         do {
-            let restored = try await database.restoreBackup(preview: archive)
+            let restored = try await ContinuedWork.run("backup-restore", title: String(localized: "正在恢复备份")) { work in
+                try await database.restoreBackup(preview: archive, listener: work.listener { status = $0 })
+            }
             preview = nil
             message = String(localized: "已合并 \(restored) 条记录")
-            await library.refresh()
+            await library.refreshAfterMerge()
         } catch { self.error = error.localizedDescription }
     }
 }

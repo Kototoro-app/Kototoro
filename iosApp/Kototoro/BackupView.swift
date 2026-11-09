@@ -14,6 +14,7 @@ struct BackupView: View {
     @State private var external: IosExternalBackupPreview?
     @State private var report: IosExternalImportResult?
     @State private var busy = false
+    @State private var status: ContinuedWork.Status?
     @State private var message: String?
     @State private var error: String?
 
@@ -75,7 +76,7 @@ struct BackupView: View {
             }
             if let external { externalSection(external) }
             if let report { reportSection(report) }
-            if busy { ProgressView().frame(maxWidth: .infinity) }
+            if busy { ContinuedWorkProgress(status: status) }
             // Below a backup being previewed or imported, which belongs to the buttons above.
             Section {
                 NavigationLink { GoogleDriveSyncView(model: library.googleDrive) } label: {
@@ -91,6 +92,7 @@ struct BackupView: View {
             }
         }
         .navigationTitle("备份与同步")
+        .onChange(of: busy) { _, running in if !running { status = nil } }
     }
 
     private func export() async {
@@ -105,7 +107,9 @@ struct BackupView: View {
             formatter.dateFormat = "yyyyMMdd-HHmmss"
             let stamp = formatter.string(from: Date())
             let url = directory.appendingPathComponent("kototoro_\(stamp).bk.zip")
-            try await database.exportBackup(path: url.path)
+            try await ContinuedWork.run("backup-export", title: String(localized: "正在导出备份")) { work in
+                try await database.exportBackup(path: url.path, listener: work.listener { status = $0 })
+            }
             exportFile = BackupFile(url: url)
             exporting = true
         } catch { self.error = error.localizedDescription }
@@ -119,10 +123,13 @@ struct BackupView: View {
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
         do {
             // One entry for every format: Kototoro/Kotatsu archives restore, other apps' backups import.
-            if database.isKototoroBackup(path: url.path) {
-                preview = try await database.previewBackup(path: url.path)
-            } else {
-                external = try await database.previewExternalBackup(path: url.path)
+            try await ContinuedWork.run("backup-read", title: String(localized: "正在读取备份"),
+                                        subtitle: url.lastPathComponent) { _ in
+                if database.isKototoroBackup(path: url.path) {
+                    preview = try await database.previewBackup(path: url.path)
+                } else {
+                    external = try await database.previewExternalBackup(path: url.path)
+                }
             }
         } catch { self.error = error.localizedDescription }
     }
@@ -132,10 +139,12 @@ struct BackupView: View {
         busy = true; error = nil
         defer { busy = false }
         do {
-            let restored = try await database.restoreBackup(preview: archive)
+            let restored = try await ContinuedWork.run("backup-restore", title: String(localized: "正在恢复备份")) { work in
+                try await database.restoreBackup(preview: archive, listener: work.listener { status = $0 })
+            }
             preview = nil
             message = String(localized: "已合并 \(restored) 条记录")
-            await library.refresh()
+            await library.refreshAfterMerge()
         } catch { self.error = error.localizedDescription }
     }
 
@@ -195,7 +204,10 @@ struct BackupView: View {
         busy = true; error = nil
         defer { busy = false }
         do {
-            report = try await database.importExternalBackup(preview: backup, sources: sources.sources)
+            report = try await ContinuedWork.run("backup-import", title: String(localized: "正在导入备份"),
+                                                 subtitle: backup.app) { _ in
+                try await database.importExternalBackup(preview: backup, sources: sources.sources)
+            }
             external = nil
             message = String(localized: "已导入 \(backup.app) 备份")
             await library.refresh()
@@ -204,6 +216,7 @@ struct BackupView: View {
 
     static func title(_ section: String) -> String {
         switch section {
+        case "index": String(localized: "备份索引")
         case "categories": String(localized: "收藏分类")
         case "favourites", "work_favourites": String(localized: "收藏")
         case "history", "work_history": String(localized: "历史")
