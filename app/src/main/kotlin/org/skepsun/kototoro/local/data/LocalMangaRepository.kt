@@ -181,7 +181,9 @@ class LocalMangaRepository @Inject constructor(
             }
         }
 
-        else -> LocalContentParser(manga.url.toUri()).getContent(withDetails = true).manga
+        else -> LocalContentParser(manga.url.toUri()).getContent(withDetails = true).manga.let { parsed ->
+            if (parsed.id != manga.id) parsed.copy(id = manga.id) else parsed
+        }
     }
 
     override suspend fun getPages(chapter: ContentChapter, nextChapterUrl: String?): List<ContentPage> {

@@ -19,6 +19,7 @@ import org.skepsun.kototoro.core.util.ext.toMimeType
 import org.skepsun.kototoro.parsers.model.ContentChapter
 import org.skepsun.kototoro.parsers.model.ContentPage
 import org.skepsun.kototoro.core.util.ext.URI_SCHEME_ZIP
+import org.skepsun.kototoro.core.util.ext.toZipUri
 import java.io.File
 import java.util.zip.ZipFile
 import javax.inject.Inject
@@ -575,7 +576,7 @@ class NovelContentLoader @Inject constructor(
                                 android.util.Log.d("NovelContentLoader", "image unresolved, keeping remote source")
                         }
                         if (entryPath != null) {
-                            val absolute = "$URI_SCHEME_ZIP://$zipPath#$entryPath"
+                            val absolute = File(zipPath).toZipUri(entryPath).toString()
                             img.attr("src", absolute)
                             img.removeAttr("data-src")
                         }

@@ -130,8 +130,13 @@ private suspend fun updateIndex(rootKeys: Set<String>) {
     }
 
     private suspend fun upsert(manga: LocalContent) {
-        mangaDataRepository.storeContent(manga.manga, replaceExisting = true)
-        db.getLocalContentIndexDao().upsert(manga.toEntity())
+        val stored = mangaDataRepository.storeContentAndReturn(manga.manga, replaceExisting = true)
+        db.getLocalContentIndexDao().upsert(
+            LocalContentIndexEntity(
+                mangaId = stored.id,
+                path = manga.toUri().toString(),
+            ),
+        )
     }
 
     private fun LocalContent.toEntity() = LocalContentIndexEntity(

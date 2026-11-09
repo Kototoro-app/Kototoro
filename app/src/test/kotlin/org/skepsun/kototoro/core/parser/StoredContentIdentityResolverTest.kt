@@ -13,7 +13,10 @@ import org.skepsun.kototoro.core.db.entity.MangaEntity
 import org.skepsun.kototoro.core.db.entity.MangaWithTags
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentSource
+import org.skepsun.kototoro.core.model.LocalNovelSource
 import org.skepsun.kototoro.parsers.model.ContentType
+import org.skepsun.kototoro.parsers.util.longHashCode
+import java.io.File
 
 class StoredContentIdentityResolverTest {
 
@@ -128,6 +131,110 @@ class StoredContentIdentityResolverTest {
 		val card = content(id = 42L, url = "", publicUrl = "")
 
 		assertEquals(card, resolver.preserveStoredRemoteIdentity(card))
+	}
+
+
+	@Test
+	fun `resolveStoredContent re-anchors local EPUB folder to legacy path-hashed row`() = runTest {
+		val folder = File("/storage/emulated/0/Books/Series Name (Book 1) #1")
+		val folderUri = folder.toURI().toString()
+		val newId = folderUri.longHashCode()
+		val legacyId = folder.absolutePath.longHashCode()
+		coEvery { mangaDao.find(legacyId) } returns mangaWithTags(
+			id = legacyId,
+			source = LocalNovelSource.name,
+			url = "file://${folder.absolutePath}/book.epub",
+			publicUrl = "${folder.absolutePath}/book.epub",
+		)
+
+		val resolved = resolver.resolveStoredContent(
+			Content(
+				id = newId,
+				title = "Book 1",
+				altTitles = emptySet(),
+				url = folderUri,
+				publicUrl = folderUri,
+				rating = -1f,
+				contentRating = null,
+				coverUrl = null,
+				tags = emptySet(),
+				state = null,
+				authors = emptySet(),
+				source = LocalNovelSource,
+			),
+		)
+
+		assertEquals(legacyId, resolved.id)
+	}
+
+	@Test
+	fun `resolveStoredContent re-anchors contained EPUB path without matching sibling folders`() = runTest {
+		val folder = File("/storage/emulated/0/Books/Vol 1")
+		val sibling = File("/storage/emulated/0/Books/Vol 10")
+		val folderUri = folder.toURI().toString()
+		val newId = folderUri.longHashCode()
+		val legacyId = folder.absolutePath.longHashCode()
+		coEvery { mangaDao.find(legacyId) } returns null
+		coEvery { mangaDao.findBySourceAndUrl(LocalNovelSource.name, folderUri) } returns null
+		coEvery { mangaDao.findBySourceAndPublicUrl(LocalNovelSource.name, folderUri) } returns null
+		coEvery { mangaDao.find(newId) } returns null
+		coEvery { mangaDao.findAllBySource(LocalNovelSource.name) } returns listOf(
+			MangaWithTags(
+				manga = MangaEntity(
+					id = 100L,
+					title = "Shared Title",
+					altTitles = null,
+					url = "file://${sibling.absolutePath}/book.epub",
+					publicUrl = "${sibling.absolutePath}/book.epub",
+					rating = -1f,
+					isNsfw = false,
+					contentRating = null,
+					coverUrl = "",
+					largeCoverUrl = null,
+					state = null,
+					authors = null,
+					source = LocalNovelSource.name,
+				),
+				tags = emptyList(),
+			),
+			MangaWithTags(
+				manga = MangaEntity(
+					id = 200L,
+					title = "Shared Title",
+					altTitles = null,
+					url = "file://${folder.absolutePath}/book.epub",
+					publicUrl = "${folder.absolutePath}/book.epub",
+					rating = -1f,
+					isNsfw = false,
+					contentRating = null,
+					coverUrl = "",
+					largeCoverUrl = null,
+					state = null,
+					authors = null,
+					source = LocalNovelSource.name,
+				),
+				tags = emptyList(),
+			),
+		)
+
+		val resolved = resolver.resolveStoredContent(
+			Content(
+				id = newId,
+				title = "Shared Title",
+				altTitles = emptySet(),
+				url = folderUri,
+				publicUrl = folderUri,
+				rating = -1f,
+				contentRating = null,
+				coverUrl = null,
+				tags = emptySet(),
+				state = null,
+				authors = emptySet(),
+				source = LocalNovelSource,
+			),
+		)
+
+		assertEquals(200L, resolved.id)
 	}
 
 	private fun content(
