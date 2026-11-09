@@ -5,15 +5,18 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -44,6 +47,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onKeyEvent
@@ -57,6 +61,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.contentDescription
@@ -64,12 +69,14 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.compose.KototoroSlider
+import org.skepsun.kototoro.core.ui.gestures.mouseDragScroll
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
 import org.skepsun.kototoro.core.ui.text.uiString
@@ -286,6 +293,7 @@ fun VideoPlayerBottomControls(
     var chaptersAnchorBounds by remember { mutableStateOf(IntRect.Zero) }
     var speedAnchorBounds by remember { mutableStateOf(IntRect.Zero) }
     var qualityAnchorBounds by remember { mutableStateOf(IntRect.Zero) }
+    val actionsScrollState = rememberScrollState()
     val progress = if (state.durationMs > 0L) {
         state.positionMs.toFloat() / state.durationMs.toFloat()
     } else {
@@ -350,12 +358,50 @@ fun VideoPlayerBottomControls(
                 Text(text = formatPlaybackTime(state.durationMs), style = MaterialTheme.typography.labelMedium)
             }
             BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-                val showSecondaryActions = maxWidth >= 600.dp * LocalDensity.current.fontScale
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth(),
+                val expandedControls = maxWidth >= 600.dp * LocalDensity.current.fontScale
+                @Composable
+                fun ExtraActions() {
+                    state.qualityLabel?.let { label ->
+                        PlayerTextButton(
+                            text = label,
+                            onClick = { onAction(VideoPlayerAction.OpenQuality(qualityAnchorBounds)) },
+                            modifier = Modifier.onGloballyPositioned {
+                                qualityAnchorBounds = it.boundsInWindowIntRect()
+                            },
+                        )
+                    }
+                    if (state.supportsNotes) PlayerIconButton(
+                        icon = {
+                            Icon(
+                                imageVector = ReaderPanelIcons.Comment,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        },
+                        contentDescription = uiString("video_add_note"),
+                        onClick = { onAction(VideoPlayerAction.AddNote) },
+                        focusRequester = noteButtonFocusRequester,
+                    )
+                }
+                @Composable
+                fun MarkerActions() {
+                    if (state.supportsIntroOutroMarkers) {
+                        PlayerTextButton(uiString("video_mark_intro")) {
+                            onAction(VideoPlayerAction.ToggleIntroMarker)
+                        }
+                        PlayerTextButton(uiString("video_mark_outro")) {
+                            onAction(VideoPlayerAction.ToggleOutroMarker)
+                        }
+                    }
+                }
+                Row(
+                    modifier = Modifier
+                        .testTag("video-actions")
+                        .mouseDragScroll(actionsScrollState, Orientation.Horizontal)
+                        .horizontalScroll(actionsScrollState)
+                        .widthIn(min = maxWidth),
                     horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
-                    itemVerticalAlignment = Alignment.CenterVertically,
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     PlayerIconButton(
                         icon = { Icon(VideoPlayerIcons.SkipPrevious, contentDescription = null) },
@@ -370,7 +416,7 @@ fun VideoPlayerBottomControls(
                         onClick = { onAction(VideoPlayerAction.NextChapter) },
                     )
                     leadingActions()
-                    if (showSecondaryActions) {
+                    if (expandedControls) {
                         PlayerChapterButton(
                             groupLabel = state.chapterGroupLabel,
                             onClick = { onAction(VideoPlayerAction.OpenChapterSelection(chaptersAnchorBounds)) },
@@ -388,29 +434,7 @@ fun VideoPlayerBottomControls(
                             },
                         )
                     }
-                    if (showSecondaryActions) {
-                        state.qualityLabel?.let { label ->
-                            PlayerTextButton(
-                                text = label,
-                                onClick = { onAction(VideoPlayerAction.OpenQuality(qualityAnchorBounds)) },
-                                modifier = Modifier.onGloballyPositioned {
-                                    qualityAnchorBounds = it.boundsInWindowIntRect()
-                                },
-                            )
-                        }
-                        if (state.supportsNotes) PlayerIconButton(
-                            icon = {
-                                Icon(
-                                    imageVector = ReaderPanelIcons.Comment,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp),
-                                )
-                            },
-                            contentDescription = uiString("video_add_note"),
-                            onClick = { onAction(VideoPlayerAction.AddNote) },
-                            focusRequester = noteButtonFocusRequester,
-                        )
-                    }
+                    if (expandedControls) ExtraActions()
                     PlayerTextButton(
                         text = state.playbackSpeedLabel,
                         onClick = { onAction(VideoPlayerAction.OpenPlaybackSpeed(speedAnchorBounds)) },
@@ -418,14 +442,9 @@ fun VideoPlayerBottomControls(
                             speedAnchorBounds = it.boundsInWindowIntRect()
                         },
                     )
-                    trailingActions()
-                    if (showSecondaryActions && state.supportsIntroOutroMarkers) {
-                        PlayerTextButton(uiString("video_mark_intro")) {
-                            onAction(VideoPlayerAction.ToggleIntroMarker)
-                        }
-                        PlayerTextButton(uiString("video_mark_outro")) {
-                            onAction(VideoPlayerAction.ToggleOutroMarker)
-                        }
+                    if (expandedControls) {
+                        trailingActions()
+                        MarkerActions()
                     }
                     if (state.supportsScreenLock) PlayerIconButton(
                         icon = {
@@ -453,6 +472,23 @@ fun VideoPlayerBottomControls(
                         onClick = { onAction(VideoPlayerAction.ToggleFullscreen) },
                         modifier = Modifier.testTag("video-fullscreen"),
                     )
+                    if (!expandedControls) {
+                        trailingActions()
+                        ExtraActions()
+                        MarkerActions()
+                    }
+                }
+                if (actionsScrollState.canScrollBackward) {
+                    PlayerScrollHint(
+                        forward = false,
+                        modifier = Modifier.align(Alignment.CenterStart),
+                    )
+                }
+                if (actionsScrollState.canScrollForward) {
+                    PlayerScrollHint(
+                        forward = true,
+                        modifier = Modifier.align(Alignment.CenterEnd),
+                    )
                 }
             }
         }
@@ -460,6 +496,29 @@ fun VideoPlayerBottomControls(
 }
 
 private val PlayerControlsForeground = Color.White
+
+@Composable
+private fun PlayerScrollHint(forward: Boolean, modifier: Modifier = Modifier) {
+    val pointsRight = forward == (LocalLayoutDirection.current == LayoutDirection.Ltr)
+    val shade = Color.Black.copy(alpha = 0.7f)
+    Canvas(
+        modifier.testTag(if (forward) "video-actions-scroll-forward" else "video-actions-scroll-back")
+            .width(16.dp).height(40.dp).background(
+            Brush.horizontalGradient(if (pointsRight) listOf(Color.Transparent, shade) else listOf(shade, Color.Transparent)),
+        ),
+    ) {
+        val centerX = size.width / 2
+        val centerY = size.height / 2
+        val direction = if (pointsRight) 1 else -1
+        val arrow = Path().apply {
+            moveTo(centerX + direction * 2.dp.toPx(), centerY)
+            lineTo(centerX - direction * 1.dp.toPx(), centerY - 3.dp.toPx())
+            lineTo(centerX - direction * 1.dp.toPx(), centerY + 3.dp.toPx())
+            close()
+        }
+        drawPath(arrow, Color.White.copy(alpha = 0.85f))
+    }
+}
 
 @Composable
 private fun PlayerIconButton(
