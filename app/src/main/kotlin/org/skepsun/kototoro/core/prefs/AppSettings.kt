@@ -51,6 +51,7 @@ import org.skepsun.kototoro.parsers.util.find
 import org.skepsun.kototoro.parsers.util.mapNotNullToSet
 import org.skepsun.kototoro.parsers.util.mapToSet
 import org.skepsun.kototoro.parsers.util.nullIfEmpty
+import org.skepsun.kototoro.backups.data.BackupSettingsFilter
 import org.skepsun.kototoro.core.util.ext.connectivityManager
 import org.skepsun.kototoro.core.util.ext.activityManager
 import org.skepsun.kototoro.core.util.ext.getEnumValue
@@ -2805,14 +2806,11 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
     }
 
     fun upsertAll(m: Map<String, *>) {
-        // Source availability verdicts are per device: keep the local values, never import them.
-        val deviceLocal = DEVICE_LOCAL_KEYS.associateWith { prefs.getStringSet(it, null) }
+        val local = prefs.all.filterKeys { !BackupSettingsFilter.isBackupableKey(it) }
         prefs.edit {
             removeAll(prefs)
-            putAll(m)
-            for ((key, value) in deviceLocal) {
-                if (value != null) putStringSet(key, value) else remove(key)
-            }
+            putAll(m.filterKeys { BackupSettingsFilter.isBackupableKey(it) })
+            putAll(local)
         }
         migrateLegacyUiPreferences()
     }

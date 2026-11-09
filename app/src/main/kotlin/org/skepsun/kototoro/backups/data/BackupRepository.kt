@@ -703,10 +703,21 @@ class BackupRepository @Inject constructor(
                         getExternalExtensionRepoDao().upsert(it.toEntity())
                     }
 
-                    BackupSection.EXTENSION_GROUPS -> sectionInput.readJsonArray<SourceGroup>(serializer())
-                        .restoreWithoutTransaction("EXTENSION_GROUPS") {
-                            storeSourceGroup(it)
+                    BackupSection.EXTENSION_GROUPS -> {
+                        val replace = restoreMode == RestoreMode.SNAPSHOT_REPLACE
+                        val staging = File(appContext.filesDir, "source_groups.restoring")
+                        val targetDir = if (replace) staging.also { it.deleteRecursively() } else sourceGroupsDir()
+                        val groupsResult = sectionInput.readJsonArray<SourceGroup>(serializer())
+                            .restoreWithoutTransaction("EXTENSION_GROUPS") {
+                                storeSourceGroup(it, targetDir)
+                            }
+                        if (replace && groupsResult.isAllSuccess) {
+                            groupsResult + runCatching { swapSourceGroupsDir(staging) }
+                        } else {
+                            if (replace) staging.deleteRecursively()
+                            groupsResult
                         }
+                    }
 
                     BackupSection.SCROBBLING -> sectionInput.readJsonArray<ScrobblingBackup>(serializer()).restoreToDb("SCROBBLING") {
                         getScrobblingDao().upsert(it.toEntity())
@@ -891,12 +902,7 @@ class BackupRepository @Inject constructor(
     }
 
     private fun dumpSettings(): String {
-        val map = settings.getAllValues().toMutableMap()
-        map.remove(AppSettings.KEY_APP_PASSWORD)
-        map.remove(AppSettings.KEY_PROXY_PASSWORD)
-        map.remove(AppSettings.KEY_PROXY_LOGIN)
-        map.remove(AppSettings.KEY_INCOGNITO_MODE)
-        AppSettings.DEVICE_LOCAL_KEYS.forEach { map.remove(it) }
+        val map = settings.getAllValues().filterKeys { BackupSettingsFilter.isBackupableKey(it) }
         return JSONObject(map).toString()
     }
 
@@ -1017,6 +1023,9 @@ class BackupRepository @Inject constructor(
      * locally; "unlocked" never writes a marker (the key is removed instead).
      */
     private fun restoreSourceLocks(codes: Map<String, Int>, mode: RestoreMode) {
+        // Restored locks and pins count as the user's own, so the next group apply never releases them.
+        sourceLocks.setGroupApplied(emptySet())
+        appContext.getSharedPreferences("group_applied_pins", Context.MODE_PRIVATE).edit().clear().commit()
         if (codes.isEmpty()) return
         val merge = mode == RestoreMode.MERGE
         val set = LinkedHashMap<String, Boolean?>()
@@ -1031,8 +1040,6 @@ class BackupRepository @Inject constructor(
         }
         if (set.isNotEmpty()) {
             sourceLocks.setAll(set)
-            // A lock restored from a backup is no longer a group-applied one.
-            sourceLocks.setGroupApplied(sourceLocks.groupAppliedNames() - set.keys)
         }
         if (unlock.isNotEmpty()) sourceLocks.remove(unlock)
     }
@@ -1084,9 +1091,6 @@ class BackupRepository @Inject constructor(
                 // The section replaces the sources table and the source locks; JSON source rows are kept.
                 database.getSourcesDao().deleteAll()
                 sourceLocks.remove(sourceLocks.locks.value.keys.toList())
-            }
-            if (BackupSection.EXTENSION_GROUPS in actOn) {
-                sourceGroupsDir().listFiles().orEmpty().forEach { it.delete() }
             }
         }
     }
@@ -1254,6 +1258,35 @@ class BackupRepository @Inject constructor(
 
     private fun sourceGroupsDir() = java.io.File(appContext.filesDir, "source_groups")
 
+    private fun swapSourceGroupsDir(staging: File) {
+        val dir = sourceGroupsDir()
+        staging.mkdirs()
+        val previous = File(appContext.filesDir, "source_groups.previous")
+        previous.deleteRecursively()
+        val hadPrevious = dir.exists()
+        if (hadPrevious) check(dir.renameTo(previous)) { "Cannot move aside source groups" }
+        try {
+            try {
+                java.nio.file.Files.move(
+                    staging.toPath(),
+                    dir.toPath(),
+                    java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+                )
+            } catch (e: java.nio.file.AtomicMoveNotSupportedException) {
+                java.nio.file.Files.move(
+                    staging.toPath(),
+                    dir.toPath(),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                )
+            }
+        } catch (e: Throwable) {
+            dir.deleteRecursively()
+            if (hadPrevious) previous.renameTo(dir)
+            throw e
+        }
+        previous.deleteRecursively()
+    }
+
     private fun readStoredSourceGroups(): List<SourceGroup> = sourceGroupsDir()
         .listFiles { f -> f.isFile && f.extension == "json" }.orEmpty()
         .filter { it.length() in 1..SOURCE_GROUP_MAX_BYTES }
@@ -1263,9 +1296,9 @@ class BackupRepository @Inject constructor(
         }
 
     /** Restores a group file; an existing group with the same id is kept (merge, never overwrite). */
-    private fun storeSourceGroup(group: SourceGroup) {
-        if (!group.isValid()) return
-        val dir = sourceGroupsDir().also { it.mkdirs() }
+    private fun storeSourceGroup(group: SourceGroup, dir: File) {
+        check(group.isValid()) { "Invalid source group ${group.id}" }
+        dir.mkdirs()
         val target = java.io.File(dir, "${group.id}.json")
         if (target.exists()) return
         val temp = java.io.File(dir, "${group.id}.json.tmp")
