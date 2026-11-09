@@ -7,7 +7,6 @@ data class SettingEntry(
 	val t: String,
 	val v: String,
 	val at: Long,
-	val version: Long = 0L,
 ) {
 	val isDeleted: Boolean get() = t == TYPE_DELETED
 
@@ -15,7 +14,7 @@ data class SettingEntry(
 		/** Type tag of a tombstone: the key was removed (reset to default) at [at]. */
 		const val TYPE_DELETED = "d"
 
-		fun deleted(at: Long, version: Long = 0L) = SettingEntry(t = TYPE_DELETED, v = "", at = at, version = version)
+		fun deleted(at: Long) = SettingEntry(t = TYPE_DELETED, v = "", at = at)
 	}
 }
 
@@ -50,8 +49,7 @@ object SettingsSyncMerger {
 	// "_storage" keys (local_storage, local_novel_storage, local_video_storage) hold device-local File.path values.
 	private val excludedSuffixes = listOf("_dir", "_dirs", "_dir_uris", "_dir_uri", "_uri", "_uris", "_path", "_storage")
 	private val excludedPrefixes = listOf("sync_", "google_drive", "backup_periodic")
-	// available/empty/cloudflare_sources are per-device source availability verdicts (see AppSettings.DEVICE_LOCAL_KEYS).
-	private val excludedKeys = setOf("init", "app_version", "available_sources", "empty_sources", "cloudflare_sources")
+	private val excludedKeys = setOf("init", "app_version")
 
 	fun isSyncableKey(key: String): Boolean {
 		val normalized = key.lowercase()
@@ -70,30 +68,12 @@ object SettingsSyncMerger {
 			val winner = when {
 				localEntry == null -> remoteEntry
 				remoteEntry == null -> localEntry
-				compareEntries(remoteEntry, localEntry) > 0 -> remoteEntry
+				remoteEntry.at >= localEntry.at -> remoteEntry
 				else -> localEntry
 			} ?: continue
-			result[key] = if (localEntry != null && remoteEntry != null) {
-				winner.copy(version = maxOf(localEntry.version, remoteEntry.version))
-			} else {
-				winner
-			}
+			result[key] = winner
 		}
 		return result
-	}
-
-	/** Orders by logical version (when both sides have one), then wall clock, then content as a deterministic tie-break. */
-	fun compareEntries(a: SettingEntry, b: SettingEntry): Int {
-		val stamp = compareStamp(a.version, a.at, b.version, b.at)
-		if (stamp != 0) return stamp
-		val type = a.t.compareTo(b.t)
-		return if (type != 0) type else a.v.compareTo(b.v)
-	}
-
-	/** Records without a version (0, legacy) fall back to the wall clock. */
-	fun compareStamp(versionA: Long, atA: Long, versionB: Long, atB: Long): Int {
-		if (versionA > 0L && versionB > 0L && versionA != versionB) return versionA.compareTo(versionB)
-		return atA.compareTo(atB)
 	}
 
 	fun mergeStores(
