@@ -126,6 +126,8 @@
 		F80000000000000000000024 /* ExtensionArtwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = F80000000000000000000025 /* ExtensionArtwork.swift */; };
 		F80000000000000000000026 /* ContinuedWork.swift in Sources */ = {isa = PBXBuildFile; fileRef = F80000000000000000000027 /* ContinuedWork.swift */; };
 		F80000000000000000000028 /* BackgroundSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = F80000000000000000000029 /* BackgroundSync.swift */; };
+		F8000000000000000000002F /* AppGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = F80000000000000000000031 /* AppGroup.swift */; };
+		F80000000000000000000030 /* AppGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = F80000000000000000000031 /* AppGroup.swift */; };
 		F8000000000000000000002A /* BackgroundSyncSchedule.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8000000000000000000002C /* BackgroundSyncSchedule.swift */; };
 		F8000000000000000000002B /* BackgroundSyncSchedule.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8000000000000000000002C /* BackgroundSyncSchedule.swift */; };
 		F8000000000000000000002D /* BackgroundSyncScheduleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8000000000000000000002E /* BackgroundSyncScheduleTests.swift */; };
@@ -294,6 +296,7 @@
 		F80000000000000000000025 /* ExtensionArtwork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtensionArtwork.swift; sourceTree = "<group>"; };
 		F80000000000000000000027 /* ContinuedWork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContinuedWork.swift; sourceTree = "<group>"; };
 		F80000000000000000000029 /* BackgroundSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundSync.swift; sourceTree = "<group>"; };
+		F80000000000000000000031 /* AppGroup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppGroup.swift; sourceTree = "<group>"; };
 		F8000000000000000000002C /* BackgroundSyncSchedule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundSyncSchedule.swift; sourceTree = "<group>"; };
 		F8000000000000000000002E /* BackgroundSyncScheduleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundSyncScheduleTests.swift; sourceTree = "<group>"; };
 		F80000000000000000000008 /* SourceFilterSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceFilterSheet.swift; sourceTree = "<group>"; };
@@ -373,6 +376,7 @@
 				F80000000000000000000027 /* ContinuedWork.swift */,
 				F80000000000000000000029 /* BackgroundSync.swift */,
 				F8000000000000000000002C /* BackgroundSyncSchedule.swift */,
+				F80000000000000000000031 /* AppGroup.swift */,
 				F80000000000000000000008 /* SourceFilterSheet.swift */,
 				F8000000000000000000000A /* DetailsPanorama.swift */,
 				F8000000000000000000000E /* LibraryView.swift */,
@@ -734,6 +738,7 @@
 				F80000000000000000000026 /* ContinuedWork.swift in Sources */,
 				F80000000000000000000028 /* BackgroundSync.swift in Sources */,
 				F8000000000000000000002A /* BackgroundSyncSchedule.swift in Sources */,
+				F8000000000000000000002F /* AppGroup.swift in Sources */,
 				C0FFEE00000000000000001B /* CustomSpaces.swift in Sources */,
 				C0FFEE00000000000000001D /* LibraryFilter.swift in Sources */,
 				C0FFEE00000000000000001F /* PdfImport.swift in Sources */,
@@ -830,6 +835,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				C0FFEE000000000000000024 /* KototoroWidget.swift in Sources */,
+				F80000000000000000000030 /* AppGroup.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

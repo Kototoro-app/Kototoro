@@ -5,9 +5,7 @@ import WidgetKit
 /// What the "继续阅读" home-screen widget shows: the latest works of the history with their progress and a small
 /// cover, written into the App Group the widget extension reads (Android's recent-works widget).
 enum WidgetSnapshot {
-    static let groupID = "group.org.skepsun.kototoro.ios"
-
-    static var container: URL? { FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: groupID) }
+    static var container: URL? { AppGroup.container }
     private static let store = WidgetSnapshotStore()
     @MainActor private static var revision: UInt64 = 0
 

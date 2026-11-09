@@ -14,9 +14,7 @@ struct WidgetWork: Codable, Identifiable {
     var link: URL? { URL(string: "kototoro://continue?key=" + (id.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? "")) }
 }
 
-private let groupID = "group.org.skepsun.kototoro.ios"
-
-private func container() -> URL? { FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: groupID) }
+private func container() -> URL? { AppGroup.container }
 
 struct RecentEntry: TimelineEntry {
     let date: Date
