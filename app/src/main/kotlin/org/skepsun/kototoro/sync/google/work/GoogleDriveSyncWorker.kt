@@ -68,7 +68,8 @@ class GoogleDriveSyncWorker @AssistedInject constructor(
             setForeground(buildForegroundInfo(stage))
         } catch (e: CancellationException) {
             throw e
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            android.util.Log.w("GoogleDriveSyncWorker", "foreground info failed", e)
         }
     }
 

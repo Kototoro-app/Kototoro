@@ -65,4 +65,15 @@ class SourceLockStoreTest {
 		assertEquals(emptyMap<String, Boolean>(), store.locks.value)
 		assertEquals(emptySet<String>(), store.groupAppliedNames())
 	}
+
+	@Test
+	fun `setAll bumps the revision once and a later external write is still mirrored`() {
+		val before = store.externalRevision.get()
+		store.setAll(mapOf("a" to true, "b" to false))
+		assertEquals(before + 1, store.externalRevision.get())
+
+		lockPrefs.edit().putBoolean("a", false).apply()
+		assertEquals(false, store.get("a"))
+		assertEquals(before + 2, store.externalRevision.get())
+	}
 }

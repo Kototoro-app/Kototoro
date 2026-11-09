@@ -6,6 +6,7 @@ import androidx.core.content.edit
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
@@ -27,14 +28,16 @@ class SourceLockStore private constructor(context: Context) {
 	 */
 	val externalRevision = AtomicInteger(0)
 
-	@Volatile
-	private var applyingBatch = false
+	/** Keys written by [setAll] whose (asynchronous) listener callback is still due; those are already mirrored. */
+	private val pendingBatchKeys: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
 	// Held strongly: SharedPreferences keeps listeners weakly.
 	private val changeListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-		// A batch publishes [locks] once at its end instead of once per key.
-		if (!applyingBatch) applyKeyChange(key)
-		externalRevision.incrementAndGet()
+		// A batch publishes [locks] and bumps the revision once itself instead of once per key.
+		if (key == null || !pendingBatchKeys.remove(key)) {
+			applyKeyChange(key)
+			externalRevision.incrementAndGet()
+		}
 	}
 
 	init {
@@ -77,21 +80,21 @@ class SourceLockStore private constructor(context: Context) {
 	@Synchronized
 	fun setAll(entries: Map<String, Boolean?>) {
 		if (entries.isEmpty()) return
-		applyingBatch = true
-		try {
-			prefs.edit {
-				for ((name, lockedEnabled) in entries) {
-					if (lockedEnabled == null) putString(name, UNLOCKED) else putBoolean(name, lockedEnabled)
-				}
+		// Android only notifies for keys whose value really changes; tracking others would swallow a later external write.
+		val stored = prefs.all
+		val changed = entries.filter { (name, lockedEnabled) -> stored[name] != (lockedEnabled ?: UNLOCKED) }.keys
+		pendingBatchKeys.addAll(changed)
+		prefs.edit {
+			for ((name, lockedEnabled) in entries) {
+				if (lockedEnabled == null) putString(name, UNLOCKED) else putBoolean(name, lockedEnabled)
 			}
-			_locks.value = _locks.value.toMutableMap().also { map ->
-				for ((name, lockedEnabled) in entries) {
-					if (lockedEnabled == null) map.remove(name) else map[name] = lockedEnabled
-				}
-			}
-		} finally {
-			applyingBatch = false
 		}
+		_locks.value = _locks.value.toMutableMap().also { map ->
+			for ((name, lockedEnabled) in entries) {
+				if (lockedEnabled == null) map.remove(name) else map[name] = lockedEnabled
+			}
+		}
+		externalRevision.incrementAndGet()
 	}
 
 	/** Drops the entry entirely (no marker): for sources that no longer exist anywhere, e.g. a deleted JSON source. */

@@ -44,6 +44,9 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.IOException
 import java.io.InputStream
+import java.nio.file.AtomicMoveNotSupportedException
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
@@ -143,27 +146,29 @@ class SourceGroupRepository @Inject constructor(
 				packages = collectInstalledPackages(),
 				sourceStates = database.getSourcesDao().findAll().mapNotNull {
 					val lock = contentSources.lockState(it.source)
-					if (it.isEnabled || lock != null || it.isPinned || currentDomainOverride(it.source) != null) {
+					val domainOverride = currentDomainOverride(it.source)
+					if (it.isEnabled || lock != null || it.isPinned || domainOverride != null) {
 						SourceGroupSourceState(
 							source = it.source,
 							enabled = it.isEnabled,
 							pinned = it.isPinned,
 							sortKey = it.sortKey,
 							locked = lock,
-							domain = currentDomainOverride(it.source),
+							domain = domainOverride,
 						)
 					} else null
 				} + database.getJsonSourceDao().findAll().mapNotNull {
 					// JSON sources live in their own table; their lock is keyed by the entity id.
 					val lock = contentSources.lockState(it.id)
-					if (it.enabled || lock != null || it.isPinned || currentDomainOverride(it.id) != null) {
+					val domainOverride = currentDomainOverride(it.id)
+					if (it.enabled || lock != null || it.isPinned || domainOverride != null) {
 						SourceGroupSourceState(
 							source = it.id,
 							enabled = it.enabled,
 							pinned = it.isPinned,
 							sortKey = 0,
 							locked = lock,
-							domain = currentDomainOverride(it.id),
+							domain = domainOverride,
 						)
 					} else null
 				},
@@ -644,8 +649,11 @@ class SourceGroupRepository @Inject constructor(
 		val target = groupFile(group.id)
 		val temp = File(groupsDir, "${group.id}.json.tmp")
 		temp.writeText(SourceGroupJson.encode(group))
-		if (target.exists()) target.delete()
-		check(temp.renameTo(target)) { "Cannot store source group ${group.id}" }
+		try {
+			Files.move(temp.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+		} catch (_: AtomicMoveNotSupportedException) {
+			Files.move(temp.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
+		}
 	}
 
 	private fun groupFile(id: String): File {
