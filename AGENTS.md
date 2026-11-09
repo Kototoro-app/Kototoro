@@ -71,9 +71,27 @@ Uses JUnit5, Kotest, MockK, and MockWebServer for unit tests, plus AndroidX Test
 ## Commit & Pull Request Guidelines
 Use Conventional Commits: `feat:`, `fix(scope):`, `docs:`, `chore:`. Keep commits narrowly scoped. PRs should explain motivation, affected areas, validation commands, and risks. Include screenshots for UI changes. Link related issues.
 
+## Release Notes Format
+GitHub Release bodies are hand-written in the fixed format of recent releases (e.g. v2.4.0); the CI-generated commit list is only the trailing appendix. Compare with the previous release (`gh release view <prev-tag>`) before writing.
+
+1. Title `## Kototoro X.Y.Z` (no `v`).
+2. `###` sections per platform, each named "中文 / English"; omit empty sections and keep this order:
+   `跨平台 / Across platforms` (Android, desktop and iOS) → `Android 与桌面 / Android & desktop` → `Android` →
+   `桌面 / Desktop` (Windows/macOS/Linux share `desktop-app`; name the OS when only one is affected) → `iOS / iPadOS` →
+   `下载与安装 / Downloads & installation` (always last).
+3. One bilingual item per change — Chinese first, then English on the next line indented by two spaces, with equivalent content:
+   ```markdown
+   - **中文短标题（#652）**：中文说明。
+     **English short title (#652):** English description.
+   ```
+   Chinese uses full-width colon/parentheses and 「」 for UI labels; the English title ends with `:` inside the bold and uses `*italics*` for UI labels and `→` for settings paths. Put related issue numbers in the title parentheses.
+4. Write for users: observable behavior, what a fix changes, where a new setting lives and its default (explain why if it defaults to off). No class/module names or implementation detail. Merge commits of one feature into one item; do not list pure `docs`/`chore`/`refactor`/`test` commits; do not overstate — note preconditions or unfinished parts.
+5. `下载与安装` is the fixed five-row table (Android, Windows x64, Linux x64, macOS, iOS / iPadOS); reuse the previous wording with the new version, and state plainly when a platform's package is not published.
+6. Then `**完整变更 / Full changelog:** [vPREV...vCUR](https://github.com/Kototoro-app/Kototoro/compare/vPREV...vCUR)` and a collapsed `<details><summary>完整提交列表 / Full commit list</summary>` holding `git log --no-merges --pretty='- %s (%h)' vPREV..vCUR` (newest first, including the version bump).
+
 ## Security & Contributor Notes
 - Never commit `local.properties`, signing files, secrets, caches, or generated artifacts.
-- Translation content is managed through **Weblate** — avoid bulk manual string rewrites unless fixing a clear defect.
+- Translations are not managed through Weblate: edit `app/src/main/res/values-*/strings.xml` directly (community PRs do the same), keeping placeholder order and types. Desktop strings are exported from the same resources by `prepareDesktopStrings`.
 - Keep `README.md` product-focused; put deeper engineering notes in `docs/`.
 - `CONTRIBUTING.md` prohibits adding new dependencies unless required (APK size matters).
 - Release workflow triggers on `v*` tags pushed to the repo.
