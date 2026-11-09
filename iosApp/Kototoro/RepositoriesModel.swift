@@ -256,7 +256,9 @@ final class RepositoriesModel: ObservableObject {
         activeID = InstalledExtension.identity(ecosystem: catalog.kind, package: extensionItem.id)
         defer { busy = false; activeID = nil }
         do {
-            try await Self.keepingAwake {
+            // Long conversions keep running when the user switches away.
+            try await ContinuedWork.run("extension-install", title: String(localized: "正在安装扩展"),
+                                        subtitle: extensionItem.title) { _ in
                 try await performInstall(extensionItem, catalog: catalog)
             }
             try await sources?.runtime?.sourcesChanged(); await sources?.load()
@@ -269,15 +271,16 @@ final class RepositoriesModel: ObservableObject {
     }
 
     func updateAll() async {
-        await installBatch(rows.filter { $0.state == .update && $0.permitsInstallation }, operation: String(localized: "更新"))
+        await installBatch(rows.filter { $0.state == .update && $0.permitsInstallation }, operation: String(localized: "更新"),
+                          progressTitle: String(localized: "正在更新扩展"))
     }
 
     /// One serialized pipeline owns installation, status, cancellation and per-package retry evidence.
     func installMissing(_ requested: [ExtensionSummary]) async {
-        await installBatch(requested, operation: String(localized: "安装"))
+        await installBatch(requested, operation: String(localized: "安装"), progressTitle: String(localized: "正在安装扩展"))
     }
 
-    private func installBatch(_ requested: [ExtensionSummary], operation: String) async {
+    private func installBatch(_ requested: [ExtensionSummary], operation: String, progressTitle: String) async {
         guard !busy && !isRefreshing && batchProgress == nil else { return }
         var seen = Set<String>()
         let pending = requested.filter { $0.permitsInstallation && seen.insert($0.id).inserted }
@@ -295,11 +298,16 @@ final class RepositoriesModel: ObservableObject {
         batchCancelled = false
         batchResults = []
         defer { busy = false; activeID = nil; batchProgress = nil }
-        await Self.keepingAwake {
+        await ContinuedWork.run("extension-batch", title: progressTitle,
+                                subtitle: pending[0].title) { work in
+            // The system's stop button ends the batch after the package in progress, like the in-app stop.
+            work.onStop = { [weak self] in self?.batchCancelled = true }
             for row in pending {
                 if batchCancelled || Task.isCancelled { break }
                 batchProgress = BatchUpdateProgress(completed: batchResults.count, total: pending.count,
                     currentTitle: row.title, failedCount: batchResults.filter { $0.error != nil }.count)
+                work.progress(batchResults.count, of: pending.count,
+                              subtitle: "\(batchResults.count + 1)/\(pending.count) · \(row.title)")
                 activeID = row.id
                 do {
                     guard let candidate = row.available, let catalog = catalogs[candidate.repositoryID],
@@ -340,16 +348,6 @@ final class RepositoriesModel: ObservableObject {
         UserDefaults.standard.set(now, forKey: Self.lastCheckKey)
         return updatesCount
     }
-    /// Long conversions must not be cut short by auto-lock; a background task covers a brief app switch.
-    private static func keepingAwake<T>(_ work: () async throws -> T) async rethrows -> T {
-        UIApplication.shared.isIdleTimerDisabled = true
-        let task = UIApplication.shared.beginBackgroundTask(withName: "extension-install")
-        defer {
-            UIApplication.shared.isIdleTimerDisabled = false
-            if task != .invalid { UIApplication.shared.endBackgroundTask(task) }
-        }
-        return try await work()
-    }
     func installFile(_ url: URL) async {
         guard !NativeSourceTransport.isFixtureRuntime else {
             error = NativeSourceTransport.fixtureInstallationMessage
@@ -375,7 +373,8 @@ final class RepositoriesModel: ObservableObject {
                 .replacingOccurrences(of: "[^A-Za-z0-9_.-]", with: "_", options: .regularExpression)
             let fallbackName = stem.isEmpty ? "local.plugin" : String(stem.prefix(200))
             status = String(localized: "正在转换、校验并安装 \(url.lastPathComponent)…")
-            try await Self.keepingAwake {
+            try await ContinuedWork.run("extension-install", title: String(localized: "正在安装扩展"),
+                                        subtitle: url.lastPathComponent) { _ in
                 try await manage(["managementVersion": 1, "operation": "install", "path": file.path,
                                   "sha256": hash, "packageName": fallbackName, "versionCode": 0, "ecosystem": ""])
             }

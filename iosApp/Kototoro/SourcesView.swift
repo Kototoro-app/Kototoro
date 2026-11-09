@@ -5,6 +5,9 @@ import SwiftUI
 /// Owns the routed source runtime for the app's lifetime: Apple CMS sites run natively, extensions use the JVM.
 @MainActor
 final class SourcesModel: ObservableObject {
+    /// The app's one runtime: the scene and the background update check share it, so the JVM session opens once.
+    static let shared = SourcesModel()
+
     @Published private(set) var sources: [IosSource] = [] {
         didSet {
             byName = Dictionary(sources.map { ($0.name, $0) }, uniquingKeysWith: { first, _ in first })
@@ -204,6 +207,14 @@ final class SourcesModel: ObservableObject {
                              localDirectory: data?.appendingPathComponent("local", isDirectory: true).path,
                              imageDirectory: data?.appendingPathComponent("images", isDirectory: true).path)
         ownedRuntime = runtime
+    }
+
+    /// The runtime with its catalog, for work without the UI (a background launch builds it on its own).
+    func prepared(_ library: IosLibrary) async -> IosSources? {
+        attach(library)
+        while isLoading { try? await Task.sleep(for: .milliseconds(100)) }
+        if catalogRevision == 0 { await load() }
+        return catalogRevision > 0 ? runtime : nil
     }
 
     func load() async {

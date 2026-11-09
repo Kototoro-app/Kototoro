@@ -204,6 +204,9 @@ private struct RecordsPage: View {
                     Label(error, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(.red)
                         .padding(.horizontal)
                 }
+                if library.isCheckingUpdates || library.updateSummary != nil {
+                    UpdateCheckStatus().padding(.horizontal)
+                }
                 if let runtime = sources.runtime {
                     timeline(runtime)
                 }
@@ -834,5 +837,39 @@ private struct RecordsTimeline: View {
             : "\(from.formatted(date: .abbreviated, time: .omitted)) — \(until.formatted(date: .abbreviated, time: .omitted))"
         return String(localized: "来源更新于 \(range)")
             + (event.unknownPublishedCount > 0 ? String(localized: " · 部分时间未知") : "")
+    }
+}
+
+/// The favourite update check on the records page: its running counts while it goes, then the result until dismissed.
+private struct UpdateCheckStatus: View {
+    @EnvironmentObject private var library: LibraryModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if library.isCheckingUpdates {
+                if let progress = library.updateProgress, progress.total > 0 {
+                    ProgressView(value: Double(progress.checked), total: Double(progress.total)) {
+                        Text("正在检查更新").font(.subheadline.weight(.medium))
+                    } currentValueLabel: {
+                        Text(LibraryModel.updateCounts(progress)).monospacedDigit()
+                    }
+                } else {
+                    Label { Text("正在检查更新").font(.subheadline.weight(.medium)) } icon: { ProgressView() }
+                }
+            } else if let summary = library.updateSummary {
+                HStack(alignment: .firstTextBaseline) {
+                    Label(summary, systemImage: "checkmark.circle").font(.footnote)
+                    Spacer()
+                    Button("关闭", systemImage: "xmark") { library.dismissUpdateSummary() }
+                        .labelStyle(.iconOnly).buttonStyle(.borderless).foregroundStyle(.secondary)
+                        .accessibilityIdentifier("updates.summary.dismiss")
+                }
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("updates.status")
     }
 }

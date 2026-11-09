@@ -288,6 +288,62 @@ final class ProductFlowTests: XCTestCase {
         XCTAssertTrue(app.navigationBars["换源"].waitForExistence(timeout: 5), "Cancelling keeps the search screen")
     }
 
+    /// The scheduled update check (BackgroundUpdates.run, started by KOTOTORO_RUN_UPDATE_REFRESH) opens the shared
+    /// library and runtime on its own, checks the favourites and leaves its result on the records page.
+    @MainActor
+    func testScheduledUpdateCheckLeavesItsSummaryOnTheRecordsPage() async throws {
+        guard (try? await URLSession.shared.data(from: URL(string: "http://127.0.0.1:8765/api.php/provide/vod/")!)) != nil else {
+            throw XCTSkip("Start serve-cms-fixture.py first")
+        }
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["-space.enabled", "NO", "-listMode.browse", "grid"]
+        app.launch()
+        let run = String(UUID().uuidString.prefix(6))
+        let siteName = "后台更新 \(run)"
+        importVideoSite(app, url: "http://127.0.0.1:8765/api.php/provide/vod/?updates=\(run)", title: siteName)
+        let search = app.pageSearchField()
+        XCTAssertTrue(search.waitForExistence(timeout: 10))
+        search.tap(); search.typeText(siteName)
+        let source = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@",
+                                                      "source.JSON_TVBOX_", siteName)).firstMatch
+        XCTAssertTrue(source.waitForExistence(timeout: 20)); source.tap()
+        let work = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "source.content.")).firstMatch
+        XCTAssertTrue(work.waitForExistence(timeout: 20), app.debugDescription)
+        work.press(forDuration: 0.8)
+        XCTAssertTrue(app.buttons["browse.favourite"].waitForExistence(timeout: 5))
+        app.buttons["browse.favourite"].tap()
+        // A category of its own, so the work is favourited even on a device with none yet.
+        let newCategory = app.buttons["favourite.category.add"]
+        XCTAssertTrue(newCategory.waitForExistence(timeout: 10), app.debugDescription)
+        newCategory.tap()
+        // An alert's field does not carry the identifier set in SwiftUI.
+        let title = app.alerts.textFields.firstMatch
+        XCTAssertTrue(title.waitForExistence(timeout: 5), app.debugDescription)
+        title.typeText("后台更新 \(run)")
+        app.alerts.buttons["创建"].tap()
+        let category = app.buttons.matching(NSPredicate(format: "identifier MATCHES %@ AND label CONTAINS %@",
+                                                        #"favourite\.category\.[0-9]+"#, run)).firstMatch
+        for _ in 0..<10 where category.exists && !category.isHittable { app.swipeUp() }
+        XCTAssertTrue(category.waitForExistence(timeout: 10), app.debugDescription)
+        if category.value as? String == "未选中" { category.tap() }
+        app.buttons["favourite.save"].tap()
+        XCTAssertTrue(app.buttons["favourite.save"].waitForNonExistence(timeout: 10))
+
+        app.terminate()
+        app.launchArguments += ["-updates_background_enabled", "YES"]
+        app.launchEnvironment["KOTOTORO_RUN_UPDATE_REFRESH"] = "1"
+        app.launch()
+        app.mainTab("记录").tap()
+        let summary = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "已检查")).firstMatch
+        XCTAssertTrue(summary.waitForExistence(timeout: 120), app.debugDescription)
+        XCTAssertFalse(summary.label.hasPrefix("已检查 0 部"), summary.label)
+        let attachment = XCTAttachment(screenshot: app.screenshot()); attachment.name = "Scheduled update check summary"
+        attachment.lifetime = .keepAlways; add(attachment)
+        app.buttons["updates.summary.dismiss"].tap()
+        XCTAssertTrue(summary.waitForNonExistence(timeout: 5))
+    }
+
     @MainActor
     func testBrowseAndDetailsShareMultiCategoryFavouritesAndBulkSelection() {
         continueAfterFailure = false

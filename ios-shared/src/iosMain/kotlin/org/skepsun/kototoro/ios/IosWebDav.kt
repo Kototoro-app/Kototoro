@@ -54,14 +54,18 @@ class IosWebDav internal constructor(private val library: IosLibrary) {
             .map { IosWebDavFile(it.name, it.size, it.lastModifiedMillis) }
     }
 
-    /** Exports the library, uploads it under Android's v3 name stamped [timestamp], and retires old backups. */
+    /**
+     * Exports the library, uploads it under Android's v3 name stamped [timestamp], and retires old backups. [listener]
+     * hears the export's sections, then `upload` bytes.
+     */
     @Throws(Exception::class)
-    suspend fun upload(settings: WebDavSettings, timestamp: String): IosWebDavUpload {
+    suspend fun upload(settings: WebDavSettings, timestamp: String, listener: IosProgressListener? = null): IosWebDavUpload {
         require(settings.configured) { localized("请先填写 WebDAV 服务器地址") }
         val path = temporaryFile("upload")
         try {
-            library.exportBackup(path)
+            library.exportBackup(path, listener)
             val size = fileSize(path)
+            val progress = ProgressThrottle(listener)
             return withSync { sync ->
                 val name = sync.remoteName(BACKUP_DATA_VERSION, timestamp)
                 sync.upload(settings, name, size) { channel ->
@@ -69,11 +73,15 @@ class IosWebDav internal constructor(private val library: IosLibrary) {
                     val file = fopen(path, "rb") ?: error(localized("无法读取备份文件"))
                     try {
                         val buffer = ByteArray(BUFFER)
+                        var sent = 0L
+                        progress.report(STAGE_UPLOAD, 0, size)
                         while (true) {
                             currentCoroutineContext().ensureActive()
                             val count = buffer.usePinned { fread(it.addressOf(0), 1u, BUFFER.convert(), file) }.toInt()
                             if (count <= 0) break
                             channel.writeFully(buffer, 0, count)
+                            sent += count
+                            progress.report(STAGE_UPLOAD, sent, size)
                         }
                     } finally { fclose(file) }
                 }
@@ -82,16 +90,23 @@ class IosWebDav internal constructor(private val library: IosLibrary) {
         } finally { remove(path) }
     }
 
-    /** Downloads backup [name] into a temporary file and returns its path; nothing is left behind on failure. */
+    /**
+     * Downloads backup [name] into a temporary file and returns its path; nothing is left behind on failure.
+     * [listener] hears `download` bytes out of [size], the listing's size (0 when unknown).
+     */
     @Throws(Exception::class)
-    suspend fun download(settings: WebDavSettings, name: String): String {
+    suspend fun download(settings: WebDavSettings, name: String, size: Long = 0,
+        listener: IosProgressListener? = null): String {
         val path = temporaryFile("download")
+        val progress = ProgressThrottle(listener)
         try {
             withSync { sync ->
                 sync.download(settings, name) { channel ->
                     val file = fopen(path, "wb") ?: error(localized("无法写入备份文件"))
                     try {
                         val buffer = ByteArray(BUFFER)
+                        var received = 0L
+                        progress.report(STAGE_DOWNLOAD, 0, size)
                         while (true) {
                             currentCoroutineContext().ensureActive()
                             val count = channel.readAvailable(buffer, 0, BUFFER)
@@ -99,6 +114,8 @@ class IosWebDav internal constructor(private val library: IosLibrary) {
                             if (count == 0) continue
                             val written = buffer.usePinned { fwrite(it.addressOf(0), 1u, count.convert(), file) }.toInt()
                             check(written == count) { localized("无法写入备份文件") }
+                            received += count
+                            progress.report(STAGE_DOWNLOAD, received, maxOf(size, received))
                         }
                     } finally { fclose(file) }
                 }
@@ -121,6 +138,8 @@ class IosWebDav internal constructor(private val library: IosLibrary) {
         /** The data version in the remote name, as the Windows uploader writes it. */
         const val BACKUP_DATA_VERSION = 1
         private const val BUFFER = 64 * 1024
+        private const val STAGE_UPLOAD = "upload"
+        private const val STAGE_DOWNLOAD = "download"
 
         /** Settings as the iOS page edits them (Android's keys and defaults). */
         fun settings(serverUrl: String, remotePath: String, username: String, password: String, maxCount: Int,

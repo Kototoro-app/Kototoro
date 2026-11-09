@@ -4,7 +4,7 @@ import KototoroShared
 struct ContentView: View {
     private enum MainTab: Hashable { case library, browse, records, settings, search }
     @ObservedObject var library: LibraryModel
-    @StateObject private var sources = SourcesModel()
+    @StateObject private var sources = SourcesModel.shared
     @StateObject private var storage = ReaderStorageModel()
     @StateObject private var downloads = ReaderDownloadQueue(
         file: NativeSourceTransport.downloadQueueFile
@@ -76,7 +76,7 @@ struct ContentView: View {
         .environmentObject(storage)
         .environmentObject(repositories)
         .task(id: library.library != nil) {
-            await library.googleDrive.sync(library, automatic: true)
+            await library.googleDrive.sync(library, trigger: .launch)
         }
         .task(id: library.mergeRevision) {
             guard library.mergeRevision > 0 else { return }
@@ -95,10 +95,11 @@ struct ContentView: View {
                     await downloads.setForeground(false)
                 }
                 BackgroundUpdates.shared.schedule()
+                BackgroundSync.shared.schedule()
             } else if phase == .active {
                 Task { await downloads.setForeground(true) }
                 Task { await repositories.checkForUpdates(force: false) }
-                Task { await library.googleDrive.sync(library, automatic: true) }
+                Task { await library.googleDrive.sync(library, trigger: .launch) }
                 Task { await WebDavConfig.backUpIfDue(library.library) }
             }
         }
@@ -152,8 +153,6 @@ struct ContentView: View {
             await library.refresh()
             await storage.trimAutomatically()
             await CustomSpaceStore.shared.load(database)
-            BackgroundUpdates.shared.library = library
-            BackgroundUpdates.shared.sources = sources
             if ProcessInfo.processInfo.environment["KOTOTORO_RUN_UPDATE_REFRESH"] == "1" { await BackgroundUpdates.shared.run() }
             await repositories.checkForUpdates(force: false)
         }

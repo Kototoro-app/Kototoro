@@ -461,9 +461,14 @@ class IosLibrary {
         sources: IosSources,
         respectSchedule: Boolean = false,
         skipCompleted: Boolean = false,
+        listener: IosUpdateProgressListener? = null,
     ): IosUpdateReport {
         trackerSources.store(sources)
-        val result = tracker.checkAll(respectSchedule = respectSchedule, skipCompleted = skipCompleted)
+        val result = tracker.checkAll(respectSchedule = respectSchedule, skipCompleted = skipCompleted,
+            onCounts = { counts, total ->
+                listener?.onUpdateProgress(IosUpdateProgress(counts.checked, total, counts.withUpdates,
+                    counts.newChapters, counts.failed, counts.skipped))
+            })
         return IosUpdateReport(result.checked, result.withUpdates, result.failed, result.newChapters, result.skipped)
     }
 
@@ -480,11 +485,13 @@ class IosLibrary {
 
     /** Merges in one transaction; local rows are never cleared and newer local state wins. */
     @Throws(Exception::class)
-    suspend fun restoreBackup(preview: IosBackupPreview): Int = backups.restore(preview)
+    suspend fun restoreBackup(preview: IosBackupPreview, listener: IosProgressListener? = null): Int =
+        backups.restore(preview, listener)
 
     /** Writes the Android-compatible library sections; [path] must not exist yet. */
     @Throws(Exception::class)
-    suspend fun exportBackup(path: String) = backups.export(path, kotlin.time.Clock.System.now().toEpochMilliseconds())
+    suspend fun exportBackup(path: String, listener: IosProgressListener? = null) =
+        backups.export(path, kotlin.time.Clock.System.now().toEpochMilliseconds(), ProgressThrottle(listener))
 
     private val externalBackups by lazy { IosExternalBackupService(this) }
 
