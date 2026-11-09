@@ -224,6 +224,43 @@ final class ReaderDownloadQueueTests: XCTestCase {
         XCTAssertEqual(calls, ["1", "1", "2", "3"])
     }
 
+    func testUserStopsReachTheOperationButRunningOutOfTimeDoesNot() async throws {
+        let queue = ReaderDownloadQueue(file: try file())
+        let leases = FakeLeases()
+        leases.install(on: queue)
+        var stops: [String] = []
+        queue.onUserStop = { stops.append($0.chapterID) }
+        var waiting: [String: CheckedContinuation<Void, Never>] = [:]
+        queue.attach { request, progress in
+            await withCheckedContinuation { waiting[request.chapterID] = $0 }
+            try await progress(1, 1)
+        }
+        try await queue.enqueue([request("1"), request("2")])
+        try await eventually { waiting["1"] != nil }
+        // Out of background time: the transfer is left to the system.
+        await queue.setForeground(false)
+        leases.stop?(true)
+        try await eventually { queue.entries.allSatisfy { $0.state == .paused } }
+        XCTAssertEqual(stops, [])
+        waiting.removeValue(forKey: "1")?.resume()
+        try await eventually { !queue.hasActiveWorker }
+
+        await queue.setForeground(true)
+        try await eventually { waiting["1"] != nil }
+        try await queue.pause(request("1").id)
+        XCTAssertEqual(stops, ["1"])
+        waiting.removeValue(forKey: "1")?.resume()
+        try await eventually { waiting["2"] != nil }
+        // The user's stop from the system's progress.
+        await queue.setForeground(false)
+        leases.stop?(false)
+        try await eventually { stops == ["1", "2"] }
+        waiting.removeValue(forKey: "2")?.resume()
+        try await eventually { !queue.hasActiveWorker }
+        try await queue.remove(request("2").id)
+        XCTAssertEqual(stops, ["1", "2", "2"])
+    }
+
     func testCorruptArchiveAndFailedPersistenceDoNotOverwriteUserState() async throws {
         let location = try file()
         let corrupt = Data("broken archive".utf8)

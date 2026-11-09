@@ -121,6 +121,9 @@ final class ReaderDownloadQueue: ObservableObject {
     private var maintainingStorage = false
     /// Without one (tests), leaving the screen pauses the queue as before.
     var leaseFactory: LeaseFactory?
+    /// The user paused, removed or stopped this entry: work its operation handed to the system (an episode's
+    /// background transfer) must stop too. Running out of background time does not call it; that work goes on.
+    var onUserStop: (@MainActor (ReaderDownloadRequest) -> Void)?
     private var lease: ReaderDownloadLease?
     private var leaseUserInitiated = false
     /// A tap queued or resumed work since the last lease began.
@@ -171,6 +174,7 @@ final class ReaderDownloadQueue: ObservableObject {
             if entry.state == .queued || entry.state == .running { entry.state = .paused }
         }
         running?.cancel()
+        stopped(id)
     }
 
     func resume(_ id: String) async throws {
@@ -189,8 +193,14 @@ final class ReaderDownloadQueue: ObservableObject {
     func remove(_ id: String) async throws {
         guard !maintainingStorage else { throw ReaderStorageError.busy }
         let running = activeID == id ? worker : nil
+        let request = entries.first { $0.id == id }?.request
         try await write { $0.removeAll { $0.id == id } }
         running?.cancel()
+        if let request { onUserStop?(request) }
+    }
+
+    private func stopped(_ id: String) {
+        if let request = entries.first(where: { $0.id == id })?.request { onUserStop?(request) }
     }
 
     func isFinishing(_ id: String) -> Bool { activeID == id }
@@ -254,6 +264,7 @@ final class ReaderDownloadQueue: ObservableObject {
 
     private func stopAll(resumable: Bool) async {
         worker?.cancel()
+        if !resumable, let activeID { stopped(activeID) }
         if maintainingStorage { return }
         do {
             try await write { next in

@@ -258,6 +258,41 @@ final class VideoSourceTests: XCTestCase {
 
     /// Native search covers local favourites, pinned sources, toolbar search and query handoff to More.
     @MainActor
+    /// A network episode downloads through the system's background session (the fixture serves HLS, which becomes an
+    /// offline package) and the player then reports it as downloaded.
+    func testCmsEpisodeDownloadsThroughTheBackgroundSession() throws {
+        try requireFixture()
+        let app = XCUIApplication()
+        app.launch()
+        // A site of its own, so no earlier run has the episode already.
+        let siteName = "后台下载 \(UUID().uuidString.prefix(6))"
+        importVideoSite(app, url: api + "?download=\(siteName.suffix(6))", title: siteName)
+        resetBrowseFilters(app)
+        let sourceSearch = app.pageSearchField()
+        XCTAssertTrue(sourceSearch.waitForExistence(timeout: 10))
+        sourceSearch.tap(); sourceSearch.typeText(siteName)
+        let source = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@",
+                                                      "source.JSON_TVBOX_", siteName)).firstMatch
+        XCTAssertTrue(source.waitForExistence(timeout: 10), app.debugDescription)
+        let sourceName = String(source.identifier.dropFirst("source.".count))
+        source.tap()
+        let work = element(app, "source.content.\(contentId(101, sourceName))")
+        XCTAssertTrue(work.waitForExistence(timeout: 30), app.debugDescription)
+        work.tap()
+        let episode = revealChapter(in: app, timeout: 30)
+        XCTAssertTrue(episode.exists, app.debugDescription)
+        episode.tap()
+        let download = playerControl(app, "player.download")
+        XCTAssertTrue(download.waitForExistence(timeout: 30), app.debugDescription)
+        XCTAssertNotEqual(download.label, "本集已下载")
+        download.tap()
+        let downloaded = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "本集已下载"),
+                                                   object: download)
+        XCTAssertEqual(XCTWaiter().wait(for: [downloaded], timeout: 120), .completed,
+                       "Episode did not finish: \(app.debugDescription)")
+        attach(app, "Background session episode download")
+    }
+
     func testGlobalAndPerSourceSearchReturnFixtureResults() throws {
         continueAfterFailure = false
         try requireFixture()
