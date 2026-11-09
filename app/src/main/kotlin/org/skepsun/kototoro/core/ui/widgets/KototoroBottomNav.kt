@@ -1062,7 +1062,10 @@ private fun FloatingBottomNavRow(
                     Column(
                     modifier = Modifier
                         .then(itemModifier.fillMaxHeight())
-                        .padding(horizontal = 1.dp, vertical = 6.dp),
+                        .padding(
+                            horizontal = if (isSelected && useSharedLiquidGlassPill) 8.dp else 1.dp,
+                            vertical = 6.dp,
+                        ),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
                 ) {
