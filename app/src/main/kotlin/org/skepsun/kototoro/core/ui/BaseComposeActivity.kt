@@ -6,7 +6,6 @@ import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -20,7 +19,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.core.view.WindowCompat
 import com.lagradost.cloudstream3.MainActivity as CloudstreamHostActivity
 import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.flow.Flow
@@ -36,7 +34,6 @@ import org.skepsun.kototoro.core.ui.compose.KototoroSnackbarHost
 import org.skepsun.kototoro.core.ui.glass.LocalGlassTuning
 import org.skepsun.kototoro.core.ui.glass.rememberGlassTuning
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
-import org.skepsun.kototoro.core.ui.util.configureSafeAreaWindow
 import org.skepsun.kototoro.main.ui.protect.ScreenshotPolicyHelper
 
 abstract class BaseComposeActivity :
@@ -85,9 +82,7 @@ abstract class BaseComposeActivity :
         putDataToExtras(intent)
         exceptionResolver = entryPoint.exceptionResolverFactory.create(this)
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
-        WindowCompat.setDecorFitsSystemWindows(window, false)
-        configureSafeAreaWindow()
+        configureKototoroEdgeToEdge()
 
         observeBrowserInteractiveChallenges(entryPoint.webViewExecutor)
     }

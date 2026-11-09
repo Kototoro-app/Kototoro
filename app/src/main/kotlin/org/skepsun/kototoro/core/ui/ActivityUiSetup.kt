@@ -1,7 +1,11 @@
 package org.skepsun.kototoro.core.ui
 
-import androidx.activity.enableEdgeToEdge
+import android.graphics.Color
+import android.os.Build
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
+import androidx.activity.enableEdgeToEdge
+import androidx.core.content.ContextCompat
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowCompat
 import org.skepsun.kototoro.R
@@ -54,8 +58,29 @@ internal fun AppCompatActivity.applyKototoroActivityTheme(settings: AppSettings)
     }
 }
 
+/**
+ * Draws the activity behind both system bars on every API level.
+ *
+ * The no-argument [enableEdgeToEdge] paints a 90% white / 50% black scrim behind the navigation
+ * bar on API 26-28 and turns navigation bar contrast enforcement back on for API 29+, overriding
+ * the theme's `enforceNavigationBarContrast=false`. Several Android 10-12 ROMs honour that flag
+ * even with gesture navigation, leaving an opaque bar unless edge-to-edge is forced system-wide.
+ * API 26 cannot draw dark navigation icons, so it keeps the dim scrim the theme declares there.
+ */
 internal fun ComponentActivity.configureKototoroEdgeToEdge() {
-    enableEdgeToEdge()
+    val navigationBarStyle = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+        SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT)
+    } else {
+        SystemBarStyle.dark(ContextCompat.getColor(this, R.color.dim))
+    }
+    enableEdgeToEdge(
+        statusBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT),
+        navigationBarStyle = navigationBarStyle,
+    )
     WindowCompat.setDecorFitsSystemWindows(window, false)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        window.isStatusBarContrastEnforced = false
+        window.isNavigationBarContrastEnforced = false
+    }
     configureSafeAreaWindow()
 }
