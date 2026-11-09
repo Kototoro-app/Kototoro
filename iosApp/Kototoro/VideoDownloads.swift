@@ -82,7 +82,7 @@ enum VideoDownloads {
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         try await progress(0, 100)
         // Media takes the first 90% of the bar; subtitle files are small and finish it.
-        let media = try await MediaFile.fetch(stream, into: dir) { percent in
+        let media = try await MediaFile.fetch(stream, into: dir, title: "\(content.title) · \(chapter.title)") { percent in
             try await progress(Int(Double(percent) * 0.9), 100)
         }
         try Task.checkCancellation()
@@ -110,7 +110,7 @@ enum VideoDownloads {
         /// Fetch the stream into `directory`, choosing a single file or the HLS package from the address, and for an
         /// address that does not say, from the first bytes of the body.
         @MainActor
-        static func fetch(_ stream: IosSourcePage, into directory: URL,
+        static func fetch(_ stream: IosSourcePage, into directory: URL, title: String,
                           progress: @escaping (Int) async throws -> Void) async throws -> MediaFile {
             guard let url = URL(string: stream.url) else { throw URLError(.badURL) }
             let partial = directory.appendingPathComponent(partialName)
@@ -124,11 +124,12 @@ enum VideoDownloads {
                 return try await copyLocal(url, into: directory)
             }
             if !finished && url.absoluteString.range(of: ".m3u8", options: .caseInsensitive) != nil {
-                return try await downloadHLS(url, headers: stream.headers, into: directory, progress: progress)
+                return try await downloadHLS(url, headers: stream.headers, into: directory, title: title, progress: progress)
             }
             do {
                 if !finished {
-                    let transfer = VideoTransfers.shared.fetch(url: url, headers: stream.headers, to: partial, hls: false)
+                    let transfer = VideoTransfers.shared.fetch(url: url, headers: stream.headers, to: partial, hls: false,
+                                                               title: title)
                     for try await percent in transfer {
                         try Task.checkCancellation()
                         try await progress(percent)
@@ -140,7 +141,7 @@ enum VideoDownloads {
                 // A playlist served under a neutral address must not be saved as if it were the video.
                 if try looksLikePlaylist(downloaded) {
                     try? FileManager.default.removeItem(at: downloaded)
-                    return try await downloadHLS(url, headers: stream.headers, into: directory, progress: progress)
+                    return try await downloadHLS(url, headers: stream.headers, into: directory, title: title, progress: progress)
                 }
                 let name = "video" + mediaExtension(url)
                 let target = directory.appendingPathComponent(name)
@@ -173,11 +174,11 @@ enum VideoDownloads {
         }
 
         @MainActor
-        private static func downloadHLS(_ url: URL, headers: [String: String], into directory: URL,
+        private static func downloadHLS(_ url: URL, headers: [String: String], into directory: URL, title: String,
                                         progress: @escaping (Int) async throws -> Void) async throws -> MediaFile {
             let partial = hlsPartial(directory)
             try? FileManager.default.removeItem(at: partial)
-            let transfer = VideoTransfers.shared.fetch(url: url, headers: headers, to: partial, hls: true)
+            let transfer = VideoTransfers.shared.fetch(url: url, headers: headers, to: partial, hls: true, title: title)
             for try await percent in transfer {
                 try Task.checkCancellation()
                 try await progress(percent)
@@ -314,8 +315,9 @@ final class VideoTransfers: NSObject, URLSessionDownloadDelegate, AVAssetDownloa
     }
 
     /// Percent of the transfer into [destination]; ending the stream leaves the transfer to the system ([cancel]
-    /// stops it). [hls] downloads a playlist into an offline package.
-    func fetch(url: URL, headers: [String: String], to destination: URL, hls: Bool) -> AsyncThrowingStream<Int, Error> {
+    /// stops it). [hls] downloads a playlist into an offline package; the system shows its progress under [title].
+    func fetch(url: URL, headers: [String: String], to destination: URL, hls: Bool,
+               title: String) -> AsyncThrowingStream<Int, Error> {
         let key = Self.key(destination)
         let token = UUID()
         return AsyncThrowingStream { continuation in
@@ -337,7 +339,7 @@ final class VideoTransfers: NSObject, URLSessionDownloadDelegate, AVAssetDownloa
                 let task: URLSessionTask?
                 if hls {
                     let asset = AVURLAsset(url: url, options: headers.isEmpty ? nil : ["AVURLAssetHTTPHeaderFieldsKey": headers])
-                    task = self.hls.makeAssetDownloadTask(asset: asset, assetTitle: "video", assetArtworkData: nil,
+                    task = self.hls.makeAssetDownloadTask(asset: asset, assetTitle: title, assetArtworkData: nil,
                                                           options: nil)
                 } else {
                     var request = URLRequest(url: url)
