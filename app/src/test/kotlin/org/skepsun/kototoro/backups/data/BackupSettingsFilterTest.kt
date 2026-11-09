@@ -7,20 +7,19 @@ import org.junit.jupiter.api.Test
 class BackupSettingsFilterTest {
 
     @Test
-    fun `password keys are excluded`() {
-        assertFalse(BackupSettingsFilter.isBackupableKey("backup_periodic_webdav_password"))
+    fun `local-only keys are excluded`() {
         assertFalse(BackupSettingsFilter.isBackupableKey("app_password"))
+        assertFalse(BackupSettingsFilter.isBackupableKey("available_sources"))
     }
 
     @Test
-    fun `uri keys are excluded`() {
-        assertFalse(BackupSettingsFilter.isBackupableKey("backups_output_dir_uri"))
-        assertFalse(BackupSettingsFilter.isBackupableKey("pages_dir"))
+    fun `webdav credentials and paths are kept`() {
+        assertTrue(BackupSettingsFilter.isBackupableKey("backup_periodic_webdav_password"))
+        assertTrue(BackupSettingsFilter.isBackupableKey("backup_periodic_webdav_remote_path"))
     }
 
     @Test
     fun `regular reader setting is included`() {
         assertTrue(BackupSettingsFilter.isBackupableKey("reader_mode"))
-        assertTrue(BackupSettingsFilter.isBackupableKey("backup_periodic_webdav_server_url"))
     }
 }
