@@ -129,6 +129,7 @@
     <string name="text_file_not_supported">Either pick a ZIP or CBZ file.</string>
     <string name="no_description">No description</string>
     <string name="clear_pages_cache">Clear page cache</string>
+    <string name="clear_chapter_thumbnails">Clear chapter thumbnails</string>
     <string name="text_file_sizes">B|kB|MB|GB|TB</string>
     <string name="standard">Standard</string>
     <string name="webtoon">Webtoon</string>
@@ -168,7 +169,7 @@
     <string name="double_page_cover_page">First page as cover (solo)</string>
     <string name="miscellaneous">Miscellaneous</string>
     <string name="grid_size">Grid size</string>
-    <string name="grid_size_columns_hint">About %1$d columns per row</string>
+    <string name="grid_size_columns_hint">~%1$d columns</string>
     <string name="home_rail_rows_per_page">Rows per page</string>
     <string name="grid_aspect_ratio">Grid ratio</string>
     <string name="fit_page_thumbnails">Fit page thumbnails</string>
@@ -312,10 +313,7 @@
     <string name="size_s">Size: %s</string>
     <string name="clear_updates_feed">Clear updates feed</string>
     <string name="updates_feed_cleared">Cleared</string>
-    <string name="show_all_updates">Show all updates</string>
     <string name="feed_visible_entries">Visible entries limit</string>
-    <string name="feed_behavior_description">Default shows new unread chapters only.\n\nWhen enabled, the feed shows cached tracked entries with up to 10 chapters per item. Use Trigger Update to refresh tracked favorites.</string>
-    <string name="trigger_update_now">Trigger Update</string>
     <string name="rotate_screen">Rotate screen</string>
     <string name="update">Update</string>
     <string name="feed_will_update_soon">Feed update will start soon</string>
@@ -414,6 +412,7 @@
     <string name="hide_read_chapters">Hide read chapters</string>
     <string name="chapter_show_download_button">Show download buttons</string>
     <string name="chapter_show_translate_button">Show translate buttons</string>
+    <string name="chapter_show_thumbnails">Show chapter thumbnails</string>
     <string name="merge_branch_chapters">Merge branch chapters</string>
     <string name="sign_in">Sign in</string>
     <string name="sign_in_in_settings">Sign in in settings</string>
@@ -562,8 +561,7 @@
     <string name="browse_more_tracking_recommendations_summary">Show additional tracking rows below content sources on the Browse page. When disabled, the hero stays visible and content sources stay expanded.</string>
     <string name="bangumi_recommendations_load_failed_hint">Failed to load Bangumi recommendations. Try a VPN or select another mirror in Settings - Storage &amp; network.</string>
     <string name="browse_display_options_summary">This option has moved to Browse page search bar > More > Display options.</string>
-    <string name="show_extra_info_on_cards">Show extra info on cards</string>
-    <string name="show_extra_info_on_cards_summary">Display rating, status, chapter count and tags on content cards</string>
+    <string name="show_extra_info_on_cards">Extra info</string>
     <string name="card_progress_style">Card progress style</string>
     <string name="card_progress_style_bottom_bar">Bottom progress bar</string>
     <string name="card_progress_style_circular_badge">Corner circular badge</string>
@@ -1332,6 +1330,11 @@
     <string name="manage_categories">Manage categories</string>
     <string name="suggestions_wifi_only_summary">Do not update suggestions using metered network connections</string>
     <string name="tracker_wifi_only_summary">Do not check for new chapters using metered network connections</string>
+    <string name="tracker_skip_completed">Skip completed titles</string>
+    <string name="tracker_skip_completed_summary">Don\'t check titles their source marks as completed</string>
+    <string name="tracker_mark_duplicates_read">Mark repeated chapters as read</string>
+    <string name="tracker_mark_duplicates_read_summary">New chapters with the number of a chapter you have read count as read</string>
+    <string name="tracker_progress_summary">New chapters: %1$d · Failed: %2$d · Skipped: %3$d</string>
     <string name="search_hint">Enter manga title, genre or source name</string>
     <string name="progress">Progress</string>
     <string name="reader_progress_template">Chapter %1$d/%2$d · %3$d%%</string>
@@ -1417,6 +1420,7 @@
     <string name="video_cache_size">Cache size (MB)</string>
     <string name="video_cache_size_summary">%1$d MB</string>
     <string name="thumbnails_cache_limit">Thumbnails cache limit</string>
+    <string name="chapter_thumbnails_cache_limit">Chapter thumbnails cache limit</string>
     <string name="favicons_cache_limit">Favicons cache limit</string>
     <string name="pages_cache_limit">Pages cache limit</string>
     <string name="novel_cache_limit">Novel cache limit</string>
@@ -1919,6 +1923,13 @@
     <string name="pref_nav_labels_always_visible_summary">Show the label on every navigation item instead of only the selected one</string>
     <string name="pages_saving">Saving pages</string>
     <string name="ask_for_dest_dir_every_time">Ask for the destination dir every time</string>
+    <string name="pages_save_per_manga_folder">Create a folder for each manga</string>
+    <string name="pages_save_per_manga_folder_summary">Pages saved to the default directory go into a subfolder named after the manga</string>
+    <string name="crop_include_previous_page">Add previous page</string>
+    <string name="crop_include_next_page">Add next page</string>
+    <string name="crop_stitch_top_to_bottom">Top to bottom</string>
+    <string name="crop_stitch_left_to_right">Left to right</string>
+    <string name="crop_stitch_right_to_left">Right to left</string>
     <string name="default_page_save_dir">Default page save directory</string>
     <string name="remove_from_history">Remove from history</string>
     <string name="location">Location</string>
@@ -2036,6 +2047,8 @@
     <string name="disable_nsfw_notifications">Disable NSFW notifications</string>
     <string name="disable_nsfw_notifications_summary">Do not show notifications about NSFW manga updates</string>
     <string name="tracker_debug_info">Checking for new chapters log</string>
+    <string name="tracker_failing_titles">Titles that keep failing</string>
+    <string name="tracker_next_check">Next check %s</string>
     <string name="tracker_debug_info_summary">Debug information about background checks for new chapters</string>
     <!-- In plural, used for filter -->
     <string name="_new">New</string>
@@ -2658,7 +2671,7 @@
     <string name="aniyomi_extensions_summary">Manage Aniyomi extension sources</string>
     <string name="extensions">APK extension</string>
     <string name="extension_management">Extension management</string>
-    <string name="extension_management_summary">Manage repositories, JSON sources, APK extensions, and JAR parsers</string>
+    <string name="extension_management_summary">Enable and test sources, manage repositories and extension packages</string>
     <string name="extensions_summary_pattern">Mihon %1$d · Aniyomi %2$d · IReader %3$d</string>
     <string name="filter_extensions_by_language">Filter extensions by language</string>
     <string name="filter_extensions_by_language_summary">Only show Mihon and Aniyomi extensions that match your selected content languages</string>
@@ -3433,8 +3446,21 @@
     <string name="pref_glass_blur_strength_summary">Sets the final blur radius used by the current glass material preset, in dp</string>
     <string name="pref_glass_noise_strength">Glass noise factor</string>
     <string name="pref_glass_noise_strength_summary">Sets the final noise amount applied to the current glass material preset, from 0.00 to 1.00</string>
+    <string name="appearance_group_immersive">Immersive layers</string>
+    <string name="appearance_immersive_summary">Tint and blur under the top and bottom bars, and blur quality</string>
     <string name="pref_glass_immersive_strength">Immersive tint strength</string>
     <string name="pref_glass_immersive_strength_summary">Controls the top and bottom immersive tint intensity independently of the selected material preset</string>
+    <string name="pref_glass_immersive_top">Top immersive layer</string>
+    <string name="pref_glass_immersive_top_summary">Tint and blur the content under the status bar and top bar</string>
+    <string name="pref_glass_immersive_bottom">Bottom immersive layer</string>
+    <string name="pref_glass_immersive_bottom_summary">Tint and blur the content around the bottom bar; the floating glass bar reads fine without it</string>
+    <string name="pref_glass_edge_blur">Edge blur</string>
+    <string name="pref_glass_edge_blur_summary">Blurs the content under the top and bottom bars and fades it out; requires Android 12 or later</string>
+    <string name="pref_glass_blur_quality">Blur quality</string>
+    <string name="pref_glass_blur_quality_summary">Resolution that glass and edge blur are computed from. Lower saves GPU and battery; higher keeps text that leaves the blur sharper</string>
+    <string name="pref_glass_blur_quality_performance">Performance</string>
+    <string name="pref_glass_blur_quality_balanced">Balanced</string>
+    <string name="pref_glass_blur_quality_quality">Quality</string>
     <string name="glass_material_family_kototoro">Kototoro (Recommended)</string>
     <string name="glass_material_family_haze">Haze</string>
     <string name="glass_material_family_cupertino">Cupertino</string>
@@ -3553,6 +3579,10 @@
     <string name="start_reading">Start reading</string>
     <string name="pref_tablet_list_filter_panel">Open filter panel on entering list</string>
     <string name="pref_tablet_list_filter_panel_summary">On tablets, open the filter drawer when opening a source list.</string>
+    <string name="pref_tablet_nav_bar_left">Navigation bar on the left</string>
+    <string name="pref_tablet_nav_bar_left_summary">On tablets, place the vertical navigation bar along the left edge instead of the right</string>
+    <string name="pref_tablet_nav_labels">Navigation bar labels</string>
+    <string name="pref_tablet_nav_labels_summary">On tablets, show a label under each destination in the vertical navigation bar</string>
     <string name="appearance_group_list_interaction">List interaction and motion</string>
     <string name="appearance_group_list_information">List information</string>
     <string name="appearance_group_details_content">Content and controls</string>
@@ -4164,4 +4194,8 @@
     <string name="kitsu_dub_de">German dub</string>
     <string name="kitsu_dub_ko">Korean dub</string>
     <string name="kitsu_dub_it">Italian dub</string>
+    <string name="source_preferences">Source preferences &amp; content filters</string>
+    <string name="source_preferences_summary">Sorting, grouping, adult content filters and tag blacklist</string>
+    <string name="source_preferences_browsing">Browsing</string>
+    <string name="extension_settings">Extension settings</string>
 </resources>

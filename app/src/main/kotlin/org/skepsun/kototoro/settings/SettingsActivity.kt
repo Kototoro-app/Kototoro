@@ -107,6 +107,7 @@ import org.skepsun.kototoro.settings.about.AboutSettingsViewModel
 import org.skepsun.kototoro.settings.about.AppUpdateActivity
 import org.skepsun.kototoro.settings.about.changelog.ChangelogRoute
 import org.skepsun.kototoro.settings.about.changelog.ChangelogViewModel
+import org.skepsun.kototoro.settings.compose.SourcesSettingsPage
 import org.skepsun.kototoro.settings.compose.SettingsAdaptiveShell
 import org.skepsun.kototoro.settings.compose.AppearanceSettingsPage
 import org.skepsun.kototoro.settings.compose.SettingsAlertDialog
@@ -250,7 +251,6 @@ class SettingsActivity :
         }
 
     private val viewModel: SettingsSearchViewModel by viewModels()
-    private val rootSettingsViewModel: RootSettingsViewModel by viewModels()
     private val aboutSettingsViewModel: AboutSettingsViewModel by viewModels()
     private val periodicalBackupSettingsViewModel: PeriodicalBackupSettingsViewModel by viewModels()
     private val discordSettingsViewModel: DiscordSettingsViewModel by viewModels()
@@ -555,6 +555,9 @@ class SettingsActivity :
                 SettingsDestination.AppearanceGlassSettings -> {
                     outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_APPEARANCE_GLASS_SETTINGS)
                 }
+                SettingsDestination.AppearanceImmersiveSettings -> {
+                    outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_APPEARANCE_IMMERSIVE_SETTINGS)
+                }
                 SettingsDestination.AppearanceBadgesSettings -> {
                     outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_APPEARANCE_BADGES_SETTINGS)
                 }
@@ -599,6 +602,9 @@ class SettingsActivity :
                 }
                 SettingsDestination.SourcesSettings -> {
                     outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_SOURCES_SETTINGS)
+                }
+                SettingsDestination.ExtensionSettings -> {
+                    outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_EXTENSION_SETTINGS)
                 }
                 SettingsDestination.SuggestionsSettings -> {
                     outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_SUGGESTIONS_SETTINGS)
@@ -732,6 +738,7 @@ class SettingsActivity :
             SettingsDestination.AppearanceHomeSettings,
             SettingsDestination.AppearanceInterfaceSettings,
             SettingsDestination.AppearanceGlassSettings,
+            SettingsDestination.AppearanceImmersiveSettings,
             SettingsDestination.AppearanceBadgesSettings,
             SettingsDestination.AppearanceSearchFiltersSettings,
             SettingsDestination.AppearanceNavigationSettings,
@@ -747,6 +754,7 @@ class SettingsActivity :
             SettingsDestination.ReaderSettings,
             SettingsDestination.ReplaceRulesSettings,
             SettingsDestination.SourcesSettings,
+            SettingsDestination.ExtensionSettings,
             SettingsDestination.SuggestionsSettings,
             SettingsDestination.SyncSettings,
             SettingsDestination.BackupsSettings,
@@ -795,6 +803,7 @@ class SettingsActivity :
             AppRouter.ACTION_PROXY -> SettingsDestination.ProxySettings
             AppRouter.ACTION_READER -> SettingsDestination.ReaderSettings
             AppRouter.ACTION_SOURCES -> SettingsDestination.SourcesSettings
+            AppRouter.ACTION_EXTENSION_SETTINGS -> SettingsDestination.ExtensionSettings
             AppRouter.ACTION_MANAGE_DOWNLOADS -> SettingsDestination.DownloadsSettings
             AppRouter.ACTION_MANAGE_SOURCES -> null
             AppRouter.ACTION_SOURCE -> intent.getStringExtra(AppRouter.KEY_SOURCE)
@@ -861,6 +870,7 @@ class SettingsActivity :
             SettingsDestination.SourcesSettings -> {
                 sourcesSettingsViewModel.refreshLinksEnabled()
             }
+            SettingsDestination.ExtensionSettings -> Unit
             is SettingsDestination.UnifiedSources -> {
                 updateUnifiedSourcesSearchActive(false)
                 unifiedSourcesActivePanel = null
@@ -898,6 +908,7 @@ class SettingsActivity :
             SettingsDestination.AppearanceHomeSettings -> COMPOSE_DESTINATION_APPEARANCE_HOME_SETTINGS
             SettingsDestination.AppearanceInterfaceSettings -> COMPOSE_DESTINATION_APPEARANCE_INTERFACE_SETTINGS
             SettingsDestination.AppearanceGlassSettings -> COMPOSE_DESTINATION_APPEARANCE_GLASS_SETTINGS
+            SettingsDestination.AppearanceImmersiveSettings -> COMPOSE_DESTINATION_APPEARANCE_IMMERSIVE_SETTINGS
             SettingsDestination.AppearanceBadgesSettings -> COMPOSE_DESTINATION_APPEARANCE_BADGES_SETTINGS
             SettingsDestination.AppearanceSearchFiltersSettings -> COMPOSE_DESTINATION_APPEARANCE_SEARCH_FILTERS_SETTINGS
             SettingsDestination.AppearanceNavigationSettings -> COMPOSE_DESTINATION_APPEARANCE_NAVIGATION_SETTINGS
@@ -913,6 +924,7 @@ class SettingsActivity :
             SettingsDestination.ReaderSettings -> COMPOSE_DESTINATION_READER_SETTINGS
             SettingsDestination.ReplaceRulesSettings -> COMPOSE_DESTINATION_REPLACE_RULES_SETTINGS
             SettingsDestination.SourcesSettings -> COMPOSE_DESTINATION_SOURCES_SETTINGS
+            SettingsDestination.ExtensionSettings -> COMPOSE_DESTINATION_EXTENSION_SETTINGS
             SettingsDestination.SuggestionsSettings -> COMPOSE_DESTINATION_SUGGESTIONS_SETTINGS
             SettingsDestination.SyncSettings -> COMPOSE_DESTINATION_SYNC_SETTINGS
             SettingsDestination.BackupsSettings -> COMPOSE_DESTINATION_BACKUPS_SETTINGS
@@ -946,6 +958,7 @@ class SettingsActivity :
             SettingsDestination.AppearanceInterfaceSettings ->
                 getString(R.string.appearance_group_interface_and_behavior)
             SettingsDestination.AppearanceGlassSettings -> getString(R.string.appearance_group_glass_tuner)
+            SettingsDestination.AppearanceImmersiveSettings -> getString(R.string.appearance_group_immersive)
             SettingsDestination.AppearanceBadgesSettings -> getString(R.string.badges_in_lists)
             SettingsDestination.AppearanceSearchFiltersSettings -> getString(R.string.search_bar_filters)
             SettingsDestination.AppearanceNavigationSettings -> getString(R.string.appearance_navigation_group)
@@ -960,7 +973,8 @@ class SettingsActivity :
             SettingsDestination.PlaybackSettings -> getString(R.string.playback_settings)
             SettingsDestination.ReaderSettings -> getString(R.string.reader_settings)
             SettingsDestination.ReplaceRulesSettings -> getString(R.string.replace_rules)
-            SettingsDestination.SourcesSettings -> getString(R.string.remote_sources)
+            SettingsDestination.SourcesSettings -> getString(R.string.source_preferences)
+            SettingsDestination.ExtensionSettings -> getString(R.string.extension_settings)
             SettingsDestination.SuggestionsSettings -> getString(R.string.suggestions)
             SettingsDestination.SyncSettings -> getString(R.string.sync_settings)
             SettingsDestination.BackupsSettings -> getString(R.string.backup_restore)
@@ -1022,6 +1036,9 @@ class SettingsActivity :
             onOpenInterfaceSettings = {
                 openDestination(SettingsDestination.AppearanceInterfaceSettings, null, false)
             },
+            onOpenImmersiveSettings = {
+                openDestination(SettingsDestination.AppearanceImmersiveSettings, null, false)
+            },
         )
     }
 
@@ -1058,6 +1075,11 @@ class SettingsActivity :
                 title = getString(R.string.appearance_group_glass_tuner),
             ) {
                 RenderAppearanceSettings(AppearanceSettingsPage.GLASS)
+            }
+            SettingsDestination.AppearanceImmersiveSettings -> RenderComposeSection(
+                title = getString(R.string.appearance_group_immersive),
+            ) {
+                RenderAppearanceSettings(AppearanceSettingsPage.IMMERSIVE)
             }
             SettingsDestination.AppearanceBadgesSettings -> RenderComposeSection(
                 title = getString(R.string.badges_in_lists),
@@ -1417,7 +1439,16 @@ class SettingsActivity :
             ) {
                 SourceSettingsRoute(appRouter = router)
             }
-            SettingsDestination.SourcesSettings -> RenderComposeSection(title = getString(R.string.remote_sources)) {
+            SettingsDestination.ExtensionSettings -> RenderComposeSection(title = getString(R.string.extension_settings)) {
+                SourcesSettingsRoute(
+                    settings = kototoroAppSettings,
+                    viewModel = sourcesSettingsViewModel,
+                    onSetupWizardClick = { router.showWelcomeSheet() },
+                    onGlobalTagBlacklistClick = {},
+                    page = SourcesSettingsPage.EXTENSIONS,
+                )
+            }
+            SettingsDestination.SourcesSettings -> RenderComposeSection(title = getString(R.string.source_preferences)) {
                 SourcesSettingsRoute(
                     settings = kototoroAppSettings,
                     viewModel = sourcesSettingsViewModel,
@@ -1464,6 +1495,7 @@ class SettingsActivity :
                         onSearchClick = { updateUnifiedSourcesSearchActive(true) },
                         onFilterClick = openFilter,
                         onGroupsClick = { showSourceGroups = true },
+                        onSettingsClick = { openDestination(SettingsDestination.ExtensionSettings, null, false) },
                         reorderEnabled = !(loadingOrder || readyState == null || readyState.filters.query.isNotBlank()),
                         onReorderClick = {
                             loadingOrder = true
@@ -1549,8 +1581,6 @@ class SettingsActivity :
 
     @Composable
     private fun RenderSettingsRootContent(modifier: Modifier = Modifier) {
-        val enabledSourcesCount by rootSettingsViewModel.enabledSourcesCount.collectAsStateWithLifecycle()
-        val totalSourcesCount by rootSettingsViewModel.totalSourcesCount.collectAsStateWithLifecycle()
         val searchResults by viewModel.content.collectAsStateWithLifecycle()
         val searchQuery by viewModel.queryText.collectAsStateWithLifecycle()
         val isSearchActive by viewModel.isSearchActive.collectAsStateWithLifecycle()
@@ -1579,8 +1609,6 @@ class SettingsActivity :
             SettingsRootScreen(
                 sections = buildSettingsRootSections(
                     context = this,
-                    enabledSourcesCount = enabledSourcesCount,
-                    totalSourcesCount = totalSourcesCount,
                     onOpenDestination = { composeDestination ->
                         openDestination(composeDestination, null, true)
                     },
@@ -2196,6 +2224,7 @@ class SettingsActivity :
         private const val COMPOSE_DESTINATION_APPEARANCE_HOME_SETTINGS = "appearance_home_settings"
         private const val COMPOSE_DESTINATION_APPEARANCE_INTERFACE_SETTINGS = "appearance_interface_settings"
         private const val COMPOSE_DESTINATION_APPEARANCE_GLASS_SETTINGS = "appearance_glass_settings"
+        private const val COMPOSE_DESTINATION_APPEARANCE_IMMERSIVE_SETTINGS = "appearance_immersive_settings"
         private const val COMPOSE_DESTINATION_APPEARANCE_BADGES_SETTINGS = "appearance_badges_settings"
         private const val COMPOSE_DESTINATION_APPEARANCE_SEARCH_FILTERS_SETTINGS = "appearance_search_filters_settings"
         private const val COMPOSE_DESTINATION_APPEARANCE_NAVIGATION_SETTINGS = "appearance_navigation_settings"
@@ -2211,6 +2240,7 @@ class SettingsActivity :
         private const val COMPOSE_DESTINATION_READER_SETTINGS = "reader_settings"
         private const val COMPOSE_DESTINATION_REPLACE_RULES_SETTINGS = "replace_rules_settings"
         private const val COMPOSE_DESTINATION_SOURCES_SETTINGS = "sources_settings"
+        private const val COMPOSE_DESTINATION_EXTENSION_SETTINGS = "extension_settings"
         private const val COMPOSE_DESTINATION_SUGGESTIONS_SETTINGS = "suggestions_settings"
         private const val COMPOSE_DESTINATION_SYNC_SETTINGS = "sync_settings"
         private const val COMPOSE_DESTINATION_BACKUPS_SETTINGS = "backups_settings"
@@ -2270,6 +2300,7 @@ class SettingsActivity :
             COMPOSE_DESTINATION_APPEARANCE_HOME_SETTINGS -> SettingsDestination.AppearanceHomeSettings
             COMPOSE_DESTINATION_APPEARANCE_INTERFACE_SETTINGS -> SettingsDestination.AppearanceInterfaceSettings
             COMPOSE_DESTINATION_APPEARANCE_GLASS_SETTINGS -> SettingsDestination.AppearanceGlassSettings
+            COMPOSE_DESTINATION_APPEARANCE_IMMERSIVE_SETTINGS -> SettingsDestination.AppearanceImmersiveSettings
             COMPOSE_DESTINATION_APPEARANCE_BADGES_SETTINGS -> SettingsDestination.AppearanceBadgesSettings
             COMPOSE_DESTINATION_APPEARANCE_SEARCH_FILTERS_SETTINGS ->
                 SettingsDestination.AppearanceSearchFiltersSettings
@@ -2287,6 +2318,7 @@ class SettingsActivity :
             COMPOSE_DESTINATION_READER_SETTINGS -> SettingsDestination.ReaderSettings
             COMPOSE_DESTINATION_REPLACE_RULES_SETTINGS -> SettingsDestination.ReplaceRulesSettings
             COMPOSE_DESTINATION_SOURCES_SETTINGS -> SettingsDestination.SourcesSettings
+            COMPOSE_DESTINATION_EXTENSION_SETTINGS -> SettingsDestination.ExtensionSettings
             COMPOSE_DESTINATION_SUGGESTIONS_SETTINGS -> SettingsDestination.SuggestionsSettings
             COMPOSE_DESTINATION_SYNC_SETTINGS -> SettingsDestination.SyncSettings
             COMPOSE_DESTINATION_BACKUPS_SETTINGS -> SettingsDestination.BackupsSettings

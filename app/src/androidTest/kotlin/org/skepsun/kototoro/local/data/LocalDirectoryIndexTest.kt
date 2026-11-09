@@ -72,7 +72,7 @@ class LocalDirectoryIndexTest {
         storage = LocalStorageManager(context, settings)
         val content = ContentDataRepository(
             db, Provider { error("No remote links in this fixture") },
-            Provider { error("No shortcuts in this fixture") }, StoredContentIdentityResolver(db),
+            Provider { error("No shortcuts in this fixture") }, StoredContentIdentityResolver(db), settings,
         )
         index = LocalContentIndex(
             content, db, context, Provider { repository }, Provider { LocalNovelRepository(storage) }, storage,

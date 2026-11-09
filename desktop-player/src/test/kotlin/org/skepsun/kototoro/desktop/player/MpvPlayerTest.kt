@@ -166,6 +166,8 @@ class MpvPlayerTest {
             println("${preset.name} ${describe(image)}")
             assertEquals(120 * preset.scale, image.width, preset.name)
             assertEquals(180 * preset.scale, image.height, preset.name)
+            assertTrue((image.getRGB(image.width / 2, image.height / 9) and 0xFF) > 200,
+                "${preset.name} ${describe(image)}")
             if (preset.scale == 2) {
                 var different = 0
                 for (x in 0 until 240 step 3) for (y in 0 until 360 step 3) if (image.getRGB(x, y) != reference.getRGB(x, y)) different++

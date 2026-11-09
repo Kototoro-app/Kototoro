@@ -26,6 +26,7 @@ import androidx.compose.ui.node.LayoutModifierNode
 import androidx.compose.ui.node.ModifierNodeElement
 import androidx.compose.ui.node.ObserverModifierNode
 import androidx.compose.ui.node.observeReads
+import androidx.compose.ui.node.invalidateDraw
 import androidx.compose.ui.node.requireGraphicsContext
 import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.unit.Constraints
@@ -279,7 +280,7 @@ private class DrawBackdropNode(
     // Kototoro patch -- the backdrop layer (blur + lens over everything behind the surface) is
     // re-rendered every frame while content scrolls underneath, and on the glass chrome that was
     // the dominant RenderThread/GPU cost. When an effect is present the layer is recorded at
-    // 1/BackdropResolutionScale and scaled back up; the blur hides the lost detail. Effects see a
+    // BackdropQuality.inputScale and scaled back up; the blur hides the lost detail. Effects see a
     // matching density/size (BackdropEffectScopeImpl.update), so dp parameters are unchanged,
     // while the backdrop itself is still positioned with the real density. See backdrop/UPSTREAM.md.
     private var resolutionScale = 1f
@@ -408,6 +409,8 @@ private class DrawBackdropNode(
 
     override fun onObservedReadsChanged() {
         invalidateDrawCache()
+        // Kototoro patch -- a BackdropQuality change swaps the layer scale, which only the draw pass applies.
+        invalidateDraw()
     }
 
     fun invalidateDrawCache() {
@@ -422,7 +425,11 @@ private class DrawBackdropNode(
         if (!isRenderEffectSupported()) return
 
         effectScope.apply(effects)
-        val wantedScale = if (effectScope.renderEffect != null) BackdropResolutionScale else 1f
+        val wantedScale = if (effectScope.renderEffect != null && !effectScope.requiresFullResolution) {
+            1f / BackdropQuality.inputScale.coerceIn(0.25f, 1f)
+        } else {
+            1f
+        }
         if (wantedScale != resolutionScale) {
             // Effects were resolved against the other scale; resolve them again at the new one.
             effectScope.density = effectScope.density * resolutionScale / wantedScale
@@ -456,6 +463,3 @@ private class DrawBackdropNode(
         exportedBackdrop?.layerCoordinates = null
     }
 }
-
-// Kototoro patch -- see the resolutionScale note in DrawBackdropNode.
-private const val BackdropResolutionScale = 2f

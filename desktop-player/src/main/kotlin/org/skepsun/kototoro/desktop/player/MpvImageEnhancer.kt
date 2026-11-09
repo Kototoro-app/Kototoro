@@ -64,6 +64,8 @@ class MpvImageEnhancer(private val library: Path, private val shaders: MpvShader
         MpvPlayer(library, options = mapOf(
             "o" to output.toAbsolutePath().toString(), "of" to "image2", "ovc" to "png", "frames" to "1",
             "vf" to "gpu=w=$width:h=$height", "glsl-shaders" to shaderList(files),
+            // Anime4K does the upscaling; avoid mpv 0.37/Mesa's black frames in the default separable scaler.
+            "scale" to "bilinear",
             "keep-open" to "no", "audio" to "no",
         )).use { player ->
             player.load(MpvStream(input.toAbsolutePath().toString()))

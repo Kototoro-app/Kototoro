@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -33,7 +32,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import org.skepsun.kototoro.reader.ui.compose.design.ReaderPanelIcons
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.draw.clip
+import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
+import org.skepsun.kototoro.core.ui.theme.LocalIsIosInterfaceStyle
+import org.skepsun.kototoro.settings.compose.SettingsIconTone
+import org.skepsun.kototoro.settings.compose.SettingsLeadingIcon
+import org.skepsun.kototoro.settings.compose.SettingsMaterialIcons
+import org.skepsun.kototoro.settings.compose.settingsChevronColor
+import org.skepsun.kototoro.settings.compose.settingsGroupContainerColor
+import org.skepsun.kototoro.settings.compose.settingsSwitchColors
 import kotlin.math.roundToInt
 
 /**
@@ -58,20 +67,92 @@ fun SettingsSectionHeader(text: String, modifier: Modifier = Modifier) {
     )
 }
 
-/** The card holding one section's rows; hosts put a [SettingsRowDivider] between consecutive rows. */
+/**
+ * One section's rows; hosts put a [SettingsRowDivider] between consecutive rows. It follows the interface style the
+ * same way Android's `SettingsItemGroup` does: the iOS style draws one continuous card with inset dividers, the
+ * Material style gives every row its own tile (inner corners small, the group's outer corners large, a gap instead of
+ * a divider). Rows learn which one they are in through [LocalSettingsRowTiles].
+ */
 @Composable
 fun SettingsGroup(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surface,
-    ) {
-        Column(Modifier.fillMaxWidth().padding(vertical = 4.dp), content = content)
+    val tokens = LocalInterfaceStyleTokens.current
+    if (LocalIsIosInterfaceStyle.current) {
+        Surface(
+            modifier = modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(tokens.settingsGroupOuterCornerRadius),
+            color = settingsGroupContainerColor(),
+        ) {
+            CompositionLocalProvider(LocalSettingsRowTiles provides false) {
+                Column(Modifier.fillMaxWidth().padding(vertical = 4.dp), content = content)
+            }
+        }
+    } else {
+        // Clipping the column rounds the first tile's top and the last tile's bottom to the outer radius.
+        CompositionLocalProvider(LocalSettingsRowTiles provides true) {
+            Column(
+                modifier = modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(tokens.settingsGroupOuterCornerRadius)),
+                verticalArrangement = Arrangement.spacedBy(tokens.settingsItemGap),
+                content = content,
+            )
+        }
+    }
+}
+
+/** True inside a Material-style [SettingsGroup], where each row draws its own tile and dividers disappear. */
+private val LocalSettingsRowTiles = staticCompositionLocalOf { false }
+
+/**
+ * A host-supplied row placed in a [SettingsGroup] (a slot the shared page leaves to the platform, such as Android's
+ * reorder preference): it gets the same tile the shared rows draw for themselves in the Material style.
+ */
+@Composable
+fun SettingsGroupRow(content: @Composable () -> Unit) = SettingsRowTile(content)
+
+/** A row's own tile inside a Material-style [SettingsGroup]; elsewhere the row sits directly on the group's card. */
+@Composable
+private fun SettingsRowTile(content: @Composable () -> Unit) {
+    if (LocalSettingsRowTiles.current) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(LocalInterfaceStyleTokens.current.settingsGroupInnerCornerRadius),
+            color = settingsGroupContainerColor(),
+        ) {
+            // A shared row inside a host row must not draw a second tile; a host slot may hold several rows, so they
+            // stack in a column instead of the Surface's box.
+            CompositionLocalProvider(LocalSettingsRowTiles provides false) {
+                Column(Modifier.fillMaxWidth()) { content() }
+            }
+        }
+    } else {
+        content()
+    }
+}
+
+/**
+ * Android's settings icon: the glyph on a tinted rounded badge ([SettingsLeadingIcon]), followed by the title. The
+ * badge carries its own trailing gap, so it shares a gapless row with the text.
+ */
+@Composable
+private fun SettingsRowLabel(
+    title: String,
+    summary: String?,
+    leadingIcon: Painter?,
+    tone: SettingsIconTone,
+    modifier: Modifier = Modifier,
+) {
+    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+        if (leadingIcon != null) {
+            SettingsLeadingIcon(imageVector = SettingsMaterialIcons.Settings, icon = leadingIcon, tone = tone)
+        }
+        SettingsRowText(title, summary, Modifier.weight(1f))
     }
 }
 
 @Composable
 fun SettingsRowDivider(modifier: Modifier = Modifier) {
+    if (LocalSettingsRowTiles.current) return
     HorizontalDivider(
         modifier = modifier.padding(horizontal = 16.dp),
         color = MaterialTheme.colorScheme.onSurface.copy(alpha = .1f),
@@ -93,25 +174,19 @@ fun SettingsSwitchRow(
     testTag: String? = null,
     leadingIcon: Painter? = null,
 ) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .then(if (testTag != null) Modifier.testTag(testTag) else Modifier)
-            .toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = onCheckedChange)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        if (leadingIcon != null) {
-            Icon(
-                painter = leadingIcon,
-                contentDescription = null,
-                tint = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(24.dp),
-            )
+    SettingsRowTile {
+        Row(
+            modifier = modifier
+                .fillMaxWidth()
+                .then(if (testTag != null) Modifier.testTag(testTag) else Modifier)
+                .toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = onCheckedChange)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            SettingsRowLabel(title, summary, leadingIcon, SettingsIconTone.SECONDARY_VARIANT, Modifier.weight(1f))
+            Switch(checked = checked, onCheckedChange = null, enabled = enabled, colors = settingsSwitchColors())
         }
-        SettingsRowText(title, summary, Modifier.weight(1f))
-        Switch(checked = checked, onCheckedChange = null, enabled = enabled)
     }
 }
 
@@ -133,40 +208,33 @@ fun SettingsValueRow(
     testTag: String? = null,
     leadingIcon: Painter? = null,
 ) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .then(if (testTag != null) Modifier.testTag(testTag) else Modifier)
-            .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        if (leadingIcon != null) {
+    SettingsRowTile {
+        Row(
+            modifier = modifier
+                .fillMaxWidth()
+                .then(if (testTag != null) Modifier.testTag(testTag) else Modifier)
+                .clickable(enabled = enabled, onClick = onClick)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            SettingsRowLabel(title, summary, leadingIcon, SettingsIconTone.PRIMARY, Modifier.weight(1f))
+            if (!value.isNullOrBlank()) {
+                Text(
+                    text = value,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.widthIn(max = 260.dp),
+                )
+            }
             Icon(
-                painter = leadingIcon,
+                imageVector = SettingsMaterialIcons.KeyboardArrowRight,
                 contentDescription = null,
-                tint = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(24.dp),
+                tint = settingsChevronColor().copy(alpha = if (enabled) 1f else .4f),
             )
         }
-        SettingsRowText(title, summary, Modifier.weight(1f))
-        if (!value.isNullOrBlank()) {
-            Text(
-                text = value,
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.widthIn(max = 260.dp),
-            )
-        }
-        Icon(
-            imageVector = ReaderPanelIcons.ArrowForward,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) .6f else .25f),
-            modifier = Modifier.size(16.dp),
-        )
     }
 }
 
@@ -195,42 +263,32 @@ fun SettingsSliderRow(
 ) {
     val steps = ((valueRange.last - valueRange.first) / step - 1).coerceAtLeast(0)
     var draft by remember(value) { mutableStateOf(value.coerceIn(valueRange.first, valueRange.last)) }
-    Column(
-        modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            if (leadingIcon != null) {
-                Icon(
-                    painter = leadingIcon,
-                    contentDescription = null,
-                    tint = if (enabled) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                    modifier = Modifier.size(24.dp),
+    SettingsRowTile {
+        Column(
+            modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                SettingsRowLabel(title, summary, leadingIcon, SettingsIconTone.SECONDARY_VARIANT, Modifier.weight(1f))
+                Text(
+                    text = valueText(draft),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            SettingsRowText(title, summary, Modifier.weight(1f))
-            Text(
-                text = valueText(draft),
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            Slider(
+                value = draft.toFloat(),
+                onValueChange = { raw ->
+                    val notches = (raw - valueRange.first).div(step).roundToInt()
+                    draft = (valueRange.first + notches * step).coerceIn(valueRange.first, valueRange.last)
+                },
+                onValueChangeFinished = { onValueChange(draft) },
+                valueRange = valueRange.first.toFloat()..valueRange.last.toFloat(),
+                steps = steps,
+                enabled = enabled,
+                modifier = if (testTag != null) Modifier.testTag(testTag) else Modifier,
             )
         }
-        Slider(
-            value = draft.toFloat(),
-            onValueChange = { raw ->
-                val notches = (raw - valueRange.first).div(step).roundToInt()
-                draft = (valueRange.first + notches * step).coerceIn(valueRange.first, valueRange.last)
-            },
-            onValueChangeFinished = { onValueChange(draft) },
-            valueRange = valueRange.first.toFloat()..valueRange.last.toFloat(),
-            steps = steps,
-            enabled = enabled,
-            modifier = if (testTag != null) Modifier.testTag(testTag) else Modifier,
-        )
     }
 }
 
@@ -253,50 +311,43 @@ fun SettingsSplitSwitchRow(
     switchTag: String? = null,
     leadingIcon: Painter? = null,
 ) {
-    Row(
-        modifier = modifier.fillMaxWidth().padding(end = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
+    SettingsRowTile {
         Row(
-            modifier = Modifier
-                .weight(1f)
-                .then(if (testTag != null) Modifier.testTag(testTag) else Modifier)
-                .clickable(enabled = enabled, onClick = onClick)
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+            modifier = modifier.fillMaxWidth().padding(end = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            if (leadingIcon != null) {
-                Icon(
-                    painter = leadingIcon,
-                    contentDescription = null,
-                    tint = if (enabled) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                    modifier = Modifier.size(24.dp),
-                )
-            }
-            SettingsRowText(title, summary, Modifier.weight(1f))
+            SettingsRowLabel(
+                title = title,
+                summary = summary,
+                leadingIcon = leadingIcon,
+                tone = SettingsIconTone.SECONDARY,
+                modifier = Modifier
+                    .weight(1f)
+                    .then(if (testTag != null) Modifier.testTag(testTag) else Modifier)
+                    .clickable(enabled = enabled, onClick = onClick)
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+            )
+            Switch(
+                checked = checked,
+                onCheckedChange = onCheckedChange,
+                enabled = enabled,
+                colors = settingsSwitchColors(),
+                modifier = if (switchTag != null) Modifier.testTag(switchTag) else Modifier,
+            )
         }
-        Switch(
-            checked = checked,
-            onCheckedChange = onCheckedChange,
-            enabled = enabled,
-            modifier = if (switchTag != null) Modifier.testTag(switchTag) else Modifier,
-        )
     }
 }
 
 /** Read-only row: what a source reports about itself, or a control Windows cannot draw. */
 @Composable
 fun SettingsInfoRow(title: String, summary: String?, modifier: Modifier = Modifier) {
-    Row(
-        modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        SettingsRowText(title, summary, Modifier.weight(1f))
+    SettingsRowTile {
+        Row(
+            modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            SettingsRowText(title, summary, Modifier.weight(1f))
+        }
     }
 }
 
@@ -328,13 +379,15 @@ fun SettingsActionRow(
     verticalPadding: Dp = 12.dp,
     content: @Composable RowScope.() -> Unit,
 ) {
-    Row(
-        modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = verticalPadding),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        SettingsRowText(title, summary, Modifier.weight(1f))
-        content()
+    SettingsRowTile {
+        Row(
+            modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = verticalPadding),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            SettingsRowText(title, summary, Modifier.weight(1f))
+            content()
+        }
     }
 }
 

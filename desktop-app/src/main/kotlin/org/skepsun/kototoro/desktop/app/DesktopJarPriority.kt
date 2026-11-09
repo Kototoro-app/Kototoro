@@ -12,8 +12,11 @@ import org.skepsun.kototoro.parserhost.ParserPluginRegistry
  */
 internal const val JAR_PRIORITY_ORDER_KEY = "jar_priority_order"
 
-/** Android's `show_broken_sources`, stored next to the other extension switches. */
+/** Android's retired `show_broken_sources`, stored next to the other extension switches; read once to migrate. */
 internal const val SHOW_BROKEN_SOURCES_KEY = "show_broken_sources"
+
+/** The parsers marked `@Broken` that were already switched off once, so a later switch-on is not undone. */
+internal const val SEEN_BROKEN_SOURCES_KEY = "broken_sources_seen"
 
 /** Android's `AppSettings.KEY_CHAPTERS_CLEAR_AUTO`: run the read-chapter sweep when the app starts. */
 internal const val CHAPTERS_CLEAR_AUTO_KEY = "chapters_clear_auto"

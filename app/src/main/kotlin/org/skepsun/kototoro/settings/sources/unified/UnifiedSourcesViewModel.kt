@@ -82,6 +82,7 @@ import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.model.ContentListFilter
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
 import org.skepsun.kototoro.ireader.IReaderExtensionManager
+import org.skepsun.kototoro.sync.google.domain.ExtensionRemovalLog
 import org.skepsun.kototoro.tsundoku.TsundokuExtensionManager
 import org.skepsun.kototoro.settings.sources.extensions.ExtensionBatchUpdateStateMachine
 import org.skepsun.kototoro.settings.sources.extensions.isNewerThanInstalled
@@ -1355,6 +1356,7 @@ class UnifiedSourcesViewModel @Inject constructor(
                 .remove("${packageName}:repo")
                 .remove("${packageName}:repoName")
                 .apply()
+            ExtensionRemovalLog.record(appContext, "jar", packageName)
             GlobalExtensionManager.initialize(appContext)
             packageRemovalCleanup.afterPackageRemoved(packageName, packageSourceNames, isJar = true)
             return PackageRemovalResult(removedDirectly = true)
@@ -1377,32 +1379,39 @@ class UnifiedSourcesViewModel @Inject constructor(
                 .remove("${packageName}:archive")
                 .remove("${packageName}:icon")
                 .apply()
+            ExtensionRemovalLog.record(appContext, "cloudstream", packageName)
             cloudstreamRuntimeManager.initialize()
             packageRemovalCleanup.afterPackageRemoved(packageName, packageSourceNames, isJar = false)
             return PackageRemovalResult(removedDirectly = true)
         }
 
+        // Loaders prefer a system install over a managed copy of the same package, so a system row can hide a
+        // local APK that would surface again after the uninstall. Remove the managed copy either way.
         val ecosystem = item.kind.toLocalApkEcosystem()
-        if (ecosystem != null && item.installLocation == UnifiedSourcePackageInstallLocation.LOCAL_APK) {
-            val deleted = LocalApkExtensionSupport.deleteManagedLocalPackage(
-                context = appContext,
-                ecosystem = ecosystem,
-                packageName = packageName,
+        val deletedLocal = ecosystem != null && LocalApkExtensionSupport.deleteManagedLocalPackage(
+            context = appContext,
+            ecosystem = ecosystem,
+            packageName = packageName,
+        )
+        if (deletedLocal) {
+            ExtensionRemovalLog.record(appContext, checkNotNull(ecosystem), packageName)
+        }
+        if (item.installLocation == UnifiedSourcePackageInstallLocation.LOCAL_APK && deletedLocal) {
+            packageRemovalCleanup.afterPackageRemoved(packageName, packageSourceNames, isJar = false)
+            return PackageRemovalResult(
+                removedDirectly = true,
+                reloadExternalExtensionManagers = true,
             )
-            if (deleted) {
-                packageRemovalCleanup.afterPackageRemoved(packageName, packageSourceNames, isJar = false)
-                return PackageRemovalResult(
-                    removedDirectly = true,
-                    reloadExternalExtensionManagers = true,
-                )
-            }
         }
 
         val uninstallIntent = buildUninstallIntent(item.kind, packageName)
         uninstallIntent.data?.schemeSpecificPart?.let { systemPkg ->
             pendingUninstalls[systemPkg] = PendingUninstall(packageName, packageSourceNames, item.kind.toExternalExtensionType())
         }
-        return PackageRemovalResult(uninstallIntent = uninstallIntent)
+        return PackageRemovalResult(
+            reloadExternalExtensionManagers = deletedLocal,
+            uninstallIntent = uninstallIntent,
+        )
     }
 
     private fun isPackageInstalledOnDevice(packageName: String): Boolean = try {

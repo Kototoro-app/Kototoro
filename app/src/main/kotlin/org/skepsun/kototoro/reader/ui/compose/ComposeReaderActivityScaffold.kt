@@ -131,7 +131,7 @@ import org.skepsun.kototoro.core.ui.compose.TvModalBottomSheet
 import org.skepsun.kototoro.core.ui.compose.KototoroLoadingIndicator
 import org.skepsun.kototoro.core.ui.compose.KototoroMotion
 import org.skepsun.kototoro.core.ui.compose.ImmersiveEdgeGradient
-import org.skepsun.kototoro.core.ui.compose.toTransparentImmersiveColor
+import org.skepsun.kototoro.core.ui.compose.ImmersiveEdge
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderChapterTitleChip
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderChromeTopBar
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderInfoBarAlignment
@@ -184,8 +184,6 @@ private val ReaderInfoBarItemSpacing = 10.dp
  */
 private val ReaderFloatingControlInset = 62.dp
 private val ReaderFloatingControlHeight = 44.dp
-private val ReaderTopImmersiveStops = listOf(0f, 0.24f, 0.50f, 0.70f, 0.86f, 1f)
-private val ReaderBottomImmersiveStops = listOf(0f, 0.18f, 0.38f, 0.70f, 1f)
 
 @Immutable
 internal data class ComposeReaderChromeState(
@@ -437,6 +435,14 @@ private fun ReaderChapterPanelMoreMenu(
                 rowActions.setShowTranslate(!rowActions.showTranslate)
             },
         )
+        ReaderChapterPanelMenuItem(
+            text = stringResource(R.string.chapter_show_thumbnails),
+            selected = rowActions.showThumbnails,
+            onClick = {
+                onDismissRequest()
+                rowActions.setShowThumbnails(!rowActions.showThumbnails)
+            },
+        )
     }
 }
 
@@ -522,7 +528,6 @@ internal fun ComposeReaderActivityScaffold(
     BackHandler { callbacks.onBackPressed() }
     val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
     val immersiveBaseColor = if (isSystemInDarkTheme()) Color.Black else Color.White
-    val immersiveTransparent = immersiveBaseColor.toTransparentImmersiveColor()
     val topImmersiveHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 76.dp
     val bottomImmersiveHeight = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 84.dp
     val readerBackdrop = if (isIosStyle && !state.eInkModeEnabled) {
@@ -553,29 +558,16 @@ internal fun ComposeReaderActivityScaffold(
             Box(modifier = Modifier.fillMaxSize()) {
                 ImmersiveEdgeGradient(
                     height = topImmersiveHeight + ReaderTopImmersiveFeatherExtension,
-                    colors = listOf(
-                        immersiveBaseColor.copy(alpha = 0.86f),
-                        immersiveBaseColor.copy(alpha = 0.62f),
-                        immersiveBaseColor.copy(alpha = 0.32f),
-                        immersiveBaseColor.copy(alpha = 0.12f),
-                        immersiveBaseColor.copy(alpha = 0.035f),
-                        immersiveTransparent,
-                    ),
-                    stops = ReaderTopImmersiveStops,
+                    color = immersiveBaseColor.copy(alpha = 0.86f),
+                    edge = ImmersiveEdge.TOP,
                     modifier = Modifier
                         .align(Alignment.TopCenter)
                         .fillMaxWidth(),
                 )
                 ImmersiveEdgeGradient(
                     height = bottomImmersiveHeight + ReaderBottomImmersiveFeatherExtension,
-                    colors = listOf(
-                        immersiveTransparent,
-                        immersiveBaseColor.copy(alpha = 0.035f),
-                        immersiveBaseColor.copy(alpha = 0.16f),
-                        immersiveBaseColor.copy(alpha = 0.42f),
-                        immersiveBaseColor.copy(alpha = 0.78f),
-                    ),
-                    stops = ReaderBottomImmersiveStops,
+                    color = immersiveBaseColor.copy(alpha = 0.78f),
+                    edge = ImmersiveEdge.BOTTOM,
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth(),

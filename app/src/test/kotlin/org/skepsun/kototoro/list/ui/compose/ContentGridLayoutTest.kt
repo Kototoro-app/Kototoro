@@ -48,7 +48,7 @@ class ContentGridLayoutTest {
     @Test
     fun `movie cards preserve landscape ratio across scales and window sizes`() {
         for (mode in listOf(ListMode.MOVIE_GRID, ListMode.COMPACT_MOVIE_GRID)) {
-            for (scale in listOf(0.5f, 1f, 1.5f)) {
+            for (scale in listOf(0.5f, 1f, 1.5f, 2f)) {
                 val base = mode.gridPosterCardStyle(scale)
                 assertTrue(base.itemWidth >= 160.dp)
                 assertEquals(base, mode.railPosterCardStyle(scale))
@@ -99,6 +99,20 @@ class ContentGridLayoutTest {
         assertEquals(14f, resolveGridTitleFontSize(1f).value)
         assertEquals(16f, resolveGridTitleFontSize(1.5f).value)
         assertEquals(15f, resolveGridTitleFontSize(1.25f).value)
+        assertEquals(18f, resolveGridTitleFontSize(2f).value)
+    }
+
+    @Test
+    fun `every step of the grid size slider changes the card width`() {
+        assertEquals(200, GridSizeRange.last)
+        for (mode in listOf(ListMode.GRID, ListMode.MOVIE_GRID)) {
+            val widths = GridSizeRange.step(5).map { mode.gridPosterCardStyle(it / 100f).itemWidth.value }
+            // Movie cards keep a 160dp floor at small scales; past it no slider step may be clamped away.
+            val growing = widths.dropWhile { it <= 160f }
+            assertTrue(growing.zipWithNext().all { (a, b) -> b > a }, "$mode: $widths")
+        }
+        assertEquals(192f, compactPosterCardStyle(2f).itemWidth.value)
+        assertEquals(352f, ListMode.MOVIE_GRID.gridPosterCardStyle(2f).itemWidth.value)
     }
 
     @Test

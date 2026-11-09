@@ -13,6 +13,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import org.skepsun.kototoro.R
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -23,14 +25,22 @@ import coil3.compose.AsyncImage
 import coil3.network.NetworkHeaders
 import coil3.network.httpHeaders
 import coil3.request.ImageRequest
+import dagger.hilt.EntryPoint
+import dagger.hilt.InstallIn
+import dagger.hilt.android.EntryPointAccessors
+import dagger.hilt.components.SingletonComponent
 import org.skepsun.kototoro.core.source.ChapterArtworkCodec
 import org.skepsun.kototoro.core.util.ext.mangaSourceExtra
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.ui.adaptive.tvHorizontalEdgeGuard
 import org.skepsun.kototoro.core.ui.chapters.ChapterCardData
+import org.skepsun.kototoro.core.ui.chapters.EPISODE_THUMBNAIL_ASPECT_RATIO
+import org.skepsun.kototoro.core.ui.chapters.PAGE_THUMBNAIL_ASPECT_RATIO
 import org.skepsun.kototoro.core.ui.chapters.ChapterGridCard as SharedChapterGridCard
 import org.skepsun.kototoro.core.ui.chapters.ChapterListCard as SharedChapterListCard
+import org.skepsun.kototoro.details.domain.ChapterThumbnailResolver
 import org.skepsun.kototoro.details.ui.model.ChapterListItem
+import org.skepsun.kototoro.parsers.model.ContentChapter
 
 /** Android resource and TV-focus adapters for the shared chapter cards. */
 @Composable
@@ -45,6 +55,8 @@ fun ChapterListCard(
     onDownload: (() -> Unit)? = null,
     /** Shows a translate button at the end of the row; null hides it. */
     onTranslate: (() -> Unit)? = null,
+    /** Falls back to the chapter's first page when the source gives it no artwork. */
+    showFirstPageThumbnail: Boolean = false,
 ) = SharedChapterListCard(
     item = item.cardData(),
     isSelected = isSelected,
@@ -55,7 +67,8 @@ fun ChapterListCard(
     // The row's click target stops before the trailing buttons, so on a television RIGHT steps from
     // the title onto the download / translate buttons instead of leaving the panel.
     focusModifier = Modifier.tvFocusable(shape = RoundedCornerShape(8.dp), borderWidth = 2.dp, addFocusTarget = false),
-    thumbnail = chapterThumbnail(item),
+    thumbnail = chapterThumbnail(item, showFirstPageThumbnail),
+    thumbnailAspectRatio = chapterThumbnailAspectRatio(item),
     actions = if (onDownload != null || onTranslate != null) {
         {
             // Whatever the row ends with has nothing to its right. Without the guard RIGHT scrolls
@@ -117,6 +130,7 @@ fun ChapterGridCard(
     onLongClick: () -> Unit,
     focusRequester: FocusRequester? = null,
     modifier: Modifier = Modifier,
+    showFirstPageThumbnail: Boolean = false,
 ) = SharedChapterGridCard(
     item = item.cardData(),
     isSelected = isSelected,
@@ -125,14 +139,18 @@ fun ChapterGridCard(
     focusRequester = focusRequester,
     modifier = modifier,
     focusModifier = Modifier.tvFocusable(shape = RoundedCornerShape(8.dp), borderWidth = 3.dp, addFocusTarget = false),
-    thumbnail = chapterThumbnail(item),
+    thumbnail = chapterThumbnail(item, showFirstPageThumbnail),
+    thumbnailAspectRatio = chapterThumbnailAspectRatio(item),
 )
 
 @Composable
-private fun chapterThumbnail(item: ChapterListItem): (@Composable BoxScope.() -> Unit)? {
+private fun chapterThumbnail(
+    item: ChapterListItem,
+    showFirstPage: Boolean,
+): (@Composable BoxScope.() -> Unit)? {
     val metadata = remember(item.chapter.sourceData) {
         ChapterArtworkCodec.decode(item.chapter.sourceData)
-    } ?: return null
+    } ?: return if (showFirstPage) firstPageThumbnail(item.chapter) else null
     val thumbnailUrl = metadata.posterUrl
     val context = LocalContext.current
     val request = remember(context, item.chapter.source.name, metadata) {
@@ -154,6 +172,45 @@ private fun chapterThumbnail(item: ChapterListItem): (@Composable BoxScope.() ->
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize(),
         )
+    }
+}
+
+/** Source artwork keeps its landscape frame; the first-page fallback is portrait. */
+@Composable
+private fun chapterThumbnailAspectRatio(item: ChapterListItem): Float {
+    val hasArtwork = remember(item.chapter.sourceData) {
+        ChapterArtworkCodec.decode(item.chapter.sourceData) != null
+    }
+    return if (hasArtwork) EPISODE_THUMBNAIL_ASPECT_RATIO else PAGE_THUMBNAIL_ASPECT_RATIO
+}
+
+@EntryPoint
+@InstallIn(SingletonComponent::class)
+internal interface ChapterThumbnailEntryPoint {
+    val chapterThumbnailResolver: ChapterThumbnailResolver
+}
+
+/** The chapter's first page, looked up only once the card is composed; null for chapters without pages to show. */
+@Composable
+private fun firstPageThumbnail(chapter: ContentChapter): (@Composable BoxScope.() -> Unit)? {
+    val context = LocalContext.current
+    val resolver = remember(context.applicationContext) {
+        EntryPointAccessors.fromApplication<ChapterThumbnailEntryPoint>(context.applicationContext)
+            .chapterThumbnailResolver
+    }
+    if (!resolver.supports(chapter)) return null
+    return {
+        val image by produceState<Any?>(null, chapter.id, chapter.url) {
+            value = resolver.thumbnail(chapter)
+        }
+        image?.let { model ->
+            AsyncImage(
+                model = model,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
     }
 }
 

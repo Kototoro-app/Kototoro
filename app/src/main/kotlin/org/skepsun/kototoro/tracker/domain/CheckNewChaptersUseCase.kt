@@ -16,7 +16,6 @@ import org.skepsun.kototoro.parsers.util.findById
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
 import org.skepsun.kototoro.tracker.domain.model.ContentTracking
 import org.skepsun.kototoro.tracker.domain.model.MangaUpdates
-import java.time.Instant
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -46,7 +45,7 @@ class CheckNewChaptersUseCase @Inject constructor(
     }
 
     suspend operator fun invoke(manga: Content, currentChapterId: Long, percent: Float) {
-        if (repository.updateReadChapter(manga.id, currentChapterId, percent)) return
+        if (repository.updateReadChapter(manga.id, currentChapterId, percent, manga.chapters)) return
         if (ReadingProgress.isCompleted(percent)) {
             markCompleted(manga)
         } else {
@@ -55,30 +54,36 @@ class CheckNewChaptersUseCase @Inject constructor(
     }
 
     suspend operator fun invoke(manga: Content, currentChapterId: Long) = mutex.withLock(manga.id) {
-        if (repository.updateReadChapter(manga.id, currentChapterId)) return@withLock
+        if (repository.updateReadChapter(manga.id, currentChapterId, readerChapters = manga.chapters)) return@withLock
         runCatchingCancellable {
             repository.updateTracks()
             val details = getFullContent(manga)
             val track = repository.getTrackOrNull(manga) ?: return@withLock
             val branch = checkNotNull(details.chapters?.findById(currentChapterId)).branch
             val chapters = details.getChapters(branch)
-            val chapterIndex = chapters.indexOfFirst { x -> x.id == currentChapterId }
-            val lastNewChapterIndex = chapters.size - track.newChapters
-            val lastChapter = chapters.lastOrNull()
+            if (chapters.isEmpty()) return@withLock
+            // Reading is not a check: the anchor only moves to what was read, so chapters the tracker has not seen
+            // yet are still reported, and the check time stays, so the title keeps its place in the queue.
+            val state = trackAfterReading(
+                readIndex = chapters.indexOfFirst { x -> x.id == currentChapterId },
+                anchorIndex = chapters.indexOfFirst { x -> x.id == track.lastChapterId },
+                lastIndex = chapters.lastIndex,
+                pending = track.newChapters,
+            )
+            val anchor = chapters[state.anchorIndex]
             val tracking = ContentTracking(
                 anchorMangaId = track.anchorMangaId,
                 entityId = track.entityId,
                 preferredLocalMangaId = track.preferredLocalMangaId,
                 manga = details,
-                lastChapterId = lastChapter?.id ?: 0L,
-                lastCheck = Instant.now(),
-                lastChapterDate = lastChapter?.uploadDate?.toInstantOrNull() ?: track.lastChapterDate,
-                newChapters = when {
-                    track.newChapters == 0 -> 0
-                    chapterIndex < 0 -> track.newChapters
-                    chapterIndex >= lastNewChapterIndex -> chapters.lastIndex - chapterIndex
-                    else -> track.newChapters
+                lastChapterId = anchor.id,
+                lastCheck = track.lastCheck,
+                lastChapterDate = if (anchor.id == track.lastChapterId) {
+                    track.lastChapterDate
+                } else {
+                    anchor.uploadDate.toInstantOrNull() ?: track.lastChapterDate
                 },
+                newChapters = state.pending,
             )
             repository.mergeWith(tracking)
         }.onFailure { e ->
@@ -99,7 +104,7 @@ class CheckNewChaptersUseCase @Inject constructor(
                 preferredLocalMangaId = track.preferredLocalMangaId,
                 manga = details,
                 lastChapterId = lastChapter?.id ?: track.lastChapterId,
-                lastCheck = Instant.now(),
+                lastCheck = track.lastCheck,
                 lastChapterDate = lastChapter?.uploadDate?.toInstantOrNull() ?: track.lastChapterDate,
                 newChapters = 0,
             )
@@ -114,12 +119,41 @@ class CheckNewChaptersUseCase @Inject constructor(
         // The persisted manga row owns its own tracking state, so the track's anchor
         // manga is the identity. There is no Work/entity to resolve.
         val ownerId = track.anchorMangaId
-        val details = getFullContent(track.manga, forceFetch = true).copy(id = ownerId)
-        compare(
-            track = track,
-            entityId = ownerId,
+        if (track.manga.isLocal) {
+            // A local copy has no stored chapter list to compare with, so it keeps comparing with its anchor.
+            val details = getFullContent(track.manga, forceFetch = true).copy(id = ownerId)
+            return@runCatchingCancellable compare(
+                track = track,
+                entityId = ownerId,
+                manga = details,
+                branch = getBranch(details, track.lastChapterId),
+                historyChapterId = historyRepository.getOne(track.manga)?.chapterId ?: 0L,
+            )
+        }
+        // Storing the fetched list finds the new chapters (storeChapterSnapshot), as it does for the details page.
+        // Most checks find nothing new, so they only ask for the chapter list. When there is something new the
+        // details are refreshed too: a series usually turns finished with its last chapter, which "skip completed
+        // titles" relies on.
+        val repo = mangaRepositoryFactory.create(track.manga.source)
+        val chaptersOnly = !track.isEmpty() && repo.refreshesChaptersAlone
+        val fetched = if (chaptersOnly) {
+            repo.getDetails(track.manga, ContentRepository.DetailsFetchMode.CHAPTERS_REFRESH)
+        } else {
+            fetchDetails(track.manga)
+        }
+        var (details, stored) = repository.storeCheckedSnapshot(fetched, ownerId)
+        if (stored is ChapterSnapshotResult.Incomplete) throw IncompleteChapterListException()
+        val reported = (stored as? ChapterSnapshotResult.Updated)?.reported.orEmpty().mapTo(HashSet()) { it.chapterId }
+        if (chaptersOnly && reported.isNotEmpty()) {
+            details = repository.storeCheckedSnapshot(fetchDetails(track.manga), ownerId).first
+        }
+        MangaUpdates.Success(
             manga = details,
+            entityId = ownerId,
+            anchorMangaId = ownerId,
             branch = getBranch(details, track.lastChapterId),
+            newChapters = details.chapters.orEmpty().filter { it.id in reported },
+            isValid = stored is ChapterSnapshotResult.Updated,
         )
     }.getOrElse { error ->
         MangaUpdates.Failure(
@@ -168,19 +202,34 @@ class CheckNewChaptersUseCase @Inject constructor(
         entityId: Long,
         manga: Content,
         branch: String?,
+        historyChapterId: Long,
     ): MangaUpdates.Success {
         // The comparison rules are shared with the Windows tracker (core-domain TrackRules).
         val chapters = if (track.isEmpty()) emptyList() else requireNotNull(manga.getChapters(branch))
         if (BuildConfig.DEBUG && !track.isEmpty() && chapters.findById(track.lastChapterId) == null) {
             Log.e("Tracker", "Chapter ${track.lastChapterId} not found")
         }
-        val comparison = compareTrackedChapters(chapters, { it.id }, track.lastChapterId)
+        val comparison = compareTrackedChapters(
+            chapters = chapters,
+            id = { it.id },
+            lastChapterId = track.lastChapterId,
+            uploadDate = { it.uploadDate },
+            lastChapterDate = track.lastChapterDate?.toEpochMilli() ?: 0L,
+            historyChapterId = historyChapterId,
+        )
         return MangaUpdates.Success(
             manga = manga,
             entityId = entityId,
             anchorMangaId = track.anchorMangaId,
             branch = branch,
-            newChapters = comparison.newChapters,
+            newChapters = reportedNewChapters(
+                newChapters = comparison.newChapters,
+                branch = chapters,
+                id = { it.id },
+                uploadDate = { it.uploadDate },
+                readChapterId = historyChapterId,
+                now = System.currentTimeMillis(),
+            ),
             isValid = comparison.isValid,
         )
     }

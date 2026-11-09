@@ -138,6 +138,20 @@ class SourceSettingsViewModel @Inject constructor(
                 val httpSource = repository.aniyomiSource as? eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
                 browserUrl.value = httpSource?.baseUrl
             }
+            is org.skepsun.kototoro.tsundoku.TsundokuNovelRepository -> {
+                browserUrl.value = runCatching { (repository.source as? org.skepsun.kototoro.tsundoku.model.TsundokuNovelSource)?.baseUrlOrNull }.getOrNull()?.takeIf { it.isNotBlank() }
+            }
+            is org.skepsun.kototoro.ireader.IReaderMangaRepository -> {
+                val httpSource = repository.source.catalogueSource as? ireader.core.source.HttpSource
+                browserUrl.value = runCatching { httpSource?.baseUrl }.getOrNull()?.takeIf { it.isNotBlank() }
+            }
+            is org.skepsun.kototoro.core.lnreader.LNReaderContentRepository -> {
+                val config = (repository.source as? JsonContentSource)?.entity?.config.orEmpty()
+                browserUrl.value = runCatching {
+                    org.skepsun.kototoro.core.lnreader.LNReaderPluginMetadata.extractFromCode(config, repository.source.name)
+                        ?.site
+                }.getOrNull()?.takeIf { it.startsWith("http://") || it.startsWith("https://") }
+            }
             is org.skepsun.kototoro.cloudstream.runtime.CloudstreamContentRepository -> {
                 browserUrl.value = repository.source.api.mainUrl.takeIf { it.isNotBlank() }
             }

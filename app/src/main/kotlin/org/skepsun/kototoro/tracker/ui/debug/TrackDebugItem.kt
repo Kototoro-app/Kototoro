@@ -12,6 +12,10 @@ data class TrackDebugItem(
     val lastChapterDate: Instant?,
     val lastResult: Int,
     val lastError: String?,
+    /** Checks failed in a row ([org.skepsun.kototoro.tracker.data.TrackScheduleEntity.failCount]). */
+    val failCount: Int = 0,
+    /** When background checks next look at the work; null before its first scheduled check. */
+    val nextCheckTime: Instant? = null,
 ) : ListModel {
 
     override fun areItemsTheSame(other: ListModel): Boolean {

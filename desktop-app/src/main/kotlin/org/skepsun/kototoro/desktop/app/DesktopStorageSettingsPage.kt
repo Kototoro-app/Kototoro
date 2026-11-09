@@ -70,7 +70,7 @@ internal fun DesktopStorageSettingsPage(controller: DesktopController, state: De
     val probe by controller.session.githubMirror.probeState.collectAsState()
     val probeResults by controller.session.githubMirror.probeResults.collectAsState()
     Column(
-        modifier = Modifier.widthIn(max = 760.dp).fillMaxWidth().verticalScroll(rememberScrollState()),
+        modifier = Modifier.widthIn(max = 760.dp).fillMaxWidth().verticalScroll(rememberScrollState()).padding(top = LocalDesktopTopInset.current),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         SettingsSectionHeader(AndroidStrings["storage_usage"])

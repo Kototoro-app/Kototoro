@@ -36,6 +36,36 @@ class SourceInvalidArgumentException : Exception("Invalid source argument")
 class SourceOperationUnsupportedException : Exception("Unsupported source operation")
 
 /**
+ * The site answered HTTP 429. [retryAfterMillis] is how long it asked to wait, when it said.
+ */
+class SourceRateLimitException(val retryAfterMillis: Long? = null) : Exception("Rate limited by the source") {
+
+    companion object {
+        private val HTTP_429 = Regex("""(?:HTTP error|Status=|status code:?|HTTP)\s*429\b""", RegexOption.IGNORE_CASE)
+
+        /**
+         * The rate limit anywhere in [error]'s cause chain: a [SourceRateLimitException], one that crossed the wire
+         * ([SourceErrorCode.RATE_LIMITED]), or an extension library's own 429 failure, which the libraries name only
+         * in their messages (Mihon's `HttpException`: "HTTP error 429"; Jsoup's: "Status=429").
+         */
+        fun find(error: Throwable?): SourceRateLimitException? {
+            var current = error
+            var depth = 0
+            while (current != null && depth++ < 16) {
+                when {
+                    current is SourceRateLimitException -> return current
+                    current is SourceRemoteException && current.error.code == SourceErrorCode.RATE_LIMITED ->
+                        return SourceRateLimitException(current.error.retryAfterMillis)
+                    current.message?.let(HTTP_429::containsMatchIn) == true -> return SourceRateLimitException()
+                }
+                current = current.cause?.takeIf { it !== current }
+            }
+            return null
+        }
+    }
+}
+
+/**
  * A request met a browser challenge. Runtimes throw it (or hosts recognise their libraries' own exceptions, see
  * [SourceEndpoint]); only the [origin] crosses the wire.
  */

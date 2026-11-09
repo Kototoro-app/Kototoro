@@ -1,6 +1,13 @@
 import XCTest
 
 extension XCUIApplication {
+    /// The readers' back control: the navigation bar's back button, or the reader's own button when its controls sit
+    /// at the bottom.
+    var readerBackButton: XCUIElement {
+        for id in ["reader.back", "novel.back"] where buttons[id].exists { return buttons[id] }
+        return navigationBars.buttons["BackButton"]
+    }
+
     /// Opens Settings and follows [path], the identifiers of the entries to tap, scrolling each page to its entry.
     func openSettings(_ path: String..., file: StaticString = #filePath, line: UInt = #line) {
         mainTab("设置").tap()

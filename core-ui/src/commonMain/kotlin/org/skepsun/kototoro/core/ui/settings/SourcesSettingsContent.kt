@@ -75,6 +75,11 @@ fun SourcesSettingsContent(
     adultNote: String? = null,
     moreNote: String? = null,
     renderDialog: @Composable (PreferenceDialogContent) -> Unit = { PreferenceDialog(it) },
+    /**
+     * Whether the extension rows (plugin priority, broken sources, install behavior) sit on this page. Android moved
+     * them into extension management ([ExtensionSettingsContent]); the desktop source settings still show them here.
+     */
+    showExtensionSection: Boolean = true,
 ) {
     var dialog by remember { mutableStateOf<SourcesChoiceDialog?>(null) }
     Column(
@@ -115,25 +120,23 @@ fun SourcesSettingsContent(
                     modifier = Modifier.tvFocusable(enabled = enabled, addFocusTarget = false))
             }
         }
-        Column {
-            SettingsSectionHeader(titles.remote)
-            SettingsGroup {
-                jarPriorityEditor()
-                SettingsRowDivider()
-                SettingsSwitchRow(uiString("show_broken_sources"), uiString("show_broken_sources_summary"),
-                    state.showBrokenSources, enabled, onShowBrokenChange,
-                    testTag = "source-setting-show-broken", leadingIcon = icons.broken,
-                    modifier = Modifier.tvFocusable(enabled = enabled, addFocusTarget = false))
-                SettingsRowDivider()
-                SettingsValueRow(uiString("extension_install_behavior"), state.installBehaviorSummary, null, enabled,
-                    onInstallBehaviorClick, testTag = "source-setting-install-behavior", leadingIcon = icons.install,
-                    modifier = Modifier.tvFocusable(enabled = enabled, addFocusTarget = false))
-            }
+        if (showExtensionSection) {
+            ExtensionSettingsGroup(
+                title = titles.remote,
+                showBrokenSources = state.showBrokenSources,
+                installBehaviorSummary = state.installBehaviorSummary,
+                onShowBrokenChange = onShowBrokenChange,
+                onInstallBehaviorClick = onInstallBehaviorClick,
+                jarPriorityEditor = jarPriorityEditor,
+                enabled = enabled,
+                brokenIcon = icons.broken,
+                installIcon = icons.install,
+            )
         }
         Column {
             SettingsSectionHeader(titles.adult)
             SettingsGroup {
-                adultFilterEditor()
+                SettingsGroupRow { adultFilterEditor() }
                 SettingsRowDivider()
                 SettingsValueRow(uiString("incognito_for_nsfw"), null,
                     incognitoOptions.firstOrNull { it.value == state.incognitoMode }?.label, enabled,
@@ -185,5 +188,75 @@ fun SourcesSettingsContent(
             incognitoOptions, onIncognitoChange, { dialog = null }, enabled,
             tagPrefix = "source-incognito", renderDialog = renderDialog)
         null -> Unit
+    }
+}
+
+/**
+ * How extensions are installed and resolved: the plugin de-duplication priority, whether parsers marked broken are
+ * listed, and what happens after an extension installs. They describe extension management rather than browsing, so
+ * hosts can show them there ([ExtensionSettingsContent]) instead of among the source preferences.
+ */
+@Composable
+fun ExtensionSettingsGroup(
+    title: String,
+    showBrokenSources: Boolean,
+    installBehaviorSummary: String,
+    /** Null hides the row: Android retired the global switch in favor of enabling a broken parser explicitly. */
+    onShowBrokenChange: ((Boolean) -> Unit)?,
+    onInstallBehaviorClick: () -> Unit,
+    jarPriorityEditor: @Composable () -> Unit,
+    enabled: Boolean = true,
+    brokenIcon: Painter? = null,
+    installIcon: Painter? = null,
+) {
+    Column {
+        SettingsSectionHeader(title)
+        SettingsGroup {
+            SettingsGroupRow { jarPriorityEditor() }
+            SettingsRowDivider()
+            if (onShowBrokenChange != null) {
+                SettingsSwitchRow(uiString("show_broken_sources"), uiString("show_broken_sources_summary"),
+                    showBrokenSources, enabled, onShowBrokenChange,
+                    testTag = "source-setting-show-broken", leadingIcon = brokenIcon,
+                    modifier = Modifier.tvFocusable(enabled = enabled, addFocusTarget = false))
+                SettingsRowDivider()
+            }
+            SettingsValueRow(uiString("extension_install_behavior"), installBehaviorSummary, null, enabled,
+                onInstallBehaviorClick, testTag = "source-setting-install-behavior", leadingIcon = installIcon,
+                modifier = Modifier.tvFocusable(enabled = enabled, addFocusTarget = false))
+        }
+    }
+}
+
+/** A page holding only [ExtensionSettingsGroup], opened from extension management. */
+@Composable
+fun ExtensionSettingsContent(
+    installBehaviorSummary: String,
+    onInstallBehaviorClick: () -> Unit,
+    jarPriorityEditor: @Composable () -> Unit,
+    modifier: Modifier = Modifier,
+    showBrokenSources: Boolean = false,
+    onShowBrokenChange: ((Boolean) -> Unit)? = null,
+    title: String = "",
+    enabled: Boolean = true,
+    brokenIcon: Painter? = null,
+    installIcon: Painter? = null,
+    contentPadding: PaddingValues = PaddingValues(0.dp),
+) {
+    Column(
+        modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(contentPadding)
+            .testTag("extension-settings-content"),
+    ) {
+        ExtensionSettingsGroup(
+            title = title,
+            showBrokenSources = showBrokenSources,
+            installBehaviorSummary = installBehaviorSummary,
+            onShowBrokenChange = onShowBrokenChange,
+            onInstallBehaviorClick = onInstallBehaviorClick,
+            jarPriorityEditor = jarPriorityEditor,
+            enabled = enabled,
+            brokenIcon = brokenIcon,
+            installIcon = installIcon,
+        )
     }
 }

@@ -1,13 +1,14 @@
 package org.skepsun.kototoro.core.util.ext
 
 import android.os.SystemClock
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.channelFlow
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.first
@@ -19,8 +20,8 @@ import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.transform
 import kotlinx.coroutines.flow.transformLatest
-import kotlinx.coroutines.flow.transformWhile
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
 import org.skepsun.kototoro.parsers.util.suspendlazy.SuspendLazy
 import java.util.concurrent.TimeUnit
@@ -106,12 +107,24 @@ fun tickerFlow(interval: Long, timeUnit: TimeUnit): Flow<Long> = flow {
     }
 }
 
+/**
+ * Re-emits the latest value every [interval] while the upstream is active, and completes as soon as the upstream
+ * does, without waiting for the next heartbeat.
+ */
 fun <T> Flow<T>.withTicker(interval: Long, timeUnit: TimeUnit) = channelFlow<T> {
-    onCompletion { cause ->
-        close(cause)
-    }.combine(tickerFlow(interval, timeUnit)) { x, _ -> x }
-        .transformWhile<T, Unit> { trySend(it).isSuccess }
-        .collect()
+    val intervalMs = timeUnit.toMillis(interval)
+    var heartbeat: Job? = null
+    collect { value ->
+        heartbeat?.cancelAndJoin()
+        send(value)
+        heartbeat = launch {
+            while (true) {
+                delay(intervalMs)
+                send(value)
+            }
+        }
+    }
+    heartbeat?.cancel()
 }
 
 

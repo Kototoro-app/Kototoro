@@ -150,9 +150,11 @@ final class SourceRuntimeTests: XCTestCase {
             XCTFail("No visible reader image: \(app.debugDescription)", file: file, line: line)
             return
         }
-        // The equally sized top and bottom controls share the reader's safe-area viewport.
-        // UIScrollView's accessibility frame includes system insets and is larger than that viewport.
-        let centerY = (app.buttons["reader.back"].frame.midY + app.buttons["reader.nextChapter"].frame.midY) / 2
+        // Pages are centred in the reader's safe-area viewport: from the navigation bar's top edge to the bottom
+        // controls' 12 pt margin. UIScrollView's accessibility frame includes system insets and is larger than that.
+        let safeTop = app.navigationBars.firstMatch.frame.minY
+        let safeBottom = app.buttons["reader.nextChapter"].frame.maxY + 12
+        let centerY = (safeTop + safeBottom) / 2
         XCTAssertEqual(image.frame.midY, centerY, accuracy: 2,
                        "Image \(image.frame) must be centered at \(centerY)", file: file, line: line)
         XCTAssertEqual(image.frame.midX, window.midX, accuracy: 2,
@@ -219,7 +221,7 @@ final class SourceRuntimeTests: XCTestCase {
                        app.buttons["reader.nextChapter"].frame.height, accuracy: 1)
         XCTAssertEqual(app.descendants(matching: .any)["reader.progressControl"].frame.height,
                        app.buttons["reader.nextChapter"].frame.height, accuracy: 1)
-        XCTAssertEqual(app.buttons["reader.back"].frame.width, app.buttons["reader.back"].frame.height, accuracy: 1)
+        XCTAssertEqual(app.readerBackButton.frame.width, app.readerBackButton.frame.height, accuracy: 1)
         let footerScreenshot = XCTAttachment(screenshot: app.screenshot())
         footerScreenshot.name = "Native chapter progress bar and floating bookmark"
         footerScreenshot.lifetime = .keepAlways; add(footerScreenshot)
@@ -260,7 +262,7 @@ final class SourceRuntimeTests: XCTestCase {
         progress.adjust(toNormalizedSliderPosition: 1)
         XCTAssertTrue(app.images["reader.image"].waitForExistence(timeout: 30))
         assertPosition(app, page: 2, total: 2)
-        app.buttons["reader.back"].tap()
+        app.readerBackButton.tap()
         XCTAssertTrue(chapterButton(in: app).waitForExistence(timeout: 5))
         XCTAssertTrue(app.detailsReadButton().waitForExistence(timeout: 10))
         app.navigationBars.buttons.firstMatch.tap()

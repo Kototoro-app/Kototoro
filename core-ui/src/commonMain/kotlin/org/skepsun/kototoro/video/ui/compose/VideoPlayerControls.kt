@@ -25,17 +25,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Audiotrack
-import androidx.compose.material.icons.filled.GridView
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.SkipNext
-import androidx.compose.material.icons.filled.SkipPrevious
-import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -67,9 +56,9 @@ import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
@@ -78,12 +67,14 @@ import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.compose.KototoroSlider
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
+import org.skepsun.kototoro.core.ui.text.uiString
+import org.skepsun.kototoro.reader.ui.compose.design.ReaderPanelIcons
+import androidx.compose.foundation.layout.RowScope
 import kotlin.math.roundToInt
 
 /** Immutable projection of playback state consumed by the Compose player chrome. */
@@ -101,6 +92,18 @@ data class VideoPlayerControlState(
     val chapterGroupLabel: String? = null,
     val playbackSpeedLabel: String = "1.00x",
     val qualityLabel: String? = null,
+    /** Host capabilities: Android has notes, intro/outro markers, a screen lock and a rotation button. */
+    val supportsNotes: Boolean = true,
+    val supportsIntroOutroMarkers: Boolean = true,
+    val supportsScreenLock: Boolean = true,
+    /** False shows a fullscreen toggle (by [isFullscreen]) instead of Android's rotation button. */
+    val showsRotation: Boolean = true,
+    val isFullscreen: Boolean = false,
+    /** The top bar's overflow button (Android's player options menu). */
+    val supportsMore: Boolean = true,
+    /** Android's `video_controls_alpha` and `video_gradient_alpha`: the controls' and the edge gradients' strength. */
+    val controlsAlpha: Float = 1f,
+    val scrimAlpha: Float = 0.72f,
 )
 
 /** Events emitted by Compose. The Activity or a ViewModel owns the Media3 side effects. */
@@ -180,6 +183,8 @@ fun VideoPlayerTopControls(
     onAction: (VideoPlayerAction) -> Unit,
     primaryFocusRequester: FocusRequester? = null,
     modifier: Modifier = Modifier,
+    /** Host buttons before the track buttons (the desktop's cast). */
+    actions: @Composable RowScope.() -> Unit = {},
 ) {
     var moreAnchorBounds by remember { mutableStateOf(IntRect.Zero) }
     var subtitleAnchorBounds by remember { mutableStateOf(IntRect.Zero) }
@@ -189,7 +194,7 @@ fun VideoPlayerTopControls(
             .fillMaxWidth()
             .background(
                 Brush.verticalGradient(
-                    colors = listOf(Color.Black.copy(alpha = 0.72f), Color.Transparent),
+                    colors = listOf(Color.Black.copy(alpha = state.scrimAlpha), Color.Transparent),
                 ),
             ),
         color = Color.Transparent,
@@ -199,11 +204,12 @@ fun VideoPlayerTopControls(
             modifier = Modifier
                 .fillMaxWidth()
                 .statusBarsPadding()
-                .padding(horizontal = 4.dp, vertical = 4.dp),
+                .padding(horizontal = 4.dp, vertical = 4.dp)
+                .graphicsLayer { alpha = state.controlsAlpha },
             verticalAlignment = Alignment.CenterVertically,
         ) {
             PlayerIconButton(
-                icon = { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null) },
+                icon = { Icon(VideoPlayerIcons.ArrowBack, contentDescription = null) },
                 contentDescription = "Back",
                 onClick = { onAction(VideoPlayerAction.NavigateBack) },
             )
@@ -223,8 +229,9 @@ fun VideoPlayerTopControls(
                     )
                 }
             }
+            actions()
             PlayerIconButton(
-                icon = { Icon(Icons.Filled.Subtitles, contentDescription = null) },
+                icon = { Icon(VideoPlayerIcons.Subtitles, contentDescription = null) },
                 contentDescription = "Subtitles",
                 onClick = { onAction(VideoPlayerAction.OpenSubtitles(subtitleAnchorBounds)) },
                 modifier = Modifier.onGloballyPositioned {
@@ -232,16 +239,16 @@ fun VideoPlayerTopControls(
                 },
             )
             PlayerIconButton(
-                icon = { Icon(Icons.Filled.Audiotrack, contentDescription = null) },
+                icon = { Icon(VideoPlayerIcons.Audiotrack, contentDescription = null) },
                 contentDescription = "Audio tracks",
                 onClick = { onAction(VideoPlayerAction.OpenAudioTracks(audioAnchorBounds)) },
                 modifier = Modifier.onGloballyPositioned {
                     audioAnchorBounds = it.boundsInWindowIntRect()
                 },
             )
-            PlayerIconButton(
-                icon = { Icon(Icons.Filled.MoreVert, contentDescription = null) },
-                contentDescription = stringResource(R.string.options),
+            if (state.supportsMore) PlayerIconButton(
+                icon = { Icon(VideoPlayerIcons.MoreVert, contentDescription = null) },
+                contentDescription = uiString("options"),
                 onClick = { onAction(VideoPlayerAction.OpenMore(moreAnchorBounds)) },
                 modifier = Modifier.onGloballyPositioned {
                     moreAnchorBounds = it.boundsInWindowIntRect()
@@ -260,6 +267,10 @@ fun VideoPlayerBottomControls(
     primaryFocusRequester: FocusRequester? = null,
     noteButtonFocusRequester: FocusRequester? = null,
     modifier: Modifier = Modifier,
+    /** Host buttons after previous/next (the desktop's ten-second jumps). */
+    leadingActions: @Composable () -> Unit = {},
+    /** Host buttons before the intro/outro markers (the desktop's tracks, enhancement and volume). */
+    trailingActions: @Composable () -> Unit = {},
 ) {
     val tokens = LocalInterfaceStyleTokens.current
     var chaptersAnchorBounds by remember { mutableStateOf(IntRect.Zero) }
@@ -284,7 +295,7 @@ fun VideoPlayerBottomControls(
             .keepVisibleDuringTouch(onInteractionStart, onInteractionEnd)
             .background(
                 Brush.verticalGradient(
-                    colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.72f)),
+                    colors = listOf(Color.Transparent, Color.Black.copy(alpha = state.scrimAlpha)),
                 ),
             ),
         color = Color.Transparent,
@@ -294,7 +305,8 @@ fun VideoPlayerBottomControls(
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
-                .padding(horizontal = tokens.screenHorizontalPadding, vertical = 8.dp),
+                .padding(horizontal = tokens.screenHorizontalPadding, vertical = 8.dp)
+                .graphicsLayer { alpha = state.controlsAlpha },
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Row(
@@ -304,7 +316,7 @@ fun VideoPlayerBottomControls(
                 PlayerIconButton(
                     icon = {
                         Icon(
-                            imageVector = if (state.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                            imageVector = if (state.isPlaying) VideoPlayerIcons.Pause else VideoPlayerIcons.PlayArrow,
                             contentDescription = null,
                         )
                     },
@@ -336,17 +348,18 @@ fun VideoPlayerBottomControls(
                     itemVerticalAlignment = Alignment.CenterVertically,
                 ) {
                     PlayerIconButton(
-                        icon = { Icon(Icons.Filled.SkipPrevious, contentDescription = null) },
+                        icon = { Icon(VideoPlayerIcons.SkipPrevious, contentDescription = null) },
                         contentDescription = "Previous chapter",
                         enabled = state.hasPreviousChapter,
                         onClick = { onAction(VideoPlayerAction.PreviousChapter) },
                     )
                     PlayerIconButton(
-                        icon = { Icon(Icons.Filled.SkipNext, contentDescription = null) },
+                        icon = { Icon(VideoPlayerIcons.SkipNext, contentDescription = null) },
                         contentDescription = "Next chapter",
                         enabled = state.hasNextChapter,
                         onClick = { onAction(VideoPlayerAction.NextChapter) },
                     )
+                    leadingActions()
                     if (showSecondaryActions) {
                         PlayerChapterButton(
                             groupLabel = state.chapterGroupLabel,
@@ -357,7 +370,7 @@ fun VideoPlayerBottomControls(
                         )
                     } else {
                         PlayerIconButton(
-                            icon = { Icon(Icons.Filled.GridView, contentDescription = null) },
+                            icon = { Icon(VideoPlayerIcons.GridView, contentDescription = null) },
                             contentDescription = "Chapters",
                             onClick = { onAction(VideoPlayerAction.OpenChapterSelection(chaptersAnchorBounds)) },
                             modifier = Modifier.onGloballyPositioned {
@@ -375,15 +388,15 @@ fun VideoPlayerBottomControls(
                                 },
                             )
                         }
-                        PlayerIconButton(
+                        if (state.supportsNotes) PlayerIconButton(
                             icon = {
                                 Icon(
-                                    painter = painterResource(R.drawable.ic_comment),
+                                    imageVector = ReaderPanelIcons.Comment,
                                     contentDescription = null,
                                     modifier = Modifier.size(18.dp),
                                 )
                             },
-                            contentDescription = stringResource(R.string.video_add_note),
+                            contentDescription = uiString("video_add_note"),
                             onClick = { onAction(VideoPlayerAction.AddNote) },
                             focusRequester = noteButtonFocusRequester,
                         )
@@ -395,31 +408,40 @@ fun VideoPlayerBottomControls(
                             speedAnchorBounds = it.boundsInWindowIntRect()
                         },
                     )
-                    if (showSecondaryActions) {
-                        PlayerTextButton(stringResource(R.string.video_mark_intro)) {
+                    trailingActions()
+                    if (showSecondaryActions && state.supportsIntroOutroMarkers) {
+                        PlayerTextButton(uiString("video_mark_intro")) {
                             onAction(VideoPlayerAction.ToggleIntroMarker)
                         }
-                        PlayerTextButton(stringResource(R.string.video_mark_outro)) {
+                        PlayerTextButton(uiString("video_mark_outro")) {
                             onAction(VideoPlayerAction.ToggleOutroMarker)
                         }
                     }
-                    PlayerIconButton(
+                    if (state.supportsScreenLock) PlayerIconButton(
                         icon = {
-                            Icon(Icons.Filled.Lock, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Icon(VideoPlayerIcons.Lock, contentDescription = null, modifier = Modifier.size(18.dp))
                         },
                         contentDescription = "Lock controls",
                         onClick = { onAction(VideoPlayerAction.ToggleScreenLock) },
                     )
-                    PlayerIconButton(
+                    if (state.showsRotation) PlayerIconButton(
                         icon = {
                             Icon(
-                                painter = painterResource(R.drawable.ic_screen_rotation),
+                                imageVector = ReaderPanelIcons.ScreenRotation,
                                 contentDescription = null,
                                 modifier = Modifier.size(20.dp),
                             )
                         },
-                        contentDescription = stringResource(R.string.rotate_screen),
+                        contentDescription = uiString("rotate_screen"),
                         onClick = { onAction(VideoPlayerAction.ToggleFullscreen) },
+                    ) else PlayerIconButton(
+                        icon = {
+                            Icon(if (state.isFullscreen) VideoPlayerIcons.FullscreenExit else VideoPlayerIcons.Fullscreen,
+                                contentDescription = null)
+                        },
+                        contentDescription = uiString("fullscreen_mode"),
+                        onClick = { onAction(VideoPlayerAction.ToggleFullscreen) },
+                        modifier = Modifier.testTag("video-fullscreen"),
                     )
                 }
             }
@@ -561,7 +583,7 @@ private fun PlayerChapterButton(
         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 7.dp),
     ) {
         Icon(
-            imageVector = Icons.Filled.GridView,
+            imageVector = VideoPlayerIcons.GridView,
             contentDescription = null,
             tint = PlayerControlsForeground,
             modifier = Modifier.size(20.dp),

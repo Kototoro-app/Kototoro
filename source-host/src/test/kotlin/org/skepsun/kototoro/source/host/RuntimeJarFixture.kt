@@ -315,7 +315,9 @@ internal class RuntimeJarFixture(private val root: Path) {
                 }
                 public Object getMangaUpdate(SMangaImpl manga, java.util.List<SChapterImpl> existing,
                     boolean details, boolean chapters, Continuation<Object> continuation) {
-                    if (!details || !chapters) throw new IllegalArgumentException("missing update flags");
+                    if (!chapters) throw new IllegalArgumentException("missing chapter flag");
+                    if (!details) return new SMangaUpdate(manga, java.util.Arrays.asList(
+                        chapter("/chapter/2", 0.5f, "new"), chapter("/chapter/1", -1, "old")));
                     SMangaImpl partial = new SMangaImpl(); partial.setUrl("wrong URL"); partial.setThumbnail_url(manga.getUrl());
                     partial.setDescription("<p>description</p>");
                     // A declared number that disagrees with the list order (extensions misparse titles).

@@ -6,6 +6,7 @@ import org.jsoup.nodes.Element
 import org.skepsun.kototoro.core.javascript.JavaScriptContext
 import org.skepsun.kototoro.core.javascript.JavaScriptRuleParser
 import org.skepsun.kototoro.core.javascript.VariableReplacer
+import org.skepsun.kototoro.core.jsonsource.SecurityValidator
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -515,7 +516,7 @@ class EnhancedRuleEngine @Inject constructor(
     private fun applyRegexExtraction(input: String, pattern: String): String {
         return try {
             val regex = Regex(pattern)
-            val match = regex.find(input)
+            val match = SecurityValidator.findBounded(regex, input)
 
             if (match != null) {
                 // 如果有捕获组，返回第一个捕获组
@@ -571,7 +572,10 @@ class EnhancedRuleEngine @Inject constructor(
             val regex = Regex(pattern)
 
             // 使用 Kotlin 的 replace 方法，它支持 $1, $2 等捕获组引用
-            regex.replace(input, replacement)
+            SecurityValidator.replaceBounded(regex, input, replacement) ?: run {
+                Log.w(TAG, "Regex replacement timed out: $operator")
+                input
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Error applying regex replacement: $operator", e)
             input

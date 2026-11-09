@@ -40,11 +40,19 @@ fun mergeUpdateChapters(groups: List<List<UpdateChapter>>): List<UpdateChapter> 
     }.sortedWith(compareBy<UpdateChapter> { it.discoveredAt }.thenBy { it.key })
 
 /** All database helpers in this file run inside the caller's write transaction. */
-suspend fun MangaDatabase.recordUpdateBatch(mangaId: Long, chapterIds: Set<Long>, now: Long): Int {
+suspend fun MangaDatabase.recordUpdateBatch(mangaId: Long, chapterIds: Set<Long>, now: Long): Int =
+    recordUpdateChapters(mangaId, getChaptersDao().findAll(mangaId).filter { it.chapterId in chapterIds }, now)
+
+/**
+ * [recordUpdateBatch] with the new [chapters] given rather than looked up in the work's stored chapter list. A local
+ * copy of a remote work has no stored list; its own chapters keep the remote source, URL and id, so the keys of the
+ * remote chapters given here are the keys its reading completes.
+ */
+suspend fun MangaDatabase.recordUpdateChapters(mangaId: Long, chapters: List<ChapterEntity>, now: Long): Int {
     val dao = getTrackLogsDao()
     val previous = dao.findByOwner(mangaId)
     val known = previous.flatMap { decodeUpdateChapters(it.chapterMetadata) }.mapTo(HashSet()) { it.key }
-    val added = getChaptersDao().findAll(mangaId).filter { it.chapterId in chapterIds }
+    val added = chapters
         .distinctBy { it.updateKey() }.filterNot { it.updateKey() in known }
         .map { UpdateChapter(it.updateKey(), it.chapterId, it.title, it.branch, it.uploadDate, now) }
     if (added.isNotEmpty()) {
@@ -53,6 +61,24 @@ suspend fun MangaDatabase.recordUpdateBatch(mangaId: Long, chapterIds: Set<Long>
     }
     refreshPendingUpdateCount(mangaId)
     return added.size
+}
+
+/**
+ * A chapter re-uploaded under a new identity keeps its update: the recorded chapters that are keys of [moves] take
+ * the identity of the chapter they moved to, with their discovery and read times unchanged.
+ */
+suspend fun MangaDatabase.rekeyUpdateChapters(mangaId: Long, moves: Map<ChapterEntity, ChapterEntity>) {
+    val targets = moves.entries.associate { (from, to) -> from.updateKey() to to }
+    val dao = getTrackLogsDao()
+    for (log in dao.findByOwner(mangaId)) {
+        val chapters = decodeUpdateChapters(log.chapterMetadata)
+        if (chapters.none { it.key in targets }) continue
+        dao.updateChapterMetadata(log.id, encodeUpdateChapters(chapters.map { chapter ->
+            targets[chapter.key]?.let { to ->
+                chapter.copy(key = to.updateKey(), chapterId = to.chapterId, title = to.title)
+            } ?: chapter
+        }))
+    }
 }
 
 /** Known chapter identities, rather than notification flags or historic event totals, own the badge. */
@@ -78,9 +104,19 @@ suspend fun MangaDatabase.reconcileUpdateNotifications(mangaId: Long) {
     }
 }
 
-/** Reading a chapter's final page completes that chapter, without treating skipped chapters as read. */
-suspend fun MangaDatabase.completeUpdateChapter(mangaId: Long, chapterId: Long, now: Long) {
-    val chapter = getChaptersDao().findAll(mangaId).firstOrNull { it.chapterId == chapterId } ?: return
+/**
+ * Reading a chapter's final page completes that chapter, without treating skipped chapters as read. [chapters] is
+ * the reader's list, used when the work has no stored one (a local copy, see [recordUpdateChapters]).
+ */
+suspend fun MangaDatabase.completeUpdateChapter(
+    mangaId: Long,
+    chapterId: Long,
+    now: Long,
+    chapters: List<ChapterEntity> = emptyList(),
+) {
+    val chapter = getChaptersDao().findAll(mangaId).firstOrNull { it.chapterId == chapterId }
+        ?: chapters.firstOrNull { it.chapterId == chapterId }
+        ?: return
     val key = chapter.updateKey()
     val dao = getTrackLogsDao()
     var changed = false
@@ -109,6 +145,16 @@ suspend fun MangaDatabase.completePendingUpdates(mangaId: Long, now: Long) {
 }
 
 /**
+ * The subscriptions page's "mark all read": every tracked work's pending updates complete as in
+ * [completePendingUpdates], and reminders left by works no longer tracked stop counting as unread too. History and
+ * the timeline's rows stay. Callers run it in one write transaction.
+ */
+suspend fun MangaDatabase.completeAllPendingUpdates(now: Long) {
+    for (mangaId in getTracksDao().findAllIds()) completePendingUpdates(mangaId, now)
+    getTrackLogsDao().markAllAsSeen()
+}
+
+/**
  * Android's `TrackingRepository.updateReadChapter` fallback for counters written before v86: the badge counts
  * chapters but its log carries no identities, so there is nothing for [completeUpdateChapter] to complete and
  * reading could never lower it. The position in the branch stands in for those identities: the counter becomes the
@@ -131,14 +177,18 @@ suspend fun MangaDatabase.recomputeLegacyUpdateCounter(
     val branch = chapters.filter { it.branch == current.branch }
     val index = branch.indexOfFirst { it.chapterId == chapterId }
     if (index < 0) return null
-    // The counter covers the tail of the branch, so a chapter inside that tail is what the badge is about.
-    if (index < branch.size - track.newChapters) return null
-    val last = branch.last()
-    val pending = branch.lastIndex - index
-    if (pending == track.newChapters && last.chapterId == track.lastChapterId) return null
+    val state = trackAfterReading(
+        readIndex = index,
+        anchorIndex = branch.indexOfFirst { it.chapterId == track.lastChapterId },
+        lastIndex = branch.lastIndex,
+        pending = track.newChapters,
+    )
+    val anchor = branch[state.anchorIndex]
+    val pending = state.pending
+    if (pending == track.newChapters && anchor.chapterId == track.lastChapterId) return null
     getTracksDao().upsert(TrackEntity(
         mangaId = track.mangaId,
-        lastChapterId = last.chapterId,
+        lastChapterId = anchor.chapterId,
         newChapters = pending,
         lastCheckTime = track.lastCheckTime,
         lastChapterDate = track.lastChapterDate,

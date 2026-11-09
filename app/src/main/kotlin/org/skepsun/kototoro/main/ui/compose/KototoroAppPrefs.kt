@@ -29,11 +29,12 @@ internal class KototoroAppPrefs internal constructor(
     val globalTagBlacklist: State<Set<String>>,
     val isNavBarPinned: State<Boolean>,
     val tabletUiMode: State<TabletUiMode>,
+    val isTabletNavBarOnLeft: State<Boolean>,
+    val isTabletNavLabelsVisible: State<Boolean>,
     val mainNavItems: State<List<NavItem>>,
     val isMainFabEnabled: State<Boolean>,
     val sidekickPosition: State<SpaceSwitcherPosition>,
     val globalFavoritesSortOrder: State<ListSortOrder>,
-    val showAllUpdates: State<Boolean>,
     val feedLimit: State<Int>,
     val exitConfirmationEnabled: State<Boolean>,
     val topBarStyle: State<TopBarStyle>,
@@ -105,6 +106,12 @@ internal fun rememberKototoroAppPrefs(appSettings: AppSettings): KototoroAppPref
     }
     val isNavBarPinned = appSettings.observeAsState(AppSettings.KEY_NAV_PINNED) { isNavBarPinned }
     val tabletUiMode = appSettings.observeAsState(AppSettings.KEY_TABLET_UI_MODE) { tabletUiMode }
+    val isTabletNavBarOnLeft = appSettings.observeAsState(AppSettings.KEY_TABLET_NAV_BAR_LEFT) {
+        isTabletNavBarOnLeft
+    }
+    val isTabletNavLabelsVisible = appSettings.observeAsState(AppSettings.KEY_TABLET_NAV_LABELS) {
+        isTabletNavLabelsVisible
+    }
     val mainNavItems = appSettings.observeAsState(AppSettings.KEY_NAV_MAIN) { mainNavItems }
     val isMainFabEnabled = appSettings.observeAsState(AppSettings.KEY_MAIN_FAB) { isMainFabEnabled }
     val sidekickPosition = appSettings.observeAsState(AppSettings.KEY_SPACE_SWITCHER_POSITION) {
@@ -112,9 +119,6 @@ internal fun rememberKototoroAppPrefs(appSettings: AppSettings): KototoroAppPref
     }
     val globalFavoritesSortOrder = appSettings.observeAsState(keys = arrayOf(AppSettings.KEY_FAVORITES_ORDER)) {
         allFavoritesSortOrder
-    }
-    val showAllUpdates = appSettings.observeAsState(keys = arrayOf(AppSettings.KEY_SHOW_ALL_UPDATES)) {
-        showAllUpdates
     }
     val feedLimit = appSettings.observeAsState(keys = arrayOf(AppSettings.KEY_FEED_LIMIT)) {
         feedLimit
@@ -137,11 +141,12 @@ internal fun rememberKototoroAppPrefs(appSettings: AppSettings): KototoroAppPref
         globalTagBlacklist = globalTagBlacklist,
         isNavBarPinned = isNavBarPinned,
         tabletUiMode = tabletUiMode,
+        isTabletNavBarOnLeft = isTabletNavBarOnLeft,
+        isTabletNavLabelsVisible = isTabletNavLabelsVisible,
         mainNavItems = mainNavItems,
         isMainFabEnabled = isMainFabEnabled,
         sidekickPosition = sidekickPosition,
         globalFavoritesSortOrder = globalFavoritesSortOrder,
-        showAllUpdates = showAllUpdates,
         feedLimit = feedLimit,
         exitConfirmationEnabled = exitConfirmationEnabled,
         topBarStyle = topBarStyle,

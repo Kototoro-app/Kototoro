@@ -171,7 +171,10 @@ class AniyomiSourceRuntime @JvmOverloads constructor(
                 val declared = (AniyomiModelAdapter.read(native, "getEpisode_number") as? Number)?.toFloat() ?: -1f
                 adapter.episode(native, parentUrl, if (declared > 0) declared else (index + 1).toFloat())
                     .also { session.episodes[it.id] = adapter.copyEpisode(native) }
-            } // Source order (oldest first), not by extension-declared numbers, as Aniyomi lists them.
+            }.let { list -> // Source order (oldest first), not by extension-declared numbers, as Aniyomi lists them.
+                if (MihonModelRules.scanlatorBranches(list, SourceChapter::branch, SourceChapter::number)) list
+                else list.map { if (it.branch == null) it else it.copy(branch = null) }
+            }
             adapter.detailFallbacks(details, original)
             session.animes[parentUrl] = adapter.copy(details)
             adapter.content(details, chapters).copy(id = content.id)

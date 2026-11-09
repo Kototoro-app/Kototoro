@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.settings.compose
 
+import com.kyant.backdrop.isRenderEffectSupported
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
@@ -23,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.prefs.GlassBlurQuality
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.AppFontPreset
 import org.skepsun.kototoro.core.prefs.BackgroundArtworkSource
@@ -49,8 +51,13 @@ import org.skepsun.kototoro.core.ui.glass.GlassCustomPreset
 import org.skepsun.kototoro.core.ui.glass.GlassTuningParam
 import org.skepsun.kototoro.core.ui.glass.GlassTuningScope
 import org.skepsun.kototoro.core.ui.glass.GlassTuningState
+import org.skepsun.kototoro.list.ui.compose.GridSizeRange
 import org.skepsun.kototoro.settings.compose.glass.GlassPreset
 import org.skepsun.kototoro.settings.compose.glass.GlassTuningSection
+import org.skepsun.kototoro.settings.compose.glass.GlassBlurQualityRow
+import org.skepsun.kototoro.settings.compose.glass.GlassEdgeBlurSlider
+import org.skepsun.kototoro.settings.compose.glass.GlassImmersiveSlider
+import org.skepsun.kototoro.settings.compose.glass.GlassMasterSwitch
 
 data class AppearanceSettingsUiState(
     val navSummary: String,
@@ -81,6 +88,8 @@ data class AppearanceSettingsUiState(
     val isQuickFilterEnabled: Boolean,
     val tabletListPreviewMode: TabletListPreviewMode,
     val isTabletListFilterPanelDefaultOpen: Boolean,
+    val isTabletNavBarOnLeft: Boolean = false,
+    val isTabletNavLabelsVisible: Boolean = false,
     val progressIndicatorMode: ProgressIndicatorMode,
     val cardProgressStyle: CardProgressStyle,
     val topBarStyle: TopBarStyle,
@@ -127,6 +136,10 @@ data class AppearanceSettingsUiState(
     val isGlassEffectEnabled: Boolean,
     val isReducedVisualEffectsEnabled: Boolean,
     val glassImmersiveStrengthPercent: Int,
+    val glassEdgeBlurRadiusDp: Int = 0,
+    val isGlassImmersiveTopEnabled: Boolean = true,
+    val isGlassImmersiveBottomEnabled: Boolean = false,
+    val glassBlurQuality: GlassBlurQuality = GlassBlurQuality.BALANCED,
 )
 
 data class AppearanceSettingsOptions(
@@ -170,6 +183,7 @@ enum class AppearanceSettingsPage {
     HOME,
     INTERFACE,
     GLASS,
+    IMMERSIVE,
     BADGES,
     SEARCH_FILTERS,
     NAVIGATION,
@@ -207,6 +221,8 @@ fun AppearanceSettingsScreen(
     onQuickFilterChange: (Boolean) -> Unit,
     onTabletListPreviewModeChange: (TabletListPreviewMode) -> Unit,
     onTabletListFilterPanelDefaultChange: (Boolean) -> Unit,
+    onTabletNavBarOnLeftChange: (Boolean) -> Unit = {},
+    onTabletNavLabelsVisibleChange: (Boolean) -> Unit = {},
     onProgressIndicatorModeChange: (ProgressIndicatorMode) -> Unit,
     onCardProgressStyleChange: (CardProgressStyle) -> Unit,
     onTopBarStyleChange: (TopBarStyle) -> Unit,
@@ -248,6 +264,10 @@ fun AppearanceSettingsScreen(
     onGlassEffectEnabledChange: (Boolean) -> Unit,
     onReducedVisualEffectsChange: (Boolean) -> Unit,
     onImmersiveStrengthChange: (Int) -> Unit,
+    onEdgeBlurRadiusChange: (Int) -> Unit = {},
+    onImmersiveTopChange: (Boolean) -> Unit = {},
+    onImmersiveBottomChange: (Boolean) -> Unit = {},
+    onBlurQualityChange: (GlassBlurQuality) -> Unit = {},
     glassTuning: GlassTuningState,
     onGlassTuningSetValue: (GlassTuningScope, GlassTuningParam, Float) -> Unit,
     onGlassTuningFollowGlobal: (GlassTuningScope, GlassTuningParam, Boolean) -> Unit,
@@ -270,6 +290,7 @@ fun AppearanceSettingsScreen(
     onDetailsSettingsClick: () -> Unit = {},
     onHomeSettingsClick: () -> Unit = {},
     onInterfaceSettingsClick: () -> Unit = {},
+    onImmersiveSettingsClick: () -> Unit = {},
 ) {
     when (page) {
         AppearanceSettingsPage.GLASS -> {
@@ -278,7 +299,6 @@ fun AppearanceSettingsScreen(
                 glassTuning = glassTuning,
                 onGlassEffectEnabledChange = onGlassEffectEnabledChange,
                 onReducedVisualEffectsChange = onReducedVisualEffectsChange,
-                onImmersiveStrengthChange = onImmersiveStrengthChange,
                 onGlassTuningSetValue = onGlassTuningSetValue,
                 onGlassTuningFollowGlobal = onGlassTuningFollowGlobal,
                 onGlassTuningPreset = onGlassTuningPreset,
@@ -289,6 +309,17 @@ fun AppearanceSettingsScreen(
                 onGlassTuningDeleteCustomPreset = onGlassTuningDeleteCustomPreset,
                 onGlassTuningExportCustomPresets = onGlassTuningExportCustomPresets,
                 onGlassTuningImportCustomPresets = onGlassTuningImportCustomPresets,
+            )
+            return
+        }
+        AppearanceSettingsPage.IMMERSIVE -> {
+            AppearanceImmersiveSettingsScreen(
+                state = state,
+                onImmersiveStrengthChange = onImmersiveStrengthChange,
+                onImmersiveTopChange = onImmersiveTopChange,
+                onImmersiveBottomChange = onImmersiveBottomChange,
+                onEdgeBlurRadiusChange = onEdgeBlurRadiusChange,
+                onBlurQualityChange = onBlurQualityChange,
             )
             return
         }
@@ -519,6 +550,14 @@ fun AppearanceSettingsScreen(
                 }
                 item {
                     SettingsActionPreference(
+                        title = stringResource(R.string.appearance_group_immersive),
+                        summary = stringResource(R.string.appearance_immersive_summary),
+                        iconRes = R.drawable.ic_fullscreen,
+                        onClick = onImmersiveSettingsClick,
+                    )
+                }
+                item {
+                    SettingsActionPreference(
                         title = stringResource(R.string.search_bar_filters),
                         summary = stringResource(R.string.appearance_search_filters_group_summary),
                         iconRes = R.drawable.ic_filter_menu,
@@ -586,7 +625,7 @@ fun AppearanceSettingsScreen(
                         title = stringResource(R.string.grid_size),
                         iconRes = R.drawable.ic_grid,
                         value = state.gridSize,
-                        valueRange = 50..150,
+                        valueRange = GridSizeRange,
                         step = 5,
                         valueText = { "$it%" },
                         onValueChange = onGridSizeChange,
@@ -866,6 +905,24 @@ fun AppearanceSettingsScreen(
                     )
                 }
                 item {
+                    SettingsSwitchPreference(
+                        title = stringResource(R.string.pref_tablet_nav_bar_left),
+                        iconRes = R.drawable.ic_view_column,
+                        checked = state.isTabletNavBarOnLeft,
+                        summary = stringResource(R.string.pref_tablet_nav_bar_left_summary),
+                        onCheckedChange = onTabletNavBarOnLeftChange,
+                    )
+                }
+                item {
+                    SettingsSwitchPreference(
+                        title = stringResource(R.string.pref_tablet_nav_labels),
+                        iconRes = R.drawable.ic_view_column,
+                        checked = state.isTabletNavLabelsVisible,
+                        summary = stringResource(R.string.pref_tablet_nav_labels_summary),
+                        onCheckedChange = onTabletNavLabelsVisibleChange,
+                    )
+                }
+                item {
                     SettingsChoicePreference(
                         title = stringResource(R.string.pref_loading_circle_style),
                         iconRes = R.drawable.ic_timer_run,
@@ -983,12 +1040,82 @@ fun AppearanceSettingsScreen(
 }
 
 @Composable
+private fun AppearanceImmersiveSettingsScreen(
+    state: AppearanceSettingsUiState,
+    onImmersiveStrengthChange: (Int) -> Unit,
+    onImmersiveTopChange: (Boolean) -> Unit,
+    onImmersiveBottomChange: (Boolean) -> Unit,
+    onEdgeBlurRadiusChange: (Int) -> Unit,
+    onBlurQualityChange: (GlassBlurQuality) -> Unit,
+) {
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.background,
+    ) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(
+                start = SettingsContentHorizontalPadding,
+                end = SettingsContentHorizontalPadding,
+                top = settingsContentTopInset(8.dp),
+                bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 24.dp,
+            ),
+        ) {
+            item(key = "appearance_immersive_controls") {
+                // One item per row: the Material group gives every item its own tile, so rows must not share one.
+                SettingsPreferenceGroup(
+                    title = stringResource(R.string.appearance_group_immersive),
+                ) {
+                    item {
+                        GlassMasterSwitch(
+                            title = stringResource(R.string.pref_glass_immersive_top),
+                            summary = stringResource(R.string.pref_glass_immersive_top_summary),
+                            checked = state.isGlassImmersiveTopEnabled,
+                            onCheckedChange = onImmersiveTopChange,
+                        )
+                    }
+                    item {
+                        GlassMasterSwitch(
+                            title = stringResource(R.string.pref_glass_immersive_bottom),
+                            summary = stringResource(R.string.pref_glass_immersive_bottom_summary),
+                            checked = state.isGlassImmersiveBottomEnabled,
+                            onCheckedChange = onImmersiveBottomChange,
+                        )
+                    }
+                    item {
+                        GlassImmersiveSlider(
+                            value = state.glassImmersiveStrengthPercent,
+                            onValueChange = onImmersiveStrengthChange,
+                        )
+                    }
+                    // Edge blur and its quality need RenderEffect (Android 12+).
+                    if (isRenderEffectSupported()) {
+                        item {
+                            GlassEdgeBlurSlider(
+                                value = state.glassEdgeBlurRadiusDp,
+                                enabled = !state.isReducedVisualEffectsEnabled,
+                                onValueChange = onEdgeBlurRadiusChange,
+                            )
+                        }
+                        item {
+                            GlassBlurQualityRow(
+                                selected = state.glassBlurQuality,
+                                onSelected = onBlurQualityChange,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun AppearanceGlassSettingsScreen(
     state: AppearanceSettingsUiState,
     glassTuning: GlassTuningState,
     onGlassEffectEnabledChange: (Boolean) -> Unit,
     onReducedVisualEffectsChange: (Boolean) -> Unit,
-    onImmersiveStrengthChange: (Int) -> Unit,
     onGlassTuningSetValue: (GlassTuningScope, GlassTuningParam, Float) -> Unit,
     onGlassTuningFollowGlobal: (GlassTuningScope, GlassTuningParam, Boolean) -> Unit,
     onGlassTuningPreset: (GlassPreset) -> Unit,
@@ -1022,10 +1149,8 @@ private fun AppearanceGlassSettingsScreen(
                             tuning = glassTuning,
                             isGlassEffectEnabled = state.isGlassEffectEnabled,
                             isReducedVisualEffects = state.isReducedVisualEffectsEnabled,
-                            immersiveStrengthPercent = state.glassImmersiveStrengthPercent,
                             onGlassEffectEnabledChange = onGlassEffectEnabledChange,
                             onReducedVisualEffectsChange = onReducedVisualEffectsChange,
-                            onImmersiveStrengthChange = onImmersiveStrengthChange,
                             onSetValue = onGlassTuningSetValue,
                             onSetFollowGlobal = onGlassTuningFollowGlobal,
                             onApplyPreset = onGlassTuningPreset,

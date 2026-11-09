@@ -103,7 +103,7 @@ internal fun DesktopReadingStatsContent(
 ) {
     var confirmClear by remember { mutableStateOf(false) }
     Column(
-        modifier = Modifier.widthIn(max = 760.dp).fillMaxWidth().verticalScroll(rememberScrollState()),
+        modifier = Modifier.widthIn(max = 760.dp).fillMaxWidth().verticalScroll(rememberScrollState()).padding(top = LocalDesktopTopInset.current),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         // Android puts the period menu and the kind pills in one sideways-scrolling row; a desktop window is wide

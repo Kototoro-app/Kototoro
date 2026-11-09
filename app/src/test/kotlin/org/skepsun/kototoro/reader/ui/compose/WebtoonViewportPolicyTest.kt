@@ -139,10 +139,10 @@ class WebtoonViewportPolicyTest {
 	}
 
 	@Test
-	fun `selects last page whose end is visible across chapter boundary`() {
+	fun `selects page under the viewport center across chapter boundary`() {
 		assertEquals(
 			201L,
-			resolveLastEndVisibleWebtoonPageKey(
+			resolveCenterWebtoonPageKey(
 				items = listOf(
 					WebtoonVisibleItem(pageKey = 105L, offsetPx = -200, sizePx = 400),
 					WebtoonVisibleItem(pageKey = 201L, offsetPx = 200, sizePx = 800),
@@ -154,10 +154,10 @@ class WebtoonViewportPolicyTest {
 	}
 
 	@Test
-	fun `keeps current page while adjacent page end is outside viewport`() {
+	fun `keeps current page while it still covers the viewport center`() {
 		assertEquals(
 			105L,
-			resolveLastEndVisibleWebtoonPageKey(
+			resolveCenterWebtoonPageKey(
 				items = listOf(
 					WebtoonVisibleItem(pageKey = 105L, offsetPx = -100, sizePx = 900),
 					WebtoonVisibleItem(pageKey = 201L, offsetPx = 800, sizePx = 900),
@@ -166,6 +166,61 @@ class WebtoonViewportPolicyTest {
 				viewportEndPx = 1000,
 			),
 		)
+	}
+
+	@Test
+	fun `page taller than the viewport is current while it fills the screen`() {
+		// Issue #652: page 2 fills the screen and page 3 is not visible yet.
+		assertEquals(
+			2L,
+			resolveCenterWebtoonPageKey(
+				items = listOf(WebtoonVisibleItem(pageKey = 2L, offsetPx = -300, sizePx = 2400)),
+				viewportStartPx = 0,
+				viewportEndPx = 1000,
+			),
+		)
+	}
+
+	@Test
+	fun `next page becomes current once it crosses the viewport center`() {
+		val before = listOf(
+			WebtoonVisibleItem(pageKey = 1L, offsetPx = -1900, sizePx = 2400),
+			WebtoonVisibleItem(pageKey = 2L, offsetPx = 500, sizePx = 2400),
+		)
+		val after = listOf(
+			WebtoonVisibleItem(pageKey = 1L, offsetPx = -1910, sizePx = 2400),
+			WebtoonVisibleItem(pageKey = 2L, offsetPx = 490, sizePx = 2400),
+		)
+
+		assertEquals(2L, resolveCenterWebtoonPageKey(before, viewportStartPx = 0, viewportEndPx = 1000))
+		assertEquals(2L, resolveCenterWebtoonPageKey(after, viewportStartPx = 0, viewportEndPx = 1000))
+		assertEquals(
+			1L,
+			resolveCenterWebtoonPageKey(
+				items = listOf(
+					WebtoonVisibleItem(pageKey = 1L, offsetPx = -1890, sizePx = 2400),
+					WebtoonVisibleItem(pageKey = 2L, offsetPx = 510, sizePx = 2400),
+				),
+				viewportStartPx = 0,
+				viewportEndPx = 1000,
+			),
+		)
+	}
+
+	@Test
+	fun `center in a gap between pages picks the nearest page`() {
+		assertEquals(
+			2L,
+			resolveCenterWebtoonPageKey(
+				items = listOf(
+					WebtoonVisibleItem(pageKey = 1L, offsetPx = -100, sizePx = 580),
+					WebtoonVisibleItem(pageKey = 2L, offsetPx = 504, sizePx = 600),
+				),
+				viewportStartPx = 0,
+				viewportEndPx = 1000,
+			),
+		)
+		assertEquals(null, resolveCenterWebtoonPageKey(emptyList(), viewportStartPx = 0, viewportEndPx = 1000))
 	}
 
 	@Test

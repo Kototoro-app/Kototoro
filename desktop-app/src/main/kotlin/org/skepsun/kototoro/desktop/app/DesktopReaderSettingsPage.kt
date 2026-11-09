@@ -51,7 +51,7 @@ internal fun DesktopReaderSettingsPage(controller: DesktopController, state: Des
     val webtoon = settings.mode.isVerticalStrip
     var directionDialogVisible by remember { mutableStateOf(false) }
     Column(
-        modifier = Modifier.widthIn(max = 760.dp).fillMaxWidth().verticalScroll(rememberScrollState()),
+        modifier = Modifier.widthIn(max = 760.dp).fillMaxWidth().verticalScroll(rememberScrollState()).padding(top = LocalDesktopTopInset.current),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         ReaderModeSettingsContent(

@@ -20,10 +20,12 @@ import org.skepsun.kototoro.core.db.entity.toContent
 import org.skepsun.kototoro.core.db.entity.toContentChapters
 import org.skepsun.kototoro.core.db.entity.toContentTags
 import org.skepsun.kototoro.core.model.LocalMangaSource
+import org.skepsun.kototoro.core.model.getPreferredBranch
 import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.core.nav.ContentIntent
 import org.skepsun.kototoro.core.os.AppShortcutManager
+import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ReaderMode
 import org.skepsun.kototoro.core.ui.model.ContentOverride
 import org.skepsun.kototoro.core.util.ext.toFileOrNull
@@ -35,6 +37,8 @@ import org.skepsun.kototoro.reader.domain.ReaderColorFilter
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingStatus
 import javax.inject.Inject
 import javax.inject.Provider
+import org.skepsun.kototoro.tracker.domain.ChapterSnapshotResult
+import org.skepsun.kototoro.tracker.domain.storeChapterSnapshot
 
 @Reusable
 class ContentDataRepository @Inject constructor(
@@ -42,6 +46,7 @@ class ContentDataRepository @Inject constructor(
     private val resolverProvider: Provider<ContentLinkResolver>,
     private val appShortcutManagerProvider: Provider<AppShortcutManager>,
     private val storedContentIdentityResolver: StoredContentIdentityResolver,
+    private val settings: AppSettings,
 ) {
 
     sealed interface MetadataSourceSelection {
@@ -336,9 +341,7 @@ class ContentDataRepository @Inject constructor(
                 db.getTagsDao().upsert(tags)
                 db.getMangaDao().upsert(stored.toEntity(), tags)
                 if (!stored.isLocal) {
-                    stored.chapters?.let { chapters ->
-                        db.getChaptersDao().replaceAll(stored.id, chapters.withIndex().toEntities(stored.id))
-                    }
+                    storeChapters(stored)
                 }
             }
             stored
@@ -351,14 +354,25 @@ class ContentDataRepository @Inject constructor(
 
     suspend fun updateContentSnapshot(manga: Content): Content {
         return db.withTransaction {
-            upsertContentSnapshot(resolveStoredContent(manga))
+            upsertContentSnapshot(resolveStoredContent(manga)).also { stored ->
+                if (!stored.isLocal) storeChapters(stored)
+            }
         }
     }
 
-    suspend fun updateContentSnapshotAtAnchor(manga: Content, anchorMangaId: Long): Content {
+    suspend fun updateContentSnapshotAtAnchor(manga: Content, anchorMangaId: Long): Content =
+        storeCheckedSnapshot(manga, anchorMangaId).first
+
+    /**
+     * [updateContentSnapshotAtAnchor] for a check, which needs to know what storing the chapter list found: the
+     * new chapters recorded as updates, or that the list was not stored (see [storeChapterSnapshot]). The result is
+     * null when no chapter list was stored at all.
+     */
+    suspend fun storeCheckedSnapshot(manga: Content, anchorMangaId: Long): Pair<Content, ChapterSnapshotResult?> {
         return db.withTransaction {
             check(db.getMangaDao().contains(anchorMangaId)) { "Unknown anchor manga: $anchorMangaId" }
-            upsertContentSnapshot(manga.copy(id = anchorMangaId))
+            val stored = upsertContentSnapshot(manga.copy(id = anchorMangaId))
+            stored to if (stored.isLocal) null else storeChapters(stored)
         }
     }
 
@@ -367,12 +381,23 @@ class ContentDataRepository @Inject constructor(
         val tags = manga.tags.toEntities()
         db.getTagsDao().upsert(tags)
         db.getMangaDao().upsert(manga.toEntity(), tags)
-        if (!manga.isLocal) {
-            manga.chapters?.let { chapters ->
-                db.getChaptersDao().replaceAll(manga.id, chapters.withIndex().toEntities(manga.id))
-            }
-        }
         return manga
+    }
+
+    /**
+     * Stores the chapter list of a remote [manga], which records the new chapters of a tracked work as updates
+     * wherever the list came from: a check, the details page or the reader. Null when [manga] carries no list.
+     */
+    private suspend fun storeChapters(manga: Content): ChapterSnapshotResult? {
+        val chapters = manga.chapters ?: return null
+        return db.storeChapterSnapshot(
+            mangaId = manga.id,
+            workTitle = manga.title,
+            chapters = chapters.withIndex().toEntities(manga.id),
+            now = System.currentTimeMillis(),
+            fallbackBranch = manga.getPreferredBranch(null),
+            markDuplicatesRead = settings.isTrackerMarkDuplicatesRead,
+        )
     }
 
     suspend fun gcChaptersCache() {

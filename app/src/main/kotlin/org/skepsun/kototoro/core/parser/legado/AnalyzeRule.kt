@@ -12,6 +12,7 @@ import java.util.regex.Pattern
 import org.jsoup.nodes.Element
 import org.skepsun.kototoro.core.javascript.BookInfo
 import org.skepsun.kototoro.core.javascript.ChapterInfo
+import org.skepsun.kototoro.core.jsonsource.SecurityValidator
 import org.skepsun.kototoro.core.parser.legado.bridge.LegadoSandboxRuleRuntimeContext
 import org.skepsun.kototoro.core.model.jsonsource.LegadoBookSource
 import org.skepsun.kototoro.core.parser.legado.runtime.LegadoRuleRuntimeContext
@@ -561,9 +562,9 @@ class AnalyzeRule(
         return if (sourceRule.replaceFirst) {
             if (compiledRegex != null) {
                 runCatching {
-                    val matcher = compiledRegex.toPattern().matcher(result)
-                    if (matcher.find()) {
-                        matcher.group().replaceFirst(compiledRegex, replacement)
+                    val match = SecurityValidator.findBounded(compiledRegex, result)
+                    if (match != null) {
+                        SecurityValidator.replaceFirstBounded(compiledRegex, match.value, replacement) ?: ""
                     } else ""
                 }.getOrElse { replacement }
             } else {
@@ -572,7 +573,7 @@ class AnalyzeRule(
         } else {
             if (compiledRegex != null) {
                 runCatching {
-                    result.replace(compiledRegex, replacement)
+                    SecurityValidator.replaceBounded(compiledRegex, result, replacement) ?: result
                 }.getOrElse {
                     runCatching { result.replace(regexStr, replacement) }.getOrDefault(result)
                 }

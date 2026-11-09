@@ -114,7 +114,7 @@ final class SourceIconStore {
         let group = source.group
         let ecosystem = source.ecosystem
         let failedKey = "source.icon.v2.failed.\(key)"
-        let failedAt = UserDefaults.standard.double(forKey: failedKey)
+        let failedAt = SourceIconRetry.failures.double(forKey: failedKey)
         let recentlyFailed = !packaged && failedAt > 0 && Date().timeIntervalSince1970 - failedAt < Self.retryInterval
         let directory = directory
         request.task = Task.detached(priority: .utility) { () -> UIImage? in
@@ -213,9 +213,9 @@ final class SourceIconStore {
         if inFlight[key]?.token == token { inFlight[key] = nil }
         if let image {
             memory[key] = image
-            UserDefaults.standard.removeObject(forKey: "source.icon.v2.failed.\(key)")
+            SourceIconRetry.failures.removeObject(forKey: "source.icon.v2.failed.\(key)")
         } else if let failedKey {
-            UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: failedKey)
+            SourceIconRetry.failures.set(Date().timeIntervalSince1970, forKey: failedKey)
         }
     }
 

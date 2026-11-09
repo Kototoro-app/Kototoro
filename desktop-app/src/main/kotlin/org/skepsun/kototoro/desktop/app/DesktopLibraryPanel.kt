@@ -27,6 +27,7 @@ import org.skepsun.kototoro.core.ui.topbar.TopBarTabItem
 import org.skepsun.kototoro.core.ui.topbar.TopBarTabsRail
 import org.skepsun.kototoro.desktop.runtime.DesktopNsfwTarget
 import org.skepsun.kototoro.core.ui.topbar.TopBarTitleBlock
+import org.skepsun.kototoro.core.ui.topbar.FloatingTopBarScaffold
 import org.skepsun.kototoro.core.ui.compose.CompactFilterChip
 import org.skepsun.kototoro.core.ui.topbar.TopBarIconAction
 import org.skepsun.kototoro.main.ui.compose.CompactDropdownMenuItem
@@ -102,7 +103,11 @@ internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAp
             true
         } else false
     }) {
-        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        // Android's floating shelf bar: the title or selection bar, the category tabs and the count float over the
+        // grid, which scrolls beneath them.
+        val inset = LocalDesktopTopInset.current
+        FloatingTopBarScaffold(modifier = Modifier.fillMaxSize(), backdropColor = Canvas, scrimColor = Canvas, topBar = {
+        Column(Modifier.fillMaxWidth().padding(top = inset, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             if (checkedIds.isNotEmpty()) DesktopLibrarySelectionBar(
                 count = checkedIds.size, history = history, allPinned = allPinned, enabled = enabled,
                 onSelectAll = { selectedIds = LinkedHashSet(shownIds) },
@@ -165,7 +170,9 @@ internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAp
             }
             Text(desktopText("library.count", entries.size, state.library.entries.size), color = Muted, fontSize = 12.sp,
                 modifier = Modifier.testTag("library-count"))
-            Box(Modifier.weight(1f)) {
+        }
+        }) { inner ->
+            Box(Modifier.fillMaxSize()) {
                 if (entries.isNotEmpty()) {
                     val progress = remember(entries) { entries.associate { it.content.id to it.progressPercent } }
                     val newChapters = remember(entries, history) {
@@ -190,6 +197,7 @@ internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAp
                         listMode = state.libraryDisplay.listMode,
                         gridSize = state.libraryDisplay.gridSize,
                         collectionState = collectionState,
+                        contentPadding = PaddingValues(top = inner.calculateTopPadding()),
                         metaOf = { content ->
                             content.authors.joinToString().ifBlank {
                                 sourceTitles[content.source.name] ?: content.source.name
@@ -204,7 +212,7 @@ internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAp
                     onAction = { update(DesktopLibrarySelection()) },
                     actionModifier = Modifier.testTag("library-clear-empty"),
                     enabled = enabled,
-                    modifier = Modifier.align(Alignment.Center),
+                    modifier = Modifier.align(Alignment.Center).padding(top = inner.calculateTopPadding()),
                 )
             }
         }
@@ -411,9 +419,9 @@ private fun LibraryDisplayOptions(display: DesktopLibraryDisplay, enabled: Boole
                     icon = { mode -> painterResource(when (mode) {
                         org.skepsun.kototoro.core.prefs.ListMode.LIST -> "icons/ic_list.svg"
                         org.skepsun.kototoro.core.prefs.ListMode.DETAILED_LIST -> "icons/ic_list_detailed.svg"
+                        org.skepsun.kototoro.core.prefs.ListMode.COMPACT_GRID -> "icons/ic_grid_compact.svg"
                         else -> "icons/ic_grid.svg"
                     }) },
-                    checkIcon = painterResource("icons/ic_check.svg"),
                     modes = DesktopLibraryDisplay.MODES,
                 )
                 if (display.listMode.isGrid) {

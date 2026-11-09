@@ -27,7 +27,7 @@ class DesktopHomeMouseGesturesTest {
     @TempDir lateinit var directory: Path
 
     @Test
-    fun `home history and recommendations move under mouse dragging without opening a work`() {
+    fun `home history, updates and recommendations move under mouse dragging without opening a work`() {
         // The SDK's process-global Android runtime uses the same isolated JVM/classpath as the other UI probes.
         val log = directory.resolve("home-mouse.log")
         val process = ProcessBuilder(DesktopProbes.javaExecutable,
@@ -55,6 +55,13 @@ class DesktopHomeMouseGesturesTest {
                     DesktopLibraryEntry(content, emptySet(), 1000L - index, 1000L - index, .25f)
                 }),
                 suggestions = works,
+                // Android's list-mode updates rail scrolls by pages of rows like the cover rails.
+                feed = org.skepsun.kototoro.tracker.domain.feed.FeedSnapshot(emptyList(), works.associate { content ->
+                    content.id to org.skepsun.kototoro.tracker.domain.feed.FeedUpdateRow(content.id, content.id, null,
+                        null, 2, 1000L - content.id, 1000L - content.id, 0L, false, null, content.title, null,
+                        "gesture-fixture", false)
+                }),
+                feedContents = works.associateBy { it.id },
             )
             runDesktopComposeUiTest(width = 1260, height = 620) {
                 setContent {
@@ -66,7 +73,7 @@ class DesktopHomeMouseGesturesTest {
                 }
                 fun position(tag: String) = onNodeWithTag(tag).fetchSemanticsNode().config[
                     SemanticsProperties.HorizontalScrollAxisRange].value()
-                for (tag in listOf("home-history", "home-recommendations")) {
+                for (tag in listOf("home-history", "home-updates", "home-recommendations")) {
                     onNodeWithTag("home-scroll").performScrollToNode(hasTestTag(tag))
                     val before = position(tag)
                     onNodeWithTag(tag).performMouseInput {

@@ -1,65 +1,22 @@
 package org.skepsun.kototoro.core.parser.legado
 
+import org.skepsun.kototoro.core.jsonsource.SecurityValidator
 import java.util.regex.Pattern
 
 /**
  * Regex analyzer for pattern matching.
  *
- * Aligned with legado-with-MD3 AnalyzeByRegex pattern.
+ * Aligned with legado-with-MD3 AnalyzeByRegex pattern. The patterns come from imported source rules,
+ * so every match a rule makes, across all of its `&&` steps, shares one [SecurityValidator] deadline: a
+ * catastrophically backtracking pattern gives up with no result instead of pinning the parser thread.
  */
 object AnalyzeByRegex {
 
-    fun getElement(res: String, regs: Array<String>, index: Int = 0): List<String>? {
-        var vIndex = index
-        val resM = Pattern.compile(regs[vIndex]).matcher(res)
-        if (!resM.find()) {
-            return null
-        }
-        // 判断索引的规则是最后一个规则
-        return if (vIndex + 1 == regs.size) {
-            // 新建容器
-            val info = arrayListOf<String>()
-            for (groupIndex in 0..resM.groupCount()) {
-                info.add(resM.group(groupIndex) ?: "")
-            }
-            info
-        } else {
-            val result = StringBuilder()
-            do {
-                result.append(resM.group())
-            } while (resM.find())
-            getElement(result.toString(), regs, ++vIndex)
-        }
-    }
+    fun getElement(res: String, regs: Array<String>, index: Int = 0): List<String>? =
+        getElement(res, regs, index, SecurityValidator.regexDeadline())
 
-    fun getElements(res: String, regs: Array<String>, index: Int = 0): List<List<String>> {
-        var vIndex = index
-        val resM = Pattern.compile(regs[vIndex]).matcher(res)
-        if (!resM.find()) {
-            return arrayListOf()
-        }
-        // 判断索引的规则是最后一个规则
-        if (vIndex + 1 == regs.size) {
-            // 创建书息缓存数组
-            val books = ArrayList<List<String>>()
-            // 提取列表
-            do {
-                // 新建容器
-                val info = arrayListOf<String>()
-                for (groupIndex in 0..resM.groupCount()) {
-                    info.add(resM.group(groupIndex) ?: "")
-                }
-                books.add(info)
-            } while (resM.find())
-            return books
-        } else {
-            val result = StringBuilder()
-            do {
-                result.append(resM.group())
-            } while (resM.find())
-            return getElements(result.toString(), regs, ++vIndex)
-        }
-    }
+    fun getElements(res: String, regs: Array<String>, index: Int = 0): List<List<String>> =
+        getElements(res, regs, index, SecurityValidator.regexDeadline())
 
     /**
      * Convenience overload accepting List<String> for patterns
@@ -68,4 +25,49 @@ object AnalyzeByRegex {
         if (patterns.isEmpty()) return emptyList()
         return getElements(text, patterns.toTypedArray()).map { it as Any }
     }
+
+    private fun getElement(res: String, regs: Array<String>, index: Int, deadline: Long): List<String>? {
+        val pattern = Pattern.compile(regs[index])
+        // 判断索引的规则是最后一个规则
+        if (index + 1 == regs.size) {
+            return SecurityValidator.withRegexDeadline(res, deadline) { input ->
+                val resM = pattern.matcher(input)
+                if (!resM.find()) return@withRegexDeadline null
+                // 新建容器
+                (0..resM.groupCount()).map { resM.group(it) ?: "" }
+            }
+        }
+        val joined = joinMatches(res, pattern, deadline) ?: return null
+        return getElement(joined, regs, index + 1, deadline)
+    }
+
+    private fun getElements(res: String, regs: Array<String>, index: Int, deadline: Long): List<List<String>> {
+        val pattern = Pattern.compile(regs[index])
+        // 判断索引的规则是最后一个规则
+        if (index + 1 == regs.size) {
+            return SecurityValidator.withRegexDeadline(res, deadline) { input ->
+                val resM = pattern.matcher(input)
+                // 创建书息缓存数组, 提取列表
+                val books = ArrayList<List<String>>()
+                while (resM.find()) {
+                    books.add((0..resM.groupCount()).map { resM.group(it) ?: "" })
+                }
+                books
+            }.orEmpty()
+        }
+        val joined = joinMatches(res, pattern, deadline) ?: return emptyList()
+        return getElements(joined, regs, index + 1, deadline)
+    }
+
+    /** Every match of [pattern] in [res] run together, the input of the next step; null when none or out of time. */
+    private fun joinMatches(res: String, pattern: Pattern, deadline: Long): String? =
+        SecurityValidator.withRegexDeadline(res, deadline) { input ->
+            val resM = pattern.matcher(input)
+            if (!resM.find()) return@withRegexDeadline null
+            val result = StringBuilder()
+            do {
+                result.append(resM.group())
+            } while (resM.find())
+            result.toString()
+        }
 }

@@ -38,6 +38,83 @@ class TrackRulesTest {
 	}
 
 	@Test
+	fun `a vanished last chapter falls back to chapters uploaded after it`() {
+		data class Chapter(val id: Long, val uploadedAt: Long)
+		// The source moved to new chapter URLs: every id changed, and chapter 11 is new.
+		val chapters = (101L..110L).map { Chapter(it, uploadedAt = it) } + Chapter(111L, uploadedAt = 500L)
+
+		val comparison = compareTrackedChapters(chapters, Chapter::id, lastChapterId = 10L,
+			uploadDate = Chapter::uploadedAt, lastChapterDate = 110L)
+
+		assertTrue(comparison.isValid)
+		assertEquals(listOf(111L), comparison.newChapters.map(Chapter::id))
+	}
+
+	@Test
+	fun `a vanished last chapter re-anchors when dates cannot tell what is new`() {
+		data class Chapter(val id: Long, val uploadedAt: Long)
+		val redated = (101L..110L).map { Chapter(it, uploadedAt = 900L) }
+		val undated = (101L..110L).map { Chapter(it, uploadedAt = 0L) }
+		val reAnchored = TrackComparison(emptyList<Chapter>(), isValid = false)
+
+		// The source re-dated every chapter: reporting all of them would be wrong.
+		assertEquals(reAnchored, compareTrackedChapters(redated, Chapter::id, 10L, Chapter::uploadedAt, 110L))
+		assertEquals(reAnchored, compareTrackedChapters(undated, Chapter::id, 10L, Chapter::uploadedAt, 110L))
+		// No date was ever recorded for the track.
+		assertEquals(reAnchored, compareTrackedChapters(redated, Chapter::id, 10L, Chapter::uploadedAt, 0L))
+	}
+
+	@Test
+	fun `reading does not move the anchor past chapters the tracker has not seen`() {
+		// Chapters 0..9; the tracker last saw chapter 7; 8 and 9 appeared since and were loaded by the reader.
+		assertEquals(7, trackAfterReading(3, anchorIndex = 7, lastIndex = 9, pending = 0).anchorIndex)
+		assertEquals(7, trackAfterReading(7, anchorIndex = 7, lastIndex = 9, pending = 0).anchorIndex)
+		// Reading past the anchor moves it to what was read, not to the end of the list.
+		assertEquals(8, trackAfterReading(8, anchorIndex = 7, lastIndex = 9, pending = 0).anchorIndex)
+	}
+
+	@Test
+	fun `reading counts down a counter over the tail of the branch`() {
+		assertEquals(ReadingTrackState(anchorIndex = 2, pending = 1), trackAfterReading(2, 1, 3, pending = 2))
+		assertEquals(ReadingTrackState(anchorIndex = 3, pending = 0), trackAfterReading(3, 1, 3, pending = 2))
+		assertEquals(ReadingTrackState(anchorIndex = 1, pending = 2), trackAfterReading(0, 1, 3, pending = 2))
+		assertEquals(ReadingTrackState(anchorIndex = 1, pending = 2), trackAfterReading(-1, 1, 3, pending = 2))
+	}
+
+	@Test
+	fun `reading without an anchor in the branch falls back to the end of the list`() {
+		assertEquals(ReadingTrackState(anchorIndex = 9, pending = 1), trackAfterReading(8, -1, 9, pending = 3))
+		assertEquals(ReadingTrackState(anchorIndex = 9, pending = 3), trackAfterReading(2, -1, 9, pending = 3))
+	}
+
+	@Test
+	fun `chapters already read or uploaded long ago are not reported`() {
+		data class Chapter(val id: Long, val uploadedAt: Long)
+		val day = 86_400_000L
+		val now = 200 * day
+		val branch = listOf(Chapter(1, 10 * day), Chapter(2, 50 * day), Chapter(3, 150 * day), Chapter(4, 0),
+			Chapter(5, 190 * day))
+		val new = branch.drop(1)
+
+		// Reading position at chapter 3: chapters 2 and 3 were read already.
+		assertEquals(listOf(4L, 5L), reportedNewChapters(new, branch, Chapter::id, Chapter::uploadedAt,
+			readChapterId = 3, now = now).map(Chapter::id))
+		// Without a position only the stale chapter 2 goes; chapter 4 has no date and stays.
+		assertEquals(listOf(3L, 4L, 5L), reportedNewChapters(new, branch, Chapter::id, Chapter::uploadedAt,
+			readChapterId = 0, now = now).map(Chapter::id))
+	}
+
+	@Test
+	fun `a vanished anchor without usable dates falls back to the reading position`() {
+		val ids = (101L..110L).toList()
+		assertEquals(listOf(109L, 110L), compareTrackedChapters(ids, { it }, lastChapterId = 5,
+			historyChapterId = 108).newChapters)
+		// Most of the list after the reading position: not trusted.
+		assertEquals(TrackComparison(emptyList<Long>(), isValid = false),
+			compareTrackedChapters(ids, { it }, lastChapterId = 5, historyChapterId = 102))
+	}
+
+	@Test
 	fun `comparison follows Android's tracker cases`() {
 		assertEquals(TrackComparison(emptyList<Long>(), isValid = false), compareTrackedChapters(ids, { it }, 0L))
 		assertEquals(TrackComparison(emptyList<Long>(), isValid = true), compareTrackedChapters(ids, { it }, 4L))

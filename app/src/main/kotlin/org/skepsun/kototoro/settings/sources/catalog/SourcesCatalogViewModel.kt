@@ -159,7 +159,7 @@ class SourcesCatalogViewModel @Inject constructor(
         val allSources = repository.queryAllSources(
             isDisabledOnly = true,
             isNewOnly = filter.isNewOnly,
-            excludeBroken = !settings.isShowBrokenSources,
+            excludeBroken = true,
             types = filter.types,
             query = query,
             locale = filter.locale,

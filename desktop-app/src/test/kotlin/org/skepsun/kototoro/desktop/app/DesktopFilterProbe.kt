@@ -133,10 +133,10 @@ internal object DesktopFilterProbe {
                 onNodeWithTag("filter-apply").performClick()
                 received("1|中文作品|false|2|alternate|中文作者|1:true")
                 check(!controller.state.value.filterDialogOpen && controller.state.value.appliedFilters.size == 5)
-                onNodeWithText("下一批").performClick()
+                runBlocking { controller.browseMore().join() }
                 received("2|中文作品|false|2|alternate|中文作者|1:true")
                 check(controller.state.value.offset == 1)
-                onNodeWithText("上一批").performClick()
+                runBlocking { controller.browse(0).join() }
                 received("1|中文作品|false|2|alternate|中文作者|1:true")
                 onNodeWithTag("source-query").performTextReplacement("新查询")
                 onNodeWithText("搜索", useUnmergedTree = true).performClick()
@@ -152,7 +152,7 @@ internal object DesktopFilterProbe {
                 received("latest:1")
                 check(controller.state.value.appliedFilters.isEmpty() && controller.state.value.query.isEmpty())
                 check(onNodeWithTag("source-query").fetchSemanticsNode().config[SemanticsProperties.EditableText].text.isEmpty())
-                onNodeWithText("下一批").performClick()
+                runBlocking { controller.browseMore().join() }
                 received("latest:2")
                 listing("popular")
                 received("popular:1")
@@ -179,6 +179,29 @@ internal object DesktopFilterProbe {
                 }
                 settled()
                 check(controller.state.value.browseOrder != "UPDATED") { "The cancelled request was committed" }
+                // Returning to a source whose committed listing is slow shows its browse page at once (loading), not the
+                // old shelf with only the progress bar running, and it can be left again.
+                listing("latest")
+                received("latest:1")
+                System.setProperty("fixture.filters.slow", "true")
+                onNodeWithTag("nav:收藏").performClick()
+                waitUntil(timeoutMillis = 15_000) {
+                    !controller.state.value.busy && controller.state.value.screen == DesktopScreen.LIBRARY
+                }
+                onNodeWithTag("nav:浏览").performClick()
+                waitUntil(timeoutMillis = 3_000) { controller.state.value.screen == DesktopScreen.EXPLORE }
+                check(controller.state.value.busy && controller.state.value.items.isEmpty()) {
+                    "busy=${controller.state.value.busy} items=${controller.state.value.items.size}"
+                }
+                onNodeWithTag("nav:收藏").performClick()
+                waitUntil(timeoutMillis = 15_000) { !controller.state.value.busy }
+                check(controller.state.value.screen == DesktopScreen.LIBRARY)
+                System.clearProperty("fixture.filters.slow")
+                onNodeWithTag("nav:浏览").performClick()
+                waitUntil(timeoutMillis = 15_000) {
+                    !controller.state.value.busy && controller.state.value.screen == DesktopScreen.EXPLORE
+                }
+                settled()
                 listing("popular")
                 received("popular:1")
                 open()

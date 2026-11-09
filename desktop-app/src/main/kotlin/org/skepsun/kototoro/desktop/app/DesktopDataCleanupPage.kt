@@ -101,6 +101,7 @@ internal fun DesktopDataCleanupPage(controller: DesktopController, state: Deskto
     // HTTP cache, search history, cookies and browser data, the database itself); they stay out instead of
     // offering a button that would clear nothing.
     DataCleanupContent(
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(top = LocalDesktopTopInset.current),
         sections = sections,
         modifier = Modifier.widthIn(max = 760.dp).fillMaxWidth(),
     )

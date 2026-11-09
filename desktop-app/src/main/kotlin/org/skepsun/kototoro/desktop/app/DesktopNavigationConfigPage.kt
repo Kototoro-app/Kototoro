@@ -26,6 +26,7 @@ internal fun DesktopNavigationConfigPage(controller: DesktopController, state: D
     val active = !state.busy
     Column(Modifier.widthIn(max = 760.dp).fillMaxWidth()) {
         NavigationSettingsContent(
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(top = LocalDesktopTopInset.current),
             configuredItems = settings.items.mapIndexed { index, item ->
                 NavigationSettingsItem(
                     id = item.name,

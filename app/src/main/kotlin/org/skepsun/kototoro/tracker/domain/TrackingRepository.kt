@@ -12,6 +12,7 @@ import org.skepsun.kototoro.core.db.entity.MangaTagsEntity
 import org.skepsun.kototoro.core.db.entity.TagEntity
 import org.skepsun.kototoro.core.db.entity.toContent
 import org.skepsun.kototoro.core.db.entity.toContentTags
+import org.skepsun.kototoro.core.db.entity.toEntities
 import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
@@ -19,11 +20,15 @@ import org.skepsun.kototoro.core.util.ext.toInstantOrNull
 import org.skepsun.kototoro.details.domain.ProgressUpdateUseCase
 import org.skepsun.kototoro.list.domain.ListFilterOption
 import org.skepsun.kototoro.list.domain.toCriteria
+import org.skepsun.kototoro.parsers.model.ContentState
 import org.skepsun.kototoro.parsers.model.Content
+import org.skepsun.kototoro.parsers.model.ContentChapter
 import org.skepsun.kototoro.parsers.util.ifZero
 import org.skepsun.kototoro.tracker.data.TrackEntity
 import org.skepsun.kototoro.tracker.data.TrackLogEntity
+import org.skepsun.kototoro.tracker.data.TrackQueueEntry
 import org.skepsun.kototoro.tracker.data.TRACK_LOG_RETAINED_SIZE
+import org.skepsun.kototoro.tracker.data.clearUnrecordedTrackCounters
 import org.skepsun.kototoro.tracker.domain.model.ContentTracking
 import org.skepsun.kototoro.tracker.domain.model.MangaUpdates
 import org.skepsun.kototoro.tracker.domain.model.TrackingLogItem
@@ -96,9 +101,44 @@ class TrackingRepository @Inject constructor(
             .onStart { gcIfNeeded() }
     }
 
-    suspend fun getTracks(offset: Int, limit: Int): List<ContentTracking> {
-        return db.getTracksDao().findAll(offset = offset, limit = limit)
-            .mapNotNull { it.toContentTracking() }
+    /**
+     * Up to [limit] tracks to check, least recently checked first; finished titles are left out when the user asked
+     * to skip them. Sources still cooling down or challenged last time are kept from filling the batch
+     * ([selectTrackBatch]).
+     */
+    suspend fun getTracks(
+        limit: Int,
+        cooldowns: Map<String, Long>,
+        challenged: Set<String>,
+        respectSchedule: Boolean,
+        now: Long = System.currentTimeMillis(),
+    ): List<ContentTracking> {
+        val dao = db.getTracksDao()
+        val queue = if (settings.isTrackerSkipCompleted) {
+            dao.findQueueExceptState(ContentState.FINISHED.name)
+        } else {
+            dao.findQueue()
+        }
+        return selectTrackBatch(
+            queue = queue,
+            sourceOf = TrackQueueEntry::source,
+            limit = limit,
+            cooldowns = cooldowns,
+            challenged = challenged,
+            now = now,
+            due = { entry -> !respectSchedule || isTrackDue(entry.nextCheckTime, now) },
+        )
+            .mapNotNull { entry -> dao.find(entry.mangaId)?.toContentTracking() }
+    }
+
+    /** How many tracks [getTracks] can return, which the check interval is spread over. */
+    suspend fun getCheckedTracksCount(): Int {
+        val dao = db.getTracksDao()
+        return if (settings.isTrackerSkipCompleted) {
+            dao.getTracksCountExceptState(ContentState.FINISHED.name)
+        } else {
+            dao.getTracksCount()
+        }
     }
 
     suspend fun getFavouriteUpdatesSummary(): FavouriteUpdatesSummary {
@@ -152,34 +192,58 @@ class TrackingRepository @Inject constructor(
         )
     }
 
+    /**
+     * Stores a remote work's checked details and chapter list at [anchorMangaId], so feed and details read the same
+     * committed snapshot; storing the list records its new chapters ([storeChapterSnapshot]).
+     */
+    suspend fun storeCheckedSnapshot(manga: Content, anchorMangaId: Long): Pair<Content, ChapterSnapshotResult?> =
+        contentDataRepository.storeCheckedSnapshot(manga, anchorMangaId)
+
+    /**
+     * Records the outcome of a check. A remote work's snapshot and new chapters were stored by
+     * [storeCheckedSnapshot] already; a remote check for a local owner carries its id, so that owner's files/source
+     * are never replaced, and it has no stored chapter list to find the new chapters in.
+     */
     suspend fun updateTrack(manga: Content, updates: MangaUpdates): TrackEntity = db.withTransaction {
-        if (updates is MangaUpdates.Success) {
-            val owner = contentDataRepository.findContentById(manga.id, withChapters = false)
-            if (owner != null && !owner.isLocal) {
-                // Feed and details must read the same committed snapshot. A remote check for a
-                // local owner carries its id, so never replace that owner's files/source.
-                contentDataRepository.updateContentSnapshotAtAnchor(updates.manga, manga.id)
-            }
+        val owner = if (updates is MangaUpdates.Success) {
+            contentDataRepository.findContentById(manga.id, withChapters = false)
+        } else {
+            null
         }
         val prev = getOrCreateTrack(manga.id)
         val entity = prev.mergeWith(updates, manga.id)
         db.getTracksDao().upsert(entity)
+        val now = System.currentTimeMillis()
+        db.updateTrackSchedule(manga.id, succeeded = updates is MangaUpdates.Success, now = now)
         if (updates is MangaUpdates.Success) {
-            db.recordUpdateBatch(manga.id, updates.newChapters.mapTo(HashSet()) { it.id }, System.currentTimeMillis())
+            if (owner?.isLocal == true) {
+                db.recordUpdateChapters(manga.id, updates.newChapters.withIndex().toEntities(manga.id), now)
+            } else {
+                db.recordUpdateBatch(manga.id, updates.newChapters.mapTo(HashSet()) { it.id }, now)
+            }
         }
         entity
     }
 
-    /** Returns false only for legacy logs that have no reliable chapter identities. */
-    suspend fun updateReadChapter(mangaId: Long, chapterId: Long, percent: Float? = null): Boolean = db.withTransaction {
+    /**
+     * Returns false only for legacy logs that have no reliable chapter identities. [readerChapters] is the list being
+     * read, used for a work without a stored chapter list (a local copy of a remote work).
+     */
+    suspend fun updateReadChapter(
+        mangaId: Long,
+        chapterId: Long,
+        percent: Float? = null,
+        readerChapters: List<ContentChapter>? = null,
+    ): Boolean = db.withTransaction {
         if (db.getTrackLogsDao().findByOwner(mangaId).none { it.chapterMetadata.isNotBlank() }) return@withTransaction false
         val chapters = db.getChaptersDao().findAll(mangaId)
+            .ifEmpty { readerChapters?.withIndex()?.toEntities(mangaId).orEmpty() }
         val current = chapters.firstOrNull { it.chapterId == chapterId } ?: return@withTransaction true
         val branch = chapters.filter { it.branch == current.branch }
         val index = branch.indexOfFirst { it.chapterId == chapterId }
         val progress = percent ?: db.getHistoryDao().find(mangaId)?.percent ?: return@withTransaction true
         if (progress * branch.size + 0.0001f >= index + 1) {
-            db.completeUpdateChapter(mangaId, chapterId, System.currentTimeMillis())
+            db.completeUpdateChapter(mangaId, chapterId, System.currentTimeMillis(), chapters)
         }
         true
     }
@@ -197,7 +261,7 @@ class TrackingRepository @Inject constructor(
     }
 
     suspend fun markAllUpdatesAsRead() = db.withTransaction {
-        for (id in db.getTracksDao().findAllIds()) db.completePendingUpdates(id, System.currentTimeMillis())
+        db.completeAllPendingUpdates(System.currentTimeMillis())
     }
 
     suspend fun markUpdateAsRead(mangaId: Long) {
@@ -244,6 +308,8 @@ class TrackingRepository @Inject constructor(
     suspend fun gc() = db.withTransaction {
         db.getTracksDao().gc()
         db.getTrackLogsDao().deleteOrphans()
+        db.getTrackScheduleDao().gc()
+        db.clearUnrecordedTrackCounters()
     }
 
     suspend fun mergeWith(tracking: ContentTracking) {
@@ -349,8 +415,10 @@ class TrackingRepository @Inject constructor(
             return emptyList()
         }
         val fallbackByAnchorId = buildFallbackContentByAnchorId(tracks.map(TrackEntity::mangaId))
+        val schedules = db.getTrackScheduleDao().findByIds(tracks.map(TrackEntity::mangaId)).associateBy { it.mangaId }
         return tracks.mapNotNull { track ->
             val fallbackContent = fallbackByAnchorId[track.mangaId] ?: return@mapNotNull null
+            val schedule = schedules[track.mangaId]
             TrackDebugItem(
                 manga = fallbackContent,
                 lastChapterId = track.lastChapterId,
@@ -359,7 +427,12 @@ class TrackingRepository @Inject constructor(
                 lastChapterDate = track.lastChapterDate.toInstantOrNull(),
                 lastResult = track.lastResult,
                 lastError = track.lastError,
+                failCount = schedule?.failCount ?: 0,
+                nextCheckTime = schedule?.nextCheckTime?.toInstantOrNull(),
             )
+        }.sortedByDescending { item ->
+            // Works that keep failing first, the rest in check order.
+            if (item.failCount >= PERSISTENT_FAILURE_COUNT) item.failCount else 0
         }
     }
 

@@ -122,7 +122,7 @@ internal object DesktopInstallPolicyProbe {
                 }
                 // Mihon is still "ask every time", so the catalogue row installs nothing until the question is answered.
                 idle()
-                val beforeInstall = session.sourceListings(includeBroken = true).map { it.source.name }.toSet()
+                val beforeInstall = session.sourceListings().map { it.source.name }.toSet()
                 onNodeWithTag("nav:更多").performClick(); idle()
                 onNodeWithTag("nav:扩展与仓库").performClick(); idle()
                 val address = "http://127.0.0.1:${server.address.port}/index.pb"
@@ -147,13 +147,15 @@ internal object DesktopInstallPolicyProbe {
                 check(session.extensionInstallPolicies()["MIHON"] == ExtensionInstallPolicy.INSTALL_ONLY) {
                     session.extensionInstallPolicies().toString()
                 }
-                val installed = session.sourceListings(includeBroken = true).map { it.source.name }.toSet() - beforeInstall
+                val installed = session.sourceListings().map { it.source.name }.toSet() - beforeInstall
                 check(installed.isNotEmpty()) { "the package brought no source" }
                 check(installed.all { it in session.disabledSources() }) { session.disabledSources().toString() }
                 check(controller.state.value.message?.isNotEmpty() == true)
-                // A source settings row shows the mixed answer, and the sheet offers one row per kind plus the batch.
+                // The extension settings row (扩展与仓库 → 拓展设置) shows the mixed answer, and the sheet offers one row per
+                // kind plus the batch.
                 onNodeWithTag("nav:更多").performClick(); idle()
-                onNodeWithTag("source-settings-open").performScrollTo().performClick(); idle()
+                onNodeWithTag("nav:扩展与仓库").performScrollTo().performClick(); idle()
+                onNodeWithTag("extension-settings-open").performClick(); idle()
                 onNodeWithTag("source-setting-install-behavior").performScrollTo().assertTextContains("仅安装", substring = true)
                 onNodeWithTag("source-setting-install-behavior").performClick(); idle()
                 onNodeWithTag("install-behavior-dialog").assertExists()

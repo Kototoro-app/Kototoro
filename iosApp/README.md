@@ -209,9 +209,16 @@ xcodebuild -project "iosApp/Kototoro.xcodeproj" -scheme Kototoro \
 
 ## 真机 IPA（本地侧载预览）
 
+设置 → 关于读取安装包的 `CFBundleShortVersionString` 和 `CFBundleVersion`，仅 Debug 构建附加
+`Debug` 标记。应用更新页复用现有 AltStore Release / Nightly 发布源，按版本号和构建号检查当前
+系统可安装的 IPA；下载沿用 GitHub 镜像设置，文件直接写盘并以发布源中的大小和 SHA-256 校验。
+完成后通过系统分享面板保存到“文件”或交给侧载工具签名安装；应用自身不执行覆盖安装。
+`AppUpdateTests` 覆盖版本显示/排序、渠道与兼容性、HTTP 错误、下载/校验/取消及关于页入口。
+
 发行 IPA 由本机打包后手动上传：
 `iosApp/Scripts/package-ipa.sh [--jvm [运行时目录]] [版本] [构建号]`，版本默认取工程的 `MARKETING_VERSION`，构建号默认为提交数；
 产物在 `iosApp/build/release-ios/`（`Kototoro-<版本>-ios[-jvm]-unsigned.ipa` 与 `.sha256`），需由侧载工具签名。
+`KOTOTORO_UPDATE_CHANNEL=release|nightly` 将更新渠道写入安装包，默认 `release`；iOS CI 使用所发布的渠道。
 不带 `--jvm` 的默认构建没有扩展运行时，只能使用 CMS/TVBox。`--jvm` 默认嵌入 `iosApp/build/jvm-device`，
 先用 `build-jvm-preview.py --platform iphoneos --profile "iosApp/build/jvm-real-api"` 生成；脚本拒绝模拟器运行时。
 发行包不带预览配置里的样本扩展与 `preview.json`：打包时另存 `iosApp/build/jvm-device-release`，`jars`/`plugins` 为空，

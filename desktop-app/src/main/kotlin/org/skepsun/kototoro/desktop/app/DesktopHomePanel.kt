@@ -6,6 +6,8 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.snapping.SnapPosition
+import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -26,6 +28,7 @@ import org.skepsun.kototoro.core.ui.compose.HeroPagerIndicator
 import org.skepsun.kototoro.core.ui.home.*
 import org.skepsun.kototoro.core.ui.gestures.mouseDragScroll
 import org.skepsun.kototoro.core.ui.topbar.TopBarTitleBlock
+import org.skepsun.kototoro.core.ui.topbar.FloatingTopBarScaffold
 import org.skepsun.kototoro.list.domain.ReadingProgress
 import org.skepsun.kototoro.list.ui.compose.ContentCardBookSpine
 import org.skepsun.kototoro.list.ui.compose.ContentCardBottomProgressBar
@@ -97,22 +100,32 @@ internal fun DesktopHomePanel(controller: DesktopController, state: DesktopAppSt
         )
     }
     val open: (SourceContent) -> Unit = { if (enabled) controller.details(it) }
-    Column(Modifier.fillMaxSize().testTag("home-panel"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            TopBarTitleBlock(desktopText("nav.home"))
-            Spacer(Modifier.weight(1f))
-            DesktopSourceFilterControls(filter, state.sources, controller::homeFilter, enabled, "home")
-        }
+    // Android's floating home bar: the title and the filter capsule float over the hero and rails, which scroll beneath.
+    val inset = LocalDesktopTopInset.current
+    FloatingTopBarScaffold(
+        modifier = Modifier.fillMaxSize().testTag("home-panel"),
+        backdropColor = Canvas, scrimColor = Canvas,
+        topBar = {
+            Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = inset + 8.dp, bottom = 8.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                TopBarTitleBlock(desktopText("nav.home"))
+                Spacer(Modifier.weight(1f))
+                DesktopSourceFilterControls(filter, state.sources, controller::homeFilter, enabled, "home")
+            }
+        },
+    ) { inner ->
+        val barTop = inner.calculateTopPadding()
         HomeScreenLayout(
             hasHero = hero.isNotEmpty(),
             hasHighlights = true,
             initialized = true,
             tabletLayoutEnabled = true,
-            modifier = Modifier.weight(1f).fillMaxWidth(),
-            estimatedHeroHeight = HomeHeroCardHeight + 8.dp,
+            modifier = Modifier.fillMaxSize(),
+            estimatedHeroHeight = HomeHeroCardHeight + 8.dp + barTop,
+            // Without a hero the list itself starts below the bar; with one, the hero's own padding does.
+            contentPadding = PaddingValues(top = if (hero.isEmpty()) barTop else 0.dp, bottom = 12.dp),
             hero = { modifier, layoutClass ->
-                Box(modifier.fillMaxWidth().padding(top = 8.dp)) {
+                Box(modifier.fillMaxWidth().padding(top = 8.dp + barTop)) {
                     HomeHero(controller, hero, layoutClass, open)
                 }
             },
@@ -212,13 +225,22 @@ private fun UpdatesRail(controller: DesktopController, works: List<HomeWork>) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         HomeSectionHeader(desktopText("home.sectionUpdates"), works.size, painterResource("icons/ic_arrow_forward.svg"),
             onMoreClick = { controller.subscriptions() }, titleModifier = Modifier.testTag("home-updates-more"))
-        // Android's list-mode rail: rows of covers with the new chapter count, three to a row on wide windows.
+        // Android's list-mode rail: a horizontally scrolling row of pages, each a column of rows, three pages across on
+        // wide windows with the next one peeking in from the right edge.
         BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val pages = works.take(30).chunked(UPDATES_ROWS_PER_PAGE)
             val columns = (maxWidth / 300.dp).toInt().coerceIn(1, 3)
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                works.take(columns * 2).chunked(columns).forEach { row ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        row.forEach { work ->
+            val spacing = 12.dp
+            val exact = (maxWidth - spacing * (columns - 1)) / columns
+            val pageWidth = if (pages.size > columns) exact * 0.92f else exact
+            val listState = rememberLazyListState()
+            LazyRow(state = listState, horizontalArrangement = Arrangement.spacedBy(spacing),
+                flingBehavior = rememberSnapFlingBehavior(listState, SnapPosition.Start),
+                modifier = Modifier.fillMaxWidth().mouseDragScroll(listState, Orientation.Horizontal)
+                    .testTag("home-updates")) {
+                items(pages, key = { it.first().content.id }) { page ->
+                    Column(Modifier.width(pageWidth), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        page.forEach { work ->
                             HomeListRailRow(
                                 title = work.content.title,
                                 sourceTitle = controller.state.value.sources.firstOrNull { it.source.name == work.content.source.name }
@@ -228,20 +250,21 @@ private fun UpdatesRail(controller: DesktopController, works: List<HomeWork>) {
                                 rimBorderBrush = rim,
                                 onClick = { controller.openTracked(work.content.id) },
                                 supportingText = desktopText("home.newChapters", work.newChapters),
-                                modifier = Modifier.weight(1f).testTag("home-update:${work.content.id}"),
+                                modifier = Modifier.fillMaxWidth().testTag("home-update:${work.content.id}"),
                                 cover = {
                                     DesktopCover(work.content, controller.session.covers, Modifier.matchParentSize())
                                     ContentCardBookSpine(Modifier.align(Alignment.CenterStart), width = 2.5.dp)
                                 },
                             )
                         }
-                        repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
                     }
                 }
             }
         }
     }
 }
+
+private const val UPDATES_ROWS_PER_PAGE = 2
 
 @Composable
 private fun QuickAccess(controller: DesktopController, enabled: Boolean, expanded: Boolean) {

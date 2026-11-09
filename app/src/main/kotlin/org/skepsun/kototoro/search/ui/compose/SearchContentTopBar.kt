@@ -1,8 +1,6 @@
 package org.skepsun.kototoro.search.ui.compose
 
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -12,8 +10,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -22,12 +22,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.kyant.backdrop.Backdrop
 import org.skepsun.kototoro.core.prefs.ListMode
+import org.skepsun.kototoro.core.ui.compose.ImmersiveEdge
+import org.skepsun.kototoro.core.ui.compose.ImmersiveEdgeBlur
+import org.skepsun.kototoro.core.ui.compose.ImmersiveEdgeBlurTintScale
+import org.skepsun.kototoro.core.ui.compose.ImmersiveEdgeGradient
+import org.skepsun.kototoro.core.ui.compose.immersiveEdgeBlurRadius
 import org.skepsun.kototoro.core.ui.compose.resolveTopImmersiveAlpha
 import org.skepsun.kototoro.core.ui.glass.rememberGlassPrefsOrFallback
 
@@ -72,6 +78,7 @@ internal fun SearchContentTopBar(
     onClearActiveQuery: () -> Unit,
     onQuickFilterOptionClick: (ListFilterOption) -> Unit,
     onToggleTag: (ContentTag, Boolean) -> Unit,
+    edgeBackdrop: Backdrop? = null,
 ) {
     val extractedTags = remember(contentItems, selectedTags, availableTags) {
         buildSourcePinnedTags(
@@ -95,39 +102,42 @@ internal fun SearchContentTopBar(
     val statusBarTopPadding = statusBarPadding.calculateTopPadding()
     val glassPrefs = rememberGlassPrefsOrFallback()
     val immersiveStrength = (glassPrefs.immersiveStrengthPercent.coerceIn(0, 100)) / 100f
-    val isDarkTheme = isSystemInDarkTheme()
-    val immersiveBaseColor = if (isDarkTheme) Color.Black else Color.White
-    val immersiveTopColors = listOf(
-        immersiveBaseColor.copy(alpha = lerpFloat(0.72f, 0.98f, immersiveStrength)),
-        immersiveBaseColor.copy(alpha = lerpFloat(0.56f, 0.82f, immersiveStrength)),
-        immersiveBaseColor.copy(alpha = lerpFloat(0.32f, 0.52f, immersiveStrength)),
-        immersiveBaseColor.copy(alpha = lerpFloat(0.12f, 0.22f, immersiveStrength)),
-        Color.Transparent,
-    )
+    val immersiveBaseColor = MaterialTheme.colorScheme.surface.copy(alpha = 1f)
+    val isTopImmersiveEdge = glassPrefs.isTopImmersiveEdgeEnabled
+    val edgeBlurRadius = if (edgeBackdrop != null) immersiveEdgeBlurRadius() else 0.dp
+    val edgeTintScale = if (edgeBlurRadius > 0.dp) ImmersiveEdgeBlurTintScale else 1f
+    // End at the bottom of the pinned chrome, where the list's content inset begins.
+    var chromeHeightPx by remember { mutableIntStateOf(0) }
+    val topEdgeHeight = with(density) { chromeHeightPx.toDp() }.coerceAtLeast(statusBarTopPadding)
 
     Box(
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(statusBarTopPadding + topActionsHeight + 6.dp)
-                .graphicsLayer { alpha = topGradientAlpha }
-                .background(
-                    brush = Brush.verticalGradient(
-                        colorStops = arrayOf(
-                            0f to immersiveTopColors[0],
-                            0.38f to immersiveTopColors[1],
-                            0.72f to immersiveTopColors[2],
-                            0.92f to immersiveTopColors[3],
-                            1f to immersiveTopColors[4],
-                        ),
-                    ),
+        if (isTopImmersiveEdge) {
+            if (edgeBackdrop != null && edgeBlurRadius > 0.dp) {
+                ImmersiveEdgeBlur(
+                    backdrop = edgeBackdrop,
+                    edge = ImmersiveEdge.TOP,
+                    height = topEdgeHeight,
+                    radius = edgeBlurRadius,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            ImmersiveEdgeGradient(
+                height = topEdgeHeight,
+                color = immersiveBaseColor.copy(
+                    alpha = lerpFloat(0.72f, 0.98f, immersiveStrength) * edgeTintScale,
                 ),
-        )
+                edge = ImmersiveEdge.TOP,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .graphicsLayer { alpha = topGradientAlpha },
+            )
+        }
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .onSizeChanged { chromeHeightPx = it.height }
                 .padding(top = statusBarTopPadding),
         ) {
             if (searchMode) {

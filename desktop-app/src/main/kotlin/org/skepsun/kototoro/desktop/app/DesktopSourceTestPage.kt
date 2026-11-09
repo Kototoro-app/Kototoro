@@ -55,7 +55,7 @@ internal fun DesktopSourceTestPage(controller: DesktopController, state: Desktop
     var expanded by remember { mutableStateOf(emptySet<String>()) }
     val active = !state.busy
     Column(
-        modifier = Modifier.widthIn(max = 900.dp).fillMaxWidth().verticalScroll(rememberScrollState()),
+        modifier = Modifier.widthIn(max = 900.dp).fillMaxWidth().verticalScroll(rememberScrollState()).padding(top = LocalDesktopTopInset.current),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         SettingsGroup {

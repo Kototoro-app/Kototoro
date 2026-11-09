@@ -96,6 +96,7 @@
     <string name="share_image">分享圖片</string>
     <string name="delete">刪除</string>
     <string name="clear_pages_cache">清除頁面快取</string>
+    <string name="clear_chapter_thumbnails">清除章節縮圖</string>
     <string name="fit_page_thumbnails">完整顯示縮略圖</string>
     <string name="network">網路</string>
     <string name="webtoon_zoom_summary">在 webtoon 模式中允許手勢縮放</string>
@@ -120,9 +121,6 @@
     <string name="size_s">大小: %s</string>
     <string name="updates_feed_cleared">已清除</string>
     <string name="clear_updates_feed">清除更新訂閱</string>
-    <string name="show_all_updates">顯示所有更新</string>
-    <string name="feed_behavior_description">預設只顯示新的未讀章節。\n\n啟用後，更新頁會顯示已快取的訂閱項目，每個項目最多顯示 10 個章節。使用「立即觸發更新」重新整理已訂閱收藏。</string>
-    <string name="trigger_update_now">立即觸發更新</string>
     <string name="rotate_screen">旋轉畫面</string>
     <string name="update">更新</string>
     <string name="track_sources">尋找更新</string>
@@ -450,6 +448,11 @@
     <string name="related_manga_summary">顯示相關漫畫的清單。在某些情況下它也許不準確或缺失</string>
     <string name="reader_zoom_buttons_summary">是否在右下角顯示縮放控制按鈕</string>
     <string name="tracker_wifi_only_summary">使用計量付費網路連線時不檢查新章節</string>
+    <string name="tracker_skip_completed">跳過已完結作品</string>
+    <string name="tracker_skip_completed_summary">不檢查來源標記為已完結的作品</string>
+    <string name="tracker_mark_duplicates_read">重複章節標為已讀</string>
+    <string name="tracker_mark_duplicates_read_summary">與已讀章節同號的新章節視為已讀</string>
+    <string name="tracker_progress_summary">新章節：%1$d · 失敗：%2$d · 跳過：%3$d</string>
     <string name="order_added">加入日期</string>
     <string name="on_device">在裝置上</string>
     <string name="suggest_new_sources">在應用程式更新之後推薦新的來源</string>
@@ -589,6 +592,13 @@
     <string name="show_labels_in_navbar">在導航欄顯示標籤</string>
     <string name="pages_saving">正在儲存頁面</string>
     <string name="ask_for_dest_dir_every_time">每次都詢問目的地目錄</string>
+    <string name="pages_save_per_manga_folder">為每部作品建立資料夾</string>
+    <string name="pages_save_per_manga_folder_summary">儲存到預設目錄的頁面會放進以作品名稱命名的子資料夾</string>
+    <string name="crop_include_previous_page">拼接上一頁</string>
+    <string name="crop_include_next_page">拼接下一頁</string>
+    <string name="crop_stitch_top_to_bottom">從上到下</string>
+    <string name="crop_stitch_left_to_right">從左到右</string>
+    <string name="crop_stitch_right_to_left">從右到左</string>
     <string name="default_page_save_dir">預設頁面儲存目錄</string>
     <string name="multiple_cbz_files">多個 CBZ 檔案</string>
     <string name="preferred_download_format">偏好的下載格式</string>
@@ -672,6 +682,8 @@
     <string name="disable_connectivity_check">停用連線檢查</string>
     <string name="disable_nsfw_notifications_summary">不顯示有關 NSFW 漫畫更新的通知</string>
     <string name="tracker_debug_info">檢查新章節日誌</string>
+    <string name="tracker_failing_titles">持續檢查失敗的作品</string>
+    <string name="tracker_next_check">下次檢查 %s</string>
     <string name="tracker_debug_info_summary">有關背景檢查新章節的偵錯資訊</string>
     <string name="sources_disabled">來源已停用</string>
     <string name="disable">停用</string>
@@ -1205,7 +1217,7 @@
     <string name="extension_install_mode_local_apk">安裝模式：本地 APK</string>
     <string name="extension_install_mode_system">安裝模式：系統安裝</string>
     <string name="extension_management">拓展管理</string>
-    <string name="extension_management_summary">管理倉庫、JSON 源、APK 拓展和 JAR 解析器</string>
+    <string name="extension_management_summary">啟用與測試源，管理倉庫與擴展包</string>
     <string name="extension_repo_added_message">已添加 %1$s</string>
     <string name="extension_repo_already_exists_message">倉庫已存在</string>
     <string name="extension_repo_count">%d 個倉庫</string>
@@ -2110,8 +2122,7 @@
     <string name="show_broken_sources_summary">允許查看與使用被標記爲已損壞的源插件</string>
     <string name="show_extensions_in_grid">擴展以雙列顯示</string>
     <string name="show_extensions_in_list">擴展以單列顯示</string>
-    <string name="show_extra_info_on_cards">在卡片上顯示額外信息</string>
-    <string name="show_extra_info_on_cards_summary">在內容卡片上顯示評分、連載狀態、章節數和類別標籤</string>
+    <string name="show_extra_info_on_cards">額外資訊</string>
     <string name="show_floating_control_button">顯示浮動控制按鈕</string>
     <string name="show_less">收起</string>
     <string name="show_more">展開更多</string>
@@ -2228,6 +2239,7 @@
     <string name="theme_name_totoro">Totoro</string>
     <string name="thumbnails_cache">縮略圖緩存</string>
     <string name="thumbnails_cache_limit">縮略圖緩存限制</string>
+    <string name="chapter_thumbnails_cache_limit">章節縮圖快取限制</string>
     <string name="title">標題</string>
     <string name="total_chapters">總章節數</string>
     <string name="tracking_accounts">追蹤賬號</string>
@@ -2619,8 +2631,21 @@ SHA-256 指紋:
     <string name="pref_glass_blur_strength_summary">設定目前玻璃預設使用的最終模糊半徑，單位 dp</string>
     <string name="pref_glass_noise_strength">玻璃噪點係數</string>
     <string name="pref_glass_noise_strength_summary">設定目前玻璃預設應用的最終噪點量，範圍 0.00 至 1.00</string>
+    <string name="appearance_group_immersive">沉浸層</string>
+    <string name="appearance_immersive_summary">頂欄與底欄下方的著色、邊緣模糊與模糊畫質</string>
     <string name="pref_glass_immersive_strength">沉浸式着色強度</string>
     <string name="pref_glass_immersive_strength_summary">獨立控制頂部和底部的沉浸式著色強度，不受預設影響</string>
+    <string name="pref_glass_immersive_top">頂部沉浸層</string>
+    <string name="pref_glass_immersive_top_summary">著色並模糊狀態列與頂欄下方的內容</string>
+    <string name="pref_glass_immersive_bottom">底部沉浸層</string>
+    <string name="pref_glass_immersive_bottom_summary">著色並模糊底欄周圍的內容；懸浮玻璃底欄不依賴它也清晰可讀</string>
+    <string name="pref_glass_edge_blur">邊緣模糊</string>
+    <string name="pref_glass_edge_blur_summary">模糊頂欄與底欄下方的內容並漸隱過渡，需要 Android 12 以上</string>
+    <string name="pref_glass_blur_quality">模糊畫質</string>
+    <string name="pref_glass_blur_quality_summary">玻璃與邊緣模糊的計算解析度。越低越省 GPU 與電量，越高離開模糊區的文字越清晰</string>
+    <string name="pref_glass_blur_quality_performance">效能</string>
+    <string name="pref_glass_blur_quality_balanced">均衡</string>
+    <string name="pref_glass_blur_quality_quality">畫質</string>
     <string name="glass_material_kototoro">Kototoro（推薦）</string>
     <string name="glass_material_haze_ultra_thin">Haze 超薄</string>
     <string name="glass_material_haze_thin">Haze 薄</string>
@@ -2825,7 +2850,7 @@ SHA-256 指紋:
     <string name="double_page_foldable">摺疊屏雙頁</string>
     <string name="double_page_cover_page">首圖作為封面（單獨顯示）</string>
     <string name="miscellaneous">雜項</string>
-    <string name="grid_size_columns_hint">每行約 %1$d 列</string>
+    <string name="grid_size_columns_hint">約 %1$d 列</string>
     <string name="home_rail_rows_per_page">每頁行數</string>
     <string name="replace_rules">文本替換規則</string>
     <string name="replace_rules_summary">使用按順序執行、相容來源匹配的規則清理小說正文</string>
@@ -2919,6 +2944,7 @@ SHA-256 指紋:
     <string name="updates_check_too_soon">剛剛檢查過，請稍後再試</string>
     <string name="chapter_show_download_button">顯示下載按鈕</string>
     <string name="chapter_show_translate_button">顯示翻譯按鈕</string>
+    <string name="chapter_show_thumbnails">顯示章節縮圖</string>
     <string name="welcome_intro_title">設定 Kototoro</string>
     <string name="welcome_intro_summary">選擇你的閱讀和觀看方式。Kototoro 現在通過外掛化來源族群整合漫畫、小說和影片，支援 JAR、Mihon、Aniyomi、IReader、Legado、TVBox、LNReader 和 Cloudstream。</string>
     <string name="welcome_step_start">開始</string>
@@ -3505,6 +3531,10 @@ SHA-256 指紋:
     <string name="start_reading">開始閱讀</string>
     <string name="pref_tablet_list_filter_panel">進入列表時預設開啟過濾器面板</string>
     <string name="pref_tablet_list_filter_panel_summary">在平板橫屏開啟作品列表時，在右側半屏顯示過濾器面板。</string>
+    <string name="pref_tablet_nav_bar_left">導覽列靠左</string>
+    <string name="pref_tablet_nav_bar_left_summary">在平板上把直向導覽列放在左側邊緣，而不是右側</string>
+    <string name="pref_tablet_nav_labels">導覽列文字</string>
+    <string name="pref_tablet_nav_labels_summary">在平板的直向導覽列中，於每個圖示下方顯示名稱</string>
     <string name="appearance_group_list_interaction">列表互動與動效</string>
     <string name="appearance_group_list_information">列表資訊</string>
     <string name="appearance_group_details_content">內容與操作</string>
@@ -4095,4 +4125,8 @@ SHA-256 指紋:
     <string name="kitsu_dub_it">意配</string>
     <string name="explore_tab_tracking_sites">追蹤網站</string>
     <string name="explore_tab_sources">內容源</string>
+    <string name="source_preferences">來源偏好與內容過濾</string>
+    <string name="source_preferences_summary">排序、分組、成人內容過濾與標籤黑名單</string>
+    <string name="source_preferences_browsing">瀏覽與排序</string>
+    <string name="extension_settings">拓展設定</string>
 </resources>

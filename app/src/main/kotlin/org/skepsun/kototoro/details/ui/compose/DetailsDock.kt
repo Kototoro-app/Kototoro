@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.details.ui.compose
 
 
+import org.skepsun.kototoro.core.ui.chapters.ChapterGridSizeRange
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -305,6 +306,7 @@ internal fun DetailsPaneActionsRow(
                     sizeValue = if (isChaptersTab) chapterGridSizeValue else pageGridSizeValue,
                     aspectRatio = pageThumbnailAspectRatio,
                     showAspectRatio = !isChaptersTab,
+                    sizeRange = if (isChaptersTab) ChapterGridSizeRange else PageGridSizeRange,
                     onSizeValueChange = if (isChaptersTab) onChapterGridSizeChange else onPageGridSizeChange,
                     onAspectRatioChange = onPageThumbnailAspectRatioChange,
                     onBackClick = detailsPaneState::hideGridSizeControls,
@@ -853,6 +855,7 @@ private fun PageGridSizeControlsRow(
     onAspectRatioChange: (Float) -> Unit,
     onBackClick: () -> Unit,
     showAspectRatio: Boolean = true,
+    sizeRange: IntRange = PageGridSizeRange,
     modifier: Modifier = Modifier,
 ) {
     val heightRatio = 1f / aspectRatio.coerceIn(PageThumbnailAspectRatioMin, PageThumbnailAspectRatioMax)
@@ -888,7 +891,7 @@ private fun PageGridSizeControlsRow(
                 label = stringResource(R.string.grid_size),
                 value = sizeValue,
                 onValueChange = onSizeValueChange,
-                valueRange = 50f..150f,
+                valueRange = sizeRange.first.toFloat()..sizeRange.last.toFloat(),
             )
             if (showAspectRatio) LabeledGridSlider(
                 label = stringResource(R.string.grid_aspect_ratio),
@@ -1115,6 +1118,19 @@ private fun ExpandedPaneUtilityDock(
                         onClick = {
                             expanded = false
                             rowActions.setShowTranslate(!rowActions.showTranslate)
+                        },
+                    )
+                    CompactDropdownMenuItem(
+                        text = { Text(stringResource(R.string.chapter_show_thumbnails)) },
+                        leadingIcon = {
+                            DetailsMenuIcon(R.drawable.ic_images)
+                        },
+                        trailingIcon = {
+                            MenuSelectionIndicator(selected = rowActions.showThumbnails)
+                        },
+                        onClick = {
+                            expanded = false
+                            rowActions.setShowThumbnails(!rowActions.showThumbnails)
                         },
                     )
                 }
@@ -1689,3 +1705,5 @@ private fun DetailsMenuIconPreview() {
         DetailsMenuIcon(iconRes = R.drawable.ic_info_outline)
     }
 }
+
+private val PageGridSizeRange = 50..150

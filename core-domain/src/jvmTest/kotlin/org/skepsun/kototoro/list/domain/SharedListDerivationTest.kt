@@ -19,7 +19,6 @@ import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.tracker.domain.feed.FeedCardRow
 import org.skepsun.kototoro.tracker.domain.feed.FeedDeriver
 import org.skepsun.kototoro.tracker.domain.feed.FeedSnapshot
-import org.skepsun.kototoro.tracker.domain.feed.FeedUpdateRow
 import org.skepsun.kototoro.tracker.domain.updates.UpdateCardTag
 import org.skepsun.kototoro.tracker.domain.updates.UpdateGroupRow
 import org.skepsun.kototoro.tracker.domain.updates.UpdatesDeriver
@@ -158,20 +157,6 @@ class SharedListDerivationTest {
         // Both row 1 and row 2 carry category 7, so the join must happen before the limit; pinned no longer jumps the
         // queue (FEED_ORDER is discovery time only), so the newest matching row is what the single slot shows.
         assertEquals(listOf(1L), result.visibleRows.map { it.logId })
-    }
-
-    @Test
-    fun `feed show all suppresses duplicate owners and emits synthetic identity`() {
-        val result = FeedDeriver.derive(FeedDeriver.Input(
-            snapshot = FeedSnapshot(
-                rows = listOf(feedRow(1, ownerId = 10)),
-                updateRowsByOwnerId = mapOf(10L to pendingUpdate(10), 20L to pendingUpdate(20)),
-            ),
-            showAllUpdates = true,
-        ))
-        assertEquals(listOf(-20L, 1L), result.visibleRows.map { it.logId })
-        assertEquals(2, result.visibleRows.first().chapters.size)
-        assertEquals(20L, result.visibleRows.first().ownerId)
     }
 
     @Test
@@ -338,34 +323,5 @@ class SharedListDerivationTest {
         overrideCoverUrl = null,
         sourceGroupFlags = 1 shl ContentGroup.MANGA.ordinal,
         sourceOriginFlags = 1 shl OriginGroup.NATIVE.ordinal,
-    )
-
-    private fun pendingUpdate(
-        ownerId: Long,
-        mangaId: Long = ownerId,
-        entityId: Long? = ownerId,
-        newChapters: Int = 2,
-        lastChapterDate: Long = ownerId * 10L,
-        lastCheckTime: Long = ownerId,
-        isPinned: Boolean = false,
-        sourceName: String = "TEST",
-        isNsfw: Boolean = false,
-        title: String = "Update $ownerId",
-        displayMangaId: Long? = ownerId + 1000L,
-    ) = FeedUpdateRow(
-        ownerId = ownerId,
-        mangaId = mangaId,
-        entityId = entityId,
-        preferredLocalMangaId = null,
-        newChapters = newChapters,
-        lastChapterDate = lastChapterDate,
-        lastCheckTime = lastCheckTime,
-        lastChapterId = 42L,
-        isPinned = isPinned,
-        displayMangaId = displayMangaId,
-        title = title,
-        coverUrl = null,
-        sourceName = sourceName,
-        isNsfw = isNsfw,
     )
 }

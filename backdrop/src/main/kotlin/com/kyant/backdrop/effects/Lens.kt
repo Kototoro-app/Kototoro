@@ -17,10 +17,15 @@ fun BackdropEffectScope.lens(
     @FloatRange(from = 0.0) refractionHeight: Float,
     @FloatRange(from = 0.0) refractionAmount: Float,
     depthEffect: Boolean = false,
-    chromaticAberration: Boolean = false
+    chromaticAberration: Boolean = false,
+    @FloatRange(from = 0.0) saturation: Float = 1f
 ) {
-    if (!isRuntimeShaderSupported()) return
-    if (refractionHeight <= 0f || refractionAmount <= 0f) return
+    if (!isRuntimeShaderSupported() || refractionHeight <= 0f || refractionAmount <= 0f) {
+        if (saturation != 1f) {
+            colorControls(saturation = saturation)
+        }
+        return
+    }
 
     if (padding > 0f) {
         padding = (padding - refractionHeight).fastCoerceAtLeast(0f)
@@ -48,6 +53,7 @@ fun BackdropEffectScope.lens(
                 setFloatUniform("refractionHeight", refractionHeight)
                 setFloatUniform("refractionAmount", -refractionAmount)
                 setFloatUniform("depthEffect", if (depthEffect) 1f else 0f)
+                setFloatUniform("saturation", saturation)
                 if (chromaticAberration) {
                     setFloatUniform("chromaticAberration", 1f)
                 }
@@ -57,6 +63,16 @@ fun BackdropEffectScope.lens(
             throwUnsupportedSDFException()
         }
     effect(effect)
+}
+
+@Deprecated("Use the overload with saturation", level = DeprecationLevel.HIDDEN)
+fun BackdropEffectScope.lens(
+    @FloatRange(from = 0.0) refractionHeight: Float,
+    @FloatRange(from = 0.0) refractionAmount: Float,
+    depthEffect: Boolean = false,
+    chromaticAberration: Boolean = false
+) {
+    lens(refractionHeight, refractionAmount, depthEffect, chromaticAberration, saturation = 1f)
 }
 
 private val BackdropEffectScope.cornerRadii: FloatArray?

@@ -11,6 +11,7 @@ import org.skepsun.kototoro.core.source.*
 import org.skepsun.kototoro.tracker.data.TrackEntity
 import org.skepsun.kototoro.tracker.data.TrackLogEntity
 import org.skepsun.kototoro.tracker.data.mergeRestoredTrackLog
+import org.skepsun.kototoro.tracker.domain.completeAllPendingUpdates
 import org.skepsun.kototoro.tracker.domain.dailyUpdateGroups
 import org.skepsun.kototoro.tracker.domain.decodeUpdateChapters
 import org.skepsun.kototoro.tracker.domain.encodeUpdateChapters
@@ -29,6 +30,72 @@ class DesktopTrackerTest {
         10, "追踪作品", emptySet(), "/work", "https://fixture.invalid/work", 0f, null, null,
         emptySet(), "ONGOING", emptySet(), source, chapters = chapters,
     )
+
+    @Test
+    fun `chapter only checks refresh full details only when updates are found`() = runBlocking<Unit> {
+        DesktopRuntime.open(directory).use { runtime ->
+            val library = DesktopLibrary(runtime.database) { source }
+            var remote = work(listOf(chapter(1)))
+            var fullCalls = 0
+            var chapterCalls = 0
+            val tracker = DesktopTracker(runtime.database, library,
+                fetchDetails = { fullCalls++; remote }, preferredBranch = { null }, now = { 86_400_000L },
+                fetchChapters = { chapterCalls++; it.copy(chapters = remote.chapters) })
+            library.addFavourite(remote)
+
+            tracker.checkAll()
+            tracker.checkAll()
+            assertEquals(1, fullCalls)
+            assertEquals(1, chapterCalls)
+            remote = work(listOf(chapter(1), chapter(2))).copy(state = "FINISHED")
+            assertEquals(1, tracker.checkAll().newChapters)
+            assertEquals(2, fullCalls)
+            assertEquals(2, chapterCalls)
+            assertEquals("FINISHED", library.find(remote.id)?.state)
+            assertEquals(1, runtime.database.getTracksDao().find(remote.id)?.newChapters)
+        }
+    }
+
+    @Test
+    fun `skip completed applies to manual and scheduled checks without removing their tracks`() = runBlocking<Unit> {
+        DesktopRuntime.open(directory).use { runtime ->
+            val library = DesktopLibrary(runtime.database) { source }
+            val finished = work(listOf(chapter(1))).copy(state = "FINISHED")
+            var calls = 0
+            val tracker = DesktopTracker(runtime.database, library, { calls++; it }, { null }, { 86_400_000L })
+            library.addFavourite(finished)
+
+            assertEquals(0, tracker.checkAll(skipCompleted = true).checked)
+            assertEquals(0, tracker.checkAll(respectSchedule = true, skipCompleted = true).checked)
+            assertEquals(0, calls)
+            assertNotNull(runtime.database.getTracksDao().find(finished.id))
+            assertEquals(1, tracker.checkAll().checked)
+            assertEquals(1, calls)
+        }
+    }
+
+    @Test
+    fun `duplicate policy also applies when details saves the chapter list`() = runBlocking<Unit> {
+        DesktopRuntime.open(directory).use { runtime ->
+            val library = DesktopLibrary(runtime.database) { source }
+            var remote = work((1L..3L).map { chapter(it) })
+            val tracker = DesktopTracker(runtime.database, library, { remote }, { null }, { 86_400_000L })
+            library.addFavourite(remote)
+            tracker.checkAll()
+            library.recordPage(remote, chapter(3), 1, 2)
+            library.markDuplicateChaptersRead = true
+            val duplicate = chapter(31).copy(number = 3f, title = "第 3 话", uploadDate = 3_000L)
+            remote = remote.copy(chapters = remote.chapters!! + duplicate + chapter(4))
+
+            library.save(remote, now = 86_400_000L)
+
+            assertEquals(1, runtime.database.getTracksDao().find(remote.id)?.newChapters)
+            val updates = runtime.database.getTrackLogsDao().findByOwner(remote.id)
+                .flatMap { decodeUpdateChapters(it.chapterMetadata) }
+            assertTrue(updates.single { it.chapterId == duplicate.id }.readAt > 0)
+            assertEquals(0, updates.single { it.chapterId == 4L }.readAt)
+        }
+    }
 
     @Test
     fun `cross day pending updates accumulate by identity and stale sync cannot undo reading`() = runBlocking<Unit> {
@@ -69,6 +136,35 @@ class DesktopTrackerTest {
             assertEquals(2, runtime.database.getTracksDao().find(10)?.newChapters)
         }
     }
+
+    @Test
+    fun `a challenged source is skipped for the rest of the run while other sources are checked`() =
+        runBlocking<Unit> {
+            DesktopRuntime.open(directory).use { runtime ->
+                val other = SourceRef("MIHON_7", "zh", "MANGA")
+                val library = DesktopLibrary(runtime.database) { name -> if (name == other.name) other else source }
+                val challenged = (11L..13L).map { id -> work(listOf(chapter(1))).copy(id = id, url = "/w$id") }
+                val healthy = work(listOf(chapter(1))).copy(id = 20, url = "/w20", source = other)
+                (challenged + healthy).forEach { library.addFavourite(it) }
+                val fetched = ArrayList<Long>()
+                val tracker = DesktopTracker(runtime.database, library, fetchDetails = { stored ->
+                    fetched += stored.id
+                    if (stored.source == source) throw SourceChallengeException("https://fixture.invalid")
+                    stored
+                }, preferredBranch = { null }, now = { 5_000_000L })
+
+                val report = tracker.checkAll()
+
+                assertEquals(4, report.checked)
+                assertTrue(report.skipped >= 1, "report: $report")
+                assertEquals(3, report.failed + report.skipped, "report: $report")
+                assertTrue(20L in fetched)
+                assertEquals(report.failed, fetched.count { it != 20L })
+                // A skipped title is not marked as checked, so it keeps its place for the next run.
+                val unchecked = challenged.map { it.id }.filterNot { it in fetched }
+                assertTrue(unchecked.all { runtime.database.getTracksDao().find(it)?.lastCheckTime == 0L })
+            }
+        }
 
     @Test
     fun `checks find new chapters with Android rules and feed the shared read model`() = runBlocking<Unit> {
@@ -132,6 +228,30 @@ class DesktopTrackerTest {
     }
 
     @Test
+    fun `mark all read clears every counter and reminder but keeps the timeline`() = runBlocking<Unit> {
+        DesktopRuntime.open(directory).use { runtime ->
+            val library = DesktopLibrary(runtime.database) { source }
+            var remote = work(listOf(chapter(1)))
+            val tracker = DesktopTracker(runtime.database, library, { remote }, { null }, { 86_400_000L })
+            library.addFavourite(remote)
+            tracker.checkAll()
+            remote = work((1L..3L).map { chapter(it) })
+            tracker.checkAll()
+            assertEquals(2, runtime.database.getTracksDao().find(10)?.newChapters)
+            assertEquals(1, runtime.database.getTrackLogsDao().observeUnreadCount().first())
+
+            runtime.database.completeAllPendingUpdates(5_000L)
+
+            assertEquals(0, runtime.database.getTracksDao().find(10)?.newChapters)
+            assertTrue(runtime.database.getTracksDao().findUpdated().isEmpty())
+            assertEquals(0, runtime.database.getTrackLogsDao().observeUnreadCount().first())
+            assertEquals(1, runtime.database.getTrackLogsDao().count(), "the timeline keeps its rows")
+            val log = runtime.database.getTrackLogsDao().findByOwner(10).single()
+            assertTrue(decodeUpdateChapters(log.chapterMetadata).all { it.readAt == 5_000L })
+        }
+    }
+
+    @Test
     fun `a badge from before chapters carried identities clears when the newest chapter is read`() = runBlocking<Unit> {
         DesktopRuntime.open(directory).use { runtime ->
             val library = DesktopLibrary(runtime.database) { source }
@@ -188,7 +308,8 @@ class DesktopTrackerTest {
         DesktopRuntime.open(directory).use { runtime ->
             val library = DesktopLibrary(runtime.database) { source }
             var remote = work(listOf(chapter(1, "A"), chapter(2, "B")))
-            val tracker = DesktopTracker(runtime.database, library, { remote }, preferredBranch = { "B" })
+            val tracker = DesktopTracker(runtime.database, library, { remote }, preferredBranch = { "B" },
+                now = { 86_400_000L })
             library.addFavourite(remote)
             tracker.checkAll()
             assertEquals(2L, runtime.database.getTracksDao().find(10)?.lastChapterId, "no history: the preferred branch")
@@ -198,6 +319,27 @@ class DesktopTrackerTest {
             remote = work(listOf(chapter(1, "A"), chapter(2, "B"), chapter(3, "A"), chapter(4, "B")))
             tracker.checkAll()
             assertEquals(1, runtime.database.getTracksDao().find(10)?.newChapters)
+        }
+    }
+
+    @Test
+    fun `a rate limiting source cools down and is left alone by the next run`() = runBlocking<Unit> {
+        DesktopRuntime.open(directory).use { runtime ->
+            val library = DesktopLibrary(runtime.database) { source }
+            val remote = work((1L..2L).map { chapter(it) })
+            var calls = 0
+            // A wait longer than a minute gives the source up for the run and cools it down for later runs.
+            val tracker = DesktopTracker(runtime.database, library, fetchDetails = {
+                calls++
+                throw SourceRateLimitException(retryAfterMillis = 120_000L)
+            }, preferredBranch = { null }, now = { 86_400_000L })
+            library.addFavourite(remote)
+
+            assertEquals(1, tracker.checkAll().failed)
+            assertEquals(1, calls)
+            val second = tracker.checkAll()
+            assertEquals(1, calls, "the cooling source is not asked again")
+            assertEquals(1, second.skipped)
         }
     }
 }

@@ -56,6 +56,7 @@ import org.skepsun.kototoro.suggestions.data.SuggestionDao
 import org.skepsun.kototoro.suggestions.data.SuggestionEntity
 import org.skepsun.kototoro.tracker.data.TrackEntity
 import org.skepsun.kototoro.tracker.data.TrackLogEntity
+import org.skepsun.kototoro.tracker.data.TrackScheduleEntity
 import org.skepsun.kototoro.tracker.data.TracksDao
 import org.skepsun.kototoro.space.data.SpaceNavigationEntryEntity
 import org.skepsun.kototoro.space.data.SpaceSessionDao
@@ -76,13 +77,14 @@ import org.skepsun.kototoro.core.dictionary.DictionaryRuleDao
 import org.skepsun.kototoro.core.dictionary.TranslationDictionaryDao
 import org.skepsun.kototoro.core.dictionary.TranslationDictionaryEntity
 
-const val DATABASE_VERSION = 86
+const val DATABASE_VERSION = 87
 
 @Database(
     entities = [
         MangaEntity::class, TagEntity::class, HistoryEntity::class, MangaTagsEntity::class, ChapterEntity::class,
         FavouriteCategoryEntity::class, FavouriteEntity::class, MangaPrefsEntity::class, TrackEntity::class,
-        TrackLogEntity::class, SuggestionEntity::class, BookmarkEntity::class, ScrobblingEntity::class,
+        TrackLogEntity::class, TrackScheduleEntity::class, SuggestionEntity::class, BookmarkEntity::class,
+        ScrobblingEntity::class,
         MangaSourceEntity::class, StatsEntity::class, LocalContentIndexEntity::class, EpubChapterMappingEntity::class,
         JsonSourceEntity::class, ExternalExtensionRepoEntity::class,
         TrackingSiteItemEntity::class, TrackingSiteLinkEntity::class, SourcePresetEntity::class,
@@ -123,6 +125,8 @@ abstract class MangaDatabase : RoomDatabase() {
     abstract fun getTrackerReadDao(): org.skepsun.kototoro.tracker.data.TrackerReadDao
 
     abstract fun getTrackLogsDao(): TrackLogsDao
+
+    abstract fun getTrackScheduleDao(): org.skepsun.kototoro.tracker.data.TrackScheduleDao
 
     abstract fun getSuggestionDao(): SuggestionDao
 

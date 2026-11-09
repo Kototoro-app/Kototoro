@@ -4,6 +4,7 @@ import java.io.File
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import org.skepsun.kototoro.core.extensions.jarPackageKey
+import org.skepsun.kototoro.sync.google.data.model.SyncExtensionPackage
 
 internal fun writeSyncedExtension(target: File, bytes: ByteArray, expectedSize: Long, readOnly: Boolean = false) {
     require(bytes.isNotEmpty() && (expectedSize <= 0 || bytes.size.toLong() == expectedSize)) {
@@ -41,5 +42,24 @@ internal fun deleteStaleExtensionFiles(directory: File, keep: File, packageId: S
         // Restored JARs are made read-only, so deleting them requires lifting the flag first.
         val writable = !stale.exists() || stale.canWrite() || stale.setWritable(true)
         writable && stale.delete()
+    }
+}
+
+/**
+ * Whether [installed] holds a copy of the removed package installed after the removal. JARs are matched by
+ * package key: a reinstall from a repository may use a versioned file name for the same package.
+ */
+internal fun isReinstalledAfterRemoval(
+    kind: String,
+    packageId: String,
+    removedAt: Long,
+    installed: List<SyncExtensionPackage>,
+): Boolean {
+    val isJar = kind.equals("jar", ignoreCase = true)
+    return installed.any { item ->
+        !item.isDeleted &&
+            item.kind.equals(kind, ignoreCase = true) &&
+            item.installedAt > removedAt &&
+            if (isJar) item.packageId.jarPackageKey() == packageId.jarPackageKey() else item.packageId == packageId
     }
 }

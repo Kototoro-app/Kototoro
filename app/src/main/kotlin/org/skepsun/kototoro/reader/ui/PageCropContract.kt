@@ -19,6 +19,10 @@ data class PageCropRequest(
     val chapterId: Long = 0L,
     val chapterIndex: Int = 0,
     val page: Int = 0,
+    /** The pages before and after [source] that the editor may stack onto it. */
+    val previousSource: Uri? = null,
+    val nextSource: Uri? = null,
+    val stitchDirection: StitchDirection = StitchDirection.TOP_TO_BOTTOM,
 )
 
 class PageCropContract : ActivityResultContract<PageCropRequest, Uri?>() {
@@ -36,6 +40,9 @@ class PageCropContract : ActivityResultContract<PageCropRequest, Uri?>() {
             putExtra(PageCropActivity.EXTRA_CHAPTER_ID, input.chapterId)
             putExtra(PageCropActivity.EXTRA_CHAPTER_INDEX, input.chapterIndex)
             putExtra(PageCropActivity.EXTRA_PAGE, input.page)
+            putExtra(PageCropActivity.EXTRA_PREVIOUS_SOURCE_URI, input.previousSource)
+            putExtra(PageCropActivity.EXTRA_NEXT_SOURCE_URI, input.nextSource)
+            putExtra(PageCropActivity.EXTRA_STITCH_DIRECTION, input.stitchDirection.name)
         }
     }
 

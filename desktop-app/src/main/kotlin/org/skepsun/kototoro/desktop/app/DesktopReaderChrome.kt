@@ -32,7 +32,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.skepsun.kototoro.core.ui.compose.ImmersiveEdgeGradient
-import org.skepsun.kototoro.core.ui.compose.toTransparentImmersiveColor
+import org.skepsun.kototoro.core.ui.compose.ImmersiveEdge
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderChromeTopBar
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderChapterTitleChip
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderInfoBarAlignment
@@ -50,8 +50,6 @@ private val BottomImmersiveHeight = 84.dp
 private val TopFeatherExtension = 72.dp
 private val BottomFeatherExtension = 48.dp
 private val FloatingControlInset = 62.dp
-private val TopImmersiveStops = listOf(0f, 0.24f, 0.50f, 0.70f, 0.86f, 1f)
-private val BottomImmersiveStops = listOf(0f, 0.18f, 0.38f, 0.70f, 1f)
 
 /**
  * Android's reader chrome over the Windows reader, from the shared core-ui pieces: the top bar (back, title chip
@@ -81,17 +79,14 @@ internal fun BoxScope.DesktopReaderChrome(
         Box(Modifier.fillMaxSize()) {
             ImmersiveEdgeGradient(
                 height = TopImmersiveHeight + TopFeatherExtension,
-                colors = listOf(immersiveBase.copy(alpha = .86f), immersiveBase.copy(alpha = .62f),
-                    immersiveBase.copy(alpha = .32f), immersiveBase.copy(alpha = .12f), immersiveBase.copy(alpha = .035f),
-                    immersiveBase.toTransparentImmersiveColor()),
-                stops = TopImmersiveStops,
+                color = immersiveBase.copy(alpha = .86f),
+                edge = ImmersiveEdge.TOP,
                 modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth(),
             )
             ImmersiveEdgeGradient(
                 height = BottomImmersiveHeight + BottomFeatherExtension,
-                colors = listOf(immersiveBase.toTransparentImmersiveColor(), immersiveBase.copy(alpha = .035f),
-                    immersiveBase.copy(alpha = .16f), immersiveBase.copy(alpha = .42f), immersiveBase.copy(alpha = .78f)),
-                stops = BottomImmersiveStops,
+                color = immersiveBase.copy(alpha = .78f),
+                edge = ImmersiveEdge.BOTTOM,
                 modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
             )
         }

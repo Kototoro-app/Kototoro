@@ -39,20 +39,16 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.R
-import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.exceptions.CloudFlareException
 import org.skepsun.kototoro.core.exceptions.resolve.CaptchaHandler
 import org.skepsun.kototoro.core.model.ids
@@ -75,6 +71,10 @@ import org.skepsun.kototoro.parsers.util.toIntUp
 import org.skepsun.kototoro.settings.work.PeriodicWorkScheduler
 import org.skepsun.kototoro.tracker.domain.CheckNewChaptersUseCase
 import org.skepsun.kototoro.tracker.domain.GetTracksUseCase
+import org.skepsun.kototoro.tracker.domain.SourceAnswer
+import org.skepsun.kototoro.tracker.domain.SourceCheck
+import org.skepsun.kototoro.tracker.domain.checkBySource
+import org.skepsun.kototoro.tracker.domain.TrackingRepository
 import org.skepsun.kototoro.tracker.domain.model.ContentTracking
 import org.skepsun.kototoro.tracker.domain.model.MangaUpdates
 import org.skepsun.kototoro.tracker.work.TrackerNotificationHelper.NotificationInfo
@@ -155,12 +155,19 @@ class TrackWorker @AssistedInject constructor(
         if (!settings.isTrackerEnabled) {
             return Result.success()
         }
-        val tracks = getTracksUseCase(if (isFullRun) Int.MAX_VALUE else BATCH_SIZE)
+        val sourceState = TrackSourceCooldowns(applicationContext)
+        val tracks = getTracksUseCase(
+            limit = if (isFullRun) Int.MAX_VALUE else BATCH_SIZE,
+            cooldowns = sourceState.read(),
+            challenged = sourceState.readChallenged(),
+            // A run the user asked for checks everything; background runs only works due at their release pace.
+            respectSchedule = !isFullRun,
+        )
         if (tracks.isEmpty()) {
             return Result.success()
         }
 
-        val notifications = checkUpdatesAsync(tracks)
+        val notifications = checkUpdatesAsync(tracks, sourceState)
         if (notifications.isNotEmpty() && applicationContext.checkNotificationPermission(null)) {
             val groupNotification = notificationHelper.createGroupNotification(notifications)
             notifications.forEach { notificationManager.notify(it.tag, it.id, it.notification) }
@@ -171,33 +178,66 @@ class TrackWorker @AssistedInject constructor(
         return Result.success()
     }
 
+    /**
+     * Checks [tracks] taking sources in turn, with at most [TRACK_SOURCE_PARALLELISM] checks per source under
+     * [TRACK_GLOBAL_PARALLELISM] overall, so a library on a few sites does not put every request on one of them.
+     * A source that rate-limits is paused, and one that asks for a challenge or keeps refusing is skipped for
+     * the rest of the run; skipped titles are not checked, so they keep their place for the next run. A source given
+     * up on because of rate limits cools down, and later runs skip it until then; a source that challenged the run
+     * is remembered, so the next batches give it only a probe until it answers again.
+     */
     @CheckResult
-    private suspend fun checkUpdatesAsync(tracks: List<ContentTracking>): List<NotificationInfo> {
-        val semaphore = Semaphore(MAX_PARALLELISM)
-        return channelFlow {
-            for (track in tracks) {
-                launch {
-                    semaphore.withPermit {
-                        send(
-                            runCatchingCancellable {
-                                checkNewChaptersUseCase.invoke(track)
-                            }.getOrElse { error ->
-                                MangaUpdates.Failure(
-                                    manga = track.manga,
-                                    entityId = track.entityId,
-                                    anchorMangaId = track.anchorMangaId,
-                                    error = error,
-                                )
-                            },
-                        )
+    private suspend fun checkUpdatesAsync(
+        tracks: List<ContentTracking>,
+        sourceState: TrackSourceCooldowns,
+    ): List<NotificationInfo> {
+        val challenged = HashSet<String>()
+        val answered = HashSet<String>()
+        return try {
+            checkUpdatesBySource(tracks, sourceState, challenged, answered)
+        } finally {
+            // Also after a cancelled run: what it heard from sources holds either way.
+            sourceState.updateChallenged(challenged, answered)
+        }
+    }
+
+    private suspend fun checkUpdatesBySource(
+        tracks: List<ContentTracking>,
+        sourceState: TrackSourceCooldowns,
+        challenged: MutableSet<String>,
+        answered: MutableSet<String>,
+    ): List<NotificationInfo> {
+        var tally = CheckTally()
+        return checkBySource(
+            items = tracks,
+            sourceOf = { it.manga.source.name },
+            now = System::currentTimeMillis,
+            answerOf = { updates: MangaUpdates -> (updates as? MangaUpdates.Failure)?.error.toSourceAnswer() },
+            cooldowns = sourceState.read(),
+            onCooldown = sourceState::put,
+            check = ::checkTrack,
+        ).map { check ->
+            when (check) {
+                is SourceCheck.Skipped -> null
+                is SourceCheck.Checked -> check.result.also { result ->
+                    val answer = (result as? MangaUpdates.Failure)?.error.toSourceAnswer()
+                    when (answer) {
+                        SourceAnswer.Challenged -> challenged += check.source
+                        SourceAnswer.Answered -> answered += check.source
+                        is SourceAnswer.RateLimited -> Unit
                     }
                 }
             }
         }.onEachIndexed { index, it ->
+            tally = tally.add(it)
             if (applicationContext.checkNotificationPermission(WORKER_CHANNEL_ID)) {
-                notificationManager.notify(WORKER_NOTIFICATION_ID, createWorkerNotification(tracks.size, index + 1))
+                notificationManager.notify(
+                    WORKER_NOTIFICATION_ID,
+                    createWorkerNotification(tracks.size, index + 1, tally),
+                )
             }
             when (it) {
+                null -> Unit
                 is MangaUpdates.Failure -> {
                     val e = it.error
                     if (e is CloudFlareException) {
@@ -210,7 +250,7 @@ class TrackWorker @AssistedInject constructor(
             }
         }.mapNotNull {
             when (it) {
-                is MangaUpdates.Failure -> null
+                null, is MangaUpdates.Failure -> null
                 is MangaUpdates.Success -> if (it.isValid && it.isNotEmpty()) {
                     notificationHelper.createNotification(
                         manga = it.manga,
@@ -221,6 +261,29 @@ class TrackWorker @AssistedInject constructor(
                 }
             }
         }.toList()
+    }
+
+    private suspend fun checkTrack(track: ContentTracking): MangaUpdates = runCatchingCancellable {
+        checkNewChaptersUseCase.invoke(track)
+    }.getOrElse { error ->
+        MangaUpdates.Failure(
+            manga = track.manga,
+            entityId = track.entityId,
+            anchorMangaId = track.anchorMangaId,
+            error = error,
+        )
+    }
+
+    /** What the run has found so far, shown under the progress bar; null updates are titles skipped. */
+    private data class CheckTally(val newChapters: Int = 0, val failed: Int = 0, val skipped: Int = 0) {
+
+        fun add(updates: MangaUpdates?): CheckTally = when (updates) {
+            null -> copy(skipped = skipped + 1)
+            is MangaUpdates.Failure -> copy(failed = failed + 1)
+            is MangaUpdates.Success -> if (updates.isValid) copy(newChapters = newChapters + updates.newChapters.size) else this
+        }
+
+        val isEmpty: Boolean get() = newChapters == 0 && failed == 0 && skipped == 0
     }
 
     override suspend fun getForegroundInfo(): ForegroundInfo {
@@ -244,11 +307,25 @@ class TrackWorker @AssistedInject constructor(
         }
     }
 
-    private fun createWorkerNotification(max: Int, progress: Int) = NotificationCompat.Builder(
+    private fun createWorkerNotification(
+        max: Int,
+        progress: Int,
+        tally: CheckTally = CheckTally(),
+    ) = NotificationCompat.Builder(
         applicationContext,
         WORKER_CHANNEL_ID,
     ).apply {
         setContentTitle(applicationContext.getString(R.string.check_for_new_chapters))
+        if (!tally.isEmpty) {
+            setContentText(
+                applicationContext.getString(
+                    R.string.tracker_progress_summary,
+                    tally.newChapters,
+                    tally.failed,
+                    tally.skipped,
+                ),
+            )
+        }
         setPriority(NotificationCompat.PRIORITY_MIN)
         setCategory(NotificationCompat.CATEGORY_SERVICE)
         setDefaults(0)
@@ -351,7 +428,7 @@ class TrackWorker @AssistedInject constructor(
     class Scheduler @Inject constructor(
         private val workManager: WorkManager,
         private val settings: AppSettings,
-        private val dbProvider: Provider<MangaDatabase>,
+        private val trackingRepositoryProvider: Provider<TrackingRepository>,
     ) : PeriodicWorkScheduler {
 
         private val requestMutex = Mutex()
@@ -372,7 +449,7 @@ class TrackWorker @AssistedInject constructor(
             val frequency = settings.trackerFrequencyFactor
             // The interval rule is shared with the Windows scheduler (core-domain TrackRules).
             val interval = org.skepsun.kototoro.tracker.domain.trackerCheckIntervalHours(
-                trackCount = dbProvider.get().getTracksDao().getTracksCount(),
+                trackCount = trackingRepositoryProvider.get().getCheckedTracksCount(),
                 batchSize = BATCH_SIZE,
                 frequency = frequency,
             ) ?: return unschedule()
@@ -506,7 +583,6 @@ class TrackWorker @AssistedInject constructor(
         const val WORKER_NOTIFICATION_ID = 35
         const val TAG = "tracking"
         const val TAG_ONESHOT = "tracking_oneshot"
-        const val MAX_PARALLELISM = 6
         val BATCH_SIZE = if (BuildConfig.DEBUG) 20 else 46
         const val SETTINGS_ACTION_CODE = 5
 

@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.desktop.app
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.widthIn
@@ -10,12 +11,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.core.ui.settings.SettingsGroup
 import org.skepsun.kototoro.core.ui.settings.SettingsRowDivider
 import org.skepsun.kototoro.core.ui.settings.SettingsSectionHeader
 import org.skepsun.kototoro.core.ui.settings.SettingsSwitchRow
 import org.skepsun.kototoro.core.ui.settings.SettingsValueRow
+import org.skepsun.kototoro.settings.compose.SettingsSwitchPreference
 
 /**
  * Android's update preferences: a switch for checking new chapters and a choice of how often to check. The frequency
@@ -37,6 +40,22 @@ internal fun DesktopTrackerSettings(controller: DesktopController, state: Deskto
             SettingsValueRow(desktopText("settings.checkFrequency"), null,
                 frequencies.firstOrNull { it.first == tracker.frequency }?.second, active,
                 { choosingFrequency = true }, testTag = "settings-tracker-frequency")
+            SettingsRowDivider()
+            Box(Modifier.testTag("settings-tracker-skip-completed")) {
+                SettingsSwitchPreference(
+                    title = AndroidStrings["tracker_skip_completed"], checked = tracker.skipCompleted,
+                    summary = AndroidStrings["tracker_skip_completed_summary"], enabled = active,
+                    onCheckedChange = { controller.trackerSettings(tracker.copy(skipCompleted = it)) },
+                )
+            }
+            SettingsRowDivider()
+            Box(Modifier.testTag("settings-tracker-mark-duplicates-read")) {
+                SettingsSwitchPreference(
+                    title = AndroidStrings["tracker_mark_duplicates_read"], checked = tracker.markDuplicatesRead,
+                    summary = AndroidStrings["tracker_mark_duplicates_read_summary"], enabled = active,
+                    onCheckedChange = { controller.trackerSettings(tracker.copy(markDuplicatesRead = it)) },
+                )
+            }
         }
     }
     if (choosingFrequency) {

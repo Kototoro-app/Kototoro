@@ -8,18 +8,22 @@ import androidx.compose.ui.platform.LocalContext
 
 /**
  * Visibility of the per-chapter row actions shared by the details page and both readers.
- * Both default to on; the chapter panel more menu flips them.
+ * The two buttons default to on and first-page thumbnails default to off; the chapter panel more menu flips them.
  */
 @Stable
 class ChapterRowActionPrefs(
     val showDownload: Boolean,
     val showTranslate: Boolean,
+    val showThumbnails: Boolean,
     private val updateDownload: (Boolean) -> Unit,
     private val updateTranslate: (Boolean) -> Unit,
+    private val updateThumbnails: (Boolean) -> Unit,
 ) {
     fun setShowDownload(value: Boolean) = updateDownload(value)
 
     fun setShowTranslate(value: Boolean) = updateTranslate(value)
+
+    fun setShowThumbnails(value: Boolean) = updateThumbnails(value)
 }
 
 @Composable
@@ -32,12 +36,17 @@ fun rememberChapterRowActionPrefs(): ChapterRowActionPrefs {
     val showTranslate by settings.observeAsState(AppSettings.KEY_CHAPTER_TRANSLATE_BUTTON) {
         isChapterTranslateButtonVisible
     }
-    return remember(settings, showDownload, showTranslate) {
+    val showThumbnails by settings.observeAsState(AppSettings.KEY_CHAPTER_THUMBNAILS) {
+        isChapterThumbnailsEnabled
+    }
+    return remember(settings, showDownload, showTranslate, showThumbnails) {
         ChapterRowActionPrefs(
             showDownload = showDownload,
             showTranslate = showTranslate,
+            showThumbnails = showThumbnails,
             updateDownload = { settings.isChapterDownloadButtonVisible = it },
             updateTranslate = { settings.isChapterTranslateButtonVisible = it },
+            updateThumbnails = { settings.isChapterThumbnailsEnabled = it },
         )
     }
 }

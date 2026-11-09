@@ -269,8 +269,7 @@ internal object DesktopParserProbe {
                     }
                     check(controller.state.value.items.map { it.id } == listOf(1000L, 1001L, 1002L, 1003L) &&
                         controller.state.value.offset == 1)
-                    onNodeWithTag("browse-no-more").assertExists()
-                    onNodeWithTag("browse-next-page").assertIsNotEnabled()
+                    onNodeWithTag("content-grid").performScrollToNode(hasTestTag("browse-no-more")); onNodeWithTag("browse-no-more").assertExists()
                     // 上一批 still replaces the rows with that batch alone (the manual button keeps replace semantics).
                     runBlocking { controller.browse(0).join() }
                     check(controller.state.value.items.map { it.id } == listOf(1000L, 1001L) &&

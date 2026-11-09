@@ -1,5 +1,8 @@
 package org.skepsun.kototoro.desktop.app
 
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -51,7 +54,10 @@ internal fun DesktopSuggestionsPage(controller: DesktopController, state: Deskto
     }
     val filters = state.suggestionFilters
     val visible = remember(items, filters) { desktopSuggestedContents(items, filters) }
-    Column(Modifier.fillMaxSize().testTag("suggestions-panel"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    // The header card, notices and chips lead the grid, so they scroll beneath the floating bar with the works.
+    val inset = LocalDesktopTopInset.current
+    val header: @Composable () -> Unit = { Column(Modifier.fillMaxWidth().padding(bottom = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)) {
         // Android's suggestions header card (same accent tile, wash and pills) instead of a bare title row.
         PageSummaryHeader(
             title = AndroidStrings["suggestions_header_title"],
@@ -107,15 +113,24 @@ internal fun DesktopSuggestionsPage(controller: DesktopController, state: Deskto
             )
         } else if (items.isNotEmpty()) {
             if (chips.isNotEmpty()) SuggestionChips(chips, filters, enabled, controller::toggleSuggestionFilter)
-            Box(Modifier.weight(1f).fillMaxWidth()) {
-                ContentGrid(
-                    contents = visible,
-                    enabled = enabled,
-                    covers = controller.session.covers,
-                    onOpen = controller::details,
-                    listMode = state.libraryDisplay.listMode,
-                )
-            }
+        }
+    } }
+    Box(Modifier.fillMaxSize().testTag("suggestions-panel")) {
+        if (items.isNotEmpty() && visible.isNotEmpty()) {
+            ContentGrid(
+                contents = visible,
+                enabled = enabled,
+                covers = controller.session.covers,
+                onOpen = controller::details,
+                listMode = state.libraryDisplay.listMode,
+                contentPadding = PaddingValues(top = inset),
+                header = header,
+            )
+        } else Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = inset),
+            verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            header()
+            // Chips can narrow the works to none; the grid's own empty panel says so below them.
+            if (items.isNotEmpty()) ContentGrid(visible, enabled, controller.session.covers, controller::details)
         }
     }
 }

@@ -33,6 +33,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -44,6 +46,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.getContentType
@@ -179,8 +182,23 @@ fun ChaptersPagesTabsContent(
                 }
             }
 
-            LaunchedEffect(safeCurrentPage, tabsList) {
-                onSelectedTabIdChange?.invoke(tabsList[safeCurrentPage].tabId)
+            // With a caller-owned selection the pager only reports pages the user settles on. Its programmatic scrolls
+            // always land on the selection, and the first settled page may be a stale one restored from saved state;
+            // reporting either fed the effect above its own result, so a restored pager and the caller's selection
+            // rewrote each other every frame and the panel kept flipping between chapters and pages (#633).
+            val latestSelectedTabId by rememberUpdatedState(selectedTabId)
+            val latestOnSelectedTabIdChange by rememberUpdatedState(onSelectedTabIdChange)
+            if (selectedTabId == null) {
+                LaunchedEffect(safeCurrentPage, tabsList) {
+                    latestOnSelectedTabIdChange?.invoke(tabsList[safeCurrentPage].tabId)
+                }
+            } else {
+                LaunchedEffect(pagerState, tabsList) {
+                    snapshotFlow { pagerState.settledPage }.drop(1).collect { page ->
+                        val tabId = tabsList.getOrNull(page)?.tabId ?: return@collect
+                        if (tabId != latestSelectedTabId) latestOnSelectedTabIdChange?.invoke(tabId)
+                    }
+                }
             }
 
             LaunchedEffect(currentTabId) {
@@ -195,6 +213,9 @@ fun ChaptersPagesTabsContent(
                     tabs = tabsList,
                     dragModifier = dragModifier,
                     onTabClick = { index ->
+                        if (selectedTabId != null) {
+                            tabsList.getOrNull(index)?.let { onSelectedTabIdChange?.invoke(it.tabId) }
+                        }
                         coroutineScope.launch {
                             pagerState.scrollToPage(index)
                         }

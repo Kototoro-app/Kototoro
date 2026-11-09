@@ -53,7 +53,7 @@ struct SettingsView: View {
             Section {
                 NavigationLink { PrivacySettingsPage() } label: { Label("隐私与安全", systemImage: "hand.raised") }
                     .accessibilityIdentifier("settings.privacy")
-                NavigationLink { GeneralSettingsPage() } label: { Label("通用", systemImage: "gearshape") }
+                NavigationLink { GeneralSettingsPage(library: library) } label: { Label("通用", systemImage: "gearshape") }
                     .accessibilityIdentifier("settings.general")
                 NavigationLink { AboutSettingsPage(library: library) } label: {
                     Label("关于", systemImage: "info.circle")
@@ -118,10 +118,11 @@ struct PrivacySettingsPage: View {
 
 /// Background update checks and the GitHub mirror.
 struct GeneralSettingsPage: View {
+    @ObservedObject var library: LibraryModel
     var body: some View {
         Form {
             Section {
-                BackgroundUpdateSettingsRows()
+                BackgroundUpdateSettingsRows(library: library)
             } header: {
                 Text("作品更新")
             } footer: {
@@ -149,7 +150,13 @@ struct AboutSettingsPage: View {
         Form {
             Section {
                 LabeledContent("应用", value: "Kototoro")
-                LabeledContent("版本", value: String(localized: "iOS 开发版"))
+                LabeledContent("版本", value: AppBuildInfo.current.description)
+                    .accessibilityIdentifier("settings.appVersion")
+                LabeledContent("构建渠道", value: AppBuildInfo.current.channel.title)
+                NavigationLink { AppUpdateView() } label: {
+                    Label("检查更新", systemImage: "arrow.clockwise")
+                }
+                .accessibilityIdentifier("settings.appUpdates")
             }
             Section {
                 if let version = library.schemaVersion {

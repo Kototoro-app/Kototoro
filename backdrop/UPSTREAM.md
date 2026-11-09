@@ -42,7 +42,8 @@ RuntimeEffect, shaders and render effects from the original Skiko implementation
 
 2. `com/kyant/backdrop/DrawBackdropModifier.kt`, `com/kyant/backdrop/BackdropEffectScope.kt` --
    when a surface has a render effect (blur/lens), `DrawBackdropNode` records its backdrop layer
-   at 1/2 resolution and scales it back up (`BackdropResolutionScale`). The backdrop is
+   at reduced resolution and scales it back up (originally a fixed 1/2, now
+   `BackdropQuality.inputScale`). The backdrop is
    re-rendered every frame while content scrolls underneath, and on the iOS-style glass chrome
    that was the dominant RenderThread/GPU cost (Perfetto: `flush layers` 1.5-1.7 ms per frame,
    3-5 ms in the slowest frames). `BackdropEffectScopeImpl.update` takes the scale and hands
@@ -50,5 +51,32 @@ RuntimeEffect, shaders and render effects from the original Skiko implementation
    corner radii) keep their visual size; the backdrop itself is still positioned with the real
    density so `layerBlock` inverse transforms stay correct. Surfaces without a render effect
    are unchanged (scale 1).
+   `BackdropQuality.inputScale` (snapshot state) sets the scale process-wide with Haze's
+   `HazePerformanceMode` presets: `PERFORMANCE` 0.5, `BALANCED` sqrt(0.625) ~= 0.79 (default),
+   `QUALITY` 1 (full resolution). Nodes read it while resolving effects, so live surfaces
+   re-resolve and redraw.
+   Effects can set `BackdropEffectScope.requiresFullResolution` when a zero-radius region must meet
+   unfiltered content. The immersive progressive blur uses this to avoid a resampling seam at its content edge.
 
    Status: compiled, not yet measured or visually compared on device.
+
+3. `com/kyant/backdrop/shadow/ShadowModifier.kt`, `shadow/InnerShadowModifier.kt`,
+   `highlight/HighlightModifier.kt`, new `internal/RecordKey.kt` -- ported from the upstream
+   performance proposal [#126](https://github.com/Kyant0/AndroidLiquidGlass/issues/126), item 1
+   (branch `ntvien/AndroidLiquidGlass:perf/record-shadow-layers-once`, not merged upstream). The
+   shadow, inner shadow and highlight layers are recorded again only when size, density, layout
+   direction, inner shape or a parameter other than alpha changes; alpha stays a layer property,
+   so press/fade animations no longer re-record. Also resets the inner shadow's `prevRadius` on
+   detach.
+
+4. `com/kyant/backdrop/effects/Lens.kt`, `internal/Shaders.kt`, `effects/ColorFilter.kt` -- ported
+   from #126 item 4 (branch `perf/vibrancy-in-lens`). `lens(..., saturation)` applies saturation
+   inside the refraction shader, so `vibrancy()` + `lens()` costs one render pass less; it falls
+   back to `colorControls(saturation)` when the lens cannot run (API < 33, zero refraction). The
+   old four-argument `lens` stays as a hidden overload. Kototoro's `SharedLiquidGlassSurface` and
+   `SwipeableFilterChip` pass `saturation = 1.5f` instead of calling `vibrancy()` when a lens runs.
+
+   Status for 3 and 4 (Android 17 device, iOS interface style, debug build, A/B against the same
+   build without them, two interleaved rounds): bottom-tab switching GPU p99 17 -> 12-14 ms, p90
+   10 -> 9 ms; home scrolling unchanged. Glass over vivid covers differs by at most 21/255 (the
+   saturation now runs after the blur instead of before); the top bar differs by at most 3/255.

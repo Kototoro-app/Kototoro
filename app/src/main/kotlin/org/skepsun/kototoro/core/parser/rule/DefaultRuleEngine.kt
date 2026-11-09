@@ -3,6 +3,7 @@ package org.skepsun.kototoro.core.parser.rule
 import com.jayway.jsonpath.JsonPath
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import org.skepsun.kototoro.core.jsonsource.SecurityValidator
 import us.codecraft.xsoup.Xsoup
 import java.net.URI
 import javax.inject.Inject
@@ -298,7 +299,7 @@ class DefaultRuleEngine @Inject constructor(
 
         // Apply regex replacement if specified (Legado ## format)
         val afterReplacement = if (rule.regexReplacement != null) {
-            result.replace(rule.regexReplacement, "")
+            SecurityValidator.replaceBounded(rule.regexReplacement, result, "") ?: ""
         } else {
             result
         }
@@ -464,7 +465,7 @@ class DefaultRuleEngine @Inject constructor(
         val (pattern, modifiers) = extractModifiers(withoutPrefix)
 
         // Validate regex using SecurityValidator
-        val validation = org.skepsun.kototoro.core.jsonsource.SecurityValidator.validateRegex(pattern)
+        val validation = SecurityValidator.validateRegex(pattern)
         if (!validation.isValid) {
             throw IllegalArgumentException("Invalid regex pattern: ${validation.errors.joinToString(", ")}")
         }
@@ -567,7 +568,7 @@ class DefaultRuleEngine @Inject constructor(
         val regex = rule.regex ?: return ""
         val text = element.html()
 
-        val match = regex.find(text) ?: return ""
+        val match = SecurityValidator.findBounded(regex, text) ?: return ""
 
         // If there are capture groups, return the first one
         // Otherwise return the entire match
@@ -756,7 +757,7 @@ class DefaultRuleEngine @Inject constructor(
                     RuleType.REGEX -> {
                         // For regex, apply to the current result string
                         val regex = chainedRule.regex ?: continue
-                        val match = regex.find(currentResult) ?: ""
+                        val match = SecurityValidator.findBounded(regex, currentResult) ?: ""
                         if (match is MatchResult) {
                             if (match.groupValues.size > 1) match.groupValues[1] else match.value
                         } else {

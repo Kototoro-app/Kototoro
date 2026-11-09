@@ -18,7 +18,8 @@ internal val LocalDesktopBackdrop = staticCompositionLocalOf<Backdrop?> { null }
 /** Resolves host style/window availability; both platforms call the Android glass draw implementation in core-ui. */
 @Composable
 internal fun DesktopControlSurface(modifier: Modifier, shape: Shape, content: @Composable BoxScope.() -> Unit) {
-    val backdrop = LocalDesktopBackdrop.current
+    // The page under a floating bar first (FloatingTopBarScaffold), so the glass refracts what scrolls beneath it.
+    val backdrop = org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop.current ?: LocalDesktopBackdrop.current
     if (LocalDesktopInterfaceStyle.current == DesktopInterfaceStyle.IOS && backdrop != null) {
         SharedLiquidGlassSurface(backdrop, emptyGlassTuningState(), GlassStyle(.82f, .24f, 0.dp, 4.dp), shape,
             GlassComponentRole.PillControl, modifier = modifier, content = content)

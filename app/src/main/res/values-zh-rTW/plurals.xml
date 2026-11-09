@@ -42,4 +42,10 @@
     <plurals name="history_grouped_sources">
         <item quantity="other">%1$d 個來源</item>
     </plurals>
+    <plurals name="tracker_failing_titles_summary">
+        <item quantity="other">%1$d 部作品連續檢查失敗 %2$d 次以上</item>
+    </plurals>
+    <plurals name="tracker_failed_in_a_row">
+        <item quantity="other">連續失敗 %1$d 次</item>
+    </plurals>
 </resources>

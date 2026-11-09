@@ -24,6 +24,7 @@ import org.skepsun.kototoro.space.domain.SpaceRoutePreferencesRepository
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
+import org.skepsun.kototoro.list.ui.compose.GridSizeRange
 
 @Singleton
 class SpaceRoutePreferencesController @Inject constructor(
@@ -103,7 +104,7 @@ class SpaceRoutePreferencesController @Inject constructor(
                 }
                 currentSpace.value = spaceId
                 settings.listMode = preferences.listMode.toListModeOr(defaults.listMode.toListModeOr(ListMode.GRID))
-                settings.gridSize = preferences.gridSize.coerceIn(50, 150)
+                settings.gridSize = preferences.gridSize.coerceIn(GridSizeRange)
                 settings.historySortOrder = preferences.historySortOrder.toSortOrderOr(ListSortOrder.LAST_READ)
                 settings.allFavoritesSortOrder = preferences.favoritesSortOrder.toSortOrderOr(ListSortOrder.NEWEST)
                 globalFavoritesState.setSelectedSourceTags(SourceTag.fromIds(preferences.sourceTags))

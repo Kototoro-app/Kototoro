@@ -39,6 +39,11 @@ class FeedMenuProvider(
             true
         }
 
+        R.id.action_mark_all_read -> {
+            viewModel.markAllAsRead()
+            true
+        }
+
         R.id.action_clear_feed -> {
             val checkListener = RememberCheckListener(true)
             buildAlertDialog(context, isCentered = true) {

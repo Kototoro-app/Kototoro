@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.desktop.app
 
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -38,7 +39,7 @@ internal fun DesktopSourcePreferences(controller: DesktopController, state: Desk
     var dialog by remember(screen.source.name) { mutableStateOf<SourcePreferenceDialog?>(null) }
     val rows = remember(sections) { sections.flatMap { it.rows }.associateBy(SourcePreferenceNode::id) }
     Column(
-        modifier = Modifier.widthIn(max = 760.dp).fillMaxWidth().verticalScroll(rememberScrollState()),
+        modifier = Modifier.widthIn(max = 760.dp).fillMaxWidth().verticalScroll(rememberScrollState()).padding(top = LocalDesktopTopInset.current),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         OutlinedButton({ controller.browse() }, enabled = enabled) { Text(desktopText("browse.backToBrowse")) }

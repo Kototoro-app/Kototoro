@@ -104,6 +104,7 @@ fun AppearanceSettingsRoute(
     onOpenDetailsSettings: () -> Unit = {},
     onOpenHomeSettings: () -> Unit = {},
     onOpenInterfaceSettings: () -> Unit = {},
+    onOpenImmersiveSettings: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
@@ -173,6 +174,12 @@ fun AppearanceSettingsRoute(
     val tabletListPreviewMode = settings.observeAsState(AppSettings.KEY_TABLET_LIST_PREVIEW_MODE) {
         tabletListPreviewMode
     }.value
+    val isTabletNavBarOnLeft = settings.observeAsState(AppSettings.KEY_TABLET_NAV_BAR_LEFT) {
+        isTabletNavBarOnLeft
+    }.value
+    val isTabletNavLabelsVisible = settings.observeAsState(AppSettings.KEY_TABLET_NAV_LABELS) {
+        isTabletNavLabelsVisible
+    }.value
     val isTabletListFilterPanelDefaultOpen = settings.observeAsState(
         AppSettings.KEY_TABLET_LIST_FILTER_PANEL_DEFAULT,
     ) { isTabletListFilterPanelDefaultOpen }.value
@@ -233,6 +240,14 @@ fun AppearanceSettingsRoute(
         settings.observeAsState(AppSettings.KEY_NAV_ACCENT_SAMPLE_BLUE) { isSampleBlueNavAccentEnabled }.value
     val glassImmersiveStrengthPercent =
         settings.observeAsState(AppSettings.KEY_GLASS_IMMERSIVE_STRENGTH) { glassImmersiveStrengthPercent }.value
+    val glassEdgeBlurRadiusDp =
+        settings.observeAsState(AppSettings.KEY_GLASS_EDGE_BLUR) { glassEdgeBlurRadiusDp }.value
+    val isGlassImmersiveTopEnabled =
+        settings.observeAsState(AppSettings.KEY_GLASS_IMMERSIVE_TOP) { isGlassImmersiveTopEnabled }.value
+    val isGlassImmersiveBottomEnabled =
+        settings.observeAsState(AppSettings.KEY_GLASS_IMMERSIVE_BOTTOM) { isGlassImmersiveBottomEnabled }.value
+    val glassBlurQuality =
+        settings.observeAsState(AppSettings.KEY_GLASS_BLUR_QUALITY) { glassBlurQuality }.value
     val isGlassEffectEnabled =
         settings.observeAsState(AppSettings.KEY_GLASS_EFFECT_ENABLED) { isGlassEffectEnabled }.value
     // Glass Finish Tuner state (Global + 5 role scopes) and its live controller.
@@ -412,6 +427,8 @@ fun AppearanceSettingsRoute(
         isQuickFilterEnabled = isQuickFilterEnabled,
         tabletListPreviewMode = tabletListPreviewMode,
         isTabletListFilterPanelDefaultOpen = isTabletListFilterPanelDefaultOpen,
+        isTabletNavBarOnLeft = isTabletNavBarOnLeft,
+        isTabletNavLabelsVisible = isTabletNavLabelsVisible,
         progressIndicatorMode = progressIndicatorMode,
         cardProgressStyle = cardProgressStyle,
         topBarStyle = topBarStyle,
@@ -457,6 +474,10 @@ fun AppearanceSettingsRoute(
         isGlassEffectEnabled = isGlassEffectEnabled,
         isReducedVisualEffectsEnabled = isReducedVisualEffectsEnabled,
         glassImmersiveStrengthPercent = glassImmersiveStrengthPercent,
+        glassEdgeBlurRadiusDp = glassEdgeBlurRadiusDp,
+        isGlassImmersiveTopEnabled = isGlassImmersiveTopEnabled,
+        isGlassImmersiveBottomEnabled = isGlassImmersiveBottomEnabled,
+        glassBlurQuality = glassBlurQuality,
     )
 
     AppearanceSettingsScreen(
@@ -507,6 +528,8 @@ fun AppearanceSettingsRoute(
         onQuickFilterChange = { settings.isQuickFilterEnabled = it },
         onTabletListPreviewModeChange = { settings.tabletListPreviewMode = it },
         onTabletListFilterPanelDefaultChange = { settings.isTabletListFilterPanelDefaultOpen = it },
+        onTabletNavBarOnLeftChange = { settings.isTabletNavBarOnLeft = it },
+        onTabletNavLabelsVisibleChange = { settings.isTabletNavLabelsVisible = it },
         onProgressIndicatorModeChange = { settings.progressIndicatorMode = it },
         onCardProgressStyleChange = { settings.cardProgressStyle = it },
         onTopBarStyleChange = { settings.topBarStyle = it },
@@ -557,6 +580,10 @@ fun AppearanceSettingsRoute(
         onGlassEffectEnabledChange = { settings.isGlassEffectEnabled = it },
         onReducedVisualEffectsChange = { settings.isReducedVisualEffectsEnabled = it },
         onImmersiveStrengthChange = { settings.glassImmersiveStrengthPercent = it },
+        onEdgeBlurRadiusChange = { settings.glassEdgeBlurRadiusDp = it },
+        onImmersiveTopChange = { settings.isGlassImmersiveTopEnabled = it },
+        onImmersiveBottomChange = { settings.isGlassImmersiveBottomEnabled = it },
+        onBlurQualityChange = { settings.glassBlurQuality = it },
         glassTuning = glassTuning,
         onGlassTuningSetValue = { scope, param, value ->
             glassTuningController.setValue(scope, param, value)
@@ -632,6 +659,7 @@ fun AppearanceSettingsRoute(
         onDetailsSettingsClick = onOpenDetailsSettings,
         onHomeSettingsClick = onOpenHomeSettings,
         onInterfaceSettingsClick = onOpenInterfaceSettings,
+        onImmersiveSettingsClick = onOpenImmersiveSettings,
     )
 }
 

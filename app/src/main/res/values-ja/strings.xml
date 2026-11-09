@@ -440,6 +440,11 @@
     <string name="color_white">ホワイト</string>
     <string name="color_black">ブラック</string>
     <string name="tracker_wifi_only_summary">従量制ネットワーク接続を使用して新しいチャプターをチェックしないでください</string>
+    <string name="tracker_skip_completed">完結済みの作品をスキップ</string>
+    <string name="tracker_skip_completed_summary">ソースで完結と表示されている作品をチェックしない</string>
+    <string name="tracker_mark_duplicates_read">重複した章を既読にする</string>
+    <string name="tracker_mark_duplicates_read_summary">既読の章と同じ番号の新しい章を既読として扱う</string>
+    <string name="tracker_progress_summary">新しいチャプター：%1$d · 失敗：%2$d · スキップ：%3$d</string>
     <string name="manage_categories">カテゴリーの管理</string>
     <string name="captcha_required_summary">%sを正しく動作させるには、キャプチャを解決する必要があります</string>
     <string name="languages">言語</string>
@@ -809,6 +814,8 @@
     <string name="sources_disabled">無効なソース</string>
     <string name="disable_connectivity_check">接続チェックを無効にする</string>
     <string name="tracker_debug_info">新しいチャプターログの確認</string>
+    <string name="tracker_failing_titles">チェックに失敗し続けている作品</string>
+    <string name="tracker_next_check">次回のチェック %s</string>
     <string name="tracker_debug_info_summary">新規チャプター向けバックグラウンドチェックに関するデバッグ情報</string>
     <string name="_new">新しい</string>
     <string name="image_server">優先画像サーバ</string>
@@ -1223,7 +1230,7 @@
     <string name="extension_install_mode_local_apk">インストールモード：ローカルAPK</string>
     <string name="extension_install_mode_system">インストールモード：システム</string>
     <string name="extension_management">拡張機能管理</string>
-    <string name="extension_management_summary">リポジトリ、JSONソース、APK拡張機能、JARパーサーを管理</string>
+    <string name="extension_management_summary">ソースの有効化とテスト、リポジトリと拡張パッケージの管理</string>
     <string name="extension_repo_added_message">%1$s を追加しました</string>
     <string name="extension_repo_already_exists_message">リポジトリは既に存在します</string>
     <string name="extension_repo_count">%d 個のリポジトリ</string>
@@ -2020,8 +2027,7 @@
     <string name="show_broken_sources_summary">破損とマークされたパーサー拡張機能の表示と使用を許可</string>
     <string name="show_extensions_in_grid">拡張機能を2列で表示</string>
     <string name="show_extensions_in_list">拡張機能を1列で表示</string>
-    <string name="show_extra_info_on_cards">カードに追加情報を表示</string>
-    <string name="show_extra_info_on_cards_summary">コンテンツカードに評価、ステータス、話数、タグを表示</string>
+    <string name="show_extra_info_on_cards">追加情報</string>
     <string name="show_less">表示を減らす</string>
     <string name="show_more">もっと表示</string>
     <string name="show_quick_filters_summary">特定のパラメータでマンガリストをフィルタリングする機能を提供します</string>
@@ -2131,6 +2137,7 @@
     <string name="test_success">テスト成功</string>
     <string name="thumbnails_cache">サムネイルキャッシュ</string>
     <string name="thumbnails_cache_limit">サムネイルキャッシュ上限</string>
+    <string name="chapter_thumbnails_cache_limit">チャプターサムネイルキャッシュ上限</string>
     <string name="title">タイトル</string>
     <string name="total_chapters">全チャプター数</string>
     <string name="tracking_accounts">トラッキングアカウント</string>

@@ -618,4 +618,21 @@ class SyncExtensionPackage(
     @SerialName("file_name") val fileName: String? = null,
     @SerialName("payload_base64") val payloadBase64: String? = null,
     @SerialName("is_payload_included") val isPayloadIncluded: Boolean = false,
-)
+    /** When the package file was installed on the device that reported it; 0 when unknown (older clients). */
+    @SerialName("installed_at") val installedAt: Long = 0L,
+    /** Non-zero marks a tombstone: the user removed the package at this time and it must not be restored. */
+    @SerialName("deleted_at") val deletedAt: Long = 0L,
+) {
+    val isDeleted: Boolean
+        get() = deletedAt > 0L
+
+    companion object {
+
+        fun tombstone(kind: String, packageId: String, deletedAt: Long) = SyncExtensionPackage(
+            packageId = packageId,
+            name = packageId,
+            kind = kind,
+            deletedAt = deletedAt,
+        )
+    }
+}

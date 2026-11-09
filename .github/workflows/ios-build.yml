@@ -150,6 +150,7 @@ jobs:
         env:
           MARKETING: ${{ steps.version.outputs.marketing }}
           BUILD_NUMBER: ${{ steps.version.outputs.build }}
+          KOTOTORO_UPDATE_CHANNEL: ${{ inputs.channel }}
         run: iosApp/Scripts/package-ipa.sh --jvm "$MARKETING" "$BUILD_NUMBER"
 
       - name: Verify bundled JVM host startup

@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.desktop.app
 
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -39,7 +40,7 @@ internal fun DesktopDownloadSettingsPage(controller: DesktopController, state: D
     val settings by controller.downloadSettings.collectAsState()
     val active = !state.busy
     Column(
-        modifier = Modifier.widthIn(max = 760.dp).fillMaxWidth().verticalScroll(rememberScrollState()),
+        modifier = Modifier.widthIn(max = 760.dp).fillMaxWidth().verticalScroll(rememberScrollState()).padding(top = LocalDesktopTopInset.current),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         DownloadSpeedSettingsContent(

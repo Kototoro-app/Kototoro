@@ -19,12 +19,18 @@ import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.TrackerDownloadStrategy
 import org.skepsun.kototoro.core.ui.compose.KototoroSnackbarHost
+import androidx.compose.ui.res.pluralStringResource
+import org.skepsun.kototoro.tracker.domain.PERSISTENT_FAILURE_COUNT
 
 data class TrackerSettingsUiState(
     val isTrackerEnabled: Boolean,
     val isTrackerWifiOnly: Boolean,
     val trackerFrequencyFactor: Float,
     val trackSources: Set<String>,
+    val isTrackerSkipCompleted: Boolean,
+    val isTrackerMarkDuplicatesRead: Boolean,
+    /** Tracked works that keep failing their checks; their row opens the check log. */
+    val failingCount: Int = 0,
     val categoriesSummary: String,
     val isCategoriesEnabled: Boolean,
     val notificationsSummary: String,
@@ -46,6 +52,8 @@ fun TrackerSettingsScreen(
     onTrackerWifiOnlyChange: (Boolean) -> Unit,
     onTrackerFrequencyChange: (Float) -> Unit,
     onTrackSourcesChange: (Set<String>) -> Unit,
+    onTrackerSkipCompletedChange: (Boolean) -> Unit,
+    onTrackerMarkDuplicatesReadChange: (Boolean) -> Unit,
     onTrackCategoriesClick: () -> Unit,
     onNotificationsSettingsClick: () -> Unit,
     onTrackerDownloadStrategyChange: (TrackerDownloadStrategy) -> Unit,
@@ -115,6 +123,26 @@ fun TrackerSettingsScreen(
                         )
                     }
                     item {
+                        SettingsSwitchPreference(
+                            title = stringResource(R.string.tracker_skip_completed),
+                            iconRes = R.drawable.ic_check,
+                            checked = state.isTrackerSkipCompleted,
+                            summary = stringResource(R.string.tracker_skip_completed_summary),
+                            enabled = state.isTrackerEnabled,
+                            onCheckedChange = onTrackerSkipCompletedChange,
+                        )
+                    }
+                    item {
+                        SettingsSwitchPreference(
+                            title = stringResource(R.string.tracker_mark_duplicates_read),
+                            iconRes = R.drawable.ic_check,
+                            checked = state.isTrackerMarkDuplicatesRead,
+                            summary = stringResource(R.string.tracker_mark_duplicates_read_summary),
+                            enabled = state.isTrackerEnabled,
+                            onCheckedChange = onTrackerMarkDuplicatesReadChange,
+                        )
+                    }
+                    item {
                         SettingsActionPreference(
                             title = stringResource(R.string.favourites_categories),
                             iconRes = R.drawable.ic_select_group,
@@ -146,6 +174,22 @@ fun TrackerSettingsScreen(
             }
             item(key = "debug") {
                 SettingsPreferenceGroup(title = debugTitle) {
+                    if (state.failingCount > 0) {
+                        item {
+                            SettingsActionPreference(
+                                title = stringResource(R.string.tracker_failing_titles),
+                                iconRes = R.drawable.ic_alert_outline,
+                                summary = pluralStringResource(
+                                    R.plurals.tracker_failing_titles_summary,
+                                    state.failingCount,
+                                    state.failingCount,
+                                    PERSISTENT_FAILURE_COUNT,
+                                ),
+                                enabled = state.isTrackerEnabled,
+                                onClick = onTrackerDebugClick,
+                            )
+                        }
+                    }
                     item {
                         SettingsActionPreference(
                             title = stringResource(R.string.tracker_debug_info),

@@ -21,6 +21,13 @@ interface ContentRepository {
     enum class DetailsFetchMode {
         ALLOW_CACHE,
         FORCE_REFRESH,
+
+        /**
+         * Fresh chapters for a title whose details are already known: sources that can fetch the chapter list
+         * alone keep the given details and skip the details request. Nothing is read from or written to the
+         * details cache, since the result's details may be the caller's stored copy rather than the source's.
+         */
+        CHAPTERS_REFRESH,
     }
 
     enum class ListPagingMode {
@@ -51,6 +58,12 @@ interface ContentRepository {
     suspend fun getDetails(manga: Content): Content
 
     suspend fun getDetails(manga: Content, fetchMode: DetailsFetchMode): Content = getDetails(manga)
+
+    /**
+     * True when [DetailsFetchMode.CHAPTERS_REFRESH] really skips the details request; otherwise it refreshes the
+     * details as well, and a caller needs no second request for them.
+     */
+    val refreshesChaptersAlone: Boolean get() = false
 
     suspend fun getPages(chapter: ContentChapter, nextChapterUrl: String? = null): List<ContentPage>
 

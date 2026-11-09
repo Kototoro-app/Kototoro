@@ -27,6 +27,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.ui.draw.clip
@@ -204,6 +205,7 @@ fun UnifiedSourcesActionCapsule(
     onReorderClick: (() -> Unit)? = null,
     reorderEnabled: Boolean = true,
     onGroupsClick: (() -> Unit)? = null,
+    onSettingsClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val tokens = LocalInterfaceStyleTokens.current
@@ -231,54 +233,6 @@ fun UnifiedSourcesActionCapsule(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center,
         ) {
-            // Reorder and groups share one overflow menu so the capsule stays narrow and the
-            // tab capsule next to it keeps enough room.
-            var menuExpanded by remember { mutableStateOf(false) }
-            val hasMenu = onReorderClick != null || onGroupsClick != null
-            Box {
-                IconButton(
-                    onClick = { menuExpanded = true },
-                    enabled = hasMenu,
-                    modifier = Modifier.size(tokens.topBarButtonSize - 4.dp).tvIconButtonRing(),
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.MoreVert,
-                        contentDescription = stringResource(R.string.more),
-                        modifier = Modifier.size(tokens.topBarIconSize),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                DropdownMenu(
-                    expanded = menuExpanded,
-                    onDismissRequest = { menuExpanded = false },
-                ) {
-                    TvDropdownMenuItem(
-                        text = { Text(stringResource(R.string.reorder)) },
-                        enabled = onReorderClick != null && reorderEnabled,
-                        leadingIcon = {
-                            Icon(
-                                painter = rememberSafePainter(R.drawable.ic_reorder_handle),
-                                contentDescription = null,
-                            )
-                        },
-                        onClick = {
-                            menuExpanded = false
-                            onReorderClick?.invoke()
-                        },
-                    )
-                    TvDropdownMenuItem(
-                        text = { Text(stringResource(R.string.source_groups_title)) },
-                        enabled = onGroupsClick != null,
-                        leadingIcon = {
-                            Icon(imageVector = Icons.Outlined.Folder, contentDescription = null)
-                        },
-                        onClick = {
-                            menuExpanded = false
-                            onGroupsClick?.invoke()
-                        },
-                    )
-                }
-            }
             // Search button
             Box(
                 modifier = Modifier
@@ -341,6 +295,67 @@ fun UnifiedSourcesActionCapsule(
                                 modifier = Modifier.padding(horizontal = 3.5.dp, vertical = 0.5.dp),
                             )
                         }
+                    }
+                }
+            }
+
+            // Reorder, groups and settings share one overflow menu so the capsule stays narrow and the
+            // tab capsule next to it keeps enough room. It is the trailing button, as overflow menus are.
+            var menuExpanded by remember { mutableStateOf(false) }
+            val hasMenu = onReorderClick != null || onGroupsClick != null || onSettingsClick != null
+            Box {
+                IconButton(
+                    onClick = { menuExpanded = true },
+                    enabled = hasMenu,
+                    modifier = Modifier.size(tokens.topBarButtonSize - 4.dp).tvIconButtonRing(),
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.MoreVert,
+                        contentDescription = stringResource(R.string.more),
+                        modifier = Modifier.size(tokens.topBarIconSize),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                DropdownMenu(
+                    expanded = menuExpanded,
+                    onDismissRequest = { menuExpanded = false },
+                ) {
+                    TvDropdownMenuItem(
+                        text = { Text(stringResource(R.string.reorder)) },
+                        enabled = onReorderClick != null && reorderEnabled,
+                        leadingIcon = {
+                            Icon(
+                                painter = rememberSafePainter(R.drawable.ic_reorder_handle),
+                                contentDescription = null,
+                            )
+                        },
+                        onClick = {
+                            menuExpanded = false
+                            onReorderClick?.invoke()
+                        },
+                    )
+                    TvDropdownMenuItem(
+                        text = { Text(stringResource(R.string.source_groups_title)) },
+                        enabled = onGroupsClick != null,
+                        leadingIcon = {
+                            Icon(imageVector = Icons.Outlined.Folder, contentDescription = null)
+                        },
+                        onClick = {
+                            menuExpanded = false
+                            onGroupsClick?.invoke()
+                        },
+                    )
+                    if (onSettingsClick != null) {
+                        TvDropdownMenuItem(
+                            text = { Text(stringResource(R.string.extension_settings)) },
+                            leadingIcon = {
+                                Icon(imageVector = Icons.Outlined.Settings, contentDescription = null)
+                            },
+                            onClick = {
+                                menuExpanded = false
+                                onSettingsClick()
+                            },
+                        )
                     }
                 }
             }

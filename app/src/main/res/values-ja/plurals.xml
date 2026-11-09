@@ -27,4 +27,10 @@
     <plurals name="minutes">
         <item quantity="other">%1$d分</item>
     </plurals>
+    <plurals name="tracker_failing_titles_summary">
+        <item quantity="other">%1$d 件の作品が %2$d 回以上連続でチェックに失敗しています</item>
+    </plurals>
+    <plurals name="tracker_failed_in_a_row">
+        <item quantity="other">%1$d 回連続で失敗</item>
+    </plurals>
 </resources>

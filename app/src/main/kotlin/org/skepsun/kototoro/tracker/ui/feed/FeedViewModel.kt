@@ -285,12 +285,6 @@ class FeedViewModel @Inject constructor(
         val chapterTitle: String,
     )
 
-    val showAllUpdates = settings.observeAsStateFlow(
-        scope = viewModelScope + Dispatchers.Default,
-        key = AppSettings.KEY_SHOW_ALL_UPDATES,
-        valueProducer = { showAllUpdates },
-    )
-
     private val feedFilters = quickFilter.appliedOptions.combineWithSettings()
         .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, emptySet())
 
@@ -325,7 +319,6 @@ class FeedViewModel @Inject constructor(
 
     val content: StateFlow<List<ListModel>> = combine(
         feedSnapshotStore.observe(),
-        showAllUpdates,
         feedLimitFlow,
         quickFilter.appliedOptions,
         feedScope,
@@ -336,13 +329,12 @@ class FeedViewModel @Inject constructor(
     ) { values: Array<Any?> ->
         buildFeedContent(
             snapshot = values[0] as org.skepsun.kototoro.tracker.domain.feed.FeedSnapshot,
-            showAll = values[1] as Boolean,
-            limit = values[2] as Int,
-            filters = values[3] as Set<ListFilterOption>,
-            scope = values[4] as FeedScopeParams,
-            skipNsfw = values[5] as Boolean,
-            tagBlacklist = values[6] as GlobalTagBlacklist,
-            query = values[8] as String,
+            limit = values[1] as Int,
+            filters = values[2] as Set<ListFilterOption>,
+            scope = values[3] as FeedScopeParams,
+            skipNsfw = values[4] as Boolean,
+            tagBlacklist = values[5] as GlobalTagBlacklist,
+            query = values[7] as String,
         )
     }.stateIn(
         viewModelScope + Dispatchers.Default,
@@ -369,7 +361,6 @@ class FeedViewModel @Inject constructor(
 
     private fun buildFeedContent(
         snapshot: org.skepsun.kototoro.tracker.domain.feed.FeedSnapshot,
-        showAll: Boolean,
         limit: Int,
         filters: Set<ListFilterOption>,
         scope: FeedScopeParams,
@@ -380,7 +371,6 @@ class FeedViewModel @Inject constructor(
         val derived = org.skepsun.kototoro.tracker.domain.feed.FeedDeriver.derive(
             org.skepsun.kototoro.tracker.domain.feed.FeedDeriver.Input(
                 snapshot = snapshot,
-                showAllUpdates = showAll,
                 feedLimit = limit,
                 filters = filters.toCriteria(),
                 excludedNsfw = skipNsfw,
@@ -477,10 +467,6 @@ class FeedViewModel @Inject constructor(
         settings.isFeedHeaderVisible = value
     }
 
-    fun setShowAllUpdates(value: Boolean) {
-        settings.showAllUpdates = value
-    }
-
     fun onItemClick(item: FeedItem) {
         launchJob(Dispatchers.Default, CoroutineStart.ATOMIC) {
             item.logIds.filter { it > 0L }.forEach { repository.markAsRead(it) }
@@ -498,6 +484,13 @@ class FeedViewModel @Inject constructor(
                     repository.markAsRead(id)
                 }
             }
+        }
+    }
+
+    /** Every unread update and new-chapter counter at once; history and the timeline stay. */
+    fun markAllAsRead() {
+        launchJob(Dispatchers.Default) {
+            repository.markAllUpdatesAsRead()
         }
     }
 

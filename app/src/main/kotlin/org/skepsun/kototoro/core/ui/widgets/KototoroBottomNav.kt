@@ -60,7 +60,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.flow.StateFlow
 import org.skepsun.kototoro.core.ui.adaptive.TabletNavigationDestination
-import org.skepsun.kototoro.core.ui.adaptive.TabletNavigationRail
+import org.skepsun.kototoro.core.ui.adaptive.TabletVerticalBar
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.NavIndicatorStyle
@@ -96,6 +96,9 @@ import com.kyant.backdrop.shadow.InnerShadow
 import coil3.compose.rememberAsyncImagePainter
 import kotlinx.coroutines.delay
 
+/** Gap between the tablet's vertical bar and the screen edges. */
+internal val TabletVerticalBarEdgeGap = 10.dp
+
 data class BadgeInfo(val number: Int = 0, val isVisible: Boolean = false)
 
 data class BottomNavState(
@@ -116,6 +119,8 @@ private data class BottomNavPrefs(
     val navHeight: Int,
     val navFloatingHeight: Int,
     val isNavCapsuleEnabled: Boolean,
+    val isTabletNavBarOnLeft: Boolean,
+    val isTabletNavLabelsVisible: Boolean,
 )
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -125,12 +130,8 @@ fun KototoroBottomNav(
     onItemSelected: (Int) -> Unit,
     onItemReselected: (Int) -> Unit,
     railHeaderContent: (@Composable () -> Unit)? = null,
+    railActionsContent: (@Composable () -> Unit)? = null,
     adjacentAction: (@Composable () -> Unit)? = null,
-    showContinueReadingButton: Boolean = false,
-    onContinueReadingClick: () -> Unit = {},
-    continueReadingIconRes: Int = R.drawable.ic_read,
-    continueReadingContentDescriptionRes: Int = R.string._continue,
-    continueReadingCoverModel: Any? = null,
 ) {
     val navState by state.collectAsStateWithLifecycle()
     val clickPulses = remember { mutableStateMapOf<Int, Int>() }
@@ -150,6 +151,8 @@ fun KototoroBottomNav(
         AppSettings.KEY_NAV_HEIGHT,
         AppSettings.KEY_NAV_FLOATING_HEIGHT,
         AppSettings.KEY_NAV_CAPSULE,
+        AppSettings.KEY_TABLET_NAV_BAR_LEFT,
+        AppSettings.KEY_TABLET_NAV_LABELS,
     ) {
         BottomNavPrefs(
             isFloating = isNavFloating,
@@ -160,6 +163,8 @@ fun KototoroBottomNav(
             navHeight = navHeight,
             navFloatingHeight = navFloatingHeight,
             isNavCapsuleEnabled = isNavCapsuleEnabled,
+            isTabletNavBarOnLeft = isTabletNavBarOnLeft,
+            isTabletNavLabelsVisible = isTabletNavLabelsVisible,
         )
     }
     val isFloating = prefs.isFloating
@@ -201,8 +206,6 @@ fun KototoroBottomNav(
     }
     val systemBarsPadding = WindowInsets.systemBarsIgnoringVisibility.asPaddingValues()
     val statusBarTopPadding = WindowInsets.statusBarsIgnoringVisibility.asPaddingValues().calculateTopPadding()
-    val railStartInset = systemBarsPadding.calculateStartPadding(layoutDirection)
-    val railEndInset = systemBarsPadding.calculateEndPadding(layoutDirection)
     val railBottomInset = systemBarsPadding.calculateBottomPadding()
 
     val targetAlpha = 0.84f
@@ -242,7 +245,6 @@ fun KototoroBottomNav(
     )
     val nonFloatingContentHorizontalPadding = 6.dp
     val nonFloatingTopPadding = 4.dp
-    val railWidth = navHeight.dp.coerceIn(80.dp, 160.dp)
 
     val navContainerStyle = if (isFloating) {
         GlassDefaults.bottomBarChromeStyle().copy(
@@ -256,42 +258,58 @@ fun KototoroBottomNav(
         )
     }
     if (useNavigationRail) {
-        Surface(
-            modifier = navBarModifier,
-            color = NavigationRailDefaults.ContainerColor,
-            contentColor = contentColorFor(NavigationRailDefaults.ContainerColor),
-            tonalElevation = 3.dp,
-        ) {
-            TabletNavigationRail(
-                destinations = activeItems.map { TabletNavigationDestination(it.id, stringResource(it.title)) },
-                selectedId = navState.selectedItemId,
-                onSelect = { id ->
-                    clickPulses[id] = (clickPulses[id] ?: 0) + 1
-                    onItemSelected(id)
-                },
-                onReselect = onItemReselected,
-                icon = { id, selected ->
-                    val item = activeItems.first { it.id == id }
-                    PremiumNavigationIcon(
-                        itemId = id, isSelected = selected, clickPulse = clickPulses[id] ?: 0,
-                        badge = navState.badges[id], contentDescription = stringResource(item.title),
-                        selectedTint = sampleAccent,
-                    )
-                },
-                modifier = Modifier.fillMaxHeight().width(railWidth),
-                contentPadding = PaddingValues(start = railStartInset, end = railEndInset,
-                    top = statusBarTopPadding, bottom = railBottomInset),
-                showLabels = showSelectedLabels,
-                selectedIconColor = sampleAccent ?: if (isIosStyle) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.onSecondaryContainer,
-                header = railHeaderContent,
-                resume = if (showContinueReadingButton) ({
-                    ContinueReadingRailButton(onClick = onContinueReadingClick, iconRes = continueReadingIconRes,
-                        contentDescriptionRes = continueReadingContentDescriptionRes, coverModel = continueReadingCoverModel,
-                        modifier = Modifier.padding(vertical = 4.dp))
-                }) else null,
-            )
+        // iPhone Duo's vertical bar: floating glass controls along one hardware edge instead of a
+        // full-height tinted rail. The bar stays on its physical side in right-to-left languages.
+        val barOnLeft = prefs.isTabletNavBarOnLeft
+        val edgeInset = if (barOnLeft) {
+            systemBarsPadding.calculateLeftPadding(layoutDirection)
+        } else {
+            systemBarsPadding.calculateRightPadding(layoutDirection)
         }
+        TabletVerticalBar(
+            destinations = activeItems.map { TabletNavigationDestination(it.id, stringResource(it.title)) },
+            selectedId = navState.selectedItemId,
+            onSelect = { id ->
+                clickPulses[id] = (clickPulses[id] ?: 0) + 1
+                onItemSelected(id)
+            },
+            onReselect = onItemReselected,
+            icon = { id, selected ->
+                val item = activeItems.first { it.id == id }
+                PremiumNavigationIcon(
+                    itemId = id, isSelected = selected, clickPulse = clickPulses[id] ?: 0,
+                    badge = navState.badges[id], contentDescription = stringResource(item.title),
+                    selectedTint = sampleAccent,
+                )
+            },
+            capsule = { capsuleModifier, content ->
+                MainNavBottomContainer(
+                    modifier = capsuleModifier,
+                    style = GlassDefaults.bottomBarChromeStyle().copy(
+                        containerAlpha = targetAlpha,
+                        borderAlpha = 0.10f,
+                    ),
+                    shape = Capsule(),
+                    content = content,
+                )
+            },
+            modifier = Modifier
+                .fillMaxHeight()
+                .absolutePadding(
+                    left = TabletVerticalBarEdgeGap + if (barOnLeft) edgeInset else 0.dp,
+                    right = TabletVerticalBarEdgeGap + if (barOnLeft) 0.dp else edgeInset,
+                    top = statusBarTopPadding + TabletVerticalBarEdgeGap,
+                    bottom = railBottomInset + TabletVerticalBarEdgeGap,
+                ),
+            showLabels = prefs.isTabletNavLabelsVisible,
+            selectedContentColor = sampleAccent ?: if (isIosStyle) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSecondaryContainer,
+            indicatorColor = if (isIosStyle) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)
+                else MaterialTheme.colorScheme.secondaryContainer,
+            header = railHeaderContent,
+            actions = railActionsContent,
+            accessory = adjacentAction,
+        )
     } else if (isFloating) {
         BoxWithConstraints(
             modifier = floatingNavModifier,
@@ -635,50 +653,6 @@ private fun Modifier.mainNavBackdrop(
         // visible through it while the capsule no longer captures the page.
         Modifier.background(selectionTint, shape)
     })
-}
-
-@Composable
-private fun ContinueReadingRailButton(
-    onClick: () -> Unit,
-    iconRes: Int,
-    contentDescriptionRes: Int,
-    coverModel: Any?,
-    modifier: Modifier = Modifier,
-) {
-    val shape = RoundedCornerShape(14.dp)
-    Surface(
-        onClick = onClick,
-        modifier = modifier
-            .size(52.dp),
-        color = MaterialTheme.colorScheme.secondaryContainer,
-        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-        shape = shape,
-    ) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center,
-        ) {
-            if (coverModel != null) {
-                Image(
-                    painter = rememberAsyncImagePainter(coverModel),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.matchParentSize(),
-                )
-                Box(
-                    modifier = Modifier
-                        .matchParentSize()
-                        .background(Color.Black.copy(alpha = 0.38f)),
-                )
-            }
-            Icon(
-                painter = painterResource(iconRes),
-                contentDescription = stringResource(contentDescriptionRes),
-                tint = if (coverModel != null) Color.White else LocalContentColor.current,
-                modifier = Modifier.size(22.dp),
-            )
-        }
-    }
 }
 
 @Composable

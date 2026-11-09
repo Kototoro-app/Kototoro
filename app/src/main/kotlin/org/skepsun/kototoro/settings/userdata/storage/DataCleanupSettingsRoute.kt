@@ -62,6 +62,14 @@ fun DataCleanupSettingsRoute(
         FileSize.BYTES.format(context, pagesCacheSize)
     }
 
+    val chapterThumbnailsSize by viewModel.cacheSizes[CacheDir.CHAPTER_THUMBS]!!
+        .collectAsStateWithLifecycle(initialValue = -1L)
+    val chapterThumbnailsSummary = if (chapterThumbnailsSize < 0) {
+        context.getString(R.string.computing_)
+    } else {
+        FileSize.BYTES.format(context, chapterThumbnailsSize)
+    }
+
     val novelCacheSize by viewModel.cacheSizes[CacheDir.NOVELS]!!.collectAsStateWithLifecycle(initialValue = -1L)
     val novelCacheSummary = if (novelCacheSize < 0) {
         context.getString(R.string.computing_)
@@ -127,6 +135,7 @@ fun DataCleanupSettingsRoute(
         thumbsCacheSummary = thumbsCacheSummary,
         faviconsCacheSummary = faviconsCacheSummary,
         pagesCacheSummary = pagesCacheSummary,
+        chapterThumbnailsSummary = chapterThumbnailsSummary,
         novelCacheSummary = novelCacheSummary,
         videoCacheSummary = videoCacheSummary,
         videoProxyCacheSummary = videoProxyCacheSummary,
@@ -144,6 +153,7 @@ fun DataCleanupSettingsRoute(
         isThumbsCacheEnabled = AppSettings.KEY_THUMBS_CACHE_CLEAR !in loadingKeys,
         isFaviconsCacheEnabled = AppSettings.KEY_FAVICONS_CACHE_CLEAR !in loadingKeys,
         isPagesCacheEnabled = AppSettings.KEY_PAGES_CACHE_CLEAR !in loadingKeys,
+        isChapterThumbnailsEnabled = AppSettings.KEY_CHAPTER_THUMBS_CACHE_CLEAR !in loadingKeys,
         isNovelCacheEnabled = AppSettings.KEY_NOVEL_CACHE_CLEAR !in loadingKeys,
         isVideoCacheEnabled = AppSettings.KEY_VIDEO_CACHE_CLEAR !in loadingKeys,
         isVideoProxyCacheEnabled = AppSettings.KEY_VIDEO_PROXY_CACHE_CLEAR !in loadingKeys,
@@ -173,6 +183,7 @@ fun DataCleanupSettingsRoute(
         onClearPagesCache = {
             viewModel.clearCache(AppSettings.KEY_PAGES_CACHE_CLEAR, CacheDir.PAGES)
         },
+        onClearChapterThumbnails = viewModel::clearChapterThumbnails,
         onClearNovelCache = {
             viewModel.clearCache(AppSettings.KEY_NOVEL_CACHE_CLEAR, CacheDir.NOVELS)
         },

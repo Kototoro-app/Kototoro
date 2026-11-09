@@ -17,6 +17,12 @@
 		app:showAsAction="never" />
 
 	<item
+		android:id="@+id/action_mark_all_read"
+		android:orderInCategory="50"
+		android:title="@string/updated_header_all_read"
+		app:showAsAction="never" />
+
+	<item
 		android:id="@+id/action_clear_feed"
 		android:orderInCategory="50"
 		android:title="@string/clear_feed"

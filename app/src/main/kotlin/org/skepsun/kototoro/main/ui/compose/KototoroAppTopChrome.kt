@@ -1,6 +1,5 @@
 package org.skepsun.kototoro.main.ui.compose
 
-import androidx.compose.animation.AnimatedVisibility
 import kotlin.math.roundToInt
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -23,7 +22,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.material3.MaterialTheme
-import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.compose.KototoroSlider
 import org.skepsun.kototoro.core.ui.adaptive.tvSliderDpad
 import org.skepsun.kototoro.core.ui.glass.resolveFallbackShadowElevation
@@ -42,7 +40,6 @@ import org.skepsun.kototoro.explore.ui.model.SourceTag
 import org.skepsun.kototoro.parsers.model.ContentType
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
@@ -64,6 +61,8 @@ internal fun BoxScope.MainTopChrome(
     heroTransitionInProgress: Boolean,
     isDetailsChromeTransitionPending: Boolean,
     visibleStartInsetDp: androidx.compose.ui.unit.Dp,
+    navigationInsetEdge: NavigationInsetEdge,
+    verticalBarActions: VerticalBarActionsHost?,
     effectiveTopBarOffset: Float,
     chromeAlpha: Float,
     onChromeFocusChanged: (Boolean) -> Unit = {},
@@ -132,7 +131,7 @@ internal fun BoxScope.MainTopChrome(
                 heroTransitionInProgress || isDetailsChromeTransitionPending
             },
         )
-        .padding(start = visibleStartInsetDp)
+        .navigationEdgePadding(navigationInsetEdge, visibleStartInsetDp)
         .offset { androidx.compose.ui.unit.IntOffset(0, effectiveTopBarOffset.toInt()) }
         .onFocusChanged { focusState -> onChromeFocusChanged(focusState.hasFocus) }
         .graphicsLayer { alpha = chromeAlpha }
@@ -147,6 +146,7 @@ internal fun BoxScope.MainTopChrome(
         val topContent: @Composable (Modifier) -> Unit = { contentModifier ->
             KototoroTopBar(
                 query = query,
+                verticalBarActions = verticalBarActions,
                 titleRes = titleRes,
                 titleText = titleText,
                 subtitleText = subtitleText,
@@ -257,91 +257,49 @@ private fun LayeredTopBarContainer(modifier: Modifier, content: @Composable () -
 
 @Composable
 internal fun FeedDisplayOptionsContent(
-    showAllUpdates: Boolean,
-    onShowAllUpdatesChanged: (Boolean) -> Unit,
     feedLimit: Int,
     onFeedLimitChanged: (Int) -> Unit,
-    onFeedRefresh: () -> Unit,
 ) {
     val jumps = remember { listOf(50, 100, 200, 500, 1000, 2000) }
     val limitIndex = remember(feedLimit) { jumps.indexOf(feedLimit).coerceAtLeast(0) }
     Column(
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp)
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 4.dp),
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = stringResource(R.string.show_all_updates),
+                text = stringResource(R.string.feed_visible_entries),
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f),
+                color = MaterialTheme.colorScheme.onSurface
             )
-            Switch(
-                checked = showAllUpdates,
-                onCheckedChange = onShowAllUpdatesChanged,
+            Text(
+                text = feedLimit.toString(),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary
             )
         }
-        Column(
+        KototoroSlider(
+            value = limitIndex.toFloat(),
+            onValueChange = { index ->
+                onFeedLimitChanged(jumps[index.roundToInt()])
+            },
+            valueRange = 0f..(jumps.size - 1).toFloat(),
+            steps = jumps.size - 2,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 8.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = stringResource(R.string.feed_visible_entries),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = feedLimit.toString(),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-            KototoroSlider(
-                value = limitIndex.toFloat(),
-                onValueChange = { index ->
-                    onFeedLimitChanged(jumps[index.roundToInt()])
-                },
-                valueRange = 0f..(jumps.size - 1).toFloat(),
-                steps = jumps.size - 2,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    // 遥控器上滑杆自己不带环也不会响应左右键，见 tvSliderDpad（手机上是 no-op）。
-                    .tvSliderDpad(
-                        value = limitIndex.toFloat(),
-                        valueRange = 0f..(jumps.size - 1).toFloat(),
-                        onValueChange = { index -> onFeedLimitChanged(jumps[index.roundToInt()]) },
-                        steps = jumps.size - 2,
-                    ),
-            )
-        }
-        AnimatedVisibility(visible = showAllUpdates) {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Text(
-                    text = stringResource(R.string.feed_behavior_description),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                TvTextButton(
-                    onClick = onFeedRefresh,
-                    modifier = Modifier.align(Alignment.End),
-                ) {
-                    Text(text = stringResource(R.string.trigger_update_now))
-                }
-            }
-        }
+                // 遥控器上滑杆自己不带环也不会响应左右键，见 tvSliderDpad（手机上是 no-op）。
+                .tvSliderDpad(
+                    value = limitIndex.toFloat(),
+                    valueRange = 0f..(jumps.size - 1).toFloat(),
+                    onValueChange = { index -> onFeedLimitChanged(jumps[index.roundToInt()]) },
+                    steps = jumps.size - 2,
+                ),
+        )
     }
 }
 
@@ -401,11 +359,8 @@ private fun MainSelectionTopChrome(
 private fun FeedDisplayOptionsContentPreview() {
     KototoroTheme {
         FeedDisplayOptionsContent(
-            showAllUpdates = true,
-            onShowAllUpdatesChanged = {},
             feedLimit = 100,
             onFeedLimitChanged = {},
-            onFeedRefresh = {},
         )
     }
 }

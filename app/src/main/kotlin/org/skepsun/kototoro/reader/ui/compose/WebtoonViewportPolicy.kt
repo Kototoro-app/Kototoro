@@ -72,14 +72,25 @@ internal data class WebtoonVisibleItem(
     val sizePx: Int,
 )
 
-internal fun resolveLastEndVisibleWebtoonPageKey(
+/**
+ * The page the reader is looking at: the one under the viewport's center line. A page taller than the
+ * viewport is current as soon as it covers the center, not once its bottom edge comes into view
+ * (issue #652). When the center falls into a gap between pages, the nearest page wins.
+ */
+internal fun resolveCenterWebtoonPageKey(
     items: List<WebtoonVisibleItem>,
     viewportStartPx: Int,
     viewportEndPx: Int,
 ): Long? {
-    return items.lastOrNull { item ->
-        val itemEnd = item.offsetPx + item.sizePx
-        itemEnd > viewportStartPx && itemEnd <= viewportEndPx
+    val center = (viewportStartPx + viewportEndPx) / 2f
+    return items.minByOrNull { item ->
+        val start = item.offsetPx.toFloat()
+        val end = (item.offsetPx + item.sizePx).toFloat()
+        when {
+            center < start -> start - center
+            center >= end -> center - end + 0.5f
+            else -> 0f
+        }
     }?.pageKey
 }
 

@@ -1711,7 +1711,8 @@ class DetailsViewModel @Inject constructor(
         return ContentDetails(
             manga = mergedManga,
             localContent = base.local,
-            override = null,
+            // The user's own cover/title edit still wins over the tracking metadata (#632).
+            override = base.override,
             description = trackingDetails.description.toDisplayDescription() ?: base.description ?: trackingContent.description,
             isLoaded = true,
         )

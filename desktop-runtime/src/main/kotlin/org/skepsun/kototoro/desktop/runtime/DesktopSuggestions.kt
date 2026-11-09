@@ -66,19 +66,30 @@ data class DesktopSuggestionSettings(
 }
 
 /** Android's tracker schedule settings: enabled by default at frequency 1 (a full check every 18 hours). */
-data class DesktopTrackerSettings(val enabled: Boolean = true, val frequency: Float = 1f) {
+data class DesktopTrackerSettings(
+    val enabled: Boolean = true,
+    val frequency: Float = 1f,
+    val skipCompleted: Boolean = false,
+    val markDuplicatesRead: Boolean = false,
+) {
     fun toPreferences(): Map<String, SourcePreferenceValue?> = mapOf(
         KEY_ENABLED to SourcePreferenceValue.Toggle(enabled),
         KEY_FREQUENCY to SourcePreferenceValue.Text(frequency.toString()),
+        KEY_SKIP_COMPLETED to SourcePreferenceValue.Toggle(skipCompleted),
+        KEY_MARK_DUPLICATES_READ to SourcePreferenceValue.Toggle(markDuplicatesRead),
     )
 
     companion object {
         const val KEY_ENABLED = "tracker_enabled"
         const val KEY_FREQUENCY = "tracker_freq"
+        const val KEY_SKIP_COMPLETED = "tracker_skip_completed"
+        const val KEY_MARK_DUPLICATES_READ = "tracker_mark_duplicates_read"
 
         fun from(values: Map<String, SourcePreferenceValue>) = DesktopTrackerSettings(
             enabled = (values[KEY_ENABLED] as? SourcePreferenceValue.Toggle)?.value ?: true,
             frequency = (values[KEY_FREQUENCY] as? SourcePreferenceValue.Text)?.value?.toFloatOrNull() ?: 1f,
+            skipCompleted = (values[KEY_SKIP_COMPLETED] as? SourcePreferenceValue.Toggle)?.value ?: false,
+            markDuplicatesRead = (values[KEY_MARK_DUPLICATES_READ] as? SourcePreferenceValue.Toggle)?.value ?: false,
         )
     }
 }

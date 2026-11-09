@@ -365,9 +365,11 @@ private struct CompactCard: View {
     let runtime: IosSources
     let item: ContentItem
     var movie = false
+    @ScaledMetric(relativeTo: .caption) private var bottomMarkInset: CGFloat = 48
 
     var body: some View {
-        CoverFrame(runtime: runtime, item: item, cornerRadius: 10, aspect: movie ? 16 / 9 : 2 / 3)
+        CoverFrame(runtime: runtime, item: item, cornerRadius: 10, aspect: movie ? 16 / 9 : 2 / 3,
+                   bottomMarkInset: bottomMarkInset)
             .overlay(alignment: .bottomLeading) {
                 Text(item.content.title)
                     .font(.caption.weight(.semibold))
@@ -446,6 +448,8 @@ private struct CoverFrame: View {
     var showsProgress = true
     /// Compact cells (list thumbnails) keep only the counter; the row spells out the rest.
     var showsMarks = true
+    /// Title overlays reserve space above the cover's bottom edge for corner marks.
+    var bottomMarkInset: CGFloat = 0
     @ScaledMetric(relativeTo: .caption2) private var adultMark: CGFloat = 9
     private var adultMarkSize: CGFloat { min(adultMark, 14) }
 
@@ -496,7 +500,8 @@ private struct CoverFrame: View {
                         .padding(.horizontal, 4).padding(.vertical, 1.5)
                         .background(Color.red.opacity(0.85), in: .rect(cornerRadius: 4, style: .continuous))
                         .padding(.trailing, 5)
-                        .padding(.bottom, showsProgress && item.progress != nil && !item.isFinished ? 12 : 5)
+                        .padding(.bottom, max(bottomMarkInset,
+                                              showsProgress && item.progress != nil && !item.isFinished ? 12 : 5))
                         .accessibilityLabel("成人内容")
                 }
             }

@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.core.parser.legado.book
 
 import android.util.Log
+import org.skepsun.kototoro.core.jsonsource.SecurityValidator
 import org.skepsun.kototoro.core.model.jsonsource.LegadoBookSource
 import org.skepsun.kototoro.core.parser.legado.*
 import org.skepsun.kototoro.core.parser.legado.bridge.LegadoSandboxRuleRuntimeContext
@@ -86,7 +87,12 @@ object BookList {
             if (!bookUrlPattern.isNullOrBlank()) {
                 runCatching { Regex(bookUrlPattern) }
                     .getOrNull()
-                    ?.takeIf { regex -> regex.matches(baseUrl) }
+                    ?.takeIf { regex ->
+                        // A source's pattern can backtrack catastrophically even on a URL-sized input.
+                        SecurityValidator.withRegexDeadline(baseUrl, SecurityValidator.regexDeadline()) {
+                            regex.matches(it)
+                        } == true
+                    }
                     ?.let {
                         val detail = parseDetailAsSingleItem(content, baseUrl, source, config, runtimeContext)
                         if (detail != null) {

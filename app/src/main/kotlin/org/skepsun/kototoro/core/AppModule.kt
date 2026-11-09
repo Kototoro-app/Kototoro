@@ -63,6 +63,7 @@ import org.skepsun.kototoro.core.util.ext.isLowRamDevice
 import org.skepsun.kototoro.details.ui.pager.pages.ContentPageFetcher
 import org.skepsun.kototoro.details.ui.pager.pages.ContentPageKeyer
 import org.skepsun.kototoro.local.data.CacheDir
+import org.skepsun.kototoro.local.data.ChapterThumbnailCache
 import org.skepsun.kototoro.local.data.FaviconCache
 import org.skepsun.kototoro.local.data.LocalStorageCache
 import org.skepsun.kototoro.local.data.LocalStorageChanges
@@ -324,6 +325,19 @@ interface AppModule {
             dir = CacheDir.PAGES,
             defaultSize = FileSize.MEGABYTES.convert(settings.pagesCacheSizeMb.toLong(), FileSize.BYTES),
             minSize = FileSize.MEGABYTES.convert(20, FileSize.BYTES),
+        )
+
+        @Provides
+        @Singleton
+        @ChapterThumbnailCache
+        fun provideChapterThumbnailCache(
+            @ApplicationContext context: Context,
+            settings: AppSettings,
+        ) = LocalStorageCache(
+            context = context,
+            dir = CacheDir.CHAPTER_THUMBS,
+            defaultSize = FileSize.MEGABYTES.convert(settings.chapterThumbsCacheSizeMb.toLong(), FileSize.BYTES),
+            minSize = FileSize.MEGABYTES.convert(8, FileSize.BYTES),
         )
 
         @Provides

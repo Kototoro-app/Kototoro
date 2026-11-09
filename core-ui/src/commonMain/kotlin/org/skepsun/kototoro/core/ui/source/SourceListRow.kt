@@ -26,7 +26,8 @@ import androidx.compose.ui.unit.dp
 /**
  * One source as a list row (Android's `KototoroSourceCard` list form): the icon in a 48dp tile, the bold name and a
  * one-line summary, on the selection container while selected. Icon loading, availability badges and what a click
- * means belong to the host; a host that wires its own clickable through [modifier] leaves [onClick] null.
+ * means belong to the host; a host that wires its own clickable through [modifier] leaves [onClick] null. The tile
+ * frames stand-in icons; a host showing the source's own artwork turns [iconPlate] off and the artwork fills the slot.
  */
 @Composable
 fun SourceListRow(
@@ -39,6 +40,7 @@ fun SourceListRow(
     enabled: Boolean = true,
     onClick: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
+    iconPlate: Boolean = true,
     badge: @Composable BoxScope.() -> Unit = {},
 ) {
     val colors = MaterialTheme.colorScheme
@@ -66,10 +68,12 @@ fun SourceListRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
-            modifier = Modifier.size(48.dp).background(colors.surfaceContainerHigh, iconShape),
+            modifier = Modifier.size(48.dp).then(
+                if (iconPlate) Modifier.background(colors.surfaceContainerHigh, iconShape) else Modifier,
+            ),
             contentAlignment = Alignment.Center,
         ) {
-            icon(Modifier.size(28.dp))
+            icon(if (iconPlate) Modifier.size(28.dp) else Modifier.size(40.dp).clip(iconShape))
             badge()
         }
         Spacer(Modifier.width(16.dp))

@@ -46,7 +46,11 @@ internal fun DesktopSourceGrid(controller: DesktopController, state: DesktopAppS
     }
     val groups = remember(sources, settings) { settings.groups(sources) }
     val metrics = sourceQuickAccessMetrics(1.15f)
-    Column(Modifier.fillMaxSize().testTag("source-pane"), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    // Android's floating browse bar: the title, search and filters float over the source grid, which scrolls beneath.
+    val inset = LocalDesktopTopInset.current
+    org.skepsun.kototoro.core.ui.topbar.FloatingTopBarScaffold(modifier = Modifier.fillMaxSize().testTag("source-pane"),
+        backdropColor = Canvas, scrimColor = Canvas, topBar = {
+    Column(Modifier.fillMaxWidth().padding(top = inset, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             org.skepsun.kototoro.core.ui.topbar.TopBarTitleBlock(desktopText("nav.browse"))
             DesktopSearchField(query, { query = it }, desktopText("sourceGrid.search"), modifier = Modifier.weight(1f),
@@ -61,9 +65,12 @@ internal fun DesktopSourceGrid(controller: DesktopController, state: DesktopAppS
         if (state.enabledSources.isEmpty()) {
             Text(desktopText("sourceGrid.empty"), color = Muted)
         }
+    }
+    }) { inner ->
+        val padding = PaddingValues(top = inner.calculateTopPadding())
         if (settings.grid) {
             LazyVerticalGrid(GridCells.Adaptive(metrics.minCardWidth),
-                modifier = Modifier.weight(1f).testTag("source-list"),
+                modifier = Modifier.fillMaxSize().testTag("source-list"), contentPadding = padding,
                 horizontalArrangement = Arrangement.spacedBy(metrics.gridSpacing),
                 verticalArrangement = Arrangement.spacedBy(metrics.gridSpacing)) {
                 groups.forEach { (language, entries) ->
@@ -71,14 +78,16 @@ internal fun DesktopSourceGrid(controller: DesktopController, state: DesktopAppS
                         SourceGroupHeader(language)
                     }
                     items(entries, key = { it.source.name }) { source ->
+                        var showsArtwork by remember(source.source.name) { mutableStateOf(false) }
                         TabletSourceTile(source.displayName, metrics.cardHeight + 18.dp, metrics.iconContainerSize,
                             metrics.iconSize, metrics.titleTextSize,
                             onClick = { controller.selectSource(source) },
                             modifier = Modifier.testTag("source:${source.source.name}"), enabled = enabled,
                             cardBackground = Color.Transparent,
                             supportingText = source.desktopSupportingText(),
+                            iconPlate = !showsArtwork,
                             icon = { iconModifier ->
-                                DesktopSourceIcon(controller, source, iconModifier, 48.sp)
+                                DesktopSourceIcon(controller, source, iconModifier, 48.sp) { showsArtwork = it }
                             },
                         )
                     }
@@ -86,7 +95,7 @@ internal fun DesktopSourceGrid(controller: DesktopController, state: DesktopAppS
             }
         } else {
             // Android's list mode: one source per row instead of a tile grid; the same tap target and tags.
-            LazyColumn(Modifier.weight(1f).testTag("source-list-rows")) {
+            LazyColumn(Modifier.fillMaxSize().testTag("source-list-rows"), contentPadding = padding) {
                 groups.forEach { (language, entries) ->
                     if (language.isNotEmpty()) item(key = "header:$language") { SourceGroupHeader(language) }
                     items(entries, key = { it.source.name }) { source ->
@@ -102,10 +111,14 @@ internal fun DesktopSourceGrid(controller: DesktopController, state: DesktopAppS
 @Composable
 internal fun DesktopSourceRow(controller: DesktopController, source: SourceListing, enabled: Boolean, selected: Boolean,
     modifier: Modifier = Modifier) {
+    var showsArtwork by remember(source.source.name) { mutableStateOf(false) }
     SourceListRow(
         title = source.displayName,
         summary = source.desktopSupportingText(),
-        icon = { iconModifier -> DesktopSourceIcon(controller, source, iconModifier, 18.sp) },
+        iconPlate = !showsArtwork,
+        icon = { iconModifier ->
+            DesktopSourceIcon(controller, source, iconModifier, 18.sp) { showsArtwork = it }
+        },
         modifier = modifier.testTag("source:${source.source.name}"),
         selected = selected,
         expressive = LocalDesktopInterfaceStyle.current == DesktopInterfaceStyle.IOS,
@@ -123,19 +136,22 @@ private fun SourceGroupHeader(language: String) {
 /**
  * Android's source tile icon: the site's own favicon when [DesktopFavicons] can fetch one, the first letter of the
  * source name while it loads or when the site has nothing to offer. Both live in the same slot so a grid of tiles
- * does not shift when the icons arrive.
+ * does not shift when the icons arrive. [onArtworkChange] tells the host when the favicon is showing, so it can drop
+ * the plate that only frames the letter.
  */
 @Composable
 internal fun DesktopSourceIcon(controller: DesktopController, source: SourceListing, modifier: Modifier,
-    letterSize: TextUnit) {
+    letterSize: TextUnit, onArtworkChange: (Boolean) -> Unit = {}) {
     val icon by produceState<ImageBitmap?>(initialValue = null, source.source.name, source.iconUrl, source.siteUrl) {
         value = controller.session.favicons.load(source)
     }
+    val currentOnArtworkChange by rememberUpdatedState(onArtworkChange)
+    LaunchedEffect(icon != null) { currentOnArtworkChange(icon != null) }
     Box(modifier, contentAlignment = Alignment.Center) {
         val bitmap = icon
         if (bitmap != null) {
             Image(bitmap, source.displayName, contentScale = ContentScale.Fit,
-                modifier = Modifier.fillMaxSize().padding(4.dp).testTag("source-icon:${source.source.name}"))
+                modifier = Modifier.fillMaxSize().testTag("source-icon:${source.source.name}"))
         } else {
             Text(source.displayName.take(1), fontSize = letterSize, color = Accent)
         }

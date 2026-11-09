@@ -7,8 +7,13 @@ class GetTracksUseCase @Inject constructor(
     private val repository: TrackingRepository,
 ) {
 
-    suspend operator fun invoke(limit: Int): List<ContentTracking> {
+    suspend operator fun invoke(
+        limit: Int,
+        cooldowns: Map<String, Long>,
+        challenged: Set<String>,
+        respectSchedule: Boolean,
+    ): List<ContentTracking> {
         repository.updateTracks()
-        return repository.getTracks(offset = 0, limit = limit)
+        return repository.getTracks(limit, cooldowns, challenged, respectSchedule)
     }
 }

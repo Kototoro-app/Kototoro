@@ -895,7 +895,7 @@
 
     <!-- Extensions and Sources -->
     <string name="extension_management">Eklenti yönetimi</string>
-    <string name="extension_management_summary">Depoları, JSON kaynaklarını, APK eklentilerini ve JAR ayrıştırıcılarını yönetin</string>
+    <string name="extension_management_summary">Kaynakları etkinleştirin ve test edin, depoları ve eklenti paketlerini yönetin</string>
 
     <!-- Spaces -->
     <string name="spaces">Alanlar</string>

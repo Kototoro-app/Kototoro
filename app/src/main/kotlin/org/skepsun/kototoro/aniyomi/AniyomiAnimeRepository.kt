@@ -16,6 +16,7 @@ import org.skepsun.kototoro.core.exceptions.InteractiveActionRequiredException
 import org.skepsun.kototoro.core.cache.MemoryContentCache
 import org.skepsun.kototoro.core.parser.CachingContentRepository
 import org.skepsun.kototoro.core.parser.RelatedContentSearchFallback
+import org.skepsun.kototoro.core.source.MihonModelRules
 import org.skepsun.kototoro.aniyomi.model.AniyomiAnimeSource
 import org.skepsun.kototoro.aniyomi.model.getPublicAnimeUrl
 import org.skepsun.kototoro.aniyomi.model.toAniyomiAnime
@@ -157,6 +158,10 @@ class AniyomiAnimeRepository(
                 sEpisode.toKotoChapter(source, episodeNumber)
             }
             .sortedBy { it.number }
+            .let { list ->
+                if (MihonModelRules.scanlatorBranches(list, ContentChapter::branch, ContentChapter::number)) list
+                else list.map { if (it.branch == null) it else it.copy(branch = null) }
+            }
 
         details.url = sAnime.url
 

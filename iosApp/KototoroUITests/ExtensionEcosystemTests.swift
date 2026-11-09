@@ -88,7 +88,7 @@ final class ExtensionEcosystemTests: XCTestCase {
         let image = app.images["reader.image"]
         waitForEither(image, app.staticTexts["reader.error"], timeout: 90)
         XCTAssertTrue(image.exists, "Reader failed: \(app.debugDescription)")
-        app.buttons["reader.back"].tap()
+        app.readerBackButton.tap()
         for _ in 0..<3 where !app.mainTab("作品库").exists {
             let back = app.navigationBars.buttons["BackButton"].firstMatch
             guard back.waitForExistence(timeout: 3) else { break }
@@ -102,7 +102,7 @@ final class ExtensionEcosystemTests: XCTestCase {
         attach("Continue reading accessory")
         accessory.tap()
         XCTAssertTrue(app.images["reader.image"].waitForExistence(timeout: 90), "Accessory should resume reading: \(app.debugDescription)")
-        app.buttons["reader.back"].tap()
+        app.readerBackButton.tap()
         let close = app.buttons["continueReading.close"]
         XCTAssertTrue(close.waitForExistence(timeout: 10), app.debugDescription)
         close.tap()
@@ -131,7 +131,7 @@ final class ExtensionEcosystemTests: XCTestCase {
         resume.tap()
         XCTAssertTrue(app.images["reader.image"].waitForExistence(timeout: 90), app.debugDescription)
         XCTAssertFalse(app.buttons["space.close"].exists)
-        app.buttons["reader.back"].tap()
+        app.readerBackButton.tap()
         app.buttons["continueReading.close"].tap()
         app.buttons["space.menu"].tap()
         XCTAssertTrue(app.buttons["space.select.MANGA"].isSelected)
@@ -257,7 +257,7 @@ final class ExtensionEcosystemTests: XCTestCase {
         // The reader covers the tab bar's continue-reading accessory.
         XCTAssertFalse(app.buttons["continueReading"].isHittable, "The accessory should hide in the reader")
         // Reopening the chapter reads the saved copy.
-        app.buttons["novel.back"].tap()
+        app.readerBackButton.tap()
         openFirstChapter()
         XCTAssertTrue(element("novel.offline").waitForExistence(timeout: 30), app.debugDescription)
         XCTAssertTrue(element("novel.firstParagraph").exists)

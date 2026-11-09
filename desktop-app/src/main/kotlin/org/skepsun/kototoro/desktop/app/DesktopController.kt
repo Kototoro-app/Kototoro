@@ -1,5 +1,7 @@
 package org.skepsun.kototoro.desktop.app
 
+import androidx.room.immediateTransaction
+import androidx.room.useWriterConnection
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -19,6 +21,7 @@ import org.skepsun.kototoro.details.domain.RelatedCandidate
 import org.skepsun.kototoro.details.domain.RelatedContentRules
 import org.skepsun.kototoro.core.replace.ReplaceRule
 import org.skepsun.kototoro.core.source.*
+import org.skepsun.kototoro.tracker.domain.completeAllPendingUpdates
 import org.skepsun.kototoro.tracker.domain.completePendingUpdates
 import org.skepsun.kototoro.stats.domain.ReadingStatsPeriod
 import org.skepsun.kototoro.stats.domain.StatsContentKind
@@ -107,7 +110,7 @@ enum class DesktopScreen {
     HOME, FEED, EXPLORE, LIBRARY, HISTORY, DETAILS, READER, NOVEL, VIDEO, PREFERENCES, BROWSER, DOWNLOADS, BACKUPS,
     RECOMMENDATIONS, EXTENSIONS, READER_SETTINGS, SOURCE_SETTINGS, TAG_BLACKLIST, READING_STATS, MORE, STORAGE,
     PLAYBACK_SETTINGS, PROXY_SETTINGS, CHANGELOG, CRASH_LOGS, REPLACE_RULES, DICTIONARY_RULES,
-    DOWNLOAD_SETTINGS, NAV_CONFIG, DATA_CLEANUP, SERVICES, SETUP_WIZARD, SOURCE_TEST, BOOKMARKS, UPDATED, SUGGESTIONS,
+    DOWNLOAD_SETTINGS, NAV_CONFIG, DATA_CLEANUP, SERVICES, SETUP_WIZARD, SOURCE_TEST, EXTENSION_SETTINGS, BOOKMARKS, UPDATED, SUGGESTIONS,
 }
 
 /**
@@ -132,6 +135,7 @@ internal val DesktopScreen.settingsBackTag: String?
         DesktopScreen.TAG_BLACKLIST -> "tag-blacklist-back"
         DesktopScreen.READING_STATS -> "stats-back"
         DesktopScreen.SOURCE_TEST -> "source-test-back"
+        DesktopScreen.EXTENSION_SETTINGS -> "extension-settings-back"
         DesktopScreen.EXTENSIONS -> "extensions-back"
         DesktopScreen.BACKUPS -> "backups-back"
         DesktopScreen.DOWNLOADS -> "downloads-back"
@@ -180,8 +184,6 @@ data class DesktopAppState(
      * ranks here; the settings page resolves the names against the installed plugins when it draws the row.
      */
     val jarPriorityOrder: String = "",
-    /** Android's `show_broken_sources`: `@Broken` parsers stay installed, this decides if the lists offer them. */
-    val showBrokenSources: Boolean = false,
     /** Android's `chapters_clear_auto`: sweep the chapters the history already passed at every app start. */
     val chaptersClearAuto: Boolean = false,
     /** Android's `extension_install_policies`, keyed by `UnifiedSourceKind` name; a kind nobody set asks every time. */
@@ -189,7 +191,13 @@ data class DesktopAppState(
     /** Android's `ConfirmPackageInstall`: the row waiting for "install and enable" / "install only". */
     val installPrompt: DesktopInstallRequest? = null,
     val repositories: List<DesktopRepository> = emptyList(),
+    /**
+     * The repository the available list is filtered to (Android's repository chip on the packages tab); null lists
+     * every catalogue in [extensionCatalogs].
+     */
     val extensionCatalog: DesktopRepositoryCatalog? = null,
+    /** Every repository catalogue read this session, in the saved repositories' order. */
+    val extensionCatalogs: List<DesktopRepositoryCatalog> = emptyList(),
     val installedExtensions: Map<String, Long> = emptyMap(),
     val installedEntries: List<DesktopInstalledEntry> = emptyList(),
     val jsonSources: List<org.skepsun.kototoro.desktop.runtime.DesktopJsonSource> = emptyList(),
@@ -396,7 +404,6 @@ class DesktopController(
         disabledSources = session.disabledSources(),
         sourceNsfwOverrides = session.sourceNsfwOverrides(),
         jarPriorityOrder = session.jarPriorityOrder(),
-        showBrokenSources = session.showBrokenSources(),
         chaptersClearAuto = session.chaptersClearAuto(),
         extensionInstallPolicies = session.extensionInstallPolicies()))
     val state = mutableState.asStateFlow()
@@ -467,6 +474,7 @@ class DesktopController(
             ),
             ) }
         }
+        session.library.markDuplicateChaptersRead = state.value.trackerSettings.markDuplicatesRead
         // The proxy the SDK client already uses is what the page shows; changing it writes the same store.
         mutableState.update { it.copy(proxySettings = session.proxy.settings.value) }
         mutableState.update { it.copy(githubMirror = session.githubMirror.settings.value) }
@@ -858,25 +866,6 @@ class DesktopController(
         mutableState.update { it.copy(chaptersClearAuto = session.chaptersClearAuto()) }
     }
 
-    /**
-     * Android's `show_broken_sources` switch: the parsers a plugin marked `@Broken` appear in (or leave) every source
-     * list. They stay installed either way and keep their stored works, downloads and settings, so this only
-     * republishes the offered sources and drops the browse selection if it was one of the hidden ones.
-     */
-    fun setShowBrokenSources(show: Boolean) = action {
-        session.setShowBrokenSources(show)
-        val descriptors = sourceDescriptors()
-        mutableState.update { previous ->
-            val hidden = previous.selectedSource?.takeIf { selected ->
-                descriptors.none { it.source.name == selected.source.name }
-            }
-            previous.copy(showBrokenSources = session.showBrokenSources(),
-                sources = descriptors,
-                selectedSource = if (hidden != null) null else previous.selectedSource,
-                descriptor = if (hidden != null) null else previous.descriptor,
-                items = if (hidden != null) emptyList() else previous.items)
-        }
-    }
 
     /**
      * A package the user picked. The install policy still decides the sources' switches, but it never asks here: the
@@ -895,8 +884,11 @@ class DesktopController(
      * puts the same question Android's `UnifiedInstallChoiceDialog` does — unless this is an update, which Android
      * installs without asking and whose sources keep the switches they already have.
      */
-    fun installExtension(extension: ExtensionStoreIndex.Extension) = action {
-        val catalog = requireNotNull(state.value.extensionCatalog) { desktopText("extensions.readRepositoryFirst") }
+    fun installExtension(extension: ExtensionStoreIndex.Extension,
+        from: DesktopRepositoryCatalog? = state.value.extensionCatalog) = action {
+        val catalog = requireNotNull(from ?: state.value.extensionCatalogs.firstOrNull { extension in it.extensions }) {
+            desktopText("extensions.readRepositoryFirst")
+        }
         val kind = installKind(catalog, extension)
         val request = DesktopInstallRequest.FromRepository(catalog, extension, kind, extension.sources.size)
         val updating = state.value.installedExtensions.containsKey(extension.packageName)
@@ -1009,8 +1001,44 @@ class DesktopController(
     fun fetchRepository(address: String) = action {
         val catalog = session.repositories.fetch(address)
         mutableState.update { it.copy(screen = DesktopScreen.EXTENSIONS, extensionCatalog = catalog,
+            extensionCatalogs = withCatalog(it.extensionCatalogs, catalog),
             repositories = session.repositories.saved(), installedExtensions = installedVersions(),
             message = desktopText("extensions.catalogRead", catalog.repository.name, catalog.extensions.size)) }
+    }
+
+    /**
+     * Android's repository chips on the packages tab: a repository already read is filtered to without another
+     * request; null is "all", which reads the saved repositories not read yet (failures are reported, not fatal).
+     */
+    fun selectExtensionCatalog(repository: DesktopRepository?) {
+        val known = state.value.extensionCatalogs
+        if (repository != null) {
+            val catalog = known.firstOrNull { it.repository.indexUrl == repository.indexUrl }
+            if (catalog != null) mutableState.update { it.copy(extensionCatalog = catalog) }
+            else fetchRepository(repository.indexUrl)
+            return
+        }
+        mutableState.update { it.copy(extensionCatalog = null) }
+        val missing = state.value.repositories.filter { saved -> known.none { it.repository.indexUrl == saved.indexUrl } }
+        if (missing.isEmpty()) return
+        action {
+            val failures = mutableListOf<String>()
+            for (saved in missing) {
+                val catalog = try { session.repositories.fetch(saved.indexUrl) }
+                    catch (error: CancellationException) { throw error }
+                    catch (error: Exception) { failures += "${saved.name}：${error.message ?: error.javaClass.simpleName}"; continue }
+                mutableState.update { it.copy(extensionCatalogs = withCatalog(it.extensionCatalogs, catalog)) }
+            }
+            mutableState.update { it.copy(installedExtensions = installedVersions(), error = failures.firstOrNull()) }
+        }
+    }
+
+    /** Replaces (or adds) [catalog] and keeps the saved repositories' order. */
+    private fun withCatalog(catalogs: List<DesktopRepositoryCatalog>, catalog: DesktopRepositoryCatalog):
+        List<DesktopRepositoryCatalog> {
+        val order = session.repositories.saved().map { it.indexUrl }
+        return (catalogs.filter { it.repository.indexUrl != catalog.repository.indexUrl } + catalog)
+            .sortedBy { order.indexOf(it.repository.indexUrl).let { index -> if (index < 0) Int.MAX_VALUE else index } }
     }
 
     /** Drops a saved repository; its extensions stay installed, matching Android's "forget the source" behavior. */
@@ -1021,6 +1049,7 @@ class DesktopController(
                 extensionCatalog = it.extensionCatalog?.takeIf { catalog ->
                     catalog.repository.indexUrl != repository.indexUrl
                 },
+                extensionCatalogs = it.extensionCatalogs.filter { catalog -> catalog.repository.indexUrl != repository.indexUrl },
                 message = desktopText("extensions.repositoryRemoved", repository.name))
         }
     }
@@ -1033,6 +1062,8 @@ class DesktopController(
         mutableState.update { previous -> previous.copy(screen = destination,
             sources = descriptors, installedExtensions = installedVersions(), repositories = session.repositories.saved(),
             installedEntries = session.installedEntries(),
+            // The install policy and the broken-parser rule both switch sources off while installing.
+            disabledSources = session.disabledSources(),
             extensionUpdates = previous.extensionUpdates.filter { update -> installedVersions()[update.extension.packageName]
                 ?.let { it < update.extension.versionCode } == true },
             selectedSource = previous.selectedSource?.let { selected -> descriptors.firstOrNull { it.source.name == selected.source.name } },
@@ -1109,9 +1140,11 @@ class DesktopController(
     }
 
     fun explore() = navigate {
-        if (state.value.selectedSource == null) mutableState.update {
-            it.copy(screen = DesktopScreen.EXPLORE, items = emptyList(), content = null)
-        } else browseOnIo(state.value.offset, state.value.query)
+        // Show the browse page before the source answers, as selectSource does: a slow or hanging source must not
+        // keep the window on the previous page with only the progress bar running. The rows belong to whichever
+        // shelf was shown last, so they go too.
+        mutableState.update { it.copy(screen = DesktopScreen.EXPLORE, items = emptyList(), content = null) }
+        if (state.value.selectedSource != null) browseOnIo(state.value.offset, state.value.query)
     }
 
     /** Leaves the opened source and returns to the browse page's source grid (Android's back from a source). */
@@ -1503,6 +1536,7 @@ class DesktopController(
 
     internal fun trackerSettings(settings: org.skepsun.kototoro.desktop.runtime.DesktopTrackerSettings) {
         mutableState.update { it.copy(trackerSettings = settings) }
+        session.library.markDuplicateChaptersRead = settings.markDuplicatesRead
         if (!backgroundPreferences.edit(SourcePreferenceEdit(changes = settings.toPreferences()))) {
             mutableState.update { it.copy(error = desktopText("settings.trackerSaveFailed")) }
         }
@@ -1544,8 +1578,11 @@ class DesktopController(
         mutableState.update { it.copy(suggestionNotice = null) }
     }
 
-    private suspend fun runTrackerOnIo(onProgress: suspend (Int, Int) -> Unit = { _, _ -> }) =
-        session.tracker.checkAll(onProgress).also { recordRun(LAST_TRACKER_RUN) }
+    private suspend fun runTrackerOnIo(
+        respectSchedule: Boolean = false,
+        onProgress: suspend (Int, Int) -> Unit = { _, _ -> },
+    ) = session.tracker.checkAll(respectSchedule, state.value.trackerSettings.skipCompleted, onProgress)
+        .also { recordRun(LAST_TRACKER_RUN) }
 
     private fun recordRun(key: String) {
         backgroundPreferences.edit(SourcePreferenceEdit(changes = mapOf(
@@ -1605,7 +1642,8 @@ class DesktopController(
     internal suspend fun runDueBackgroundWork(now: Long = System.currentTimeMillis()): Set<DesktopBackgroundTask> {
         val due = dueTasks(now, backgroundSchedules())
         if (DesktopBackgroundTask.TRACKER in due) {
-            val report = backgroundMutex.withLock { runTrackerOnIo() }
+            // Background runs check only works due at their release pace; "check for updates" checks all of them.
+            val report = backgroundMutex.withLock { runTrackerOnIo(respectSchedule = true) }
             val feed = session.feed.observe(session.storage.database).first()
             val contents = feedContentsOnIo(feed)
             mutableState.update { it.copy(feed = feed, feedContents = contents,
@@ -1661,13 +1699,15 @@ class DesktopController(
             runTrackerOnIo { done, total -> mutableState.update { it.copy(message = desktopText("message.checkingUpdates", done, total)) } }
         }
         loadFeedOnIo()
+        // Titles skipped because their source wants a browser challenge were not checked either.
+        val notChecked = report.failed + report.skipped
         mutableState.update { it.copy(message = when {
             report.checked == 0 -> desktopText("message.nothingToCheck")
-            report.withUpdates == 0 -> if (report.failed > 0) {
-                desktopText("message.checkedNoNewFailed", report.checked, report.failed)
+            report.withUpdates == 0 -> if (notChecked > 0) {
+                desktopText("message.checkedNoNewFailed", report.checked, notChecked)
             } else desktopText("message.checkedNoNew", report.checked)
-            else -> if (report.failed > 0) {
-                desktopText("message.checkedNewFailed", report.withUpdates, report.newChapters, report.failed)
+            else -> if (notChecked > 0) {
+                desktopText("message.checkedNewFailed", report.withUpdates, report.newChapters, notChecked)
             } else desktopText("message.checkedNew", report.withUpdates, report.newChapters)
         }) }
     }
@@ -1722,6 +1762,19 @@ class DesktopController(
         }
         loadFeedOnIo()
         mutableState.update { it.copy(message = desktopText("feed.cleared")) }
+    }
+
+    /**
+     * The subscriptions menu's "mark all read" (Android's `action_mark_all_read`): every unread reminder and
+     * new-chapter counter completes at once through the shared [completeAllPendingUpdates], keeping history,
+     * progress and the timeline's rows.
+     */
+    fun markAllFeedRead() = action {
+        val database = session.storage.database
+        database.useWriterConnection { connection ->
+            connection.immediateTransaction { database.completeAllPendingUpdates(System.currentTimeMillis()) }
+        }
+        loadFeedOnIo()
     }
 
     /** Android's "continue reading" on a feed entry: mark it read and resume from history. */
@@ -2462,6 +2515,11 @@ class DesktopController(
 
     /** Android's setup wizard, which 来源设置 opens from its overview group. */
     fun showSetupWizard() = navigate { mutableState.update { it.copy(screen = DesktopScreen.SETUP_WIZARD) } }
+
+    /** Android's extension settings (plugin priority, install behavior), opened from 扩展与仓库 like the source test. */
+    fun showExtensionSettings() = navigate {
+        mutableState.update { it.copy(screen = DesktopScreen.EXTENSION_SETTINGS) }
+    }
 
     /**
      * Android's "test all sources" page, reached from 扩展与仓库. Entering it forgets the previous run so a second visit
@@ -3763,7 +3821,7 @@ class DesktopController(
         DesktopScreen.DICTIONARY_RULES -> backFromDictionaryRules()
         DesktopScreen.TAG_BLACKLIST, DesktopScreen.SETUP_WIZARD -> showSourceSettings()
         DesktopScreen.READING_STATS, DesktopScreen.RECOMMENDATIONS -> showServices()
-        DesktopScreen.SOURCE_TEST -> showExtensions()
+        DesktopScreen.SOURCE_TEST, DesktopScreen.EXTENSION_SETTINGS -> showExtensions()
         else -> more()
     }
 

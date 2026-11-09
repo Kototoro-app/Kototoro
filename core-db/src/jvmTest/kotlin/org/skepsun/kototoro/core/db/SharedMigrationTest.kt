@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import org.skepsun.kototoro.core.db.migrations.sharedDatabaseMigrations
+import org.skepsun.kototoro.tracker.data.TrackScheduleEntity
 import java.io.File
 
 /**
@@ -45,6 +46,11 @@ class SharedMigrationTest {
 
             db.getPreferencesDao().upsert(prefs.copy(isChaptersReversed = true))
             assertTrue(db.getPreferencesDao().find(MANGA_ID)!!.isChaptersReversed)
+
+            // v87: the schedule table exists and keeps a row for the work.
+            val schedule = TrackScheduleEntity(MANGA_ID, fetchInterval = 3, nextCheckTime = 456, failCount = 1)
+            db.getTrackScheduleDao().upsert(schedule)
+            assertEquals(schedule, db.getTrackScheduleDao().find(MANGA_ID))
         } finally {
             db.close()
         }

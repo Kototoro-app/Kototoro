@@ -11,6 +11,7 @@ sealed interface SettingsDestination {
     data object AppearanceHomeSettings : SettingsDestination
     data object AppearanceInterfaceSettings : SettingsDestination
     data object AppearanceGlassSettings : SettingsDestination
+    data object AppearanceImmersiveSettings : SettingsDestination
     data object AppearanceBadgesSettings : SettingsDestination
     data object AppearanceSearchFiltersSettings : SettingsDestination
     data object AppearanceNavigationSettings : SettingsDestination
@@ -26,6 +27,7 @@ sealed interface SettingsDestination {
     data object ReaderSettings : SettingsDestination
     data object ReplaceRulesSettings : SettingsDestination
     data object SourcesSettings : SettingsDestination
+    data object ExtensionSettings : SettingsDestination
     data object SuggestionsSettings : SettingsDestination
     data object SyncSettings : SettingsDestination
     data object BackupsSettings : SettingsDestination

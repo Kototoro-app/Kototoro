@@ -34,7 +34,7 @@ final class BackgroundUpdates {
     func run() async {
         schedule()
         guard Self.enabled, let library, let runtime = sources?.runtime,
-              let report = await library.checkUpdatesReport(runtime), report.newChapters > 0 else { return }
+              let report = await library.checkUpdatesReport(runtime, respectSchedule: true), report.newChapters > 0 else { return }
         let content = UNMutableNotificationContent()
         content.title = String(localized: "作品有更新")
         content.body = String(localized: "\(report.withUpdates) 部收藏作品共有 \(report.newChapters) 个新章节")
@@ -46,8 +46,11 @@ final class BackgroundUpdates {
 
 /// Settings rows: the switch asks for notification permission, the interval is the earliest gap between checks.
 struct BackgroundUpdateSettingsRows: View {
+    @ObservedObject var library: LibraryModel
     @AppStorage(BackgroundUpdates.enabledKey) private var enabled = false
     @AppStorage(BackgroundUpdates.intervalKey) private var interval = 6
+    @AppStorage("tracker_skip_completed") private var skipCompleted = false
+    @AppStorage("tracker_mark_duplicates_read") private var markDuplicatesRead = false
 
     var body: some View {
         Toggle("后台检查更新", isOn: Binding(get: { enabled }, set: { value in
@@ -66,5 +69,12 @@ struct BackgroundUpdateSettingsRows: View {
             }
             .onChange(of: interval) { _, _ in BackgroundUpdates.shared.schedule() }
         }
+        Toggle("跳过已完结作品", isOn: $skipCompleted)
+            .accessibilityIdentifier("settings.trackerSkipCompleted")
+        Toggle("重复章节标为已读", isOn: $markDuplicatesRead)
+            .onChange(of: markDuplicatesRead) { _, value in
+                library.library?.setMarkDuplicateChaptersRead(enabled: value)
+            }
+            .accessibilityIdentifier("settings.trackerMarkDuplicatesRead")
     }
 }

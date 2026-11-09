@@ -43,6 +43,7 @@ import org.skepsun.kototoro.core.ui.compose.CompactContentCoverShape
 import org.skepsun.kototoro.core.util.ext.getThemeColor
 import org.skepsun.kototoro.tracker.data.TrackEntity
 import androidx.appcompat.R as appcompatR
+import org.skepsun.kototoro.tracker.domain.PERSISTENT_FAILURE_COUNT
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
@@ -95,6 +96,19 @@ private fun TrackerDebugRow(item: TrackDebugItem, onClick: () -> Unit) {
                 )
             } ?: context.getString(R.string.never),
         )
+        item.nextCheckTime?.let { next ->
+            append(" · ")
+            append(context.getString(R.string.tracker_next_check, DateUtils.getRelativeTimeSpanString(
+                next.toEpochMilli(), System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS,
+            )))
+        }
+        if (item.failCount >= PERSISTENT_FAILURE_COUNT) {
+            append(" · ")
+            withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
+                append(context.resources.getQuantityString(R.plurals.tracker_failed_in_a_row, item.failCount,
+                    item.failCount))
+            }
+        }
         if (item.lastResult == TrackEntity.RESULT_FAILED) {
             append(" - ")
             withStyle(

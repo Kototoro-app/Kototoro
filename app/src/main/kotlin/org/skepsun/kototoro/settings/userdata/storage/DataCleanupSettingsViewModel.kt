@@ -27,6 +27,7 @@ import org.skepsun.kototoro.local.data.CacheDir
 import org.skepsun.kototoro.local.data.LocalStorageManager
 import org.skepsun.kototoro.local.data.StorageContentKind
 import org.skepsun.kototoro.local.data.LocalMangaRepository
+import org.skepsun.kototoro.details.domain.ChapterThumbnailResolver
 import org.skepsun.kototoro.local.domain.DeleteReadChaptersUseCase
 import org.skepsun.kototoro.search.domain.ContentSearchRepository
 import org.skepsun.kototoro.tracker.domain.TrackingRepository
@@ -49,6 +50,7 @@ class DataCleanupSettingsViewModel @Inject constructor(
     private val mangaDataRepositoryProvider: Provider<ContentDataRepository>,
         private val coil: ImageLoader,
         private val torrentStreamService: TorrentStreamService,
+    private val chapterThumbnailResolver: ChapterThumbnailResolver,
 ) : BaseViewModel() {
 
     data class LocalContentCleanupResult(
@@ -106,6 +108,22 @@ class DataCleanupSettingsViewModel @Inject constructor(
                 onStorageChanged.call(Unit)
             } finally {
                 loadingKeys.update { it - key }
+            }
+        }
+    }
+
+    /** Through the resolver rather than [clearCache], so its open disk cache and session answers are reset too. */
+    fun clearChapterThumbnails() {
+        launchJob(Dispatchers.Default) {
+            try {
+                loadingKeys.update { it + AppSettings.KEY_CHAPTER_THUMBS_CACHE_CLEAR }
+                chapterThumbnailResolver.clearStored()
+                checkNotNull(cacheSizes[CacheDir.CHAPTER_THUMBS]).value =
+                    storageManager.computeCacheSize(CacheDir.CHAPTER_THUMBS)
+                coil.memoryCache?.clear()
+                onStorageChanged.call(Unit)
+            } finally {
+                loadingKeys.update { it - AppSettings.KEY_CHAPTER_THUMBS_CACHE_CLEAR }
             }
         }
     }

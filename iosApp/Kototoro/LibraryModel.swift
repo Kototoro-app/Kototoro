@@ -93,6 +93,7 @@ final class LibraryModel: ObservableObject {
                 ).appendingPathComponent("Kototoro", isDirectory: true)
                 try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
                 library = try IosLibrary(databasePath: directory.appendingPathComponent("library.db").path)
+                library?.setMarkDuplicateChaptersRead(enabled: UserDefaults.standard.bool(forKey: "tracker_mark_duplicates_read"))
             }
             guard let library else { return }
             categories = try await library.categories()
@@ -190,18 +191,28 @@ final class LibraryModel: ObservableObject {
         catch { self.error = error.localizedDescription }
     }
 
+    /// Android's feed "mark all read": clears every unread update and new-chapter badge, keeping history.
+    func markAllUpdatesRead() async {
+        do { try await library?.markAllUpdatesRead(); try await refreshRecords() }
+        catch { self.error = error.localizedDescription }
+    }
+
     func checkUpdates(_ sources: IosSources) async {
         _ = await checkUpdatesReport(sources)
     }
 
     /// The check with its report, for the background refresh's notification; nil while one runs or on failure.
-    func checkUpdatesReport(_ sources: IosSources) async -> IosUpdateReport? {
+    func checkUpdatesReport(_ sources: IosSources, respectSchedule: Bool = false) async -> IosUpdateReport? {
         guard let library, !isCheckingUpdates else { return nil }
         isCheckingUpdates = true
         defer { isCheckingUpdates = false }
         do {
-            let report = try await library.checkUpdates(sources: sources)
+            let report = try await library.checkUpdates(sources: sources, respectSchedule: respectSchedule,
+                                                        skipCompleted: UserDefaults.standard.bool(forKey: "tracker_skip_completed"))
             updateSummary = String(localized: "已检查 \(report.checked) 部，\(report.withUpdates) 部有更新，\(report.failed) 部失败")
+            if report.skipped > 0 {
+                updateSummary = (updateSummary ?? "") + String(localized: "，\(report.skipped) 部已跳过")
+            }
             try await refreshRecords()
             return report
         } catch { self.error = error.localizedDescription; return nil }

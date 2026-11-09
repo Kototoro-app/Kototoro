@@ -16,6 +16,20 @@ class MihonModelRulesTest {
     }
 
     @Test
+    fun `scanlators become branches only when they compete for one chapter number`() {
+        fun branches(vararg chapters: Pair<String?, Float>) =
+            MihonModelRules.scanlatorBranches(chapters.toList(), { it.first }, { it.second })
+        // Komga: some books credit a translator, others none — one list.
+        assertFalse(branches("Alice" to 1f, null to 2f, "" to 3f, "Bob" to 4f))
+        assertFalse(branches(null to 1f, null to 2f))
+        // A blank credit and a missing one are the same group.
+        assertFalse(branches("" to 1f, null to 1f))
+        // Two groups translating the same chapter.
+        assertTrue(branches("Alice" to 1f, "Bob" to 1f, "Alice" to 2f))
+        assertTrue(branches(null to 1f, "Bob" to 1f))
+    }
+
+    @Test
     fun `blank content identity uses title then unknown and is nonnegative`() {
         assertEquals(MihonModelRules.contentId("", "MIHON_1", ""), MihonModelRules.contentId("unknown", "MIHON_1", ""))
         assertEquals(MihonModelRules.contentId("", "MIHON_1", "漫画"), MihonModelRules.contentId("漫画", "MIHON_1", ""))

@@ -55,7 +55,6 @@ class SettingsSearchHelperTest {
 		settings.map { it.key to it.title } shouldContainExactly listOf(
 			"glass_tuner" to "string-${R.string.appearance_group_glass_tuner}",
 			"glass_effect" to "string-${R.string.pref_glass_effect}",
-			"glass_immersive_strength" to "string-${R.string.pref_glass_immersive_strength}",
 			"reduce_visual_effects" to "string-${R.string.pref_reduce_visual_effects}",
 		)
 		settings.map { it.breadcrumbs }.distinct() shouldBe listOf(
@@ -66,6 +65,27 @@ class SettingsSearchHelperTest {
 		)
 	}
 
+
+	@Test
+	fun `immersive appearance search index opens immersive settings`() {
+		val settings = SettingsSearchHelper(context).inflatePreferences()
+			.filter { it.destination == SettingsDestination.AppearanceImmersiveSettings }
+
+		settings.map { it.key to it.title } shouldContainExactly listOf(
+			"appearance_immersive" to "string-${R.string.appearance_group_immersive}",
+			"glass_immersive_top" to "string-${R.string.pref_glass_immersive_top}",
+			"glass_immersive_bottom" to "string-${R.string.pref_glass_immersive_bottom}",
+			"glass_immersive_strength" to "string-${R.string.pref_glass_immersive_strength}",
+			"glass_edge_blur" to "string-${R.string.pref_glass_edge_blur}",
+			"glass_blur_quality" to "string-${R.string.pref_glass_blur_quality}",
+		)
+		settings.map { it.breadcrumbs }.distinct() shouldBe listOf(
+			listOf(
+				"string-${R.string.appearance}",
+				"string-${R.string.appearance_group_immersive}",
+			),
+		)
+	}
 
 	@Test
 	fun `navigation appearance search index matches visible settings`() {

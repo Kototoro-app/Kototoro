@@ -443,6 +443,46 @@ Android 详情是可折叠头部 + 章节/页面/书签分页 + 底部 Dock，�
 - 验证：三端编译；`:core-ui:jvmTest` 与完整 `:desktop-app:test` 共 382 项通过、7 项跳过、0 失败；
   抽查筛选抽屉、阅读器滑块截图无视觉回退。Android 实机/模拟器、Windows 实机/CI 尚未运行。
 
+#### 共享基础：悬浮顶栏与玻璃 backdrop（2026-11-03）
+
+- 问题：桌面 backdrop 只录窗口底色，顶栏排在内容之上而非浮在其上，iOS 玻璃胶囊下永远是纯色；
+  共享组件读的 `LocalLiquidGlassBackdrop` 桌面也从未提供。
+- 共享入口 [FloatingTopBarScaffold](../../core-ui/src/commonMain/kotlin/org/skepsun/kototoro/core/ui/topbar/FloatingTopBarScaffold.kt)：
+  照 Android `SettingsTopBarScaffold` 的做法把页面录进 layer backdrop、顶栏浮于其上并只向顶栏提供
+  `LocalLiquidGlassBackdrop`，顶栏下方画 `ImmersiveEdgeGradient`（Material 稳定色调、iOS 更轻），量得的栏高作为
+  内容的上内边距；`recordBackdrop = false` 用于原生视频/浏览器窗口。
+- 桌面调用方：`DesktopApp` 根部（通用 `Header` 与挑战/失败提示悬浮；进度线另画在最上层、不占栏高；阅读页仍把
+  提示放在阅读器上方），主页、订阅、收藏/历史、浏览（来源网格与结果）各自套一层，网格/列表用
+  `contentPadding` 从栏下滚过；起点由 `LocalDesktopTopInset` 给出。`DesktopControlSurface` 优先用页面 backdrop。
+  导航栏选中图标色随风格（iOS `primary`，Material `onSecondaryContainer`），与 `KototoroBottomNav` 一致。
+- 通用顶栏页面中 17 个（更多、服务、阅读/来源/播放/代理/下载设置、存储、数据清理、导航配置、阅读统计、替换规则、
+  来源测试、设置向导、推荐设置、来源偏好、备份）登记在 `DesktopApp.ScrollUnderScreens`，滚动容器从
+  `LocalDesktopTopInset` 起排、从栏下滚过；共享的 `ServicesSettingsContent`、`PlaybackSettingsContent`、
+  `ProxySettingsContent` 为此新增默认 0 的 `contentPadding`（Android 调用方不变）。
+- 列表上方有固定行的页面也已从栏下滚过：更新与推荐把摘要卡、筛选和提示作为列表/网格的头几项（`ContentGrid` 新增
+  `header`）；书签、下载、更新日志、崩溃日志、字典规则的选择栏或操作行由 `DesktopPageBar` 浮在窗口标题栏之下、
+  列表从两层栏下滚过；标签黑名单经共享网格的头部滚动。共享 `CrashLogsContent`（`contentPadding`）、
+  `DictionaryRulesContent`、`BlacklistedTagsContent`（`topPadding`）为此新增参数，默认值保持 Android 不变。
+- 浏览页去掉“上一批/下一批/第 N 批”行，与 Android 分页列表一致：滚到末尾自动加载，到头后网格页脚显示
+  `browse-no-more`；手动翻批测试改为调用同一组控制器操作。
+- 尚未收敛：Android 侧仍用 `SettingsTopBarScaffold`/`KototoroAppTopChrome`，未改为调用共享骨架；扩展管理页
+  （标签栏下三个子页各有列表与筛选芯片）仍放在栏下。
+- 验证：`DesktopFloatingChromeTest`（Material/iOS × 浅/深，断言列表起点在栏下而非被推下、滚动后行进入栏下，并截图）。
+
+#### 第三批阶段记录：播放器控制条（2026-11-03）
+
+- Android 的 `VideoPlayerControls.kt`（`VideoPlayerControlState`/`VideoPlayerAction`、上下控制条、拇指与章节按钮）
+  原包名迁入 `core-ui/video/ui/compose`，Android `VideoPlayerActivity` 调用不变；`R.string` 改为 `uiString`，
+  `ic_comment`/`ic_screen_rotation` 走生成的 `ReaderPanelIcons`，Material 图标由 SDK `materialicons` 基线矢量照抄进
+  `VideoPlayerIcons`（不引入图标库）。状态新增默认保持 Android 现状的能力项（笔记、片头片尾、锁屏、更多、旋转/全屏）
+  与 `controlsAlpha`/`scrimAlpha`（默认 1 与 0.72，桌面传入 `video_controls_alpha`/`video_gradient_alpha`）。
+- 桌面 `DesktopVideoPlayer` 的上下浮层改为调用共享控制条：投屏、±10 秒、画质增强、静音与音量经插槽注入；
+  画质/倍速/字幕/音轨/增强菜单由 action 的窗口锚点换算为屏幕坐标后打开 `PlayerMenuWindow`；选集按钮打开侧栏。
+  投屏控制的按钮也换成同一组图标。
+- 验证：`DesktopVideoControlsTest`（离屏渲染，断言无文字播放/±10s、无 Android 专属按钮、全屏 action，截图）；
+  `-PlibmpvDirectory` 指向已安装 Kototoro.app 自带的 libmpv 跑通真实播放用例；`:app:compileDebugKotlin` 通过。
+  播放器窗口的屏幕截图在测试窗口被遮挡时会截到其他窗口，因此不作为界面依据。
+
 ### 第三批：设置与功能页面
 
 范围：07 的其余设置，以及 08–17。

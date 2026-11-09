@@ -49,18 +49,9 @@ internal fun DesktopDownloadsPanel(controller: DesktopController, closing: Boole
                 }
             })
     }
-    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedButton({ controller.previewDownloadCleanup() }, enabled = !closing && !state.busy,
-                modifier = Modifier.testTag("download-storage")) { Text(desktopText("downloads.storage")) }
-            Text(desktopText("downloads.usage", usage.chapters, usage.completeChapters, usage.pages,
-                usage.bytes / 1024), modifier = Modifier.testTag("download-usage"))
-            Checkbox(checked = autoCleanup, onCheckedChange = controller::setAutoDownloadCleanup, enabled = !closing,
-                modifier = Modifier.testTag("download-auto-cleanup"))
-            Text(desktopText("downloads.autoCleanup"))
-        }
-        DesktopImageCacheRow(controller, state.imageCache, !closing && !state.busy)
-        if (downloads.isEmpty()) Text(desktopText("downloads.empty"))
+    // The selection and batch rows float with the window's header; the usage rows lead the queue and scroll with it.
+    DesktopPageBar(modifier = Modifier.fillMaxSize(), bar = {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         if (downloads.isNotEmpty()) {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                 TextButton({ controller.selectAllDownloads() }, enabled = !closing,
@@ -101,7 +92,22 @@ internal fun DesktopDownloadsPanel(controller: DesktopController, closing: Boole
                 }
             }
         }
-        LazyColumn(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        }
+    }) { padding ->
+        LazyColumn(Modifier.fillMaxSize(), contentPadding = padding, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            item(key = "usage") { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            OutlinedButton({ controller.previewDownloadCleanup() }, enabled = !closing && !state.busy,
+                modifier = Modifier.testTag("download-storage")) { Text(desktopText("downloads.storage")) }
+            Text(desktopText("downloads.usage", usage.chapters, usage.completeChapters, usage.pages,
+                usage.bytes / 1024), modifier = Modifier.testTag("download-usage"))
+            Checkbox(checked = autoCleanup, onCheckedChange = controller::setAutoDownloadCleanup, enabled = !closing,
+                modifier = Modifier.testTag("download-auto-cleanup"))
+            Text(desktopText("downloads.autoCleanup"))
+        }
+        DesktopImageCacheRow(controller, state.imageCache, !closing && !state.busy)
+        if (downloads.isEmpty()) Text(desktopText("downloads.empty"))
+            } }
             items(rows, key = { it.first.key }) { (item, row) ->
                 val record = item.record
                 val active = item.status.isActive

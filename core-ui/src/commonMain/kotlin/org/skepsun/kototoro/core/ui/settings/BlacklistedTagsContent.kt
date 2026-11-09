@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.core.ui.settings
 
+import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
@@ -65,6 +66,8 @@ fun BlacklistedTagsContent(
     tagPrefix: String = "blacklist",
     header: (@Composable () -> Unit)? = null,
     footer: (@Composable () -> Unit)? = null,
+    /** Added above the grid's own padding: the space a floating top bar takes, the chips scrolling beneath it. */
+    topPadding: Dp = 0.dp,
 ) {
     val selectedKeys = selected.mapTo(HashSet()) { it.key }
     val emptyText = uiString("nothing_found")
@@ -72,7 +75,7 @@ fun BlacklistedTagsContent(
     val selectedLabel = uiString("selected_count", selected.size)
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = 104.dp),
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 8.dp + topPadding, bottom = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
         modifier = modifier.fillMaxSize().testTag("$tagPrefix-grid"),

@@ -1,6 +1,12 @@
 package org.skepsun.kototoro.list.ui.compose
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -9,14 +15,17 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.material3.ButtonGroupDefaults
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.ToggleButton
+import androidx.compose.material3.ToggleButtonDefaults
+import androidx.compose.material3.ToggleButtonShapes
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -26,6 +35,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.list.domain.ListSortOrder
@@ -40,6 +52,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun SortOrderControl(
     sortOrders: List<ListSortOrder>,
@@ -74,8 +87,11 @@ internal fun SortOrderControl(
         if (compact) expanded = false
     }
 
-    Column(modifier = modifier) {
-        Box {
+    // The sheet form keeps the direction buttons on the dropdown's row, so sorting costs one line.
+    Row(modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(if (compact) 8.dp else ButtonGroupDefaults.ConnectedSpaceBetween),
+        verticalAlignment = Alignment.CenterVertically) {
+        Box(modifier = if (compact) Modifier else Modifier.weight(1f)) {
             if (compact) {
                 IconButton(
                     onClick = { expanded = true },
@@ -93,34 +109,41 @@ internal fun SortOrderControl(
                     )
                 }
             } else {
-                AssistChip(
-                    onClick = { expanded = true },
-                    label = { Text(label, maxLines = 1) },
-                    leadingIcon = {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_sort),
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                        )
+                // The sheet form: the leading button of a connected group whose other buttons are the directions.
+                ToggleButton(
+                    checked = false,
+                    onCheckedChange = { expanded = true },
+                    shapes = if (supportsDirection) {
+                        ButtonGroupDefaults.connectedLeadingButtonShapes()
+                    } else {
+                        ToggleButtonShapes(CircleShape, CircleShape, CircleShape)
                     },
-                    trailingIcon = {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_expand_more),
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                        )
-                    },
+                    colors = displayOptionToggleColors(),
+                    contentPadding = PaddingValues(horizontal = 12.dp),
                     modifier = Modifier
                         .fillMaxWidth()
                         .then(focusModifier)
                         .tvFocusable(shape = CircleShape, addFocusTarget = false),
-                    colors = AssistChipDefaults.assistChipColors(
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.72f),
-                        labelColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                        leadingIconContentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                        trailingIconContentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                    ),
-                )
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_sort),
+                        contentDescription = null,
+                        modifier = Modifier.size(ToggleButtonDefaults.IconSize),
+                    )
+                    Text(
+                        text = label,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(horizontal = ToggleButtonDefaults.IconSpacing),
+                    )
+                    Icon(
+                        painter = painterResource(R.drawable.ic_expand_more),
+                        contentDescription = null,
+                        modifier = Modifier.size(ToggleButtonDefaults.IconSize),
+                    )
+                }
             }
             GlassDropdownMenu(
                 expanded = expanded,
@@ -191,7 +214,60 @@ internal fun SortOrderControl(
             }
         }
         if (!compact && supportsDirection) {
-            SortDirectionControl(selected, selectedOrder, selectOrder)
+            SortDirectionButtons(selected, selectedOrder, selectOrder)
+        }
+    }
+}
+
+/**
+ * The direction half of the sheet's connected sort group, styled like the display mode buttons: the applied direction
+ * is filled and shows its label, the other shows only its icon.
+ */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun SortDirectionButtons(
+    option: ListSortOption,
+    selectedOrder: ListSortOrder,
+    onSortOrderSelected: (ListSortOrder) -> Unit,
+) {
+    val directions = listOf(
+        Triple(option.ascending, R.drawable.ic_sort_asc, R.string.sort_order_asc),
+        Triple(option.descending, R.drawable.ic_sort_desc, R.string.sort_order_desc),
+    )
+    directions.forEachIndexed { index, (order, iconRes, textRes) ->
+        val checked = order == selectedOrder
+        val text = stringResource(textRes)
+        ToggleButton(
+            checked = checked,
+            onCheckedChange = { order?.let(onSortOrderSelected) },
+            enabled = order != null,
+            shapes = if (index == 0) {
+                ButtonGroupDefaults.connectedMiddleButtonShapes()
+            } else {
+                ButtonGroupDefaults.connectedTrailingButtonShapes()
+            },
+            colors = displayOptionToggleColors(),
+            contentPadding = PaddingValues(horizontal = 12.dp),
+            modifier = Modifier
+                .semantics { contentDescription = text }
+                .tvFocusable(enabled = order != null, shape = CircleShape, addFocusTarget = false),
+        ) {
+            Icon(
+                painter = painterResource(iconRes),
+                contentDescription = null,
+                modifier = Modifier.size(ToggleButtonDefaults.IconSize),
+            )
+            AnimatedVisibility(
+                visible = checked,
+                enter = expandHorizontally() + fadeIn(),
+                exit = shrinkHorizontally() + fadeOut(),
+            ) {
+                Text(
+                    text = text,
+                    maxLines = 1,
+                    modifier = Modifier.padding(start = ToggleButtonDefaults.IconSpacing),
+                )
+            }
         }
     }
 }

@@ -24,6 +24,7 @@ import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.explore.data.SourcesSortOrder
 import org.skepsun.kototoro.explore.data.titleResId
 import org.skepsun.kototoro.settings.SettingsActivity
+import org.skepsun.kototoro.settings.compose.SourcesSettingsPage
 import org.skepsun.kototoro.settings.compose.AdultContentFilterTarget
 import org.skepsun.kototoro.settings.compose.SettingsChoiceOption
 import org.skepsun.kototoro.settings.compose.ExtensionInstallBehaviorItem
@@ -39,6 +40,7 @@ fun SourcesSettingsRoute(
     viewModel: SourcesSettingsViewModel,
     onSetupWizardClick: () -> Unit,
     onGlobalTagBlacklistClick: () -> Unit,
+    page: SourcesSettingsPage = SourcesSettingsPage.PREFERENCES,
 ) {
     val isLinksEnabled = viewModel.isLinksEnabled.collectAsStateWithLifecycle().value
     val installedJarNames by viewModel.installedJarNames.collectAsStateWithLifecycle()
@@ -50,8 +52,6 @@ fun SourcesSettingsRoute(
     val resolvedJarPriorityOrder = remember(jarPriorityOrder, installedJarNames) {
         viewModel.resolveJarPriorityOrder(jarPriorityOrder)
     }
-    val isShowBrokenSources =
-        settings.observeAsState(AppSettings.KEY_SHOW_BROKEN_SOURCES) { isShowBrokenSources }.value
     val isNsfwContentDisabled =
         settings.observeAsState(AppSettings.KEY_DISABLE_NSFW) { isNsfwContentDisabled }.value
     val isHistoryExcludeNsfw =
@@ -121,7 +121,6 @@ fun SourcesSettingsRoute(
         isSourcesGridMode = isSourcesGridMode,
         isSourcesGroupedByLanguage = isSourcesGroupedByLanguage,
         jarPriorityOrder = resolvedJarPriorityOrder,
-        isShowBrokenSources = isShowBrokenSources,
         adultContentFilterTargets = buildSet {
             if (isNsfwContentDisabled) add(AdultContentFilterTarget.SOURCES_AND_BROWSE)
             if (isHistoryExcludeNsfw) add(AdultContentFilterTarget.HISTORY)
@@ -140,8 +139,9 @@ fun SourcesSettingsRoute(
     )
 
     SourcesSettingsScreen(
-        overviewTitle = stringResource(R.string.remote_sources),
-        remoteSourcesTitle = stringResource(R.string.remote_sources),
+        page = page,
+        overviewTitle = stringResource(R.string.source_preferences_browsing),
+        remoteSourcesTitle = "",
         adultFilteringTitle = stringResource(R.string.adult_content_filtering),
         moreTitle = stringResource(R.string.more),
         state = state,
@@ -170,7 +170,6 @@ fun SourcesSettingsRoute(
         onSourcesGroupedByLanguageChange = { settings.isSourcesGroupedByLanguage = it },
         onSetupWizardClick = onSetupWizardClick,
         onJarPriorityOrderChange = viewModel::persistJarPriorityOrder,
-        onShowBrokenSourcesChange = { settings.isShowBrokenSources = it },
         onAdultContentFilterTargetsChange = { targets ->
             val hideFromSourcesAndBrowse = AdultContentFilterTarget.SOURCES_AND_BROWSE in targets
             val hideFromHistory = AdultContentFilterTarget.HISTORY in targets

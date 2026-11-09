@@ -68,6 +68,7 @@ internal fun DesktopTagBlacklistPage(controller: DesktopController, state: Deskt
         onToggle = controller::toggleTagBlacklist,
         onShowDetails = { details = it.key.toChip(chips, languageTag) },
         modifier = Modifier.widthIn(max = 860.dp).fillMaxWidth(),
+        topPadding = LocalDesktopTopInset.current,
         enabled = active,
         rawPatternLabel = if (offerRaw) desktopText("sources.tagBlacklistAddPattern", query.trim()) else null,
         onAddRawPattern = { controller.toggleTagBlacklist(rawKey) },

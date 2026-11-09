@@ -65,15 +65,10 @@ class FeedDeriverTest {
         sourceOriginFlags = 1 shl originOrdinal("TEST"),
     )
 
-    private fun snapshot(rows: List<FeedCardRow>, updates: List<FeedUpdateRow> = emptyList()) = FeedSnapshot(
-        rows = rows,
-        updateRowsByOwnerId = updates.associateBy { it.ownerId },
-    )
+    private fun snapshot(rows: List<FeedCardRow>) = FeedSnapshot(rows = rows, updateRowsByOwnerId = emptyMap())
 
     private fun input(
         rows: List<FeedCardRow>,
-        updates: List<FeedUpdateRow> = emptyList(),
-        showAllUpdates: Boolean = false,
         feedLimit: Int = 200,
         filters: Set<ListFilterOption> = emptySet(),
         excludedNsfw: Boolean = false,
@@ -83,8 +78,7 @@ class FeedDeriverTest {
         selectedCategoryId: Long? = null,
         mangaCategoryIdsByFeedKey: Map<String, Set<Long>> = emptyMap(),
     ) = FeedDeriver.Input(
-        snapshot = snapshot(rows, updates),
-        showAllUpdates = showAllUpdates,
+        snapshot = snapshot(rows),
         feedLimit = feedLimit,
         filters = filters.toCriteria(),
         excludedNsfw = excludedNsfw,
@@ -94,35 +88,6 @@ class FeedDeriverTest {
         presetSourceNames = presetSourceNames,
         selectedCategoryId = selectedCategoryId,
         mangaCategoryIdsByFeedKey = mangaCategoryIdsByFeedKey,
-    )
-
-    private fun update(
-        ownerId: Long,
-        mangaId: Long = ownerId,
-        entityId: Long? = ownerId,
-        newChapters: Int = 2,
-        lastChapterDate: Long = ownerId * 10L,
-        lastCheckTime: Long = ownerId,
-        isPinned: Boolean = false,
-        sourceName: String = "TEST",
-        isNsfw: Boolean = false,
-        title: String = "Update $ownerId",
-        displayMangaId: Long? = ownerId + 1000L,
-    ) = FeedUpdateRow(
-        ownerId = ownerId,
-        mangaId = mangaId,
-        entityId = entityId,
-        preferredLocalMangaId = null,
-        newChapters = newChapters,
-        lastChapterDate = lastChapterDate,
-        lastCheckTime = lastCheckTime,
-        lastChapterId = 42L,
-        isPinned = isPinned,
-        displayMangaId = displayMangaId,
-        title = title,
-        coverUrl = null,
-        sourceName = sourceName,
-        isNsfw = isNsfw,
     )
 
     // The tests cannot reach SourceGroupManager; the flag ordinals are stable
@@ -266,41 +231,6 @@ class FeedDeriverTest {
         )
 
         assertEquals(listOf(1L), derived.visibleRows.map { it.logId })
-    }
-
-    @Test
-    fun `showAll merges synthetic pending updates without logs`() {
-        val logRow = row(logId = 1, ownerId = 10, createdAt = 500)
-        val pending = update(ownerId = 20, lastChapterDate = 300)
-
-        val derived = FeedDeriver.derive(input(listOf(logRow), listOf(pending), showAllUpdates = true))
-
-        assertEquals(listOf(1L, -20L), derived.visibleRows.map { it.logId })
-        // the synthetic row keeps the pending count as chapters
-        assertEquals(2, derived.visibleRows[1].chapters.size)
-    }
-
-    @Test
-    fun `showAll deduplicates log rows by owner id`() {
-        val logRow = row(logId = 1, ownerId = 10, createdAt = 500)
-        val pending = update(ownerId = 10, newChapters = 9)
-
-        val derived = FeedDeriver.derive(input(listOf(logRow), listOf(pending), showAllUpdates = true))
-
-        // the log row wins: no duplicate for owner 10
-        assertEquals(listOf(1L), derived.visibleRows.map { it.logId })
-    }
-
-    @Test
-    fun `synthetic showAll rows keep the pinned flag`() {
-        val logRow = row(logId = 1, ownerId = 10, createdAt = 100)
-        val pending = update(ownerId = 20, lastChapterDate = 900, isPinned = true)
-
-        val derived = FeedDeriver.derive(input(listOf(logRow), listOf(pending), showAllUpdates = true))
-
-        assertEquals(listOf(1L, -20L), derived.visibleRows.map { it.logId })
-        assertTrue(derived.visibleRows.last().isPinned)
-        assertEquals(20, derived.visibleRows.last().createdAt, "fallback uses check time, never publication time")
     }
 
     @Test

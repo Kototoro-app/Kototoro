@@ -41,7 +41,12 @@ def activeAbiFilters = debugOnlyAbiBuild ? ['arm64-v8a'] : allAbiFilters
 android {
 	// Phase B: Compose 1.12 requires compileSdk 37; targetSdk stays 36
 	// (Android 17 orientation-lock behavior rework is tracked in Phase E).
-	compileSdk = 37
+	// Compose ui 1.13 (BlurRadiusSpec, immersive edge blur) further requires the 37.1 minor SDK.
+	compileSdk {
+		version = release(37) {
+			minorApiLevel = 1
+		}
+	}
 	namespace = 'org.skepsun.kototoro'
 
 	signingConfigs {
@@ -62,8 +67,8 @@ android {
 		// Phase E: targetSdk 37. Large-screen orientation locks are skipped in
 		// ScreenOrientationHelper to match Android 17 behavior.
 		targetSdk = 37
-		versionCode = 1250
-		versionName = '2.3.6'
+		versionCode = 1257
+		versionName = '2.4.0'
 		manifestPlaceholders = [
 			appClassName: 'org.skepsun.kototoro.KototoroApp'
 		]
@@ -474,6 +479,8 @@ dependencies {
 	def composeBom = platform(libs.androidx.compose.bom)
 	implementation composeBom
 	implementation libs.androidx.compose.ui
+	// Explicit ui 1.13.0-rc01 wins over the BOM-pinned 1.12.x: BlurRadiusSpec drives the immersive edge blur.
+	implementation libs.androidx.compose.ui.progressive.blur
 	implementation libs.androidx.compose.ui.text.google.fonts
 	// Phase D: explicit 1.5.0-alpha26 wins over the BOM-pinned material3 1.4.0 for the whole app.
 	implementation libs.androidx.compose.material3.expressive

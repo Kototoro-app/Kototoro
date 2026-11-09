@@ -73,6 +73,8 @@ fun DownloadsSettingsRoute(
         settings.observeAsState(AppSettings.KEY_PAGES_SAVE_DIR) { getPagesSaveDir(context)?.uri?.toString() }.value
     val isPagesSavingAskEnabled =
         settings.observeAsState(AppSettings.KEY_PAGES_SAVE_ASK) { isPagesSavingAskEnabled }.value
+    val isPagesSavePerMangaFolder =
+        settings.observeAsState(AppSettings.KEY_PAGES_SAVE_PER_MANGA_FOLDER) { isPagesSavePerMangaFolder }.value
     val downloadThreads = settings.observeAsState(AppSettings.KEY_DOWNLOADS_THREADS) { downloadThreads }.value
     val downloadMaxActiveSeries =
         settings.observeAsState(AppSettings.KEY_DOWNLOADS_MAX_ACTIVE_SERIES) { downloadMaxActiveSeries }.value
@@ -108,6 +110,7 @@ fun DownloadsSettingsRoute(
         isDozeIgnoreVisible = isDozeIgnoreAvailable(context, dozeRefreshKey),
         pagesDirectorySummary = pagesDirectorySummary,
         isPagesSavingAskEnabled = isPagesSavingAskEnabled,
+        isPagesSavePerMangaFolder = isPagesSavePerMangaFolder,
         downloadThreads = downloadThreads,
         downloadMaxActiveSeries = downloadMaxActiveSeries,
         downloadRequestDelayMs = downloadRequestDelayMs,
@@ -173,6 +176,7 @@ fun DownloadsSettingsRoute(
             }
         },
         onPagesSavingAskChange = { settings.isPagesSavingAskEnabled = it },
+        onPagesSavePerMangaFolderChange = { settings.isPagesSavePerMangaFolder = it },
         onDownloadThreadsChange = { settings.downloadThreads = it },
         onDownloadMaxActiveSeriesChange = { newValue ->
             if (newValue != AppSettings.UNLIMITED_SERIES) {

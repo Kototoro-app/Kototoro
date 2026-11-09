@@ -153,16 +153,41 @@ object LocalApkExtensionSupport {
         packageName: String,
     ): Boolean {
         val root = getManagedExtensionsDir(context, ecosystem)
-        val directMatches = root.listFiles()
-            ?.filter { it.isFile && it.extension.equals("apk", ignoreCase = true) && archiveNameMatches(it, packageName) }
-            .orEmpty()
-        val nestedDirs = root.listFiles()
-            ?.filter { it.isDirectory && it.name.equals(packageName, ignoreCase = true) }
-            .orEmpty()
+        // The archive name is not always the package name: IReader repositories store APKs under their
+        // `ireader-<lang>-<name>` id while the archive declares `ireader.<name>.<lang>`, and APKs copied in by
+        // hand keep their own file names. Match the parsed package too, or the delete finds nothing and falls
+        // through to a system uninstall of a package the system never had.
+        val archives = localArchiveEntries(context, context.packageManager, ecosystem)
+            .map { (file, info) -> file to info.packageName }
         var deleted = false
-        directMatches.forEach { deleted = it.delete() || deleted }
-        nestedDirs.forEach { dir -> deleted = dir.deleteRecursively() || deleted }
+        managedDeletionTargets(root, packageName, archives).forEach { target ->
+            deleted = (if (target.isDirectory) target.deleteRecursively() else target.delete()) || deleted
+        }
+        File(File(context.codeCacheDir, LOAD_CACHE_DIR), "$ecosystem-$packageName.apk").delete()
         return deleted
+    }
+
+    /** Files and per-package directories under [root] that hold [packageName], by archive name or parsed package. */
+    internal fun managedDeletionTargets(
+        root: File,
+        packageName: String,
+        archives: List<Pair<File, String>>,
+    ): List<File> {
+        val rootFile = root.absoluteFile
+        val targets = LinkedHashSet<File>()
+        rootFile.listFiles().orEmpty().forEach { child ->
+            when {
+                child.isDirectory && child.name.equals(packageName, ignoreCase = true) -> targets += child
+                child.isFile && child.extension.equals("apk", ignoreCase = true) &&
+                    archiveNameMatches(child, packageName) -> targets += child
+            }
+        }
+        archives.filter { (_, archivePackage) -> archivePackage == packageName }.forEach { (apk, _) ->
+            val apkFile = apk.absoluteFile
+            val parent = apkFile.parentFile
+            targets += if (parent != null && parent.parentFile == rootFile) parent else apkFile
+        }
+        return targets.toList()
     }
 
     private fun File.isWithin(root: File): Boolean {

@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.core.ui.chapters
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
@@ -51,6 +52,8 @@ fun ChapterListCard(
     enabled: Boolean = true,
     actions: (@Composable RowScope.() -> Unit)? = null,
     thumbnail: (@Composable BoxScope.() -> Unit)? = null,
+    /** Width over height of [thumbnail]: 16:9 for episode artwork, portrait for a chapter's first page. */
+    thumbnailAspectRatio: Float = EPISODE_THUMBNAIL_ASPECT_RATIO,
 ) {
     val titleColor = when {
         item.isCurrent -> MaterialTheme.colorScheme.primary
@@ -87,7 +90,12 @@ fun ChapterListCard(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (thumbnail != null) {
-                Box(Modifier.padding(end = 12.dp).width(80.dp).aspectRatio(16f / 9f).clip(RoundedCornerShape(6.dp))) {
+                // Landscape artwork keeps the 80dp row thumbnail; a portrait page is narrower so the row stays short.
+                val thumbnailWidth = if (thumbnailAspectRatio >= 1f) 80.dp else 48.dp
+                Box(
+                    Modifier.padding(end = 12.dp).width(thumbnailWidth).aspectRatio(thumbnailAspectRatio)
+                        .clip(RoundedCornerShape(6.dp)),
+                ) {
                     thumbnail()
                 }
             }
@@ -159,6 +167,8 @@ fun ChapterGridCard(
     enabled: Boolean = true,
     actions: (@Composable RowScope.() -> Unit)? = null,
     thumbnail: (@Composable BoxScope.() -> Unit)? = null,
+    /** Width over height of [thumbnail]: 16:9 for episode artwork, portrait for a chapter's first page. */
+    thumbnailAspectRatio: Float = EPISODE_THUMBNAIL_ASPECT_RATIO,
 ) {
     val titleColor = if (item.isUnread) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
     Column(
@@ -170,11 +180,16 @@ fun ChapterGridCard(
             .semantics { if (!enabled) disabled() },
     ) {
     Card(
-        modifier = Modifier.fillMaxWidth().aspectRatio(if (thumbnail == null) 1f else 16f / 9f),
+        modifier = Modifier.fillMaxWidth().aspectRatio(if (thumbnail == null) 1f else thumbnailAspectRatio),
         shape = RoundedCornerShape(8.dp),
         colors = CardDefaults.cardColors(containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer
             else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .5f)),
-        border = if (!item.isUnread && !isSelected) null else CardDefaults.outlinedCardBorder(),
+        // A thumbnail covers the container colour, so selection also needs the bookmark cards' thick border.
+        border = when {
+            isSelected -> BorderStroke(4.dp, MaterialTheme.colorScheme.primary)
+            !item.isUnread -> null
+            else -> CardDefaults.outlinedCardBorder()
+        },
     ) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val titleStyle = when {
@@ -183,7 +198,12 @@ fun ChapterGridCard(
                 maxWidth < 88.dp -> MaterialTheme.typography.bodyMedium
                 else -> MaterialTheme.typography.titleMedium
             }
-            if (thumbnail != null) thumbnail() else {
+            if (thumbnail != null) {
+                thumbnail()
+                if (isSelected) {
+                    Box(Modifier.matchParentSize().background(MaterialTheme.colorScheme.primary.copy(alpha = .3f)))
+                }
+            } else {
                 Text(item.title, style = titleStyle, color = titleColor, maxLines = 1, textAlign = TextAlign.Center,
                     overflow = TextOverflow.Ellipsis, modifier = Modifier.align(Alignment.Center))
             }
@@ -220,3 +240,9 @@ fun ChapterGridCard(
     }
     }
 }
+
+/** Episode artwork from video sources is landscape. */
+const val EPISODE_THUMBNAIL_ASPECT_RATIO: Float = 16f / 9f
+
+/** A manga chapter's first page shown as its thumbnail, in the usual cover proportion. */
+const val PAGE_THUMBNAIL_ASPECT_RATIO: Float = 2f / 3f

@@ -4,6 +4,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -86,7 +87,9 @@ class AniyomiSourceRuntimeTest {
         assertEquals(listOf("Failing", "First", "Hosters"), episodes.map { it.title })
         assertEquals(listOf(1f, 2f, 1.5f), episodes.map { it.number })
         assertEquals("Fansub", episodes.first().scanlator)
-        assertEquals("Fansub", episodes.first().playbackLine)
+        // A lone fansub competes with nobody, so the episodes stay on one unnamed line.
+        assertNull(episodes.first().branch)
+        assertNull(episodes.first().playbackLine)
         assertEquals(1720000000000L, episodes.first().uploadDate)
     }
 

@@ -45,6 +45,40 @@ class MangaDatabaseDaoSmokeTest {
     }
 
     @Test
+    fun `tracks to check can leave out finished titles and keep the oldest-first order`() = runBlocking {
+        val db = newDb()
+        try {
+            for ((id, state) in listOf(1L to "ONGOING", 2L to "FINISHED", 3L to null, 4L to "ABANDONED")) {
+                db.getMangaDao().upsert(MangaEntity(
+                    id = id, title = "Work $id", altTitles = null, url = "$id", publicUrl = "https://example.org/$id",
+                    rating = 0f, isNsfw = false, contentRating = null, coverUrl = "", largeCoverUrl = null,
+                    state = state, authors = null, source = "TEST",
+                ))
+                // Checked longest ago first: 4, 3, 2, 1.
+                db.getTracksDao().upsert(TrackEntity(
+                    mangaId = id, lastChapterId = 0, newChapters = 0, lastCheckTime = 1_000L - id,
+                    lastChapterDate = 0, lastResult = TrackEntity.RESULT_NONE, lastError = null,
+                ))
+            }
+            val tracks = db.getTracksDao()
+
+            assertEquals(listOf(4L, 3L, 2L, 1L), tracks.findAll(offset = 0, limit = 10).map { it.mangaId })
+            assertEquals(
+                listOf(4L, 3L, 1L),
+                tracks.findAllExceptState("FINISHED", offset = 0, limit = 10).map { it.mangaId },
+            )
+            assertEquals(listOf(4L), tracks.findAllExceptState("FINISHED", offset = 0, limit = 1).map { it.mangaId })
+            assertEquals(3, tracks.getTracksCountExceptState("FINISHED"))
+            assertEquals(4, tracks.getTracksCount())
+            assertEquals(
+                listOf(4L to "TEST", 3L to "TEST", 2L to "TEST", 1L to "TEST"),
+                tracks.findQueue().map { it.mangaId to it.source },
+            )
+            assertEquals(listOf(4L, 3L, 1L), tracks.findQueueExceptState("FINISHED").map { it.mangaId })
+        } finally { db.close() }
+    }
+
+    @Test
     fun `viewing a reminder clears unseen count while retaining pending chapters and discovery time`() = runBlocking {
         val db = newDb()
         try {
@@ -56,10 +90,10 @@ class MangaDatabaseDaoSmokeTest {
             val tracks = db.getTracksDao()
             tracks.upsert(TrackEntity(1, 32, 2, 200, 999, TrackEntity.RESULT_HAS_UPDATE, null))
             assertEquals(1, tracks.observeUnreadWorkCount().first())
-            db.getTrackLogsDao().ensureUnreadUpdateLogs()
-            val event = db.getTrackLogsDao().dump().single()
-            assertEquals(200, event.createdAt, "publication dates cannot date a discovery event")
-            db.getTrackLogsDao().markAsRead(event.id)
+            val eventId = db.getTrackLogsDao().insert(TrackLogEntity(
+                mangaId = 1, chapters = "Chapter 33\nChapter 34", createdAt = 200, isUnread = true,
+            ))
+            db.getTrackLogsDao().markAsRead(eventId)
             assertEquals(0, tracks.observeUnreadWorkCount().first())
             assertEquals(2, tracks.find(1)!!.newChapters)
             assertEquals(1, db.getTrackLogsDao().count())

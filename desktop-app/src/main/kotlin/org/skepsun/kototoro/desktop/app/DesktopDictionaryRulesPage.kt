@@ -21,7 +21,8 @@ internal fun DesktopDictionaryRulesPage(controller: DesktopController, state: De
     val ui by controller.dictionaryRules.collectAsState()
     val active = !state.busy
     val rules = ui.rules
-    Column(Modifier.widthIn(max = 820.dp).fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    DesktopPageBar(modifier = Modifier.widthIn(max = 820.dp).fillMaxSize(), bar = {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             OutlinedButton({ importDictionaryRules(controller) }, enabled = active,
                 modifier = Modifier.testTag("dictionary-rules-import")) { Text(AndroidStrings["import_button"]) }
@@ -33,7 +34,10 @@ internal fun DesktopDictionaryRulesPage(controller: DesktopController, state: De
         Text(AndroidStrings["dictionary_rules_summary"], style = MaterialTheme.typography.bodySmall, color = Muted,
             modifier = Modifier.testTag("dictionary-rules-summary"))
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+    }
+    }) { padding ->
         DictionaryRulesContent(
+            topPadding = padding.calculateTopPadding(),
             rules = rules?.map(DictionaryRule::toUiModel),
             onEdit = { item -> controller.openDictionaryRuleEditor(rules?.firstOrNull { it.name == item.name }) },
             onToggle = { item, enabled -> rules?.firstOrNull { it.name == item.name }?.let {
@@ -42,7 +46,7 @@ internal fun DesktopDictionaryRulesPage(controller: DesktopController, state: De
             onDelete = { item -> rules?.firstOrNull { it.name == item.name }?.let(controller::deleteDictionaryRule) },
             enabled = active,
             loadingText = desktopText("dictionaryRules.loading"),
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.fillMaxSize(),
         )
     }
     if (ui.editorOpen) {

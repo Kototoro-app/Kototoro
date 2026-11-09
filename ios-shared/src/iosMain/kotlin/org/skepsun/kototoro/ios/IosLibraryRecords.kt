@@ -54,4 +54,4 @@ internal fun resolveUpdateDownloadChapters(content: IosSourceContent, names: Lis
         IosSourceChapter(chapters[name]?.singleOrNull() ?: return emptyList())
     }
 }
-data class IosUpdateReport(val checked: Int, val withUpdates: Int, val failed: Int, val newChapters: Int)
+data class IosUpdateReport(val checked: Int, val withUpdates: Int, val failed: Int, val newChapters: Int, val skipped: Int)

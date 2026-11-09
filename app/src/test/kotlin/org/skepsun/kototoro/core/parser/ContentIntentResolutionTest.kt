@@ -28,6 +28,7 @@ class ContentIntentResolutionTest {
             resolverProvider = mockk(),
             appShortcutManagerProvider = mockk(),
             storedContentIdentityResolver = mockk(),
+            settings = mockk(relaxed = true),
         ),
     )
 

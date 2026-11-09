@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Tab
@@ -13,6 +12,7 @@ import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -30,9 +30,11 @@ import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.compose.KototoroSheetSurface
+import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.compose.SheetDragHandle
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.list.ui.compose.DisplayModeSelector
+import org.skepsun.kototoro.list.ui.compose.DisplayOptionsScrimColor
 import org.skepsun.kototoro.list.ui.compose.GridSizeSlider
 import org.skepsun.kototoro.list.ui.compose.RailRowsSelector
 
@@ -84,6 +86,7 @@ fun HomeSectionsConfigRoute(
         sheetState = sheetState,
         dragHandle = null,
         shape = MaterialTheme.shapes.extraLarge,
+        scrimColor = DisplayOptionsScrimColor,
     ) {
         KototoroSheetSurface(
             modifier = Modifier
@@ -94,66 +97,69 @@ fun HomeSectionsConfigRoute(
                 minimumContainerAlpha = 0.6f,
             ),
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp)
-                    .padding(bottom = 24.dp, top = 6.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                SheetDragHandle(
-                    modifier = Modifier.align(Alignment.CenterHorizontally),
-                )
-                Text(
-                    text = stringResource(R.string.display_options),
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(bottom = 4.dp),
-                )
-                TabRow(
-                    selectedTabIndex = selectedTabIndex,
+            // The sheet covers the page the shell backdrop samples, so a glass slider thumb here would show
+            // that page through the sheet; draw the solid thumb instead.
+            CompositionLocalProvider(LocalLiquidGlassBackdrop provides null) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp)
+                        .padding(bottom = 16.dp, top = 6.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    tabTitles.forEachIndexed { index, title ->
-                        Tab(
-                            modifier = Modifier.tvTabRing(),
-                            selected = selectedTabIndex == index,
-                            onClick = { selectedTabIndex = index },
-                            text = {
-                                Text(
-                                    text = title,
-                                    maxLines = 1,
-                                )
-                            },
+                    SheetDragHandle(
+                        modifier = Modifier.align(Alignment.CenterHorizontally),
+                    )
+                    Text(
+                        text = stringResource(R.string.display_options),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    TabRow(
+                        selectedTabIndex = selectedTabIndex,
+                    ) {
+                        tabTitles.forEachIndexed { index, title ->
+                            Tab(
+                                modifier = Modifier.tvTabRing(),
+                                selected = selectedTabIndex == index,
+                                onClick = { selectedTabIndex = index },
+                                text = {
+                                    Text(
+                                        text = title,
+                                        maxLines = 1,
+                                    )
+                                },
+                            )
+                        }
+                    }
+                    when (selectedTabIndex) {
+                        0 -> HomeSectionConfigContent(
+                            listMode = prefs.historyListMode,
+                            gridSize = prefs.historyGridSize,
+                            railRows = prefs.historyRailRows,
+                            onListModeSelected = { settings.homeSectionListModeHistory = it },
+                            onGridSizeChange = { settings.homeSectionGridSizeHistory = it },
+                            onRailRowsChange = { settings.homeSectionRailRowsHistory = it },
+                        )
+
+                        1 -> HomeSectionConfigContent(
+                            listMode = prefs.updatesListMode,
+                            gridSize = prefs.updatesGridSize,
+                            railRows = prefs.updatesRailRows,
+                            onListModeSelected = { settings.homeSectionListModeUpdates = it },
+                            onGridSizeChange = { settings.homeSectionGridSizeUpdates = it },
+                            onRailRowsChange = { settings.homeSectionRailRowsUpdates = it },
+                        )
+
+                        else -> HomeSectionConfigContent(
+                            listMode = prefs.recommendationsListMode,
+                            gridSize = prefs.recommendationsGridSize,
+                            railRows = prefs.recommendationsRailRows,
+                            onListModeSelected = { settings.homeSectionListModeRecommendations = it },
+                            onGridSizeChange = { settings.homeSectionGridSizeRecommendations = it },
+                            onRailRowsChange = { settings.homeSectionRailRowsRecommendations = it },
                         )
                     }
-                }
-                when (selectedTabIndex) {
-                    0 -> HomeSectionConfigContent(
-                        listMode = prefs.historyListMode,
-                        gridSize = prefs.historyGridSize,
-                        railRows = prefs.historyRailRows,
-                        onListModeSelected = { settings.homeSectionListModeHistory = it },
-                        onGridSizeChange = { settings.homeSectionGridSizeHistory = it },
-                        onRailRowsChange = { settings.homeSectionRailRowsHistory = it },
-                    )
-
-                    1 -> HomeSectionConfigContent(
-                        listMode = prefs.updatesListMode,
-                        gridSize = prefs.updatesGridSize,
-                        railRows = prefs.updatesRailRows,
-                        onListModeSelected = { settings.homeSectionListModeUpdates = it },
-                        onGridSizeChange = { settings.homeSectionGridSizeUpdates = it },
-                        onRailRowsChange = { settings.homeSectionRailRowsUpdates = it },
-                    )
-
-                    else -> HomeSectionConfigContent(
-                        listMode = prefs.recommendationsListMode,
-                        gridSize = prefs.recommendationsGridSize,
-                        railRows = prefs.recommendationsRailRows,
-                        onListModeSelected = { settings.homeSectionListModeRecommendations = it },
-                        onGridSizeChange = { settings.homeSectionGridSizeRecommendations = it },
-                        onRailRowsChange = { settings.homeSectionRailRowsRecommendations = it },
-                    )
                 }
             }
         }
@@ -187,17 +193,10 @@ private fun HomeSectionConfigContent(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(
-            text = stringResource(R.string.list_mode),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
         DisplayModeSelector(
             currentListMode = listMode,
             onListModeSelected = onListModeSelected,
         )
-
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
 
         GridSizeSlider(
             title = stringResource(R.string.grid_size),
@@ -206,7 +205,6 @@ private fun HomeSectionConfigContent(
         )
 
         if (listMode == ListMode.LIST || listMode == ListMode.DETAILED_LIST) {
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
             RailRowsSelector(
                 railRows = railRows,
                 onRailRowsChange = onRailRowsChange,

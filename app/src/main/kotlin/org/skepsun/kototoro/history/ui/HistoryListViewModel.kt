@@ -340,6 +340,21 @@ class HistoryListViewModel @Inject constructor(
         quickFilter.clearFilter()
     }
 
+    /**
+     * The empty state's "reset filter": clears everything that can make the
+     * list empty (quick-filter options, the typed query, source tags, and the
+     * group tab unless the current space scopes it), like the favourites page.
+     */
+    fun resetFilters() {
+        clearFilter()
+        // Not GlobalFavoritesState.resetFilters: that also drops the favourites
+        // page's own quick filter.
+        globalFavoritesState.clearSourceTags()
+        if (activeSpaceScope.value == null) {
+            globalFavoritesState.clearSelectedGroupTab()
+        }
+    }
+
     fun clearHistory(minDate: Instant?) {
         launchJob(Dispatchers.Default) {
             val stringRes = if (minDate == null) {

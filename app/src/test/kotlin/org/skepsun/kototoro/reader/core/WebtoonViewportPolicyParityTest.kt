@@ -4,12 +4,12 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.skepsun.kototoro.reader.ui.compose.WebtoonVisibleItem
 import org.skepsun.kototoro.reader.ui.compose.measureWebtoonViewport
-import org.skepsun.kototoro.reader.ui.compose.resolveLastEndVisibleWebtoonPageKey
+import org.skepsun.kototoro.reader.ui.compose.resolveCenterWebtoonPageKey
 
 /**
  * Parity test verifying that the new platform-agnostic [ReaderScene] geometry contract
  * behaves with semantic equivalence to Kototoro's established, production-proven [measureWebtoonViewport]
- * and [resolveLastEndVisibleWebtoonPageKey] in `WebtoonViewportPolicy`.
+ * and [resolveCenterWebtoonPageKey] in `WebtoonViewportPolicy`.
  */
 class WebtoonViewportPolicyParityTest {
 
@@ -85,7 +85,7 @@ class WebtoonViewportPolicyParityTest {
     }
 
     @Test
-    fun `visible nodes match legacy resolveLastEndVisibleWebtoonPageKey active page semantics`() {
+    fun `visible nodes match legacy resolveCenterWebtoonPageKey active page semantics`() {
         val availableWidth = 1000
         val viewportHeight = 1000
         val scrollOffset = 200f // Viewport looks at 200..1200 in scene space
@@ -113,7 +113,7 @@ class WebtoonViewportPolicyParityTest {
             )
         }
 
-        val legacyActiveKey = resolveLastEndVisibleWebtoonPageKey(
+        val legacyActiveKey = resolveCenterWebtoonPageKey(
             items = legacyItems,
             viewportStartPx = 0,
             viewportEndPx = viewportHeight,

@@ -31,13 +31,13 @@ abstract class CachingContentRepository(
     final override suspend fun getDetails(
         manga: Content,
         fetchMode: ContentRepository.DetailsFetchMode,
-    ): Content = getDetails(
-        manga = manga,
-        cachePolicy = when (fetchMode) {
-            ContentRepository.DetailsFetchMode.ALLOW_CACHE -> CachePolicy.ENABLED
-            ContentRepository.DetailsFetchMode.FORCE_REFRESH -> CachePolicy.WRITE_ONLY
-        },
-    )
+    ): Content = when (fetchMode) {
+        ContentRepository.DetailsFetchMode.ALLOW_CACHE -> getDetails(manga, CachePolicy.ENABLED)
+        ContentRepository.DetailsFetchMode.FORCE_REFRESH -> getDetails(manga, CachePolicy.WRITE_ONLY)
+        ContentRepository.DetailsFetchMode.CHAPTERS_REFRESH -> detailsMutex.withLock(manga.cacheLockKey()) {
+            asyncSafe { getChaptersImpl(manga) }
+        }.await()
+    }
 
     final override suspend fun getPages(chapter: ContentChapter, nextChapterUrl: String?): List<ContentPage> = pagesMutex.withLock(chapter.cacheLockKey()) {
         val cacheUrl = chapter.cacheUrl()
@@ -87,6 +87,12 @@ abstract class CachingContentRepository(
     }
 
     protected abstract suspend fun getDetailsImpl(manga: Content): Content
+
+    /**
+     * [manga] with a fresh chapter list ([ContentRepository.DetailsFetchMode.CHAPTERS_REFRESH]). Sources that can
+     * fetch chapters without the details page override this; the rest refresh everything.
+     */
+    protected open suspend fun getChaptersImpl(manga: Content): Content = getDetailsImpl(manga)
 
     protected abstract suspend fun getRelatedContentImpl(seed: Content): List<Content>
 

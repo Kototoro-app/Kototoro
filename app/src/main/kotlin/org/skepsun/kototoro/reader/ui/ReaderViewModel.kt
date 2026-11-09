@@ -663,10 +663,10 @@ class ReaderViewModel @Inject constructor(
     }
 
     private fun createPageSaveTask(explicitPage: ReaderPage?): PageSaveHelper.Task {
+        val pages = content.value.pages
         val page = explicitPage ?: run {
             val state = checkNotNull(getCurrentState())
             val targetPage = targetPagePosition.value ?: state.page
-            val pages = content.value.pages
             pages.find { it.chapterId == state.chapterId && it.index == targetPage }
                 ?: pages.find { it.chapterId == state.chapterId && it.index == state.page }
                 ?: throw IllegalStateException("Cannot find current page")
@@ -676,6 +676,14 @@ class ReaderViewModel @Inject constructor(
             chapterId = page.chapterId,
             pageNumber = page.index + 1,
             page = page.toContentPage(),
+            previousPage = pages.find { it.chapterId == page.chapterId && it.index == page.index - 1 }
+                ?.toContentPage(),
+            nextPage = pages.find { it.chapterId == page.chapterId && it.index == page.index + 1 }
+                ?.toContentPage(),
+            stitchDirection = StitchDirection.forReaderMode(
+                mode = readerMode.value,
+                isContinuousHorizontalReversed = settings.isContinuousHorizontalReversed,
+            ),
         )
     }
 

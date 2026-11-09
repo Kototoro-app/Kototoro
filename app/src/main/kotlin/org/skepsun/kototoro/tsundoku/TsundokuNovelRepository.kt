@@ -165,9 +165,20 @@ class TsundokuNovelRepository(
     // ==================== Details ====================
 
     override suspend fun getDetailsImpl(manga: Content): Content = withContext(Dispatchers.IO) {
+        recordingRefresh(manga) { fetchDetails(manga) }
+    }
+
+    /** Only the chapter list, through the same [RefreshContext]-aware call; [manga]'s details are kept. */
+    override val refreshesChaptersAlone: Boolean get() = true
+
+    override suspend fun getChaptersImpl(manga: Content): Content = withContext(Dispatchers.IO) {
+        recordingRefresh(manga) { manga.copy(chapters = refreshChapters(manga, forceRefresh = false)) }
+    }
+
+    private suspend inline fun recordingRefresh(manga: Content, block: () -> Content): Content {
         refreshReporter.recordAttempt(source.sourceKey, manga.id)
-        val details = try {
-            fetchDetails(manga)
+        val result = try {
+            block()
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -175,7 +186,7 @@ class TsundokuNovelRepository(
             throw e
         }
         refreshReporter.recordSuccess(source.sourceKey, manga.id)
-        details
+        return result
     }
 
     /**

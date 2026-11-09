@@ -17,6 +17,8 @@ import org.skepsun.kototoro.favourites.data.FavouriteCategoryEntity
 import org.skepsun.kototoro.favourites.data.FavouriteEntity
 import org.skepsun.kototoro.list.domain.ListSortOrder
 import org.skepsun.kototoro.tracker.domain.completeUpdateChapter
+import org.skepsun.kototoro.tracker.domain.storeChapterSnapshot
+import org.skepsun.kototoro.tracker.domain.ChapterSnapshotResult
 import org.skepsun.kototoro.tracker.domain.recomputeLegacyUpdateCounter
 import org.skepsun.kototoro.history.data.HistoryEntity
 import org.skepsun.kototoro.migration.domain.MigrationChapter
@@ -46,6 +48,9 @@ class SourceLibrary(
      * step with its own services setting; it starts on, which is Android's default.
      */
     var statsRecording: Boolean = true
+
+    /** Apply the same duplicate-chapter policy to every chapter-list write, including details and reader saves. */
+    var markDuplicateChaptersRead: Boolean = false
 
     suspend fun favourites(withChapters: Boolean = true): List<SourceContent> = database.getFavouritesDao()
         .findAllWithActiveCategory(0, Int.MAX_VALUE).distinctBy { it.manga.id }
@@ -373,8 +378,17 @@ class SourceLibrary(
             createdAt = previous?.createdAt ?: now, updatedAt = now, deletedAt = 0))
     }
 
-    suspend fun save(content: SourceContent) = database.useWriterConnection { connection ->
-        connection.immediateTransaction { saveInTransaction(content) }
+    /**
+     * Stores [content]; storing its chapter list records the new chapters of a tracked work
+     * ([storeChapterSnapshot]), and the result says what that found. [fallbackBranch] and [now] are a check's, which
+     * knows the preferred branch and runs on its own clock.
+     */
+    suspend fun save(
+        content: SourceContent,
+        fallbackBranch: String? = null,
+        now: Long = clock(),
+    ): ChapterSnapshotResult? = database.useWriterConnection { connection ->
+        connection.immediateTransaction { saveInTransaction(content, fallbackBranch, now) }
     }
 
     /** Android's migration plan, committed with target details in one transaction; files and bookmarks stay owned
@@ -671,7 +685,11 @@ class SourceLibrary(
         }
     }
 
-    private suspend fun saveInTransaction(content: SourceContent) {
+    private suspend fun saveInTransaction(
+        content: SourceContent,
+        fallbackBranch: String? = null,
+        now: Long = clock(),
+    ): ChapterSnapshotResult? {
         database.getMangaDao().find(content.id)?.manga?.let { requireSameIdentity(it, content) }
         val entity = MangaEntity(
             id = content.id, title = content.title, altTitles = content.altTitles.joinToString("\n"),
@@ -697,13 +715,19 @@ class SourceLibrary(
         }
         database.getTagsDao().upsert(stableTags)
         database.getMangaDao().upsert(entity, stableTags)
-        content.chapters?.let { chapters ->
-            database.getChaptersDao().replaceAll(content.id, chapters.mapIndexed { index, chapter ->
+        val chapters = content.chapters ?: return null
+        return database.storeChapterSnapshot(
+            mangaId = content.id,
+            workTitle = content.title,
+            chapters = chapters.mapIndexed { index, chapter ->
                 ChapterEntity(chapter.id, content.id, chapter.title.orEmpty(), chapter.number, chapter.volume,
                     chapter.url, chapter.scanlator, chapter.uploadDate, chapter.branch, chapter.source.name,
                     index, chapter.sourceData)
-            })
-        }
+            },
+            now = now,
+            fallbackBranch = fallbackBranch,
+            markDuplicatesRead = markDuplicateChaptersRead,
+        )
     }
 
     private fun requireSameIdentity(existing: MangaEntity, content: SourceContent) {

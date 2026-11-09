@@ -55,14 +55,17 @@ import androidx.compose.ui.zIndex
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.material3.MaterialTheme
 import org.skepsun.kototoro.core.ui.compose.ImmersiveEdgeGradient
-import org.skepsun.kototoro.core.ui.compose.ImmersiveBottomGradientStops
+import org.skepsun.kototoro.core.ui.compose.ImmersiveEdge
+import org.skepsun.kototoro.core.ui.compose.ImmersiveEdgeBlur
+import org.skepsun.kototoro.core.ui.compose.ImmersiveEdgeBlurTintScale
+import org.skepsun.kototoro.core.ui.compose.LocalImmersiveEdgeBackdrop
+import org.skepsun.kototoro.core.ui.compose.immersiveEdgeBlurRadius
 import org.skepsun.kototoro.core.ui.compose.ImmersiveEdgeFeatherExtension
-import org.skepsun.kototoro.core.ui.compose.ImmersiveTopGradientStops
 import org.skepsun.kototoro.core.prefs.SpaceSwitcherPosition
+import org.skepsun.kototoro.core.prefs.limitMainNavigationItems
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarHorizontalPadding
 import org.skepsun.kototoro.core.ui.compose.LocalScrollbarActive
 import org.skepsun.kototoro.core.ui.compose.resolveTopImmersiveAlpha
-import org.skepsun.kototoro.core.ui.compose.toTransparentImmersiveColor
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.boundsInRoot
@@ -101,6 +104,11 @@ import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.space.ui.SpaceAction
 import org.skepsun.kototoro.space.ui.SpaceSidekick
 import org.skepsun.kototoro.space.ui.SpaceSwitcherRailButton
+import org.skepsun.kototoro.space.ui.SpaceSwitcherFab
+import org.skepsun.kototoro.core.ui.adaptive.tabletVerticalBarFitsActions
+import org.skepsun.kototoro.core.ui.adaptive.LocalTabletVerticalBarControlSize
+import org.skepsun.kototoro.core.ui.widgets.TabletVerticalBarEdgeGap
+import androidx.compose.ui.platform.LocalWindowInfo
 import org.skepsun.kototoro.space.ui.SpaceUiState
 import org.skepsun.kototoro.search.domain.LocalEntitySuggestion
 import org.skepsun.kototoro.core.prefs.FavoritesTabsPosition
@@ -442,7 +450,6 @@ fun KototoroApp(
     val onNavDestinationChanged = mainAppState.onNavDestinationChanged
     val pendingSearchNavigation = mainAppState.pendingSearchNavigation
     val onSearchNavigationHandled = mainAppState.onSearchNavigationHandled
-    val onFeedRefresh = mainAppState.onFeedRefresh
     val isResumeEnabled = mainAppState.isResumeEnabled
     val onResumeClick = mainAppState.onResumeClick
     val spaceUiState = mainAppState.spaceUiState
@@ -470,11 +477,12 @@ fun KototoroApp(
     val globalTagBlacklist by prefs.globalTagBlacklist
     val isNavBarPinned by prefs.isNavBarPinned
     val tabletUiMode by prefs.tabletUiMode
+    val isTabletNavBarOnLeft by prefs.isTabletNavBarOnLeft
+    val isTabletNavLabelsVisible by prefs.isTabletNavLabelsVisible
     val mainNavItems by prefs.mainNavItems
     val isMainFabEnabled by prefs.isMainFabEnabled
     val sidekickPosition by prefs.sidekickPosition
     val globalFavoritesSortOrder by prefs.globalFavoritesSortOrder
-    val showAllUpdates by prefs.showAllUpdates
     val feedLimit by prefs.feedLimit
     val exitConfirmationEnabled by prefs.exitConfirmationEnabled
     val topBarStyle by prefs.topBarStyle
@@ -514,6 +522,12 @@ fun KototoroApp(
         presentationConfig.effectiveMode,
     ) {
         presentationConfig.isTv || FoldableUtils.shouldUseTabletLayout(context, appSettings, configuration)
+    }
+    val isTabletVerticalBar = isLandscapeNavigation && !presentationConfig.isTv
+    val navigationInsetEdge = when {
+        presentationConfig.isTv -> NavigationInsetEdge.START
+        isTabletNavBarOnLeft -> NavigationInsetEdge.LEFT
+        else -> NavigationInsetEdge.RIGHT
     }
     val isLanguagePresetFilterVisibleSetting = filterVisibilityPrefs.isLanguagePresetFilterVisible
     val isContentTypeFilterVisibleSetting = filterVisibilityPrefs.isContentTypeFilterVisible
@@ -737,6 +751,24 @@ fun KototoroApp(
     } else {
         isResumeEnabled
     }
+    // The top bar's filter and ⋮ group joins the vertical bar only when the window is tall enough for it
+    // next to the full-size controls; the inputs are settings and window size, so moving it cannot change them.
+    val windowHeightPx = LocalWindowInfo.current.containerSize.height
+    val tabletBarHeight = with(density) {
+        (windowHeightPx - statusBarHeightPx - navigationBarHeightPx).toDp() - TabletVerticalBarEdgeGap * 2
+    }
+    val tabletBarItemCount = mainNavItems.limitMainNavigationItems().size
+    val tabletBarFitsActions = isTabletVerticalBar && tabletVerticalBarFitsActions(
+        availableHeight = tabletBarHeight,
+        hasHeader = spaceUiState.switcherEnabled,
+        actionsHeight = interfaceStyleTokens.topBarButtonSize * 3 + 12.dp,
+        hasAccessory = isMainFabEnabled,
+        itemCount = tabletBarItemCount,
+        showLabels = isTabletNavLabelsVisible,
+    )
+    val verticalBarActions = remember(tabletBarFitsActions, isTabletNavBarOnLeft) {
+        if (tabletBarFitsActions) VerticalBarActionsHost(isBarOnLeft = isTabletNavBarOnLeft) else null
+    }
     val effectiveResumeClick = if (spaceUiState.switcherEnabled) {
         { onSpaceResume(spaceUiState.activeSpaceId) }
     } else {
@@ -898,16 +930,10 @@ fun KototoroApp(
         }
     }
     val displayOptionsExtraContent: (@Composable (() -> Unit) -> Unit)? = if (chromeTopLevelKey == FeedNavKey) {
-        { dismiss ->
+        { _ ->
             FeedDisplayOptionsContent(
-                showAllUpdates = showAllUpdates,
-                onShowAllUpdatesChanged = { appSettings.showAllUpdates = it },
                 feedLimit = feedLimit,
                 onFeedLimitChanged = { appSettings.feedLimit = it },
-                onFeedRefresh = {
-                    onFeedRefresh()
-                    dismiss()
-                },
             )
         }
     } else {
@@ -930,9 +956,6 @@ fun KototoroApp(
     val displayCutoutPadding = WindowInsets.displayCutout.asPaddingValues()
     val displayCutoutStartDp = displayCutoutPadding.calculateStartPadding(layoutDirection)
     val displayCutoutEndDp = displayCutoutPadding.calculateEndPadding(layoutDirection)
-    val applyRootDisplayCutoutPadding = !isDetailsRoute
-    val rootDisplayCutoutStartDp = if (applyRootDisplayCutoutPadding) displayCutoutStartDp else 0.dp
-    val rootDisplayCutoutEndDp = if (applyRootDisplayCutoutPadding) displayCutoutEndDp else 0.dp
     val extraPinnedBottomInsetPx = with(density) {
         if (isNavBarPinned && !isFloating) 12.dp.roundToPx() else 0
     }
@@ -1027,12 +1050,9 @@ fun KototoroApp(
         ) {
             val immersiveStrength = ((LocalGlassPrefs.current?.immersiveStrengthPercent ?: 65).coerceIn(0, 100)) / 100f
             val immersiveBaseColor = MaterialTheme.colorScheme.surface.copy(alpha = 1f)
-            val immersiveTransparent = immersiveBaseColor.toTransparentImmersiveColor()
-            val topImmersiveOverflowPx = with(density) { 6.dp.roundToPx() }
+            // End at the page's content inset so in-content filter chips stay clear at rest.
             val topImmersiveHeight = with(density) {
-                (statusBarHeightPx + (topBarHeightPx - statusBarHeightPx) + topImmersiveOverflowPx)
-                    .coerceAtLeast(statusBarHeightPx + topImmersiveOverflowPx)
-                    .toDp()
+                contentTopInsetPx.coerceAtLeast(statusBarHeightPx).toDp()
             }
             val bottomImmersiveHeight = with(density) {
                 (
@@ -1090,70 +1110,104 @@ fun KototoroApp(
             val mainShellChrome: @Composable BoxScope.() -> Unit = {
                 if (shouldShowChrome || isChromeVisible || chromeAlpha > 0f) {
                     if (!isImmersiveRoute) {
-                        ImmersiveEdgeGradient(
-                            modifier = Modifier
-                                .align(Alignment.TopCenter)
-                                .fillMaxWidth()
-                                .graphicsLayer {
-                                    val contentScrollAlpha = if (topBarHeightPx > 0) {
-                                        (-chromeScrollState.totalContentScrollOffset.floatValue / topBarHeightPx.toFloat())
-                                            .coerceIn(0f, 1f)
-                                    } else {
-                                        0f
-                                    }
-                                    alpha = if (surfaceStyle == SurfaceStyle.BACKDROP) {
-                                        // iOS: the edge fade is overlap-driven (0 at the top, 1 once
-                                        // content passes under the floating chrome), gated by chrome
-                                        // visibility. Never velocity-driven.
-                                        chromeScrollOverlap * chromeAlpha
-                                    } else {
-                                        resolveTopImmersiveAlpha(
-                                            contentScrollAlpha = contentScrollAlpha,
-                                            chromeAlpha = chromeAlpha,
-                                        )
-                                    }
+                        val glassPrefs = LocalGlassPrefs.current
+                        val isTopImmersiveEdge = glassPrefs?.isTopImmersiveEdgeEnabled ?: true
+                        val isBottomImmersiveEdge = glassPrefs?.isBottomImmersiveEdgeEnabled ?: false
+                        val edgeBackdrop = LocalImmersiveEdgeBackdrop.current
+                        val edgeBlurRadius = if (edgeBackdrop != null) immersiveEdgeBlurRadius() else 0.dp
+                        val isEdgeBlurred = edgeBlurRadius > 0.dp
+                        val edgeTintScale = if (isEdgeBlurred) ImmersiveEdgeBlurTintScale else 1f
+                        val topEdgeHeight = topImmersiveHeight
+                        val bottomEdgeHeight = bottomImmersiveHeight + ImmersiveEdgeFeatherExtension
+                        // iOS keeps the top edge at alpha 0 until content slides under the chrome; skip the blur
+                        // pass entirely there rather than rendering it transparent.
+                        val isTopEdgeShown = surfaceStyle != SurfaceStyle.BACKDROP || chromeScrollOverlap > 0f
+                        // Animate the radius, not the copy's opacity, so sharp text never bleeds through the blur.
+                        val topEdgeBlurRadius = edgeBlurRadius * if (surfaceStyle == SurfaceStyle.BACKDROP) {
+                            chromeScrollOverlap * chromeAlpha
+                        } else {
+                            chromeAlpha
+                        }
+                        if (edgeBackdrop != null && topEdgeBlurRadius > 0.dp && isTopImmersiveEdge && isTopEdgeShown) {
+                            ImmersiveEdgeBlur(
+                                backdrop = edgeBackdrop,
+                                edge = ImmersiveEdge.TOP,
+                                height = topEdgeHeight,
+                                radius = topEdgeBlurRadius,
+                                modifier = Modifier
+                                    .align(Alignment.TopCenter)
+                                    .fillMaxWidth(),
+                            )
+                        }
+                        if (edgeBackdrop != null && isEdgeBlurred && isBottomImmersiveEdge) {
+                            ImmersiveEdgeBlur(
+                                backdrop = edgeBackdrop,
+                                edge = ImmersiveEdge.BOTTOM,
+                                height = bottomEdgeHeight,
+                                radius = edgeBlurRadius,
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .fillMaxWidth(),
+                            )
+                        }
+                        if (isTopImmersiveEdge) {
+                            ImmersiveEdgeGradient(
+                                modifier = Modifier
+                                    .align(Alignment.TopCenter)
+                                    .fillMaxWidth()
+                                    .graphicsLayer {
+                                        val contentScrollAlpha = if (topBarHeightPx > 0) {
+                                            (-chromeScrollState.totalContentScrollOffset.floatValue / topBarHeightPx.toFloat())
+                                                .coerceIn(0f, 1f)
+                                        } else {
+                                            0f
+                                        }
+                                        alpha = if (surfaceStyle == SurfaceStyle.BACKDROP) {
+                                            // iOS: the edge fade is overlap-driven (0 at the top, 1 once
+                                            // content passes under the floating chrome), gated by chrome
+                                            // visibility. Never velocity-driven.
+                                            chromeScrollOverlap * chromeAlpha
+                                        } else {
+                                            resolveTopImmersiveAlpha(
+                                                contentScrollAlpha = contentScrollAlpha,
+                                                chromeAlpha = chromeAlpha,
+                                            )
+                                        }
+                                    },
+                                height = topEdgeHeight,
+                                color = if (surfaceStyle == SurfaceStyle.BACKDROP) {
+                                    // iOS: backdrop strength ramps 0.65 → 1.0 and the scrim lifts
+                                    // 0.02 → 0.08 as overlap grows under the floating chrome.
+                                    val overlap = chromeScrollOverlap
+                                    val backdropStrength = immersiveStrength * lerpFloat(0.65f, 1f, overlap)
+                                    val scrimLift = lerpFloat(0.02f, 0.08f, overlap)
+                                    immersiveBaseColor.copy(
+                                        alpha = (lerpFloat(0.72f, 0.98f, backdropStrength) + scrimLift)
+                                            .coerceIn(0f, 1f) * edgeTintScale,
+                                    )
+                                } else {
+                                    // Material: stable tonal surface — strength and scrim stay put,
+                                    // only whole-gradient alpha responds with the short chrome tween.
+                                    immersiveBaseColor.copy(
+                                        alpha = lerpFloat(0.72f, 0.98f, immersiveStrength) * edgeTintScale,
+                                    )
                                 },
-                            height = topImmersiveHeight + ImmersiveEdgeFeatherExtension,
-                            colors = if (surfaceStyle == SurfaceStyle.BACKDROP) {
-                                // iOS: backdrop strength ramps 0.65 → 1.0 and the scrim lifts
-                                // 0.02 → 0.08 as overlap grows under the floating chrome.
-                                val overlap = chromeScrollOverlap
-                                val backdropStrength = immersiveStrength * lerpFloat(0.65f, 1f, overlap)
-                                val scrimLift = lerpFloat(0.02f, 0.08f, overlap)
-                                listOf(
-                                    immersiveBaseColor.copy(alpha = (lerpFloat(0.72f, 0.98f, backdropStrength) + scrimLift).coerceIn(0f, 1f)),
-                                    immersiveBaseColor.copy(alpha = (lerpFloat(0.56f, 0.82f, backdropStrength) + scrimLift).coerceIn(0f, 1f)),
-                                    immersiveBaseColor.copy(alpha = (lerpFloat(0.32f, 0.52f, backdropStrength) + scrimLift).coerceIn(0f, 1f)),
-                                    immersiveBaseColor.copy(alpha = (lerpFloat(0.12f, 0.22f, backdropStrength) + scrimLift).coerceIn(0f, 1f)),
-                                    immersiveTransparent,
-                                )
-                            } else {
-                                // Material: stable tonal surface — strength and scrim stay put,
-                                // only whole-gradient alpha responds with the short chrome tween.
-                                listOf(
-                                    immersiveBaseColor.copy(alpha = lerpFloat(0.72f, 0.98f, immersiveStrength)),
-                                    immersiveBaseColor.copy(alpha = lerpFloat(0.56f, 0.82f, immersiveStrength)),
-                                    immersiveBaseColor.copy(alpha = lerpFloat(0.32f, 0.52f, immersiveStrength)),
-                                    immersiveBaseColor.copy(alpha = lerpFloat(0.12f, 0.22f, immersiveStrength)),
-                                    immersiveTransparent,
-                                )
-                            },
-                            stops = ImmersiveTopGradientStops,
-                        )
+                                edge = ImmersiveEdge.TOP,
+                            )
+                        }
 
-                        ImmersiveEdgeGradient(
-                            modifier = Modifier
-                                .align(Alignment.BottomCenter)
-                                .fillMaxWidth(),
-                            height = bottomImmersiveHeight + ImmersiveEdgeFeatherExtension,
-                            colors = listOf(
-                                immersiveTransparent,
-                                immersiveBaseColor.copy(alpha = lerpFloat(0.14f, 0.24f, immersiveStrength)),
-                                immersiveBaseColor.copy(alpha = lerpFloat(0.34f, 0.54f, immersiveStrength)),
-                                immersiveBaseColor.copy(alpha = lerpFloat(0.60f, 0.90f, immersiveStrength)),
-                            ),
-                            stops = ImmersiveBottomGradientStops,
-                        )
+                        if (isBottomImmersiveEdge) {
+                            ImmersiveEdgeGradient(
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .fillMaxWidth(),
+                                height = bottomEdgeHeight,
+                                color = immersiveBaseColor.copy(
+                                    alpha = lerpFloat(0.60f, 0.90f, immersiveStrength) * edgeTintScale,
+                                ),
+                                edge = ImmersiveEdge.BOTTOM,
+                            )
+                        }
                     }
 
                     if (shouldShowChrome && !isImmersiveRoute) {
@@ -1175,6 +1229,8 @@ fun KototoroApp(
                         heroTransitionInProgress = heroTransitionInProgress,
                         isDetailsChromeTransitionPending = isDetailsChromeTransitionPending,
                         visibleStartInsetDp = visibleStartInsetDp,
+                        navigationInsetEdge = navigationInsetEdge,
+                        verticalBarActions = verticalBarActions,
                         effectiveTopBarOffset = effectiveTopBarOffset,
                         chromeAlpha = chromeAlpha,
                         onChromeFocusChanged = { focused -> isChromeFocused = focused },
@@ -1275,6 +1331,8 @@ fun KototoroApp(
                     )
                     MainBottomChrome(
                         isLandscapeNavigation = isLandscapeNavigation,
+                        isNavBarOnLeft = isTabletNavBarOnLeft,
+                        railActionsContent = verticalBarActions?.content,
                         isLayeredSurface = isLayeredSurface,
                         chromeSharedTransitionScope = chromeSharedTransitionScope,
                         heroTransitionInProgress = heroTransitionInProgress,
@@ -1293,8 +1351,18 @@ fun KototoroApp(
                         isResumeEnabled = effectiveResumeEnabled,
                         onResumeClick = effectiveResumeClick,
                         resumeAction = effectiveResumeAction,
-                        resumeCoverModel = effectiveResumeCoverModel,
-                        railHeaderContent = if (presentationConfig.isTv && spaceUiState.switcherEnabled) {
+                        railHeaderContent = if (isTabletVerticalBar && spaceUiState.switcherEnabled) {
+                            {
+                                SpaceSwitcherFab(
+                                    activeSpaceId = spaceUiState.activeSpaceId,
+                                    activeSpace = spaceUiState.spaces.firstOrNull {
+                                        it.id == spaceUiState.activeSpaceId
+                                    },
+                                    onClick = { onSpaceAction(SpaceAction.OpenSwitcher) },
+                                    modifier = Modifier.size(LocalTabletVerticalBarControlSize.current),
+                                )
+                            }
+                        } else if (presentationConfig.isTv && spaceUiState.switcherEnabled) {
                             {
                                 SpaceSwitcherRailButton(
                                     activeSpaceId = spaceUiState.activeSpaceId,
@@ -1307,13 +1375,20 @@ fun KototoroApp(
                         } else {
                             null
                         },
-                        adjacentAction = if (!isLandscapeNavigation && effectiveResumeEnabled) {
+                        adjacentAction = if (
+                            (!isLandscapeNavigation || isTabletVerticalBar) && effectiveResumeEnabled
+                        ) {
                             {
                                 ContinueReadingFab(
                                     onClick = effectiveResumeClick,
                                     action = effectiveResumeAction,
                                     coverModel = effectiveResumeCoverModel,
-                                    size = prefs.navigationPrefs.value.adjacentFabSize,
+                                    // A short vertical bar shrinks its circular controls together.
+                                    size = if (isTabletVerticalBar) {
+                                        LocalTabletVerticalBarControlSize.current
+                                    } else {
+                                        prefs.navigationPrefs.value.adjacentFabSize
+                                    },
                                 )
                             }
                         } else null,
@@ -1335,7 +1410,7 @@ fun KototoroApp(
                         rootContentBounds = coordinates.boundsInRoot()
                     },
             ) {
-                if (shouldShowChrome && isLandscapeNavigation && displayCutoutStartDp > 0.dp) {
+                if (shouldShowChrome && isLandscapeNavigation && presentationConfig.isTv && displayCutoutStartDp > 0.dp) {
                     Surface(
                         modifier = Modifier
                             .align(Alignment.CenterStart)
@@ -1346,9 +1421,7 @@ fun KototoroApp(
                     ) {}
                 }
                 Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(start = rootDisplayCutoutStartDp, end = rootDisplayCutoutEndDp),
+                    modifier = Modifier.fillMaxSize(),
                 ) {
                     SharedTransitionLayout {
                     SideEffect {
@@ -1390,6 +1463,7 @@ fun KototoroApp(
                                         shellBackdropOwnerKey = "$MAIN_SHELL_BACKDROP_OWNER_PREFIX:${renderedSpaceId.value}",
                                         detailsTransitionStyle = detailsTransitionStyle,
                                         isLandscapeNavigation = isLandscapeNavigation,
+                                        navigationInsetEdge = navigationInsetEdge,
                                         contentPadding = contentPadding,
                                         bottomBarOffsetPx = effectiveBottomNavOffset,
                                         bottomBarHeightPx = bottomNavHeightPx,
@@ -1490,18 +1564,25 @@ fun KototoroApp(
                         }
                     }
                 }
-                val isSidekickOnRight = sidekickPosition == SpaceSwitcherPosition.TOP_RIGHT ||
+                val isSidekickOnRight = (isTabletVerticalBar && !isTabletNavBarOnLeft) ||
+                    sidekickPosition == SpaceSwitcherPosition.TOP_RIGHT ||
                     sidekickPosition == SpaceSwitcherPosition.CENTER_RIGHT
                 SpaceSidekick(
                     state = spaceUiState,
                     onAction = onSpaceAction,
                     resumeItems = spaceResumeUiState.items,
                     onResume = onSpaceResume,
-                    position = sidekickPosition,
+                    // The tablet bar carries the switcher button, so its panel opens from the bar's edge.
+                    position = when {
+                        !isTabletVerticalBar -> sidekickPosition
+                        isTabletNavBarOnLeft -> SpaceSwitcherPosition.TOP_LEFT
+                        else -> SpaceSwitcherPosition.TOP_RIGHT
+                    },
                     // The search overlay is modal and its input row sits where the handle docks (the
                     // handle outranks it with zIndex 20), so it would cover and steal taps from the
                     // search button; there is nothing to switch spaces for while typing anyway.
                     visible = spaceUiState.switcherEnabled &&
+                        !(isTabletVerticalBar && shouldShowChrome) &&
                         !isSearchOverlayMounted &&
                         (!isSidekickOnRight || !isScrollbarActive.value) &&
                         (shouldShowChrome || isImmersiveRoute || isSearchRoute) &&

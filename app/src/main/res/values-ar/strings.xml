@@ -1216,7 +1216,7 @@
     <string name="extension_install_mode_local_apk">وضع التثبيت: ملف APK محلي</string>
     <string name="extension_install_mode_system">وضع التثبيت: النظام</string>
     <string name="extension_management">إدارة الإضافات</string>
-    <string name="extension_management_summary">إدارة المستودعات، مصادر JSON، إضافات APK، ومحللات JAR</string>
+    <string name="extension_management_summary">تفعيل المصادر واختبارها، وإدارة المستودعات وحزم الإضافات</string>
     <string name="extension_repo_added_message">تمت إضافة %1$s</string>
     <string name="extension_repo_already_exists_message">المستودع موجود بالفعل</string>
     <string name="extension_repo_count">%d مستودع/مستودعات</string>
@@ -2020,8 +2020,7 @@
     <string name="show_broken_sources_summary">السماح بعرض واستخدام إضافات المحلل المميزة كمعطلة</string>
     <string name="show_extensions_in_grid">إظهار الإضافات في عمودين</string>
     <string name="show_extensions_in_list">إظهار الإضافات في عمود واحد</string>
-    <string name="show_extra_info_on_cards">إظهار معلومات إضافية على البطاقات</string>
-    <string name="show_extra_info_on_cards_summary">عرض التقييم والحالة وعدد الفصول والوسوم على بطاقات المحتوى</string>
+    <string name="show_extra_info_on_cards">معلومات إضافية</string>
     <string name="show_floating_control_button">إظهار زر التحكم العائم</string>
     <string name="show_less">إظهار أقل</string>
     <string name="show_more">إظهار المزيد</string>
@@ -2130,6 +2129,7 @@
     <string name="theme_name_totoro">Totoro</string>
     <string name="thumbnails_cache">ذاكرة تخزين الصور المصغرة</string>
     <string name="thumbnails_cache_limit">حد ذاكرة تخزين الصور المصغرة</string>
+    <string name="chapter_thumbnails_cache_limit">حد ذاكرة تخزين الصور المصغرة للفصول</string>
     <string name="title">العنوان</string>
     <string name="total_chapters">إجمالي الفصول</string>
     <string name="tracking_accounts">حسابات التتبع</string>

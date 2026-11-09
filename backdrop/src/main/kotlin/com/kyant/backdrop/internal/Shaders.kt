@@ -57,8 +57,16 @@ uniform float4 cornerRadii;
 uniform float refractionHeight;
 uniform float refractionAmount;
 uniform float depthEffect;
+uniform float saturation;
 
 $RoundedRectSDF
+
+half4 vibrant(half4 c) {
+    if (saturation == 1.0 || c.a <= 0.0) return c;
+    half3 rgb = c.rgb / c.a;
+    half l = dot(rgb, half3(0.213, 0.715, 0.072));
+    return half4(clamp(mix(half3(l), rgb, half(saturation)), 0.0, 1.0) * c.a, c.a);
+}
 
 float circleMap(float x) {
     return 1.0 - sqrt(1.0 - x * x);
@@ -71,7 +79,7 @@ half4 main(float2 coord) {
     
     float sd = sdRoundedRect(centeredCoord, halfSize, radius);
     if (-sd >= refractionHeight) {
-        return content.eval(coord);
+        return vibrant(content.eval(coord));
     }
     sd = min(sd, 0.0);
     
@@ -80,7 +88,7 @@ half4 main(float2 coord) {
     float2 grad = normalize(gradSdRoundedRect(centeredCoord, halfSize, gradRadius) + depthEffect * normalize(centeredCoord));
     
     float2 refractedCoord = coord + d * grad;
-    return content.eval(refractedCoord);
+    return vibrant(content.eval(refractedCoord));
 }"""
 
 @Language("AGSL")
@@ -93,9 +101,17 @@ uniform float4 cornerRadii;
 uniform float refractionHeight;
 uniform float refractionAmount;
 uniform float depthEffect;
+uniform float saturation;
 uniform float chromaticAberration;
 
 $RoundedRectSDF
+
+half4 vibrant(half4 c) {
+    if (saturation == 1.0 || c.a <= 0.0) return c;
+    half3 rgb = c.rgb / c.a;
+    half l = dot(rgb, half3(0.213, 0.715, 0.072));
+    return half4(clamp(mix(half3(l), rgb, half(saturation)), 0.0, 1.0) * c.a, c.a);
+}
 
 float circleMap(float x) {
     return 1.0 - sqrt(1.0 - x * x);
@@ -108,7 +124,7 @@ half4 main(float2 coord) {
     
     float sd = sdRoundedRect(centeredCoord, halfSize, radius);
     if (-sd >= refractionHeight) {
-        return content.eval(coord);
+        return vibrant(content.eval(coord));
     }
     sd = min(sd, 0.0);
     
@@ -122,34 +138,34 @@ half4 main(float2 coord) {
     
     half4 color = half4(0.0);
     
-    half4 red = content.eval(refractedCoord + dispersedCoord);
+    half4 red = vibrant(content.eval(refractedCoord + dispersedCoord));
     color.r += red.r / 3.5;
     color.a += red.a / 7.0;
     
-    half4 orange = content.eval(refractedCoord + dispersedCoord * (2.0 / 3.0));
+    half4 orange = vibrant(content.eval(refractedCoord + dispersedCoord * (2.0 / 3.0)));
     color.r += orange.r / 3.5;
     color.g += orange.g / 7.0;
     color.a += orange.a / 7.0;
     
-    half4 yellow = content.eval(refractedCoord + dispersedCoord * (1.0 / 3.0));
+    half4 yellow = vibrant(content.eval(refractedCoord + dispersedCoord * (1.0 / 3.0)));
     color.r += yellow.r / 3.5;
     color.g += yellow.g / 3.5;
     color.a += yellow.a / 7.0;
     
-    half4 green = content.eval(refractedCoord);
+    half4 green = vibrant(content.eval(refractedCoord));
     color.g += green.g / 3.5;
     color.a += green.a / 7.0;
     
-    half4 cyan = content.eval(refractedCoord - dispersedCoord * (1.0 / 3.0));
+    half4 cyan = vibrant(content.eval(refractedCoord - dispersedCoord * (1.0 / 3.0)));
     color.g += cyan.g / 3.5;
     color.b += cyan.b / 3.0;
     color.a += cyan.a / 7.0;
     
-    half4 blue = content.eval(refractedCoord - dispersedCoord * (2.0 / 3.0));
+    half4 blue = vibrant(content.eval(refractedCoord - dispersedCoord * (2.0 / 3.0)));
     color.b += blue.b / 3.0;
     color.a += blue.a / 7.0;
     
-    half4 purple = content.eval(refractedCoord - dispersedCoord);
+    half4 purple = vibrant(content.eval(refractedCoord - dispersedCoord));
     color.r += purple.r / 7.0;
     color.b += purple.b / 3.0;
     color.a += purple.a / 7.0;

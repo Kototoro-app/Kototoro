@@ -1,11 +1,16 @@
 package org.skepsun.kototoro.core.ui.compose
 
 import android.content.Context
+import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.LayerDrawable
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -242,6 +247,7 @@ fun ContentSourceIcon(
     loadEnabled: Boolean = true,
     throttleNetworkLoad: Boolean = false,
     contentDescription: String? = null,
+    onArtworkChange: ((Boolean) -> Unit)? = null,
 ) {
     val resolvedSource = rememberResolvedContentSource(source)
     ContentSourceResolvedIcon(
@@ -252,8 +258,21 @@ fun ContentSourceIcon(
         loadEnabled = loadEnabled,
         throttleNetworkLoad = throttleNetworkLoad,
         contentDescription = contentDescription,
+        onArtworkChange = onArtworkChange,
     )
 }
+
+/**
+ * Whether [image] is the source's own artwork (a fetched favicon or an extension's launcher icon) rather than a
+ * stand-in: the letter fallback, a generic vector glyph or the blank tile of an empty repository. Hosts draw a plate
+ * behind stand-ins only; real artwork already carries its own background.
+ */
+private fun isSourceArtwork(image: Image, context: Context): Boolean =
+    when (image.asDrawable(context.resources)) {
+        is FaviconDrawable -> false
+        is BitmapDrawable, is LayerDrawable -> true
+        else -> false
+    }
 
 @Composable
 fun ContentSourceResolvedIcon(
@@ -264,6 +283,7 @@ fun ContentSourceResolvedIcon(
     loadEnabled: Boolean = true,
     throttleNetworkLoad: Boolean = false,
     contentDescription: String? = null,
+    onArtworkChange: ((Boolean) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val imageLoader = remember(context) {
@@ -369,6 +389,18 @@ fun ContentSourceResolvedIcon(
         }
     }
 
+    var loadedArtwork by remember(request) { mutableStateOf(false) }
+    val showsFallback = cachedIcon == null && (hasError || useFallbackOnly || !loadEnabled || !isLoadGateOpen)
+    val showsArtwork = when {
+        cachedIcon != null -> remember(cachedIcon) { isSourceArtwork(cachedIcon, context) }
+        showsFallback -> false
+        else -> loadedArtwork
+    }
+    val currentOnArtworkChange by rememberUpdatedState(onArtworkChange)
+    LaunchedEffect(showsArtwork) {
+        currentOnArtworkChange?.invoke(showsArtwork)
+    }
+
     if (cachedIcon != null) {
         val cachedPainter = rememberDrawablePainter(cachedIcon.asDrawable(context.resources))
         androidx.compose.foundation.Image(
@@ -377,7 +409,7 @@ fun ContentSourceResolvedIcon(
             contentScale = ContentScale.Fit,
             modifier = modifier.clip(RoundedCornerShape(4.dp)),
         )
-    } else if (hasError || useFallbackOnly || !loadEnabled || !isLoadGateOpen) {
+    } else if (showsFallback) {
         val fallbackPainter = rememberDrawablePainter(fallbackDrawable?.asDrawable(context.resources))
         androidx.compose.foundation.Image(
             painter = fallbackPainter,
@@ -393,9 +425,11 @@ fun ContentSourceResolvedIcon(
             modifier = modifier.clip(RoundedCornerShape(4.dp)),
             onSuccess = {
                 releaseLoadPermit()
+                loadedArtwork = isSourceArtwork(it.result.image, context)
             },
             onError = {
                 releaseLoadPermit()
+                loadedArtwork = false
                 logSourceIconError(resolvedSource, it.result.throwable)
                 if (useNegativeCache) {
                     failedSourceIcons[sourceFailureKey] = true

@@ -25,6 +25,7 @@ object IosSourceErrors {
         val remote = remote(error) ?: return null
         return when (remote.error.code) {
             SourceErrorCode.CHALLENGE_REQUIRED -> localized("该站点需要通过 Cloudflare 等浏览器验证")
+            SourceErrorCode.RATE_LIMITED -> localized("来源访问过于频繁，请稍后再试")
             SourceErrorCode.SOURCE_UNAVAILABLE -> localized("来源不可用，可能已被移除或停用")
             SourceErrorCode.UNSUPPORTED_OPERATION -> localized("此来源不支持该操作")
             SourceErrorCode.INVALID_ARGUMENT -> localized("请求参数无效，请刷新后重试")

@@ -4,17 +4,14 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import org.skepsun.kototoro.core.extensions.resolveJarPriorityOrder
 import org.skepsun.kototoro.core.source.SourceListing
 import org.skepsun.kototoro.core.ui.compose.ReorderEditorDialog
 import org.skepsun.kototoro.core.ui.compose.ReorderItem
@@ -22,8 +19,6 @@ import org.skepsun.kototoro.core.ui.settings.SourcesSettingsContent
 import org.skepsun.kototoro.core.ui.settings.SourcesSettingsContentState
 import org.skepsun.kototoro.core.ui.settings.SourcesSettingsTitles
 import org.skepsun.kototoro.core.ui.settings.PreferenceChoice
-import org.skepsun.kototoro.core.ui.settings.SettingsInfoRow
-import org.skepsun.kototoro.core.ui.settings.SettingsRowDivider
 import org.skepsun.kototoro.core.ui.settings.SettingsValueRow
 import org.skepsun.kototoro.desktop.runtime.DesktopNsfwTarget
 import org.skepsun.kototoro.desktop.runtime.DesktopSourceSettings
@@ -45,12 +40,13 @@ internal fun DesktopSourceSettingsPage(controller: DesktopController, state: Des
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         SourcesSettingsContent(
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(top = LocalDesktopTopInset.current),
             state = SourcesSettingsContentState(
                 sortOrder = settings.sort.name,
                 customSort = settings.sort == DesktopSourceSort.CUSTOM,
                 gridMode = settings.grid,
                 groupByLanguage = settings.groupByLanguage,
-                showBrokenSources = state.showBrokenSources,
+                showBrokenSources = false,
                 installBehaviorSummary = state.extensionInstallPolicies.policySummary(),
                 incognitoMode = settings.incognitoForNsfw.name,
                 blacklistedTagCount = settings.tagBlacklist.size,
@@ -65,23 +61,17 @@ internal fun DesktopSourceSettingsPage(controller: DesktopController, state: Des
             onGroupByLanguageChange = { update(settings.copy(groupByLanguage = it)) },
             onReorderClick = { dialog = SourceSettingsDialog.REORDER },
             onWizardClick = { controller.showSetupWizard() },
-            onShowBrokenChange = { controller.setShowBrokenSources(it) },
-            onInstallBehaviorClick = { dialog = SourceSettingsDialog.INSTALL_BEHAVIOR },
+            onShowBrokenChange = {},
+            onInstallBehaviorClick = {},
             onIncognitoChange = { update(settings.copy(incognitoForNsfw = DesktopTriState.valueOf(it))) },
             onBlacklistClick = { controller.showTagBlacklist() },
             onTagsWarningsChange = { controller.setTagsWarnings(it) },
             enabled = active,
             reorderSummary = desktopText("sources.reorderSummary"),
             wizardSummary = desktopText("sources.wizardSummary"),
-            jarPriorityEditor = {
-                SettingsValueRow(AndroidStrings["jar_priority_order_title"],
-                    AndroidStrings["jar_priority_order_summary"],
-                    state.jarPriorityOrder.resolvedPluginNames(state).takeIf { it.isNotEmpty() }?.joinToString(", ")
-                        ?: AndroidStrings["not_specified"],
-                    active, { dialog = SourceSettingsDialog.JAR_PRIORITY }, testTag = "source-setting-jar-priority")
-                SettingsRowDivider()
-                SettingsInfoRow(desktopText("sources.jarPriorityNote"), null)
-            },
+            // Plugin priority and install behavior live on the extension settings page (DesktopExtensionSettingsPage).
+            jarPriorityEditor = {},
+            showExtensionSection = false,
             adultFilterEditor = {
                 SettingsValueRow(desktopText("sources.nsfwFilter"), desktopText("sources.nsfwFilterSummary"),
                     settings.nsfwTargets.mapTo(sortedSetOf()) { it.title }.showAsList(), active,
@@ -92,8 +82,6 @@ internal fun DesktopSourceSettingsPage(controller: DesktopController, state: Des
         )
     }
     when (dialog) {
-        SourceSettingsDialog.JAR_PRIORITY -> DesktopJarPriorityDialog(state = state, enabled = active,
-            onOrder = { controller.setJarPriorityOrder(it) }, onDismiss = { dialog = null })
         SourceSettingsDialog.REORDER -> DesktopSourceOrderDialog(
             sources = settings.sorted(state.enabledSources),
             enabled = active,
@@ -101,13 +89,6 @@ internal fun DesktopSourceSettingsPage(controller: DesktopController, state: Des
                 dialog = null
                 controller.saveSourceOrder(names)
             },
-            onDismiss = { dialog = null },
-        )
-        SourceSettingsDialog.INSTALL_BEHAVIOR -> DesktopInstallBehaviorDialog(
-            policies = state.extensionInstallPolicies,
-            enabled = active,
-            onPolicy = { typeName, policy -> controller.setExtensionInstallPolicy(typeName, policy) },
-            onAllPolicies = { controller.setAllExtensionInstallPolicies(it) },
             onDismiss = { dialog = null },
         )
         SourceSettingsDialog.NSFW_TARGETS -> DesktopMultiChoiceSettingsDialog(
@@ -128,39 +109,7 @@ internal fun DesktopSourceSettingsPage(controller: DesktopController, state: Des
     }
 }
 
-private enum class SourceSettingsDialog { JAR_PRIORITY, NSFW_TARGETS, INSTALL_BEHAVIOR, REORDER }
-
-/**
- * The parser plugins that `jar_priority_order` ranks, in that order; plugins the value does not name come last. A
- * session that has not listed its extensions yet only knows the stored names, which are the plugin ids anyway.
- */
-private fun String.resolvedPluginNames(state: DesktopAppState): List<String> {
-    val installed = state.installedEntries.filter { it.kind == DesktopInstalledKind.PARSER }.map { it.id }
-    return if (installed.isEmpty()) parseJarPriorityNames() else resolveJarPriorityOrder(installed, this)
-}
-
-/**
- * Android's reorder preference for the deduplication order. The list is the installed parser plugins; each move
- * stores immediately like the category manager does, because [org.skepsun.kototoro.parserhost.ParserPluginRegistry]
- * applies the order when it opens — the row's note says so instead of promising a live re-rank.
- */
-@Composable
-private fun DesktopJarPriorityDialog(state: DesktopAppState, enabled: Boolean, onOrder: (List<String>) -> Unit,
-    onDismiss: () -> Unit) {
-    val order = state.jarPriorityOrder.resolvedPluginNames(state)
-    ReorderEditorDialog(
-        items = order.map { ReorderItem(it, it) },
-        onDismissRequest = onDismiss,
-        onSave = { onOrder(it) },
-        enabled = enabled,
-        saveOnMove = true,
-        title = AndroidStrings["jar_priority_order_title"],
-        summary = AndroidStrings["jar_priority_order_summary"],
-        footerText = desktopText("sources.jarPriorityNote"),
-        emptyText = desktopText("extensions.installedEmpty"),
-        tagPrefix = "jar-priority",
-    )
-}
+private enum class SourceSettingsDialog { NSFW_TARGETS, REORDER }
 
 /**
  * Android's `ReorderDialog` for the source rail. As on Android, moving never writes: the rows are a local draft and

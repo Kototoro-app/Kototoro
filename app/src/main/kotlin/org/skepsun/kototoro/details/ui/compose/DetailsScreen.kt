@@ -9,6 +9,7 @@ import org.skepsun.kototoro.core.ui.adaptive.TabletLayoutClass
 import android.os.Build
 import android.util.Log
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.BoxScope
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -97,6 +98,7 @@ import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
+import org.skepsun.kototoro.core.prefs.TabletUiMode
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.compose.KototoroPullToRefreshBox
 import org.skepsun.kototoro.core.ui.compose.KototoroSnackbarHost
@@ -109,8 +111,10 @@ import org.skepsun.kototoro.core.ui.compose.rememberResolvedSourceTitle
 import org.skepsun.kototoro.core.ui.util.ReversibleActionObserver
 import org.skepsun.kototoro.core.ui.compose.ImmersiveEdgeGradient
 import org.skepsun.kototoro.core.ui.compose.ImmersiveEdgeFeatherExtension
-import org.skepsun.kototoro.core.ui.compose.ImmersiveTopGradientStops
-import org.skepsun.kototoro.core.ui.compose.toTransparentImmersiveColor
+import org.skepsun.kototoro.core.ui.compose.ImmersiveEdge
+import org.skepsun.kototoro.core.ui.compose.ImmersiveEdgeBlur
+import org.skepsun.kototoro.core.ui.compose.ImmersiveEdgeBlurTintScale
+import org.skepsun.kototoro.core.ui.compose.immersiveEdgeBlurRadius
 import org.skepsun.kototoro.core.ui.glass.LocalGlassPrefs
 import org.skepsun.kototoro.core.ui.glass.rememberGlassPrefsOrFallback
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
@@ -148,6 +152,8 @@ import org.skepsun.kototoro.main.ui.compose.TopBarControlSurface
 import org.skepsun.kototoro.stats.ui.sheet.ContentStatsViewModel
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingStatus
 import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.Backdrop
+import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.collect
@@ -436,7 +442,15 @@ private fun DetailsScreenContent(
         resolveAvailableDetailsTabIds(contentType, settings)
     }
     // Android and Windows share the expanded-window decision; Android supplies its tablet-mode preference.
-    val isWideAdaptiveLayout = isTvPresentation || rememberAndroidTabletLayoutClass(settings) == TabletLayoutClass.EXPANDED
+    // Relaxed tablet detection also splits medium windows (600dp+, e.g. foldable inner screens, #630);
+    // strict detection keeps portrait tablets single-column until the window is expanded.
+    val tabletLayoutClass = rememberAndroidTabletLayoutClass(settings)
+    val tabletUiMode by settings.observeAsState(AppSettings.KEY_TABLET_UI_MODE) { tabletUiMode }
+    val isWideAdaptiveLayout = isTvPresentation || when (tabletLayoutClass) {
+        TabletLayoutClass.EXPANDED -> true
+        TabletLayoutClass.MEDIUM -> tabletUiMode == TabletUiMode.RELAXED
+        TabletLayoutClass.COMPACT -> false
+    }
     val isModernDetailsDockEnabled by settings.observeAsState(AppSettings.KEY_MODERN_DETAILS_DOCK) {
         isModernDetailsDockEnabled
     }
@@ -907,6 +921,23 @@ private fun DetailsScreenContent(
         null
     }
     val detailsContentBackdrop = if (isIosStyle) rememberLayerBackdrop() else null
+    // The top edge blur samples the background and the panes beneath it, never the top bar drawn above them.
+    val detailsEdgeBlurRadius = if (effectiveGlassPrefs.isTopImmersiveEdgeEnabled) immersiveEdgeBlurRadius() else 0.dp
+    val detailsEdgeBackgroundLayer = detailsBackgroundBackdrop ?: if (detailsEdgeBlurRadius > 0.dp) {
+        rememberLayerBackdrop {
+            drawRect(detailsBackdropBackground)
+            drawContent()
+        }
+    } else {
+        null
+    }
+    val detailsEdgePanesLayer = if (detailsEdgeBlurRadius > 0.dp) rememberLayerBackdrop() else null
+    val detailsEdgeBackdrop = if (detailsEdgeBackgroundLayer != null && detailsEdgePanesLayer != null) {
+        rememberCombinedBackdrop(detailsEdgeBackgroundLayer, detailsEdgePanesLayer)
+    } else {
+        null
+    }
+    val detailsEdgePanesModifier = detailsEdgePanesLayer?.let { Modifier.layerBackdrop(it) } ?: Modifier
     val routeLiquidGlassSourceModifier = if (
         isIosStyle && routeLayerBackdrop != null
     ) {
@@ -914,8 +945,8 @@ private fun DetailsScreenContent(
     } else {
         Modifier
     }
-    val detailsBackgroundSourceModifier = if (detailsBackgroundBackdrop != null) {
-        Modifier.layerBackdrop(detailsBackgroundBackdrop)
+    val detailsBackgroundSourceModifier = if (detailsEdgeBackgroundLayer != null) {
+        Modifier.layerBackdrop(detailsEdgeBackgroundLayer)
     } else {
         Modifier
     }
@@ -1218,7 +1249,9 @@ private fun DetailsScreenContent(
 
             if (isWideAdaptiveLayout) {
                 Box(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .then(detailsEdgePanesModifier),
                 ) {
                     TabletDetailsPanes(
                         modifier = Modifier
@@ -1424,7 +1457,8 @@ private fun DetailsScreenContent(
                     .fillMaxSize()
                     .onSizeChanged { size ->
                         detailsPaneState.onHostHeightChanged(size.height.toFloat())
-                    },
+                    }
+                    .then(detailsEdgePanesModifier),
             ) {
                 Scaffold(
                     modifier = Modifier.fillMaxSize(),
@@ -1613,13 +1647,30 @@ private fun DetailsScreenContent(
                 )
             }
             val detailsImmersiveStrength = ((LocalGlassPrefs.current?.immersiveStrengthPercent ?: 65).coerceIn(0, 100)) / 100f
-            val detailsImmersiveIsDark = isSystemInDarkTheme()
-            val detailsImmersiveBase = if (detailsImmersiveIsDark) Color.Black else Color.White
+            val detailsImmersiveBase = detailsBackgroundColor
+            val detailsEdgeTintScale = if (detailsEdgeBackdrop != null) ImmersiveEdgeBlurTintScale else 1f
             val detailsTopImmersiveHeight = with(density) {
                 val sbPx = statusBarTopPadding.roundToPx()
                 val tbPx = interfaceStyleTokens.mainTopBarHeight.roundToPx()
                 val overflowPx = 6.dp.roundToPx()
                 (sbPx + tbPx + overflowPx).coerceAtLeast(sbPx + overflowPx).toDp()
+            }
+            if (detailsEdgeBackdrop != null && detailsGradientAlpha > 0.01f) {
+                DetailsTopEdgeBlur(
+                    backdrop = detailsEdgeBackdrop,
+                    height = detailsTopImmersiveHeight + ImmersiveEdgeFeatherExtension,
+                    radius = {
+                        // Scale the radius, not the opacity, so sharp text never bleeds through the blur.
+                        detailsEdgeBlurRadius * if (isWideAdaptiveLayout) {
+                            detailsGradientAlpha
+                        } else {
+                            detailsGradientAlpha * (1f - compactSheetExpansionProgressProvider()).coerceIn(0f, 1f)
+                        }
+                    },
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .fillMaxWidth(),
+                )
             }
             if (detailsGradientAlpha > 0.01f) {
                 ImmersiveEdgeGradient(
@@ -1635,14 +1686,10 @@ private fun DetailsScreenContent(
                             }
                         },
                     height = detailsTopImmersiveHeight + ImmersiveEdgeFeatherExtension,
-                    colors = listOf(
-                        detailsImmersiveBase.copy(alpha = (0.72f + (0.98f - 0.72f) * detailsImmersiveStrength)),
-                        detailsImmersiveBase.copy(alpha = (0.56f + (0.82f - 0.56f) * detailsImmersiveStrength)),
-                        detailsImmersiveBase.copy(alpha = (0.32f + (0.52f - 0.32f) * detailsImmersiveStrength)),
-                        detailsImmersiveBase.copy(alpha = (0.12f + (0.22f - 0.12f) * detailsImmersiveStrength)),
-                        detailsImmersiveBase.toTransparentImmersiveColor(),
+                    color = detailsImmersiveBase.copy(
+                        alpha = (0.72f + (0.98f - 0.72f) * detailsImmersiveStrength) * detailsEdgeTintScale,
                     ),
-                    stops = ImmersiveTopGradientStops,
+                    edge = ImmersiveEdge.TOP,
                 )
             }
             if (isWideAdaptiveLayout || compactPaneAnchor != CompactDetailsPaneAnchor.Full) {
@@ -1940,5 +1987,25 @@ private fun DetailsScreenContent(
                 )
             }
         }
+    }
+}
+
+/** Reads [radius] here so dragging the compact sheet recomposes only the blur, not the whole details screen. */
+@Composable
+private fun BoxScope.DetailsTopEdgeBlur(
+    backdrop: Backdrop,
+    height: Dp,
+    radius: () -> Dp,
+    modifier: Modifier = Modifier,
+) {
+    val currentRadius = radius()
+    if (currentRadius > 0.dp) {
+        ImmersiveEdgeBlur(
+            backdrop = backdrop,
+            edge = ImmersiveEdge.TOP,
+            height = height,
+            radius = currentRadius,
+            modifier = modifier,
+        )
     }
 }

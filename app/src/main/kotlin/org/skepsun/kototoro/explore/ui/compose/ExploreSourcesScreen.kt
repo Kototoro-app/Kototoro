@@ -603,14 +603,17 @@ fun KototoroSourceCard(
             }
         }
     } else {
+        var showsArtwork by remember(item.source.name) { mutableStateOf(false) }
         SourceListRow(
             title = title,
             summary = summary,
+            iconPlate = !showsArtwork,
             icon = { iconModifier ->
                 ContentSourceIcon(
                     source = item.source,
                     modifier = iconModifier,
                     contentDescription = title,
+                    onArtworkChange = { showsArtwork = it },
                 )
             },
             modifier = modifier,

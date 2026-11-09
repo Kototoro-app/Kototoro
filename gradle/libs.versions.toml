@@ -109,6 +109,9 @@ ireaderSourceApi = "1.5.1"
 [libraries]
 androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
 androidx-compose-ui = { group = "androidx.compose.ui", name = "ui" }
+# BlurRadiusSpec (spatially varying blur) landed in ui 1.13; the BOM still pins 1.12.x, so this override pulls the
+# newer ui for the immersive edge progressive blur. Revert to the BOM version once a BOM pins ui 1.13.x.
+androidx-compose-ui-progressive-blur = { group = "androidx.compose.ui", name = "ui", version = "1.13.0-rc01" }
 androidx-compose-ui-text-google-fonts = { group = "androidx.compose.ui", name = "ui-text-google-fonts" }
 androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
 androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }

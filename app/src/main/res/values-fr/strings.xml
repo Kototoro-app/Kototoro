@@ -1250,7 +1250,7 @@
     <string name="extension_install_mode_local_apk">Mode d\'installation : APK local</string>
     <string name="extension_install_mode_system">Mode d\'installation : système</string>
     <string name="extension_management">Gestion des extensions</string>
-    <string name="extension_management_summary">Gérer les dépôts, les sources JSON, les extensions APK et les analyseurs JAR</string>
+    <string name="extension_management_summary">Activer et tester les sources, gérer les dépôts et les paquets d’extensions</string>
     <string name="extension_repo_added_message">%1$s ajouté(e)</string>
     <string name="extension_repo_already_exists_message">Le dépôt existe déjà</string>
     <string name="extension_repo_count">%d dépôt(s)</string>
@@ -2027,8 +2027,7 @@
     <string name="show_broken_sources_summary">Permet de visualiser et d\'utiliser les extensions de parseur marquées comme cassées</string>
     <string name="show_extensions_in_grid">Afficher les extensions sur deux colonnes</string>
     <string name="show_extensions_in_list">Afficher les extensions sur une colonne</string>
-    <string name="show_extra_info_on_cards">Afficher des infos supplémentaires sur les cartes</string>
-    <string name="show_extra_info_on_cards_summary">Afficher la note, le statut, le nombre de chapitres et les tags sur les cartes de contenu</string>
+    <string name="show_extra_info_on_cards">Infos en plus</string>
     <string name="show_less">Afficher moins</string>
     <string name="show_more">Afficher plus</string>
     <string name="show_source_on_cards">Afficher l\'icône et la langue de la source sur les cartes</string>
@@ -2130,6 +2129,7 @@
     <string name="test_success">Test réussi</string>
     <string name="thumbnails_cache">Cache des vignettes</string>
     <string name="thumbnails_cache_limit">Limite du cache des vignettes</string>
+    <string name="chapter_thumbnails_cache_limit">Limite du cache des vignettes de chapitres</string>
     <string name="title">Titre</string>
     <string name="total_chapters">Total des chapitres</string>
     <string name="tracking_accounts">Comptes de suivi</string>

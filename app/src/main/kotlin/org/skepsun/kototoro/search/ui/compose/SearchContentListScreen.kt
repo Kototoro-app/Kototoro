@@ -99,7 +99,10 @@ import org.skepsun.kototoro.core.ui.compose.rememberResolvedSourceTitle
 import org.skepsun.kototoro.core.ui.compose.SheetDragHandle
 import org.skepsun.kototoro.core.ui.compose.StableAnchoredBottomSheet
 import org.skepsun.kototoro.core.ui.compose.KototoroSheetSurface
+import org.skepsun.kototoro.core.ui.compose.LocalArtworkBackdrop
+import org.skepsun.kototoro.core.ui.glass.LocalGlassPrefs
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
+import org.skepsun.kototoro.core.ui.compose.immersiveEdgeBlurRadius
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassLayerBackdrop
 import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
@@ -119,7 +122,9 @@ import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
 import org.skepsun.kototoro.reader.ui.ReaderState
 import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import org.skepsun.kototoro.list.ui.compose.GridSizeRange
 
 import org.skepsun.kototoro.list.ui.compose.KototoroContentListScreen
 import org.skepsun.kototoro.list.ui.model.ContentListModel
@@ -532,10 +537,29 @@ fun AppSearchContentListRoute(
         null
     }
     val listLayerBackdrop = providedLayerBackdrop ?: fallbackLayerBackdrop
-    val liquidGlassSourceModifier = if (isIosStyle && listLayerBackdrop != null) {
-        Modifier.layerBackdrop(listLayerBackdrop)
+    // Like the main shell: iOS blurs the list it already records for glass; Material records the list only while
+    // the edge blur is on, and never exposes that layer to glass components.
+    val isTopEdgeBlurred = immersiveEdgeBlurRadius() > 0.dp &&
+        LocalGlassPrefs.current?.isTopImmersiveEdgeEnabled != false
+    val materialEdgeLayer = if (!isIosStyle && isTopEdgeBlurred) {
+        rememberLayerBackdrop {
+            drawRect(backdropBackground)
+            drawContent()
+        }
     } else {
-        Modifier
+        null
+    }
+    val artworkBackdrop = LocalArtworkBackdrop.current
+    val topEdgeBackdrop = when {
+        isIosStyle -> listLayerBackdrop
+        materialEdgeLayer == null -> null
+        artworkBackdrop != null -> rememberCombinedBackdrop(artworkBackdrop, materialEdgeLayer)
+        else -> materialEdgeLayer
+    }
+    val liquidGlassSourceModifier = when {
+        isIosStyle && listLayerBackdrop != null -> Modifier.layerBackdrop(listLayerBackdrop)
+        materialEdgeLayer != null -> Modifier.layerBackdrop(materialEdgeLayer)
+        else -> Modifier
     }
 
     BackHandler(enabled = previewContent != null || (isWideAdaptiveLayout && panels.filterOpen)) {
@@ -671,7 +695,7 @@ fun AppSearchContentListRoute(
                 onSettingsClick = { appRouter.openSourceSettings(viewModel.source) },
                 onListModeChange = { settings.listMode = it },
                 onGridSizeChange = { size ->
-                    settings.gridSize = size.coerceIn(50, 150)
+                    settings.gridSize = size.coerceIn(GridSizeRange)
                 },
                 onClearActiveQuery = {
                     searchQuery = ""
@@ -681,6 +705,7 @@ fun AppSearchContentListRoute(
                     (viewModel as? org.skepsun.kototoro.list.domain.QuickFilterListener)?.toggleFilterOption(option)
                 },
                 onToggleTag = { tag, selected -> viewModel.filterCoordinator.toggleTag(tag, selected) },
+                edgeBackdrop = topEdgeBackdrop,
             )
         }
     }
@@ -754,6 +779,7 @@ fun AppSearchContentListRoute(
                         },
                         selectedItemsIds = selectedItemsIds,
                         showInlineSelectionTopBar = false,
+                        onEmptyActionClick = viewModel.filterCoordinator::reset,
                         onRetry = ::resolveErrorAndRetry,
                         onSecondaryAction = ::openErrorInBrowser,
                         highlightedItemId = panels.previewContentId,

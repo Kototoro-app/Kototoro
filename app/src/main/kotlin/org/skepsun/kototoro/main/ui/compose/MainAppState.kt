@@ -110,7 +110,6 @@ data class MainAppState(
     val onNavDestinationChanged: (Int) -> Unit = {},
     val pendingSearchNavigation: SearchNavigationRequest? = null,
     val onSearchNavigationHandled: () -> Unit = {},
-    val onFeedRefresh: () -> Unit = {},
     val isResumeEnabled: Boolean = false,
     val onResumeClick: () -> Unit = {},
     val spaceUiState: SpaceUiState = SpaceUiState(),

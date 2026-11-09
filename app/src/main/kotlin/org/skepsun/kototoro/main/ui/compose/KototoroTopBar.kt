@@ -50,6 +50,11 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.foundation.layout.width
+import org.skepsun.kototoro.core.ui.adaptive.TabletVerticalBarControlWidth
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
@@ -215,6 +220,7 @@ fun KototoroTopBar(
     displayOptionsExtraContent: (@Composable (() -> Unit) -> Unit)? = null,
     topBarStyle: TopBarStyle = TopBarStyle.EXPANDED_SEARCH,
     favoritesTabsPosition: FavoritesTabsPosition = FavoritesTabsPosition.BOTTOM_RAIL,
+    verticalBarActions: VerticalBarActionsHost? = null,
     modifier: Modifier = Modifier,
 ) {
     var isMoreMenuExpanded by rememberSaveable { mutableStateOf(false) }
@@ -254,6 +260,336 @@ fun KototoroTopBar(
     LaunchedEffect(compactTabsState, favoritesTabsPosition) {
         if (!isInlineTabs) {
             areCompactTabsExpanded = false
+        }
+    }
+
+    // The filter and ⋮ buttons. On the tablet's vertical bar they leave this row and the bar draws
+    // them as its upper group (iPhone Duo puts the top bar's symbol items there); the menus and
+    // their state stay here either way.
+    val actionButtons: @Composable () -> Unit = {
+        if (isContentTypeFilterVisible) {
+            SwipeableFilterChip(
+                selectedType = selectedContentType,
+                enabledTypes = enabledContentTypes,
+                onTypeSelected = onContentTypeSelected,
+                controlSize = topBarControlHeight,
+                iconSize = topBarIconSize,
+                modifier = Modifier.zIndex(1f),
+                downFocusLink = contentDownFocus,
+            )
+        }
+        if (isSourceTagFilterVisible) {
+            SourceTagDropdown(
+                selectedTags = selectedSourceTags,
+                entries = sourceTagEntries,
+                enabledTags = enabledSourceTags,
+                onButtonClickIntercept = onSourceTagFilterClick,
+                onTagSelected = onSourceTagSelected,
+                buttonSize = topBarControlHeight,
+                iconSize = topBarIconSize,
+                downFocusLink = contentDownFocus,
+                customMenuContent = sourceTagCustomMenuContent,
+            )
+        }
+        if (showMoreActions) {
+            Box(
+                modifier = Modifier.onGloballyPositioned {
+                    topBarMenuAnchorBounds = it.boundsInRoot()
+                },
+            ) {
+                TopBarIconAction(
+                    icon = painterResource(R.drawable.ic_more_vert),
+                    contentDescription = stringResource(R.string.more),
+                    onClick = {
+                        // The dismiss layer above leaves a hole
+                        // over this anchor, so a tap lands here
+                        // even while a menu is open: close any
+                        // open menu, otherwise open the more menu.
+                        if (isMoreMenuExpanded || isLanguagePresetMenuExpanded) {
+                            isMoreMenuExpanded = false
+                            isLanguagePresetMenuExpanded = false
+                        } else {
+                            isMoreMenuExpanded = true
+                        }
+                    },
+                    modifier = Modifier
+                        .focusRequester(moreMenuAnchorFocus)
+                        .tvDownFocusLink(contentDownFocus),
+                    badge = isAppUpdateAvailable,
+                    size = topBarControlHeight,
+                    iconSize = topBarIconSize,
+                    inactiveTint = MaterialTheme.colorScheme.onSurface,
+                )
+                GlassDropdownMenu(
+                    expanded = isMoreMenuExpanded,
+                    onDismissRequest = { isMoreMenuExpanded = false },
+                    offset = androidx.compose.ui.unit.DpOffset(x = 0.dp, y = 4.dp),
+                    alignToAnchorEnd = verticalBarActions?.isBarOnLeft != true,
+                    useRootOverlay = LocalInterfaceStyle.current == InterfaceStyle.IOS,
+                    // Keep the toggle button's press gloss when the
+                    // menu is dismissed by tapping it again.
+                    anchorTapThrough = true,
+                    anchorBounds = topBarMenuAnchorBounds,
+                    anchorFocusRequester = moreMenuAnchorFocus,
+                    shape = CompactTopBarPillShape,
+                    style = GlassDefaults.subtleStyle(),
+                ) {
+                if (supportsDisplayModeMenu || supportsGridSizeSlider || displayOptionsExtraContent != null) {
+                    CompactDropdownMenuItem(
+                        text = { CompactDropdownMenuText(stringResource(R.string.display_options)) },
+                        leadingIcon = {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_grid),
+                                contentDescription = null,
+                            )
+                        },
+                        onClick = {
+                            isMoreMenuExpanded = false
+                            val override = onDisplayOptionsClick
+                            if (override != null) {
+                                override()
+                            } else {
+                                showDisplayOptionsSheet = true
+                            }
+                        },
+                    )
+
+                    CompactDropdownMenuDivider()
+                }
+                if (isLanguagePresetFilterVisible) {
+                    CompactDropdownMenuItem(
+                        text = { CompactDropdownMenuText(stringResource(R.string.show_language_preset_filter)) },
+                        leadingIcon = {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_language),
+                                contentDescription = null,
+                            )
+                        },
+                        onClick = {
+                            isMoreMenuExpanded = false
+                            isLanguagePresetMenuExpanded = true
+                        },
+                    )
+                    CompactDropdownMenuDivider()
+                }
+                if (showSourceSettingsEntry) {
+                    CompactDropdownMenuItem(
+                        text = { CompactDropdownMenuText(stringResource(R.string.extension_management)) },
+                        leadingIcon = {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_extension),
+                                contentDescription = null,
+                            )
+                        },
+                        onClick = {
+                            isMoreMenuExpanded = false
+                            onManageSourcesClick()
+                        },
+                    )
+                    CompactDropdownMenuItem(
+                        text = { CompactDropdownMenuText(stringResource(R.string.manage_sources)) },
+                        leadingIcon = {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_manga_source),
+                                contentDescription = null,
+                            )
+                        },
+                        onClick = {
+                            isMoreMenuExpanded = false
+                            onSourceSettingsClick()
+                        },
+                    )
+                    CompactDropdownMenuItem(
+                        text = { CompactDropdownMenuText(stringResource(R.string.tracking_accounts)) },
+                        leadingIcon = {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_user),
+                                contentDescription = null,
+                            )
+                        },
+                        onClick = {
+                            isMoreMenuExpanded = false
+                            onTrackingAccountsClick()
+                        },
+                    )
+                    CompactDropdownMenuDivider()
+                }
+                contextualMenuActions.forEach { action ->
+                    CompactDropdownMenuItem(
+                        text = { CompactDropdownMenuText(stringResource(action.titleRes)) },
+                        leadingIcon = action.iconRes?.let { iconRes ->
+                            {
+                                Icon(
+                                    painter = painterResource(iconRes),
+                                    contentDescription = null,
+                                )
+                            }
+                        },
+                        onClick = {
+                            isMoreMenuExpanded = false
+                            action.onClick()
+                        },
+                    )
+                }
+                if (contextualMenuActions.isNotEmpty()) {
+                    CompactDropdownMenuDivider()
+                }
+                CompactDropdownMenuItem(
+                    text = { CompactDropdownMenuText(stringResource(R.string.settings)) },
+                    leadingIcon = {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_settings),
+                            contentDescription = null,
+                        )
+                    },
+                    onClick = {
+                        isMoreMenuExpanded = false
+                        onSettingsClick()
+                    },
+                )
+                CompactDropdownMenuItem(
+                    text = { CompactDropdownMenuText(stringResource(R.string.help_and_feedback)) },
+                    leadingIcon = {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_info_outline),
+                            contentDescription = null,
+                        )
+                    },
+                    trailingIcon = if (isAppUpdateAvailable) {
+                        { UpdateBadgeDot() }
+                    } else {
+                        null
+                    },
+                    onClick = {
+                        isMoreMenuExpanded = false
+                        onHelpClick()
+                    },
+                )
+                CompactDropdownMenuItem(
+                    text = { CompactDropdownMenuText(stringResource(R.string.incognito_mode)) },
+                    leadingIcon = {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_incognito),
+                            contentDescription = null,
+                        )
+                    },
+                    trailingIcon = {
+                        Checkbox(
+                            checked = isIncognitoModeEnabled,
+                            onCheckedChange = null,
+                        )
+                    },
+                    onClick = {
+                        isMoreMenuExpanded = false
+                        onIncognitoToggle()
+                    },
+                )
+                }
+            }
+            GlassDropdownMenu(
+                expanded = isLanguagePresetMenuExpanded,
+                onDismissRequest = { isLanguagePresetMenuExpanded = false },
+                offset = DpOffset(x = 0.dp, y = 4.dp),
+                alignToAnchorEnd = verticalBarActions?.isBarOnLeft != true,
+                useRootOverlay = LocalInterfaceStyle.current == InterfaceStyle.IOS,
+                // Keep the toggle button's press gloss when the
+                // menu is dismissed by tapping it again.
+                anchorTapThrough = true,
+                anchorBounds = topBarMenuAnchorBounds,
+                // The language presets hang off the same ⋮ button.
+                anchorFocusRequester = moreMenuAnchorFocus,
+                shape = CompactTopBarPillShape,
+                style = GlassDefaults.subtleStyle(),
+            ) {
+                CompactDropdownMenuItem(
+                    text = { CompactDropdownMenuText(stringResource(R.string.all)) },
+                    onClick = {
+                        onLanguagePresetSelected(-1L)
+                        isLanguagePresetMenuExpanded = false
+                    },
+                    leadingIcon = {
+                        Checkbox(
+                            checked = activeLanguagePresetId <= 0L,
+                            onCheckedChange = null,
+                        )
+                    },
+                )
+                languagePresetEntries.forEach { preset ->
+                    CompactDropdownMenuItem(
+                        text = { CompactDropdownMenuText(preset.title) },
+                        onClick = {
+                            onLanguagePresetSelected(preset.id)
+                            isLanguagePresetMenuExpanded = false
+                        },
+                        leadingIcon = {
+                            Checkbox(
+                                checked = activeLanguagePresetId == preset.id,
+                                onCheckedChange = null,
+                            )
+                        },
+                    )
+                }
+                CompactDropdownMenuDivider()
+                CompactDropdownMenuItem(
+                    text = { CompactDropdownMenuText(stringResource(R.string.manage_language_presets)) },
+                    leadingIcon = {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_edit),
+                            contentDescription = null,
+                        )
+                    },
+                    onClick = {
+                        isLanguagePresetMenuExpanded = false
+                        onManageLanguagePresets()
+                    },
+                )
+            }
+
+        }
+    }
+    val actionGroup: @Composable (Boolean) -> Unit = { vertical ->
+        TopBarControlSurface(
+            // The right-side action group is a PillControl capsule like
+            // the compact tab rails; it used to hard-disable the lens,
+            // which made it inconsistent with every other pill (no lens
+            // under any preset). Pill tuning (Control Center: refraction
+            // 8/12) now keeps it safe on small capsules, so restore it.
+            pressFeedbackEnabled = false,
+        ) {
+            CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides topBarControlHeight) {
+                if (vertical) {
+                    Column(
+                        modifier = Modifier
+                            .width(TabletVerticalBarControlWidth)
+                            .padding(vertical = 4.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        actionButtons()
+                    }
+                } else {
+                    Row(
+                        modifier = Modifier
+                            .widthIn(min = topBarControlHeight)
+                            .height(topBarControlHeight)
+                            .padding(start = 2.dp, end = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        actionButtons()
+                    }
+                }
+            }
+        }
+    }
+    if (verticalBarActions != null) {
+        val latestActionGroup = rememberUpdatedState(actionGroup)
+        DisposableEffect(verticalBarActions) {
+            val slot: @Composable () -> Unit = { latestActionGroup.value(true) }
+            verticalBarActions.content = slot
+            onDispose {
+                if (verticalBarActions.content === slot) verticalBarActions.content = null
+            }
         }
     }
 
@@ -388,311 +724,15 @@ fun KototoroTopBar(
                     )
                 }
             }
-            AnimatedVisibility(
-                visible = !hidePrimaryControlsForTabs,
-                enter = fadeIn() + expandHorizontally(expandFrom = Alignment.End),
-                exit = shrinkHorizontally(shrinkTowards = Alignment.End) + fadeOut(),
-            ) {
-                TopBarControlSurface(
-                    // The right-side action group is a PillControl capsule like
-                    // the compact tab rails; it used to hard-disable the lens,
-                    // which made it inconsistent with every other pill (no lens
-                    // under any preset). Pill tuning (Control Center: refraction
-                    // 8/12) now keeps it safe on small capsules, so restore it.
-                    pressFeedbackEnabled = false,
+            if (verticalBarActions == null) {
+                AnimatedVisibility(
+                    visible = !hidePrimaryControlsForTabs,
+                    enter = fadeIn() + expandHorizontally(expandFrom = Alignment.End),
+                    exit = shrinkHorizontally(shrinkTowards = Alignment.End) + fadeOut(),
                 ) {
-                    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides topBarControlHeight) {
-                        Row(
-                            modifier = Modifier
-                                .widthIn(min = topBarControlHeight)
-                                .height(topBarControlHeight)
-                                .padding(start = 2.dp, end = 2.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(2.dp),
-                        ) {
-                            if (isContentTypeFilterVisible) {
-                                SwipeableFilterChip(
-                                    selectedType = selectedContentType,
-                                    enabledTypes = enabledContentTypes,
-                                    onTypeSelected = onContentTypeSelected,
-                                    controlSize = topBarControlHeight,
-                                    iconSize = topBarIconSize,
-                                    modifier = Modifier.zIndex(1f),
-                                    downFocusLink = contentDownFocus,
-                                )
-                            }
-                            if (isSourceTagFilterVisible) {
-                                SourceTagDropdown(
-                                    selectedTags = selectedSourceTags,
-                                    entries = sourceTagEntries,
-                                    enabledTags = enabledSourceTags,
-                                    onButtonClickIntercept = onSourceTagFilterClick,
-                                    onTagSelected = onSourceTagSelected,
-                                    buttonSize = topBarControlHeight,
-                                    iconSize = topBarIconSize,
-                                    downFocusLink = contentDownFocus,
-                                    customMenuContent = sourceTagCustomMenuContent,
-                                )
-                            }
-                            if (showMoreActions) {
-                                Box(
-                                    modifier = Modifier.onGloballyPositioned {
-                                        topBarMenuAnchorBounds = it.boundsInRoot()
-                                    },
-                                ) {
-                                    TopBarIconAction(
-                                        icon = painterResource(R.drawable.ic_more_vert),
-                                        contentDescription = stringResource(R.string.more),
-                                        onClick = {
-                                            // The dismiss layer above leaves a hole
-                                            // over this anchor, so a tap lands here
-                                            // even while a menu is open: close any
-                                            // open menu, otherwise open the more menu.
-                                            if (isMoreMenuExpanded || isLanguagePresetMenuExpanded) {
-                                                isMoreMenuExpanded = false
-                                                isLanguagePresetMenuExpanded = false
-                                            } else {
-                                                isMoreMenuExpanded = true
-                                            }
-                                        },
-                                        modifier = Modifier
-                                            .focusRequester(moreMenuAnchorFocus)
-                                            .tvDownFocusLink(contentDownFocus),
-                                        badge = isAppUpdateAvailable,
-                                        size = topBarControlHeight,
-                                        iconSize = topBarIconSize,
-                                        inactiveTint = MaterialTheme.colorScheme.onSurface,
-                                    )
-                                    GlassDropdownMenu(
-                                        expanded = isMoreMenuExpanded,
-                                        onDismissRequest = { isMoreMenuExpanded = false },
-                                        offset = androidx.compose.ui.unit.DpOffset(x = 0.dp, y = 4.dp),
-                                        alignToAnchorEnd = true,
-                                        useRootOverlay = LocalInterfaceStyle.current == InterfaceStyle.IOS,
-                                        // Keep the toggle button's press gloss when the
-                                        // menu is dismissed by tapping it again.
-                                        anchorTapThrough = true,
-                                        anchorBounds = topBarMenuAnchorBounds,
-                                        anchorFocusRequester = moreMenuAnchorFocus,
-                                        shape = CompactTopBarPillShape,
-                                        style = GlassDefaults.subtleStyle(),
-                                    ) {
-                                    if (supportsDisplayModeMenu || supportsGridSizeSlider || displayOptionsExtraContent != null) {
-                                        CompactDropdownMenuItem(
-                                            text = { CompactDropdownMenuText(stringResource(R.string.display_options)) },
-                                            leadingIcon = {
-                                                Icon(
-                                                    painter = painterResource(R.drawable.ic_grid),
-                                                    contentDescription = null,
-                                                )
-                                            },
-                                            onClick = {
-                                                isMoreMenuExpanded = false
-                                                val override = onDisplayOptionsClick
-                                                if (override != null) {
-                                                    override()
-                                                } else {
-                                                    showDisplayOptionsSheet = true
-                                                }
-                                            },
-                                        )
-
-                                        CompactDropdownMenuDivider()
-                                    }
-                                    if (isLanguagePresetFilterVisible) {
-                                        CompactDropdownMenuItem(
-                                            text = { CompactDropdownMenuText(stringResource(R.string.show_language_preset_filter)) },
-                                            leadingIcon = {
-                                                Icon(
-                                                    painter = painterResource(R.drawable.ic_language),
-                                                    contentDescription = null,
-                                                )
-                                            },
-                                            onClick = {
-                                                isMoreMenuExpanded = false
-                                                isLanguagePresetMenuExpanded = true
-                                            },
-                                        )
-                                        CompactDropdownMenuDivider()
-                                    }
-                                    if (showSourceSettingsEntry) {
-                                        CompactDropdownMenuItem(
-                                            text = { CompactDropdownMenuText(stringResource(R.string.extension_management)) },
-                                            leadingIcon = {
-                                                Icon(
-                                                    painter = painterResource(R.drawable.ic_extension),
-                                                    contentDescription = null,
-                                                )
-                                            },
-                                            onClick = {
-                                                isMoreMenuExpanded = false
-                                                onManageSourcesClick()
-                                            },
-                                        )
-                                        CompactDropdownMenuItem(
-                                            text = { CompactDropdownMenuText(stringResource(R.string.manage_sources)) },
-                                            leadingIcon = {
-                                                Icon(
-                                                    painter = painterResource(R.drawable.ic_manga_source),
-                                                    contentDescription = null,
-                                                )
-                                            },
-                                            onClick = {
-                                                isMoreMenuExpanded = false
-                                                onSourceSettingsClick()
-                                            },
-                                        )
-                                        CompactDropdownMenuItem(
-                                            text = { CompactDropdownMenuText(stringResource(R.string.tracking_accounts)) },
-                                            leadingIcon = {
-                                                Icon(
-                                                    painter = painterResource(R.drawable.ic_user),
-                                                    contentDescription = null,
-                                                )
-                                            },
-                                            onClick = {
-                                                isMoreMenuExpanded = false
-                                                onTrackingAccountsClick()
-                                            },
-                                        )
-                                        CompactDropdownMenuDivider()
-                                    }
-                                    contextualMenuActions.forEach { action ->
-                                        CompactDropdownMenuItem(
-                                            text = { CompactDropdownMenuText(stringResource(action.titleRes)) },
-                                            leadingIcon = action.iconRes?.let { iconRes ->
-                                                {
-                                                    Icon(
-                                                        painter = painterResource(iconRes),
-                                                        contentDescription = null,
-                                                    )
-                                                }
-                                            },
-                                            onClick = {
-                                                isMoreMenuExpanded = false
-                                                action.onClick()
-                                            },
-                                        )
-                                    }
-                                    if (contextualMenuActions.isNotEmpty()) {
-                                        CompactDropdownMenuDivider()
-                                    }
-                                    CompactDropdownMenuItem(
-                                        text = { CompactDropdownMenuText(stringResource(R.string.settings)) },
-                                        leadingIcon = {
-                                            Icon(
-                                                painter = painterResource(R.drawable.ic_settings),
-                                                contentDescription = null,
-                                            )
-                                        },
-                                        onClick = {
-                                            isMoreMenuExpanded = false
-                                            onSettingsClick()
-                                        },
-                                    )
-                                    CompactDropdownMenuItem(
-                                        text = { CompactDropdownMenuText(stringResource(R.string.help_and_feedback)) },
-                                        leadingIcon = {
-                                            Icon(
-                                                painter = painterResource(R.drawable.ic_info_outline),
-                                                contentDescription = null,
-                                            )
-                                        },
-                                        trailingIcon = if (isAppUpdateAvailable) {
-                                            { UpdateBadgeDot() }
-                                        } else {
-                                            null
-                                        },
-                                        onClick = {
-                                            isMoreMenuExpanded = false
-                                            onHelpClick()
-                                        },
-                                    )
-                                    CompactDropdownMenuItem(
-                                        text = { CompactDropdownMenuText(stringResource(R.string.incognito_mode)) },
-                                        leadingIcon = {
-                                            Icon(
-                                                painter = painterResource(R.drawable.ic_incognito),
-                                                contentDescription = null,
-                                            )
-                                        },
-                                        trailingIcon = {
-                                            Checkbox(
-                                                checked = isIncognitoModeEnabled,
-                                                onCheckedChange = null,
-                                            )
-                                        },
-                                        onClick = {
-                                            isMoreMenuExpanded = false
-                                            onIncognitoToggle()
-                                        },
-                                    )
-                                    }
-                                }
-                                GlassDropdownMenu(
-                                    expanded = isLanguagePresetMenuExpanded,
-                                    onDismissRequest = { isLanguagePresetMenuExpanded = false },
-                                    offset = DpOffset(x = 0.dp, y = 4.dp),
-                                    alignToAnchorEnd = true,
-                                    useRootOverlay = LocalInterfaceStyle.current == InterfaceStyle.IOS,
-                                    // Keep the toggle button's press gloss when the
-                                    // menu is dismissed by tapping it again.
-                                    anchorTapThrough = true,
-                                    anchorBounds = topBarMenuAnchorBounds,
-                                    // The language presets hang off the same ⋮ button.
-                                    anchorFocusRequester = moreMenuAnchorFocus,
-                                    shape = CompactTopBarPillShape,
-                                    style = GlassDefaults.subtleStyle(),
-                                ) {
-                                    CompactDropdownMenuItem(
-                                        text = { CompactDropdownMenuText(stringResource(R.string.all)) },
-                                        onClick = {
-                                            onLanguagePresetSelected(-1L)
-                                            isLanguagePresetMenuExpanded = false
-                                        },
-                                        leadingIcon = {
-                                            Checkbox(
-                                                checked = activeLanguagePresetId <= 0L,
-                                                onCheckedChange = null,
-                                            )
-                                        },
-                                    )
-                                    languagePresetEntries.forEach { preset ->
-                                        CompactDropdownMenuItem(
-                                            text = { CompactDropdownMenuText(preset.title) },
-                                            onClick = {
-                                                onLanguagePresetSelected(preset.id)
-                                                isLanguagePresetMenuExpanded = false
-                                            },
-                                            leadingIcon = {
-                                                Checkbox(
-                                                    checked = activeLanguagePresetId == preset.id,
-                                                    onCheckedChange = null,
-                                                )
-                                            },
-                                        )
-                                    }
-                                    CompactDropdownMenuDivider()
-                                    CompactDropdownMenuItem(
-                                        text = { CompactDropdownMenuText(stringResource(R.string.manage_language_presets)) },
-                                        leadingIcon = {
-                                            Icon(
-                                                painter = painterResource(R.drawable.ic_edit),
-                                                contentDescription = null,
-                                            )
-                                        },
-                                        onClick = {
-                                            isLanguagePresetMenuExpanded = false
-                                            onManageLanguagePresets()
-                                        },
-                                    )
-                                }
-
-                            }
-                            }
-                        }
-                    }
+                    actionGroup(false)
                 }
+            }
             }
         filterRailState?.let { state ->
             CompactTopBarFilterRail(
@@ -768,6 +808,15 @@ fun KototoroTopBar(
             )
         }
     }
+}
+
+/**
+ * Where the main top bar hands its action group when the tablet's vertical bar shows it. The bar
+ * reads [content]; the top bar keeps owning the buttons' state and menus.
+ */
+@Stable
+class VerticalBarActionsHost(val isBarOnLeft: Boolean = false) {
+    var content: (@Composable () -> Unit)? by mutableStateOf(null)
 }
 
 @Composable

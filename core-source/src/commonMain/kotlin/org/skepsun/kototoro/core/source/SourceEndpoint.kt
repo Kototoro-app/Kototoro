@@ -81,10 +81,16 @@ class SourceEndpoint(
             failure(decoded.requestId, SourceErrorCode.UNSUPPORTED_OPERATION, "Unsupported source operation")
         } catch (error: Exception) {
             val challenge = challenge(error)
+            val rateLimit = if (challenge == null) SourceRateLimitException.find(error) else null
             if (challenge != null) {
                 // Only the site's origin is sent, never the request URL or its query.
                 SourceProtocolJson.encodeToString(SourceResponse(requestId = decoded.requestId, error = SourceError(
                     SourceErrorCode.CHALLENGE_REQUIRED, "Browser verification required", challenge.origin,
+                )))
+            } else if (rateLimit != null) {
+                SourceProtocolJson.encodeToString(SourceResponse(requestId = decoded.requestId, error = SourceError(
+                    SourceErrorCode.RATE_LIMITED, "Rate limited by the source",
+                    retryAfterMillis = rateLimit.retryAfterMillis,
                 )))
             } else {
                 // Do not expose parser stack traces, tokens or raw request URLs through the wire protocol.

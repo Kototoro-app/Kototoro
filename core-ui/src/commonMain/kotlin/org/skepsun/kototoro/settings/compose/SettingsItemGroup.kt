@@ -29,6 +29,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -108,14 +109,7 @@ fun SettingsItemGroup(
     if (itemCount == 0) return
 
     val tokens = LocalInterfaceStyleTokens.current
-    val isArtworkBackground = (LocalArtworkBackdrop.current != ArtworkBackdrop.NONE)
-    val containerColor = if (isArtworkBackground) {
-        // Settings groups are content cards over artwork — join the shared layering
-        // for both interface styles instead of an iOS-only hardcoded alpha.
-        MaterialTheme.colorScheme.surfaceContainerLow.artworkAwareContainerColor(ArtworkSurfaceRole.Card)
-    } else {
-        MaterialTheme.colorScheme.surfaceContainer
-    }
+    val containerColor = settingsGroupContainerColor()
     if (LocalIsIosInterfaceStyle.current) {
         Surface(
             modifier = modifier.fillMaxWidth(),
@@ -155,6 +149,17 @@ fun SettingsItemGroup(
         }
     }
 }
+
+/** The card color of a settings group (iOS) or of each of its rows (Material). */
+@Composable
+fun settingsGroupContainerColor(): Color =
+    if (LocalArtworkBackdrop.current != ArtworkBackdrop.NONE) {
+        // Settings groups are content cards over artwork — join the shared layering
+        // for both interface styles instead of an iOS-only hardcoded alpha.
+        MaterialTheme.colorScheme.surfaceContainerLow.artworkAwareContainerColor(ArtworkSurfaceRole.Card)
+    } else {
+        MaterialTheme.colorScheme.surfaceContainer
+    }
 
 private fun settingsGroupItemShape(
     position: SettingsGroupItemPosition,

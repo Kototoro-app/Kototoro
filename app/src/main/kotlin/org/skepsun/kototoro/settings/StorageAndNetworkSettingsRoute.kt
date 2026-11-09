@@ -198,6 +198,7 @@ fun StorageAndNetworkSettingsRoute(
     )
 
     val totalCacheLimitMb = settings.observeAsState(AppSettings.KEY_THUMBS_CACHE_MB) { thumbsCacheSizeMb }.value +
+        settings.observeAsState(AppSettings.KEY_CHAPTER_THUMBS_CACHE_MB) { chapterThumbsCacheSizeMb }.value +
         settings.observeAsState(AppSettings.KEY_FAVICON_CACHE_MB) { faviconCacheSizeMb }.value +
         settings.observeAsState(AppSettings.KEY_PAGES_CACHE_MB) { pagesCacheSizeMb }.value +
         settings.observeAsState(AppSettings.KEY_NOVEL_CACHE_MB) { novelCacheSizeMb }.value +
@@ -543,6 +544,9 @@ fun CacheLimitsSettingsRoute(
         videoDanmakuCacheSizeMb
     }.value
     val thumbsCacheMb = settings.observeAsState(AppSettings.KEY_THUMBS_CACHE_MB) { thumbsCacheSizeMb }.value
+    val chapterThumbsCacheMb = settings.observeAsState(AppSettings.KEY_CHAPTER_THUMBS_CACHE_MB) {
+        chapterThumbsCacheSizeMb
+    }.value
     val faviconCacheMb = settings.observeAsState(AppSettings.KEY_FAVICON_CACHE_MB) { faviconCacheSizeMb }.value
     val pagesCacheMb = settings.observeAsState(AppSettings.KEY_PAGES_CACHE_MB) { pagesCacheSizeMb }.value
     val novelCacheMb = settings.observeAsState(AppSettings.KEY_NOVEL_CACHE_MB) { novelCacheSizeMb }.value
@@ -558,20 +562,20 @@ fun CacheLimitsSettingsRoute(
     }
 
     val srMb = srCacheLimit.toIntOrNull() ?: 512
-    val totalLimitMb = thumbsCacheMb + faviconCacheMb + pagesCacheMb + novelCacheMb +
+    val totalLimitMb = thumbsCacheMb + chapterThumbsCacheMb + faviconCacheMb + pagesCacheMb + novelCacheMb +
         ttsCacheMb + srMb + videoCacheMb + videoProxyCacheMb +
         torrentCacheMb + videoDanmakuCacheMb + httpCacheMb
 
     val activePreset = when {
-        thumbsCacheMb == 128 && faviconCacheMb == 4 && pagesCacheMb == 128 && novelCacheMb == 64 &&
+        thumbsCacheMb == 128 && chapterThumbsCacheMb == 32 && faviconCacheMb == 4 && pagesCacheMb == 128 && novelCacheMb == 64 &&
             ttsCacheMb == 64 && srCacheLimit == "256" && videoCacheMb == 512 && videoProxyCacheMb == 512 &&
             torrentCacheMb == 1024 && videoDanmakuCacheMb == 32 && httpCacheMb == 128 -> CacheLimitsPreset.COMPACT
 
-        thumbsCacheMb == 256 && faviconCacheMb == 8 && pagesCacheMb == 200 && novelCacheMb == 100 &&
+        thumbsCacheMb == 256 && chapterThumbsCacheMb == 64 && faviconCacheMb == 8 && pagesCacheMb == 200 && novelCacheMb == 100 &&
             ttsCacheMb == 100 && srCacheLimit == "512" && videoCacheMb == 1024 && videoProxyCacheMb == 1024 &&
             torrentCacheMb == 4096 && videoDanmakuCacheMb == 64 && httpCacheMb == 250 -> CacheLimitsPreset.BALANCED
 
-        thumbsCacheMb == 512 && faviconCacheMb == 16 && pagesCacheMb == 1024 && novelCacheMb == 256 &&
+        thumbsCacheMb == 512 && chapterThumbsCacheMb == 256 && faviconCacheMb == 16 && pagesCacheMb == 1024 && novelCacheMb == 256 &&
             ttsCacheMb == 256 && srCacheLimit == "1024" && videoCacheMb == 2048 && videoProxyCacheMb == 2048 &&
             torrentCacheMb == 8192 && videoDanmakuCacheMb == 128 && httpCacheMb == 512 -> CacheLimitsPreset.PERFORMANCE
 
@@ -582,6 +586,7 @@ fun CacheLimitsSettingsRoute(
         when (preset) {
             CacheLimitsPreset.COMPACT -> {
                 settings.thumbsCacheSizeMb = 128
+                settings.chapterThumbsCacheSizeMb = 32
                 settings.faviconCacheSizeMb = 4
                 settings.pagesCacheSizeMb = 128
                 settings.novelCacheSizeMb = 64
@@ -595,6 +600,7 @@ fun CacheLimitsSettingsRoute(
             }
             CacheLimitsPreset.BALANCED -> {
                 settings.thumbsCacheSizeMb = 256
+                settings.chapterThumbsCacheSizeMb = 64
                 settings.faviconCacheSizeMb = 8
                 settings.pagesCacheSizeMb = 200
                 settings.novelCacheSizeMb = 100
@@ -608,6 +614,7 @@ fun CacheLimitsSettingsRoute(
             }
             CacheLimitsPreset.PERFORMANCE -> {
                 settings.thumbsCacheSizeMb = 512
+                settings.chapterThumbsCacheSizeMb = 256
                 settings.faviconCacheSizeMb = 16
                 settings.pagesCacheSizeMb = 1024
                 settings.novelCacheSizeMb = 256
@@ -752,6 +759,18 @@ fun CacheLimitsSettingsRoute(
                 valueText = { formatCacheLimitMb(it) },
                 onValueChange = {
                     settings.thumbsCacheSizeMb = it
+                    showRestartRequired()
+                },
+            ) }
+            item { SettingsSliderPreference(
+                title = context.getString(R.string.chapter_thumbnails_cache_limit),
+                iconRes = R.drawable.ic_images,
+                value = chapterThumbsCacheMb,
+                valueRange = 16..1024,
+                step = 16,
+                valueText = { formatCacheLimitMb(it) },
+                onValueChange = {
+                    settings.chapterThumbsCacheSizeMb = it
                     showRestartRequired()
                 },
             ) }

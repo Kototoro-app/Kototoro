@@ -520,6 +520,7 @@ class LocalStorageManager @Inject constructor(
             CacheDir.TORRENT,
             CacheDir.HTTP,
             CacheDir.SUPER_RESOLUTION,
+            CacheDir.CHAPTER_THUMBS,
             CacheDir.THUMBS,
             CacheDir.FAVICONS,
             CacheDir.PAGES,

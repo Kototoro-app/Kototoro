@@ -466,7 +466,7 @@ fun ComposeWebtoonReader(
                 visibleItemSizesPx = visibleItems.map { it.size },
                 viewportHeightPx = viewportHeightPx,
             )
-            val activePageKey = resolveLastEndVisibleWebtoonPageKey(
+            val activePageKey = resolveCenterWebtoonPageKey(
                 items = visibleItems.mapNotNull { item ->
                     (item.key as? Long)?.let { key -> WebtoonVisibleItem(key, item.offset, item.size) }
                 },

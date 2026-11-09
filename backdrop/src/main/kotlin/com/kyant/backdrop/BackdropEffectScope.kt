@@ -18,6 +18,9 @@ sealed interface BackdropEffectScope : Density, RuntimeShaderCache {
     var padding: Float
 
     var renderEffect: RenderEffect?
+
+    /** Effects that meet unfiltered content at zero radius must retain the source pixel resolution. */
+    var requiresFullResolution: Boolean
 }
 
 internal abstract class BackdropEffectScopeImpl : BackdropEffectScope, RuntimeShaderCache {
@@ -28,6 +31,7 @@ internal abstract class BackdropEffectScopeImpl : BackdropEffectScope, RuntimeSh
     override var layoutDirection: LayoutDirection = LayoutDirection.Ltr
     override var padding: Float = 0f
     override var renderEffect: RenderEffect? = null
+    override var requiresFullResolution: Boolean = false
 
     private val runtimeShaderCache = RuntimeShaderCacheImpl()
 
@@ -62,6 +66,7 @@ internal abstract class BackdropEffectScopeImpl : BackdropEffectScope, RuntimeSh
     fun apply(effects: BackdropEffectScope.() -> Unit) {
         padding = 0f
         renderEffect = null
+        requiresFullResolution = false
         effects()
     }
 
@@ -72,6 +77,7 @@ internal abstract class BackdropEffectScopeImpl : BackdropEffectScope, RuntimeSh
         layoutDirection = LayoutDirection.Ltr
         padding = 0f
         renderEffect = null
+        requiresFullResolution = false
         runtimeShaderCache.clear()
     }
 }

@@ -1494,7 +1494,26 @@ struct SourceReaderView: View {
         }
         .background(settings.background.ignoresSafeArea())
         .background(EdgeSwipeBack(enabled: settings.value.edgeSwipeBack))
-        .toolbar(.hidden, for: .navigationBar, .tabBar)
+        .toolbar(.hidden, for: .tabBar)
+        // The top controls live in the system navigation bar, as on the details page, so they sit where its controls
+        // do and the bar hands its back button over when the reader is popped. Bottom panels keep their own row.
+        .toolbar(showsNavigationBar ? .visible : .hidden, for: .navigationBar)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Button { withAnimation(chromeAnimation) { panel = .chapters } } label: {
+                    Label(model.chapter.title, systemImage: "list.bullet").labelStyle(.titleAndIcon).font(.subheadline)
+                        .lineLimit(1).padding(.horizontal, 14).padding(.vertical, 10)
+                }
+                // The title item gets no glass of its own; keep it legible over any page, like the bar's buttons.
+                .buttonStyle(.plain).glassEffect(.regular.interactive(), in: .capsule)
+                .accessibilityIdentifier("reader.chapters")
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("更多", systemImage: "ellipsis") { withAnimation(chromeAnimation) { panel = .more } }
+                    .accessibilityIdentifier("reader.more")
+            }
+        }
         .statusBarHidden(!controls)
         // The home indicator fades with the controls, as in Books; a swipe from the edge still brings it back.
         .persistentSystemOverlays(controls ? .automatic : .hidden)
@@ -1927,7 +1946,7 @@ struct SourceReaderView: View {
             .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: panelAnchor(panel))))
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier(panel == .more ? "reader.morePanel" : (panel == .thumbnails ? "reader.thumbnailsPanel" : "reader.chapterPanel"))
-        } else {
+        } else if settings.value.bottomPanels {
             HStack {
                 Button("返回", systemImage: "chevron.left") { dismiss() }
                     .labelStyle(.iconOnly).buttonStyle(.glass).buttonBorderShape(.circle).controlSize(.large)
@@ -2055,6 +2074,8 @@ struct SourceReaderView: View {
         }
     }
     private var chromeAnimation: Animation? { reduceMotion ? nil : .spring }
+    /// The navigation bar carries the top controls; an open panel takes the top in its place.
+    private var showsNavigationBar: Bool { controls && panel == nil && !settings.value.bottomPanels }
     private var pageAnimation: Animation? {
         reduceMotion || settings.value.animation == 0 ? nil : .snappy(duration: 0.22)
     }

@@ -19,6 +19,7 @@ import androidx.compose.ui.node.invalidateDraw
 import androidx.compose.ui.node.requireGraphicsContext
 import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.unit.Density
+import com.kyant.backdrop.internal.RecordKey
 import com.kyant.backdrop.internal.ShapeProvider
 import com.kyant.backdrop.internal.clipOutline
 import com.kyant.backdrop.isRenderEffectSupported
@@ -74,6 +75,7 @@ internal class InnerShadowNode(
     private var clipPath: Path? = null
 
     private var prevRadius = Float.NaN
+    private var prevRecordKey: RecordKey? = null
 
     override fun ContentDrawScope.draw() {
         drawContent()
@@ -100,8 +102,6 @@ internal class InnerShadowNode(
                     null
                 }
 
-            configurePaint(shadow)
-
             shadowLayer.alpha = shadow.alpha
             shadowLayer.blendMode = shadow.blendMode
             if (prevRadius != radius) {
@@ -113,15 +113,29 @@ internal class InnerShadowNode(
                     }
                 prevRadius = radius
             }
-            shadowLayer.record {
-                val canvas = drawContext.canvas
-                canvas.save()
-                canvas.clipOutline(outline, clipPath)
-                canvas.drawOutline(outline, paint)
-                canvas.translate(offsetX, offsetY)
-                canvas.drawOutline(outline, ShadowMaskPaint)
-                canvas.translate(-offsetX, -offsetY)
-                canvas.restore()
+
+            val recordKey = RecordKey(
+                size,
+                density.density,
+                layoutDirection,
+                shapeProvider.innerShape,
+                if (shadow.alpha == 1f) shadow else shadow.copy(alpha = 1f)
+            )
+            if (recordKey != prevRecordKey) {
+                prevRecordKey = recordKey
+
+                configurePaint(shadow)
+
+                shadowLayer.record {
+                    val canvas = drawContext.canvas
+                    canvas.save()
+                    canvas.clipOutline(outline, clipPath)
+                    canvas.drawOutline(outline, paint)
+                    canvas.translate(offsetX, offsetY)
+                    canvas.drawOutline(outline, ShadowMaskPaint)
+                    canvas.translate(-offsetX, -offsetY)
+                    canvas.restore()
+                }
             }
 
             val canvas = drawContext.canvas
@@ -146,6 +160,8 @@ internal class InnerShadowNode(
             graphicsContext.releaseGraphicsLayer(layer)
             shadowLayer = null
         }
+        prevRadius = Float.NaN
+        prevRecordKey = null
     }
 
     private fun DrawScope.configurePaint(shadow: InnerShadow) {
