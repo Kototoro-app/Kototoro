@@ -2220,7 +2220,7 @@
     <string name="you_may_like">猜你喜欢</string>
     <string name="reverse_order">反转顺序</string>
     <string name="video_aspect_ratio">视频画面比例</string>
-    <string name="video_aspect_ratio_stretch">拉伸铺满</string>
+    <string name="video_aspect_ratio_stretch">拉伸</string>
     <string name="sort_by_ranking">排名</string>
     <string name="sort_by_popularity_label">热度</string>
     <string name="sort_by_collection">收藏</string>

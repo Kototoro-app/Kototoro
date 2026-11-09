@@ -92,10 +92,13 @@ data class VideoPlayerControlState(
     val chapterGroupLabel: String? = null,
     val playbackSpeedLabel: String = "1.00x",
     val qualityLabel: String? = null,
+    val aspectRatioLabel: String = "Fit",
     /** Host capabilities: Android has notes, intro/outro markers, a screen lock and a rotation button. */
     val supportsNotes: Boolean = true,
     val supportsIntroOutroMarkers: Boolean = true,
     val supportsScreenLock: Boolean = true,
+    /** Whether the host can change the video's aspect ratio. */
+    val supportsAspectRatio: Boolean = true,
     /** False shows a fullscreen toggle (by [isFullscreen]) instead of Android's rotation button. */
     val showsRotation: Boolean = true,
     val isFullscreen: Boolean = false,
@@ -113,6 +116,7 @@ sealed interface VideoPlayerAction {
     data class SeekTo(val positionMs: Long) : VideoPlayerAction
     data object PreviousChapter : VideoPlayerAction
     data object NextChapter : VideoPlayerAction
+    data object CycleAspectRatio : VideoPlayerAction
     data class OpenSubtitles(val anchorBounds: IntRect) : VideoPlayerAction
     data class OpenAudioTracks(val anchorBounds: IntRect) : VideoPlayerAction
     data class OpenChapterSelection(val anchorBounds: IntRect) : VideoPlayerAction
@@ -230,6 +234,12 @@ fun VideoPlayerTopControls(
                 }
             }
             actions()
+            if (state.supportsAspectRatio) PlayerTextButton(
+                text = state.aspectRatioLabel,
+                contentDescription = "${uiString("video_aspect_ratio")}, ${state.aspectRatioLabel}",
+                modifier = Modifier.widthIn(min = 48.dp, max = 96.dp),
+                onClick = { onAction(VideoPlayerAction.CycleAspectRatio) },
+            )
             PlayerIconButton(
                 icon = { Icon(VideoPlayerIcons.Subtitles, contentDescription = null) },
                 contentDescription = "Subtitles",
@@ -616,6 +626,7 @@ private fun LayoutCoordinates.boundsInWindowIntRect(): IntRect {
 private fun PlayerTextButton(
     text: String,
     modifier: Modifier = Modifier,
+    contentDescription: String? = null,
     onClick: () -> Unit,
 ) {
     val isTvPresentation = LocalUiPresentationConfig.current.isTv
@@ -625,6 +636,10 @@ private fun PlayerTextButton(
         onClick = onClick,
         modifier = modifier
             .height(if (isTvPresentation) 48.dp else 40.dp)
+            .then(
+                if (contentDescription != null) Modifier.semantics { this.contentDescription = contentDescription }
+                else Modifier,
+            )
             .onFocusChanged { isFocused = it.isFocused }
             .then(
                 if (isTvPresentation && isFocused) {
@@ -635,6 +650,12 @@ private fun PlayerTextButton(
             ),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp),
     ) {
-        Text(text = text, color = PlayerControlsForeground, style = MaterialTheme.typography.labelLarge)
+        Text(
+            text = text,
+            color = PlayerControlsForeground,
+            style = MaterialTheme.typography.labelLarge,
+            maxLines = if (contentDescription != null) 1 else Int.MAX_VALUE,
+            overflow = if (contentDescription != null) TextOverflow.Ellipsis else TextOverflow.Clip,
+        )
     }
 }

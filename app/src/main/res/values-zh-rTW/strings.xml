@@ -2406,7 +2406,7 @@ SHA-256 指紋:
     <string name="video_aspect_ratio_4_3">4:3</string>
     <string name="video_aspect_ratio_fill">填充</string>
     <string name="video_aspect_ratio_fit">適應</string>
-    <string name="video_aspect_ratio_stretch">拉伸鋪滿</string>
+    <string name="video_aspect_ratio_stretch">拉伸</string>
     <string name="video_audio_track">音軌</string>
     <string name="video_auto_next">自動續播</string>
     <string name="video_background">播放背景</string>
