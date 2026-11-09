@@ -1,13 +1,20 @@
 package org.skepsun.kototoro.local.data
 
+import android.content.Context
 import android.net.Uri
 import com.hippo.unifile.FakeSafDirUniFile
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.mockkStatic
+import io.mockk.unmockkStatic
 import kotlinx.coroutines.runBlocking
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import org.skepsun.kototoro.core.model.ContentSource
@@ -18,6 +25,7 @@ import org.skepsun.kototoro.core.model.looksLikeLocalNovelContent
 import org.skepsun.kototoro.core.model.looksLikeNovelUrl
 import org.skepsun.kototoro.local.data.output.LocalContentDirOutput
 import org.skepsun.kototoro.local.data.output.createPreservingArchiveExtension
+import org.skepsun.kototoro.local.epub.EpubStorageManager
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentChapter
 import org.skepsun.kototoro.parsers.model.ContentRating
@@ -25,6 +33,8 @@ import org.skepsun.kototoro.parsers.model.ContentSource as ParserContentSource
 import org.skepsun.kototoro.parsers.model.ContentState
 import org.skepsun.kototoro.parsers.model.ContentType
 import java.io.File
+import java.net.URI
+import java.net.URLEncoder
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
@@ -32,6 +42,21 @@ class DownloadedChapterResolutionTest {
 
     @TempDir
     lateinit var tempDir: File
+
+    @BeforeEach
+    fun setUp() {
+        mockkStatic(Uri::class)
+        every { Uri.parse(any()) } answers { uri(firstArg()) }
+        every { Uri.fromFile(any()) } answers { uri(firstArg<File>().toURI().toString()) }
+        every { Uri.encode(any()) } answers {
+            URLEncoder.encode(firstArg<String>(), Charsets.UTF_8.name()).replace("+", "%20")
+        }
+    }
+
+    @AfterEach
+    fun tearDown() {
+        unmockkStatic(Uri::class)
+    }
 
     @Test
     fun `extensionless file with PK zip header is recognized as zip archive`() {
@@ -294,20 +319,46 @@ class DownloadedChapterResolutionTest {
     @Test
     fun `EpubStorageManager findPageEbookFile locates legacy chapter pdf and cbz files`() {
         val rootDir = File(tempDir, "novel_root").apply { mkdirs() }
-        val manager = org.skepsun.kototoro.local.epub.EpubStorageManager(
-            context = android.content.Context(),
-            localStorageManager = LocalStorageManager(rootDir),
+        val localStorageManager = mockk<LocalStorageManager> {
+            every { getPreferredNovelDownloadDir() } returns rootDir
+        }
+        val manager = EpubStorageManager(
+            context = mockk<Context>(relaxed = true),
+            localStorageManager = localStorageManager,
         )
         assertNull(manager.findPageEbookFile(101L, 9001L))
 
         val mangaEpubDir = File(rootDir, "epub/101").apply { mkdirs() }
         File(mangaEpubDir, "chapter_9001.pdf").writeBytes("%PDF-1.7\n".toByteArray())
         File(mangaEpubDir, "chapter_9002.cbz").writeBytes(byteArrayOf(0x50, 0x4B, 0x03, 0x04))
-        File(mangaEpubDir, "chapter_9003.pdf").createNewFile() // empty 0-byte file
+        File(mangaEpubDir, "chapter_9003.pdf").createNewFile()
 
         assertEquals("chapter_9001.pdf", manager.findPageEbookFile(101L, 9001L)?.name)
         assertEquals("chapter_9002.cbz", manager.findPageEbookFile(101L, 9002L)?.name)
         assertNull(manager.findPageEbookFile(101L, 9003L))
+    }
+
+    private fun uri(value: String): Uri {
+        val parsed = URI(value)
+        return mockk<Uri>().also { result ->
+            every { result.toString() } returns value
+            every { result.scheme } returns parsed.scheme
+            every { result.path } returns parsed.path
+            every { result.fragment } returns parsed.fragment
+            every { result.encodedFragment } returns parsed.rawFragment
+            every { result.buildUpon() } answers {
+                var scheme = parsed.scheme
+                var fragment = parsed.rawFragment
+                mockk<Uri.Builder>().also { builder ->
+                    every { builder.scheme(any()) } answers { scheme = firstArg(); builder }
+                    every { builder.fragment(any()) } answers { fragment = firstArg(); builder }
+                    every { builder.encodedFragment(any()) } answers { fragment = firstArg(); builder }
+                    every { builder.build() } answers {
+                        uri(URI(scheme, parsed.authority, parsed.path, parsed.query, fragment).toString())
+                    }
+                }
+            }
+        }
     }
 
     private fun sampleContent(

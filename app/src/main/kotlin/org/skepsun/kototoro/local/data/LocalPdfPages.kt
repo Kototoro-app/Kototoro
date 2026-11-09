@@ -12,6 +12,7 @@ import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.util.longHashCode
 import java.io.File
 import java.io.IOException
+import java.util.LinkedHashMap
 import kotlin.math.max
 import kotlin.math.roundToInt
 
@@ -80,21 +81,40 @@ fun Uri.toSourceContentPdfUri(): Uri = toUnderlyingPdfUri()
 
 object LocalPdfPages {
 
+    private const val MAX_CACHED_PDF_RENDERERS = 4
+
+    private class CachedPdfRenderer(val renderer: PdfRenderer) {
+        val renderLock = Any()
+        var activeCount = 0
+        var evicted = false
+    }
+
+    private val cacheLock = Any()
+    private val pdfRenderers = LinkedHashMap<String, CachedPdfRenderer>(MAX_CACHED_PDF_RENDERERS, 0.75f, true)
+
     fun isPdfPageUri(uri: Uri): Boolean = uri.isPdfPageUri()
 
     fun isPdfDocument(file: File): Boolean = file.isPdfDocument
 
     fun getPageCount(file: File): Int {
-        return ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY).use { descriptor ->
-            PdfRenderer(descriptor).use { renderer -> renderer.pageCount }
+        return withCachedRenderer(
+            key = file.toUri().toString(),
+            openDescriptor = { ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY) },
+        ) { renderer ->
+            renderer.pageCount
         }
     }
 
     fun getPageCount(contentResolver: ContentResolver, uri: Uri): Int {
-        val descriptor = contentResolver.openFileDescriptor(uri.toUnderlyingPdfUri(), "r")
-            ?: throw IOException("Unable to open PDF descriptor: $uri")
-        return descriptor.use { pfd ->
-            PdfRenderer(pfd).use { renderer -> renderer.pageCount }
+        val underlying = uri.toUnderlyingPdfUri()
+        return withCachedRenderer(
+            key = underlying.toString(),
+            openDescriptor = {
+                contentResolver.openFileDescriptor(underlying, "r")
+                    ?: throw IOException("Unable to open PDF descriptor: $uri")
+            },
+        ) { renderer ->
+            renderer.pageCount
         }
     }
 
@@ -153,44 +173,135 @@ object LocalPdfPages {
         val pageIndex = requireNotNull(pageUri.pdfPageIndex()) {
             "PDF page URI has no valid page index: $pageUri"
         }
-        val descriptor = when (pageUri.scheme) {
-            URI_SCHEME_PDF -> {
-                val path = requireNotNull(pageUri.toUnderlyingPdfUri().path) {
-                    "PDF file URI path is null: $pageUri"
+        val underlying = pageUri.toUnderlyingPdfUri()
+        return withCachedRenderer(
+            key = underlying.toString(),
+            openDescriptor = {
+                when (pageUri.scheme) {
+                    URI_SCHEME_PDF -> {
+                        val path = requireNotNull(underlying.path) {
+                            "PDF file URI path is null: $pageUri"
+                        }
+                        ParcelFileDescriptor.open(File(path), ParcelFileDescriptor.MODE_READ_ONLY)
+                    }
+
+                    URI_SCHEME_CONTENT_PDF -> {
+                        contentResolver.openFileDescriptor(underlying, "r")
+                            ?: throw IOException("Unable to open PDF content URI: $pageUri")
+                    }
+
+                    else -> throw IllegalArgumentException("Unsupported PDF page URI: $pageUri")
                 }
-                ParcelFileDescriptor.open(File(path), ParcelFileDescriptor.MODE_READ_ONLY)
+            },
+        ) { renderer ->
+            if (pageIndex !in 0 until renderer.pageCount) {
+                throw IndexOutOfBoundsException(
+                    "PDF page index $pageIndex out of bounds (count=${renderer.pageCount})",
+                )
             }
-
-            URI_SCHEME_CONTENT_PDF -> {
-                contentResolver.openFileDescriptor(pageUri.toUnderlyingPdfUri(), "r")
-                    ?: throw IOException("Unable to open PDF content URI: $pageUri")
+            renderer.openPage(pageIndex).use { page ->
+                val (width, height) = computeTargetDimensions(
+                    pageWidthPts = page.width,
+                    pageHeightPts = page.height,
+                    maxDimensionPx = maxDimensionPx.coerceAtLeast(64),
+                )
+                val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                try {
+                    bitmap.eraseColor(Color.WHITE)
+                    page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                    bitmap
+                } catch (e: Throwable) {
+                    bitmap.recycle()
+                    throw e
+                }
             }
-
-            else -> throw IllegalArgumentException("Unsupported PDF page URI: $pageUri")
         }
-        return descriptor.use { pfd ->
-            PdfRenderer(pfd).use { renderer ->
-                if (pageIndex !in 0 until renderer.pageCount) {
-                    throw IndexOutOfBoundsException(
-                        "PDF page index $pageIndex out of bounds (count=${renderer.pageCount})",
-                    )
-                }
-                renderer.openPage(pageIndex).use { page ->
-                    val (width, height) = computeTargetDimensions(
-                        pageWidthPts = page.width,
-                        pageHeightPts = page.height,
-                        maxDimensionPx = maxDimensionPx.coerceAtLeast(64),
-                    )
-                    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-                    try {
-                        bitmap.eraseColor(Color.WHITE)
-                        page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                        bitmap
-                    } catch (e: Throwable) {
-                        bitmap.recycle()
-                        throw e
+    }
+
+    /** Drops the cached renderer for [pageUri] once any in-flight page render finishes. */
+    fun evictPdfRenderer(pageUri: Uri) {
+        val toClose = synchronized(cacheLock) {
+            pdfRenderers.remove(pageUri.toUnderlyingPdfUri().toString())?.also { entry ->
+                entry.evicted = true
+            }?.takeIf { it.activeCount == 0 }
+        }
+        toClose?.renderer?.close()
+    }
+
+    /** Drops all cached renderers and closes idle descriptors immediately. */
+    fun clearPdfRenderers() {
+        val idle = synchronized(cacheLock) {
+            val readyToClose = pdfRenderers.values.filter { entry ->
+                entry.evicted = true
+                entry.activeCount == 0
+            }
+            pdfRenderers.clear()
+            readyToClose
+        }
+        idle.forEach { it.renderer.close() }
+    }
+
+    private inline fun <T> withCachedRenderer(
+        key: String,
+        openDescriptor: () -> ParcelFileDescriptor,
+        block: (PdfRenderer) -> T,
+    ): T {
+        var evictedIdle: CachedPdfRenderer? = null
+        val entry = synchronized(cacheLock) {
+            val existing = pdfRenderers[key]
+            if (existing != null && !existing.evicted) {
+                existing.activeCount++
+                existing
+            } else {
+                null
+            }
+        } ?: run {
+            val descriptor = openDescriptor()
+            val created = try {
+                PdfRenderer(descriptor)
+            } catch (e: Throwable) {
+                descriptor.close()
+                throw e
+            }
+            var duplicateToClose: PdfRenderer? = null
+            val chosen = synchronized(cacheLock) {
+                val raced = pdfRenderers[key]
+                if (raced != null && !raced.evicted) {
+                    raced.activeCount++
+                    duplicateToClose = created
+                    raced
+                } else {
+                    if (pdfRenderers.size >= MAX_CACHED_PDF_RENDERERS) {
+                        val eldestKey = pdfRenderers.keys.first()
+                        val eldest = pdfRenderers.remove(eldestKey)
+                        if (eldest != null) {
+                            eldest.evicted = true
+                            if (eldest.activeCount == 0) {
+                                evictedIdle = eldest
+                            }
+                        }
+                    }
+                    CachedPdfRenderer(created).also {
+                        it.activeCount = 1
+                        pdfRenderers[key] = it
                     }
                 }
+            }
+            duplicateToClose?.close()
+            evictedIdle?.renderer?.close()
+            chosen
+        }
+        return try {
+            synchronized(entry.renderLock) {
+                block(entry.renderer)
+            }
+        } finally {
+            val closeAfterUse = synchronized(cacheLock) {
+                entry.activeCount--
+                entry.evicted && entry.activeCount == 0
+            }
+            if (closeAfterUse) {
+                entry.renderer.close()
             }
         }
     }

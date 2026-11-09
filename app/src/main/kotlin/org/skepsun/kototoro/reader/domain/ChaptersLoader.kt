@@ -13,8 +13,8 @@ import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.util.ext.isFileUri
 import org.skepsun.kototoro.core.util.ext.isContentZipUri
 import org.skepsun.kototoro.core.util.ext.isZipUri
+import org.skepsun.kototoro.core.util.ext.isPageEbookChapter
 import org.skepsun.kototoro.details.data.ContentDetails
-import org.skepsun.kototoro.download.ui.worker.isPageEbookChapter
 import org.skepsun.kototoro.local.data.isPdfPageUri
 import org.skepsun.kototoro.local.epub.EpubStorageManager
 import org.skepsun.kototoro.parsers.model.ContentChapter

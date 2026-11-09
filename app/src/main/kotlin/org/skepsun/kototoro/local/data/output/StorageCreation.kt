@@ -3,7 +3,7 @@ package org.skepsun.kototoro.local.data.output
 import android.net.Uri
 import android.provider.DocumentsContract
 import com.hippo.unifile.UniFile
-import org.skepsun.kototoro.App
+import com.github.tvbox.osc.base.App
 import org.skepsun.kototoro.core.exceptions.StorageWriteException
 
 /**
