@@ -84,7 +84,10 @@ class LocalNovelRepository @Inject constructor(
                 LocalContentParser(uri)
             }
             parser.getContent(withDetails = true).manga
-        }.getOrNull()?.let { return it.withLocalNovelSource() }
+        }.getOrNull()?.let { parsed ->
+            val resolved = parsed.withLocalNovelSource()
+            return if (resolved.id != manga.id) resolved.copy(id = manga.id) else resolved
+        }
 
         // Try to find by filename pattern first (for multi-CBZ format)
         val entries = findNovelEntries()

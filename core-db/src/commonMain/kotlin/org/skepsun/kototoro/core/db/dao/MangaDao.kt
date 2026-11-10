@@ -64,6 +64,65 @@ abstract class MangaDao {
     @Query("SELECT * FROM manga WHERE source = :source AND public_url = :publicUrl LIMIT 1")
     abstract suspend fun findBySourceAndPublicUrl(source: String, publicUrl: String): MangaWithTags?
 
+    /**
+     * Primary-key probe for local novel folders without `index.json`: prefers an existing legacy
+     * path-hashed row over a modern URI-hashed row in a single `INTEGER PRIMARY KEY` lookup.
+     */
+    @Query(
+        """
+        SELECT manga_id FROM manga
+        WHERE manga_id IN (:legacyId, :currentId) AND source = :source
+        ORDER BY CASE WHEN manga_id = :legacyId THEN 0 ELSE 1 END
+        LIMIT 1
+        """,
+    )
+    abstract suspend fun findLocalFolderRowIdByIds(
+        source: String,
+        legacyId: Long,
+        currentId: Long,
+    ): Long?
+
+    /**
+     * Finds an existing local work for an unindexed novel folder by exact `url`/`public_url` or
+     * directory-boundary `SUBSTR` prefix without loading tags or deserializing full entities.
+     */
+    @Query(
+        """
+        SELECT manga_id FROM manga
+        WHERE source = :source
+            AND (
+                (:url <> '' AND url = :url)
+                OR (:publicUrl <> '' AND public_url = :publicUrl)
+                OR (
+                    title = :title
+                    AND (
+                        SUBSTR(public_url, 1, LENGTH(:pathPrefix)) = :pathPrefix
+                        OR SUBSTR(url, 1, LENGTH(:fileUriPrefix)) = :fileUriPrefix
+                        OR SUBSTR(url, 1, LENGTH(:singleSlashUriPrefix)) = :singleSlashUriPrefix
+                        OR SUBSTR(url, 1, LENGTH(:encodedUriPrefix)) = :encodedUriPrefix
+                        OR SUBSTR(url, 1, LENGTH(:legacyEpubPrefix)) = :legacyEpubPrefix
+                    )
+                )
+            )
+        ORDER BY CASE
+            WHEN (:url <> '' AND url = :url) OR (:publicUrl <> '' AND public_url = :publicUrl) THEN 0
+            ELSE 1
+        END
+        LIMIT 1
+        """,
+    )
+    abstract suspend fun findLocalFolderRowIdByPath(
+        source: String,
+        title: String,
+        url: String,
+        publicUrl: String,
+        pathPrefix: String,
+        fileUriPrefix: String,
+        singleSlashUriPrefix: String,
+        encodedUriPrefix: String,
+        legacyEpubPrefix: String,
+    ): Long?
+
     @Transaction
     @Query("SELECT * FROM manga WHERE source = :source")
     abstract suspend fun findAllBySource(source: String): List<MangaWithTags>
