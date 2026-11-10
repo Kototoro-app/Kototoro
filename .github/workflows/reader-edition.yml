@@ -62,11 +62,11 @@ jobs:
       - name: Install pinned Android build inputs
         run: sdkmanager 'platforms;android-37.0' 'platforms;android-37.1' 'build-tools;36.0.0' 'build-tools;37.0.0' 'ndk;28.2.13676358' 'cmake;3.22.1'
       - name: Unit and integration tests
-        run: ./gradlew :core-domain:jvmTest :reader-core:jvmTest :reader-novel:jvmTest :app:testDebugUnitTest --no-daemon --console=plain --max-workers=2 -Pkotlin.daemon.jvmargs=-Xmx2g
+        run: ./gradlew :core-domain:jvmTest :reader-core:jvmTest :reader-novel:jvmTest :app:testDebugUnitTest --no-daemon --console=plain --max-workers=2 -Pkotlin.daemon.jvmargs=-Xmx6g
       - name: Android Lint and runtime dependency checks
-        run: ./gradlew :app:lintDebug :app:verifyReaderDependencies --no-daemon --console=plain --max-workers=2 -Pkotlin.daemon.jvmargs=-Xmx2g --no-configuration-cache
+        run: ./gradlew :app:lintDebug :app:verifyReaderDependencies --no-daemon --console=plain --max-workers=2 -Pkotlin.daemon.jvmargs=-Xmx6g --no-configuration-cache
       - name: Build installable ARM64 debug APK
-        run: ./gradlew :app:assembleDebug --no-daemon --console=plain --max-workers=2 -Pkotlin.daemon.jvmargs=-Xmx2g
+        run: ./gradlew :app:assembleDebug --no-daemon --console=plain --max-workers=2 -Pkotlin.daemon.jvmargs=-Xmx6g
       - name: Verify APK signature and checksum
         shell: bash
         run: |
@@ -122,7 +122,7 @@ jobs:
           api-level: 35
           arch: x86_64
           disable-animations: true
-          script: ./gradlew :app:connectedDebugAndroidTest -PreaderDebugAbi=x86_64 --no-daemon --console=plain --max-workers=2 -Pkotlin.daemon.jvmargs=-Xmx2g
+          script: ./gradlew :app:connectedDebugAndroidTest -PreaderDebugAbi=x86_64 --no-daemon --console=plain --max-workers=2 -Pkotlin.daemon.jvmargs=-Xmx6g
       - uses: actions/upload-artifact@v6
         if: always()
         with:

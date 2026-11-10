@@ -109,3 +109,8 @@ Le parcours de premier lancement propose uniquement manga et roman. Ses listes d
 installables retirent Aniyomi, TVBox et Cloudstream. Le filtre d’installation refuse aussi
 ces écosystèmes si une ancienne sélection vidéo est restaurée. Les tests des filtres de
 langue et de compatibilité manga/roman sont conservés.
+
+Le job instrumenté 129819529308 du pipeline 42813145069 a échoué avant l’exécution des tests :
+le compilateur Kotlin a atteint le plafond de 2Go introduit par le workflow. Les commandes CI
+reprennent désormais les 6Go déjà prévus par gradle.properties. Le rapport ne présente pas cet
+échec de compilation comme un résultat de test appareil.
