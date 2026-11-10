@@ -67,6 +67,9 @@ class ExtensionInstallService @Inject constructor(
         extension: RepoAvailableExtension,
         mode: ExtensionInstallMode = ExtensionInstallMode.LOCAL_APK,
     ): ExtensionInstallResult {
+        require(extension.type != ExternalExtensionType.ANIYOMI && extension.type != ExternalExtensionType.CLOUDSTREAM) {
+            "Reader Edition supports reading extensions only"
+        }
         val rawUrl = extension.archiveUrl ?: when (extension.type) {
             ExternalExtensionType.CLOUDSTREAM -> "${extension.repoUrl}/${extension.archiveName}"
             else -> "${extension.repoUrl}/apk/${extension.archiveName}"

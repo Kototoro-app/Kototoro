@@ -1,13 +1,8 @@
 package org.skepsun.kototoro.settings
 
 
-import android.os.Bundle
-import android.view.View
 import androidx.compose.runtime.Composable
-import org.skepsun.kototoro.R
-import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.settings.compose.AISettingsScreen
-import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 
 @Composable
 fun AISettingsRoute(
@@ -16,7 +11,6 @@ fun AISettingsRoute(
     onOpenTranslationSettings: () -> Unit,
     onOpenImageEnhancementSettings: () -> Unit,
     onOpenTtsSettings: () -> Unit,
-    onOpenVideoEnhancementSettings: () -> Unit,
 ) {
     AISettingsScreen(
         onOpenOcrModels = onOpenOcrModels,
@@ -24,6 +18,5 @@ fun AISettingsRoute(
         onOpenTranslationSettings = onOpenTranslationSettings,
         onOpenImageEnhancementSettings = onOpenImageEnhancementSettings,
         onOpenTtsSettings = onOpenTtsSettings,
-        onOpenVideoEnhancementSettings = onOpenVideoEnhancementSettings,
     )
 }

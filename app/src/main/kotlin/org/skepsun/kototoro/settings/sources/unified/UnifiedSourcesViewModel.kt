@@ -760,6 +760,7 @@ class UnifiedSourcesViewModel @Inject constructor(
         title: String? = null,
         enableImportedSources: Boolean = true,
     ) {
+        if (!kind.isReadingKind()) return
         val cleanUrl = url.trim()
         if (cleanUrl.isBlank()) return
         launchLoadingJob(Dispatchers.IO) {

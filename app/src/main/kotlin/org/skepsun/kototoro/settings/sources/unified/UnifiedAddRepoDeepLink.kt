@@ -34,8 +34,10 @@ object UnifiedAddRepoDeepLinkParser {
         if (uri == null) {
             return UnifiedAddRepoDeepLink.EMPTY
         }
+        val kind = uri.getQueryParameter(PARAM_KIND).parseKind()
+        if (kind != null && !kind.isReadingKind()) return UnifiedAddRepoDeepLink.EMPTY
         return UnifiedAddRepoDeepLink(
-            kind = uri.getQueryParameter(PARAM_KIND).parseKind(),
+            kind = kind,
             url = uri.getQueryParameter(PARAM_URL).normalizedUrl(),
         )
     }
@@ -47,7 +49,7 @@ object UnifiedAddRepoDeepLinkParser {
      */
     fun kindFromScheme(scheme: String?): UnifiedSourceKind? {
         return when (scheme?.trim()?.lowercase(Locale.ROOT)) {
-            "aniyomi", "anikku" -> UnifiedSourceKind.ANIYOMI
+            "aniyomi", "anikku" -> null
             "tachiyomi", "kototoro" -> UnifiedSourceKind.MIHON
             else -> null
         }

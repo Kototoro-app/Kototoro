@@ -6,7 +6,6 @@
 	<uses-permission android:name="android.permission.INTERNET" />
 	<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 	<uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
-	<uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
 	<uses-permission
 		android:name="android.permission.FOREGROUND_SERVICE"
 		tools:ignore="ForegroundServicesPolicy" />
@@ -70,19 +69,7 @@
         <intent>
             <action android:name="tachiyomi.extension" />
         </intent>
-        <!-- For Aniyomi extensions -->
-        <intent>
-            <action android:name="tachiyomi.animeextension.intent.action.PICK_EXTENSION" />
-        </intent>
-        <intent>
-            <action android:name="eu.kanade.tachiyomi.animeextension.PICK_EXTENSION" />
-        </intent>
-        <intent>
-            <action android:name="eu.kanade.tachiyomi.animeextension.UPDATE_EXTENSION" />
-        </intent>
-        <intent>
-            <action android:name="tachiyomi.animeextension" />
-        </intent>
+
 	</queries>
 
 	<application
@@ -261,8 +248,6 @@
 
 				<data android:scheme="kototoro" />
 				<data android:scheme="tachiyomi" />
-				<data android:scheme="aniyomi" />
-				<data android:scheme="anikku" />
 				<data android:host="add-repo" />
 			</intent-filter>
 		</activity>

@@ -387,20 +387,35 @@ class AppRouter(
     }
 
     fun openReader(intent: ReaderIntent, anchor: View? = null) {
-        val activityIntent = intent.intent
-        // Intercept video sources when ReaderIntent carries a Content extra and route accordingly
-        runCatching {
-            val parcelable = activityIntent.getParcelableExtraCompat<ParcelableContent>(KEY_MANGA)
-            val manga = parcelable?.manga ?: run {
-                val contentIntent = ContentIntent(activityIntent)
-                val mangaId = contentIntent.mangaId
-                if (mangaId != ContentIntent.ID_NONE) {
-                    kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
-                        contentDataRepository.findDisplayContentById(mangaId, withChapters = false)
-                            ?: contentDataRepository.findContentById(mangaId, withChapters = false)
-                    }
-                } else null
+        val parcelable = runCatching {
+            intent.intent.getParcelableExtraCompat<ParcelableContent>(KEY_MANGA)
+        }.getOrNull()
+        val mangaId = runCatching { ContentIntent(intent.intent).mangaId }.getOrDefault(ContentIntent.ID_NONE)
+        if (parcelable != null || mangaId == ContentIntent.ID_NONE) {
+            openResolvedReader(intent, parcelable?.manga, anchor)
+            return
+        }
+        val scope = (activity as? LifecycleOwner)?.lifecycleScope
+            ?: org.skepsun.kototoro.core.util.ext.processLifecycleScope
+        scope.launch(Dispatchers.Main.immediate) {
+            val manga = try {
+                withContext(Dispatchers.IO) {
+                    contentDataRepository.findDisplayContentById(mangaId, withChapters = false)
+                        ?: contentDataRepository.findContentById(mangaId, withChapters = false)
+                }
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                Log.w("AppRouter", "Cannot resolve saved reading content", error)
+                null
             }
+            openResolvedReader(intent, manga, anchor)
+        }
+    }
+
+    private fun openResolvedReader(intent: ReaderIntent, manga: Content?, anchor: View?) {
+        val activityIntent = intent.intent
+        runCatching {
             if (manga != null) {
                 // 瀵硅棰戝唴瀹瑰拰EPUB鍐呭锛氫紶?ReaderState锛屼紭鍏堜娇鐢ㄥ巻鍙茶褰曚腑鐨勭姸?
                 val source = manga.source.unwrap()

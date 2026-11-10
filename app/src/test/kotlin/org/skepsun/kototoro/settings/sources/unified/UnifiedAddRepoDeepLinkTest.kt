@@ -25,15 +25,16 @@ class UnifiedAddRepoDeepLinkTest {
     }
 
     @Test
-    fun `kind and url parse from uri`() {
-        val link = UnifiedAddRepoDeepLinkParser.fromUri(
-            uriWithParameters(
-                UnifiedAddRepoDeepLinkParser.PARAM_KIND to "TVBOX",
-                UnifiedAddRepoDeepLinkParser.PARAM_URL to "http://z.qiqiv.cn/123.txt",
-            ),
-        )
-        assertEquals(UnifiedSourceKind.TVBOX, link.kind)
-        assertEquals("http://z.qiqiv.cn/123.txt", link.url)
+    fun `retired audiovisual repository links are rejected`() {
+        for (kind in listOf("TVBOX", "ANIYOMI", "CLOUDSTREAM")) {
+            val link = UnifiedAddRepoDeepLinkParser.fromUri(
+                uriWithParameters(
+                    UnifiedAddRepoDeepLinkParser.PARAM_KIND to kind,
+                    UnifiedAddRepoDeepLinkParser.PARAM_URL to "https://example.com/repo.json",
+                ),
+            )
+            assertEquals(UnifiedAddRepoDeepLink.EMPTY, link)
+        }
     }
 
     @Test
@@ -61,11 +62,11 @@ class UnifiedAddRepoDeepLinkTest {
     fun `kind matching is case insensitive`() {
         val link = UnifiedAddRepoDeepLinkParser.fromUri(
             uriWithParameters(
-                UnifiedAddRepoDeepLinkParser.PARAM_KIND to "cloudstream",
+                UnifiedAddRepoDeepLinkParser.PARAM_KIND to "mIhOn",
                 UnifiedAddRepoDeepLinkParser.PARAM_URL to "https://example.com/repo.json",
             ),
         )
-        assertEquals(UnifiedSourceKind.CLOUDSTREAM, link.kind)
+        assertEquals(UnifiedSourceKind.MIHON, link.kind)
     }
 
     @Test
@@ -83,8 +84,8 @@ class UnifiedAddRepoDeepLinkTest {
 
     @Test
     fun `scheme fallback keeps legacy mappings`() {
-        assertEquals(UnifiedSourceKind.ANIYOMI, UnifiedAddRepoDeepLinkParser.kindFromScheme("aniyomi"))
-        assertEquals(UnifiedSourceKind.ANIYOMI, UnifiedAddRepoDeepLinkParser.kindFromScheme("anikku"))
+        assertNull(UnifiedAddRepoDeepLinkParser.kindFromScheme("aniyomi"))
+        assertNull(UnifiedAddRepoDeepLinkParser.kindFromScheme("anikku"))
         assertEquals(UnifiedSourceKind.MIHON, UnifiedAddRepoDeepLinkParser.kindFromScheme("tachiyomi"))
         assertEquals(UnifiedSourceKind.MIHON, UnifiedAddRepoDeepLinkParser.kindFromScheme("kototoro"))
         assertNull(UnifiedAddRepoDeepLinkParser.kindFromScheme("tvbox"))
