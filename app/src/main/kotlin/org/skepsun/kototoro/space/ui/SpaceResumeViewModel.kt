@@ -14,11 +14,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.plus
 import kotlinx.coroutines.withTimeoutOrNull
-import org.skepsun.kototoro.core.model.LocalVideoSource
-import org.skepsun.kototoro.core.model.getContentType
 import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.core.model.looksLikeLocalVideoContent
-import org.skepsun.kototoro.core.model.looksLikeVideoUrl
 import org.skepsun.kototoro.core.os.NetworkState
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsFlow
@@ -112,6 +109,8 @@ class SpaceResumeViewModel @Inject constructor(
 
     fun resume(spaceId: SpaceId) {
         launchLoadingJob(Dispatchers.Default) {
+            val context = catalogRepository.find(spaceId) ?: return@launchLoadingJob
+            if (context.kind == SpaceKind.ANIME) return@launchLoadingJob
             val item = uiState.value.items[spaceId]?.takeIf(SpaceResumeItem::canResume)
                 ?: withTimeoutOrNull(2_000L) {
                     uiState.map { state ->
@@ -123,33 +122,19 @@ class SpaceResumeViewModel @Inject constructor(
             val history = historyRepository.getOne(item.content)
             onOpenReader.call(
                 SpaceResumeRequest(
-                    content = item.content.normalizeLocalVideoSource(),
-                    contentType = catalogRepository.find(spaceId)?.kind?.toContentType(),
+                    content = item.content,
+                    contentType = context.kind.toContentType(),
                     state = history?.let(::ReaderState),
                 ),
             )
         }
-    }
-
-    private fun Content.normalizeLocalVideoSource(): Content {
-        if (!looksLikeLocalVideoContent() || source.getContentType() == ContentType.VIDEO) return this
-        return copy(
-            source = LocalVideoSource,
-            chapters = chapters?.map { chapter ->
-                if (chapter.source.getContentType() == ContentType.MANGA && chapter.url.looksLikeVideoUrl()) {
-                    chapter.copy(source = LocalVideoSource)
-                } else {
-                    chapter
-                }
-            },
-        )
     }
 }
 
 private fun SpaceKind.toContentType(): ContentType? = when (this) {
     SpaceKind.MANGA -> ContentType.MANGA
     SpaceKind.NOVEL -> ContentType.NOVEL
-    SpaceKind.ANIME -> ContentType.VIDEO
+    SpaceKind.ANIME -> null
     SpaceKind.ALL -> null
 }
 
@@ -160,7 +145,8 @@ internal fun buildSpaceResumeUiState(
 ): SpaceResumeUiState {
     return SpaceResumeUiState(
         items = recent.mapNotNull { (spaceId, content) ->
-            content?.let {
+            if (spaceId == org.skepsun.kototoro.space.domain.BuiltInSpaces.Anime) return@mapNotNull null
+            content?.takeUnless { it.looksLikeLocalVideoContent() }?.let {
                 spaceId to SpaceResumeItem(
                     spaceId = spaceId,
                     title = it.title,

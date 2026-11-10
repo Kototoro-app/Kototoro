@@ -65,7 +65,7 @@ class SpaceViewModelTest {
 		val collection = backgroundScope.launch(dispatcher) { viewModel.uiState.collect {} }
 
 		viewModel.onAction(SpaceAction.OpenSwitcher)
-		viewModel.onAction(SpaceAction.SelectSpace(BuiltInSpaces.Anime))
+		viewModel.onAction(SpaceAction.SelectSpace(BuiltInSpaces.Novel))
 		advanceUntilIdle()
 
 		assertFalse(viewModel.uiState.value.switcherEnabled)
@@ -84,10 +84,10 @@ class SpaceViewModelTest {
 		)
 		val collection = backgroundScope.launch(dispatcher) { viewModel.uiState.collect {} }
 
-		assertTrue(viewModel.selectSpaceAndAwait(BuiltInSpaces.Anime))
+		assertTrue(viewModel.selectSpaceAndAwait(BuiltInSpaces.Novel))
 
-		assertEquals(BuiltInSpaces.Anime, repository.activeSpace.value)
-		assertEquals(BuiltInSpaces.Anime, viewModel.uiState.value.activeSpaceId)
+		assertEquals(BuiltInSpaces.Novel, repository.activeSpace.value)
+		assertEquals(BuiltInSpaces.Novel, viewModel.uiState.value.activeSpaceId)
 		assertFalse(viewModel.uiState.value.switchInProgress)
 		collection.cancel()
 	}
