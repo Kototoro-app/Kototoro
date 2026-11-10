@@ -46,6 +46,16 @@ driver.
   Android ZIP format.
 - Source settings, WebView2-based Cloudflare verification and cookie sync.
 
+### Screenshots
+
+The desktop app shares one interface across systems; these were captured on macOS.
+
+![Desktop favourites shelf](/screenshots/macos/1.png)
+
+| Details | Reader |
+| --- | --- |
+| ![Desktop details page](/screenshots/macos/2.png) | ![Desktop manga reader](/screenshots/macos/3.png) |
+
 ### Not yet available
 
 WebDAV / Google Drive sync, OCR and translation, TTS, Spaces, IReader / Legado / TVBox sources, batch download
@@ -86,6 +96,14 @@ last ten iOS builds of their channel and are regenerated from the GitHub release
 - Backup: Android-format ZIP merge plus Mihon / Aniyomi / Venera import.
 - Tracking accounts (Bangumi, AniList, MyAnimeList, Kitsu, Shikimori, MangaUpdates, SIMKL), with credentials kept
   in the Keychain.
+
+### Screenshots
+
+| Library | Details | Manga reader | Novel reader |
+| --- | --- | --- | --- |
+| ![iOS library](/screenshots/ios/1.png) | ![iOS details page](/screenshots/ios/2.png) | ![iOS manga reader](/screenshots/ios/3.png) | ![iOS novel reader](/screenshots/ios/4.png) |
+
+![iOS video player](/screenshots/ios/5.png)
 
 ### Limitations
 

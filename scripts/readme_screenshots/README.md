@@ -13,6 +13,9 @@ third-party source or copyrighted artwork ever appears in the repository.
 | `4.png` | Novel reader, controls hidden |
 | `5.png` | Video player with subtitles, landscape |
 
+The iOS and macOS shots live in `docs/public/screenshots/{ios,macos}/` and show the same library; see
+[iOS](#ios) and [macOS](#macos) below.
+
 ## Scripts
 
 - `make_demo_library.py <out>` generates the library into `<out>/{manga,novel,video}` plus
@@ -21,6 +24,10 @@ third-party source or copyrighted artwork ever appears in the repository.
   the `index.json` files the app writes on its first scan.
 - `demo_mode.sh` puts the status bar in demo mode: 12:00, full battery and Wi-Fi, no notification
   icons.
+- `package_for_import.py <out> <files>` packages the library as files the iOS app imports: a CBZ per manga
+  (chapter folders plus `ComicInfo.xml`), an EPUB for the novel and a folder of episodes per video.
+- `desktop_source/build.py <out> <compatibility-dir> <demo.jar>` builds the manga into a Mihon extension JAR for
+  the desktop app; pages and catalog are resources inside the JAR, so the source never touches the network.
 
 ## Procedure
 
@@ -77,6 +84,51 @@ third-party source or copyrighted artwork ever appears in the repository.
    from PIL import Image
    Image.open("shot.png").convert("RGB").quantize(256, dither=Image.Dither.FLOYDSTEINBERG).save("1.png", optimize=True)
    ```
+
+## iOS
+
+`docs/public/screenshots/ios/1-5.png`: library, details page, manga reader, novel reader, video player
+(landscape), on an iPhone simulator with the app in English.
+
+1. Package the library and copy it to the simulator's "On My iPhone" storage (open the Files app once so the
+   storage exists), then fix the status bar:
+
+   ```bash
+   python scripts/readme_screenshots/package_for_import.py /tmp/kototoro-demo /tmp/kototoro-import
+   D=$(ls -d ~/Library/Developer/CoreSimulator/Devices/<UDID>/data/Containers/Shared/AppGroup/*/"File Provider Storage")
+   mkdir -p "$D/Demo" && cp -R /tmp/kototoro-import/. "$D/Demo/"
+   xcrun simctl status_bar <UDID> override --time "9:41" --batteryState charged --batteryLevel 100 \
+       --wifiBars 3 --cellularBars 4 --dataNetwork wifi
+   ```
+
+2. Build and run the app (see `iosApp/README.md`) with `-AppleLanguages "(en)" -AppleLocale en_US`.
+3. **Browse -> Local manga -> +**: in the picker open *On My iPhone/Demo*, tap one file, *Select All*, *Open*.
+   The EPUB lands in *Local novels*. In **Local videos** use the folder button and open *Demo/Orbit Cafe*.
+4. In *Local manga* long-press a cover, *Select multiple*, *Select all*, the heart, and create the category
+   "Read later". Relaunch the app so the "back to Files" breadcrumb leaves the status bar.
+5. Capture with `xcrun simctl io <UDID> screenshot shot.png`, in the same order as on Android. The manga reader
+   pages right to left, so swipe left-to-right for page 2. Read Sky Archive last so the continue bar shows it.
+6. Scale the shots to two thirds (804 px wide). Do not quantise these: 256 colours wash out the tinted glass.
+
+## macOS
+
+`docs/public/screenshots/macos/1-3.png`: favourites shelf, details page, manga reader, from the real desktop
+window. The desktop app has no local import, so the library comes from the demo extension.
+
+1. Build the extension and start the app on an empty data directory (compatibility JARs as in
+   `desktop-app/README.md`):
+
+   ```bash
+   python scripts/readme_screenshots/desktop_source/build.py /tmp/kototoro-demo build/desktop-compatibility /tmp/demo-library.jar
+   ./gradlew -PwithDesktopApp "-PmihonCompatibilityDirectory=$PWD/build/desktop-compatibility" :desktop-app:run \
+       --args="--data-dir /tmp/kototoro-mac --import /tmp/demo-library.jar --lang en"
+   ```
+
+2. **Browse -> Demo Library**: click each cover and the heart in its preview panel. The default category is
+   created as "收藏" whatever the language; rename it to "Read later" from the Favourites menu.
+3. Open Sky Archive from **Favourites**: *Read*, right arrow for page 2 (reader shot); back, *Details* (details
+   shot); close it for the shelf shot. Move the pointer off rows and buttons before capturing.
+4. Capture the window alone, without its shadow: `screencapture -x -o -l <window id> shot.png`.
 
 ## Library layout notes
 
