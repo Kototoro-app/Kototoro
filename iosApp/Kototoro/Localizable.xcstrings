@@ -3321,6 +3321,16 @@
         }
       }
     },
+    "剩余约 %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "About %@ left"
+          }
+        }
+      }
+    },
     "加入收藏": {
       "localizations": {
         "en": {
