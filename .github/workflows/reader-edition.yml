@@ -34,8 +34,10 @@ jobs:
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v5
       - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
       - name: Install pinned Android build inputs
-        run: sdkmanager 'platforms;android-37.0' 'platforms;android-37.1' 'build-tools;37.0.0' 'ndk;28.2.13676358' 'cmake;3.22.1'
+        run: sdkmanager 'platforms;android-37.0' 'platforms;android-37.1' 'build-tools;36.0.0' 'build-tools;37.0.0' 'ndk;28.2.13676358' 'cmake;3.22.1'
       - name: Unit and integration tests
         run: ./gradlew :core-domain:jvmTest :reader-core:jvmTest :reader-novel:jvmTest :app:testDebugUnitTest --no-daemon --console=plain --max-workers=2 -Pkotlin.daemon.jvmargs=-Xmx2g
       - name: Android Lint and runtime dependency checks
@@ -83,8 +85,10 @@ jobs:
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v5
       - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
       - name: Install pinned Android build inputs
-        run: sdkmanager 'platforms;android-37.0' 'platforms;android-37.1' 'build-tools;37.0.0' 'ndk;28.2.13676358' 'cmake;3.22.1'
+        run: sdkmanager 'platforms;android-37.0' 'platforms;android-37.1' 'build-tools;36.0.0' 'build-tools;37.0.0' 'ndk;28.2.13676358' 'cmake;3.22.1'
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
