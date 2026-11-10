@@ -36,7 +36,7 @@ fun ChoiceChipFlow(
     )
 }
 
-/** One chip of [ChoiceChipFlow]: Android's 36dp height and label style, so a shared row looks the same on both hosts. */
+/** A wrapping choice with a 48dp minimum touch target and space for Android font scaling. */
 @Composable
 fun ChoiceChip(
     selected: Boolean,
@@ -49,7 +49,7 @@ fun ChoiceChip(
     FilterChip(
         selected = selected,
         onClick = onClick,
-        modifier = modifier.heightIn(min = 36.dp),
+        modifier = modifier.heightIn(min = 48.dp),
         enabled = enabled,
         label = {
             ProvideTextStyle(MaterialTheme.typography.labelLarge) { label() }

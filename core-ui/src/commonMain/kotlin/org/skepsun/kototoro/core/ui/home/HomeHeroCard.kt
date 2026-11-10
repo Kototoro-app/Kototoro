@@ -19,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
@@ -35,7 +36,7 @@ fun HomeHeroCardSurface(
     content: @Composable BoxScope.() -> Unit,
 ) {
     Box(
-        modifier.fillMaxWidth().height(cardHeight)
+        modifier.fillMaxWidth().height(cardHeight * LocalDensity.current.fontScale.coerceAtLeast(1f))
             .clip(RoundedCornerShape(LocalInterfaceStyleTokens.current.sectionCornerRadius))
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .then(interactionModifier).clickable(onClick = onClick),

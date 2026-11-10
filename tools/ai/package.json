@@ -1,0 +1,12 @@
+{
+  "name": "kototoro-reader-ai-tools",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Optional development gateway; never included in the Android APK",
+  "engines": { "node": ">=24.0.0 <27" },
+  "scripts": {
+    "start": "omniroute",
+    "check": "omniroute --version"
+  },
+  "dependencies": { "omniroute": "3.8.53" }
+}

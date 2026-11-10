@@ -43,6 +43,8 @@ import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -217,20 +219,21 @@ fun HomeSectionHeader(
     configureModifier: Modifier = Modifier,
     onConfigureClick: (() -> Unit)? = null,
 ) {
-    val controlSize = if (large) 48.dp else 32.dp
+    val controlSize = 48.dp
     CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides controlSize) {
         Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically) {
             TextButton(
                 onClick = onMoreClick,
-                modifier = Modifier.weight(1f, fill = false).then(titleModifier),
+                modifier = Modifier.weight(1f, fill = false).heightIn(min = controlSize)
+                    .then(titleModifier).semantics { heading() },
                 colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurface),
                 contentPadding = PaddingValues(0.dp),
             ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = title,
-                        style = if (large) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleSmall,
+                        style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,

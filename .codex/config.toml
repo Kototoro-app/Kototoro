@@ -1,0 +1,10 @@
+# Optional profile. The normal Codex provider and credentials remain unchanged.
+[profiles.omniroute]
+model_provider = "omniroute"
+model = "auto"
+
+[model_providers.omniroute]
+name = "OmniRoute (local development gateway)"
+base_url = "http://localhost:20128/v1"
+env_key = "OMNIROUTE_API_KEY"
+wire_api = "responses"
