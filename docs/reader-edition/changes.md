@@ -76,3 +76,18 @@ Aucun gain énergétique chiffré n’est revendiqué.
 Le premier pipeline Reader Edition (42810153051) a détecté un défaut de préparation SDK :
 `android-actions/setup-android@v3` tentait d’installer l’ancien paquet `tools`. Le workflow précise
 maintenant `packages: platform-tools` et installe explicitement les entrées nécessaires au projet.
+
+## Raccordements et validation continue
+
+Le pipeline 42810609820 a compilé les modules partagés et détecté deux raccordements
+obsolètes dans AISettingsRoute. Le callback vidéo a été retiré du composant intermédiaire.
+Les liens d’ajout de dépôts audiovisuels, les schémas Android Aniyomi et l’installation de
+paquets Aniyomi/Cloudstream sont également refusés dans Reader Edition.
+La résolution d’un livre par son identifiant dans AppRouter utilise désormais une coroutine
+liée à l’activité et Dispatchers.IO pour la base de données ; le runBlocking du chemin de
+navigation a été retiré. Aucune amélioration de latence chiffrée n’est revendiquée.
+
+Git HTTPS et plusieurs téléchargements Maven ont ensuite répondu HTTP 503 dans l’environnement
+cloud. La publication a continué par les API de l’intégration GitHub, en vérifiant l’égalité
+du SHA de l’arbre source et en conservant les anciens commits locaux sous
+`refs/reader-edition/local-before-api`. La branche stable reste intacte.

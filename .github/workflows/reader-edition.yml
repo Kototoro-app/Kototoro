@@ -24,7 +24,7 @@ env:
 
 jobs:
   ai-tooling:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     defaults:
@@ -95,7 +95,7 @@ jobs:
           retention-days: 14
 
   instrumented:
-    if: github.event_name == 'workflow_dispatch' && inputs.instrumented
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.instrumented)
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
