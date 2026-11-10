@@ -184,6 +184,11 @@ class DesktopAppTest {
     }
 
     @Test
+    fun `a Legado book source file imports browses its categories reads a chapter and is removed again`() {
+        probe("legado-sources", directory.resolve("中文 legado source"), 120)
+    }
+
+    @Test
     fun `tablet layout and immersive reader panels preserve progress in wide and narrow windows`() {
         probe("tablet", directory.resolve("中文 tablet wide"), 150)
         probe("tablet-narrow", directory.resolve("中文 tablet narrow"), 150)

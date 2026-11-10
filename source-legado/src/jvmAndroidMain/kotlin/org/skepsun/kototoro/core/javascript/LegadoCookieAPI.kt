@@ -1,9 +1,7 @@
 package org.skepsun.kototoro.core.javascript
 
-import android.util.Log
 import okhttp3.Cookie
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import org.skepsun.kototoro.core.network.jsonsource.PersistentCookieJar
 import org.skepsun.kototoro.core.parser.legado.LegadoNetworkUtils
 
 /**
@@ -20,7 +18,7 @@ import org.skepsun.kototoro.core.parser.legado.LegadoNetworkUtils
  * - mapToCookie(cookieMap): 将 Map 转换为 Cookie 字符串
  */
 class LegadoCookieAPI(
-    private val cookieJar: PersistentCookieJar
+    private val cookieJar: LegadoScriptCookies
 ) {
 
     companion object {

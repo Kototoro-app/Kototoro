@@ -14,6 +14,7 @@ internal object DesktopSourceLabels {
         SourceEcosystem.TSUNDOKU -> "Tsundoku"
         SourceEcosystem.CLOUDSTREAM -> "Cloudstream"
         SourceEcosystem.TVBOX -> "TVBox"
+        SourceEcosystem.LEGADO -> "Legado"
     }
 
     /** Android's own content-type title, so both hosts read one translation instead of two copies of the text. */

@@ -171,6 +171,10 @@ object DesktopAppProbe {
                 DesktopJsonSourcesProbe.run(args)
                 return
             }
+            if (args[0] == "legado-sources") {
+                DesktopLegadoSourcesProbe.run(args)
+                return
+            }
             if (args[0] == "sourcetest") {
                 DesktopSourceTestProbe.run(args)
                 return

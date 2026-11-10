@@ -10,7 +10,7 @@ import java.util.LinkedList;
 
 @Keep
 @SuppressWarnings({"FieldCanBeLocal", "unused"})
-public class QueryTTF {
+public class QueryTTF implements LegadoQueryTtf {
     private static class Header {
         public long sfntVersion;
         public int numTables;

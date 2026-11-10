@@ -1,0 +1,61 @@
+plugins {
+	id 'org.jetbrains.kotlin.multiplatform'
+	id 'org.jetbrains.kotlin.plugin.serialization'
+	id 'com.android.kotlin.multiplatform.library'
+}
+
+kotlin {
+	compilerOptions {
+		freeCompilerArgs.add('-opt-in=org.skepsun.kototoro.parsers.InternalParsersApi')
+	}
+	androidLibrary {
+		namespace = 'org.skepsun.kototoro.source.legado'
+		compileSdk = 37
+		minSdk = 26
+	}
+	jvm {
+		compilerOptions {
+			jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11
+		}
+	}
+
+	sourceSets {
+		getByName('androidMain') {
+			kotlin.srcDir('src/jvmAndroidMain/kotlin')
+			dependencies {
+				api project(':core-source')
+				api project(':parser-api')
+				api libs.jsoup
+				implementation libs.xsoup
+				implementation libs.jsonpath
+				api libs.rhino
+				api libs.okhttp
+				implementation libs.gson
+				implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:${libs.versions.coroutines.get()}"
+			}
+		}
+		getByName('jvmMain') {
+			kotlin.srcDir('src/jvmAndroidMain/kotlin')
+			dependencies {
+				api project(':core-source')
+				api project(':parser-api')
+				api libs.jsoup
+				implementation libs.xsoup
+				implementation libs.jsonpath
+				api libs.rhino
+				api libs.okhttp
+				implementation libs.gson
+				implementation libs.json
+				implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:${libs.versions.coroutines.get()}"
+			}
+		}
+		getByName('jvmTest') {
+			dependencies {
+				implementation 'org.junit.jupiter:junit-jupiter:5.8.2'
+				runtimeOnly 'org.junit.platform:junit-platform-launcher:1.8.2'
+			}
+		}
+	}
+}
+
+tasks.withType(Test).configureEach { useJUnitPlatform() }

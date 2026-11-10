@@ -16,9 +16,13 @@ import org.skepsun.kototoro.tvbox.TvBoxStoredConfig
 
 internal data class DesktopImportedSourceRepository(val address: String, val title: String, val sources: List<DesktopJsonSource>)
 
-/** Existing TVBox documents already carry their origin; no parallel repository store or migration is needed. */
+/**
+ * Existing TVBox documents already carry their origin; no parallel repository store or migration is needed.
+ * Legado book sources record no origin, so they are managed per source on the sources tab.
+ */
 internal fun importedSourceRepositories(sources: List<DesktopJsonSource>): List<DesktopImportedSourceRepository> =
-    sources.map { source -> source to runCatching { TvBoxStoredConfig.parse(source.config) }.getOrNull() }
+    sources.filterNot { DesktopLegadoSourceRuntime.owns(it.id) }
+        .map { source -> source to runCatching { TvBoxStoredConfig.parse(source.config) }.getOrNull() }
         .groupBy { (source, config) -> config?.sourceLocator?.takeIf(String::isNotBlank) ?: source.api ?: source.id }
         .map { (address, entries) ->
             DesktopImportedSourceRepository(address, entries.first().second?.sourceTitle ?: entries.first().first.name,

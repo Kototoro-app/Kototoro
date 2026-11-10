@@ -186,10 +186,8 @@ class AnalyzeUrl(
             isLenient = true
         }
 
-        internal val optionsSplitRegex = Regex("\\s*,\\s*(?=\\{)")
+        internal val optionsSplitRegex = LegadoUrlRules.optionsSplitRegex
 
-        // Regex for @js: or <js>...</js>
-        internal val JS_PATTERN = Regex("@js:([\\s\\S]*)|<js>([\\s\\S]*?)</js>", RegexOption.IGNORE_CASE)
         private val DATA_URI_REGEX = Regex("^data:.*?;base64,(.*)", RegexOption.IGNORE_CASE)
         private const val BINARY_PLAN_MARKER = "__kototoro_binary__"
         private const val MEDIA_ITEM_SPLIT_TAG = "\uD83D\uDEA7"
@@ -201,109 +199,10 @@ class AnalyzeUrl(
          * 注意：对于 POST（或带 body 的请求），options 会影响请求语义（同一路径不同 body 对应不同内容），
          * 若无区分会导致章节/页面缓存键冲突（表现为“所有章节都是同一个章节”）。
          */
-        fun normalizeUrl(url: String?): String {
-            if (url.isNullOrBlank()) return ""
-            val splitMatch = optionsSplitRegex.find(url)
-            if (splitMatch == null) {
-                var normalized = url.trim()
-                if (normalized.endsWith("/") && normalized.length > 8) {
-                    normalized = normalized.substring(0, normalized.length - 1)
-                }
-                return normalized
-            }
+        fun normalizeUrl(url: String?): String = LegadoUrlRules.normalizeUrl(url)
 
-            val urlPart = url.substring(0, splitMatch.range.first).trim()
-            val optionsPart = url.substring(splitMatch.range.last + 1).trim()
-
-            // 尝试解析 options；若是 POST/带 body，则把 options 的摘要拼到 key 上避免冲突
-            val optionsKeySuffix = runCatching {
-                val normalizedOptions = if (optionsPart.contains("'")) {
-                    optionsPart.replace("'", "\"")
-                } else optionsPart
-                val optionsJson = JSONObject(normalizedOptions)
-                val method = optionsJson.optString("method", "GET").uppercase()
-                val body = optionsJson.optString("body", "")
-                if (method != "GET" || body.isNotBlank()) {
-                    val signature = buildString {
-                        append(method)
-                        if (body.isNotBlank()) {
-                            append("|")
-                            append(body)
-                        }
-                    }
-                    "#opt=" + signature.hashCode().toUInt().toString(16)
-                } else ""
-            }.getOrDefault("")
-
-            var normalized = urlPart + optionsKeySuffix
-
-            // Remove trailing slash
-            if (normalized.endsWith("/") && normalized.length > 8) {
-                normalized = normalized.substring(0, normalized.length - 1)
-            }
-
-            return normalized
-        }
-
-        internal fun jsValueToTemplateString(value: Any?): String? {
-            return when (value) {
-                null -> null
-                is String -> value
-                is Double -> if (value % 1.0 == 0.0) {
-                    String.format(java.util.Locale.ROOT, "%.0f", value)
-                } else {
-                    value.toString()
-                }
-                is Float -> if (value % 1f == 0f) {
-                    String.format(java.util.Locale.ROOT, "%.0f", value.toDouble())
-                } else {
-                    value.toString()
-                }
-                else -> value.toString()
-            }
-        }
-
-        internal fun resolveUrl(base: String, relative: String): String {
-            if (relative.isBlank()) return base
-            if (relative.startsWith("http://") || relative.startsWith("https://") || relative.startsWith("data:")) {
-                return relative
-            }
-
-            if (relative.startsWith("//")) {
-                val protocol = if (base.startsWith("https")) "https" else "http"
-                return "$protocol:$relative"
-            }
-
-            val host = getHost(base)
-            if (host.isNotEmpty() && relative.startsWith(host)) {
-                val protocol = if (base.startsWith("https")) "https" else "http"
-                return "$protocol://$relative"
-            }
-
-            return try {
-                java.net.URL(java.net.URL(base), relative).toString()
-            } catch (e: Exception) {
-                if (relative.startsWith("/")) {
-                    try {
-                        val baseUri = java.net.URL(base)
-                        "${baseUri.protocol}://${baseUri.host}$relative"
-                    } catch (_: Exception) {
-                        relative
-                    }
-                } else {
-                    relative
-                }
-            }
-        }
-
-        private fun getHost(url: String?): String {
-            if (url.isNullOrBlank()) return ""
-            return try {
-                java.net.URL(url).host ?: ""
-            } catch (_: Exception) {
-                ""
-            }
-        }
+        internal fun resolveUrl(base: String, relative: String): String =
+            LegadoUrlRules.resolveUrl(base, relative)
 
         private fun resolveSourceBaseUrl(source: Any?): String {
             return when (source) {
@@ -519,30 +418,25 @@ class AnalyzeUrl(
             page = page,
             baseUrl = baseUrl,
         )
-        val evaluatedRuleUrl = LegadoUrlTemplateEvaluator(
+        val prepared = LegadoRequestPlanner(
             key = key,
             page = page,
             baseUrl = baseUrl,
             jsEvaluator = activeJsEvaluator,
-        ).evaluate(ruleUrl)
-
-        val plan = LegadoRequestPlanBuilder(
-            baseUrl = baseUrl,
             enabledCookieJarDefault = enabledCookieJarDefault,
             useWebViewDefault = useWebViewDefault,
             webJsDefault = webJsDefault,
             webViewDelayDefault = webViewDelayDefault,
             defaultHeaders = defaultHeaders,
-            jsEvaluator = activeJsEvaluator,
             readTimeoutMs = readTimeoutMs,
             callTimeoutMs = callTimeoutMs,
-        ).build(evaluatedRuleUrl)
-        builtRuleUrl = evaluatedRuleUrl
+        ).prepare(ruleUrl)
+        builtRuleUrl = prepared.evaluatedRuleUrl
         initialized = true
-        val mergedHeaders = LinkedHashMap(plan.headers).apply {
+        val mergedHeaders = LinkedHashMap(prepared.plan.headers).apply {
             putAll(runtimeHeaderOverrides)
         }
-        return plan.copy(headers = mergedHeaders).also(lastBuiltPlan::set)
+        return prepared.plan.copy(headers = mergedHeaders).also(lastBuiltPlan::set)
     }
 
     fun initUrl() {

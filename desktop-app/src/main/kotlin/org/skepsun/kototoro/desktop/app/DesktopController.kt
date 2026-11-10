@@ -953,18 +953,43 @@ class DesktopController(
         val url = address.trim()
         require(url.isNotEmpty()) { desktopText("jsonSources.addressRequired") }
         mutableState.update { it.copy(screen = DesktopScreen.EXTENSIONS) }
-        val result = session.importJsonSources(url, title?.trim()?.takeIf(String::isNotEmpty))
-        publishJsonSources(result)
+        // A recognisable CMS API path is never a Legado catalog, so it is not downloaded just to be looked at.
+        val mayBeCatalog = (url.startsWith("http://") || url.startsWith("https://")) &&
+            org.skepsun.kototoro.tvbox.TvBoxImport.macCmsApiUrl(url) == null
+        val legado = if (mayBeCatalog) {
+            runCatching { session.fetchJsonDocument(url) }.getOrNull()?.let(DesktopLegadoCatalog::read)
+        } else null
+        if (legado != null) {
+            publishLegadoSources(legado)
+        } else {
+            publishJsonSources(session.importJsonSources(url, title?.trim()?.takeIf(String::isNotEmpty)))
+        }
     }
 
     fun importExtensionFile(path: Path) = if (path.fileName.toString().endsWith(".json", ignoreCase = true)) {
         action {
             val content = withContext(Dispatchers.IO) { Files.readString(path) }
-            val result = session.importJsonDocument(content, path.toUri().toString(), path.fileName.toString())
-            publishJsonSources(result)
+            val legado = DesktopLegadoCatalog.read(content)
+            if (legado != null) {
+                publishLegadoSources(legado)
+            } else {
+                publishJsonSources(session.importJsonDocument(content, path.toUri().toString(), path.fileName.toString()))
+            }
         }
     } else {
         importJar(path, DesktopScreen.EXTENSIONS)
+    }
+
+    /** Legado book sources: novel sources are stored next to the TVBox documents, every other entry is counted. */
+    private suspend fun publishLegadoSources(result: DesktopLegadoImport) {
+        require(result.sources.isNotEmpty()) { desktopText("jsonSources.legadoNoneFound") }
+        require(session.jsonSources.add(result.sources)) { desktopText("jsonSources.saveFailed") }
+        session.reloadJsonSources()
+        mutableState.update {
+            it.copy(screen = DesktopScreen.EXTENSIONS, sources = sourceDescriptors(), jsonSources = session.jsonSourceList(),
+                message = desktopText("jsonSources.added", result.sources.size) +
+                    if (result.skipped > 0) " · " + desktopText("jsonSources.legadoSkipped", result.skipped) else "")
+        }
     }
 
     private suspend fun publishJsonSources(result: org.skepsun.kototoro.tvbox.TvBoxImportResult) {

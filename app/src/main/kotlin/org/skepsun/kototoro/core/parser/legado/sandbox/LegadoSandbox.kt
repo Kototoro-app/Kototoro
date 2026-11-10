@@ -14,6 +14,8 @@ import org.skepsun.kototoro.core.parser.legado.RuleData
 import org.skepsun.kototoro.core.parser.legado.RuleDataInterface
 import org.skepsun.kototoro.core.javascript.BookInfo as JsBookInfo
 import org.skepsun.kototoro.core.javascript.ChapterInfo as JsChapterInfo
+import org.skepsun.kototoro.core.parser.legado.runtime.LegadoRuleContextProvider
+import org.skepsun.kototoro.core.parser.legado.runtime.LegadoRuleRuntimeContext
 
 /**
  * Sandboxed JavaScript execution environment for Legado sources.
@@ -29,7 +31,9 @@ class LegadoSandbox(
     private val runtimeBridge: KototoroLegadoRuntimeBridge? = null,
     private val variableStore: KototoroLegadoVariableStore? =
         (runtimeBridge?.variableStore as? KototoroLegadoVariableStore) ?: prefs?.let(::KototoroLegadoVariableStore),
-) {
+) : LegadoRuleContextProvider {
+
+    override fun createRuleRuntimeContext(): LegadoRuleRuntimeContext = LegadoSandboxRuleRuntimeContext(this)
 
     private val cache = mutableMapOf<String, String>()
     private var reGetBookAction: (() -> Unit)? = null

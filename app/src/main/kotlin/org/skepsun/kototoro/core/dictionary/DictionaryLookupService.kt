@@ -11,6 +11,7 @@ import org.skepsun.kototoro.core.parser.legado.AnalyzeRule
 import org.skepsun.kototoro.core.parser.legado.AnalyzeUrl
 import org.skepsun.kototoro.core.parser.legado.ConcurrentRateLimiter
 import org.skepsun.kototoro.core.parser.legado.bridge.KototoroLegadoHttpExecutor
+import org.skepsun.kototoro.core.parser.legado.bridge.androidLegadoRuleAjax
 import org.skepsun.kototoro.core.parser.legado.runtime.StandaloneLegadoListRuntime
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -51,6 +52,7 @@ class DictionaryLookupService @Inject constructor(
             source = config,
             parserSourceName = rule.name,
             httpExecutor = executor,
+            ajaxHandler = ::androidLegadoRuleAjax,
         )
         val runtimeContext = runtime.createRuntimeContext(key = query)
         val analyzer = AnalyzeUrl(

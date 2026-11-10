@@ -37,7 +37,7 @@ internal fun DesktopExtensionImportDialog(
                     FilterChip(!sourceConfig, { sourceConfig = false },
                         { Text(desktopText("extensions.repositoryType")) }, enabled = enabled,
                         modifier = Modifier.testTag("extension-add-repository"))
-                    FilterChip(sourceConfig, { sourceConfig = true }, { Text("TVBox / CMS") }, enabled = enabled,
+                    FilterChip(sourceConfig, { sourceConfig = true }, { Text("TVBox / CMS / Legado") }, enabled = enabled,
                         modifier = Modifier.testTag("extension-add-tvbox"))
                 }
                 OutlinedTextField(address, { address = it }, singleLine = true, enabled = enabled,

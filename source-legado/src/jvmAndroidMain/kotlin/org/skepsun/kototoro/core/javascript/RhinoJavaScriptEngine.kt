@@ -1,16 +1,10 @@
 package org.skepsun.kototoro.core.javascript
 
-import android.content.Context
-import android.util.Log
-import java.net.CookieManager
 import org.mozilla.javascript.Context as RhinoContext
 import org.mozilla.javascript.NativeJavaObject
 import org.mozilla.javascript.Scriptable
 import org.mozilla.javascript.ScriptableObject
 import org.skepsun.kototoro.core.model.jsonsource.LegadoBookSource
-import org.skepsun.kototoro.core.network.jsonsource.LegadoHttpClient
-import org.skepsun.kototoro.core.network.jsonsource.PersistentCookieJar
-import org.skepsun.kototoro.core.network.jsonsource.UserAgentManager
 
 /**
  * 基于 Rhino 的 JavaScript 引擎实现。
@@ -21,10 +15,8 @@ import org.skepsun.kototoro.core.network.jsonsource.UserAgentManager
  * - java/cookie/source/book/result 等绑定按执行上下文即时注入。
  */
 class RhinoJavaScriptEngine(
-    private val httpClient: LegadoHttpClient,
-    private val cookieManager: CookieManager,
-    private val cookieJar: PersistentCookieJar,
-    private val androidContext: Context,
+    private val platform: LegadoScriptPlatform,
+    private val cookieJar: LegadoScriptCookies = platform.fallbackCookies(),
 ) : JavaScriptEngine {
 
     private var standardScope: Scriptable? = null
@@ -38,7 +30,7 @@ class RhinoJavaScriptEngine(
 
     private fun initializeEngine() {
         Log.i(TAG, "Starting Rhino engine initialization...")
-        val ctx = RhinoContext.enter()
+        val ctx = platform.enterRhinoContext()
         try {
             ctx.optimizationLevel = -1
             ctx.languageVersion = 200
@@ -52,7 +44,7 @@ class RhinoJavaScriptEngine(
     }
 
     override fun execute(script: String, context: JavaScriptContext): Any? {
-        val currentCtx = RhinoContext.enter()
+        val currentCtx = platform.enterRhinoContext()
         return try {
             currentCtx.optimizationLevel = -1
             currentCtx.languageVersion = 200
@@ -61,7 +53,7 @@ class RhinoJavaScriptEngine(
                 standardScope = it
             }
             val runtimeScope = createExecutionScope(currentCtx, baseScope, context)
-            val defaultJavaApi = LegadoJavaAPI(httpClient, cookieManager, androidContext, cookieJar).also {
+            val defaultJavaApi = LegadoJavaAPI(platform, cookieJar).also {
                 it.jsContext = context
             }
             val cookieApi = LegadoCookieAPI(cookieJar)
@@ -111,8 +103,7 @@ class RhinoJavaScriptEngine(
         SharedJsScope.getScope(
             jsLib = context.source?.jsLib,
             rhinoContext = currentCtx,
-            httpClient = httpClient,
-            androidContext = androidContext,
+            platform = platform,
         )?.let { sharedScope ->
             runtimeScope.prototype = sharedScope
         }
@@ -186,7 +177,7 @@ class RhinoJavaScriptEngine(
         context.source?.let { source ->
             val sourceWrapper = SourceWrapper(
                 source = source,
-                context = androidContext,
+                platform = platform,
                 cookieJar = cookieJar,
                 jsExecutor = { script, scriptContext -> execute(script, scriptContext) },
                 contextFactory = { extraBindings ->
@@ -215,7 +206,7 @@ class RhinoJavaScriptEngine(
 
         context.book?.let { book ->
             val sourceKey = context.source?.bookSourceUrl.orEmpty()
-            val bookWrapper = BookWrapper(book, androidContext, sourceKey)
+            val bookWrapper = BookWrapper(book, platform, sourceKey)
             ScriptableObject.putProperty(currentScope, "book", RhinoContext.javaToJS(bookWrapper, currentScope))
         }
     }
@@ -335,19 +326,14 @@ class RhinoJavaScriptEngine(
 
     class SourceWrapper(
         private val source: LegadoBookSource,
-        private val context: Context,
-        private val cookieJar: PersistentCookieJar,
+        private val platform: LegadoScriptPlatform,
+        private val cookieJar: LegadoScriptCookies,
         private val jsExecutor: (String, JavaScriptContext) -> Any?,
         private val contextFactory: (Map<String, Any?>) -> JavaScriptContext,
     ) {
-        private val prefs by lazy {
-            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        }
+        private val prefs by lazy { platform.store(PREFS_NAME) }
         private val cookieApi by lazy {
             LegadoCookieAPI(cookieJar)
-        }
-        private val userAgentManager by lazy {
-            UserAgentManager()
         }
 
         val bookSourceComment: String? get() = source.bookSourceComment
@@ -384,13 +370,11 @@ class RhinoJavaScriptEngine(
         }
 
         fun getVariable(): String {
-            return prefs.getString(sourceVariableKey(), "") ?: ""
+            return prefs.getString(sourceVariableKey()) ?: ""
         }
 
         fun setVariable(variable: String?) {
-            prefs.edit().apply {
-                if (variable == null) remove(sourceVariableKey()) else putString(sourceVariableKey(), variable)
-            }.apply()
+            prefs.putString(sourceVariableKey(), variable)
         }
 
         fun putVariable(variable: String?) {
@@ -400,13 +384,13 @@ class RhinoJavaScriptEngine(
         fun put(key: String, value: String): String {
             return contextFactory(emptyMap()).runtimeContext?.putSourceVariable(key, value)
                 ?: value.also {
-                    prefs.edit().putString(kvKey(key), value).apply()
+                    prefs.putString(kvKey(key), value)
                 }
         }
 
         fun get(key: String): String {
             return contextFactory(emptyMap()).runtimeContext?.getSourceVariable(key)
-                ?: (prefs.getString(kvKey(key), "") ?: "")
+                ?: (prefs.getString(kvKey(key)) ?: "")
         }
 
         fun getLoginJs(): String? {
@@ -473,7 +457,7 @@ class RhinoJavaScriptEngine(
                 }
             }
             if (result.keys.none { it.equals(USER_AGENT_HEADER, ignoreCase = true) }) {
-                result[USER_AGENT_HEADER] = userAgentManager.getUserAgent()
+                result[USER_AGENT_HEADER] = platform.defaultUserAgent
             }
             if (hasLoginHeader) {
                 getLoginHeaderMap()?.let(result::putAll)
@@ -483,12 +467,12 @@ class RhinoJavaScriptEngine(
 
         fun putLoginInfo(info: String): Boolean {
             return runCatching {
-                prefs.edit().putString(loginInfoKey(), info).apply()
+                prefs.putString(loginInfoKey(), info)
             }.isSuccess
         }
 
         fun getLoginInfo(): String? {
-            return prefs.getString(loginInfoKey(), null)
+            return prefs.getString(loginInfoKey())
         }
 
         fun getLoginInfoMap(): Map<String, String> {
@@ -506,7 +490,7 @@ class RhinoJavaScriptEngine(
         }
 
         fun removeLoginInfo() {
-            prefs.edit().remove(loginInfoKey()).apply()
+            prefs.putString(loginInfoKey(), null)
         }
 
         fun putLoginHeader(header: String?): Boolean {
@@ -520,22 +504,16 @@ class RhinoJavaScriptEngine(
                     ?.let { cookie ->
                         cookieApi.replaceCookie(getKey(), cookie)
                     }
-                prefs.edit().apply {
-                    if (header == null) {
-                        remove(loginHeaderKey())
-                    } else {
-                        putString(loginHeaderKey(), header)
-                    }
-                }.apply()
+                prefs.putString(loginHeaderKey(), header)
             }.isSuccess
         }
 
         fun getLoginHeader(): String? {
-            return prefs.getString(loginHeaderKey(), null)
+            return prefs.getString(loginHeaderKey())
         }
 
         fun removeLoginHeader() {
-            prefs.edit().remove(loginHeaderKey()).apply()
+            prefs.putString(loginHeaderKey(), null)
             cookieApi.removeCookie(getKey())
         }
 
@@ -548,11 +526,11 @@ class RhinoJavaScriptEngine(
         }
 
         fun putConcurrent(value: String) {
-            prefs.edit().putString(concurrentRateKey(), value).apply()
+            prefs.putString(concurrentRateKey(), value)
         }
 
         fun getConcurrent(): String {
-            return prefs.getString(concurrentRateKey(), source.concurrentRate ?: "") ?: ""
+            return prefs.getString(concurrentRateKey()) ?: source.concurrentRate ?: ""
         }
 
 
@@ -632,12 +610,10 @@ class RhinoJavaScriptEngine(
 
     class BookWrapper(
         private val book: BookInfo,
-        private val context: Context,
+        private val platform: LegadoScriptPlatform,
         private val sourceKey: String,
     ) {
-        private val prefs by lazy {
-            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        }
+        private val prefs by lazy { platform.store(PREFS_NAME) }
 
         val bookUrl: String get() = book.bookUrl
         val name: String? get() = book.name
@@ -652,13 +628,7 @@ class RhinoJavaScriptEngine(
 
         fun putVariable(key: String, value: String?): Boolean {
             book.putVariable(key, value)
-            prefs.edit().apply {
-                if (value == null) {
-                    remove(bookVariableKey(key))
-                } else {
-                    putString(bookVariableKey(key), value)
-                }
-            }.apply()
+            prefs.putString(bookVariableKey(key), value)
             Log.d(TAG, "book.putVariable($key, $value) -> persisted to prefs")
             return true
         }
@@ -668,13 +638,13 @@ class RhinoJavaScriptEngine(
             if (memValue.isNotEmpty()) {
                 return memValue
             }
-            val persistedValue = prefs.getString(bookVariableKey(key), "") ?: ""
+            val persistedValue = prefs.getString(bookVariableKey(key)) ?: ""
             if (persistedValue.isNotEmpty()) {
                 book.putVariable(key, persistedValue)
                 Log.d(TAG, "book.getVariable($key) -> loaded from prefs: $persistedValue")
                 return persistedValue
             }
-            val defaultValue = prefs.getString(bookDefaultKey(key), "") ?: ""
+            val defaultValue = prefs.getString(bookDefaultKey(key)) ?: ""
             if (defaultValue.isNotEmpty()) {
                 book.putVariable(key, defaultValue)
                 Log.d(TAG, "book.getVariable($key) -> loaded default from prefs: $defaultValue")

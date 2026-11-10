@@ -59,7 +59,7 @@ class KototoroLegadoVariableStore(
         }.apply()
     }
 
-    fun getVariable(sourceKey: String, key: String): String? {
+    override fun getVariable(sourceKey: String, key: String): String? {
         return prefs.getString(variableKey(sourceKey, key), null)
     }
 

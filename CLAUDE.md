@@ -218,6 +218,20 @@ Android 与桌面的 UI 按 CMP 共享呈现演进；Windows 与 macOS 始终共
   成员/哈希变化，按编号维持打包后的类优先级。Compose 资源目录可定位随包桥，S3 待完成，见计划 §33–52。
 - `source-tvbox/` - 苹果 CMS / TVBox type 0/1 的共享 `SourceRuntime`（KMP 纯 Kotlin，HTTP 由平台注入）：配置导入、
   JSON/XML 解析，存储格式、`JSON_TVBOX_` ID、`tvbox://` URL 与 ID 哈希同 Android；iOS 默认构建经 Ktor Darwin 原生执行，见计划 §93。
+- `source-legado/` - Legado 书源运行时（KMP：`jvmAndroidMain` 由 Android 与桌面 JVM 共用，包名仍是
+  `org.skepsun.kototoro.core.parser.legado` 与 `core.javascript`）：规则解析（JSoup/JSONPath/XPath/正则）、URL 请求计划、
+  搜索/详情/目录/正文解析、发现分类 `LegadoExploreKinds`，以及脚本宿主——`RhinoJavaScriptEngine`、`LegadoJavaAPI`
+  （脚本里的 `java`）、`LegadoCookieAPI`、`SharedJsScope`。平台能力经 `LegadoScriptPlatform` 注入：Android 是 `app` 的
+  `AndroidLegadoScriptPlatform`（同文件里保留原参数的 `RhinoJavaScriptEngine(...)`/`LegadoJavaAPI(...)` 工厂函数，调用点不变），
+  桌面是 `desktop-app` 的 `DesktopLegadoScriptPlatform`。Android 脚本可触达任意类；桌面脚本跑在
+  `DesktopLegadoRhino`（30 s 超时）与白名单 `DesktopLegadoClassShutter` 里，未放行的类一经包装即报错，
+  WebView、内置浏览器、字体表、7z/rar、繁简转换在桌面直接失败。桌面入口是 `DesktopLegadoSourceRuntime`
+  （只收 `bookSourceType` 0 的小说书源，存在 `desktop_json_sources`）。请求规则（请求头/Cookie 合并、重试、限流、编码判定）
+  是共享的 `LegadoPlanHttpExecutor`，平台网络经 `LegadoPlanTransport` 注入：Android 的 `KototoroLegadoHttpExecutor` 只剩
+  网络/WebView/Cloudflare 适配，桌面的 `DesktopLegadoTransport` 用会话的共享客户端（网页验证由该客户端的拦截器处理），
+  并把剩下的 4xx/5xx 报成 `HTTP <code>`（Android 是解析成空列表）。真实书源探针：`-PrealLegadoCatalog=<file>` 跑
+  `DesktopLegadoSourceRuntimeTest`（用裸 OkHttp，不含会话客户端的验证与代理）；应用级回归是 `DesktopAppTest` 的
+  `legado-sources` 探针。
 - `parser-host/` - JVM 上加载 kototoro-parsers / kotatsu-parsers / UMA（Tsuki）插件 JAR：子优先 classloader、
   宿主共享 ABI、`ParserSourceRuntime`（OFFSET 分页、小说 `getChapterContent`）；真实插件用 `-PkototoroParsersJar`、
   `-PdexPluginJar`、`-PparserHostOnline` 选择性验证。

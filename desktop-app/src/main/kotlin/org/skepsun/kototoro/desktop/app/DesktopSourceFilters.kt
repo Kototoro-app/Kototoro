@@ -26,6 +26,7 @@ internal fun SourceEcosystem.originGroup(): OriginGroup = when (this) {
     SourceEcosystem.TSUNDOKU -> OriginGroup.TSUNDOKU
     SourceEcosystem.CLOUDSTREAM -> OriginGroup.CLOUDSTREAM
     SourceEcosystem.TVBOX -> OriginGroup.TVBOX_JSON
+    SourceEcosystem.LEGADO -> OriginGroup.LEGADO_JSON
 }
 
 /** A source's content group from its content type, as Android's source groups classify it (NSFW wins). */

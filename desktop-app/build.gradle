@@ -370,6 +370,8 @@ dependencies {
     implementation project(':mihon-desktop-compat')
     implementation project(':cloudstream-desktop')
     implementation project(':source-tvbox')
+    implementation project(':source-legado')
+    implementation libs.rhino
     implementation project(':core-domain')
     implementation project(':reader-core')
     // Novel paging reuses the shared line splitter Android paginates with, not a Windows-only rewrite.
@@ -839,6 +841,8 @@ tasks.withType(Test).configureEach {
     providers.gradleProperty('realApkDirectory').orNull?.with { systemProperty 'kototoro.dex.real.apks', it }
     providers.gradleProperty('realNovelApk').orNull?.with { systemProperty 'kototoro.real.novel', it }
     providers.gradleProperty('realAnimeApk').orNull?.with { systemProperty 'kototoro.real.anime', it }
+    providers.gradleProperty('realLegadoCatalog').orNull?.with { systemProperty 'kototoro.real.legado', it }
+    providers.gradleProperty('realLegadoQuery').orNull?.with { systemProperty 'kototoro.real.legado.query', it }
     providers.gradleProperty('realDirect').orNull?.with { systemProperty 'kototoro.real.direct', it }
     providers.gradleProperty('mpvOptions').orNull?.with { systemProperty 'kototoro.real.mpvoptions', it }
     providers.gradleProperty('ncnnDirectory').orNull?.with { systemProperty 'kototoro.ncnn.dir', it }

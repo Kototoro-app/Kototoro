@@ -1,8 +1,5 @@
 package org.skepsun.kototoro.core.javascript
 
-import android.content.Context
-import android.util.LruCache
-import android.util.Log
 import java.io.File
 import java.lang.ref.WeakReference
 import java.security.MessageDigest
@@ -11,25 +8,27 @@ import org.json.JSONObject
 import org.mozilla.javascript.Context as RhinoContext
 import org.mozilla.javascript.Scriptable
 import org.mozilla.javascript.ScriptableObject
-import org.skepsun.kototoro.core.network.jsonsource.LegadoHttpClient
 
 object SharedJsScope {
 
     private const val TAG = "SharedJsScope"
     private const val CACHE_FOLDER = "shareJs"
-    private val scopeMap = LruCache<String, WeakReference<Scriptable>>(16)
+    private const val MAX_SCOPES = 16
+    private val scopeMap = object : LinkedHashMap<String, WeakReference<Scriptable>>(MAX_SCOPES, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, WeakReference<Scriptable>>?): Boolean =
+            size > MAX_SCOPES
+    }
 
     fun getScope(
         jsLib: String?,
         rhinoContext: RhinoContext,
-        httpClient: LegadoHttpClient,
-        androidContext: Context,
+        platform: LegadoScriptPlatform,
     ): Scriptable? {
         if (jsLib.isNullOrBlank()) return null
         val key = md5(jsLib)
         synchronized(this) {
             scopeMap.get(key)?.get()?.let { return it }
-            val scope = buildScope(jsLib, rhinoContext, httpClient, androidContext)
+            val scope = buildScope(jsLib, rhinoContext, platform)
             scopeMap.put(key, WeakReference(scope))
             return scope
         }
@@ -45,8 +44,7 @@ object SharedJsScope {
     private fun buildScope(
         jsLib: String,
         rhinoContext: RhinoContext,
-        httpClient: LegadoHttpClient,
-        androidContext: Context,
+        platform: LegadoScriptPlatform,
     ): Scriptable {
         val scope = rhinoContext.initStandardObjects()
         if (isJsonObject(jsLib)) {
@@ -57,7 +55,7 @@ object SharedJsScope {
                     val key = keys.next()
                     val value = jsMap.optString(key).trim()
                     if (isAbsUrl(value)) {
-                        val script = loadRemoteJs(value, httpClient, androidContext)
+                        val script = loadRemoteJs(value, platform)
                         rhinoContext.evaluateString(
                             scope,
                             RhinoJavaScriptEngine.wrapScript(script),
@@ -85,16 +83,15 @@ object SharedJsScope {
 
     private fun loadRemoteJs(
         url: String,
-        httpClient: LegadoHttpClient,
-        androidContext: Context,
+        platform: LegadoScriptPlatform,
     ): String {
-        val cacheDir = File(androidContext.cacheDir, CACHE_FOLDER).apply { mkdirs() }
+        val cacheDir = File(platform.cacheDir(), CACHE_FOLDER).apply { mkdirs() }
         val cacheFile = File(cacheDir, md5(url))
         if (cacheFile.exists()) {
             return cacheFile.readText()
         }
         val body = runBlocking {
-            httpClient.get(url).use { response ->
+            platform.http.get(url).use { response ->
                 if (!response.isSuccessful) {
                     error("下载 jsLib 失败: $url code=${response.code}")
                 }

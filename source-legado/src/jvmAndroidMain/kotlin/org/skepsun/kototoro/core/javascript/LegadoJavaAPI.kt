@@ -1,16 +1,5 @@
 package org.skepsun.kototoro.core.javascript
 
-import android.content.Context
-import android.content.Intent
-import android.net.Uri
-import android.os.Handler
-import android.os.Looper
-import android.provider.Settings
-import android.util.Base64 as AndroidBase64
-import android.util.LruCache
-import androidx.appcompat.app.AppCompatDelegate
-import android.util.Log
-import android.widget.Toast
 import java.io.ByteArrayInputStream
 import java.io.File
 import java.io.InputStream
@@ -34,18 +23,11 @@ import org.jsoup.Connection
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import org.jsoup.select.Elements
-import org.skepsun.kototoro.R
-import org.skepsun.kototoro.core.network.jsonsource.LegadoHttpClient
-import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.parser.legado.ConcurrentRateLimiter
 import org.skepsun.kototoro.core.parser.legado.AnalyzeByJSoup
 import org.skepsun.kototoro.core.parser.legado.AnalyzeByJsonPath
 import org.skepsun.kototoro.core.parser.legado.LegadoRequestPlanBuilder
 import org.skepsun.kototoro.core.parser.legado.runtime.LegadoJsEvaluator
-import org.skepsun.kototoro.core.prefs.AppSettings
-import org.skepsun.kototoro.core.util.ChineseConverter
-import org.skepsun.kototoro.core.util.LibArchiveUtils
-import java.net.CookieManager
 import java.net.URL
 import java.net.URLDecoder
 import java.net.URLEncoder
@@ -66,13 +48,6 @@ import org.mozilla.javascript.Context as RhinoContext
 import org.mozilla.javascript.NativeJavaObject
 import org.mozilla.javascript.Scriptable
 import org.mozilla.javascript.ScriptableObject
-import org.skepsun.kototoro.browser.OpenUrlConfirmActivity
-import org.skepsun.kototoro.parsers.model.ContentSource
-import org.skepsun.kototoro.reader.novel.NovelPageTurnAnimation
-import org.skepsun.kototoro.reader.novel.NovelReaderSettings
-import org.skepsun.kototoro.settings.sources.unified.UnifiedSourceKind
-import org.skepsun.kototoro.settings.sources.unified.UnifiedSourcesActivity
-import androidx.appcompat.app.AppCompatActivity
 
 /**
  * Legado Java API 实现
@@ -81,17 +56,12 @@ import androidx.appcompat.app.AppCompatActivity
  * 参考 Legado 源码: app/src/main/java/io/legado/app/help/http/HttpHelper.kt
  */
 class LegadoJavaAPI(
-    private val httpClient: LegadoHttpClient,
-    private val cookieManager: CookieManager,
-    private val context: Context,
-    private val cookieJar: org.skepsun.kototoro.core.network.jsonsource.PersistentCookieJar? = null,
-    private val browserLauncherFactory: (Context, org.skepsun.kototoro.core.network.jsonsource.PersistentCookieJar?) -> BrowserLauncher =
-        ::BrowserLauncher,
+    private val platform: LegadoScriptPlatform,
+    private val cookieJar: LegadoScriptCookies? = null,
 ) {
 
     private var currentHtml: String? = null
-    private val mainHandler = Handler(Looper.getMainLooper())
-    private val browserLauncher = browserLauncherFactory(context, cookieJar)
+    private val httpClient get() = platform.http
 
     // 存储 JavaScript 变量的 Map
     private val jsVariables = mutableMapOf<String, Any?>()
@@ -107,7 +77,15 @@ class LegadoJavaAPI(
         private const val LEGADO_SOURCE_TYPE_BOOK = 0
         private const val QUERY_TTF_CACHE_SIZE = 16
         private val TITLE_NUM_PATTERN = Regex("(第)(.+?)(章)")
-        private val queryTtfCache = LruCache<String, QueryTTF>(QUERY_TTF_CACHE_SIZE)
+        private val queryTtfCache = object : LinkedHashMap<String, LegadoQueryTtf>(QUERY_TTF_CACHE_SIZE, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, LegadoQueryTtf>?): Boolean =
+                size > QUERY_TTF_CACHE_SIZE
+        }
+        // android.util.Base64's flag bits; scripts pass them as plain numbers.
+        private const val BASE64_DEFAULT = 0
+        private const val BASE64_NO_PADDING = 1
+        private const val BASE64_NO_WRAP = 2
+        private const val BASE64_URL_SAFE = 8
         private val CHINESE_NUMBER_MAP: Map<Char, Int> = buildMap {
             "零一二三四五六七八九十".forEachIndexed { index, c -> put(c, index) }
             "〇壹贰叁肆伍陆柒捌玖拾".forEachIndexed { index, c -> put(c, index) }
@@ -179,16 +157,11 @@ class LegadoJavaAPI(
         val source = jsContext?.source ?: return null
         return RhinoJavaScriptEngine.SourceWrapper(
             source = source,
-            context = context,
+            platform = platform,
             cookieJar = cookieJar ?: return null,
             jsExecutor = { script, scriptContext ->
                 val activeCookieJar = cookieJar ?: return@SourceWrapper null
-                RhinoJavaScriptEngine(
-                    httpClient = httpClient,
-                    cookieManager = cookieManager,
-                    cookieJar = activeCookieJar,
-                    androidContext = context,
-                ).execute(script, scriptContext)
+                RhinoJavaScriptEngine(platform, activeCookieJar).execute(script, scriptContext)
             },
             contextFactory = { extraBindings ->
                 JavaScriptContext(
@@ -218,10 +191,10 @@ class LegadoJavaAPI(
         return jsContext?.source?.bookSourceName
     }
 
-    private fun resolveParserContentSource(): ContentSource? {
+    private fun parserSourceName(): String? {
         val sourceName = jsContext?.sourceName
             ?: jsContext?.runtimeContext?.getParserSourceName()
-        return sourceName?.takeIf { it.isNotBlank() }?.let { org.skepsun.kototoro.core.model.ContentSource(it) }
+        return sourceName?.takeIf { it.isNotBlank() }
     }
 
     private val jsEvaluator = LegadoJsEvaluator { script, result ->
@@ -403,16 +376,16 @@ class LegadoJavaAPI(
      * @return Base64 编码后的字符串
      */
     fun base64Encode(str: String): String? {
-        return base64Encode(str, AndroidBase64.NO_WRAP)
+        return base64Encode(str, BASE64_NO_WRAP)
     }
 
     @Suppress("unused")
     fun base64Encode(str: String, flags: Int): String? {
         val encoder = when {
-            flags and AndroidBase64.URL_SAFE != 0 -> java.util.Base64.getUrlEncoder()
+            flags and BASE64_URL_SAFE != 0 -> java.util.Base64.getUrlEncoder()
             else -> java.util.Base64.getEncoder()
         }
-        val normalizedEncoder = if (flags and AndroidBase64.NO_PADDING != 0) {
+        val normalizedEncoder = if (flags and BASE64_NO_PADDING != 0) {
             encoder.withoutPadding()
         } else {
             encoder
@@ -420,7 +393,7 @@ class LegadoJavaAPI(
         return runCatching {
             normalizedEncoder.encodeToString(str.toByteArray())
         }.getOrElse {
-            runCatching { AndroidBase64.encodeToString(str.toByteArray(), flags) }.getOrNull()
+            runCatching { platform.base64Encode(str.toByteArray(), flags) }.getOrNull()
         }
     }
 
@@ -433,7 +406,7 @@ class LegadoJavaAPI(
     fun base64Decode(str: String?): String {
         if (str.isNullOrBlank()) return ""
         return runCatching {
-            String(base64DecodeBytes(str, AndroidBase64.DEFAULT), Charsets.UTF_8)
+            String(base64DecodeBytes(str, BASE64_DEFAULT), Charsets.UTF_8)
         }.getOrDefault("")
     }
 
@@ -442,7 +415,7 @@ class LegadoJavaAPI(
         if (str.isNullOrBlank()) return ""
         val resolvedCharset = runCatching { Charset.forName(charset) }.getOrDefault(Charsets.UTF_8)
         return runCatching {
-            String(base64DecodeBytes(str, AndroidBase64.DEFAULT), resolvedCharset)
+            String(base64DecodeBytes(str, BASE64_DEFAULT), resolvedCharset)
         }.getOrDefault("")
     }
 
@@ -456,7 +429,7 @@ class LegadoJavaAPI(
     @Suppress("unused")
     fun base64DecodeToByteArray(str: String?): ByteArray? {
         if (str.isNullOrBlank()) return null
-        return runCatching { base64DecodeBytes(str, AndroidBase64.DEFAULT) }.getOrNull()
+        return runCatching { base64DecodeBytes(str, BASE64_DEFAULT) }.getOrNull()
     }
 
     @Suppress("unused")
@@ -795,9 +768,7 @@ class LegadoJavaAPI(
      */
     fun toast(message: Any?) {
         val displayMessage = formatSourceScopedMessage(message)
-        mainHandler.post {
-            Toast.makeText(context, displayMessage, Toast.LENGTH_SHORT).show()
-        }
+        platform.toast(displayMessage, long = false)
     }
 
     /**
@@ -807,9 +778,7 @@ class LegadoJavaAPI(
      */
     fun longToast(message: Any?) {
         val displayMessage = formatSourceScopedMessage(message)
-        mainHandler.post {
-            Toast.makeText(context, displayMessage, Toast.LENGTH_LONG).show()
-        }
+        platform.toast(displayMessage, long = true)
     }
 
     /**
@@ -818,32 +787,32 @@ class LegadoJavaAPI(
      * @return Android ID
      */
     fun androidId(): String {
-        return Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID) ?: ""
+        return platform.androidId()
     }
 
     /**
      * 繁体转简体
      */
     fun t2s(text: String): String {
-        return ChineseConverter.t2s(text)
+        return platform.t2s(text)
     }
 
     /**
      * 简体转繁体
      */
     fun s2t(text: String): String {
-        return ChineseConverter.s2t(text)
+        return platform.s2t(text)
     }
 
     private fun base64DecodeBytes(str: String, flags: Int): ByteArray {
         val decoder = when {
-            flags and AndroidBase64.URL_SAFE != 0 -> java.util.Base64.getUrlDecoder()
+            flags and BASE64_URL_SAFE != 0 -> java.util.Base64.getUrlDecoder()
             else -> java.util.Base64.getDecoder()
         }
         return runCatching {
             decoder.decode(str)
         }.getOrElse {
-            AndroidBase64.decode(str, flags)
+            platform.base64Decode(str, flags)
         }
     }
 
@@ -1438,7 +1407,7 @@ class LegadoJavaAPI(
      */
     fun getWebViewUA(): String {
         return try {
-            android.webkit.WebSettings.getDefaultUserAgent(context)
+            platform.webViewUserAgent()
         } catch (e: Exception) {
             "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.120 Mobile Safari/537.36"
         }
@@ -1459,7 +1428,7 @@ class LegadoJavaAPI(
 
     fun encodingDetect(bytes: ByteArray): String? {
         if (bytes.isEmpty()) return null
-        return org.skepsun.kototoro.core.util.EncodingDetect.getEncode(bytes)
+        return platform.detectEncoding(bytes)
     }
 
     fun encodingDetect(str: String): String? {
@@ -1711,22 +1680,22 @@ class LegadoJavaAPI(
         Log.i(TAG, "startBrowserAwait called: url=$url, title=$title")
 
         try {
-            toast(context.getString(R.string.legado_browser_verification_started))
-            val result = browserLauncher.launchAndWait(
+            toast(platform.browserMessage(LegadoBrowserMessage.STARTED))
+            val result = platform.startBrowserAwait(
                 url = url,
                 title = title,
-                source = resolveParserContentSource(),
+                parserSourceName = parserSourceName(),
                 refetchAfterSuccess = refetchAfterSuccess,
                 html = html,
             )
             if (result?.html?.isNotBlank() == true) {
-                toast(context.getString(R.string.legado_browser_verification_done))
+                toast(platform.browserMessage(LegadoBrowserMessage.DONE))
             }
             Log.i(TAG, "Browser verification completed for: $url")
             return StrResponse(result?.url ?: url, result?.html.orEmpty())
         } catch (e: Exception) {
             Log.e(TAG, "Failed to launch browser", e)
-            toast(context.getString(R.string.legado_browser_verification_failed, e.message.orEmpty()))
+            toast(platform.browserMessage(LegadoBrowserMessage.FAILED, e.message.orEmpty()))
             return StrResponse(url, "")
         }
     }
@@ -1744,14 +1713,7 @@ class LegadoJavaAPI(
     @Suppress("unused")
     fun startBrowser(url: String, title: String, html: String?) {
         try {
-            val intent = org.skepsun.kototoro.core.nav.AppRouter.browserIntent(
-                context = context,
-                url = url,
-                source = resolveParserContentSource(),
-                title = title,
-            ).putExtra(org.skepsun.kototoro.core.nav.AppRouter.KEY_BROWSER_HTML, html)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            context.startActivity(intent)
+            platform.startBrowser(url, title, parserSourceName(), html)
         } catch (e: Exception) {
             Log.e(TAG, "startBrowser failed: $url - ${e.message}", e)
         }
@@ -1942,42 +1904,15 @@ class LegadoJavaAPI(
     @Suppress("unused")
     fun openUrl(url: String, mimeType: String?) {
         require(url.length < 64 * 1024) { "openUrl parameter url too long" }
-        buildLegadoImportIntent(url)?.let { importIntent ->
-            runCatching { context.startActivity(importIntent) }
-                .onFailure { Log.e(TAG, "openUrl import failed: $url - ${it.message}", it) }
-            return
-        }
+        val handled = runCatching { platform.openImportUrl(url) }
+            .onFailure { Log.e(TAG, "openUrl import failed: $url - ${it.message}", it) }
+            .getOrDefault(true)
+        if (handled) return
         val source = requireNotNull(jsContext?.source) { "openUrl source cannot be null" }
-        val activity = requireNotNull(context as? AppCompatActivity) { "openUrl activity context required" }
-        val sourceOrigin = resolveParserContentSource()?.name ?: source.bookSourceUrl
-        val intent = OpenUrlConfirmActivity.newIntent(
-            activity = activity,
-            url = url,
-            mimeType = mimeType,
-            sourceOrigin = sourceOrigin,
-            sourceName = source.bookSourceName,
-            sourceType = LEGADO_SOURCE_TYPE_BOOK,
-        )
         runCatching {
-            context.startActivity(intent)
+            platform.openUrl(url, mimeType, parserSourceName(), source)
         }.onFailure {
             Log.e(TAG, "openUrl failed: $url - ${it.message}", it)
-        }
-    }
-
-    private fun buildLegadoImportIntent(url: String): Intent? {
-        val uri = runCatching { Uri.parse(url) }.getOrNull() ?: return null
-        val scheme = uri.scheme?.lowercase(Locale.ROOT) ?: return null
-        if (scheme != "legado" && scheme != "yuedu") {
-            return null
-        }
-        val importUrl = uri.getQueryParameter("src").orEmpty().ifBlank { return null }
-        return UnifiedSourcesActivity.newIntent(
-            context = context,
-            initialRepositoryKind = UnifiedSourceKind.LEGADO,
-            initialRepositoryUrl = importUrl,
-        ).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
     }
 
@@ -2009,7 +1944,7 @@ class LegadoJavaAPI(
         }
         return runCatching {
             archiveFile.inputStream().buffered().use { input ->
-                LibArchiveUtils.unArchive(input, outputDir)
+                platform.unArchive(input, outputDir)
             }
             "$ARCHIVE_TEMP_FOLDER_NAME${File.separator}$targetName"
         }.getOrElse {
@@ -2034,7 +1969,7 @@ class LegadoJavaAPI(
                     val charset = if (bytes.all { it >= 0 }) {
                         Charsets.UTF_8
                     } else {
-                        val charsetName = org.skepsun.kototoro.core.util.EncodingDetect.getEncode(bytes)
+                        val charsetName = platform.detectEncoding(bytes)
                         runCatching { Charset.forName(charsetName) }.getOrDefault(Charsets.UTF_8)
                     }
                     append(String(bytes, charset))
@@ -2086,7 +2021,7 @@ class LegadoJavaAPI(
         ReplaceWith("queryTTF(data)")
     )
     @Suppress("unused")
-    fun queryBase64TTF(data: String?): QueryTTF? {
+    fun queryBase64TTF(data: String?): LegadoQueryTtf? {
         log(
             "queryBase64TTF(String)方法已过时,并将在未来删除；请无脑使用queryTTF(Any)替代，新方法支持传入 url、本地文件、base64、ByteArray 自动判断&自动缓存，特殊情况需禁用缓存请传入第二可选参数false:Boolean",
         )
@@ -2094,12 +2029,12 @@ class LegadoJavaAPI(
     }
 
     @Suppress("unused")
-    fun queryTTF(data: Any?): QueryTTF? {
+    fun queryTTF(data: Any?): LegadoQueryTtf? {
         return queryTTF(data, true)
     }
 
     @Suppress("unused")
-    fun queryTTF(data: Any?, useCache: Boolean): QueryTTF? {
+    fun queryTTF(data: Any?, useCache: Boolean): LegadoQueryTtf? {
         return try {
             var cacheKey: String? = null
             val queryTtf = when (data) {
@@ -2122,7 +2057,7 @@ class LegadoJavaAPI(
                             }
                         }
                     } ?: return null
-                    QueryTTF(fontBytes)
+                    platform.queryTtf(fontBytes)
                 }
 
                 is ByteArray -> {
@@ -2130,7 +2065,7 @@ class LegadoJavaAPI(
                         cacheKey = sha256Hex(data)
                         getCachedQueryTtf(cacheKey)?.let { return it }
                     }
-                    QueryTTF(data)
+                    platform.queryTtf(data)
                 }
 
                 else -> return null
@@ -2146,8 +2081,8 @@ class LegadoJavaAPI(
     @Suppress("unused")
     fun replaceFont(
         text: String,
-        errorQueryTTF: QueryTTF?,
-        correctQueryTTF: QueryTTF?,
+        errorQueryTTF: LegadoQueryTtf?,
+        correctQueryTTF: LegadoQueryTtf?,
     ): String {
         return replaceFont(text, errorQueryTTF, correctQueryTTF, false)
     }
@@ -2155,8 +2090,8 @@ class LegadoJavaAPI(
     @Suppress("unused")
     fun replaceFont(
         text: String,
-        errorQueryTTF: QueryTTF?,
-        correctQueryTTF: QueryTTF?,
+        errorQueryTTF: LegadoQueryTtf?,
+        correctQueryTTF: LegadoQueryTtf?,
         filter: Boolean,
     ): String {
         if (errorQueryTTF == null || correctQueryTTF == null) return text
@@ -2209,7 +2144,7 @@ class LegadoJavaAPI(
         val bytes = loadRemoteOrHexBytes(url) ?: return null
         return runCatching {
             ByteArrayInputStream(bytes).use {
-                LibArchiveUtils.getByteArrayContent(it, path)
+                platform.archiveEntry(it, path)
             }
         }.getOrElse {
             Log.e(TAG, "get7zByteArrayContent failed: ${it.message}", it)
@@ -2222,7 +2157,7 @@ class LegadoJavaAPI(
         val bytes = loadRemoteOrHexBytes(url) ?: return null
         return runCatching {
             ByteArrayInputStream(bytes).use {
-                LibArchiveUtils.getByteArrayContent(it, path)
+                platform.archiveEntry(it, path)
             }
         }.getOrElse {
             Log.e(TAG, "getRarByteArrayContent failed: ${it.message}", it)
@@ -2239,13 +2174,7 @@ class LegadoJavaAPI(
     }
 
     @Suppress("unused")
-    fun getThemeMode(): String {
-        return when (AppSettings(context).theme) {
-            AppCompatDelegate.MODE_NIGHT_NO -> "1"
-            AppCompatDelegate.MODE_NIGHT_YES -> "2"
-            else -> "0"
-        }
-    }
+    fun getThemeMode(): String = platform.themeMode()
 
     @Suppress("unused")
     fun getThemeConfig(): String {
@@ -2253,23 +2182,7 @@ class LegadoJavaAPI(
     }
 
     @Suppress("unused")
-    fun getThemeConfigMap(): Map<String, Any?> {
-        val settings = AppSettings(context)
-        val isNightTheme = settings.theme == AppCompatDelegate.MODE_NIGHT_YES
-        val accentColor = settings.colorScheme.name.lowercase(Locale.ROOT)
-        val backgroundColor = if (isNightTheme) "#121212" else "#FFFFFF"
-        val bottomBackground = if (settings.isAmoledTheme && isNightTheme) "#000000" else backgroundColor
-        return linkedMapOf(
-            "themeName" to settings.colorScheme.name,
-            "isNightTheme" to isNightTheme,
-            "primaryColor" to backgroundColor,
-            "accentColor" to accentColor,
-            "backgroundColor" to backgroundColor,
-            "bottomBackground" to bottomBackground,
-            "backgroundImgPath" to null,
-            "backgroundImgBlur" to 0,
-        )
-    }
+    fun getThemeConfigMap(): Map<String, Any?> = platform.themeConfig()
 
     @Suppress("unused")
     fun getReadBookConfig(): String {
@@ -2277,88 +2190,7 @@ class LegadoJavaAPI(
     }
 
     @Suppress("unused")
-    fun getReadBookConfigMap(): Map<String, Any?> {
-        val settings = AppSettings(context)
-        val novel = NovelReaderSettings.load(context)
-        val isNightTheme = settings.theme == AppCompatDelegate.MODE_NIGHT_YES
-        val textColor = if (isNightTheme) "#ADADAD" else "#3E3D3B"
-        val backgroundColor = when (settings.readerBackground) {
-            org.skepsun.kototoro.core.prefs.ReaderBackground.BLACK -> "#000000"
-            org.skepsun.kototoro.core.prefs.ReaderBackground.DARK -> "#000000"
-            org.skepsun.kototoro.core.prefs.ReaderBackground.WHITE -> "#FFFFFF"
-            else -> "#EEEEEE"
-        }
-        return linkedMapOf(
-            "name" to novel.themePreset.name,
-            "bgStr" to backgroundColor,
-            "bgStrNight" to "#000000",
-            "bgStrEInk" to "#FFFFFF",
-            "bgAlpha" to 100,
-            "bgType" to 0,
-            "bgTypeNight" to 0,
-            "bgTypeEInk" to 0,
-            "darkStatusIcon" to !isNightTheme,
-            "darkStatusIconNight" to false,
-            "darkStatusIconEInk" to true,
-            "textColor" to textColor,
-            "textColorNight" to "#ADADAD",
-            "textColorEInk" to "#000000",
-            "textColorInt" to 0,
-            "textColorIntNight" to 0,
-            "textColorIntEInk" to 0,
-            "textAccentColor" to textColor,
-            "textAccentColorNight" to "#FE4D55",
-            "textAccentColorEInk" to "#000000",
-            "textAccentColorInt" to 0,
-            "textAccentColorIntNight" to 0,
-            "textAccentColorIntEInk" to 0,
-            "pageAnim" to if (novel.pageTurnAnimation == NovelPageTurnAnimation.SIMULATION) 1 else 0,
-            "pageAnimEInk" to 4,
-            "textFont" to "",
-            "titleFont" to "",
-            "headerFont" to "",
-            "footerFont" to "",
-            "headerFontSize" to 12,
-            "footerFontSize" to 12,
-            "textBold" to 500,
-            "textSize" to novel.fontSizeSp.toInt(),
-            "letterSpacing" to 0.1f,
-            "lineSpacingExtra" to (novel.lineSpacing * 10).toInt(),
-            "paragraphSpacing" to novel.paragraphSpacing.toInt(),
-            "titleMode" to 0,
-            "titleSize" to 0,
-            "titleTopSpacing" to 0,
-            "titleBottomSpacing" to 0,
-            "titleColor" to 0,
-            "paragraphIndent" to if (novel.enableParagraphIndent) "　　" else "",
-            "paddingBottom" to 6,
-            "paddingLeft" to novel.marginHorizontal,
-            "paddingRight" to novel.marginHorizontal,
-            "paddingTop" to 6,
-            "headerPaddingBottom" to 0,
-            "headerPaddingLeft" to novel.marginHorizontal,
-            "headerPaddingRight" to novel.marginHorizontal,
-            "headerPaddingTop" to 0,
-            "footerPaddingBottom" to 6,
-            "footerPaddingLeft" to novel.marginHorizontal,
-            "footerPaddingRight" to novel.marginHorizontal,
-            "footerPaddingTop" to 6,
-            "showHeaderLine" to false,
-            "showFooterLine" to novel.showReadingStatus,
-            "tipHeaderLeft" to 0,
-            "tipHeaderMiddle" to 0,
-            "tipHeaderRight" to 0,
-            "tipFooterLeft" to 0,
-            "tipFooterMiddle" to 0,
-            "tipFooterRight" to 0,
-            "tipHeaderColor" to 0,
-            "tipFooterColor" to 0,
-            "tipDividerColor" to -1,
-            "headerMode" to 0,
-            "footerMode" to 0,
-            "regexColorRules" to emptyList<Map<String, Any?>>(),
-        )
-    }
+    fun getReadBookConfigMap(): Map<String, Any?> = platform.readBookConfig()
 
     class JsURL(
         url: String,
@@ -2479,20 +2311,13 @@ class LegadoJavaAPI(
 
     private fun buildSourceWebViewHeaders(): Map<String, String> {
         val source = jsContext?.source ?: return emptyMap()
-        val effectiveCookieJar = cookieJar ?: org.skepsun.kototoro.core.network.jsonsource.PersistentCookieJar(
-            httpClient.getCookieJar(),
-        )
+        val effectiveCookieJar = cookieJar ?: platform.fallbackCookies()
         return RhinoJavaScriptEngine.SourceWrapper(
             source = source,
-            context = context,
+            platform = platform,
             cookieJar = effectiveCookieJar,
             jsExecutor = { script, scriptContext ->
-                RhinoJavaScriptEngine(
-                    httpClient = httpClient,
-                    cookieManager = cookieManager,
-                    cookieJar = effectiveCookieJar,
-                    androidContext = context,
-                ).execute(script, scriptContext)
+                RhinoJavaScriptEngine(platform, effectiveCookieJar).execute(script, scriptContext)
             },
             contextFactory = { extraBindings ->
                 JavaScriptContext(
@@ -2519,7 +2344,7 @@ class LegadoJavaAPI(
 
     private fun evaluateInlineJs(script: String, result: Any?): Any? {
         val activeContext = jsContext ?: return result
-        val rhino = RhinoContext.enter()
+        val rhino = platform.enterRhinoContext()
         val previousResult = activeContext.result
         return try {
             rhino.optimizationLevel = -1
@@ -2711,7 +2536,6 @@ class LegadoJavaAPI(
                         url = plan.url,
                         body = body.toRequestBody(contentType.toMediaTypeOrNull()),
                         headers = mergedHeaders,
-                        source = null,
                         proxy = plan.proxy,
                         dnsIp = plan.dnsIp,
                         enableCookieJar = plan.enableCookieJar,
@@ -2729,7 +2553,6 @@ class LegadoJavaAPI(
                 else -> httpClient.get(
                     url = plan.url,
                     headers = mergedHeaders,
-                    source = null,
                     proxy = plan.proxy,
                     dnsIp = plan.dnsIp,
                     enableCookieJar = plan.enableCookieJar,
@@ -2761,11 +2584,7 @@ class LegadoJavaAPI(
     }
 
     private fun getSafeFileRoot(): File {
-        fun pathToFile(path: String?): File? {
-            return path?.takeIf { it.isNotBlank() }?.let(::File)
-        }
-        return pathToFile(runCatching { context.externalCacheDir?.absolutePath }.getOrNull())
-            ?: pathToFile(runCatching { context.cacheDir?.absolutePath }.getOrNull())
+        return runCatching { platform.safeFileRoot() }.getOrNull()
             ?: File(System.getProperty("java.io.tmpdir"), "kototoro-legado-js").apply { mkdirs() }
     }
 
@@ -2825,7 +2644,7 @@ class LegadoJavaAPI(
             if (trimmed.contains(";base64", ignoreCase = true)) {
                 runCatching { java.util.Base64.getDecoder().decode(body) }
                     .recoverCatching { java.util.Base64.getUrlDecoder().decode(body) }
-                    .getOrElse { android.util.Base64.decode(body, android.util.Base64.DEFAULT) }
+                    .getOrElse { platform.base64Decode(body, BASE64_DEFAULT) }
             } else {
                 URLDecoder.decode(body, Charsets.UTF_8.name()).toByteArray(Charsets.UTF_8)
             }
@@ -2849,13 +2668,13 @@ class LegadoJavaAPI(
             .joinToString("") { "%02x".format(it) }
     }
 
-    private fun getCachedQueryTtf(key: String): QueryTTF? {
+    private fun getCachedQueryTtf(key: String): LegadoQueryTtf? {
         return synchronized(queryTtfCache) {
             queryTtfCache.get(key)
         }
     }
 
-    private fun putCachedQueryTtf(key: String, queryTTF: QueryTTF) {
+    private fun putCachedQueryTtf(key: String, queryTTF: LegadoQueryTtf) {
         synchronized(queryTtfCache) {
             queryTtfCache.put(key, queryTTF)
         }

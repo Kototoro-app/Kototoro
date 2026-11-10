@@ -90,10 +90,25 @@ class DesktopSession private constructor(
     }
     @Volatile private var jsonSourceCache = jsonSources.all()
     private val tvboxRuntime = org.skepsun.kototoro.tvbox.MacCmsSourceRuntime(jsonHttp) {
-        jsonSourceCache.map {
+        jsonSourceCache.filterNot { DesktopLegadoSourceRuntime.owns(it.id) }.map {
             org.skepsun.kototoro.tvbox.TvBoxSource(it.id, it.name, it.config, it.iconUrl)
         }
     }
+    /** Legado book sources share the JSON store; only novel sources (`bookSourceType` 0) are decoded into this list. */
+    @Volatile private var legadoSourceCache = jsonSourceCache.mapNotNull(DesktopLegadoCatalog::source)
+    /** Android's `legado_source_store` and `legado_book_store`, each in its own preference file. */
+    private val legadoPlatform = DesktopLegadoScriptPlatform(
+        client = jsonClient,
+        root = storage.paths.root.resolve("cache/legado"),
+        stores = { name -> storage.preferences.open("desktop_$name") },
+    )
+    private val legadoVariables = DesktopLegadoVariableStore(legadoPlatform.store("legado_source_store"))
+    private val legadoRuntime = DesktopLegadoSourceRuntime(
+        sources = { legadoSourceCache },
+        createEngine = { org.skepsun.kototoro.core.javascript.RhinoJavaScriptEngine(legadoPlatform) },
+        createExecutor = { desktopLegadoExecutor(jsonClient, it.config, legadoVariables) },
+        variableStore = legadoVariables,
+    )
 
     /** Sites the JSON runtime serves right now; the runtime reads the same list. */
     internal fun jsonSourceList(): List<org.skepsun.kototoro.desktop.runtime.DesktopJsonSource> = jsonSourceCache
@@ -153,6 +168,7 @@ class DesktopSession private constructor(
     /** Re-reads the stored documents after an import or a removal; read failures stay in [startupErrors]. */
     internal suspend fun reloadJsonSources() {
         jsonSourceCache = jsonSources.all()
+        legadoSourceCache = jsonSourceCache.mapNotNull(DesktopLegadoCatalog::source)
         startupErrors.clear()
         startupErrors += jsonSources.errors
         tvboxRuntime.invalidate()
@@ -161,6 +177,8 @@ class DesktopSession private constructor(
     /** Follows the shared TVBox import rules: multi-repository links, CMS APIs and documents all land here. */
     internal suspend fun importJsonSources(url: String, title: String?) =
         org.skepsun.kototoro.tvbox.TvBoxImport.importFromUrl(jsonHttp, url, title)
+    /** The document behind an import link, so the caller can tell a Legado catalog from a TVBox one. */
+    internal suspend fun fetchJsonDocument(url: String): String = jsonHttp.get(url, emptyMap())
     internal suspend fun importJsonDocument(content: String, locator: String, title: String?) =
         org.skepsun.kototoro.tvbox.TvBoxImport.importDocument(jsonHttp, content, locator, title)
 
@@ -172,6 +190,7 @@ class DesktopSession private constructor(
                 RoutedSourceRuntime.Route(parsers::owns, parserRuntime),
                 RoutedSourceRuntime.Route(cloudstreamRuntime::owns, cloudstreamRuntime),
                 RoutedSourceRuntime.Route(org.skepsun.kototoro.tvbox.MacCmsSourceRuntime::owns, tvboxRuntime),
+                RoutedSourceRuntime.Route(DesktopLegadoSourceRuntime::owns, legadoRuntime),
             )),
             sourceDiagnostics::record,
         ),
@@ -185,8 +204,7 @@ class DesktopSession private constructor(
         registry.installed().flatMap { it.sources }.firstOrNull { it.source.name == name }?.source
             ?: parsers.sources().firstOrNull { it.source.name == name }?.source
             ?: cloudstream.sources().firstOrNull { it.name == name }?.let(CloudstreamSourceRuntime::sourceRef)
-            ?: jsonSourceCache.firstOrNull { it.id == name }
-                ?.let { SourceRef(it.id, "", org.skepsun.kototoro.tvbox.MacCmsSourceRuntime.CONTENT_TYPE) }
+            ?: jsonSourceCache.firstOrNull { it.id == name }?.let(::jsonSourceRef)
     }
     /** New-chapter tracking with Android's rules; details refresh through the normal source protocol. */
     val tracker = org.skepsun.kototoro.desktop.runtime.DesktopTracker(
@@ -894,9 +912,15 @@ private const val PROXY_TEST_URL = "http://neverssl.com"
 private fun cloudstreamListing(source: org.skepsun.kototoro.cloudstream.model.CloudstreamSource) =
     SourceListing(CloudstreamSourceRuntime.sourceRef(source), source.displayName, SourceEcosystem.CLOUDSTREAM, supportsLatest = false)
 
+private fun jsonSourceRef(source: org.skepsun.kototoro.desktop.runtime.DesktopJsonSource) = SourceRef(
+    source.id, "",
+    if (DesktopLegadoSourceRuntime.owns(source.id)) "NOVEL" else org.skepsun.kototoro.tvbox.MacCmsSourceRuntime.CONTENT_TYPE,
+)
+
 private fun jsonListing(source: org.skepsun.kototoro.desktop.runtime.DesktopJsonSource) = SourceListing(
-    SourceRef(source.id, "", org.skepsun.kototoro.tvbox.MacCmsSourceRuntime.CONTENT_TYPE),
-    source.name, SourceEcosystem.TVBOX, supportsLatest = false,
+    jsonSourceRef(source), source.name,
+    if (DesktopLegadoSourceRuntime.owns(source.id)) SourceEcosystem.LEGADO else SourceEcosystem.TVBOX,
+    supportsLatest = false,
     // Android's TVBox/JSON sources carry their own icon; the site address answers when the document had none.
     iconUrl = source.iconUrl?.takeIf(String::isNotBlank),
     siteUrl = source.api?.takeIf(String::isNotBlank),

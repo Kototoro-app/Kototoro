@@ -1,4 +1,3 @@
 package org.skepsun.kototoro.core.util
 
-fun String.splitNotBlank(delimiter: String): List<String> =
-    this.split(delimiter).mapNotNull { it.trim().takeIf { part -> part.isNotEmpty() } }
+// The implementation is shared by Android and desktop in :source-legado.

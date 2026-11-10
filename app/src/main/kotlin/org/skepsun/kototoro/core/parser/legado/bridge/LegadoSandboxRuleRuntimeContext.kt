@@ -5,6 +5,7 @@ import org.mozilla.javascript.Undefined
 import org.skepsun.kototoro.core.javascript.BookInfo
 import org.skepsun.kototoro.core.javascript.ChapterInfo
 import org.skepsun.kototoro.core.parser.legado.runtime.LegadoRuleRuntimeContext
+import org.skepsun.kototoro.core.parser.legado.RuleDataInterface
 import org.skepsun.kototoro.core.parser.legado.sandbox.LegadoSandbox
 
 /**
@@ -13,6 +14,9 @@ import org.skepsun.kototoro.core.parser.legado.sandbox.LegadoSandbox
 class LegadoSandboxRuleRuntimeContext(
     private val sandbox: LegadoSandbox,
 ) : LegadoRuleRuntimeContext {
+
+    override fun ajax(url: String, baseUrl: String, ruleData: RuleDataInterface?): String? =
+        androidLegadoRuleAjax(url, baseUrl, ruleData, this)
 
     override fun evalJs(script: String, result: Any?, baseUrl: String): Any? {
         sandbox.putVariable("baseUrl", normalizeBaseUrlForJavaScript(baseUrl))

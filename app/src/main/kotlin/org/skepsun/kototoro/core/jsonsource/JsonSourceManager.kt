@@ -553,7 +553,7 @@ class JsonSourceManager @Inject constructor(
 
         return try {
             // Parse JSON array into list of LegadoBookSource objects
-            val sources = json.decodeFromString<List<org.skepsun.kototoro.core.model.jsonsource.LegadoBookSource>>(jsonContent)
+            val sources = org.skepsun.kototoro.core.model.jsonsource.LegadoSourceCatalog.decode(jsonContent, json)
 
             if (sources.isEmpty()) {
                 JsonSourceLogger.logWarning("JSON array is empty")
@@ -641,7 +641,7 @@ class JsonSourceManager @Inject constructor(
 
     fun inspectLegadoJson(jsonContent: String): Result<List<org.skepsun.kototoro.core.model.jsonsource.LegadoBookSource>> {
         return runCatching {
-            json.decodeFromString<List<org.skepsun.kototoro.core.model.jsonsource.LegadoBookSource>>(jsonContent)
+            org.skepsun.kototoro.core.model.jsonsource.LegadoSourceCatalog.decode(jsonContent, json)
                 .filter { source -> source.bookSourceName.isNotBlank() && source.bookSourceUrl.isNotBlank() }
         }
     }
@@ -1505,7 +1505,11 @@ class JsonSourceManager @Inject constructor(
         val urlHash = sourceUrl.hashCode().toUInt().toString(16).uppercase()
 
         // Build the identifier
-        val sourceId = "$typePrefix$urlHash"
+        val sourceId = if (sourceType == JsonSourceType.LEGADO) {
+            org.skepsun.kototoro.core.model.jsonsource.LegadoSourceCatalog.sourceId(sourceUrl, bookSourceType)
+        } else {
+            "$typePrefix$urlHash"
+        }
 
         JsonSourceLogger.logDebug("Generated ID $sourceId for URL: $sourceUrl")
 
