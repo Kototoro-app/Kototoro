@@ -1,6 +1,8 @@
 package org.skepsun.kototoro.local.epub
 
 import android.content.Context
+import org.skepsun.kototoro.local.data.LocalPdfPages
+import androidx.core.net.toUri
 import androidx.annotation.WorkerThread
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -178,6 +180,7 @@ class EpubStorageManager @Inject constructor(
 
         // 复制文件
         sourceFile.copyTo(ebookFile, overwrite = true)
+        LocalPdfPages.evictPdfRenderer(ebookFile)
 
         android.util.Log.d("EpubStorageManager", "Ebook file copied successfully, size: ${ebookFile.length()} bytes")
 
@@ -199,6 +202,7 @@ class EpubStorageManager @Inject constructor(
         val deleted = epubDir.deleteRecursively()
 
         if (deleted) {
+            LocalPdfPages.evictPdfRenderersUnder(epubDir.toUri())
             android.util.Log.d("EpubStorageManager", "EPUB directory deleted successfully")
         } else {
             android.util.Log.e("EpubStorageManager", "Failed to delete EPUB directory")

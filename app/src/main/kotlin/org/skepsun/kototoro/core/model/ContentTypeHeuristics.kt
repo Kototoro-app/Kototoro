@@ -53,24 +53,23 @@ fun String?.looksLikeNovelUrl(): Boolean {
     if (normalized.isBlank()) {
         return false
     }
+    if (normalized.startsWith("localepub:") || normalized.startsWith("epub:")) {
+        return true
+    }
+    if (!normalized.startsWith("/") && !localNovelSchemes.any(normalized::startsWith)) {
+        return false
+    }
     if (
-        normalized.startsWith("localepub:") ||
-        normalized.startsWith("epub:") ||
         normalized.contains("#chapter/") ||
         normalized.contains("#chapter%2f") ||
         normalized.endsWith("#text")
     ) {
         return true
     }
-    if (localNovelSchemes.any(normalized::startsWith)) {
-        val withoutQuery = normalized.substringBefore('?')
-        val fragment = withoutQuery.substringAfter('#', "")
-        val base = withoutQuery.substringBefore('#')
-        if (localNovelExtensions.any { base.endsWith(it) || fragment.endsWith(it) }) {
-            return true
-        }
-    }
-    return false
+    val withoutQuery = normalized.substringBefore('?')
+    val fragment = withoutQuery.substringAfter('#', "")
+    val base = withoutQuery.substringBefore('#')
+    return localNovelExtensions.any { base.endsWith(it) || fragment.endsWith(it) }
 }
 
 fun ContentChapter.looksLikeNovelChapter(): Boolean {

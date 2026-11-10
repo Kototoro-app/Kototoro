@@ -1,12 +1,15 @@
 package org.skepsun.kototoro.local.data
 
 import android.content.Context
+import android.graphics.pdf.PdfRenderer
 import android.net.Uri
+import androidx.core.net.toUri
 import com.hippo.unifile.FakeSafDirUniFile
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkStatic
 import io.mockk.unmockkStatic
+import io.mockk.verify
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -55,6 +58,7 @@ class DownloadedChapterResolutionTest {
 
     @AfterEach
     fun tearDown() {
+        LocalPdfPages.clearPdfRenderers()
         unmockkStatic(Uri::class)
     }
 
@@ -312,8 +316,12 @@ class DownloadedChapterResolutionTest {
 
         assertTrue("file+zip:///storage/emulated/0/novel/0_Ch_1.cbz#00000000.html".looksLikeNovelUrl())
         assertTrue("content+zip://authority/doc#chapter.xhtml".looksLikeNovelUrl())
+        assertTrue("file:///storage/emulated/0/novels/book.epub#chapter/0".looksLikeNovelUrl())
+        assertTrue("file:///storage/emulated/0/novels/ch1.txt#text".looksLikeNovelUrl())
         assertFalse("content+zip://authority/doc#00001.jpg".looksLikeNovelUrl())
         assertFalse("file+pdf:///storage/emulated/0/book.pdf#0".looksLikeNovelUrl())
+        assertFalse("https://mangasite.example/manga/891#chapter/1".looksLikeNovelUrl())
+        assertFalse("https://mangasite.example/manga/891#text".looksLikeNovelUrl())
     }
 
     @Test
@@ -338,23 +346,121 @@ class DownloadedChapterResolutionTest {
         assertNull(manager.findPageEbookFile(101L, 9003L))
     }
 
+    @Test
+    fun `deleting downloaded PDF chapter or parent folder evicts cached PdfRenderers`() = runBlocking {
+        val backingDir = File(tempDir, "pdf_evict_dir").apply { mkdirs() }
+        val cacheDir = File(tempDir, "pdf_evict_cache").apply { mkdirs() }
+        val safRootUri = Uri.parse(
+            "content://com.android.externalstorage.documents/tree/primary%3AManga/document/primary%3AManga%2FWork1",
+        )
+        val safRoot = FakeSafDirUniFile(
+            treeUri = safRootUri,
+            backingDir = backingDir,
+        )
+        val chapter15 = ContentChapter(
+            id = 1500L,
+            title = "Chapter 15",
+            number = 15f,
+            volume = 0,
+            url = "https://example.org/ch/15",
+            scanlator = null,
+            uploadDate = 0L,
+            branch = null,
+            source = ContentSource("TEST_MANGA"),
+        )
+        val manga = sampleContent(
+            id = 42L,
+            title = "Sample Manga",
+            source = ContentSource("TEST_MANGA"),
+            chapters = listOf(chapter15),
+        )
+        val output = LocalContentDirOutput(safRoot, manga, cacheDir)
+        val pdfSource = File(tempDir, "source_evict.pdf").apply {
+            writeBytes("%PDF-1.7\n1 0 obj\n<<>>\nendobj\n".toByteArray())
+        }
+        output.addPageEbookChapter(IndexedValue(0, chapter15), pdfSource, "pdf")
+
+        val storedPdfFile = File(backingDir, "0_Chapter_15.pdf")
+        assertTrue(storedPdfFile.isFile)
+        val safChapterUri = checkNotNull(safRoot.findFile("0_Chapter_15.pdf")).uri
+
+        val safRenderer = mockk<PdfRenderer>(relaxed = true)
+        val fileRenderer = mockk<PdfRenderer>(relaxed = true)
+        LocalPdfPages.putRendererForTest(safChapterUri, safRenderer)
+        LocalPdfPages.putRendererForTest(storedPdfFile.toUri(), fileRenderer)
+        assertTrue(LocalPdfPages.hasCachedRenderer(safChapterUri))
+        assertTrue(LocalPdfPages.hasCachedRenderer(storedPdfFile.toUri()))
+
+        output.deleteChapters(setOf(1500L))
+
+        assertFalse(storedPdfFile.exists())
+        assertFalse(LocalPdfPages.hasCachedRenderer(safChapterUri))
+        assertFalse(LocalPdfPages.hasCachedRenderer(storedPdfFile.toUri()))
+        verify(exactly = 1) { safRenderer.close() }
+        verify(exactly = 1) { fileRenderer.close() }
+
+        val childUri = Uri.parse("${safRootUri}%2F1_Chapter_16.pdf")
+        val siblingUri = Uri.parse(
+            "content://com.android.externalstorage.documents/tree/primary%3AManga/document/primary%3AManga%2FWork10%2F1_Chapter_16.pdf",
+        )
+        val childRenderer = mockk<PdfRenderer>(relaxed = true)
+        val siblingRenderer = mockk<PdfRenderer>(relaxed = true)
+        LocalPdfPages.putRendererForTest(childUri, childRenderer)
+        LocalPdfPages.putRendererForTest(siblingUri, siblingRenderer)
+
+        LocalPdfPages.evictPdfRenderersUnder(safRootUri)
+
+        assertFalse(LocalPdfPages.hasCachedRenderer(childUri))
+        assertTrue(LocalPdfPages.hasCachedRenderer(siblingUri))
+        verify(exactly = 1) { childRenderer.close() }
+        verify(exactly = 0) { siblingRenderer.close() }
+    }
+
     private fun uri(value: String): Uri {
         val parsed = URI(value)
         return mockk<Uri>().also { result ->
             every { result.toString() } returns value
             every { result.scheme } returns parsed.scheme
+            every { result.authority } returns parsed.authority
+            every { result.encodedAuthority } returns parsed.rawAuthority
             every { result.path } returns parsed.path
+            every { result.encodedPath } returns parsed.rawPath
+            every { result.query } returns parsed.query
+            every { result.encodedQuery } returns parsed.rawQuery
+            every { result.schemeSpecificPart } returns parsed.schemeSpecificPart
+            every { result.encodedSchemeSpecificPart } returns parsed.rawSchemeSpecificPart
             every { result.fragment } returns parsed.fragment
             every { result.encodedFragment } returns parsed.rawFragment
             every { result.buildUpon() } answers {
-                var scheme = parsed.scheme
-                var fragment = parsed.rawFragment
+                var scheme: String? = parsed.scheme
+                var encodedFragment: String? = parsed.rawFragment
                 mockk<Uri.Builder>().also { builder ->
-                    every { builder.scheme(any()) } answers { scheme = firstArg(); builder }
-                    every { builder.fragment(any()) } answers { fragment = firstArg(); builder }
-                    every { builder.encodedFragment(any()) } answers { fragment = firstArg(); builder }
+                    every { builder.scheme(any()) } answers {
+                        scheme = args[0] as String?
+                        builder
+                    }
+                    every { builder.fragment(any()) } answers {
+                        encodedFragment = (args[0] as String?)?.let { raw ->
+                            URI("x", "//a", raw).rawFragment
+                        }
+                        builder
+                    }
+                    every { builder.encodedFragment(any()) } answers {
+                        encodedFragment = args[0] as String?
+                        builder
+                    }
                     every { builder.build() } answers {
-                        uri(URI(scheme, parsed.authority, parsed.path, parsed.query, fragment).toString())
+                        uri(
+                            buildString {
+                                if (!scheme.isNullOrEmpty()) {
+                                    append(scheme).append(':')
+                                }
+                                append(parsed.rawSchemeSpecificPart)
+                                if (encodedFragment != null) {
+                                    append('#').append(encodedFragment)
+                                }
+                            },
+                        )
                     }
                 }
             }

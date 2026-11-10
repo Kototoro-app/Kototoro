@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.reader.ui
 
+import org.skepsun.kototoro.local.data.LocalPdfPages
 import org.skepsun.kototoro.core.prefs.isLight
 import android.app.assist.AssistContent
 import android.content.Intent
@@ -1549,6 +1550,7 @@ class ReaderActivity :
     override fun onDestroy() {
         if (isFinishing && !isChangingConfigurations) {
             resetTranslationSession()
+            LocalPdfPages.clearPdfRenderers()
         }
         super.onDestroy()
     }

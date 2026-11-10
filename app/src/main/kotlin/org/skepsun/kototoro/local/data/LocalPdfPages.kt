@@ -83,7 +83,12 @@ object LocalPdfPages {
 
     private const val MAX_CACHED_PDF_RENDERERS = 4
 
-    private class CachedPdfRenderer(val renderer: PdfRenderer) {
+    private data class FileStamp(val lastModified: Long, val length: Long)
+
+    private class CachedPdfRenderer(
+        val renderer: PdfRenderer,
+        val fileStamp: FileStamp?,
+    ) {
         val renderLock = Any()
         var activeCount = 0
         var evicted = false
@@ -99,6 +104,7 @@ object LocalPdfPages {
     fun getPageCount(file: File): Int {
         return withCachedRenderer(
             key = file.toUri().toString(),
+            expectedStamp = file.currentStamp(),
             openDescriptor = { ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY) },
         ) { renderer ->
             renderer.pageCount
@@ -109,6 +115,7 @@ object LocalPdfPages {
         val underlying = uri.toUnderlyingPdfUri()
         return withCachedRenderer(
             key = underlying.toString(),
+            expectedStamp = null,
             openDescriptor = {
                 contentResolver.openFileDescriptor(underlying, "r")
                     ?: throw IOException("Unable to open PDF descriptor: $uri")
@@ -174,16 +181,23 @@ object LocalPdfPages {
             "PDF page URI has no valid page index: $pageUri"
         }
         val underlying = pageUri.toUnderlyingPdfUri()
+        val backingFile = if (pageUri.scheme == URI_SCHEME_PDF) {
+            val path = requireNotNull(underlying.path) {
+                "PDF file URI path is null: $pageUri"
+            }
+            File(path)
+        } else {
+            null
+        }
         return withCachedRenderer(
             key = underlying.toString(),
+            expectedStamp = backingFile?.currentStamp(),
             openDescriptor = {
                 when (pageUri.scheme) {
-                    URI_SCHEME_PDF -> {
-                        val path = requireNotNull(underlying.path) {
-                            "PDF file URI path is null: $pageUri"
-                        }
-                        ParcelFileDescriptor.open(File(path), ParcelFileDescriptor.MODE_READ_ONLY)
-                    }
+                    URI_SCHEME_PDF -> ParcelFileDescriptor.open(
+                        requireNotNull(backingFile),
+                        ParcelFileDescriptor.MODE_READ_ONLY,
+                    )
 
                     URI_SCHEME_CONTENT_PDF -> {
                         contentResolver.openFileDescriptor(underlying, "r")
@@ -218,6 +232,11 @@ object LocalPdfPages {
         }
     }
 
+    /** Drops the cached renderer for [file] once any in-flight page render finishes. */
+    fun evictPdfRenderer(file: File) {
+        evictPdfRenderer(file.toUri())
+    }
+
     /** Drops the cached renderer for [pageUri] once any in-flight page render finishes. */
     fun evictPdfRenderer(pageUri: Uri) {
         val toClose = synchronized(cacheLock) {
@@ -226,6 +245,29 @@ object LocalPdfPages {
             }?.takeIf { it.activeCount == 0 }
         }
         toClose?.renderer?.close()
+    }
+
+    /** Drops cached renderers for [rootUri] itself and any child PDF documents beneath it. */
+    fun evictPdfRenderersUnder(rootUri: Uri) {
+        val base = rootUri.toUnderlyingPdfUri().toString().trimEnd('/')
+        if (base.isEmpty()) return
+        val slashPrefix = "$base/"
+        val encodedSlashUpper = "$base%2F"
+        val encodedSlashLower = "$base%2f"
+        val idleToClose = synchronized(cacheLock) {
+            val matchingKeys = pdfRenderers.keys.filter { key ->
+                key == base ||
+                    key.startsWith(slashPrefix) ||
+                    key.startsWith(encodedSlashUpper) ||
+                    key.startsWith(encodedSlashLower)
+            }
+            matchingKeys.mapNotNull { key ->
+                pdfRenderers.remove(key)?.also { entry ->
+                    entry.evicted = true
+                }?.takeIf { it.activeCount == 0 }
+            }
+        }
+        idleToClose.forEach { it.renderer.close() }
     }
 
     /** Drops all cached renderers and closes idle descriptors immediately. */
@@ -241,21 +283,47 @@ object LocalPdfPages {
         idle.forEach { it.renderer.close() }
     }
 
+    internal fun putRendererForTest(uri: Uri, renderer: PdfRenderer) {
+        synchronized(cacheLock) {
+            pdfRenderers[uri.toUnderlyingPdfUri().toString()] = CachedPdfRenderer(renderer, null)
+        }
+    }
+
+    internal fun hasCachedRenderer(uri: Uri): Boolean = synchronized(cacheLock) {
+        val entry = pdfRenderers[uri.toUnderlyingPdfUri().toString()]
+        entry != null && !entry.evicted
+    }
+
+    private fun File.currentStamp(): FileStamp = FileStamp(lastModified(), length())
+
     private inline fun <T> withCachedRenderer(
         key: String,
+        expectedStamp: FileStamp?,
         openDescriptor: () -> ParcelFileDescriptor,
         block: (PdfRenderer) -> T,
     ): T {
-        var evictedIdle: CachedPdfRenderer? = null
+        var staleIdleToClose: CachedPdfRenderer? = null
         val entry = synchronized(cacheLock) {
             val existing = pdfRenderers[key]
             if (existing != null && !existing.evicted) {
-                existing.activeCount++
-                existing
+                if (expectedStamp != null && existing.fileStamp != expectedStamp) {
+                    pdfRenderers.remove(key)
+                    existing.evicted = true
+                    if (existing.activeCount == 0) {
+                        staleIdleToClose = existing
+                    }
+                    null
+                } else {
+                    existing.activeCount++
+                    existing
+                }
             } else {
                 null
             }
+        }?.also {
+            staleIdleToClose?.renderer?.close()
         } ?: run {
+            staleIdleToClose?.renderer?.close()
             val descriptor = openDescriptor()
             val created = try {
                 PdfRenderer(descriptor)
@@ -264,14 +332,21 @@ object LocalPdfPages {
                 throw e
             }
             var duplicateToClose: PdfRenderer? = null
+            var evictedIdle: CachedPdfRenderer? = null
             val chosen = synchronized(cacheLock) {
                 val raced = pdfRenderers[key]
-                if (raced != null && !raced.evicted) {
+                if (raced != null && !raced.evicted && (expectedStamp == null || raced.fileStamp == expectedStamp)) {
                     raced.activeCount++
                     duplicateToClose = created
                     raced
                 } else {
-                    if (pdfRenderers.size >= MAX_CACHED_PDF_RENDERERS) {
+                    if (raced != null) {
+                        pdfRenderers.remove(key)
+                        raced.evicted = true
+                        if (raced.activeCount == 0) {
+                            evictedIdle = raced
+                        }
+                    } else if (pdfRenderers.size >= MAX_CACHED_PDF_RENDERERS) {
                         val eldestKey = pdfRenderers.keys.first()
                         val eldest = pdfRenderers.remove(eldestKey)
                         if (eldest != null) {
@@ -281,7 +356,7 @@ object LocalPdfPages {
                             }
                         }
                     }
-                    CachedPdfRenderer(created).also {
+                    CachedPdfRenderer(created, expectedStamp).also {
                         it.activeCount = 1
                         pdfRenderers[key] = it
                     }

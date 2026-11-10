@@ -13,7 +13,9 @@ import org.skepsun.kototoro.core.util.ext.deleteAwait
 import org.skepsun.kototoro.core.util.ext.isImage
 import org.skepsun.kototoro.core.util.ext.toFileNameSafe
 import org.skepsun.kototoro.core.zip.ZipOutput
+import android.net.Uri
 import org.skepsun.kototoro.local.data.ContentIndex
+import org.skepsun.kototoro.local.data.LocalPdfPages
 import org.skepsun.kototoro.local.data.input.LocalContentParser
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentChapter
@@ -159,7 +161,11 @@ class LocalContentDirOutput(
         }
         // Already gone (removed by hand or by an interrupted earlier attempt): nothing left to delete.
         val chapterFile = rootFile.resolveRelative(fileName)?.takeIf { it.exists() } ?: return
+        val chapterUri = runCatching { chapterFile.uri }.getOrNull()
+        val chapterPath = chapterFile.filePath
         check(chapterFile.delete()) { "Failed to delete chapter file: $chapterFile" }
+        chapterUri?.let(LocalPdfPages::evictPdfRenderer)
+        chapterPath?.let { path -> LocalPdfPages.evictPdfRenderer(File(path)) }
     }
 
     private fun UniFile.resolveRelative(relativePath: String): UniFile? {
@@ -205,11 +211,17 @@ class LocalContentDirOutput(
     ) = mutex.withLock {
         val safeExtension = extension.trimStart('.').lowercase().ifEmpty { "pdf" }
         val targetName = chapterFileNameWithExtension(chapter, safeExtension)
+        var targetUri: Uri? = null
+        var targetPath: String? = null
         val actualName = runInterruptible(Dispatchers.IO) {
             val target = rootFile.createFileOrThrow(targetName)
             sourceFile.inputStream().use { input -> target.openOutputStream().use(input::copyTo) }
+            targetUri = runCatching { target.uri }.getOrNull()
+            targetPath = target.filePath
             target.name?.takeIf(String::isNotBlank) ?: targetName
         }
+        targetUri?.let(LocalPdfPages::evictPdfRenderer)
+        targetPath?.let { path -> LocalPdfPages.evictPdfRenderer(File(path)) }
         index.addChapter(chapter, actualName, null)
         index.setChapterFileName(chapter.value.id, actualName)
         flushIndex()

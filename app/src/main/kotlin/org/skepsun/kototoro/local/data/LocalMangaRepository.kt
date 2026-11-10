@@ -238,6 +238,7 @@ class LocalMangaRepository @Inject constructor(
             file.deleteAwait()
         }
         if (result) {
+            LocalPdfPages.evictPdfRenderersUnder(uri)
             localContentIndex.delete(manga.id)
             localStorageChanges.emit(null)
         }
