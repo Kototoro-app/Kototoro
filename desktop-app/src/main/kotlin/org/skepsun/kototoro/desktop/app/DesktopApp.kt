@@ -244,7 +244,7 @@ internal fun DesktopSourcePane(controller: DesktopController, state: DesktopAppS
                 fileFilter = FileNameExtensionFilter(desktopText("browse.importFilter"), "jar", "apk", "cs3")
             }
             if (chooser.showOpenDialog(null) == JFileChooser.APPROVE_OPTION) controller.importJar(chooser.selectedFile.toPath())
-        }, enabled = enabled, modifier = Modifier.fillMaxWidth()) { Text(desktopText("browse.importJar")) }
+        }, enabled = enabled, modifier = Modifier.fillMaxWidth()) { Text(desktopText("browse.importExtension")) }
         HorizontalDivider()
         Text(desktopText("browse.sources", sources.size), fontWeight = FontWeight.SemiBold)
         DesktopSearchField(filter, { filter = it }, desktopText("browse.findSource"), modifier = Modifier.fillMaxWidth())
@@ -302,7 +302,7 @@ internal fun DesktopPageBar(bar: @Composable () -> Unit, modifier: Modifier = Mo
 private fun Header(state: DesktopAppState, controller: DesktopController, enabled: Boolean) {
     val title = when (state.screen) {
         DesktopScreen.HOME -> desktopText("nav.home")
-        DesktopScreen.FEED -> desktopText("nav.subscriptions")
+        DesktopScreen.FEED -> AndroidStrings["feed"]
         DesktopScreen.UPDATED -> AndroidStrings["updated"]
         DesktopScreen.SUGGESTIONS -> AndroidStrings["suggestions"]
         DesktopScreen.EXPLORE -> state.selectedSource?.displayName ?: desktopText("screens.browseSource")

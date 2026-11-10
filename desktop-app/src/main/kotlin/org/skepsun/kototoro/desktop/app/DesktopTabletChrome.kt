@@ -137,7 +137,7 @@ internal fun desktopNavItemLabel(item: DesktopNavItem): String = when (item) {
     DesktopNavItem.FAVOURITES -> desktopText("nav.favourites")
     DesktopNavItem.BROWSE -> desktopText("nav.browse")
     DesktopNavItem.HISTORY -> desktopText("nav.history")
-    DesktopNavItem.SUBSCRIPTIONS -> desktopText("nav.subscriptions")
+    DesktopNavItem.SUBSCRIPTIONS -> AndroidStrings["feed"]
     // Android's `NavItem.BOOKMARKS` takes `R.string.notes` for the same destination.
     DesktopNavItem.BOOKMARKS -> AndroidStrings["notes"]
     // Android's `NavItem.UPDATED` label is `R.string.updated`.

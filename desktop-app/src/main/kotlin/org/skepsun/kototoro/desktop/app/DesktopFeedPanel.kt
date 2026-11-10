@@ -96,7 +96,7 @@ internal fun DesktopFeedPanel(controller: DesktopController, state: DesktopAppSt
         topBar = {
             Box(Modifier.fillMaxWidth().padding(top = inset, bottom = 12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    TopBarTitleBlock(desktopText("nav.subscriptions"))
+                    TopBarTitleBlock(AndroidStrings["feed"])
                     Spacer(Modifier.weight(1f))
                     DesktopSourceFilterControls(filter, state.sources, controller::feedFilter, enabled, "feed")
                     Button({ controller.checkUpdates() }, enabled = enabled, modifier = Modifier.testTag("feed-check")) {
