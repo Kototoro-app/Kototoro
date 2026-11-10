@@ -510,7 +510,9 @@ class DiscoverViewModel @Inject constructor(
         categories: List<TrackingSiteCategory>,
         currentTab: BrowseGroupTab,
     ): List<TrackingSiteCategory> {
-        val uniqueCategories = categories.distinctBy { it.id }
+        val uniqueCategories = categories.distinctBy { it.id }.filter {
+            org.skepsun.kototoro.core.model.ReaderDiscoveryPolicy.acceptsCategory(it.id, service.name)
+        }
         if (currentTab == BrowseGroupTab.All) {
             return uniqueCategories.withScheduleCategoryFirst(service)
         }

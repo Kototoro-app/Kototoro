@@ -520,6 +520,10 @@ class DefaultTrackingSiteDiscoveryService @Inject constructor(
     }
 
     override suspend fun getTrending(catalog: TrackingSiteCatalog): List<TrackingSiteItem> {
+        if (!org.skepsun.kototoro.core.model.ReaderDiscoveryPolicy.acceptsCategory(catalog.category, catalog.service.name) ||
+            catalog.contentType in VIDEO_CONTENT_TYPES
+        ) return emptyList()
+        if (catalog.contentType == null) return getTrending(catalog.copy(contentType = ContentType.MANGA))
         if (catalog.service == ScrobblerService.KITSU) {
             return getKitsuTrending(catalog)
         }
@@ -575,8 +579,9 @@ class DefaultTrackingSiteDiscoveryService @Inject constructor(
             return getTrending(catalog)
         }
 
-        val searchAnime = catalog.contentType == null || catalog.contentType in VIDEO_CONTENT_TYPES
-        val searchManga = catalog.contentType == null || catalog.contentType !in VIDEO_CONTENT_TYPES
+        if (catalog.contentType in VIDEO_CONTENT_TYPES || catalog.service == ScrobblerService.SIMKL) return emptyList()
+        val searchAnime = false
+        val searchManga = true
 
         if (catalog.service == ScrobblerService.KITSU) {
             val offset = catalog.page * 20

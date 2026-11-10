@@ -91,3 +91,16 @@ Git HTTPS et plusieurs téléchargements Maven ont ensuite répondu HTTP 503 dan
 cloud. La publication a continué par les API de l’intégration GitHub, en vérifiant l’égalité
 du SHA de l’arbre source et en conservant les anciens commits locaux sous
 `refs/reader-edition/local-before-api`. La branche stable reste intacte.
+
+## Découverte des services de suivi
+
+La vérification des points d’entrée a trouvé une seconde cause d’exposition de catalogues
+anime : DiscoverViewModel retournait toutes les catégories dans l’onglet Tous et réintroduisait
+les catégories originales quand un filtre ne trouvait rien. La politique ReaderDiscoveryPolicy
+filtre maintenant les catégories avant ces deux chemins. Les liens directs sont contrôlés avant
+l’affichage du cache. Les recherches de métadonnées ne demandent plus de résultats anime, et les
+catalogues sans type explicite utilisent le format manga.
+
+Dix-huit tests ciblés ont été compilés avec le compilateur Kotlin 2.4.0 puis exécutés sous
+JUnit Platform 1.8.2 sur les sources réelles : 18 réussis, aucun ignoré. Ce contrôle isolé
+n’est pas une validation Gradle/Android ni un parcours UX. Le pipeline complet reste la référence.

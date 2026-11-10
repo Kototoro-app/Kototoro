@@ -77,6 +77,11 @@ class DiscoverCategoryViewModel @Inject constructor(
 
     fun initialize(serviceName: String, categoryId: String) {
         val service = ScrobblerService.entries.find { it.name == serviceName } ?: return
+        if (!org.skepsun.kototoro.core.model.ReaderDiscoveryPolicy.acceptsCategory(categoryId, service.name)) {
+            _items.value = emptyList()
+            _contentState.value = emptyList()
+            return
+        }
         if (currentService == service && currentCategory == categoryId) return
         currentService = service
         currentCategory = categoryId
