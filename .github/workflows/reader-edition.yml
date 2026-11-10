@@ -43,6 +43,8 @@ jobs:
         run: npm run check
       - name: Audit development gateway dependencies
         run: npm audit --audit-level=high
+      - name: Start and probe the local gateway without provider credentials
+        run: npm run smoke
 
   verify:
     runs-on: ubuntu-24.04

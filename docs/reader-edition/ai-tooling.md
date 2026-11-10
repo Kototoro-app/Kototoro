@@ -15,6 +15,7 @@ Node.js 24 est recommandé. Depuis la racine du dépôt :
 ```sh
 npm ci --prefix tools/ai
 npm run --prefix tools/ai check
+(cd tools/ai && npm run smoke)
 npm run --prefix tools/ai start
 ```
 
@@ -57,3 +58,9 @@ Nouvel audit après correction : **0 critique, 0 élevée, 0 modérée, 7 faible
 Mesure : `npm audit --package-lock-only --json --prefix tools/ai`, 10 novembre 2026.
 Ces sept avis faibles restent à suivre. Le résultat décrit le verrou npm, pas un test
 d’inférence ni une validation exhaustive du tableau de bord OmniRoute.
+
+Le projet fournit aussi l’allowlist des scripts npm préconisée par OmniRoute pour préparer
+les fichiers runtime requis. Le contrôle `smoke` démarre le mode headless et interroge
+`/v1/models` sans identifiants fournisseur ; HTTP 200 ou 401 confirme la disponibilité
+du point d’entrée. Le flux du serveur reste privé pour ne pas exposer d’éventuels secrets
+générés au premier démarrage. Ce contrôle ne valide pas une requête d’inférence.
