@@ -78,9 +78,7 @@ import org.skepsun.kototoro.tsundoku.TsundokuExtensionManager
 /** Kinds whose packages (JAR/APK/Cloudstream) are installed from repos. */
 private val INSTALLABLE_EXTERNAL_KINDS = listOf(
     UnifiedSourceKind.JAR,
-    UnifiedSourceKind.CLOUDSTREAM,
     UnifiedSourceKind.MIHON,
-    UnifiedSourceKind.ANIYOMI,
     UnifiedSourceKind.IREADER,
     UnifiedSourceKind.TSUNDOKU,
 )
@@ -88,7 +86,6 @@ private val INSTALLABLE_EXTERNAL_KINDS = listOf(
 /** Kinds installed as APKs, where the user can pick sideload vs system install. */
 private val APK_INSTALL_KINDS = setOf(
     UnifiedSourceKind.MIHON,
-    UnifiedSourceKind.ANIYOMI,
     UnifiedSourceKind.IREADER,
     UnifiedSourceKind.TSUNDOKU,
 )
@@ -96,7 +93,6 @@ private val APK_INSTALL_KINDS = setOf(
 /** JSON-based kinds whose "install" = importing the source list into the app. */
 private val JSON_INSTALL_KINDS = listOf(
     UnifiedSourceKind.LEGADO,
-    UnifiedSourceKind.TVBOX,
     UnifiedSourceKind.LNREADER,
 )
 
@@ -204,7 +200,7 @@ class WelcomeViewModel @Inject constructor(
     @LocalizedAppContext private val context: Context,
 ) : BaseViewModel() {
 
-    private val supportedContentTypes = listOf(ContentType.MANGA, ContentType.NOVEL, ContentType.VIDEO)
+    private val supportedContentTypes = listOf(ContentType.MANGA, ContentType.NOVEL)
 
     private var updateJob: Job? = null
     private var planJob: Job? = null

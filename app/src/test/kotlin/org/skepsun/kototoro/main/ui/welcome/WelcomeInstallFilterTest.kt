@@ -58,9 +58,9 @@ class WelcomeInstallFilterTest {
         assertTrue(WelcomeInstallFilter.excludesKind(UnifiedSourceKind.IREADER, videoOnly))
         assertTrue(WelcomeInstallFilter.excludesKind(UnifiedSourceKind.LNREADER, videoOnly))
 
-        assertFalse(WelcomeInstallFilter.excludesKind(UnifiedSourceKind.ANIYOMI, videoOnly))
-        assertFalse(WelcomeInstallFilter.excludesKind(UnifiedSourceKind.CLOUDSTREAM, videoOnly))
-        assertFalse(WelcomeInstallFilter.excludesKind(UnifiedSourceKind.TVBOX, videoOnly))
+        assertTrue(WelcomeInstallFilter.excludesKind(UnifiedSourceKind.ANIYOMI, videoOnly))
+        assertTrue(WelcomeInstallFilter.excludesKind(UnifiedSourceKind.CLOUDSTREAM, videoOnly))
+        assertTrue(WelcomeInstallFilter.excludesKind(UnifiedSourceKind.TVBOX, videoOnly))
     }
 
     @Test

@@ -39,6 +39,9 @@ internal object WelcomeInstallFilter {
      * An empty expanded selection excludes every ecosystem with a known content family.
      */
     fun excludesKind(kind: UnifiedSourceKind, expandedSelectedTypes: Set<ContentType>): Boolean {
+        if (kind == UnifiedSourceKind.ANIYOMI || kind == UnifiedSourceKind.CLOUDSTREAM || kind == UnifiedSourceKind.TVBOX) {
+            return true
+        }
         if (expandedSelectedTypes.isEmpty()) {
             return contentTypesOf(kind).isNotEmpty()
         }

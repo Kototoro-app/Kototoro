@@ -104,3 +104,8 @@ catalogues sans type explicite utilisent le format manga.
 Dix-huit tests ciblés ont été compilés avec le compilateur Kotlin 2.4.0 puis exécutés sous
 JUnit Platform 1.8.2 sur les sources réelles : 18 réussis, aucun ignoré. Ce contrôle isolé
 n’est pas une validation Gradle/Android ni un parcours UX. Le pipeline complet reste la référence.
+
+Le parcours de premier lancement propose uniquement manga et roman. Ses listes d’écosystèmes
+installables retirent Aniyomi, TVBox et Cloudstream. Le filtre d’installation refuse aussi
+ces écosystèmes si une ancienne sélection vidéo est restaurée. Les tests des filtres de
+langue et de compatibilité manga/roman sont conservés.
