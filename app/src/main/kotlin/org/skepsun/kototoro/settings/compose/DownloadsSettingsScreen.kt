@@ -28,7 +28,6 @@ import org.skepsun.kototoro.core.ui.settings.DownloadSpeedSettingsUiState
 data class DownloadsSettingsUiState(
     val mangaDirectoriesSummary: String,
     val preferredDownloadFormat: DownloadFormat,
-    val preferredVideoQuality: String,
     val isNovelImagesEnabled: Boolean,
     val allowDownloadOnMeteredNetwork: TriStateOption,
     val isDozeIgnoreVisible: Boolean,
@@ -52,7 +51,6 @@ fun DownloadsSettingsScreen(
     meteredNetworkOptions: List<SettingsChoiceOption<TriStateOption>>,
     onMangaDirectoriesClick: () -> Unit,
     onPreferredDownloadFormatChange: (DownloadFormat) -> Unit,
-    onPreferredVideoQualityChange: (String) -> Unit,
     onNovelImagesChange: (Boolean) -> Unit,
     onAllowMeteredNetworkChange: (TriStateOption) -> Unit,
     onIgnoreDozeClick: () -> Unit,

@@ -206,10 +206,6 @@ fun StorageAndNetworkSettingsRoute(
         (settings.observeAsState(AppSettings.KEY_READER_SUPER_RESOLUTION_CACHE_LIMIT) {
             settings.prefs.getString(AppSettings.KEY_READER_SUPER_RESOLUTION_CACHE_LIMIT, "512") ?: "512"
         }.value.toIntOrNull() ?: 512) +
-        settings.observeAsState(AppSettings.KEY_VIDEO_CACHE_MB) { videoCacheSizeMb }.value +
-        settings.observeAsState(AppSettings.KEY_VIDEO_PROXY_CACHE_MB) { videoProxyCacheSizeMb }.value +
-        settings.observeAsState(AppSettings.KEY_TORRENT_CACHE_MB) { torrentCacheSizeMb }.value +
-        settings.observeAsState(AppSettings.KEY_VIDEO_DANMAKU_CACHE_MB) { videoDanmakuCacheSizeMb }.value +
         settings.observeAsState(AppSettings.KEY_HTTP_CACHE_MB_LIMIT) { httpCacheSizeMb }.value
 
     val cacheLimitsSummary = context.getString(
@@ -395,7 +391,7 @@ fun StorageAndNetworkSettingsRoute(
             item {
                 SettingsChoicePreference(
                     title = context.getString(R.string.pref_bangumi_mirror),
-                    iconRes = R.drawable.ic_content_video,
+                    iconRes = R.drawable.ic_content_manga,
                     value = bangumiMirror,
                     options = bangumiMirrorOptions,
                     summary = context.getString(R.string.pref_bangumi_mirror_summary),
@@ -535,14 +531,6 @@ fun CacheLimitsSettingsRoute(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val videoCacheMb = settings.observeAsState(AppSettings.KEY_VIDEO_CACHE_MB) { videoCacheSizeMb }.value
-    val videoProxyCacheMb = settings.observeAsState(AppSettings.KEY_VIDEO_PROXY_CACHE_MB) {
-        videoProxyCacheSizeMb
-    }.value
-    val torrentCacheMb = settings.observeAsState(AppSettings.KEY_TORRENT_CACHE_MB) { torrentCacheSizeMb }.value
-    val videoDanmakuCacheMb = settings.observeAsState(AppSettings.KEY_VIDEO_DANMAKU_CACHE_MB) {
-        videoDanmakuCacheSizeMb
-    }.value
     val thumbsCacheMb = settings.observeAsState(AppSettings.KEY_THUMBS_CACHE_MB) { thumbsCacheSizeMb }.value
     val chapterThumbsCacheMb = settings.observeAsState(AppSettings.KEY_CHAPTER_THUMBS_CACHE_MB) {
         chapterThumbsCacheSizeMb
@@ -563,21 +551,20 @@ fun CacheLimitsSettingsRoute(
 
     val srMb = srCacheLimit.toIntOrNull() ?: 512
     val totalLimitMb = thumbsCacheMb + chapterThumbsCacheMb + faviconCacheMb + pagesCacheMb + novelCacheMb +
-        ttsCacheMb + srMb + videoCacheMb + videoProxyCacheMb +
-        torrentCacheMb + videoDanmakuCacheMb + httpCacheMb
+        ttsCacheMb + srMb + httpCacheMb
 
     val activePreset = when {
         thumbsCacheMb == 128 && chapterThumbsCacheMb == 32 && faviconCacheMb == 4 && pagesCacheMb == 128 && novelCacheMb == 64 &&
-            ttsCacheMb == 64 && srCacheLimit == "256" && videoCacheMb == 512 && videoProxyCacheMb == 512 &&
-            torrentCacheMb == 1024 && videoDanmakuCacheMb == 32 && httpCacheMb == 128 -> CacheLimitsPreset.COMPACT
+            ttsCacheMb == 64 && srCacheLimit == "256" &&
+            httpCacheMb == 128 -> CacheLimitsPreset.COMPACT
 
         thumbsCacheMb == 256 && chapterThumbsCacheMb == 64 && faviconCacheMb == 8 && pagesCacheMb == 200 && novelCacheMb == 100 &&
-            ttsCacheMb == 100 && srCacheLimit == "512" && videoCacheMb == 1024 && videoProxyCacheMb == 1024 &&
-            torrentCacheMb == 4096 && videoDanmakuCacheMb == 64 && httpCacheMb == 250 -> CacheLimitsPreset.BALANCED
+            ttsCacheMb == 100 && srCacheLimit == "512" &&
+            httpCacheMb == 250 -> CacheLimitsPreset.BALANCED
 
         thumbsCacheMb == 512 && chapterThumbsCacheMb == 256 && faviconCacheMb == 16 && pagesCacheMb == 1024 && novelCacheMb == 256 &&
-            ttsCacheMb == 256 && srCacheLimit == "1024" && videoCacheMb == 2048 && videoProxyCacheMb == 2048 &&
-            torrentCacheMb == 8192 && videoDanmakuCacheMb == 128 && httpCacheMb == 512 -> CacheLimitsPreset.PERFORMANCE
+            ttsCacheMb == 256 && srCacheLimit == "1024" &&
+            httpCacheMb == 512 -> CacheLimitsPreset.PERFORMANCE
 
         else -> CacheLimitsPreset.CUSTOM
     }
@@ -592,10 +579,6 @@ fun CacheLimitsSettingsRoute(
                 settings.novelCacheSizeMb = 64
                 settings.ttsCacheSizeMb = 64
                 settings.prefs.edit().putString(AppSettings.KEY_READER_SUPER_RESOLUTION_CACHE_LIMIT, "256").apply()
-                settings.videoCacheSizeMb = 512
-                settings.videoProxyCacheSizeMb = 512
-                settings.torrentCacheSizeMb = 1024
-                settings.videoDanmakuCacheSizeMb = 32
                 settings.httpCacheSizeMb = 128
             }
             CacheLimitsPreset.BALANCED -> {
@@ -606,10 +589,6 @@ fun CacheLimitsSettingsRoute(
                 settings.novelCacheSizeMb = 100
                 settings.ttsCacheSizeMb = 100
                 settings.prefs.edit().putString(AppSettings.KEY_READER_SUPER_RESOLUTION_CACHE_LIMIT, "512").apply()
-                settings.videoCacheSizeMb = 1024
-                settings.videoProxyCacheSizeMb = 1024
-                settings.torrentCacheSizeMb = 4096
-                settings.videoDanmakuCacheSizeMb = 64
                 settings.httpCacheSizeMb = 250
             }
             CacheLimitsPreset.PERFORMANCE -> {
@@ -620,10 +599,6 @@ fun CacheLimitsSettingsRoute(
                 settings.novelCacheSizeMb = 256
                 settings.ttsCacheSizeMb = 256
                 settings.prefs.edit().putString(AppSettings.KEY_READER_SUPER_RESOLUTION_CACHE_LIMIT, "1024").apply()
-                settings.videoCacheSizeMb = 2048
-                settings.videoProxyCacheSizeMb = 2048
-                settings.torrentCacheSizeMb = 8192
-                settings.videoDanmakuCacheSizeMb = 128
                 settings.httpCacheSizeMb = 512
             }
             CacheLimitsPreset.CUSTOM -> {}
@@ -832,44 +807,6 @@ fun CacheLimitsSettingsRoute(
                 onValueChange = {
                     settings.prefs.edit().putString(AppSettings.KEY_READER_SUPER_RESOLUTION_CACHE_LIMIT, it).apply()
                 },
-            ) }
-        }
-        SettingsPreferenceGroup(title = context.getString(R.string.video_caches)) {
-            item { SettingsSliderPreference(
-                title = context.getString(R.string.video_playback_cache_limit),
-                iconRes = R.drawable.ic_content_video,
-                value = videoCacheMb,
-                valueRange = 256..4096,
-                step = 128,
-                valueText = { formatCacheLimitMb(it) },
-                onValueChange = { settings.videoCacheSizeMb = it },
-            ) }
-            item { SettingsSliderPreference(
-                title = context.getString(R.string.video_proxy_cache_limit),
-                iconRes = R.drawable.ic_dns,
-                value = videoProxyCacheMb,
-                valueRange = 128..4096,
-                step = 128,
-                valueText = { formatCacheLimitMb(it) },
-                onValueChange = { settings.videoProxyCacheSizeMb = it },
-            ) }
-            item { SettingsSliderPreference(
-                title = context.getString(R.string.torrent_cache_limit),
-                iconRes = R.drawable.ic_network_cellular,
-                value = torrentCacheMb,
-                valueRange = 512..16384,
-                step = 512,
-                valueText = { formatCacheLimitMb(it) },
-                onValueChange = { settings.torrentCacheSizeMb = it },
-            ) }
-            item { SettingsSliderPreference(
-                title = context.getString(R.string.danmaku_cache_limit),
-                iconRes = R.drawable.ic_danmaku,
-                value = videoDanmakuCacheMb,
-                valueRange = 16..1024,
-                step = 16,
-                valueText = { formatCacheLimitMb(it) },
-                onValueChange = { settings.videoDanmakuCacheSizeMb = it },
             ) }
         }
         SettingsPreferenceGroup(title = context.getString(R.string.network)) {

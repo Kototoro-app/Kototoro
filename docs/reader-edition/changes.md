@@ -114,3 +114,15 @@ Le job instrumenté 129819529308 du pipeline 42813145069 a échoué avant l’ex
 le compilateur Kotlin a atteint le plafond de 2Go introduit par le workflow. Les commandes CI
 reprennent désormais les 6Go déjà prévus par gradle.properties. Le rapport ne présente pas cet
 échec de compilation comme un résultat de test appareil.
+
+## Dernière session et stockage
+
+Les raccourcis de reprise ignorent désormais les espaces retirés avant toute activation. Les
+fixtures de tests utilisent des romans pour vérifier la lecture hors ligne et les espaces actifs.
+Le dernier contrôle CI a compilé l’application, puis trouvé des références de tests aux anciens
+fournisseurs vidéo et à TorrentUtils. Ces références sont retirées avec leurs composants exclusifs.
+
+Les quotas de cache ne comprennent plus de réglages vidéo, torrent ou Danmaku. Les presets
+modifient uniquement les caches de lecture. Le diagnostic conserve le comptage des anciens fichiers
+sous « Autres données » et celui des anciens caches sous « Autres caches » ; il ne supprime rien.
+Les callbacks et observations de qualité vidéo devenus inutiles sont retirés des réglages de téléchargement.

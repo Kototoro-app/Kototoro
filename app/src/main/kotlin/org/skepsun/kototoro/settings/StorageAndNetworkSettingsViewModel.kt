@@ -70,16 +70,13 @@ class StorageAndNetworkSettingsViewModel @Inject constructor(
     private suspend fun loadStorageUsage(): StorageUsage {
         val localMangaSize = storageManager.computeStorageSize(StorageContentKind.MANGA)
         val localNovelSize = storageManager.computeStorageSize(StorageContentKind.NOVEL)
-        val localVideoSize = storageManager.computeStorageSize(StorageContentKind.VIDEO)
+        // Preserve and account for legacy files without exposing retired media controls.
+        val otherStoredFilesSize = storageManager.computeStorageSize(StorageContentKind.VIDEO)
 
         val thumbsCacheSize = storageManager.computeCacheSize(CacheDir.THUMBS)
         val faviconsCacheSize = storageManager.computeCacheSize(CacheDir.FAVICONS)
         val pagesCacheSize = storageManager.computeCacheSize(CacheDir.PAGES)
         val novelsCacheSize = storageManager.computeCacheSize(CacheDir.NOVELS)
-        val videoCacheSize = storageManager.computeCacheSize(CacheDir.VIDEO)
-        val videoProxyCacheSize = storageManager.computeCacheSize(CacheDir.VIDEO_PROXY)
-        val torrentCacheSize = storageManager.computeCacheSize(CacheDir.TORRENT)
-        val danmakuCacheSize = storageManager.computeCacheSize(CacheDir.DANMAKU)
         val ttsCacheSize = storageManager.computeCacheSize(CacheDir.TtsAudio)
         val srCacheSize = storageManager.computeCacheSize(CacheDir.SUPER_RESOLUTION)
         val httpCacheSize = httpCache.directory.computeSize()
@@ -91,10 +88,6 @@ class StorageAndNetworkSettingsViewModel @Inject constructor(
             faviconsCacheSize +
             pagesCacheSize +
             novelsCacheSize +
-            videoCacheSize +
-            videoProxyCacheSize +
-            torrentCacheSize +
-            danmakuCacheSize +
             ttsCacheSize +
             srCacheSize +
             httpCacheSize
@@ -102,15 +95,11 @@ class StorageAndNetworkSettingsViewModel @Inject constructor(
 
         val totalBytes = localMangaSize +
             localNovelSize +
-            localVideoSize +
+            otherStoredFilesSize +
             thumbsCacheSize +
             faviconsCacheSize +
             pagesCacheSize +
             novelsCacheSize +
-            videoCacheSize +
-            videoProxyCacheSize +
-            torrentCacheSize +
-            danmakuCacheSize +
             ttsCacheSize +
             srCacheSize +
             httpCacheSize +
@@ -131,15 +120,11 @@ class StorageAndNetworkSettingsViewModel @Inject constructor(
             items = listOf(
                 item(StorageUsageCategory.LOCAL_MANGA, localMangaSize),
                 item(StorageUsageCategory.LOCAL_NOVELS, localNovelSize),
-                item(StorageUsageCategory.LOCAL_VIDEOS, localVideoSize),
+                item(StorageUsageCategory.OTHER_STORAGE, otherStoredFilesSize),
                 item(StorageUsageCategory.THUMBS_CACHE, thumbsCacheSize),
                 item(StorageUsageCategory.FAVICONS_CACHE, faviconsCacheSize),
                 item(StorageUsageCategory.PAGES_CACHE, pagesCacheSize),
                 item(StorageUsageCategory.NOVELS_CACHE, novelsCacheSize),
-                item(StorageUsageCategory.VIDEO_CACHE, videoCacheSize),
-                item(StorageUsageCategory.VIDEO_PROXY_CACHE, videoProxyCacheSize),
-                item(StorageUsageCategory.TORRENT_CACHE, torrentCacheSize),
-                item(StorageUsageCategory.DANMAKU_CACHE, danmakuCacheSize),
                 item(StorageUsageCategory.TTS_CACHE, ttsCacheSize),
                 item(StorageUsageCategory.SUPER_RESOLUTION_CACHE, srCacheSize),
                 item(StorageUsageCategory.HTTP_CACHE, httpCacheSize),

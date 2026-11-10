@@ -31,7 +31,7 @@ class StorageUsagePieChartTest {
             items = listOf(
                 StorageUsage.Item(category = StorageUsageCategory.THUMBS_CACHE, bytes = 300L, percent = 0.3f),
                 StorageUsage.Item(category = StorageUsageCategory.PAGES_CACHE, bytes = 100L, percent = 0.1f),
-                StorageUsage.Item(category = StorageUsageCategory.VIDEO_CACHE, bytes = 0L, percent = 0f),
+                StorageUsage.Item(category = StorageUsageCategory.OTHER_STORAGE, bytes = 0L, percent = 0f),
                 StorageUsage.Item(category = StorageUsageCategory.AVAILABLE, bytes = 2000L, percent = 0.6f),
             ),
         )

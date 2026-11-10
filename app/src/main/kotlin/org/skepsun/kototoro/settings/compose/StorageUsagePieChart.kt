@@ -67,15 +67,11 @@ data class StoragePieChartData(
 internal fun categoryColor(category: StorageUsageCategory): Color = when (category) {
     StorageUsageCategory.LOCAL_MANGA -> Color(0xFF3F51B5) // Indigo
     StorageUsageCategory.LOCAL_NOVELS -> Color(0xFF009688) // Teal
-    StorageUsageCategory.LOCAL_VIDEOS -> Color(0xFFE91E63) // Pink
+    StorageUsageCategory.OTHER_STORAGE -> Color(0xFFE91E63) // Pink
     StorageUsageCategory.THUMBS_CACHE -> Color(0xFF2196F3) // Blue
     StorageUsageCategory.FAVICONS_CACHE -> Color(0xFF00BCD4) // Cyan
     StorageUsageCategory.PAGES_CACHE -> Color(0xFF4CAF50) // Green
     StorageUsageCategory.NOVELS_CACHE -> Color(0xFF8BC34A) // Light Green
-    StorageUsageCategory.VIDEO_CACHE -> Color(0xFFFF5722) // Deep Orange
-    StorageUsageCategory.VIDEO_PROXY_CACHE -> Color(0xFFFF9800) // Orange
-    StorageUsageCategory.TORRENT_CACHE -> Color(0xFF795548) // Brown
-    StorageUsageCategory.DANMAKU_CACHE -> Color(0xFF9C27B0) // Purple
     StorageUsageCategory.TTS_CACHE -> Color(0xFF673AB7) // Deep Purple
     StorageUsageCategory.SUPER_RESOLUTION_CACHE -> Color(0xFF03A9F4) // Light Blue
     StorageUsageCategory.HTTP_CACHE -> Color(0xFF607D8B) // Blue Grey
@@ -90,15 +86,11 @@ internal fun storageCategoryLabel(
 ): String = when (category) {
     StorageUsageCategory.LOCAL_MANGA -> context.getString(R.string.local_manga_storage)
     StorageUsageCategory.LOCAL_NOVELS -> context.getString(R.string.local_novel_storage)
-    StorageUsageCategory.LOCAL_VIDEOS -> context.getString(R.string.local_video_storage)
+    StorageUsageCategory.OTHER_STORAGE -> context.getString(R.string.other_storage)
     StorageUsageCategory.THUMBS_CACHE -> context.getString(R.string.thumbnails_cache)
     StorageUsageCategory.FAVICONS_CACHE -> context.getString(R.string.favicons_cache)
     StorageUsageCategory.PAGES_CACHE -> context.getString(R.string.pages_cache)
     StorageUsageCategory.NOVELS_CACHE -> context.getString(R.string.novel_reader_cache)
-    StorageUsageCategory.VIDEO_CACHE -> context.getString(R.string.video_playback_cache)
-    StorageUsageCategory.VIDEO_PROXY_CACHE -> context.getString(R.string.video_proxy_cache)
-    StorageUsageCategory.TORRENT_CACHE -> context.getString(R.string.torrent_cache)
-    StorageUsageCategory.DANMAKU_CACHE -> context.getString(R.string.danmaku_cache)
     StorageUsageCategory.TTS_CACHE -> context.getString(R.string.tts_audio_cache)
     StorageUsageCategory.SUPER_RESOLUTION_CACHE -> context.getString(R.string.reader_super_resolution_cache)
     StorageUsageCategory.HTTP_CACHE -> context.getString(R.string.network_cache)

@@ -63,8 +63,6 @@ fun DownloadsSettingsRoute(
     val context = LocalContext.current
     val preferredDownloadFormat =
         settings.observeAsState(AppSettings.KEY_DOWNLOADS_FORMAT) { preferredDownloadFormat }.value
-    val preferredVideoQuality =
-        settings.observeAsState(AppSettings.KEY_DOWNLOADS_VIDEO_QUALITY) { preferredDownloadVideoQuality }.value
     val isNovelImagesEnabled =
         settings.observeAsState(AppSettings.KEY_DOWNLOADS_NOVEL_IMAGES) { isDownloadNovelImagesEnabled }.value
     val allowDownloadOnMeteredNetwork =
@@ -104,7 +102,6 @@ fun DownloadsSettingsRoute(
     val state = DownloadsSettingsUiState(
         mangaDirectoriesSummary = mangaDirectoriesSummary,
         preferredDownloadFormat = preferredDownloadFormat,
-        preferredVideoQuality = preferredVideoQuality,
         isNovelImagesEnabled = isNovelImagesEnabled,
         allowDownloadOnMeteredNetwork = allowDownloadOnMeteredNetwork,
         isDozeIgnoreVisible = isDozeIgnoreAvailable(context, dozeRefreshKey),
@@ -150,15 +147,6 @@ fun DownloadsSettingsRoute(
         meteredNetworkOptions = meteredNetworkOptions,
         onMangaDirectoriesClick = onOpenMangaDirectories,
         onPreferredDownloadFormatChange = { settings.preferredDownloadFormat = it },
-        onPreferredVideoQualityChange = { value ->
-            settings.preferredDownloadVideoQuality = value
-                .split(',')
-                .map(String::trim)
-                .filter(String::isNotEmpty)
-                .distinct()
-                .joinToString(", ")
-                .ifBlank { "1080p, 720p, 480p" }
-        },
         onNovelImagesChange = { settings.isDownloadNovelImagesEnabled = it },
         onAllowMeteredNetworkChange = onAllowMeteredNetworkChange,
         onIgnoreDozeClick = {

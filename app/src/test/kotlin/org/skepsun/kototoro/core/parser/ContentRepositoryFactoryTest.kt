@@ -39,7 +39,6 @@ import org.skepsun.kototoro.parsers.model.NovelChapterContent
 import org.skepsun.kototoro.parsers.model.SortOrder
 import org.skepsun.kototoro.aniyomi.AniyomiExtensionManager
 import org.skepsun.kototoro.aniyomi.model.AniyomiAnimeSource
-import org.skepsun.kototoro.cloudstream.runtime.CloudstreamContentRepositoryProvider
 import org.skepsun.kototoro.ireader.IReaderExtensionManager
 import org.skepsun.kototoro.tracking.discovery.data.TrackingContentRepositoryProvider
 
@@ -86,9 +85,7 @@ class ContentRepositoryFactoryTest {
 			kotatsuContentRepositoryProvider,
 			testContentRepositoryProvider,
 			externalContentRepositoryProvider,
-			cloudstreamContentRepositoryProvider,
 			mihonContentRepositoryProvider,
-			aniyomiContentRepositoryProvider,
 			ireaderContentRepositoryProvider,
 			tsundokuContentRepositoryProvider,
 			jsonContentRepositoryProvider,
