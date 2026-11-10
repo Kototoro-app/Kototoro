@@ -167,8 +167,8 @@ class LocalListViewModel @Inject constructor(
         val types = when (tab) {
             BrowseGroupTab.Content -> setOf(ContentType.MANGA, ContentType.HENTAI_MANGA)
             BrowseGroupTab.Novel -> setOf(ContentType.NOVEL, ContentType.HENTAI_NOVEL)
-            BrowseGroupTab.Video -> setOf(ContentType.VIDEO, ContentType.HENTAI_VIDEO)
-            BrowseGroupTab.All -> emptySet()
+            BrowseGroupTab.Video -> org.skepsun.kototoro.core.model.ReaderContentPolicy.contentTypes
+            BrowseGroupTab.All -> org.skepsun.kototoro.core.model.ReaderContentPolicy.contentTypes
         }
         // 清除旧的内容类型过滤，再设置新的
         val currentFilter = filterCoordinator.snapshot().listFilter

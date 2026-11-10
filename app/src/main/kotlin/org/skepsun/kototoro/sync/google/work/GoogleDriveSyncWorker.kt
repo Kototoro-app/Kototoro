@@ -56,6 +56,7 @@ class GoogleDriveSyncWorker @AssistedInject constructor(
             }
             val constraints = Constraints.Builder()
                 .setRequiredNetworkType(if (settings.isWifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED)
+                .setRequiresBatteryNotLow(true)
                 .build()
             val request = PeriodicWorkRequestBuilder<GoogleDriveSyncWorker>(
                 intervalMinutes.toLong(),
@@ -64,7 +65,7 @@ class GoogleDriveSyncWorker @AssistedInject constructor(
                 .setConstraints(constraints)
                 .setInitialDelay(intervalMinutes.toLong(), TimeUnit.MINUTES)
                 .addTag(TAG_PERIODIC)
-                .setBackoffCriteria(BackoffPolicy.LINEAR, 30, TimeUnit.MINUTES)
+                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.MINUTES)
                 .build()
             workManager.enqueueUniquePeriodicWork(TAG_PERIODIC, ExistingPeriodicWorkPolicy.UPDATE, request).await()
         }

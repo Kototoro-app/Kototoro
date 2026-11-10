@@ -103,7 +103,7 @@ class LocalMangaRepository @Inject constructor(
         } else {
             emptySet()
         },
-        availableContentTypes = EnumSet.of(ContentType.MANGA, ContentType.NOVEL, ContentType.VIDEO),
+        availableContentTypes = EnumSet.of(ContentType.MANGA, ContentType.NOVEL),
     )
 
     override suspend fun getList(offset: Int, order: SortOrder?, filter: ContentListFilter?): List<Content> {
@@ -131,6 +131,10 @@ class LocalMangaRepository @Inject constructor(
     private suspend fun getFilteredAndSortedList(order: SortOrder?, filter: ContentListFilter?): ArrayList<LocalContent> {
         localContentIndex.updateIfRequired()
         val list = getIndexedList()
+        list.retainAll { local ->
+            val source = local.manga.source
+            source == null || org.skepsun.kototoro.core.model.ReaderContentPolicy.acceptsSource(source.name, source.contentType)
+        }
         if (settings.isNsfwContentDisabled) {
             list.removeAll { it.manga.isNsfw() }
         }

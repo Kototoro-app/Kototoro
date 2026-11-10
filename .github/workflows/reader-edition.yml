@@ -23,6 +23,25 @@ env:
   GRADLE_OPTS: -Dorg.gradle.jvmargs=-Xmx3g -Dfile.encoding=UTF-8
 
 jobs:
+  ai-tooling:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: tools/ai
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: tools/ai/package-lock.json
+      - name: Install locked OmniRoute development gateway
+        run: npm ci --no-audit --no-fund
+      - name: Verify OmniRoute CLI
+        run: npm run check
+
   verify:
     runs-on: ubuntu-24.04
     timeout-minutes: 60

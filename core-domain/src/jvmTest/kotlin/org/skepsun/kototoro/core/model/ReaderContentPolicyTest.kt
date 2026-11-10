@@ -32,6 +32,7 @@ class ReaderContentPolicyTest {
     @Test
     fun `unavailable reading extensions keep their restored content type`() {
         assertTrue(ReaderContentPolicy.acceptsSnapshot("RESTORED", ContentType.NOVEL, ContentType.OTHER))
+        assertTrue(ReaderContentPolicy.acceptsSnapshot("RESTORED", ContentType.OTHER, ContentType.NOVEL))
         assertFalse(ReaderContentPolicy.acceptsSnapshot("RESTORED", ContentType.VIDEO, ContentType.MANGA))
         assertFalse(ReaderContentPolicy.acceptsSnapshot("RESTORED", null, ContentType.OTHER))
     }

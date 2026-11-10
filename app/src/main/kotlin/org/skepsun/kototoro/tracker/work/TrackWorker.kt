@@ -457,7 +457,7 @@ class TrackWorker @AssistedInject constructor(
             val request = PeriodicWorkRequestBuilder<TrackWorker>(interval.toLong(), TimeUnit.HOURS)
                 .setConstraints(constraints)
                 .addTag(TAG)
-                .setBackoffCriteria(BackoffPolicy.LINEAR, 30, TimeUnit.MINUTES)
+                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.MINUTES)
                 .build()
             workManager
                 .enqueueUniquePeriodicWork(TAG, ExistingPeriodicWorkPolicy.UPDATE, request)
@@ -574,6 +574,7 @@ class TrackWorker @AssistedInject constructor(
 
         private fun createConstraints() = Constraints.Builder()
             .setRequiredNetworkType(if (settings.isTrackerWifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED)
+            .setRequiresBatteryNotLow(true)
             .build()
     }
 

@@ -63,3 +63,16 @@ l’application d’exclusivement lecture dans toutes ses entrées externes.
 Les interfaces utilisent toujours les données et composants réels de Kototoro. Ce lot ne constitue
 pas une refonte visuelle complète de tous les écrans. Les validations réelles seront consignées dans
 `tests.md` ; les parcours non exécutés doivent rester explicitement non validés.
+
+## Automatisations et dernière vérification du périmètre
+
+Le scanner local et les notes ne présentent plus les œuvres vidéo. Les anciens fichiers et notes
+restent stockés ; les exports des archives restent indépendants de cette projection UI.
+Les actualisations périodiques de chapitres et la synchronisation Google Drive attendent une batterie
+suffisante et utilisent un backoff exponentiel. Le lancement manuel garde sa politique interactive.
+La planification périodique est actualisée au démarrage par WorkManager UPDATE, sans recréer de queue.
+Aucun gain énergétique chiffré n’est revendiqué.
+
+Le premier pipeline Reader Edition (42810153051) a détecté un défaut de préparation SDK :
+`android-actions/setup-android@v3` tentait d’installer l’ancien paquet `tools`. Le workflow précise
+maintenant `packages: platform-tools` et installe explicitement les entrées nécessaires au projet.

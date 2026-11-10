@@ -40,6 +40,9 @@ class BookNotesRepository @Inject constructor(
             val mangaId = count.mangaId
             val manga = (worksById[mangaId] ?: database.getMangaDao().find(mangaId))?.toContent()
                 ?: return@mapNotNull null
+            if (!org.skepsun.kototoro.core.model.ReaderContentPolicy.acceptsSource(manga.source.name, manga.source.contentType)) {
+                return@mapNotNull null
+            }
             val history = historyMap[mangaId]
             val progressPercent = history?.percent
             val progressText = when {

@@ -15,5 +15,5 @@ object ReaderContentPolicy {
 
     /** Restored metadata wins over an unresolved extension's OTHER fallback. */
     fun acceptsSnapshot(name: String, persistedType: ContentType?, resolvedType: ContentType): Boolean =
-        acceptsSource(name, persistedType ?: resolvedType)
+        acceptsSource(name, persistedType?.takeUnless { it == ContentType.OTHER } ?: resolvedType)
 }

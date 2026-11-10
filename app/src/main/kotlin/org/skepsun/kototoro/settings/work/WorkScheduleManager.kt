@@ -55,7 +55,7 @@ class WorkScheduleManager @Inject constructor(
                 isEnabled = googleDriveSyncSettings.isSyncEnabled &&
                     googleDriveSyncSettings.isSignedIn &&
                     googleDriveSyncSettings.intervalMinutes > 0,
-                force = false,
+                force = true,
             )
             googleDriveSyncScheduler.enqueueStartSyncIfAllowed()
         }
