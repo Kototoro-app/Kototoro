@@ -2,6 +2,7 @@ package org.skepsun.kototoro.sync.google.domain
 
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
+import org.skepsun.kototoro.core.prefs.AppSettings
 
 class SettingsSyncMergerTest : StringSpec({
 
@@ -41,6 +42,14 @@ class SettingsSyncMergerTest : StringSpec({
 		).forEach { key ->
 			SettingsSyncMerger.isSyncableKey(key) shouldBe false
 		}
+	}
+
+	"device local keys are never synced and are dropped by merge" {
+		AppSettings.DEVICE_LOCAL_KEYS.forEach { key ->
+			SettingsSyncMerger.isSyncableKey(key) shouldBe false
+		}
+		val entry = mapOf(AppSettings.KEY_EMPTY_SOURCES to SettingEntry("s", "x", 1L))
+		SettingsSyncMerger.merge(entry, entry).isEmpty() shouldBe true
 	}
 
 	"reader and theme keys are syncable" {

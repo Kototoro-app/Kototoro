@@ -49,7 +49,8 @@ object SettingsSyncMerger {
 	// "_storage" keys (local_storage, local_novel_storage, local_video_storage) hold device-local File.path values.
 	private val excludedSuffixes = listOf("_dir", "_dirs", "_dir_uris", "_dir_uri", "_uri", "_uris", "_path", "_storage")
 	private val excludedPrefixes = listOf("sync_", "google_drive", "backup_periodic")
-	private val excludedKeys = setOf("init", "app_version")
+	// available/empty/cloudflare_sources are per-device source availability verdicts (see AppSettings.DEVICE_LOCAL_KEYS).
+	private val excludedKeys = setOf("init", "app_version", "available_sources", "empty_sources", "cloudflare_sources")
 
 	fun isSyncableKey(key: String): Boolean {
 		val normalized = key.lowercase()

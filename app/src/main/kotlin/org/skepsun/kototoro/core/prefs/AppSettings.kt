@@ -51,7 +51,6 @@ import org.skepsun.kototoro.parsers.util.find
 import org.skepsun.kototoro.parsers.util.mapNotNullToSet
 import org.skepsun.kototoro.parsers.util.mapToSet
 import org.skepsun.kototoro.parsers.util.nullIfEmpty
-import org.skepsun.kototoro.backups.data.BackupSettingsFilter
 import org.skepsun.kototoro.core.util.ext.connectivityManager
 import org.skepsun.kototoro.core.util.ext.activityManager
 import org.skepsun.kototoro.core.util.ext.getEnumValue

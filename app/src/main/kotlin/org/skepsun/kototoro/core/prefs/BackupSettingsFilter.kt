@@ -1,6 +1,4 @@
-package org.skepsun.kototoro.backups.data
-
-import org.skepsun.kototoro.core.prefs.AppSettings
+package org.skepsun.kototoro.core.prefs
 
 /** Keys that never leave the device in a backup; restore keeps their local values instead of wiping them. */
 object BackupSettingsFilter {

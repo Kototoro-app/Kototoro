@@ -1,4 +1,4 @@
-package org.skepsun.kototoro.backups.data
+package org.skepsun.kototoro.core.prefs
 
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue

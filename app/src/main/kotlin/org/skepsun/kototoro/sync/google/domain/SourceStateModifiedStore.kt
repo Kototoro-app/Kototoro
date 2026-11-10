@@ -56,13 +56,21 @@ class SourceStateModifiedStore @Inject constructor(
             Triple(result, changed, System.currentTimeMillis())
         }
         // A failed or cancelled transaction must not leave metadata for a rolled-back state.
-        changed.forEach { recordApplied(it.source, it.isEnabled, it.isPinned, it.sortKey, at) }
+        recordAllApplied(changed, at)
         result
     }
 
     /** Records a committed remote state without treating it as a new local edit. */
     fun recordApplied(source: String, enabled: Boolean, pinned: Boolean, sortKey: Int, modifiedAt: Long) {
         prefs.edit { putString(source, "${stateHash(enabled, pinned, sortKey)}|$modifiedAt") }
+    }
+
+    /** [recordApplied] for many rows in a single prefs edit. */
+    fun recordAllApplied(entities: Collection<MangaSourceEntity>, modifiedAt: Long) {
+        if (entities.isEmpty()) return
+        prefs.edit {
+            for (e in entities) putString(e.source, "${stateHash(e)}|$modifiedAt")
+        }
     }
 
     private fun stateHash(entity: MangaSourceEntity): Int =

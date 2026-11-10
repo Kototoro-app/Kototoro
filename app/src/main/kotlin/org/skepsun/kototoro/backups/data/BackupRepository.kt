@@ -65,6 +65,7 @@ import org.skepsun.kototoro.core.db.entity.RestoreCheckpointDao
 import org.skepsun.kototoro.core.db.entity.RestoreCheckpointEntity
 import org.skepsun.kototoro.core.parser.kotatsu.KotatsuParserSource
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.prefs.BackupSettingsFilter
 import org.skepsun.kototoro.core.util.CompositeResult
 import org.skepsun.kototoro.core.util.progress.Progress
 import org.skepsun.kototoro.explore.data.ContentSourcesRepository
@@ -689,7 +690,7 @@ class BackupRepository @Inject constructor(
                             }
                             if (it.lock != SourceBackup.LOCK_UNKNOWN) restoredLocks[it.source] = it.lock
                         }
-                        restoreSourceLocks(restoredLocks, restoreMode)
+                        restoreSourceLocks(restoredLocks, restoreMode, preserveLocalSources)
                         sourcesResult
                     }
 
@@ -1022,10 +1023,12 @@ class BackupRepository @Inject constructor(
      * Applies the lock codes of a restored SOURCES section in one batch. A merge keeps locks that already exist
      * locally; "unlocked" never writes a marker (the key is removed instead).
      */
-    private fun restoreSourceLocks(codes: Map<String, Int>, mode: RestoreMode) {
-        // Restored locks and pins count as the user's own, so the next group apply never releases them.
-        sourceLocks.setGroupApplied(emptySet())
-        appContext.getSharedPreferences("group_applied_pins", Context.MODE_PRIVATE).edit().clear().commit()
+    private fun restoreSourceLocks(codes: Map<String, Int>, mode: RestoreMode, preserveLocalSources: Boolean) {
+        // Only state the restore really replaced counts as the user's own; a merge keeps local locks and their marks.
+        if (mode == RestoreMode.SNAPSHOT_REPLACE) sourceLocks.setGroupApplied(emptySet())
+        if (!preserveLocalSources) {
+            appContext.getSharedPreferences("group_applied_pins", Context.MODE_PRIVATE).edit().clear().commit()
+        }
         if (codes.isEmpty()) return
         val merge = mode == RestoreMode.MERGE
         val set = LinkedHashMap<String, Boolean?>()

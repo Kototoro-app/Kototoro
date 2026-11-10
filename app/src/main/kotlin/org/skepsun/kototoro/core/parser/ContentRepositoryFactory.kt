@@ -70,8 +70,8 @@ class ContentRepositoryFactory @Inject constructor(
      */
     @AnyThread
     fun invalidate(source: ContentSource) {
-        val repository = create(source)
-        repositoryInstanceCache.remove(repository.source)?.let { cached ->
+        val resolved = sourceResolutionPipeline.resolveWithTrace(source).resolvedSource
+        repositoryInstanceCache.remove(resolved)?.let { cached ->
             (cached as? CachingContentRepository)?.invalidateCache()
         }
     }

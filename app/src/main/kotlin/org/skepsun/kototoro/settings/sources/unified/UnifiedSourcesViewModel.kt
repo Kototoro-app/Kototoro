@@ -252,6 +252,7 @@ class UnifiedSourcesViewModel @Inject constructor(
      * Each entry is retired once the authoritative rebuild reports the same value.
      */
     private val _enabledOverrides = MutableStateFlow<Map<String, Boolean>>(emptyMap())
+    @Volatile
     private var pendingRepositoryEdit: Pair<UnifiedSourceRepositoryItem, UnifiedSourcesUiState.Ready>? = null
     private val _events = MutableSharedFlow<UnifiedSourcesEvent>(extraBufferCapacity = 1)
     val events: SharedFlow<UnifiedSourcesEvent> = _events.asSharedFlow()
@@ -783,6 +784,7 @@ class UnifiedSourcesViewModel @Inject constructor(
         url: String,
         title: String?,
         enableImportedSources: Boolean,
+        replacingExternalBaseUrl: String? = null,
     ): Boolean {
         val cleanUrl = url.trim()
         if (cleanUrl.isBlank()) return false
@@ -830,7 +832,7 @@ class UnifiedSourcesViewModel @Inject constructor(
             UnifiedSourceKind.ANIYOMI,
             UnifiedSourceKind.IREADER,
             UnifiedSourceKind.JAR,
-            UnifiedSourceKind.TSUNDOKU -> prepareExternalRepository(kind, cleanUrl)
+            UnifiedSourceKind.TSUNDOKU -> prepareExternalRepository(kind, cleanUrl, replacingExternalBaseUrl)
             UnifiedSourceKind.NATIVE -> {
                 emitMessage(appContext.getString(R.string.unified_sources_native_no_repository))
                 false
@@ -1012,7 +1014,14 @@ class UnifiedSourcesViewModel @Inject constructor(
             val awaitsTrust = newKind.toExternalExtensionType() != null
             // External repositories are only added after the trust dialog; keep the old one until then.
             pendingRepositoryEdit = if (awaitsTrust) oldRepository to ready else null
-            val added = addRepositoryFromUrlImpl(newKind, trimmedUrl, trimmedName.takeIf { it.isNotBlank() }, true)
+            val replacing = if (awaitsTrust && oldRepository.kind == newKind) externalBaseUrlFor(oldRepository) else null
+            val added = addRepositoryFromUrlImpl(
+                newKind,
+                trimmedUrl,
+                trimmedName.takeIf { it.isNotBlank() },
+                true,
+                replacingExternalBaseUrl = replacing,
+            )
             if (!added) {
                 pendingRepositoryEdit = null
                 return@launchLoadingJob
@@ -1090,9 +1099,17 @@ class UnifiedSourcesViewModel @Inject constructor(
         val pendingEdit = pendingRepositoryEdit
         pendingRepositoryEdit = null
         launchLoadingJob(Dispatchers.IO) {
-            when (val result = extensionRepoRepository.confirmAddRepo(repo)) {
+            val replacing = pendingEdit?.first
+                ?.takeIf { it.kind.toExternalExtensionType() == repo.type }
+                ?.let { externalBaseUrlFor(it) }
+            when (val result = extensionRepoRepository.confirmAddRepo(repo, replacing)) {
                 is ExternalExtensionRepoRepository.AddRepoResult.Success -> {
-                    pendingEdit?.let { (old, ready) -> deleteRepositoryImpl(old, ready) }
+                    pendingEdit?.let { (old, ready) ->
+                        // A same-key edit already replaced the old repository inside confirmAddRepo.
+                        if (old.kind.toExternalExtensionType() == null || externalBaseUrlFor(old) != null) {
+                            deleteRepositoryImpl(old, ready)
+                        }
+                    }
                     emitMessage(appContext.getString(R.string.extension_repo_added_message, result.repo.displayName))
                     extensionRepoRepository.refresh(repo.type)
                     refreshAvailableExternalPackages(listOf(repo.type))
@@ -1358,7 +1375,7 @@ class UnifiedSourcesViewModel @Inject constructor(
                 .apply()
             ExtensionRemovalLog.record(appContext, "jar", packageName)
             GlobalExtensionManager.initialize(appContext)
-            packageRemovalCleanup.afterPackageRemoved(packageName, packageSourceNames, isJar = true)
+            packageRemovalCleanup.afterPackageRemoved(packageName, packageSourceNames)
             return PackageRemovalResult(removedDirectly = true)
         }
 
@@ -1381,7 +1398,7 @@ class UnifiedSourcesViewModel @Inject constructor(
                 .apply()
             ExtensionRemovalLog.record(appContext, "cloudstream", packageName)
             cloudstreamRuntimeManager.initialize()
-            packageRemovalCleanup.afterPackageRemoved(packageName, packageSourceNames, isJar = false)
+            packageRemovalCleanup.afterPackageRemoved(packageName, packageSourceNames)
             return PackageRemovalResult(removedDirectly = true)
         }
 
@@ -1397,7 +1414,7 @@ class UnifiedSourcesViewModel @Inject constructor(
             ExtensionRemovalLog.record(appContext, checkNotNull(ecosystem), packageName)
         }
         if (item.installLocation == UnifiedSourcePackageInstallLocation.LOCAL_APK && deletedLocal) {
-            packageRemovalCleanup.afterPackageRemoved(packageName, packageSourceNames, isJar = false)
+            packageRemovalCleanup.afterPackageRemoved(packageName, packageSourceNames)
             return PackageRemovalResult(
                 removedDirectly = true,
                 reloadExternalExtensionManagers = true,
@@ -1429,7 +1446,7 @@ class UnifiedSourcesViewModel @Inject constructor(
         val types = HashSet<ExternalExtensionType?>()
         gone.forEach { (systemPkg, info) ->
             pendingUninstalls.remove(systemPkg)
-            packageRemovalCleanup.afterPackageRemoved(info.packageName, info.sourceNames, isJar = false)
+            packageRemovalCleanup.afterPackageRemoved(info.packageName, info.sourceNames)
             types += info.type
         }
         types.forEach { reloadExternalExtensionManagers(it) }
@@ -1667,12 +1684,16 @@ class UnifiedSourcesViewModel @Inject constructor(
         val reloadExternalExtensionManagers: Boolean = false,
     )
 
-    private suspend fun prepareExternalRepository(kind: UnifiedSourceKind, url: String): Boolean {
+    private suspend fun prepareExternalRepository(
+        kind: UnifiedSourceKind,
+        url: String,
+        replacingBaseUrl: String? = null,
+    ): Boolean {
         val type = kind.toExternalExtensionType()
             ?: throw IllegalArgumentException(
                 appContext.getString(R.string.unified_sources_unsupported_repository_kind, kind.name),
             )
-        return when (val result = extensionRepoRepository.prepareAddRepo(type, url)) {
+        return when (val result = extensionRepoRepository.prepareAddRepo(type, url, replacingBaseUrl)) {
             is ExternalExtensionRepoRepository.PrepareAddRepoResult.Ready -> {
                 _events.emit(UnifiedSourcesEvent.TrustExternalRepository(result.repo))
                 true
@@ -1728,6 +1749,15 @@ class UnifiedSourcesViewModel @Inject constructor(
         extensionRepoRepository.refresh(repo)
         refreshAvailableExternalPackages(listOf(type))
         emitMessage(appContext.getString(R.string.unified_sources_repository_refreshed))
+    }
+
+    /** Stored base URL of an external repository item, or null when it is not (or no longer) registered. */
+    private suspend fun externalBaseUrlFor(repository: UnifiedSourceRepositoryItem): String? {
+        val type = repository.kind.toExternalExtensionType() ?: return null
+        val url = normalizeRepositoryUrlForAction(repository.url)
+        return extensionRepoRepository.getByType(type)
+            .firstOrNull { normalizeRepositoryUrlForAction(it.baseUrl) == url }
+            ?.baseUrl
     }
 
     private suspend fun deleteExternalRepository(repository: UnifiedSourceRepositoryItem) {

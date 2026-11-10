@@ -282,7 +282,7 @@ class ExtensionsBrowserViewModel @Inject constructor(
             if (gone.isEmpty()) return@launchJob
             gone.forEach { (pkg, info) ->
                 pendingUninstalls.remove(pkg)
-                packageRemovalCleanup.afterPackageRemoved(info.packageName, info.sourceNames, isJar = false)
+                packageRemovalCleanup.afterPackageRemoved(info.packageName, info.sourceNames)
             }
             mihonExtensionManager.loadExtensions()
             aniyomiExtensionManager.loadExtensions()
@@ -311,7 +311,7 @@ class ExtensionsBrowserViewModel @Inject constructor(
                 org.skepsun.kototoro.core.extensions.GlobalExtensionManager.mangaSources.value
                     .filter { it.jarName.removeSuffix(".jar") == jarName }.map { it.name }
             org.skepsun.kototoro.core.extensions.GlobalExtensionManager.initialize(appContext)
-            packageRemovalCleanup.afterPackageRemoved(item.pkgName, jarSourceNames, isJar = true)
+            packageRemovalCleanup.afterPackageRemoved(item.pkgName, jarSourceNames)
             return
         }
         val prefs = appContext.getSharedPreferences("cloudstream_plugin_versions", android.content.Context.MODE_PRIVATE)
@@ -334,7 +334,7 @@ class ExtensionsBrowserViewModel @Inject constructor(
         val csSourceNames = cloudstreamRuntimeManager.sources.value
             .filter { it.pluginPackageName == item.pkgName }.map { it.name }
         cloudstreamRuntimeManager.initialize()
-        packageRemovalCleanup.afterPackageRemoved(item.pkgName, csSourceNames, isJar = false)
+        packageRemovalCleanup.afterPackageRemoved(item.pkgName, csSourceNames)
     }
 
     fun setSearchQuery(query: String?) {

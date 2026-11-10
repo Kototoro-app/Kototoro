@@ -41,7 +41,7 @@ class ExternalExtensionRepoRepository @Inject constructor(
         }
     }
 
-    suspend fun prepareAddRepo(type: ExternalExtensionType, indexUrl: String): PrepareAddRepoResult {
+    suspend fun prepareAddRepo(type: ExternalExtensionType, indexUrl: String, replacingBaseUrl: String? = null): PrepareAddRepoResult {
         Log.d(TAG, "prepareAddRepo:start type=$type input=$indexUrl")
         val normalizedIndexUrl = service.normalizeIndexUrl(indexUrl, type) ?: return PrepareAddRepoResult.InvalidUrl
             .also { Log.d(TAG, "prepareAddRepo:invalidUrl type=$type input=$indexUrl") }
@@ -65,7 +65,7 @@ class ExternalExtensionRepoRepository @Inject constructor(
             return PrepareAddRepoResult.RepoAlreadyExists(existingResolvedRepo.toDomain())
         }
         val duplicate = dao.getByFingerprint(type, repo.signingKeyFingerprint)
-        if (duplicate != null) {
+        if (duplicate != null && duplicate.baseUrl != replacingBaseUrl) {
             Log.d(
                 TAG,
                 "prepareAddRepo:duplicateFingerprint type=$type baseUrl=$baseUrl fingerprint=${repo.signingKeyFingerprint} existingBaseUrl=${duplicate.baseUrl}",
@@ -76,19 +76,23 @@ class ExternalExtensionRepoRepository @Inject constructor(
         return PrepareAddRepoResult.Ready(repo)
     }
 
-    suspend fun confirmAddRepo(repo: ExternalExtensionRepo): AddRepoResult {
+    suspend fun confirmAddRepo(repo: ExternalExtensionRepo, replacingBaseUrl: String? = null): AddRepoResult {
         Log.d(TAG, "confirmAddRepo:start type=${repo.type} baseUrl=${repo.baseUrl} name=${repo.displayName}")
         if (dao.get(repo.type, repo.baseUrl) != null) {
             Log.d(TAG, "confirmAddRepo:duplicateBaseUrl type=${repo.type} baseUrl=${repo.baseUrl}")
             return AddRepoResult.RepoAlreadyExists
         }
         val duplicate = dao.getByFingerprint(repo.type, repo.signingKeyFingerprint)
-        if (duplicate != null) {
+        if (duplicate != null && duplicate.baseUrl != replacingBaseUrl) {
             Log.d(
                 TAG,
                 "confirmAddRepo:duplicateFingerprint type=${repo.type} baseUrl=${repo.baseUrl} fingerprint=${repo.signingKeyFingerprint} existingBaseUrl=${duplicate.baseUrl}",
             )
             return AddRepoResult.DuplicateFingerprint(duplicate.toDomain())
+        }
+        if (duplicate != null) {
+            // Same signing key under a new address: the edited repository is replaced, the unique key allows no overlap.
+            dao.delete(repo.type, duplicate.baseUrl)
         }
         dao.upsert(repo.toEntity())
         Log.d(TAG, "confirmAddRepo:success type=${repo.type} baseUrl=${repo.baseUrl} name=${repo.displayName}")

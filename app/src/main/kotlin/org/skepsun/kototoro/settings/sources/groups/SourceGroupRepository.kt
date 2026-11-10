@@ -8,8 +8,11 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import androidx.room.withTransaction
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -83,7 +86,7 @@ data class SourceGroupApplyPreview(
 	val manualPackages: List<String> = emptyList(),
 	/** Number of sources whose manual domain the group would overwrite. */
 	val domainOverrideCount: Int = 0,
-	/** Names of the first few of those sources. */
+	/** First few overrides as "source → domain". */
 	val domainOverrideSample: List<String> = emptyList(),
 ) {
 	val needsConfirmation: Boolean
@@ -253,10 +256,9 @@ class SourceGroupRepository @Inject constructor(
 		val allNames = group.sourceStates.mapTo(HashSet()) { it.source }
 		val domainSources = group.sourceStates
 			.filter { !it.domain.isNullOrBlank() && isValidGroupDomain(it.domain) && isValidGroupSourceName(it.source, allNames) }
-			.map { it.source }
 		SourceGroupApplyPreview(
 			domainOverrideCount = domainSources.size,
-			domainOverrideSample = domainSources.take(3),
+			domainOverrideSample = domainSources.take(3).map { "${it.source} → ${it.domain}" },
 			groupName = group.name,
 			reposToAdd = reposToAdd,
 			packagesToInstall = auto.map { it.pkg }.distinct(),
@@ -381,14 +383,16 @@ class SourceGroupRepository @Inject constructor(
 			}
 
 			val knownNames = knownGroupSourceNames(group)
+			var skippedDomains = 0
 			database.withTransaction {
 				group.sourceStates.forEachIndexed { index, state ->
 					stateStep(context.getString(R.string.source_groups_error_source, state.source)) {
-						applySourceDetails(state, knownNames)
+						if (!applySourceDetails(state, knownNames)) skippedDomains++
 					}
 					tick(publish = (index + 1) % PROGRESS_BATCH == 0 || index == group.sourceStates.lastIndex)
 				}
 			}
+			if (skippedDomains > 0) errors += context.getString(R.string.source_groups_domain_skipped, skippedDomains)
 
 			// Applying is a sync: per-source state the group does not mention is reset, never kept.
 			stateStep(context.getString(R.string.source_groups_error_apply_state)) {
@@ -403,7 +407,7 @@ class SourceGroupRepository @Inject constructor(
 			tick()
 			if (stateFailed) rollback(snapshot, group, errors)
 		} catch (e: CancellationException) {
-			rollback(snapshot, group, errors)
+			withContext(NonCancellable) { rollback(snapshot, group, errors) }
 			throw e
 		} catch (e: Exception) {
 			Log.w(TAG, "Source group apply failed", e)
@@ -483,19 +487,20 @@ class SourceGroupRepository @Inject constructor(
 	private fun knownGroupSourceNames(group: SourceGroup): Set<String> =
 		group.sourceStates.mapNotNullTo(HashSet()) { s -> s.source.takeIf { contentSources.isSourceAvailable(it) } }
 
-	private suspend fun applySourceDetails(state: SourceGroupSourceState, knownNames: Set<String>) {
+	private suspend fun applySourceDetails(state: SourceGroupSourceState, knownNames: Set<String>): Boolean {
 		val source = contentSources.resolveSource(state.source)
 		contentSources.setIsPinned(listOf(source), state.pinned)
-		if (!state.domain.isNullOrBlank()) {
-			if (!isValidGroupSourceName(state.source, knownNames) || !isValidGroupDomain(state.domain)) {
-				throw IllegalArgumentException("Invalid source name or domain")
-			}
-			sourcePrefs(state.source).edit()
-				.putString(SourceSettings.KEY_DOMAIN, state.domain)
-				.apply()
-			// Rebuild the parser so the restored domain takes effect without an app restart.
-			repositoryFactory.invalidate(source)
+		if (state.domain.isNullOrBlank()) return true
+		if (!isValidGroupSourceName(state.source, setOf(state.source)) || !isValidGroupDomain(state.domain)) {
+			throw IllegalArgumentException("Invalid source name or domain")
 		}
+		if (state.source !in knownNames) return false
+		sourcePrefs(state.source).edit()
+			.putString(SourceSettings.KEY_DOMAIN, state.domain)
+			.apply()
+		// Rebuild the parser so the restored domain takes effect without an app restart.
+		repositoryFactory.invalidate(source)
+		return true
 	}
 
 	/**
@@ -621,7 +626,7 @@ class SourceGroupRepository @Inject constructor(
 		runGuarded(failures, "rollback jar priority") {
 			settings.jarPriorityOrder = snapshot.jarPriority
 		}
-		errors += "Rolled back to the state before apply"
+		errors += context.getString(R.string.source_groups_rolled_back)
 		errors += failures
 		_progress.update { it.copy(errors = errors.toList()) }
 	}
@@ -632,7 +637,11 @@ class SourceGroupRepository @Inject constructor(
 			block()
 			true
 		} catch (e: CancellationException) {
-			throw e
+			// Timeouts and installer aborts are CancellationExceptions too: only a cancelled apply propagates.
+			currentCoroutineContext().ensureActive()
+			Log.w(TAG, "Source group step failed: $label", e)
+			errors += "$label: ${e.localizedMessage ?: e.javaClass.simpleName}"
+			false
 		} catch (e: Exception) {
 			Log.w(TAG, "Source group step failed: $label", e)
 			errors += "$label: ${e.localizedMessage ?: e.javaClass.simpleName}"

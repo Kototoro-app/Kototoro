@@ -22,7 +22,7 @@ class PackageRemovalCleanup @Inject constructor(
 ) {
 
     /** Clears the package's sources' availability and its package-level (`PKG_`) origin rows. Per-source rows are kept. */
-    suspend fun afterPackageRemoved(packageName: String, sourceNames: Collection<String>, isJar: Boolean) {
+    suspend fun afterPackageRemoved(packageName: String, sourceNames: Collection<String>) {
         sourceAvailabilityRepository.clearAvailability(sourceNames)
         sourceOriginsDao.findAll()
             .filter { it.packageName == packageName && it.sourceKey.startsWith("PKG_") }
