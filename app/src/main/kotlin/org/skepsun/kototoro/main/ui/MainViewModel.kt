@@ -17,10 +17,7 @@ import org.skepsun.kototoro.core.exceptions.EmptyHistoryException
 import org.skepsun.kototoro.core.background.BackgroundArtwork
 import org.skepsun.kototoro.core.background.BackgroundArtworkRepository
 import org.skepsun.kototoro.core.github.AppUpdateRepository
-import org.skepsun.kototoro.core.model.LocalVideoSource
-import org.skepsun.kototoro.core.model.getContentType
 import org.skepsun.kototoro.core.model.looksLikeLocalVideoContent
-import org.skepsun.kototoro.core.model.looksLikeVideoUrl
 import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsFlow
@@ -151,32 +148,10 @@ class MainViewModel @Inject constructor(
 
     fun openLastReader() {
         launchLoadingJob(Dispatchers.Default) {
-            val rawContent = historyRepository.getLastOrNull(
+            val content = historyRepository.getLastOrNull(
                 excludeNsfw = settings.isHistoryExcludeNsfw,
-            ) ?: throw EmptyHistoryException()
-            val history = historyRepository.getOne(rawContent)
-            val resolvedBase = rawContent
-            val content = if (
-                resolvedBase.looksLikeLocalVideoContent() &&
-                resolvedBase.source.getContentType() != org.skepsun.kototoro.parsers.model.ContentType.VIDEO
-            ) {
-                resolvedBase.copy(
-                    source = LocalVideoSource,
-                    chapters = resolvedBase.chapters?.map { chapter ->
-                        if (
-                            chapter.source.getContentType() ==
-                            org.skepsun.kototoro.parsers.model.ContentType.MANGA &&
-                            chapter.url.looksLikeVideoUrl()
-                        ) {
-                            chapter.copy(source = LocalVideoSource)
-                        } else {
-                            chapter
-                        }
-                    },
-                )
-            } else {
-                resolvedBase
-            }
+            )?.takeUnless { it.looksLikeLocalVideoContent() } ?: throw EmptyHistoryException()
+            val history = historyRepository.getOne(content)
             onOpenReader.call(
                 MainReaderRequest(
                     content = content,

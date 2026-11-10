@@ -90,7 +90,7 @@ data class MainAppState(
     val onLanguagePresetSelected: (Long) -> Unit = {},
     val onManageLanguagePresets: () -> Unit = {},
     val selectedContentType: ContentType? = null,
-    val enabledContentTypes: Set<ContentType> = setOf(ContentType.MANGA, ContentType.NOVEL, ContentType.VIDEO),
+    val enabledContentTypes: Set<ContentType> = setOf(ContentType.MANGA, ContentType.NOVEL),
     val isContentTypeFilterVisible: Boolean = true,
     val onContentTypeSelected: (ContentType?) -> Unit = {},
     val selectedSourceTags: Set<SourceTag> = emptySet(),

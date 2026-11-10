@@ -130,9 +130,6 @@ class MainChromeController(
             if (callback.isContentTypeEnabled(BrowseGroupTab.Novel)) {
                 add(ContentType.NOVEL)
             }
-            if (callback.isContentTypeEnabled(BrowseGroupTab.Video)) {
-                add(ContentType.VIDEO)
-            }
         }
         syncSearchSuggestionFilters()
     }
@@ -251,5 +248,4 @@ private fun String?.toPresetId(): Long = this?.toLongOrNull()?.takeIf { it > 0L 
 private fun allTopBarContentTypes(): Set<ContentType> = setOf(
     ContentType.MANGA,
     ContentType.NOVEL,
-    ContentType.VIDEO,
 )

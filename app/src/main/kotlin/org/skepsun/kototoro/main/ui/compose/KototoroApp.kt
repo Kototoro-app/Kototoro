@@ -135,7 +135,6 @@ import org.skepsun.kototoro.core.ui.compose.LocalHeroTransitionPhase
 import org.skepsun.kototoro.core.ui.compose.HeroTransitionPhase
 import org.skepsun.kototoro.core.ui.compose.LocalHeroReturnTransitionInProgress
 import org.skepsun.kototoro.core.model.getContentType
-import org.skepsun.kototoro.core.model.looksLikeLocalVideoContent
 import org.skepsun.kototoro.core.util.ext.mangaExtra
 import org.skepsun.kototoro.core.util.ext.takeIfUsableImageUri
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
@@ -731,20 +730,7 @@ fun KototoroApp(
     } else {
         lastReadContent
     }
-    val effectiveResumeContentType = if (spaceUiState.switcherEnabled) {
-        when (spaceUiState.spaces.firstOrNull { it.id == spaceUiState.activeSpaceId }?.kind) {
-            SpaceKind.MANGA -> ContentType.MANGA
-            SpaceKind.NOVEL -> ContentType.NOVEL
-            SpaceKind.ANIME -> ContentType.VIDEO
-            SpaceKind.ALL, null -> effectiveResumeContent?.source?.getContentType()
-        }
-    } else {
-        effectiveResumeContent?.source?.getContentType()
-    }
-    val effectiveResumeAction = resolveMainResumeAction(
-        contentType = effectiveResumeContentType,
-        looksLikeVideoContent = effectiveResumeContent?.looksLikeLocalVideoContent() == true,
-    )
+    val effectiveResumeAction = MainResumeAction.READ
     val effectiveResumeCoverModel = rememberMainResumeCoverRequest(effectiveResumeContent)
     val effectiveResumeEnabled = isMainFabEnabled && if (spaceUiState.switcherEnabled) {
         activeSpaceResumeItem?.canResume == true

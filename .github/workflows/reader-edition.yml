@@ -56,6 +56,8 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v5
+        with:
+          cache-read-only: false
       - uses: android-actions/setup-android@v3
         with:
           packages: platform-tools
@@ -107,6 +109,8 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v5
+        with:
+          cache-read-only: false
       - uses: android-actions/setup-android@v3
         with:
           packages: platform-tools

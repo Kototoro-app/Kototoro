@@ -18,9 +18,11 @@ import org.skepsun.kototoro.core.db.entity.toContent
 import org.skepsun.kototoro.core.db.entity.toEntity
 import org.skepsun.kototoro.core.db.entity.toContentTags
 import org.skepsun.kototoro.core.model.ContentHistory
+import org.skepsun.kototoro.core.model.ReaderContentPolicy
 import org.skepsun.kototoro.core.model.getContentType
 import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.core.model.isNsfw
+import org.skepsun.kototoro.core.model.looksLikeLocalVideoContent
 import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ProgressIndicatorMode
@@ -49,7 +51,7 @@ import java.time.Instant
 import javax.inject.Inject
 import javax.inject.Provider
 
-private const val NSFW_FILTER_BATCH_SIZE = 32
+private const val HISTORY_FILTER_BATCH_SIZE = 32
 
 data class HistoryPopularFilterOptions(
     val tags: List<ContentTag> = emptyList(),
@@ -414,13 +416,19 @@ class HistoryRepository @Inject constructor(
             return emptyList()
         }
         val targetSize = if (limit == null) Int.MAX_VALUE else offset + limit
-        // NSFW rows are filtered after loading, so keep widening the window until enough
-        // visible rows are found or the history is exhausted.
-        var fetchSize = if (excludeNsfw) maxOf(targetSize, NSFW_FILTER_BATCH_SIZE) else targetSize
+        // Keep archived media in Room, but page past it when finding reading history.
+        // The same window also handles the optional adult-content filter.
+        var fetchSize = maxOf(targetSize, HISTORY_FILTER_BATCH_SIZE)
         while (true) {
             val rows = findRecentRows(spaceId, allowedSourceNames, fetchSize)
-            val contents = rows.map { it.toContent() }
-            val visible = if (excludeNsfw) contents.filterNot { it.isNsfw() } else contents
+            val visible = rows.mapNotNull { row ->
+                val content = row.toContent()
+                val persistedType = row.manga.contentType?.let { raw -> ContentType.entries.find { it.name == raw } }
+                content.takeIf {
+                    ReaderContentPolicy.acceptsSnapshot(row.manga.source, persistedType, it.source.getContentType()) &&
+                        !it.looksLikeLocalVideoContent() && (!excludeNsfw || !it.isNsfw())
+                }
+            }
             if (visible.size >= targetSize || rows.size < fetchSize || fetchSize == Int.MAX_VALUE) {
                 return visible.drop(offset).let { if (limit == null) it else it.take(limit) }
             }

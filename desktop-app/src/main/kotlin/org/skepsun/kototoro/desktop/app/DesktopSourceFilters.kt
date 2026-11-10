@@ -8,6 +8,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import org.skepsun.kototoro.core.ui.compose.FilterFacetOption
+import org.skepsun.kototoro.core.ui.compose.SingleChoiceFilterMenu
 import org.skepsun.kototoro.core.jsonsource.OriginGroup
 import org.skepsun.kototoro.core.source.SourceEcosystem
 import org.skepsun.kototoro.core.source.SourceListing
@@ -61,9 +63,9 @@ internal fun SourceTag.desktopTitle(): String = when (this) {
 
 private fun SourceTag.desktopIcon(): String = "icons/ic_source_$id.svg"
 
-/** Android's top bar content-type chip values: all, manga, novel and video. */
+/** Reader format choices shared with Android. */
 internal val DesktopContentTabs: List<BrowseGroupTab> =
-    listOf(BrowseGroupTab.All, BrowseGroupTab.Content, BrowseGroupTab.Novel, BrowseGroupTab.Video)
+    BrowseGroupTab.getAllTabs()
 
 internal fun BrowseGroupTab.desktopTitle(): String = when (this) {
     BrowseGroupTab.Content -> DesktopSourceLabels.contentType("MANGA")
@@ -86,7 +88,7 @@ data class DesktopSourceFilter(
 
     fun accepts(ecosystem: SourceEcosystem?, contentType: String?): Boolean =
         SourceTag.accepts(tags, ecosystem?.originGroup()) &&
-            (tab == BrowseGroupTab.All || tab.matchesContentType(contentTypeOf(contentType)))
+            tab.matchesContentType(contentTypeOf(contentType))
 
     fun accepts(listing: SourceListing): Boolean = accepts(listing.ecosystem, listing.source.contentType)
 
@@ -120,26 +122,25 @@ internal fun DesktopSourceFilterControls(filter: DesktopSourceFilter, sources: L
     actions: @Composable RowScope.() -> Unit = {}) {
     val enabledTags = remember(sources) { DesktopSourceFilter.enabledTags(sources) }
     val enabledTabs = remember(sources) { DesktopSourceFilter.enabledTabs(sources) }
-    DesktopControlSurface(Modifier.height(44.dp), RoundedCornerShape(percent = 50)) {
+    DesktopControlSurface(Modifier.heightIn(min = 48.dp), RoundedCornerShape(percent = 50)) {
         Row(Modifier.padding(horizontal = 4.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-            var typeMenu by remember { mutableStateOf(false) }
-            Box {
-                TextButton({ typeMenu = true }, enabled = enabled, modifier = Modifier.testTag("$tagPrefix-content-type"),
-                    colors = ButtonDefaults.textButtonColors(contentColor =
-                        if (filter.tab != BrowseGroupTab.All) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurfaceVariant)) { Text(filter.tab.desktopTitle()) }
-                DropdownMenu(typeMenu && enabled, { typeMenu = false }) {
-                    DesktopContentTabs.forEach { tab ->
-                        DropdownMenuItem({ Text(tab.desktopTitle()) }, onClick = {
-                            typeMenu = false
-                            onChange(filter.copy(tab = tab))
-                        }, enabled = tab in enabledTabs, modifier = Modifier.testTag("$tagPrefix-content-type:${tab.tag()}"),
-                            trailingIcon = if (tab == filter.tab) {
-                                { Icon(painterResource("icons/ic_check.svg"), null, tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(18.dp)) }
-                            } else null)
-                    }
-                }
+            SingleChoiceFilterMenu(
+                options = DesktopContentTabs.map { tab ->
+                    FilterFacetOption(tab, tab.desktopTitle(), tab == filter.tab, tab in enabledTabs)
+                },
+                onOptionSelected = { tab -> onChange(filter.copy(tab = tab)) },
+                enabled = enabled,
+                optionModifier = { Modifier.testTag("$tagPrefix-content-type:${it.tag()}") },
+            ) { openMenu ->
+                TextButton(
+                    onClick = openMenu,
+                    enabled = enabled,
+                    modifier = Modifier.testTag("$tagPrefix-content-type").heightIn(min = 48.dp),
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = if (filter.tab != BrowseGroupTab.All) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                    ),
+                ) { Text(filter.tab.desktopTitle()) }
             }
             var tagMenu by remember { mutableStateOf(false) }
             Box {

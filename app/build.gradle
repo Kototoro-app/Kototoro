@@ -661,6 +661,7 @@ dependencies {
 	androidTestImplementation libs.androidx.runner
 	androidTestImplementation libs.androidx.rules
 	androidTestImplementation libs.androidx.test.core
+	androidTestImplementation libs.androidx.uiautomator
 	androidTestImplementation libs.androidx.junit
 
 	androidTestImplementation libs.kotlinx.coroutines.test

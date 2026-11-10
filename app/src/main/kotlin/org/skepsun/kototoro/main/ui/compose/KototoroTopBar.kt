@@ -181,7 +181,7 @@ fun KototoroTopBar(
     compactTabsState: CompactTabsTopBarOverrideState? = null,
     filterRailState: CompactFilterRailOverrideState? = null,
     selectedContentType: ContentType? = null,
-    enabledContentTypes: Set<ContentType> = setOf(ContentType.MANGA, ContentType.NOVEL, ContentType.VIDEO),
+    enabledContentTypes: Set<ContentType> = setOf(ContentType.MANGA, ContentType.NOVEL),
     isContentTypeFilterVisible: Boolean = true,
     onContentTypeSelected: (ContentType?) -> Unit = {},
     selectedSourceTags: Set<SourceTag> = emptySet(),
@@ -268,7 +268,7 @@ fun KototoroTopBar(
     // their state stay here either way.
     val actionButtons: @Composable () -> Unit = {
         if (isContentTypeFilterVisible) {
-            SwipeableFilterChip(
+            ReaderFormatFilter(
                 selectedType = selectedContentType,
                 enabledTypes = enabledContentTypes,
                 onTypeSelected = onContentTypeSelected,

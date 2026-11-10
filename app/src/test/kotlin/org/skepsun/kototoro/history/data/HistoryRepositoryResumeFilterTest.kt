@@ -59,20 +59,52 @@ class HistoryRepositoryResumeFilterTest {
 
 	@Test
 	fun `space resume filters by space content types and adult rating`() = runTest {
-		every { spaceContentPolicy.allowedSourceNames(BuiltInSpaces.Anime) } returns null
-		every { spaceContentPolicy.allowedTypes(BuiltInSpaces.Anime) } returns setOf(ContentType.VIDEO)
+		every { spaceContentPolicy.allowedSourceNames(BuiltInSpaces.Novel) } returns null
+		every { spaceContentPolicy.allowedTypes(BuiltInSpaces.Novel) } returns setOf(ContentType.NOVEL)
 		coEvery {
-			historyDao.findRecentForSpace(listOf(ContentType.VIDEO.name), any())
+			historyDao.findRecentForSpace(listOf(ContentType.NOVEL.name), any())
 		} returns listOf(
-			row(1L, ContentRating.ADULT, ContentType.VIDEO),
-			row(2L, ContentRating.SAFE, ContentType.VIDEO),
+			row(1L, ContentRating.ADULT, ContentType.NOVEL),
+			row(2L, ContentRating.SAFE, ContentType.NOVEL),
 		)
 
 		assertEquals(
 			2L,
-			repository.getLastOrNull(spaceId = BuiltInSpaces.Anime, excludeNsfw = true)?.id,
+			repository.getLastOrNull(spaceId = BuiltInSpaces.Novel, excludeNsfw = true)?.id,
 		)
 	}
+
+    @Test
+    fun `resume skips archived video even without the adult filter`() = runTest {
+        val rows = listOf(
+            row(1L, ContentRating.SAFE, ContentType.VIDEO),
+            row(2L, ContentRating.SAFE, ContentType.HENTAI_VIDEO),
+            row(3L, ContentRating.SAFE, ContentType.NOVEL),
+        )
+        coEvery { historyDao.findRecent(any()) } answers { rows.take(firstArg()) }
+        assertEquals(3L, repository.getLastOrNull(excludeNsfw = false)?.id)
+    }
+
+    @Test
+    fun `resume continues past a full retired media batch`() = runTest {
+        val rows = List(32) { row(it.toLong(), ContentRating.SAFE, ContentType.VIDEO) } +
+            row(100L, ContentRating.SAFE, ContentType.MANGA)
+        coEvery { historyDao.findRecent(any()) } answers { rows.take(firstArg()) }
+        assertEquals(100L, repository.getLastOrNull()?.id)
+        coVerify(exactly = 1) { historyDao.findRecent(32) }
+        coVerify(exactly = 1) { historyDao.findRecent(64) }
+    }
+
+    @Test
+    fun `retired provider cannot resume with incorrect manga metadata`() = runTest {
+        val rows = listOf(
+            row(1L, ContentRating.SAFE, source = "ANIYOMI_123"),
+            row(2L, ContentRating.SAFE, source = "CLOUDSTREAM_Test"),
+            row(3L, ContentRating.SAFE, ContentType.NOVEL),
+        )
+        coEvery { historyDao.findRecent(any()) } answers { rows.take(firstArg()) }
+        assertEquals(3L, repository.getLastOrNull()?.id)
+    }
 
 	@Test
 	fun `popular filter options reuse one history load`() = runTest {

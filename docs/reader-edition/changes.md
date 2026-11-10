@@ -126,3 +126,23 @@ Les quotas de cache ne comprennent plus de réglages vidéo, torrent ou Danmaku.
 modifient uniquement les caches de lecture. Le diagnostic conserve le comptage des anciens fichiers
 sous « Autres données » et celui des anciens caches sous « Autres caches » ; il ne supprime rien.
 Les callbacks et observations de qualité vidéo devenus inutiles sont retirés des réglages de téléchargement.
+
+## Sélecteur de format et historique de reprise
+
+Le contrôle à trois positions vidéo/manga/roman est remplacé par un menu Material à choix
+unique : Tous, Manga, Roman. Son implémentation de menu réside dans core-ui et est consommée
+par les barres Android et desktop. L’ancre Android conserve les liens de focus TV et une cible
+de 48dp ; le menu expose le choix sélectionné dans sa sémantique. Les anciens filtres vidéo
+restaurés affichent Tous. Un test appareil ouvre le menu à 200% et choisit Roman.
+
+La reprise globale utilisait directement les dernières lignes Room, en contournant le filtre
+d’affichage des listes. HistoryRepository applique maintenant la politique sur le type persisté
+et le fournisseur, puis élargit la fenêtre jusqu’au prochain livre. Trois tests couvrent les
+vidéos récentes, un lot entier retiré et les métadonnées manga erronées d’un fournisseur vidéo.
+Aucune ligne historique n’est effacée. Les commandes « lecture vidéo » de la reprise sont retirées.
+
+Le pipeline 42815793737 a validé la compilation principale mais a échoué sur les références
+de tests retirées et sur une dépendance UI Automator manquante pour le nouveau test d’interface.
+La dépendance existante du catalogue est raccordée à androidTest ; les tests n’avaient pas
+encore été exécutés sur émulateur. Le cache Gradle est désormais inscriptible sur cette branche
+afin de réutiliser les dépendances et les résultats des compilations successives.
