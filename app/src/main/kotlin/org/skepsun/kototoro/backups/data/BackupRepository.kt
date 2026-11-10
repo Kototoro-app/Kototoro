@@ -1265,6 +1265,8 @@ class BackupRepository @Inject constructor(
         val dir = sourceGroupsDir()
         staging.mkdirs()
         val previous = File(appContext.filesDir, "source_groups.previous")
+        // An interrupted earlier swap left the only copy aside: put it back before starting over.
+        if (!dir.exists() && previous.exists()) check(previous.renameTo(dir)) { "Cannot restore source groups" }
         previous.deleteRecursively()
         val hadPrevious = dir.exists()
         if (hadPrevious) check(dir.renameTo(previous)) { "Cannot move aside source groups" }

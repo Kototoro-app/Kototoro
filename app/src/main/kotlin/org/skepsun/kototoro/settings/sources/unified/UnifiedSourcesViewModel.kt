@@ -40,8 +40,6 @@ import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
 import okhttp3.OkHttpClient
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
@@ -56,7 +54,6 @@ import org.skepsun.kototoro.core.lnreader.LNReaderRepository
 import org.skepsun.kototoro.core.lnreader.LNReaderPluginMetadata
 import org.skepsun.kototoro.core.model.jsonsource.TVBoxStoredConfig
 import org.skepsun.kototoro.core.model.ContentSourceAvailability
-import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.network.jsonsource.JsonSourceHttpClient
 import org.skepsun.kototoro.core.network.jsonsource.LegadoHttpClient
 import org.skepsun.kototoro.core.prefs.AppSettings
@@ -93,7 +90,6 @@ import javax.inject.Inject
 
 private const val TAG = "UnifiedSourcesVM"
 private const val REFRESH_PACKAGES_TIMEOUT_MS = 30_000L
-private const val SOURCE_TEST_MAX_PARALLELISM = 3
 private const val REPOSITORY_SWAP_RESTORE_TIMEOUT_MS = 8_000L
 /** Coalesces bursts of catalog inputs into one rebuild (install progress ticks, DB churn). */
 private const val CATALOG_RECOMPOSE_COALESCE_MS = 150L
@@ -198,7 +194,6 @@ class UnifiedSourcesViewModel @Inject constructor(
     private val contentSourcesRepository: ContentSourcesRepository,
     private val sourceAvailabilityRepository: SourceAvailabilityRepository,
     private val packageRemovalCleanup: org.skepsun.kototoro.extensions.install.PackageRemovalCleanup,
-    private val contentRepositoryFactory: ContentRepository.Factory,
     private val jsonSourceManager: JsonSourceManager,
     private val legadoHttpClient: LegadoHttpClient,
     @JsonSourceHttpClient private val okHttpClient: OkHttpClient,
@@ -1250,68 +1245,6 @@ class UnifiedSourcesViewModel @Inject constructor(
                 contentSourcesRepository.setSourceLock(item.source, targetLock)
             }
         }
-    }
-
-    fun testSources(sourceIds: Set<String>) {
-        if (sourceIds.isEmpty()) {
-            return
-        }
-        val sourceItems = (uiState.value as? UnifiedSourcesUiState.Ready)
-            ?.allSources
-            .orEmpty()
-            .filter { it.id in sourceIds }
-        if (sourceItems.isEmpty()) {
-            return
-        }
-        launchLoadingJob(Dispatchers.IO) {
-            val semaphore = Semaphore(SOURCE_TEST_MAX_PARALLELISM)
-            val results = sourceItems.map { item ->
-                async {
-                    val outcome = testSource(item, semaphore)
-                    item to outcome
-                }
-            }.awaitAll()
-            sourceAvailabilityRepository.setAvailabilities(
-                results.associate { (item, outcome) -> item.source.name to outcome.availability },
-            )
-            logTestSummary(results)
-            emitMessage(
-                appContext.getString(
-                    R.string.source_test_completed_with_unverified,
-                    results.count { it.second.isAvailable },
-                    results.count {
-                        it.second.availability == ContentSourceAvailability.EMPTY ||
-                            it.second.availability == ContentSourceAvailability.CLOUDFLARE
-                    },
-                    results.count { it.second.availability == ContentSourceAvailability.UNKNOWN },
-                ),
-            )
-        }
-    }
-
-    private suspend fun testSource(item: UnifiedSourceItem, semaphore: Semaphore): SourceTestOutcome {
-        val outcome = semaphore.withPermit {
-            probeSourceAvailability(item.source, { contentRepositoryFactory.create(item.source) })
-        }
-        if (outcome.failure != null) {
-            Log.w(
-                TAG,
-                "source_test_failed source=${item.source.name} type=${item.source::class.simpleName} " +
-                    "failure=${outcome.failure}",
-            )
-        }
-        return outcome
-    }
-
-    private fun logTestSummary(results: List<Pair<UnifiedSourceItem, SourceTestOutcome>>) {
-        val failureCounts = results.mapNotNull { it.second.failure }.groupingBy { it }.eachCount()
-        Log.w(
-            TAG,
-            "source_test_summary total=${results.size} available=${results.count { it.second.isAvailable }} " +
-                "unavailable=${results.count { it.second.availability == ContentSourceAvailability.EMPTY || it.second.availability == ContentSourceAvailability.CLOUDFLARE }} " +
-                "unverified=${results.count { it.second.availability == ContentSourceAvailability.UNKNOWN }} " +
-                "failures=$failureCounts",
-        )
     }
 
     fun setSourcePinned(sourceId: String, pinned: Boolean) {

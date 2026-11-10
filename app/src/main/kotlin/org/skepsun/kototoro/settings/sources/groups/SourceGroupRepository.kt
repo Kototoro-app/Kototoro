@@ -405,14 +405,14 @@ class SourceGroupRepository @Inject constructor(
 				groupJarPriorityToApply(group.jarPriority, installed)?.let { settings.jarPriorityOrder = it }
 			}
 			tick()
-			if (stateFailed) rollback(snapshot, group, errors)
+			if (stateFailed) rollback(snapshot, errors)
 		} catch (e: CancellationException) {
-			withContext(NonCancellable) { rollback(snapshot, group, errors) }
+			withContext(NonCancellable) { rollback(snapshot, errors) }
 			throw e
 		} catch (e: Exception) {
 			Log.w(TAG, "Source group apply failed", e)
 			errors += "${e.localizedMessage ?: e.javaClass.simpleName}"
-			rollback(snapshot, group, errors)
+			rollback(snapshot, errors)
 		} finally {
 			_progress.update {
 				it.copy(running = false, finished = true, step = total, errors = errors.toList())
@@ -572,6 +572,7 @@ class SourceGroupRepository @Inject constructor(
 		val pinApplied: Set<String>,
 		val domains: Map<String, String?>,
 		val jarPriority: String,
+		val allSourcesEnabled: Boolean,
 	) {
 		val pinnedNames: Set<String> =
 			sources.filter { it.isPinned }.mapTo(HashSet()) { it.source } +
@@ -588,10 +589,11 @@ class SourceGroupRepository @Inject constructor(
 			pinApplied = pinStore().all.keys.toSet(),
 			domains = group.sourceStates.map { it.source }.distinct().associateWith { currentDomainOverride(it) },
 			jarPriority = settings.jarPriorityOrder,
+			allSourcesEnabled = settings.isAllSourcesEnabled,
 		)
 	}
 
-	private suspend fun rollback(snapshot: GroupStateSnapshot?, group: SourceGroup, errors: MutableList<String>) {
+	private suspend fun rollback(snapshot: GroupStateSnapshot?, errors: MutableList<String>) {
 		if (snapshot == null) return
 		val failures = mutableListOf<String>()
 		runGuarded(failures, "rollback sources") {
@@ -625,6 +627,9 @@ class SourceGroupRepository @Inject constructor(
 		}
 		runGuarded(failures, "rollback jar priority") {
 			settings.jarPriorityOrder = snapshot.jarPriority
+		}
+		runGuarded(failures, "rollback all-sources flag") {
+			settings.isAllSourcesEnabled = snapshot.allSourcesEnabled
 		}
 		errors += context.getString(R.string.source_groups_rolled_back)
 		errors += failures

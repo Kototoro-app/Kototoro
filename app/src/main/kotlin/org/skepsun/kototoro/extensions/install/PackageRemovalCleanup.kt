@@ -3,7 +3,6 @@ package org.skepsun.kototoro.extensions.install
 import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
 import org.skepsun.kototoro.core.db.dao.SourceOriginsDao
-import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.explore.data.SourceAvailabilityRepository
 import org.skepsun.kototoro.settings.sources.lock.SourceLockStore
 import javax.inject.Inject
@@ -16,7 +15,6 @@ import javax.inject.Singleton
 @Singleton
 class PackageRemovalCleanup @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val settings: AppSettings,
     private val sourceOriginsDao: SourceOriginsDao,
     private val sourceAvailabilityRepository: SourceAvailabilityRepository,
 ) {

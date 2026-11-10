@@ -257,12 +257,12 @@ class ExtensionsBrowserViewModel @Inject constructor(
                 item.pkgName,
                 item.extension.type.normalizePackageNameForMatching(item.pkgName),
             )
-            pendingUninstalls[uninstallPkg] = PendingUninstall(item.extension.type, item.pkgName, sourceNames)
+            pendingUninstalls[uninstallPkg] = PendingUninstall(item.pkgName, sourceNames)
             onUninstallIntent.call(Intent(action, Uri.fromParts("package", uninstallPkg, null)))
         }
     }
 
-    private class PendingUninstall(val type: ExternalExtensionType, val packageName: String, val sourceNames: List<String>)
+    private class PendingUninstall(val packageName: String, val sourceNames: List<String>)
 
     private val pendingUninstalls = java.util.concurrent.ConcurrentHashMap<String, PendingUninstall>()
 
