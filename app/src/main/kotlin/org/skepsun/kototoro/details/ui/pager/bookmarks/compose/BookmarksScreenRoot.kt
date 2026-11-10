@@ -453,13 +453,7 @@ private fun NovelNotesTabContent(
                                             state = targetState,
                                         )
                                     }
-                                    is BookNoteItem.VideoNote -> {
-                                        router.openVideo(
-                                            manga = manga,
-                                            chapterId = item.chapterId,
-                                            positionMs = item.positionMs,
-                                        )
-                                    }
+                                    is BookNoteItem.VideoNote -> Unit // Retained backup data has no playback route.
                                 }
                             },
                             onMakeExcerpt = {

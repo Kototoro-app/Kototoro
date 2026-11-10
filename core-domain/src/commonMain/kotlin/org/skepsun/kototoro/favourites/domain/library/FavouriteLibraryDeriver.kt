@@ -132,6 +132,12 @@ internal fun applyVisibility(
     val visible = HashSet<Long>(snapshot.rowsByEntityId.size)
     outer@ for (entityId in snapshot.allEntityIds) {
         val row = snapshot.rowsByEntityId.getValue(entityId)
+        val fallbackType = if (row.sourceGroupFlags and
+            (groupMask(ContentGroup.VIDEO) or groupMask(ContentGroup.HENTAI_VIDEO)) != 0) ContentType.VIDEO else ContentType.MANGA
+        if (!org.skepsun.kototoro.core.model.ReaderContentPolicy.acceptsSnapshot(
+                row.sourceName, row.contentType, fallbackType,
+            )) continue@outer
+
 
         // Space content types apply to the row's resolved content type.
         if (input.allowedContentTypes != null && row.contentType !in input.allowedContentTypes) {
@@ -212,6 +218,12 @@ internal fun applyQuickFilters(
     val result = HashSet<Long>(visible.size)
     outer@ for (entityId in visible) {
         val row = snapshot.rowsByEntityId.getValue(entityId)
+        val fallbackType = if (row.sourceGroupFlags and
+            (groupMask(ContentGroup.VIDEO) or groupMask(ContentGroup.HENTAI_VIDEO)) != 0) ContentType.VIDEO else ContentType.MANGA
+        if (!org.skepsun.kototoro.core.model.ReaderContentPolicy.acceptsSnapshot(
+                row.sourceName, row.contentType, fallbackType,
+            )) continue@outer
+
         if (requireDownloaded && !row.isDownloaded) continue@outer
         if (nsfwMode == 1 && !row.isNsfw) continue@outer
         if (nsfwMode == 0 && row.isNsfw) continue@outer

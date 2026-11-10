@@ -330,20 +330,20 @@ class UnifiedSourcesViewModel @Inject constructor(
         fullCatalogState,
         filterState,
     ) { catalogData, filters ->
-        val visibleRepositories = catalogData.repositories.filterBy(filters)
-        val visiblePackages = catalogData.packages.filterBy(filters, catalogData.repositoriesById)
-        val visibleSources = catalogData.sources.filterBy(filters, catalogData.repositoriesById, catalogData.packagesById)
+        val visibleRepositories = catalogData.repositories.filter { it.kind.isReadingKind() }.filterBy(filters)
+        val visiblePackages = catalogData.packages.filter { it.kind.isReadingKind() }.filterBy(filters, catalogData.repositoriesById)
+        val visibleSources = catalogData.sources.filter { it.kind.isReadingKind() }.filterBy(filters, catalogData.repositoriesById, catalogData.packagesById)
 
         UnifiedSourcesUiState.Ready(
             filters = filters,
             repositories = visibleRepositories,
             packages = visiblePackages,
             sources = visibleSources,
-            allRepositories = catalogData.repositories,
-            allPackages = catalogData.packages,
-            allSources = catalogData.sources,
-            availableKinds = catalogData.availableKinds,
-            availableContentTypes = catalogData.availableContentTypes,
+            allRepositories = catalogData.repositories.filter { it.kind.isReadingKind() },
+            allPackages = catalogData.packages.filter { it.kind.isReadingKind() },
+            allSources = catalogData.sources.filter { it.kind.isReadingKind() },
+            availableKinds = catalogData.availableKinds.filter { it.isReadingKind() },
+            availableContentTypes = catalogData.availableContentTypes.filter { it in org.skepsun.kototoro.core.model.ReaderContentPolicy.contentTypes },
             availableLocationTypes = catalogData.availableLocationTypes,
             availableLanguages = catalogData.availableLanguages,
             recommendedPackages = catalogData.recommendedPackages,

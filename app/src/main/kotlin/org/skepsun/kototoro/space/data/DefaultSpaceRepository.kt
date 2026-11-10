@@ -24,7 +24,7 @@ class DefaultSpaceRepository @Inject constructor(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     private val initialSpace = SpaceId(localDataSource.readActiveSpaceId()).takeIf {
-        it.value.startsWith("builtin:") || it.value.startsWith("custom:")
+        it in setOf(BuiltInSpaces.Manga, BuiltInSpaces.Novel) || it.value.startsWith("custom:")
     }
         ?: BuiltInSpaces.Manga
     private val mutableActiveSpace = MutableStateFlow(initialSpace)

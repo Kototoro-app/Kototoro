@@ -22,7 +22,6 @@ fun AISettingsScreen(
     onOpenTranslationSettings: () -> Unit,
     onOpenImageEnhancementSettings: () -> Unit,
     onOpenTtsSettings: () -> Unit,
-    onOpenVideoEnhancementSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Surface(
@@ -101,19 +100,6 @@ fun AISettingsScreen(
                 }
             }
 
-            SettingsPreferenceGroup(
-                title = stringResource(R.string.ai_section_video),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                item {
-                    SettingsActionPreference(
-                        title = stringResource(R.string.ai_video_enhancement_settings),
-                        summary = stringResource(R.string.ai_video_enhancement_summary),
-                        iconRes = R.drawable.ic_content_video,
-                        onClick = onOpenVideoEnhancementSettings,
-                    )
-                }
-            }
         }
     }
 }

@@ -22,7 +22,7 @@ class BuiltinContentRepositoryProvider @Inject constructor(
         return when (source) {
             LocalMangaSource -> localMangaRepository
             LocalNovelSource -> localNovelRepository
-            LocalVideoSource -> localMangaRepository
+            LocalVideoSource -> EmptyContentRepository(source)
             UnknownContentSource -> EmptyContentRepository(source)
             else -> null
         }

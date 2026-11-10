@@ -37,7 +37,6 @@ import org.skepsun.kototoro.parsers.util.runCatchingCancellable
 import org.skepsun.kototoro.parsers.util.sizeOrZero
 import org.skepsun.kototoro.parsers.util.suspendlazy.suspendLazy
 import org.skepsun.kototoro.settings.storage.DirectoryModel
-import org.skepsun.kototoro.video.domain.resolveVideoCandidates
 import javax.inject.Inject
 
 @HiltViewModel
@@ -111,20 +110,6 @@ class DownloadDialogViewModel @Inject constructor(
                 loadAvailableOptions()
             } finally {
                 isOptionsLoading.value = false
-            }
-        }
-        launchJob(Dispatchers.Default) {
-            try {
-                val firstManga = mangaDetails.get().firstOrNull()
-                if (firstManga?.source?.getContentType() == ContentType.VIDEO) {
-                    isVideoContent.value = true
-                    isVideoQualitiesLoading.value = true
-                    loadAvailableVideoQualities()
-                }
-            } catch (e: Exception) {
-                e.printStackTraceDebug()
-            } finally {
-                isVideoQualitiesLoading.value = false
             }
         }
         loadAvailableDestinations()
@@ -298,24 +283,6 @@ class DownloadDialogViewModel @Inject constructor(
                     isRemovable = false,
                 )
             }
-        }
-    }
-
-    private suspend fun loadAvailableVideoQualities() {
-        val firstManga = mangaDetails.get().firstOrNull() ?: return
-        val firstChapter = firstManga.chapters?.firstOrNull() ?: return
-        val repo = mangaRepositoryFactory.create(firstManga.source)
-
-        runCatchingCancellable {
-            val qualities = repo.resolveVideoCandidates(firstChapter)
-                .map { it.title.trim() }
-                .filter { it.isNotEmpty() }
-                .distinct()
-            if (qualities.isNotEmpty()) {
-                videoQualities.value = qualities
-            }
-        }.onFailure {
-            it.printStackTraceDebug()
         }
     }
 

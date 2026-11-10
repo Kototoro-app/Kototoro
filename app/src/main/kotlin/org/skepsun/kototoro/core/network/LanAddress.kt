@@ -1,4 +1,4 @@
-package org.skepsun.kototoro.video.dlna
+package org.skepsun.kototoro.core.network
 
 import android.content.Context
 import android.net.wifi.WifiManager

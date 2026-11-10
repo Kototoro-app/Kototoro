@@ -127,11 +127,6 @@ open class BaseApp : App(), Configuration.Provider, SingletonImageLoader.Factory
                 e.printStackTrace()
             }
             try {
-                entryPoint.aniyomiExtensionManager().initialize()
-            } catch (e: Throwable) {
-                e.printStackTrace()
-            }
-            try {
                 entryPoint.ireaderExtensionManager().initialize()
             } catch (e: Throwable) {
                 e.printStackTrace()
@@ -143,12 +138,6 @@ open class BaseApp : App(), Configuration.Provider, SingletonImageLoader.Factory
             }
         }
         processLifecycleScope.launch(Dispatchers.IO) {
-            try {
-                BaseAppHolder.setCloudstreamRuntimeManager(entryPoint.cloudstreamRuntimeManager())
-                entryPoint.cloudstreamRuntimeManager().initialize()
-            } catch (e: Throwable) {
-                e.printStackTrace()
-            }
             try {
                 org.skepsun.kototoro.core.extensions.GlobalExtensionManager.initialize(this@BaseApp)
             } catch (e: Throwable) {

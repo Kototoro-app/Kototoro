@@ -1,5 +1,7 @@
 package org.skepsun.kototoro.space.ui
 
+import org.skepsun.kototoro.core.model.ReaderContentPolicy
+
 import androidx.compose.runtime.staticCompositionLocalOf
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
@@ -175,7 +177,7 @@ internal fun org.skepsun.kototoro.space.domain.SpaceKind.toBrowseGroupTab(): Bro
     org.skepsun.kototoro.space.domain.SpaceKind.ALL -> BrowseGroupTab.All
 }
 
-private val ALL_STANDARD_CONTENT_TYPES = ContentType.entries.filterNot { it == ContentType.OTHER }.toSet()
+private val ALL_STANDARD_CONTENT_TYPES = ReaderContentPolicy.contentTypes.toList().toSet()
 
 internal fun BrowseGroupTab.toPrimaryContentType(): ContentType? = when (this) {
     BrowseGroupTab.Content -> ContentType.MANGA

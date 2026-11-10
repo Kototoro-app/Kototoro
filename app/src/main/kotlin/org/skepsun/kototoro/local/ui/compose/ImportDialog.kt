@@ -208,7 +208,7 @@ private fun ImportTypeSelector(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.fillMaxWidth(),
         ) {
-            ImportContentType.entries.take(2).forEach { type ->
+            ImportContentType.entries.filter { it != ImportContentType.VIDEO }.take(2).forEach { type ->
                 ImportTypeChip(
                     type = type,
                     selected = selectedType == type,
@@ -221,7 +221,7 @@ private fun ImportTypeSelector(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.fillMaxWidth(),
         ) {
-            ImportContentType.entries.drop(2).forEach { type ->
+            ImportContentType.entries.filter { it != ImportContentType.VIDEO }.drop(2).forEach { type ->
                 ImportTypeChip(
                     type = type,
                     selected = selectedType == type,

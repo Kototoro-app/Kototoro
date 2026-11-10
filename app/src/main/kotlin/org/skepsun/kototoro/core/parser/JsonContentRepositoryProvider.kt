@@ -12,7 +12,7 @@ import org.skepsun.kototoro.core.network.jsonsource.PersistentCookieJar
 import org.skepsun.kototoro.core.parser.legado.LegadoRepository
 import org.skepsun.kototoro.core.parser.tvbox.TVBoxRepository
 import org.skepsun.kototoro.parsers.model.ContentSource
-import org.skepsun.kototoro.video.data.VideoLocalCacheProxy
+import org.skepsun.kototoro.core.parser.tvbox.VideoLocalCacheProxy
 import javax.inject.Inject
 
 class JsonContentRepositoryProvider @Inject constructor(

@@ -1,4 +1,4 @@
-package org.skepsun.kototoro.video.data
+package org.skepsun.kototoro.core.parser.tvbox
 
 import android.content.Context
 import android.util.Log
@@ -10,7 +10,7 @@ import org.skepsun.kototoro.core.network.ContentHttpClient
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.network.GZipOptions
-import org.skepsun.kototoro.video.dlna.NetworkUtils
+import org.skepsun.kototoro.core.network.NetworkUtils
 import java.io.ByteArrayInputStream
 import java.io.File
 import java.io.FileInputStream

@@ -19,7 +19,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.reader.domain.ReaderSuperResolutionManager
-import org.skepsun.kototoro.video.player.Anime4KShaderAssets
+import org.skepsun.kototoro.reader.translate.data.Anime4KShaderAssets
 
 /** Exercises bundled shaders and the production cache with isolated files, without contacting a source. */
 @RunWith(AndroidJUnit4::class)

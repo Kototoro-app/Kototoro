@@ -124,7 +124,6 @@ import org.skepsun.kototoro.scrobbling.common.domain.tryScrobble
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingInfo
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingStatus
 import org.skepsun.kototoro.stats.data.StatsRepository
-import org.skepsun.kototoro.video.data.VideoDownloadIndex
 import org.skepsun.kototoro.tracking.discovery.domain.TrackingEntitySearchResult
 import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteCatalog
 import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteMatchResult
@@ -357,7 +356,6 @@ class DetailsViewModel @Inject constructor(
     private val epubChapterMappingDao: org.skepsun.kototoro.core.db.dao.EpubChapterMappingDao,
     private val localEpubSource: org.skepsun.kototoro.local.epub.LocalEpubSource,
     private val epubStorageManager: org.skepsun.kototoro.local.epub.EpubStorageManager,
-    private val videoDownloadIndex: VideoDownloadIndex,
     private val favouritesRepository: FavouritesRepository,
     mangaRepositoryFactory: org.skepsun.kototoro.core.parser.ContentRepository.Factory,
     private val contentSourcesRepository: ContentSourcesRepository,
@@ -686,17 +684,6 @@ class DetailsViewModel @Inject constructor(
             ?: details?.toContent()?.takeIf { it.isLocal }?.id
     }.distinctUntilChanged()
         .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, null)
-    private val observedVideoDownloadChanges = combine(
-        videoDownloadIndex.changes,
-        currentObservedLocalMangaId,
-    ) { changedContentId, observedLocalMangaId ->
-        changedContentId to observedLocalMangaId
-    }.onEach { (changedContentId, observedLocalMangaId) ->
-        if (changedContentId == observedLocalMangaId) {
-            notifyDownloadChanged()
-        }
-    }.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, 0L to null)
-
     private var baseLoadedDetails: ContentDetails? = null
     private val trackingMetadataCandidates = MutableStateFlow<List<TrackingMetadataCandidate>>(emptyList())
     private val selectedMetadataSource = MutableStateFlow<MetadataSourceSelection>(initialMetadataSourceSelection())
@@ -4049,25 +4036,7 @@ class DetailsViewModel @Inject constructor(
      */
     override suspend fun expandEpubChaptersIfNeeded(chapters: List<org.skepsun.kototoro.details.ui.model.ChapterListItem>): List<org.skepsun.kototoro.details.ui.model.ChapterListItem> {
         android.util.Log.d("DetailsViewModel", "expandEpubChaptersIfNeeded: NEW ARCHITECTURE - returning chapters as-is (${chapters.size} chapters)")
-        val manga = mangaDetails.value?.toContent() ?: return chapters
-        val contentType = manga.source.getContentType()
-        if (contentType != ContentType.VIDEO && contentType != ContentType.HENTAI_VIDEO) {
-            return chapters
-        }
-        val downloadedIds = videoDownloadIndex.getDownloadedChapterIds(manga.id)
-        if (downloadedIds.isEmpty()) return chapters
-        val downloadedOnly = isDownloadedOnly.value
-        return chapters.mapNotNull { item ->
-            val isDownloaded = item.chapter.id in downloadedIds || item.isDownloaded
-            if (downloadedOnly && !isDownloaded) {
-                return@mapNotNull null
-            }
-            if (isDownloaded && !item.isDownloaded) {
-                item.copy(flags = item.flags or FLAG_DOWNLOADED)
-            } else {
-                item
-            }
-        }
+        return chapters
     }
 
     override suspend fun onDownloadComplete(downloadedContent: LocalContent?) {

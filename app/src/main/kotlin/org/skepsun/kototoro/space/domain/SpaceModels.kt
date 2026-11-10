@@ -58,15 +58,7 @@ object BuiltInSpaces {
             ),
             sortKey = 1,
         ),
-        SpaceContext(
-            id = Anime,
-            kind = SpaceKind.ANIME,
-            allowedContentTypes = setOf(
-                ContentType.VIDEO,
-                ContentType.HENTAI_VIDEO,
-            ),
-            sortKey = 2,
-        ),
+
     )
 }
 

@@ -40,14 +40,7 @@ fun buildSettingsRootSections(
                 summary = context.getString(R.string.ai_settings_entry_summary),
                 onClick = { onOpenDestination(SettingsDestination.AISettings) },
             ),
-            settingsRootItem(
-                key = "playback",
-                iconRes = R.drawable.ic_play,
-                iosIconColor = SettingsRootIconColor.RED,
-                title = context.getString(R.string.playback_settings),
-                summary = context.summaryOf(R.string.video_decoder_mode, R.string.video_cache_size),
-                onClick = { onOpenDestination(SettingsDestination.PlaybackSettings) },
-            ),
+
         ),
     )
 

@@ -62,9 +62,7 @@ fun AppNotesRoute(
                             val state = ReaderState(chapterId = item.chapterId, page = item.page, scroll = 0)
                             appRouter.openReader(manga = content, state = state)
                         }
-                        is BookNoteItem.VideoNote -> {
-                            appRouter.openVideo(manga = content, chapterId = item.chapterId, positionMs = item.positionMs)
-                        }
+                        is BookNoteItem.VideoNote -> Unit // Retained backup data has no playback route.
                     }
                 },
                 onDeleteNote = { item -> viewModel.deleteNote(item) },

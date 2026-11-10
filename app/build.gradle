@@ -36,7 +36,9 @@ def requestedTaskNames = gradle.startParameter.taskNames.collect { it.toLowerCas
 def debugOnlyAbiBuild = !requestedTaskNames.isEmpty() &&
 	requestedTaskNames.any { it.contains('debug') } &&
 	requestedTaskNames.every { !it.contains('release') && !it.contains('nightly') }
-def activeAbiFilters = debugOnlyAbiBuild ? ['arm64-v8a'] : allAbiFilters
+def debugAbi = providers.gradleProperty('readerDebugAbi').getOrElse('arm64-v8a')
+if (!allAbiFilters.contains(debugAbi)) throw new GradleException('Unsupported readerDebugAbi')
+def activeAbiFilters = debugOnlyAbiBuild ? [debugAbi] : allAbiFilters
 
 android {
 	// Phase B: Compose 1.12 requires compileSdk 37; targetSdk stays 36
@@ -605,14 +607,9 @@ dependencies {
 	// EPUB support for Novelia Wenku
 	implementation libs.epublib
 
-	// Media3 for video playback
+	// Media3 ExoPlayer is used by novel text-to-speech.
 	implementation libs.androidx.media3.exoplayer
-	implementation libs.androidx.media3.ui
-	implementation libs.androidx.media3.exoplayer.hls
-	implementation libs.androidx.media3.exoplayer.dash
 	implementation libs.androidx.media3.datasource.okhttp
-	implementation libs.nextlib.media3ext
-	implementation libs.bytedance.danmaku.render.engine
 	implementation libs.nanohttpd
 	implementation libs.mlkit.text.recognition
 	implementation libs.mlkit.text.recognition.japanese
@@ -627,11 +624,6 @@ dependencies {
 	// whose Android binaries align ELF segments to 16 KB pages.
 	implementation files('libs/tokenizer-native-0.38.0.aar')
 	implementation cloudstreamRuntimeJar
-	implementation files('libs/jlibtorrent-2.0.12.9.jar')
-	runtimeOnly files('libs/jlibtorrent-android-arm-2.0.12.9.jar')
-	runtimeOnly files('libs/jlibtorrent-android-arm64-2.0.12.9.jar')
-	runtimeOnly files('libs/jlibtorrent-android-x86-2.0.12.9.jar')
-	runtimeOnly files('libs/jlibtorrent-android-x86_64-2.0.12.9.jar')
 	implementation libs.cryptography.core
 	implementation libs.cryptography.provider.optimal
 	implementation libs.djl.sentencepiece
@@ -819,4 +811,21 @@ ${arrBranches ? arrBranches + '\n' : ''}        else -> 0
 }
 """, 'UTF-8')
 	}
+}
+
+// Resolve the real APK graph and reject playback-only libraries. ExoPlayer/core stay for novel TTS.
+tasks.register('verifyReaderDependencies') {
+    group = 'verification'
+    description = 'Checks the debug runtime graph for retired audiovisual dependencies.'
+    def runtimeClasspath = configurations.named('debugRuntimeClasspath')
+    doLast {
+        def forbidden = runtimeClasspath.get().resolvedConfiguration.resolvedArtifacts.findAll { artifact ->
+            def id = artifact.moduleVersion.id
+            id.group == 'com.frostwire' || id.name.startsWith('jlibtorrent') ||
+                id.name.contains('danmaku') || id.group.startsWith('com.github.anilbeesetti') ||
+                (id.group == 'androidx.media3' && id.name in ['media3-ui', 'media3-exoplayer-hls', 'media3-exoplayer-dash'])
+        }
+        if (!forbidden.isEmpty()) throw new GradleException("Playback dependencies remain: ${forbidden*.name}")
+        logger.lifecycle('Reader runtime dependency check passed.')
+    }
 }

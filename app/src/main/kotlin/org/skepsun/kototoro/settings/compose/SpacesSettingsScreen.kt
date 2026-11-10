@@ -1,5 +1,7 @@
 package org.skepsun.kototoro.settings.compose
 
+import org.skepsun.kototoro.core.model.ReaderContentPolicy
+
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -459,7 +461,7 @@ private fun SpaceEditorDialog(
     val selectAllRequester = remember { FocusRequester() }
     val fieldExit = rememberTvFieldExit(target = if (canConfirm) null else selectAllRequester)
     val readOnlyState = rememberTvTextFieldReadOnlyState()
-    val allContentTypes = remember { ContentType.entries.filterNot { it == ContentType.OTHER } }
+    val allContentTypes = remember { ReaderContentPolicy.contentTypes.toList() }
 
     SettingsAlertDialog(
         title = stringResource(

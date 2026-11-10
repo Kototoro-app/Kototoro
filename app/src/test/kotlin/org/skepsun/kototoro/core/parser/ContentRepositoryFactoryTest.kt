@@ -58,9 +58,7 @@ class ContentRepositoryFactoryTest {
 	private val kotatsuContentRepositoryProvider = mockk<KotatsuContentRepositoryProvider>()
 	private val testContentRepositoryProvider = mockk<TestContentRepositoryProvider>()
 	private val externalContentRepositoryProvider = mockk<ExternalContentRepositoryProvider>()
-	private val cloudstreamContentRepositoryProvider = mockk<CloudstreamContentRepositoryProvider>()
 	private val mihonContentRepositoryProvider = mockk<MihonContentRepositoryProvider>()
-	private val aniyomiContentRepositoryProvider = mockk<AniyomiContentRepositoryProvider>()
 	private val ireaderContentRepositoryProvider = mockk<IReaderContentRepositoryProvider>()
 	private val tsundokuContentRepositoryProvider = mockk<TsundokuContentRepositoryProvider>()
 	private val jsonContentRepositoryProvider = mockk<JsonContentRepositoryProvider>()
@@ -116,9 +114,7 @@ class ContentRepositoryFactoryTest {
 			kotatsuContentRepositoryProvider = kotatsuContentRepositoryProvider,
 			testContentRepositoryProvider = testContentRepositoryProvider,
 			externalContentRepositoryProvider = externalContentRepositoryProvider,
-			cloudstreamContentRepositoryProvider = cloudstreamContentRepositoryProvider,
 			mihonContentRepositoryProvider = mihonContentRepositoryProvider,
-			aniyomiContentRepositoryProvider = aniyomiContentRepositoryProvider,
 			ireaderContentRepositoryProvider = ireaderContentRepositoryProvider,
 			tsundokuContentRepositoryProvider = tsundokuContentRepositoryProvider,
 			jsonContentRepositoryProvider = jsonContentRepositoryProvider,

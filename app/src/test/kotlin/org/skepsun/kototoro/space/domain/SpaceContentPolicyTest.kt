@@ -53,13 +53,13 @@ class SpaceContentPolicyTest {
     }
 
     @Test
-    fun `novel and anime spaces contain their explicit content types`() {
+    fun `novel stays available and retired anime has no active scope`() {
         assertEquals(
             setOf(ContentType.NOVEL, ContentType.HENTAI_NOVEL),
             policy.allowedTypes(BuiltInSpaces.Novel),
         )
         assertEquals(
-            setOf(ContentType.VIDEO, ContentType.HENTAI_VIDEO),
+            emptySet<ContentType>(),
             policy.allowedTypes(BuiltInSpaces.Anime),
         )
     }
@@ -71,7 +71,7 @@ class SpaceContentPolicyTest {
             .groupingBy { it }
             .eachCount()
 
-        assertEquals(ContentType.entries.toSet() - ContentType.OTHER, occurrences.keys)
+        assertEquals(org.skepsun.kototoro.core.model.ReaderContentPolicy.contentTypes, occurrences.keys)
         assertTrue(occurrences.values.all { it == 1 })
     }
 

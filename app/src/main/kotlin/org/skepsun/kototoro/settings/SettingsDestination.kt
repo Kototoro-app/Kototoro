@@ -21,9 +21,7 @@ sealed interface SettingsDestination {
     data object AISettings : SettingsDestination
     data object OcrModelsSettings : SettingsDestination
     data object AiImageEnhancementSettings : SettingsDestination
-    data object AiVideoEnhancementSettings : SettingsDestination
     data object TtsSettings : SettingsDestination
-    data object PlaybackSettings : SettingsDestination
     data object ReaderSettings : SettingsDestination
     data object ReplaceRulesSettings : SettingsDestination
     data object SourcesSettings : SettingsDestination

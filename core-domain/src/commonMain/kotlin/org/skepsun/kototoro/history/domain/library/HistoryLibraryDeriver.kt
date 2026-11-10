@@ -127,6 +127,10 @@ object HistoryLibraryDeriver {
      */
     private fun HistoryCardEntry.matchesTab(input: Input): Boolean {
         val tab = input.groupTab
+        val fallbackType = if (contentGroup(ContentGroup.VIDEO) || contentGroup(ContentGroup.HENTAI_VIDEO)) {
+            ContentType.VIDEO
+        } else ContentType.MANGA
+        if (!org.skepsun.kototoro.core.model.ReaderContentPolicy.acceptsSnapshot(sourceName, contentType, fallbackType)) return false
         if (tab == BrowseGroupTab.All) return true
         val typeMatches = tab.matchesContentType(contentType ?: ContentType.MANGA)
         if (input.space != null) {

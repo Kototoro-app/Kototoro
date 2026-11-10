@@ -4,7 +4,7 @@ import android.content.Context
 import org.skepsun.kototoro.core.jsonsource.JsonContentSource
 import org.skepsun.kototoro.core.model.jsonsource.TVBoxStoredConfig
 import org.skepsun.kototoro.core.network.jsonsource.LegadoHttpClient
-import org.skepsun.kototoro.video.data.VideoLocalCacheProxy
+import org.skepsun.kototoro.core.parser.tvbox.VideoLocalCacheProxy
 
 internal object TVBoxSpiderRuntimeFactory {
 

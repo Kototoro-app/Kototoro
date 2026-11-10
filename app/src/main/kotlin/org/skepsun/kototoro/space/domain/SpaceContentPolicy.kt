@@ -1,5 +1,7 @@
 package org.skepsun.kototoro.space.domain
 
+import org.skepsun.kototoro.core.model.ReaderContentPolicy
+
 import dagger.Reusable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -76,4 +78,4 @@ class DefaultSpaceContentPolicy @Inject constructor(
     }
 }
 
-private val ALL_STANDARD_CONTENT_TYPES = ContentType.entries.filterNot { it == ContentType.OTHER }.toSet()
+private val ALL_STANDARD_CONTENT_TYPES = ReaderContentPolicy.contentTypes.toList().toSet()

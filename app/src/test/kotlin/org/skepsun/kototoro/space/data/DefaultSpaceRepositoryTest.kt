@@ -22,6 +22,15 @@ import org.skepsun.kototoro.space.domain.SpaceId
 @OptIn(ExperimentalCoroutinesApi::class)
 class DefaultSpaceRepositoryTest {
 
+    @Test
+    fun `retired anime selection restores a readable space without deleting library data`() {
+        val store = FakeSpaceLocalDataSource(BuiltInSpaces.Anime.value)
+        val repository = DefaultSpaceRepository(store, mockk(relaxed = true), TestSpaceCatalogRepository())
+
+        assertEquals(BuiltInSpaces.Manga, repository.activeSpace.value)
+        assertEquals(listOf(BuiltInSpaces.Manga.value), store.writes)
+    }
+
 	private val dispatcher = UnconfinedTestDispatcher()
 
 	@BeforeEach

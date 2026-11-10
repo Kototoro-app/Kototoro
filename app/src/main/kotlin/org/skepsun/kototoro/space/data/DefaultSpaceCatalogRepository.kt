@@ -1,5 +1,7 @@
 package org.skepsun.kototoro.space.data
 
+import org.skepsun.kototoro.core.model.ReaderContentPolicy
+
 import java.util.Locale
 import java.util.UUID
 import javax.inject.Inject
@@ -39,7 +41,13 @@ class DefaultSpaceCatalogRepository @Inject constructor(
         .flatMapLatest { enabled ->
             if (enabled) {
                 dao.observeAll().map { custom ->
-                    BuiltInSpaces.contexts + custom.map { it.toContext() }
+                    BuiltInSpaces.contexts + custom.mapNotNull { entity ->
+                        entity.toContext().let { context ->
+                            val types = context.allowedContentTypes.intersect(ReaderContentPolicy.contentTypes)
+                            context.copy(allowedContentTypes = types, kind = types.primarySpaceKind())
+                                .takeIf { types.isNotEmpty() }
+                        }
+                    }
                 }
             } else {
                 flowOf(BuiltInSpaces.contexts)
@@ -66,7 +74,7 @@ class DefaultSpaceCatalogRepository @Inject constructor(
         sourceKinds: Set<SourceType>,
     ): SpaceContext = withContext(Dispatchers.IO) {
         require(title.isNotBlank()) { "Space title must not be blank" }
-        require(contentTypes.isNotEmpty()) { "At least one content type is required" }
+        require(contentTypes.isNotEmpty() && ReaderContentPolicy.contentTypes.containsAll(contentTypes)) { "Only reading content types are supported" }
         check(dao.countActive() < MAX_CUSTOM_SPACES) { "Custom Space limit reached" }
         val now = System.currentTimeMillis()
         val space = SpaceContext(
@@ -86,7 +94,7 @@ class DefaultSpaceCatalogRepository @Inject constructor(
     override suspend fun update(space: SpaceContext) = withContext(Dispatchers.IO) {
         require(!space.isBuiltIn) { "Built-in Spaces cannot be updated" }
         require(space.title?.isNotBlank() == true) { "Space title must not be blank" }
-        require(space.allowedContentTypes.isNotEmpty()) { "At least one content type is required" }
+        require(space.allowedContentTypes.isNotEmpty() && ReaderContentPolicy.contentTypes.containsAll(space.allowedContentTypes)) { "Only reading content types are supported" }
         val existing = checkNotNull(dao.find(space.id.value)) { "Unknown custom Space: ${space.id.value}" }
         dao.update(
             space.copy(

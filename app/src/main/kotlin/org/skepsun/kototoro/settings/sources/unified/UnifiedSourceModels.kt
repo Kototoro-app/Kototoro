@@ -168,3 +168,6 @@ data class UnifiedSourceCatalogState(
 internal fun List<UnifiedSourcePackageItem>.withUniquePackageIds(): List<UnifiedSourcePackageItem> {
     return distinctBy(UnifiedSourcePackageItem::id)
 }
+
+internal fun UnifiedSourceKind.isReadingKind(): Boolean =
+    this != UnifiedSourceKind.ANIYOMI && this != UnifiedSourceKind.CLOUDSTREAM && this != UnifiedSourceKind.TVBOX

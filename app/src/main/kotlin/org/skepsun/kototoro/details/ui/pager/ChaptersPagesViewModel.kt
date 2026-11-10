@@ -67,9 +67,6 @@ import org.skepsun.kototoro.parsers.model.ContentState
 import org.skepsun.kototoro.reader.ui.ReaderActivity
 import org.skepsun.kototoro.reader.ui.ReaderState
 import org.skepsun.kototoro.reader.ui.ReaderViewModel
-import org.skepsun.kototoro.video.domain.resolveVideoCandidates
-import org.skepsun.kototoro.video.ui.VideoPlayerActivity
-import org.skepsun.kototoro.video.ui.VideoChaptersViewModel
 import java.time.Instant
 
 abstract class ChaptersPagesViewModel(
@@ -515,28 +512,7 @@ abstract class ChaptersPagesViewModel(
     }
 
     fun probeAndDownload(snapshot: Set<Long>) {
-        launchJob(Dispatchers.Default) {
-            val manga = mangaDetails.value?.toContent() ?: return@launchJob
-            if (manga.source.getContentType() != ContentType.VIDEO) return@launchJob
-
-            val chapterId = snapshot.firstOrNull() ?: return@launchJob
-            val chapter = chapters.value.find { it.chapter.id == chapterId }?.chapter ?: return@launchJob
-            val repo = mangaRepositoryFactory.create(manga.source)
-
-            val qualities = runCatchingCancellable {
-                repo.resolveVideoCandidates(chapter)
-                    .map { it.title.trim() }
-                    .filter { it.isNotEmpty() }
-                    .distinct()
-            }.getOrNull()
-
-            if (!qualities.isNullOrEmpty()) {
-                onShowVideoQualityDialog.call(QualityProbeResult(snapshot, qualities))
-            } else {
-                // Fallback to default flow without specific quality
-                onShowVideoQualityDialog.call(QualityProbeResult(snapshot, emptyList()))
-            }
-        }
+        download(snapshot, isMeteredNetworkAllowed = false)
     }
 
     fun download(snapshot: Set<Long>, isMeteredNetworkAllowed: Boolean, preferredQuality: String? = null) {

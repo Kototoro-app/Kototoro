@@ -1,5 +1,7 @@
 package org.skepsun.kototoro.explore.ui.model
 
+import org.skepsun.kototoro.core.model.ReaderContentPolicy
+
 import org.skepsun.kototoro.core.jsonsource.ContentGroup
 import org.skepsun.kototoro.core.jsonsource.OriginGroup
 import org.skepsun.kototoro.parsers.model.ContentType
@@ -38,7 +40,6 @@ sealed class BrowseGroupTab(
             All,
             Content,
             Novel,
-            Video,
         )
 
         /**
@@ -48,7 +49,7 @@ sealed class BrowseGroupTab(
             "all" -> All
             "manga" -> Content
             "novel" -> Novel
-            "video" -> Video
+            "video" -> All
             // Legacy IDs now fall back to All
             "json", "mihon", "aniyomi" -> All
             else -> All
@@ -66,7 +67,7 @@ sealed class BrowseGroupTab(
      * Check if this tab matches a content group
      */
     fun matchesContentGroup(group: ContentGroup): Boolean = when (this) {
-        All -> true
+        All -> group != ContentGroup.VIDEO && group != ContentGroup.HENTAI_VIDEO
         Content -> group == ContentGroup.MANGA || group == ContentGroup.HENTAI_MANGA
         Novel -> group == ContentGroup.NOVEL || group == ContentGroup.HENTAI_NOVEL
         Video -> group == ContentGroup.VIDEO || group == ContentGroup.HENTAI_VIDEO
@@ -81,7 +82,7 @@ sealed class BrowseGroupTab(
      * appear under the Novel/Video chips.
      */
     fun matchesContentType(type: ContentType): Boolean = when (this) {
-        All -> true
+        All -> type in ReaderContentPolicy.contentTypes
         Content -> type == ContentType.MANGA ||
             type == ContentType.MANHWA ||
             type == ContentType.MANHUA ||
@@ -102,7 +103,7 @@ sealed class BrowseGroupTab(
      * switching to Novel/Video doesn't page through thousands of other rows.
      */
     fun allowedContentTypes(): Set<ContentType>? = when (this) {
-        All -> null
+        All -> ReaderContentPolicy.contentTypes
         Content -> setOf(
             ContentType.MANGA,
             ContentType.MANHWA,
@@ -131,7 +132,7 @@ sealed class BrowseGroupTab(
      * Check if this tab supports the given source tag.
      */
     fun supportsSourceTag(tag: SourceTag): Boolean = when (this) {
-        All -> true
+        All -> tag in SourceTag.quickFilterEntries || tag == SourceTag.PINNED
         Content -> tag == SourceTag.BUILTIN || tag == SourceTag.MIHON || tag == SourceTag.LEGADO
         Novel -> tag == SourceTag.BUILTIN || tag == SourceTag.LEGADO || tag == SourceTag.IREADER || tag == SourceTag.LNREADER
         Video -> tag == SourceTag.BUILTIN || tag == SourceTag.ANIYOMI || tag == SourceTag.TVBOX || tag == SourceTag.CLOUDSTREAM

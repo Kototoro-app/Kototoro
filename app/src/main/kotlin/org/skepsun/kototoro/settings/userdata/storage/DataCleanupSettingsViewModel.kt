@@ -31,7 +31,6 @@ import org.skepsun.kototoro.details.domain.ChapterThumbnailResolver
 import org.skepsun.kototoro.local.domain.DeleteReadChaptersUseCase
 import org.skepsun.kototoro.search.domain.ContentSearchRepository
 import org.skepsun.kototoro.tracker.domain.TrackingRepository
-import org.skepsun.kototoro.video.data.TorrentStreamService
 import java.util.EnumMap
 import javax.inject.Inject
 import javax.inject.Provider
@@ -49,7 +48,6 @@ class DataCleanupSettingsViewModel @Inject constructor(
     private val localContentRepository: LocalMangaRepository,
     private val mangaDataRepositoryProvider: Provider<ContentDataRepository>,
         private val coil: ImageLoader,
-        private val torrentStreamService: TorrentStreamService,
     private val chapterThumbnailResolver: ChapterThumbnailResolver,
 ) : BaseViewModel() {
 
@@ -132,7 +130,7 @@ class DataCleanupSettingsViewModel @Inject constructor(
         launchJob(Dispatchers.Default) {
             try {
                 loadingKeys.update { it + AppSettings.KEY_TORRENT_CACHE_CLEAR }
-                torrentStreamService.clearCache()
+                // Legacy torrent files are never removed automatically by Reader Edition.
                 checkNotNull(cacheSizes[CacheDir.TORRENT]).value = storageManager.computeCacheSize(CacheDir.TORRENT)
                 onStorageChanged.call(Unit)
             } finally {

@@ -20,7 +20,7 @@ import org.skepsun.kototoro.reader.translate.data.OnnxModelManager
 import org.skepsun.kototoro.reader.translate.data.RealCuganNcnnEngine
 import org.skepsun.kototoro.reader.translate.data.RealEsrganNcnnEngine
 import org.skepsun.kototoro.reader.translate.data.Anime4kImageEngine
-import org.skepsun.kototoro.video.player.Anime4KShaderAssets
+import org.skepsun.kototoro.reader.translate.data.Anime4KShaderAssets
 import java.io.File
 import java.io.FileOutputStream
 import javax.inject.Inject

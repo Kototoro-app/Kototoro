@@ -104,16 +104,7 @@ fun DownloadsSettingsScreen(
                             onValueChange = onPreferredDownloadFormatChange,
                         )
                     }
-                    item {
-                        SettingsTextInputPreference(
-                            title = stringResource(R.string.download_video_quality),
-                            iconRes = R.drawable.ic_content_video,
-                            value = state.preferredVideoQuality,
-                            summary = stringResource(R.string.download_video_quality_summary),
-                            placeholder = "1080p, 720p, 480p",
-                            onValueChange = onPreferredVideoQualityChange,
-                        )
-                    }
+
                     item {
                         SettingsSwitchPreference(
                             title = stringResource(R.string.download_novel_images),

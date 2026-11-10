@@ -11,9 +11,7 @@ class ContentRepositoryProviderRegistry @Inject constructor(
     private val kotatsuContentRepositoryProvider: KotatsuContentRepositoryProvider,
     private val testContentRepositoryProvider: TestContentRepositoryProvider,
     private val externalContentRepositoryProvider: ExternalContentRepositoryProvider,
-    private val cloudstreamContentRepositoryProvider: org.skepsun.kototoro.cloudstream.runtime.CloudstreamContentRepositoryProvider,
     private val mihonContentRepositoryProvider: MihonContentRepositoryProvider,
-    private val aniyomiContentRepositoryProvider: AniyomiContentRepositoryProvider,
     private val ireaderContentRepositoryProvider: IReaderContentRepositoryProvider,
     private val tsundokuContentRepositoryProvider: TsundokuContentRepositoryProvider,
     private val jsonContentRepositoryProvider: JsonContentRepositoryProvider,
@@ -27,9 +25,7 @@ class ContentRepositoryProviderRegistry @Inject constructor(
             kotatsuContentRepositoryProvider,
             testContentRepositoryProvider,
             externalContentRepositoryProvider,
-            cloudstreamContentRepositoryProvider,
             mihonContentRepositoryProvider,
-            aniyomiContentRepositoryProvider,
             ireaderContentRepositoryProvider,
             tsundokuContentRepositoryProvider,
             jsonContentRepositoryProvider,
@@ -45,6 +41,13 @@ class ContentRepositoryProviderRegistry @Inject constructor(
     )
 
     fun select(source: ContentSource): SelectionResult {
+        val type = source.contentType
+        if (type == org.skepsun.kototoro.parsers.model.ContentType.VIDEO ||
+            type == org.skepsun.kototoro.parsers.model.ContentType.HENTAI_VIDEO ||
+            source.name == "LOCAL_VIDEO" ||
+            listOf("ANIYOMI_", "CLOUDSTREAM_", "JSON_TVBOX_").any(source.name::startsWith)
+        ) return SelectionResult(null, emptyList(), emptyList(), null)
+
         val supportedProviders = providers.filter { provider -> provider.supports(source) }
         android.util.Log.d(
             "ContentRepoFactory",

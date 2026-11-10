@@ -1,4 +1,4 @@
-package org.skepsun.kototoro.video.player
+package org.skepsun.kototoro.reader.translate.data
 
 import android.content.Context
 import java.io.File

@@ -219,26 +219,6 @@ class SettingsSearchHelper @Inject constructor(
             )
         }
 
-        val playbackBreadcrumbs = listOf(context.getString(R.string.playback_settings))
-        val playbackKeys = listOf(
-            "video_decoder_mode" to R.string.video_decoder_mode,
-            "video_renderer_mode" to R.string.video_renderer_mode,
-            "video_background" to R.string.video_background,
-            "playback_ai_video_settings_entry" to R.string.ai_settings,
-            "video_controls_alpha" to R.string.video_controls_alpha,
-            "video_gradient_alpha" to R.string.video_gradient_alpha
-        )
-        playbackKeys.forEach { (key, titleRes) ->
-            result.add(
-                SettingsItem(
-                    key = key,
-                    title = context.getString(titleRes),
-                    breadcrumbs = playbackBreadcrumbs,
-                    destination = SettingsDestination.PlaybackSettings,
-                ),
-            )
-        }
-
         val aiBreadcrumbs = listOf(context.getString(R.string.ai_settings))
         val aiKeys = listOf(
             "ai_models" to R.string.reader_translation_manage_ocr_models,
@@ -271,22 +251,6 @@ class SettingsSearchHelper @Inject constructor(
                     title = context.getString(titleRes),
                     breadcrumbs = aiBreadcrumbs,
                     destination = SettingsDestination.AiImageEnhancementSettings,
-                ),
-            )
-        }
-        val aiVideoKeys = listOf(
-            "video_enhancement_algorithm" to R.string.video_enhancement_algorithm,
-            "video_anime4k_preset" to R.string.video_enhancement_anime4k_preset,
-            "video_fsr_sharpness" to R.string.video_enhancement_fsr_sharpness_search,
-            "video_enhancement_remember" to R.string.video_enhancement_remember,
-        )
-        aiVideoKeys.forEach { (key, titleRes) ->
-            result.add(
-                SettingsItem(
-                    key = key,
-                    title = context.getString(titleRes),
-                    breadcrumbs = listOf(context.getString(R.string.ai_settings)),
-                    destination = SettingsDestination.AiVideoEnhancementSettings,
                 ),
             )
         }

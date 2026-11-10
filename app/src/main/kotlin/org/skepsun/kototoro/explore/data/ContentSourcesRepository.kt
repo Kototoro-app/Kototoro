@@ -1,5 +1,7 @@
 package org.skepsun.kototoro.explore.data
 
+import org.skepsun.kototoro.core.model.ReaderContentPolicy
+
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -1605,22 +1607,18 @@ class ContentSourcesRepository @Inject constructor(
     }
 
     private fun canonicalizeSourcesByName(sources: List<ContentSource>): List<ContentSource> {
-        if (sources.size <= 1) {
-            return sources
-        }
+        if (sources.isEmpty()) return emptyList()
         return LinkedHashMap<String, ContentSource>(sources.size).apply {
-            sources.forEach { source ->
+            sources.filter { ReaderContentPolicy.acceptsSource(it.name, it.getContentType()) }.forEach { source ->
                 putIfAbsent(source.name, source)
             }
         }.values.toList()
     }
 
     private fun canonicalizeSourceInfosByName(sources: List<ContentSourceInfo>): List<ContentSourceInfo> {
-        if (sources.size <= 1) {
-            return sources
-        }
+        if (sources.isEmpty()) return emptyList()
         return LinkedHashMap<String, ContentSourceInfo>(sources.size).apply {
-            sources.forEach { source ->
+            sources.filter { ReaderContentPolicy.acceptsSource(it.mangaSource.name, it.mangaSource.getContentType()) }.forEach { source ->
                 putIfAbsent(source.mangaSource.name, source)
             }
         }.values.toList()

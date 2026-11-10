@@ -64,11 +64,8 @@ enum class SourceTag(
         val quickFilterEntries: List<SourceTag> = listOf(
             BUILTIN,
             MIHON,
-            ANIYOMI,
             LEGADO,
-            TVBOX,
             IREADER,
-            CLOUDSTREAM,
             LNREADER,
             TSUNDOKU,
         )
@@ -100,6 +97,6 @@ enum class SourceTag(
                     "json" -> LEGADO
                     else -> entries.find { it.id == id }
                 }
-            }.toSet()
+            }.filter { it in quickFilterEntries || it == PINNED }.toSet()
     }
 }

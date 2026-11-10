@@ -13,7 +13,7 @@ enum class SearchContentKind {
     VIDEO,
 }
 
-val ALL_SEARCH_CONTENT_KINDS: Set<SearchContentKind> = SearchContentKind.entries.toSet()
+val ALL_SEARCH_CONTENT_KINDS: Set<SearchContentKind> = setOf(SearchContentKind.MANGA, SearchContentKind.NOVEL)
 
 data class SearchContentKindOption(
     val kind: SearchContentKind,
@@ -23,7 +23,6 @@ data class SearchContentKindOption(
 val SEARCH_CONTENT_KIND_OPTIONS: List<SearchContentKindOption> = listOf(
     SearchContentKindOption(SearchContentKind.MANGA, R.string.content_type_manga),
     SearchContentKindOption(SearchContentKind.NOVEL, R.string.content_type_novel),
-    SearchContentKindOption(SearchContentKind.VIDEO, R.string.content_type_video),
 )
 
 fun SearchContentKind.matches(source: ContentSource): Boolean {
@@ -40,7 +39,7 @@ fun SearchContentKind.matches(manga: Content): Boolean = matches(manga.source)
 fun searchContentKindsFromNames(names: Collection<String>?): Set<SearchContentKind>? {
     if (names.isNullOrEmpty()) return null
     val kinds = names.mapNotNull { name ->
-        runCatching { SearchContentKind.valueOf(name) }.getOrNull()
+        runCatching { SearchContentKind.valueOf(name) }.getOrNull()?.takeIf { it in ALL_SEARCH_CONTENT_KINDS }
     }.toSet()
     return kinds.ifEmpty { null }
 }

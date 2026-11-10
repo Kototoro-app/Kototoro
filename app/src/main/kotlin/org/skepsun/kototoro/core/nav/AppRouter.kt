@@ -374,7 +374,7 @@ class AppRouter(
             return
         }
         if (contentType == ContentType.VIDEO || contentType == ContentType.HENTAI_VIDEO) {
-            openVideoContent(manga, anchor, state)
+            return
         } else {
             openReader(
                 ReaderIntent.Builder(contextOrNull() ?: return)
@@ -383,38 +383,6 @@ class AppRouter(
                     .build(),
                 anchor,
             )
-        }
-    }
-
-    private fun openVideoContent(
-        manga: Content,
-        anchor: View?,
-        state: ReaderState?,
-        positionMs: Long? = null,
-    ) {
-        val target = resolveVideoLaunchTarget(manga, state)
-        val lastSegment = target.url.toUriOrNull()?.lastPathSegment ?: target.url
-        val isDirectStream = lastSegment.endsWith(".m3u8", ignoreCase = true) ||
-            lastSegment.endsWith(".mp4", ignoreCase = true)
-        if (isDirectStream || !manga.chapters.isNullOrEmpty()) {
-            openVideo(target.url, manga, anchor, target.state, positionMs)
-            return
-        }
-
-        val lifecycleOwner = activity as? LifecycleOwner
-        if (lifecycleOwner == null) {
-            openVideo(target.url, manga, anchor, target.state, positionMs)
-            return
-        }
-        lifecycleOwner.lifecycleScope.launch {
-            try {
-                val details = mangaRepositoryFactory.create(manga.source).getDetails(manga)
-                val resolvedTarget = resolveVideoLaunchTarget(details, state)
-                openVideo(resolvedTarget.url, details, anchor, resolvedTarget.state, positionMs)
-            } catch (e: Exception) {
-                Log.e("AppRouter", "Failed to load chapters for video", e)
-                openVideo(target.url, manga, anchor, target.state, positionMs)
-            }
         }
     }
 
@@ -466,8 +434,6 @@ class AppRouter(
                     return
                 }
                 if (contentType == ContentType.VIDEO || contentType == ContentType.HENTAI_VIDEO) {
-                    val state = activityIntent.getParcelableExtraCompat<ReaderState>(ReaderIntent.EXTRA_STATE)
-                    openVideoContent(manga, anchor, state)
                     return
                 }
             }
@@ -569,59 +535,6 @@ class AppRouter(
         )
     }
 
-    fun openVideo(
-        url: String,
-        source: ContentSource?,
-        title: String? = null,
-        anchor: View? = null,
-        state: ReaderState? = null,
-    ) {
-        val ctx = contextOrNull() ?: return
-        startActivity(
-            prepareImmersiveIntent(
-                Intent(ctx, org.skepsun.kototoro.video.ui.VideoPlayerActivity::class.java)
-                    .setData(Uri.parse(url))
-                    .putExtra(KEY_URL, url)
-                    .putExtra(KEY_SOURCE, source?.name)
-                    .putExtra(KEY_TITLE, title)
-                    .putExtra(ReaderIntent.EXTRA_STATE, state),
-            ),
-            null,
-        )
-    }
-
-    fun openVideo(
-        url: String,
-        manga: Content,
-        anchor: View? = null,
-        state: ReaderState? = null,
-        positionMs: Long? = null,
-    ) {
-        val ctx = contextOrNull() ?: return
-        val intent = prepareImmersiveIntent(
-            Intent(ctx, org.skepsun.kototoro.video.ui.VideoPlayerActivity::class.java)
-                .setData(Uri.parse(url))
-                .putExtra(KEY_URL, url)
-                .putExtra(KEY_SOURCE, manga.source.name)
-                .putExtra(KEY_TITLE, manga.title)
-                .putExtra(KEY_ID, manga.id)
-                .putExtra(KEY_MANGA, ParcelableContent(manga, withChapters = !manga.chapters.isNullOrEmpty()))
-                .putExtra(ReaderIntent.EXTRA_STATE, state),
-        )
-        if (positionMs != null && positionMs >= 0) {
-            intent.putExtra(KEY_POSITION_MS, positionMs)
-        }
-        startActivity(intent, null)
-    }
-
-    fun openVideo(
-        manga: Content,
-        chapterId: Long? = null,
-        positionMs: Long? = null,
-    ) {
-        val state = chapterId?.let { ReaderState(chapterId = it, page = 0, scroll = 0) }
-        openVideoContent(manga, null, state, positionMs)
-    }
 
     fun openAppUpdate() = startActivity(AppUpdateActivity::class.java)
 

@@ -9,11 +9,8 @@ import org.skepsun.kototoro.explore.ui.model.SourceTag
 val ALL_SOURCE_TYPES: Set<SourceType> = setOf(
     SourceType.NATIVE,
     SourceType.JSON_LEGADO,
-    SourceType.JSON_TVBOX,
     SourceType.MIHON,
-    SourceType.ANIYOMI,
     SourceType.IREADER,
-    SourceType.CLOUDSTREAM,
     SourceType.JSON_LNREADER,
     SourceType.TSUNDOKU,
 )
@@ -27,11 +24,8 @@ data class SourceTypeOption(
 val SOURCE_TYPE_OPTIONS: List<SourceTypeOption> = listOf(
     SourceTypeOption(SourceType.NATIVE, R.string.source_type_native, R.drawable.ic_source_builtin),
     SourceTypeOption(SourceType.MIHON, R.string.source_type_mihon, R.drawable.ic_source_mihon),
-    SourceTypeOption(SourceType.ANIYOMI, R.string.source_type_aniyomi, R.drawable.ic_source_aniyomi),
     SourceTypeOption(SourceType.JSON_LEGADO, R.string.source_type_legado, R.drawable.ic_source_legado),
-    SourceTypeOption(SourceType.JSON_TVBOX, R.string.source_type_tvbox, R.drawable.ic_source_tvbox),
     SourceTypeOption(SourceType.IREADER, R.string.source_type_ireader, R.drawable.ic_source_ireader),
-    SourceTypeOption(SourceType.CLOUDSTREAM, R.string.source_type_cloudstream, R.drawable.ic_source_cloudstream),
     SourceTypeOption(SourceType.JSON_LNREADER, R.string.source_type_lnreader, R.drawable.ic_source_lnreader),
     SourceTypeOption(SourceType.TSUNDOKU, R.string.source_type_tsundoku, R.drawable.ic_source_tsundoku),
 )

@@ -585,14 +585,8 @@ class SettingsActivity :
                 SettingsDestination.AiImageEnhancementSettings -> {
                     outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_AI_IMAGE_ENHANCEMENT_SETTINGS)
                 }
-                SettingsDestination.AiVideoEnhancementSettings -> {
-                    outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_AI_VIDEO_ENHANCEMENT_SETTINGS)
-                }
                 SettingsDestination.TtsSettings -> {
                     outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_TTS_SETTINGS)
-                }
-                SettingsDestination.PlaybackSettings -> {
-                    outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_PLAYBACK_SETTINGS)
                 }
                 SettingsDestination.ReaderSettings -> {
                     outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_READER_SETTINGS)
@@ -748,9 +742,7 @@ class SettingsActivity :
             SettingsDestination.AISettings,
             SettingsDestination.OcrModelsSettings,
             SettingsDestination.AiImageEnhancementSettings,
-            SettingsDestination.AiVideoEnhancementSettings,
             SettingsDestination.TtsSettings,
-            SettingsDestination.PlaybackSettings,
             SettingsDestination.ReaderSettings,
             SettingsDestination.ReplaceRulesSettings,
             SettingsDestination.SourcesSettings,
@@ -918,9 +910,7 @@ class SettingsActivity :
             SettingsDestination.AISettings -> COMPOSE_DESTINATION_AI_SETTINGS
             SettingsDestination.OcrModelsSettings -> COMPOSE_DESTINATION_OCR_MODELS_SETTINGS
             SettingsDestination.AiImageEnhancementSettings -> COMPOSE_DESTINATION_AI_IMAGE_ENHANCEMENT_SETTINGS
-            SettingsDestination.AiVideoEnhancementSettings -> COMPOSE_DESTINATION_AI_VIDEO_ENHANCEMENT_SETTINGS
             SettingsDestination.TtsSettings -> COMPOSE_DESTINATION_TTS_SETTINGS
-            SettingsDestination.PlaybackSettings -> COMPOSE_DESTINATION_PLAYBACK_SETTINGS
             SettingsDestination.ReaderSettings -> COMPOSE_DESTINATION_READER_SETTINGS
             SettingsDestination.ReplaceRulesSettings -> COMPOSE_DESTINATION_REPLACE_RULES_SETTINGS
             SettingsDestination.SourcesSettings -> COMPOSE_DESTINATION_SOURCES_SETTINGS
@@ -968,9 +958,7 @@ class SettingsActivity :
             SettingsDestination.AISettings -> getString(R.string.ai_settings)
             SettingsDestination.OcrModelsSettings -> getString(R.string.reader_translation_ocr_models_title)
             SettingsDestination.AiImageEnhancementSettings -> getString(R.string.ai_image_enhancement_settings)
-            SettingsDestination.AiVideoEnhancementSettings -> getString(R.string.ai_video_enhancement_settings)
             SettingsDestination.TtsSettings -> getString(R.string.tts_settings_title)
-            SettingsDestination.PlaybackSettings -> getString(R.string.playback_settings)
             SettingsDestination.ReaderSettings -> getString(R.string.reader_settings)
             SettingsDestination.ReplaceRulesSettings -> getString(R.string.replace_rules)
             SettingsDestination.SourcesSettings -> getString(R.string.source_preferences)
@@ -1126,9 +1114,7 @@ class SettingsActivity :
                         openDestination(SettingsDestination.AiImageEnhancementSettings, null, false)
                     },
                     onOpenTtsSettings = { openDestination(SettingsDestination.TtsSettings, null, false) },
-                    onOpenVideoEnhancementSettings = {
-                        openDestination(SettingsDestination.AiVideoEnhancementSettings, null, false)
-                    },
+
                 )
             }
             SettingsDestination.OcrModelsSettings -> RenderComposeSection(
@@ -1149,26 +1135,11 @@ class SettingsActivity :
                     modifier = Modifier.fillMaxSize(),
                 )
             }
-            SettingsDestination.AiVideoEnhancementSettings -> RenderComposeSection(
-                title = getString(R.string.ai_video_enhancement_settings),
-            ) {
-                AIVideoEnhancementSettingsRoute(
-                    settings = kototoroAppSettings,
-                )
-            }
             SettingsDestination.TtsSettings -> RenderComposeSection(title = getString(R.string.tts_settings_title)) {
                 TtsSettingsRoute(
                     settings = kototoroAppSettings,
                     coordinator = requireNotNull(ttsSettingsCoordinator),
                     modifier = Modifier.fillMaxSize(),
-                )
-            }
-            SettingsDestination.PlaybackSettings -> RenderComposeSection(title = getString(R.string.playback_settings)) {
-                PlaybackSettingsRoute(
-                    settings = kototoroAppSettings,
-                    onAiSettingsClick = {
-                        openDestination(SettingsDestination.AISettings, null, false)
-                    },
                 )
             }
             SettingsDestination.ReaderSettings -> RenderComposeSection(title = getString(R.string.reader_settings)) {
@@ -2234,9 +2205,7 @@ class SettingsActivity :
         private const val COMPOSE_DESTINATION_AI_SETTINGS = "ai_settings"
         private const val COMPOSE_DESTINATION_OCR_MODELS_SETTINGS = "ocr_models_settings"
         private const val COMPOSE_DESTINATION_AI_IMAGE_ENHANCEMENT_SETTINGS = "ai_image_enhancement_settings"
-        private const val COMPOSE_DESTINATION_AI_VIDEO_ENHANCEMENT_SETTINGS = "ai_video_enhancement_settings"
         private const val COMPOSE_DESTINATION_TTS_SETTINGS = "tts_settings"
-        private const val COMPOSE_DESTINATION_PLAYBACK_SETTINGS = "playback_settings"
         private const val COMPOSE_DESTINATION_READER_SETTINGS = "reader_settings"
         private const val COMPOSE_DESTINATION_REPLACE_RULES_SETTINGS = "replace_rules_settings"
         private const val COMPOSE_DESTINATION_SOURCES_SETTINGS = "sources_settings"
@@ -2312,9 +2281,7 @@ class SettingsActivity :
             COMPOSE_DESTINATION_AI_SETTINGS -> SettingsDestination.AISettings
             COMPOSE_DESTINATION_OCR_MODELS_SETTINGS -> SettingsDestination.OcrModelsSettings
             COMPOSE_DESTINATION_AI_IMAGE_ENHANCEMENT_SETTINGS -> SettingsDestination.AiImageEnhancementSettings
-            COMPOSE_DESTINATION_AI_VIDEO_ENHANCEMENT_SETTINGS -> SettingsDestination.AiVideoEnhancementSettings
             COMPOSE_DESTINATION_TTS_SETTINGS -> SettingsDestination.TtsSettings
-            COMPOSE_DESTINATION_PLAYBACK_SETTINGS -> SettingsDestination.PlaybackSettings
             COMPOSE_DESTINATION_READER_SETTINGS -> SettingsDestination.ReaderSettings
             COMPOSE_DESTINATION_REPLACE_RULES_SETTINGS -> SettingsDestination.ReplaceRulesSettings
             COMPOSE_DESTINATION_SOURCES_SETTINGS -> SettingsDestination.SourcesSettings

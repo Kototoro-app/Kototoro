@@ -8,6 +8,15 @@ import org.skepsun.kototoro.parsers.model.ContentType
 
 class BrowseGroupTabTest {
 
+    @Test
+    fun `old video selection restores all reading formats`() {
+        assertTrue(BrowseGroupTab.fromId("video") == BrowseGroupTab.All)
+        assertFalse(BrowseGroupTab.Video in BrowseGroupTab.getAllTabs())
+        assertTrue(BrowseGroupTab.All.matchesContentType(ContentType.MANGA))
+        assertTrue(BrowseGroupTab.All.matchesContentType(ContentType.NOVEL))
+        assertFalse(BrowseGroupTab.All.matchesContentType(ContentType.HENTAI_VIDEO))
+    }
+
 	@Test
 	fun `novel tab matches persisted novel content types regardless of source group`() {
 		assertTrue(BrowseGroupTab.Novel.matchesContentType(ContentType.NOVEL))
@@ -37,15 +46,15 @@ class BrowseGroupTabTest {
 	}
 
 	@Test
-	fun `all tab matches every content type`() {
+	fun `all tab contains only reading content types`() {
 		assertTrue(BrowseGroupTab.All.matchesContentType(ContentType.NOVEL))
-		assertTrue(BrowseGroupTab.All.matchesContentType(ContentType.VIDEO))
-		assertTrue(BrowseGroupTab.All.matchesContentType(ContentType.OTHER))
+		assertFalse(BrowseGroupTab.All.matchesContentType(ContentType.VIDEO))
+		assertFalse(BrowseGroupTab.All.matchesContentType(ContentType.OTHER))
 	}
 
 	@Test
 	fun `allowedContentTypes mirrors matchesContentType`() {
-		assertNull(BrowseGroupTab.All.allowedContentTypes())
+		assertTrue(ContentType.VIDEO !in requireNotNull(BrowseGroupTab.All.allowedContentTypes()))
 		val novelTypes = requireNotNull(BrowseGroupTab.Novel.allowedContentTypes())
 		assertTrue(ContentType.NOVEL in novelTypes)
 		assertTrue(ContentType.HENTAI_NOVEL in novelTypes)

@@ -30,7 +30,7 @@ import org.skepsun.kototoro.parsers.model.ContentTag
 import org.skepsun.kototoro.parsers.model.ContentTagGroup
 import org.skepsun.kototoro.parsers.model.RATING_UNKNOWN
 import org.skepsun.kototoro.parsers.model.SortOrder
-import org.skepsun.kototoro.video.data.VideoLocalCacheProxy
+import org.skepsun.kototoro.core.parser.tvbox.VideoLocalCacheProxy
 import java.io.File
 import java.io.InputStream
 import java.lang.reflect.Field
