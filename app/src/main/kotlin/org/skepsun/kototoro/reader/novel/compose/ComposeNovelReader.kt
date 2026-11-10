@@ -870,7 +870,7 @@ fun ComposeNovelReaderRoute(
                 if (state.bookmarkRequest != null) return@LaunchedEffect
                 var lastPublishTime = 0L
                 snapshotFlow {
-                    if (listState.isScrollInProgress) {
+                    if (listState.isScrollInProgress && !isAutoScrolling) {
                         null
                     } else {
                         NovelComposeScrollPosition(
@@ -883,7 +883,7 @@ fun ComposeNovelReaderRoute(
                     if (!isAutoScrolling || now - lastPublishTime >= autoScrollPositionPublishIntervalMs) {
                         lastPublishTime = now
                         viewModel.publishScrollPosition(position)
-                        windowBlocks.getOrNull(position.firstVisibleBlock)?.let { visible ->
+                        currentWindowBlocks.getOrNull(position.firstVisibleBlock)?.let { visible ->
                             viewModel.publishBookmarkText(
                                 visible.chapter.chapterId,
                                 (visible.block as? NovelDocumentBlock.Text)?.original.orEmpty(),

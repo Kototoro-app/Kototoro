@@ -23,14 +23,16 @@ class NovelReaderAutoScrollTest {
         )
         var dispatched = 0f
         var canScrollForward = true
-        viewModel.bindContinuousScrollDispatcher { delta ->
-            if (canScrollForward) {
-                dispatched += delta
-                delta
-            } else {
-                0f
-            }
-        }
+        viewModel.bindContinuousScrollDispatcher(
+            dispatcher = { delta ->
+                if (canScrollForward) {
+                    dispatched += delta
+                    delta
+                } else {
+                    0f
+                }
+            },
+        )
 
         val stateBefore = viewModel.uiState.value
         assertTrue(viewModel.scrollByPixels(4))
@@ -56,7 +58,7 @@ class NovelReaderAutoScrollTest {
             settings = NovelReaderSettings(readingMode = ReadingMode.PAGED),
             translation = null,
         )
-        viewModel.bindContinuousScrollDispatcher { it }
+        viewModel.bindContinuousScrollDispatcher(dispatcher = { it })
 
         assertFalse(viewModel.scrollByPixels(4))
     }

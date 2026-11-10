@@ -473,6 +473,8 @@ class NovelReaderActivity :
         super.onPause()
         if (::scrollTimer.isInitialized && scrollTimer.isActive.value) {
             setAutoScrollActive(false)
+        } else {
+            composeReaderViewModel.flushContinuousScrollPosition()
         }
     }
 
@@ -815,6 +817,9 @@ class NovelReaderActivity :
                 onPausedChanged = {
                     scrollTimer.setManuallyPaused(it)
                     composeReaderViewModel.updateAutoScroll { copy(manuallyPaused = it) }
+                    if (it) {
+                        composeReaderViewModel.flushContinuousScrollPosition()
+                    }
                 },
                 onSpeedChanged = {
                     settings.readerAutoscrollSpeed = it
