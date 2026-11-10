@@ -41,6 +41,8 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Verify OmniRoute CLI
         run: npm run check
+      - name: Audit development gateway dependencies
+        run: npm audit --audit-level=high
 
   verify:
     runs-on: ubuntu-24.04

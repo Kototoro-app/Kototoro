@@ -44,3 +44,16 @@ Aucune clé ni connexion fournisseur OmniRoute n’a été fournie. Un test d’
 de coût nécessitent cette configuration ; aucun gain de tokens ou de coût n’est annoncé.
 Le paquet OmniRoute publié représente environ 915 Mo avant dépendances. L’installation complète
 est séparée de la construction Android pour éviter de consommer le disque des runners Android.
+
+## Audit des dépendances de l’outil
+
+L’audit du verrou npm initial a signalé neuf vulnérabilités transitives : six faibles,
+deux modérées et une critique dans DOMPurify. La version corrective `3.4.17` existe ;
+un override exact est appliqué pour empêcher le verrou de conserver les versions vulnérables.
+Le workflow manuel vérifie aussi `npm audit --audit-level=high`. Le résultat du nouvel audit
+et le test du CLI doivent être consultés avant d’annoncer une validation de l’outil.
+
+Nouvel audit après correction : **0 critique, 0 élevée, 0 modérée, 7 faibles**.
+Mesure : `npm audit --package-lock-only --json --prefix tools/ai`, 10 novembre 2026.
+Ces sept avis faibles restent à suivre. Le résultat décrit le verrou npm, pas un test
+d’inférence ni une validation exhaustive du tableau de bord OmniRoute.
