@@ -10,6 +10,7 @@ import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import java.util.Properties
 import java.util.concurrent.TimeUnit
+import java.util.jar.JarFile
 
 /** Opt-in integration gate: moved image, native EXE, bundled JVM, real bridge and production Window. */
 class DesktopDistributionTest {
@@ -36,6 +37,9 @@ class DesktopDistributionTest {
         }
         assertTrue(classpath.indexOfFirst { it.fileName.toString().startsWith("000-AndroidCompat-") } <
             classpath.indexOfFirst { it.fileName.toString().startsWith("002-android-jar-") })
+        assertTrue(classpath.any { jar ->
+            JarFile(jar.toFile()).use { it.getJarEntry("com/sun/jna/platform/win32/Win32Exception.class") != null }
+        }, "The packaged runtime must contain the Windows JNA platform classes")
         assertFalse(cfg.any { it.contains("kt-compat36") || it.contains("gradle-home") ||
             it.contains("--import") || it.contains("--data-dir") })
         val fixture = Path.of(System.getProperty("kototoro.desktop.fixture.jar"))

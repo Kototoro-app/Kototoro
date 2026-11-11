@@ -372,6 +372,8 @@ dependencies {
     implementation project(':source-tvbox')
     implementation project(':source-legado')
     implementation libs.rhino
+    // AppDirs in the supplied compatibility runtime needs the Windows JNA platform classes at startup.
+    runtimeOnly libs.jna.platform
     implementation project(':core-domain')
     implementation project(':reader-core')
     // Novel paging reuses the shared line splitter Android paginates with, not a Windows-only rewrite.
@@ -406,6 +408,8 @@ def compatibilityFiles = configurations.create('suppliedCompatibilityRuntime') {
 }
 dependencies.add(compatibilityFiles.name,
     dependencies.project(path: ':mihon-desktop-compat', configuration: 'suppliedCompatibilityRuntime'))
+// The test JVM itself needs the same pinned APIs as the app, including during JUnit test discovery.
+sourceSets.test.runtimeClasspath += compatibilityFiles
 def runtimeJavaVersion = providers.gradleProperty('mihonCompatibilityJavaVersion').map { it.toInteger() }.getOrElse(21)
 def desktopLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(runtimeJavaVersion) }
 def bundleWindowsRuntime = providers.gradleProperty('withWindowsDistribution').isPresent()
@@ -822,7 +826,7 @@ tasks.withType(Test).configureEach {
     // The UI tests assert the text the app ships in Chinese, so the language is pinned instead of following the
     // machine's locale (`--lang`/DesktopStrings.pin); without this, the same tests fail on an English CI machine.
     systemProperty 'kototoro.desktop.locale', 'zh-CN'
-    systemProperty 'kototoro.desktop.test.classpath', (sourceSets.test.runtimeClasspath + compatibilityFiles).asPath
+    systemProperty 'kototoro.desktop.test.classpath', sourceSets.test.runtimeClasspath.asPath
     systemProperty 'kototoro.desktop.fixture.jar', project(':mihon-desktop-compat').layout.buildDirectory.file('fixtures/offline-desktop-fixture.jar').get().asFile
     systemProperty 'kototoro.desktop.challenge.fixture.jar', project(':mihon-desktop-compat').layout.buildDirectory.file('fixtures/interactive-desktop-fixture.jar').get().asFile
     systemProperty 'kototoro.desktop.reader.fixture.jar', project(':mihon-desktop-compat').layout.buildDirectory.file('fixtures/reader-desktop-fixture.jar').get().asFile

@@ -29,7 +29,7 @@ def prepareAnime4K = tasks.register('prepareAnime4K', Copy) {
 sourceSets.main.resources.srcDir(anime4kResources)
 tasks.named('processResources').configure { dependsOn prepareAnime4K }
 dependencies {
-	api 'net.java.dev.jna:jna:5.17.0'
+	api libs.jna
 	implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:${libs.versions.coroutines.get()}"
 	implementation libs.kotlinx.serialization.json
 	testImplementation 'org.junit.jupiter:junit-jupiter:5.8.2'
