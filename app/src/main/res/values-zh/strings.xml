@@ -2053,7 +2053,7 @@
     <string name="reader_translation_task_bench_dist_ocr">OCR</string>
     <string name="reader_translation_task_bench_dist_ocr_cache">OCR 缓存命中</string>
     <string name="reader_translation_task_bench_dist_ocr_sel">选中 OCR</string>
-    <string name="reader_translation_task_bench_dist_pipe">OCR Pipeline</string>
+    <string name="reader_translation_task_bench_dist_pipe">OCR 管道</string>
     <string name="reader_translation_task_bench_dist_pipe_fb">Pipeline 回退</string>
     <string name="reader_translation_task_bench_dist_render">渲染</string>
     <string name="reader_translation_task_bench_dist_render_cache">渲染缓存命中</string>
@@ -2125,7 +2125,7 @@
     <string name="reader_translation_task_stat_ocr_cache">OCR 缓存: %1$s</string>
     <string name="reader_translation_task_stat_ocr_eng">选中 OCR 引擎: %1$s</string>
     <string name="reader_translation_task_stat_pipe_fb">Pipeline 回退: %1$s</string>
-    <string name="reader_translation_task_stat_pipe_strat">OCR Pipeline: %1$s</string>
+    <string name="reader_translation_task_stat_pipe_strat">OCR 管道：%1$s</string>
     <string name="reader_translation_task_stat_render">渲染: %1$sms</string>
     <string name="reader_translation_task_stat_render_bubble">已渲染气泡: %1$s</string>
     <string name="reader_translation_task_stat_render_cache">渲染缓存: %1$s</string>
@@ -2989,7 +2989,7 @@
     <string name="interface_style">界面风格</string>
     <string name="interface_style_material3">md3 (legacy)</string>
     <string name="interface_style_material3_summary">保留 Android 原生的控件、间距和表面层级</string>
-    <string name="interface_style_ios">ios (modern)</string>
+    <string name="interface_style_ios">iOS（现代）</string>
     <string name="interface_style_ios_summary">更圆润的控件、更克制的表面、Backdrop 玻璃和柔和菜单</string>
     <string name="appearance_style_override_note">当前 %1$s 风格下实际使用：%2$s</string>
     <string name="appearance_style_default_value">当前 %1$s 风格默认值：%2$s</string>

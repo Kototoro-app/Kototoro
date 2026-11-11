@@ -1115,7 +1115,7 @@
     <string name="interface_style_material3_summary">Android-native besturingselementen, afstand en oppervlakken</string>
     <string name="interface_style_material3_expressive">md3 expressief</string>
     <string name="interface_style_material3_expressive_summary">Grotere adaptieve besturingselementen, benadrukte vormen en vettere typografie</string>
-    <string name="interface_style_ios">ios (modern)</string>
+    <string name="interface_style_ios">iOS (modern)</string>
     <string name="interface_style_ios_summary">Rondere besturingselementen, rustigere oppervlakken, Backdrop-glas en zachtere menu\'s</string>
     <string name="appearance_style_override_note">Actief in de huidige %1$s-stijl: %2$s</string>
     <string name="appearance_style_default_value">Huidige %1$s-stijlstandaard: %2$s</string>
@@ -2123,7 +2123,7 @@
     <string name="telegram_group">Telegram-groep</string>
     <string name="error_image_format">Niet-ondersteund afbeeldingsformaat: %s</string>
     <string name="error_not_image">Ongeldig formaat: verwachtte afbeelding maar kreeg %s</string>
-    <string name="start_download">Start download</string>
+    <string name="start_download">Download starten</string>
     <string name="save_manga_confirm">Geselecteerde manga opslaan? Dit kan dataverbruik en schijfruimte kosten</string>
     <string name="save_manga">Manga opslaan</string>
     <string name="genre">Genre</string>

@@ -44,7 +44,7 @@
     <string name="source_test_stop">توقف</string>
     <string name="source_test_resume">ادامه</string>
     <string name="source_test_close">بستن</string>
-    <string name="source_test_disable_failed">Disable failed</string>
+    <string name="source_test_disable_failed">غیرفعال‌سازی ناموفق بود</string>
     <string name="source_test_disabled">غیرفعال</string>
     <string name="source_test_status_pass">موفق</string>
     <string name="source_test_status_fail">ناموفق</string>
@@ -85,7 +85,7 @@
     <string name="source_test_msg_cloudflare">مسدود شده توسط Cloudflare، نیاز به تأیید دستی دارد</string>
     <string name="source_test_export">خروجی نتایج</string>
     <string name="source_test_copy_json">کپی JSON</string>
-    <string name="source_lock_locked">Locked, tap to unlock</string>
+    <string name="source_lock_locked">قفل‌شده، برای باز کردن قفل ضربه بزنید</string>
     <string name="source_lock_unlocked">قفل وضعیت فعلی</string>
     <string name="source_lock_action">قفل</string>
     <string name="source_unlock_action">Unlock</string>
@@ -95,7 +95,7 @@
     <string name="source_groups_delete_confirm">گروه \"%1$s\" حذف شود؟</string>
     <string name="extension_file_delete_failed">حذف %1$s انجام نشد.</string>
     <string name="source_groups_export_lost">مقصد خروجی‌گرفتن گم شد. لطفاً دوباره تلاش کنید.</string>
-    <string name="extension_repo_update_failed">Update failed: %1$s</string>
+    <string name="extension_repo_update_failed">بروزرسانی ناموفق بود: %1$s</string>
     <string name="source_groups_updated">گروه به‌روز شد</string>
     <string name="source_groups_newer_schema">این فایل گروه متعلق به نسخه جدیدتری است. برنامه را به‌روزرسانی کنید.</string>
     <string name="source_groups_confirm_domains">بازنویسی دامنه‌ها (%1$d منبع):</string>

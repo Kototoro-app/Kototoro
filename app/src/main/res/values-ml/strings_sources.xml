@@ -4,8 +4,8 @@
     <string name="source_groups_save_current">Save current state</string>
     <string name="source_groups_import">ഇംപോർട്ട്</string>
     <string name="source_groups_empty">ഗ്രൂപ്പുകൾ ഇല്ല</string>
-    <string name="source_groups_name_title">Group name</string>
-    <string name="source_groups_name_hint">Group name</string>
+    <string name="source_groups_name_title">ഗ്രൂപ്പിന്റെ പേര്</string>
+    <string name="source_groups_name_hint">ഗ്രൂപ്പിന്റെ പേര്</string>
     <string name="source_groups_default_name">Group %1$d</string>
     <string name="source_groups_apply">Apply</string>
     <string name="source_groups_confirm_title">\"%1$s\" വേണോ?</string>

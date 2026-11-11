@@ -5,7 +5,7 @@
     <string name="sync_remote_delete_incomplete">Could not delete %1$d file(s). Local sync state kept; try again.</string>
     <string name="sync_enable_required">પહેલા Google Drive સિન્ક ચાલુ કરો.</string>
     <string name="google_drive_authorization_required">Google સત્તાધિકરણ અધૂરું છે અથવા તેની મુદત સમાપ્ત થઈ ગઈ છે. તમારું એકાઉન્ટ ફરીથી કનેક્ટ કરો.</string>
-    <string name="google_drive_authorization_canceled">Google authorization was canceled or timed out.</string>
+    <string name="google_drive_authorization_canceled">Google સત્તાધિકરણ રદ કરવામાં આવ્યું હતું અથવા સમયસીમા સમાપ્ત થઈ ગઈ છે.</string>
     <string name="google_drive_browser_failed">Google સત્તાધિકરણ માટે સિસ્ટમ બ્રાઉઝર ખોલી શકાયું નથી.</string>
     <string name="google_drive_credential_store_failed">સિસ્ટમ ઓળખપત્ર સંગ્રહને ઍક્સેસ કરી શકાયું નથી. તે ઉપલબ્ધ અને અનલૉક છે તેની ખાતરી કરો, પછી ફરી પ્રયાસ કરો.</string>
     <string name="google_drive_settings_failed">સ્થાનિક સિન્ક સેટિંગ્સ સાચી રીતે સાચવી શકાઈ નથી. ડેટા ડિરેક્ટરી તપાસો અને ફરી પ્રયાસ કરો.</string>

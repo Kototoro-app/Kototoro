@@ -667,7 +667,7 @@
     <string name="percent_left">Peratus kiri</string>
     <string name="chapters_read">Bab Baca</string>
     <string name="chapters_left">Bab kiri</string>
-    <string name="external_source">External/plugin</string>
+    <string name="external_source">Luaran/plugin</string>
     <string name="plugin_incompatible">Plugin yang tidak serasi atau ralat dalaman. Pastikan anda menggunakan versi terkini plugin dan kototoro</string>
     <string name="plugin_incompatible_with_cause">Ralat Plugin: %s\n Pastikan anda menggunakan versi terkini plugin dan kototoro</string>
     <string name="connection_ok">Sambungan ok</string>
@@ -1129,7 +1129,7 @@
     <string name="welcome_plugin_acknowledge">Saya faham repositori pihak ketiga ini dikonfigurasikan atas risiko saya sendiri.</string>
     <string name="welcome_preferences_summary">Pilih bahasa dan jenis kandungan. Anda boleh mengubahnya kemudian dalam tetapan sumber.</string>
     <string name="welcome_spaces_title">Asingkan ruang anda</string>
-    <string name="welcome_spaces_summary">Spaces give manga, novels, and anime independent navigation, browsing preferences, and reading or playback context. Advanced options and custom spaces are available later in Settings &gt; User &gt; Spaces.</string>
+    <string name="welcome_spaces_summary">Ruang memberikan navigasi bebas, keutamaan pelayaran, dan konteks bacaan atau main balik untuk manga, novel, dan anime. Pilihan lanjutan dan ruang tersuai tersedia kemudian di Tetapan &gt; Pengguna &gt; Ruang.</string>
     <string name="welcome_ready_summary">Setup is complete. Kototoro will enable sources matching your selected languages and formats. You can run this wizard again from Settings &gt; Content sources &gt; Setup wizard.</string>
     <string name="welcome_jar_install_success">Kototoro: Berjaya mengambil dan melekap %1$d enjin penganalisis terkini daripada rangkaian awan!</string>
     <string name="welcome_jar_install_up_to_date">Kototoro: Pengesahan awan selesai, penganalisis tempatan adalah terkini! (Memuatkan %1$d sumber kesemuanya)</string>
@@ -1803,7 +1803,7 @@
     <string name="video_renderer_auto">Auto (GPU)</string>
     <string name="video_renderer_gpu">GPU</string>
     <string name="video_renderer_gpu_next">GPU Next (Vulkan)</string>
-    <string name="video_renderer_mediacodec_embed">MediaCodec Embed</string>
+    <string name="video_renderer_mediacodec_embed">MediaCodec Terbenam</string>
     <string name="video_fallback_super_res_disabled">Super resolusi dinyahdayakan sementara untuk meningkatkan kestabilan main balik</string>
     <string name="video_fallback_renderer_downgraded">Beralih kepada papar semula yang lebih serasi untuk meningkatkan main balik</string>
     <string name="video_fallback_conservative_mode">Peranti ini menggunakan mod main balik konservatif untuk keserasian yang lebih baik</string>

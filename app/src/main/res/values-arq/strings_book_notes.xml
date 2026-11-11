@@ -34,7 +34,7 @@
     <string name="book_notes_quote_prefix">اقتباس: %1$s</string>
     <string name="book_notes_bookmark_position">%1$s (صفحة %2$d)</string>
     <string name="book_notes_copied">تم النسخ إلى الحافظة</string>
-    <string name="book_notes_export_filename">%1$s reading notes.md</string>
+    <string name="book_notes_export_filename">ملاحظات القراءة %1$s.md</string>
     <string name="book_notes_export_title">تصدير الملاحظات من \"%1$s\"</string>
     <string name="book_notes_export_summary">%1$d ملاحظة · تصدير Markdown القياسي</string>
     <string name="book_notes_copy_markdown">نسخ محتوى Markdown</string>

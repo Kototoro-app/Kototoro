@@ -717,7 +717,7 @@
     <string name="no_fix_required">Nenhuma correção necessária para \"%s\"</string>
     <string name="handle_links_summary">Lidar com links de mangá de aplicações externas (ex: navegador). Você talvez precise habilitar isso manualmente nas configurações da aplicação</string>
     <string name="demographic_kodomo">Kodomo</string>
-    <string name="content_type_one_shot">One shot</string>
+    <string name="content_type_one_shot">One-shot</string>
     <string name="handle_links">Lidar com links</string>
     <string name="email">Email</string>
     <string name="demographics">Demografia</string>
@@ -1820,7 +1820,7 @@
     <string name="video_decoder_hardware_preferred">Preferir hardware (recomendado)</string>
     <string name="video_decoder_software_preferred">Preferir software</string>
     <string name="video_renderer_mode">Renderizador de vídeo</string>
-    <string name="video_renderer_auto">Auto (GPU)</string>
+    <string name="video_renderer_auto">Automático (GPU)</string>
     <string name="video_renderer_gpu">GPU</string>
     <string name="video_renderer_gpu_next">GPU Next (Vulkan)</string>
     <string name="video_renderer_mediacodec_embed">MediaCodec Embutido</string>
@@ -2508,8 +2508,8 @@
     <string name="source_type_aniyomi">Aniyomi</string>
     <string name="source_type_legado">Legado</string>
     <string name="source_type_tvbox">TVBox</string>
-    <string name="tvbox_site_key_title">Site key</string>
-    <string name="tvbox_site_api_title">Site API</string>
+    <string name="tvbox_site_key_title">Chave do site</string>
+    <string name="tvbox_site_api_title">API do site</string>
     <string name="tvbox_site_type_title">Tipo de site</string>
     <string name="tvbox_root_spider_title">Spider raiz</string>
     <string name="tvbox_site_jar_title">Jar do site</string>
@@ -3139,7 +3139,7 @@
     <string name="mal_category_manga_doujin">Principais Doujinshi</string>
     <string name="mal_category_manga_popular">Mangás Mais Populares</string>
     <string name="mal_category_manga_favorite">Mangás Favoritados</string>
-    <string name="mu_category_top_rated">Top Rated</string>
+    <string name="mu_category_top_rated">Mais bem avaliados</string>
     <string name="mu_category_daily_releases">Atualizações Diárias</string>
     <string name="mu_category_recently_updated">Atualizados Recentemente</string>
     <string name="mu_category_by_year">Por Ano</string>
@@ -3539,7 +3539,7 @@
     <string name="pref_glass_preset_clean">Vidro limpo</string>
     <string name="pref_glass_preset_refraction">Refração</string>
     <string name="pref_glass_preset_reader">Vidro do leitor</string>
-    <string name="pref_glass_preset_eco">Eco glass</string>
+    <string name="pref_glass_preset_eco">Vidro ecológico</string>
     <string name="pref_glass_preset_vibrant">Vibrante</string>
     <string name="pref_glass_preset_depth">Profundid.</string>
     <string name="pref_glass_preset_custom">Personal.</string>

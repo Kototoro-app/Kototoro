@@ -448,7 +448,7 @@
     <string name="welcome_plugin_acknowledge">Aku ngerti yen gudang pihak katelu iki dikonfigurasi kanthi resiko tanggung jawabku dhewe.</string>
     <string name="welcome_preferences_summary">Pilih basa lan jinis konten. Sampeyan bisa ngowahi iki mengko ing setelan sumber.</string>
     <string name="welcome_spaces_title">Pisahake papan sampeyan</string>
-    <string name="welcome_spaces_summary">Spaces give manga, novels, and anime independent navigation, browsing preferences, and reading or playback context. Advanced options and custom spaces are available later in Settings &gt; User &gt; Spaces.</string>
+    <string name="welcome_spaces_summary">Spaces nyedhiyakake navigasi, preferensi browsing, lan konteks maca utawa muter sing mandhiri kanggo manga, novel, lan anime. Opsi lanjutan lan spaces kustom kasedhiya mengko ing Pengaturan &gt; Panganggo &gt; Spaces.</string>
     <string name="welcome_ready_summary">Setup is complete. Kototoro will enable sources matching your selected languages and formats. You can run this wizard again from Settings &gt; Content sources &gt; Setup wizard.</string>
     <string name="welcome_jar_install_success">Kototoro: Kasil njupuk lan masang mesin parser paling anyar %1$d saka jaringan awan!</string>
     <string name="welcome_jar_install_up_to_date">Kototoro: Verifikasi awan rampung, parser lokal wis dianyari! (Ngemot total %1$d sumber)</string>

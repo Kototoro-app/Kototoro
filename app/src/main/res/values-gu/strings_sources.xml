@@ -97,6 +97,6 @@
     <string name="source_groups_confirm_title">Apply \"%1$s\"?</string>
     <string name="source_test_all">બધા ચકાસો</string>
     <string name="source_test_title">સ્ત્રોતો ચકાસો</string>
-    <string name="source_test_copy_json">Copy JSON</string>
-    <string name="edit_repository">Edit repository</string>
+    <string name="source_test_copy_json">JSON કોપી કરો</string>
+    <string name="edit_repository">રિપોઝીટરી સંપાદિત કરો</string>
 </resources>

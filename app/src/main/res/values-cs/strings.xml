@@ -712,7 +712,7 @@
     <string name="backup_restored_background">Záloha bude obnovena na pozadí</string>
     <string name="restoring_backup">Obnovování zálohy</string>
     <string name="show_slider">Zobrazit posuvník</string>
-    <string name="content_type_one_shot">One shot</string>
+    <string name="content_type_one_shot">Jednorázově</string>
     <string name="backup_tg_check">Zkontrolovat, jestli API funguje</string>
     <string name="backup_tg_id_not_set">Chat ID není nastaveno</string>
     <string name="open_telegram_bot">Otevřít Telegram bota</string>
@@ -780,7 +780,7 @@
     <string name="author">Autor</string>
     <string name="dont_allow">Nepovolit</string>
     <string name="scrobbler_auth_intro">Přihlaste se do %s a nastavte integraci. To vám umožní sledovat postup a stav čtení mangy</string>
-    <string name="telegram_chat_id">Telegram chat ID</string>
+    <string name="telegram_chat_id">ID Telegram chatu</string>
     <string name="error_disclaimer_report">Můžete poslat hlášení o chybě vývojářům. Tímto nám pomůžete vyřešit tento problém.</string>
     <string name="search_disabled_sources">Vyhledat ve vypnutých zdrojích</string>
     <string name="chapter_volume_number">Svazek %1$s Kapitola %2$s</string>
@@ -853,7 +853,7 @@
     <string name="main_screen_fab_summary">Umožňuje pokračovat ve čtení jedním kliknutím. Toto tlačítko se nezobrazí v režimu inkognito nebo když je historie prázdná</string>
     <string name="error_corrupted_zip">Poškozený ZIP archiv (%s)</string>
     <string name="discord_rpc">Discord Rich Presence</string>
-    <string name="discord_token">Discord Token</string>
+    <string name="discord_token">Discord token</string>
     <string name="discord_token_summary">Zadejte svůj Discord Token, abyste zapnuli Rich Presence</string>
     <string name="discord_token_description">Zadejte svůj Discord Token nebo klikněte na %s, abyste ho získali pomocí prohlížeče</string>
     <string name="discord_token_hint">Vložte svůj Discord Token zde</string>
@@ -1151,7 +1151,7 @@
     <string name="welcome_plugin_acknowledge">Rozumím, že tyto úložiště třetích stran jsou nakonfigurována na moje vlastní riziko.</string>
     <string name="welcome_preferences_summary">Zvolte jazyky a typy obsahu. To můžete později změnit v nastavení zdrojů.</string>
     <string name="welcome_spaces_title">Oddělte své prostory</string>
-    <string name="welcome_spaces_summary">Spaces give manga, novels, and anime independent navigation, browsing preferences, and reading or playback context. Advanced options and custom spaces are available later in Settings &gt; User &gt; Spaces.</string>
+    <string name="welcome_spaces_summary">Prostory poskytují nezávislou navigaci, předvolby procházení a kontext čtení nebo přehrávání pro mangy, romány a anime. Pokročilé možnosti a vlastní prostory budou později k dispozici v Nastavení &gt; Uživatel &gt; Prostory.</string>
     <string name="welcome_ready_summary">Setup is complete. Kototoro will enable sources matching your selected languages and formats. You can run this wizard again from Settings &gt; Content sources &gt; Setup wizard.</string>
     <string name="welcome_jar_install_success">Kototoro: Úspěšně staženo a připojeno %1$d nejnovějších parserů ze sítě!</string>
     <string name="welcome_jar_install_up_to_date">Kototoro: Ověření v cloudu dokončeno, místní parsery jsou aktuální! (Načteno celkem %1$d zdrojů)</string>
@@ -1162,8 +1162,8 @@
     <string name="check_updates">Hledat aktualizace</string>
     <string name="home_overview_title">Přehled</string>
     <string name="sync_status">Synchroniz.</string>
-    <string name="home_sync_status_auto">WebDAV Auto Sync</string>
-    <string name="home_sync_status_ready">WebDAV Sync Ready</string>
+    <string name="home_sync_status_auto">Automatická synchronizace WebDAV</string>
+    <string name="home_sync_status_ready">Synchronizace WebDAV připravena</string>
     <string name="home_sync_status_not_configured">Není nastaveno</string>
     <string name="home_sync_subtitle_ready">Připraveno</string>
     <string name="home_sync_subtitle_configure">Otevřete nastavení pro konfiguraci</string>
@@ -1782,7 +1782,7 @@
     <string name="reader_mode_vertical">Shora dolů (stránkované)</string>
     <string name="reader_mode_vertical_continuous">Shora dolů (plynulé)</string>
     <string name="reader_dual_page">Dvoustránkové zobrazení na šířku / velkých obrazovkách</string>
-    <string name="reader_super_resolution">AI Super Resolution</string>
+    <string name="reader_super_resolution">AI Super rozlišení</string>
     <string name="reader_super_resolution_summary">Zvětšuje rozlišení obrázků pomocí RealCUGAN (může výrazně zvýšit spotřebu baterie a výkonu)</string>
     <string name="reader_super_resolution_engine">Motor Super Resolution</string>
     <string name="reader_super_resolution_model">Neurální model</string>
@@ -3192,7 +3192,7 @@
     <string name="other_tags">Ostatní</string>
     <string name="unknown_title">Neznámý název</string>
     <string name="unknown_author">Neznámý autor</string>
-    <string name="epub_ebook_description">EPUB Ebook: %s</string>
+    <string name="epub_ebook_description">EPUB E-kniha: %s</string>
     <string name="rank">Pořadí</string>
     <string name="episode_number_format">Epizoda %1$s\n\n%2$s</string>
     <string name="source_type_ireader">IReader</string>
@@ -3820,7 +3820,7 @@
     <string name="dictionary_rule_show_label">Pravidlo zobrazení (volit.)</string>
     <string name="settings_source_legado_variables_title">Proměnné Legado</string>
     <string name="settings_source_legado_login_title">Přihl. (Legado)</string>
-    <string name="settings_source_legado_runtime_title">Runtime (Legado)</string>
+    <string name="settings_source_legado_runtime_title">Běhové prostředí (Legado)</string>
     <string name="settings_source_compat_title">Upozornění kompatibility</string>
     <string name="settings_source_compat_summary">Tento doplněk má vlastní nastavení nepodporovaná v Compose, zobrazují se jen bezpečné položky.</string>
     <string name="settings_source_variables_title">Proměnné zdroje</string>
@@ -4008,7 +4008,7 @@
     <string name="mangabaka_token_hint">Vytvořte si osobní přístupový token v nastavení účtu MangaBaka a vložte jej sem. Tento token poskytuje plný přístup k vašemu účtu MangaBaka.</string>
     <string name="mangabaka_auth_failed">Nepodařilo se přihlásit nebo načíst knihovnu. Zkontrolujte token, oprávnění a připojení a zkuste to znovu.</string>
     <string name="favourite_categories_in_space">Kategorie k zobrazení v tomto prostoru</string>
-    <string name="favourite_categories_in_space_hint">Categories are shared by every Space. This only changes which of them are listed here, so the same category can be shown in one Space and hidden in another. A Space that would hide every category keeps showing all of them.</string>
+    <string name="favourite_categories_in_space_hint">Kategorie jsou sdíleny všemi prostory. Toto nastavení určuje pouze to, které z nich jsou zde zobrazeny, takže stejná kategorie může být v jednom prostoru viditelná a v jiném skrytá. Prostor, který by skryl všechny kategorie, je bude nadále zobrazovat všechny.</string>
     <string name="choose_categories_to_show">Zobrazit kategorie</string>
     <string name="show_all_categories">Všechny kategorie</string>
     <string name="category_hidden_from_shelf">Skryto z poličky</string>
@@ -4052,7 +4052,7 @@
     <string name="kitsu_relation_prequel">Předchůdce</string>
     <string name="kitsu_relation_alternative_setting">Alternativní prostředí</string>
     <string name="kitsu_relation_alternative_version">Alternativní verze</string>
-    <string name="kitsu_relation_side_story">Side story</string>
+    <string name="kitsu_relation_side_story">Vedlejší příběh</string>
     <string name="kitsu_relation_parent_story">Hlavní příběh</string>
     <string name="kitsu_relation_summary">Shrnutí</string>
     <string name="kitsu_relation_full_story">Celý příběh</string>

@@ -877,7 +877,7 @@
     <string name="welcome_plugin_acknowledge">متوجه هستم که پیکربندی این مخازن شخص ثالث به مسئولیت خودم است.</string>
     <string name="welcome_preferences_summary">زبان‌ها و انوع محتوا را انتخاب کنید. می‌توانید بعداً این را در تنظیمات منبع تغییر دهید.</string>
     <string name="welcome_spaces_title">جدا کردن فضاها</string>
-    <string name="welcome_spaces_summary">Spaces give manga, novels, and anime independent navigation, browsing preferences, and reading or playback context. Advanced options and custom spaces are available later in Settings &gt; User &gt; Spaces.</string>
+    <string name="welcome_spaces_summary">فضاها به مانگا، رمان و انیمه ناوبری، تنظیمات مرور، و زمینه خواندن یا پخش مستقل می‌دهند. گزینه‌های پیشرفته و فضاهای سفارشی بعداً در بخش تنظیمات &gt; کاربر &gt; فضاها در دسترس خواهند بود.</string>
     <string name="welcome_ready_summary">Setup is complete. Kototoro will enable sources matching your selected languages and formats. You can run this wizard again from Settings &gt; Content sources &gt; Setup wizard.</string>
     <string name="welcome_jar_install_success">Kototoro: دریافت و بارگذاری موفقیت‌آمیز %1$d موتور تجزیه‌کننده جدید از شبکه ابری!</string>
     <string name="welcome_jar_install_up_to_date">Kototoro: تأیید ابری کامل شد، تجزیه‌کننده‌های محلی به‌روز هستند! (%1$d منبع در کل بارگذاری شد)</string>
@@ -908,7 +908,7 @@
     <string name="view_all">مشاهده همه</string>
     <string name="favorite_count">نشان‌شده‌ها</string>
     <string name="home_library_overview">نمای کلی کتابخانه</string>
-    <string name="unread_updates">Unread updates</string>
+    <string name="unread_updates">به‌روزرسانی‌های خوانده‌نشده</string>
     <string name="enabled_sources">منابع فعال</string>
     <string name="home_sources_overview">منابع</string>
     <string name="home_source_breakdown_item">%1$s · %2$d</string>
@@ -960,7 +960,7 @@
     <string name="browse_tracking_recommendations_summary">نمایش ردیف‌های پیشنهاد از وب‌سایت‌های ردیابی در صفحه مرور. در صورت غیرفعال بودن، مرور فقط منابع محتوا را نشان می‌دهد.</string>
     <string name="browse_more_tracking_recommendations">نمایش توصیه‌های وب ردیابی بیشتر</string>
     <string name="browse_more_tracking_recommendations_summary">نمایش ردیف‌های ردیابی اضافی در زیر منابع محتوا در صفحه مرور. در صورت غیرفعال بودن، هدر ثابت و منابع محتوا گسترش‌یافته باقی می‌مانند.</string>
-    <string name="bangumi_recommendations_load_failed_hint">Failed to load Bangumi recommendations. Try a VPN or select another mirror in Settings - Storage &amp; network.</string>
+    <string name="bangumi_recommendations_load_failed_hint">بارگیری پیشنهادهای Bangumi انجام نشد. VPN را امتحان کنید یا آینه دیگری را در تنظیمات - ذخیره‌سازی و شبکه انتخاب کنید.</string>
     <string name="browse_display_options_summary">This option has moved to Browse page search bar &gt; More &gt; Display options.</string>
     <string name="show_extra_info_on_cards">اطلاعات اضافی</string>
     <string name="card_progress_style">سبک پیشرفت کارت</string>
@@ -1266,7 +1266,7 @@
     <string name="crash_report_copied">گزارش خرابی در کلیپ‌بورد کپی شد.</string>
     <string name="crash_report_copy_failed">نمی‌توان گزارش خرابی را کپی کرد.</string>
     <string name="no_novel_sources">هیچ منبع رمانی وجود ندارد</string>
-    <string name="no_video_sources">No video sources</string>
+    <string name="no_video_sources">هیچ منبع ویدیویی وجود ندارد</string>
     <string name="jar_manage_sources">مدیریت منابع Jar</string>
     <string name="no_novel_sources_text">برای مرور آنلاین رمان‌ها، منابع رمان را فعال کنید</string>
     <string name="no_video_sources_text">برای مرور آنلاین ویدیوها، منابع ویدیو را فعال کنید</string>
@@ -1292,7 +1292,7 @@
     <string name="tts_audio_cache">حافظه پنهان صوتی TTS</string>
     <string name="reader_super_resolution_cache">حافظه پنهان تصویر SR</string>
     <string name="network_cache">حافظه پنهان شبکه</string>
-    <string name="cache_limits">Cache limits</string>
+    <string name="cache_limits">محدودیت‌های حافظه پنهان</string>
     <string name="cache_limit_applies_on_restart">پس از راه‌اندازی مجدد برنامه اعمال می‌شود</string>
     <string name="cache_limits_total_quota">سهمیه کل: %s</string>
     <string name="cache_limits_quick_presets">پیش‌تنظیم‌های سریع</string>
@@ -1300,7 +1300,7 @@
     <string name="cache_preset_balanced">متعادل</string>
     <string name="cache_preset_performance">عملکرد</string>
     <string name="image_caches">حافظه پنهان تصویر و خواننده</string>
-    <string name="video_caches">Video caches</string>
+    <string name="video_caches">حافظه‌های پنهان ویدیو</string>
     <string name="cache">حافظه پنهان</string>
     <string name="blacklisted_tags">برچسب‌های مسدودشده</string>
     <string name="blacklisted_tags_summary">محتوای حاوی این برچسب‌ها را از فهرست‌ها و نتایج جستجو حذف کنید</string>
@@ -3940,7 +3940,7 @@
     <string name="migration_config_family_sources">%1$s · %2$d مورد · جستجو به ترتیب</string>
     <string name="migration_candidates_empty">موردی نیست. کلیدواژه‌ها را ویرایش و جستجو کنید</string>
     <string name="library_duplicates_title">یافتن موارد تکراری</string>
-    <string name="library_duplicates_none">No duplicate favourites found</string>
+    <string name="library_duplicates_none">هیچ مورد برگزیده تکراری یافت نشد</string>
     <string name="library_duplicates_hint">برای انتخاب مورد جهت نگهداری، روی کارت ضربه بزنید. ادغام، دسته‌ها، یادداشت‌ها، آمار و پیگیری‌ها را به آن منتقل کرده و پیشرفته‌ترین پیشرفت مطالعه را نگه می‌دارد</string>
     <string name="library_duplicates_merge">ادغام</string>
     <string name="library_duplicates_not_duplicates">غیرتکراری</string>

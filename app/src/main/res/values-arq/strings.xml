@@ -3393,7 +3393,7 @@
     <string name="shared_element_transitions">انتقالات غلاف سلسة</string>
     <string name="shared_element_transitions_summary">يمكّن حركة \"البطل\" السائلة عند التنقل من قوائم المحتوى إلى صفحة التفاصيل، محولاً غلاف القائمة إلى غلاف التفاصيل.</string>
     <string name="pref_list_to_details_transition">انتقال القائمة إلى التفاصيل</string>
-    <string name="pref_list_to_details_transition_summary">Choose how the cover morphs when you open a work from a list.</string>
+    <string name="pref_list_to_details_transition_summary">ختار كيفاش الغلاف يتبدل كي تحل عمل من القائمة.</string>
     <string name="pref_list_to_details_transition_hero">تمدد البطل (افتراضي)</string>
     <string name="pref_list_to_details_transition_legacy">انزلاق الصفحة القديم</string>
     <string name="jar_plugins_updates_available">تتوفر تحديثات لإضافات JAR!</string>

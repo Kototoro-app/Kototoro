@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="sync_settings_enabled_title">Sync app settings</string>
+    <string name="sync_settings_enabled_title">همگام‌سازی تنظیمات برنامه</string>
     <string name="sync_settings_enabled_summary">تنظیمات خواننده، پخش‌کننده و ظاهر. کلمات عبور، توکن‌ها و مسیرهای دستگاه هرگز همگام‌سازی نمی‌شوند.</string>
     <string name="sync_remote_delete_incomplete">حذف %1$d فایل راه دور انجام نشد. وضعیت همگام‌سازی محلی حفظ شد؛ دوباره تلاش کنید.</string>
-    <string name="sync_enable_required">Turn on Google Drive sync first.</string>
+    <string name="sync_enable_required">ابتدا همگام‌سازی Google Drive را روشن کنید.</string>
     <string name="google_drive_authorization_required">احراز هویت Google کامل نیست یا منقضی شده است. حساب خود را دوباره متصل کنید.</string>
     <string name="google_drive_authorization_canceled">احراز هویت Google لغو شد یا به پایان رسید.</string>
     <string name="google_drive_browser_failed">مرورگر سیستم برای احراز هویت گوگل باز نشد.</string>

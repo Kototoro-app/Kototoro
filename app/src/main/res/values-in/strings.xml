@@ -611,7 +611,7 @@
     <string name="migration_completed">Migrasi selesai</string>
     <string name="delete_read_chapters_summary">Hapus bab yang telah Anda baca dari penyimpanan lokal untuk mengosongkan ruang</string>
     <string name="migrate">Migrasi</string>
-    <string name="manga_migration">Manga migration</string>
+    <string name="manga_migration">Migrasi manga</string>
     <string name="delete_read_chapters_auto">Otomatis hapus bab yang sudah dibaca</string>
     <string name="runs_on_app_start">Berjalan saat aplikasi dimulai</string>
     <string name="delete_read_chapters">Hapus bab yang sudah dibaca</string>
@@ -1322,7 +1322,7 @@
     <string name="open_external_player">Buka di pemutar eksternal</string>
     <string name="no_external_player">Pemutar eksternal tidak ditemukan</string>
     <string name="no_video_loaded">Tidak ada video dimuat</string>
-    <string name="torrent_stream_title">Stream torrent</string>
+    <string name="torrent_stream_title">Streaming torrent</string>
     <string name="torrent_stream_warning">Streaming torrent membagikan data dengan peer lain dan dapat mengekspos alamat IP Anda. Lanjutkan hanya jika Anda memahami implikasi privasi dan hukum.</string>
     <string name="torrent_stream_rejected">Streaming torrent tidak diaktifkan untuk sesi pemutaran ini</string>
     <string name="torrent_stream_failed">Gagal memulai stream torrent</string>
@@ -1651,7 +1651,7 @@
     <string name="interface_style_material3_summary">Kontrol, jarak, dan permukaan bawaan Android</string>
     <string name="interface_style_material3_expressive">md3 ekspresif</string>
     <string name="interface_style_material3_expressive_summary">Kontrol adaptif lebih besar, bentuk ditegaskan, dan hierarki huruf lebih tebal</string>
-    <string name="interface_style_ios">ios (modern)</string>
+    <string name="interface_style_ios">iOS (modern)</string>
     <string name="interface_style_ios_summary">Kontrol lebih membulat, permukaan lebih senyap, kaca Backdrop, dan menu lebih lembut</string>
     <string name="appearance_style_override_note">Berlaku pada gaya %1$s saat ini: %2$s</string>
     <string name="appearance_style_default_value">Default gaya %1$s saat ini: %2$s</string>
@@ -3196,7 +3196,7 @@
     <string name="other_tags">Lainnya</string>
     <string name="unknown_title">Judul tidak dikenal</string>
     <string name="unknown_author">Penulis tidak dikenal</string>
-    <string name="epub_ebook_description">EPUB Ebook: %s</string>
+    <string name="epub_ebook_description">Ebook EPUB: %s</string>
     <string name="rank">Peringkat</string>
     <string name="episode_number_format">Episode %1$s\n\n%2$s</string>
     <string name="source_type_ireader">IReader</string>

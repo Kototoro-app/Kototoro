@@ -57,7 +57,7 @@
     <string name="source_test_step_search">खोजें</string>
     <string name="source_test_msg_count">%1$d आइटम</string>
     <string name="source_test_msg_empty">सूची खाली है</string>
-    <string name="source_test_msg_no_items">No item to test</string>
+    <string name="source_test_msg_no_items">परीक्षण के लिए कोई आइटम नहीं है</string>
     <string name="source_test_msg_no_repo">सोर्स लोड नहीं किया जा सका</string>
     <string name="source_test_msg_timeout">टाइम आउट (%1$d से)</string>
     <string name="source_test_msg_total_timeout">सोर्स का कुल समय समाप्त (%1$d से)</string>

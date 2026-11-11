@@ -740,7 +740,7 @@
     <string name="no_alternatives_found">Nessuna alternativa trovata per \"%s\"</string>
     <string name="chapter_selection_hint">Puoi selezionare i capitoli da scaricare tramite un click prolungato nell\'elemento nella lista dei capitoli.</string>
     <string name="demographic_kodomo">Kodomo</string>
-    <string name="content_type_one_shot">One shot</string>
+    <string name="content_type_one_shot">Scatto singolo</string>
     <string name="content_type_doujinshi">Doujinshi</string>
     <string name="demographic_josei">Josei</string>
     <string name="content_type_artist_cg">CG Artist</string>

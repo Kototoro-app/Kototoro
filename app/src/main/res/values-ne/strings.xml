@@ -4022,9 +4022,9 @@
     <string name="kitsu_status_tba">टीबीए</string>
     <string name="kitsu_status_unreleased">अप्रकाशित</string>
     <string name="kitsu_status_upcoming">आगामी</string>
-    <string name="kitsu_info_start_date">Start date</string>
-    <string name="kitsu_info_end_date">End date</string>
-    <string name="kitsu_info_age_rating">Age rating</string>
+    <string name="kitsu_info_start_date">शुरुआती मिति</string>
+    <string name="kitsu_info_end_date">अन्त्य मिति</string>
+    <string name="kitsu_info_age_rating">उमेर श्रेणी</string>
     <string name="kitsu_info_episodes">एपिसोडहरू</string>
     <string name="kitsu_info_episode_length">अवधि</string>
     <string name="kitsu_episode_length_value">प्रति एपिसोड %1$d मिनेट</string>
@@ -4046,7 +4046,7 @@
     <string name="kitsu_info_description_source">विवरण स्रोत</string>
     <string name="kitsu_voiced_character">आवाज दिएको पात्र · %1$s</string>
     <string name="kitsu_section_voiced_works">Voice works</string>
-    <string name="kitsu_section_staff_works">Staff works</string>
+    <string name="kitsu_section_staff_works">स्टाफका कामहरू</string>
     <string name="kitsu_action_person_page">व्यक्ति पृष्ठ</string>
     <string name="kitsu_info_japanese_name">जापानी नाम</string>
     <string name="kitsu_info_other_names">अन्य नामहरू</string>

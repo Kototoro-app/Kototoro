@@ -13,12 +13,12 @@
     <string name="book_notes_total_count">%1$d notes</string>
     <string name="book_notes_book_search_hint">ഈ പുസ്തകത്തിൽ തിരയുക…</string>
     <string name="book_notes_no_highlight_excerpt">ഒരു ഭാഗത്തിനായി ഹൈലൈറ്റ് ടെക്സ്റ്റ് ലഭ്യമല്ല</string>
-    <string name="book_notes_selected_all">All notes (%1$d)</string>
+    <string name="book_notes_selected_all">എല്ലാ കുറിപ്പുകളും (%1$d)</string>
     <string name="book_notes_selected_highlights">ഹൈലൈറ്റുകൾ മാത്രം (%1$d)</string>
     <string name="book_notes_selected_thoughts">ചിന്തകൾ മാത്രം (%1$d)</string>
     <string name="book_notes_selected_bookmarks">Bookmarks (%1$d)</string>
     <string name="book_notes_filtered_empty">കുറിപ്പുകളൊന്നുമില്ല</string>
-    <string name="book_notes_search_notes">Search notes</string>
+    <string name="book_notes_search_notes">കുറിപ്പുകൾ തിരയുക</string>
     <string name="book_notes_overview_summary">%1$d കുറിപ്പുകൾ · %2$d പുസ്തകങ്ങളിൽ</string>
     <string name="book_notes_overview_search_hint">പുസ്തകങ്ങളോ കുറിപ്പുകളോ തിരയുക…</string>
     <string name="book_notes_overview_empty">കുറിപ്പുകൾ ഇല്ല</string>
@@ -43,8 +43,8 @@
     <string name="book_notes_share_markdown_summary">മറ്റൊരു ആപ്പിലേക്ക് അയക്കാൻ .md ഫയൽ</string>
     <string name="book_notes_save_markdown">ഫയലായി സംരക്ഷിക്കുക</string>
     <string name="book_notes_save_markdown_summary">ഫയൽ പിക്കർ ഉപയോഗിച്ച് സംരക്ഷിക്കുക</string>
-    <string name="book_notes_make_excerpt">Make excerpt</string>
-    <string name="book_notes_copy_content">Copy content</string>
+    <string name="book_notes_make_excerpt">എക്സെർപ്റ്റ് ഉണ്ടാക്കുക</string>
+    <string name="book_notes_copy_content">ഉള്ളടക്കം പകർത്തുക</string>
     <string name="book_notes_copied_markdown">Markdown ആയി പകർത്തി</string>
     <string name="book_notes_share_title">\"%1$s\" കുറിപ്പുകൾ പങ്കിടുക</string>
     <string name="book_notes_share_failed">പങ്കിടാനായില്ല: %1$s</string>

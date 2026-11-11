@@ -20,8 +20,8 @@
     <string name="video_subtitle_background">Fundo</string>
     <string name="video_subtitle_background_style">Estilo de fundo</string>
     <string name="video_subtitle_background_none">Off</string>
-    <string name="video_subtitle_background_bar">Full width</string>
-    <string name="video_subtitle_background_block">Text block</string>
+    <string name="video_subtitle_background_bar">Largura total</string>
+    <string name="video_subtitle_background_block">Bloco de texto</string>
     <string name="video_subtitle_background_lines">Por linha</string>
     <string name="video_subtitle_background_corner_radius">Raio da borda</string>
     <string name="video_subtitle_background_padding_horizontal">Preenchimento horiz.</string>

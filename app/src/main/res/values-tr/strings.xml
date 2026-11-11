@@ -321,7 +321,7 @@
     <string name="text_unsaved_changes_prompt">Değişiklikler kaydedilsin mi?</string>
     <string name="discard">Yoksay</string>
     <string name="error_no_space_left">Cihazda yer yok</string>
-    <string name="webtoon_zoom">Webtoon zoom</string>
+    <string name="webtoon_zoom">Webtoon yakınlaştırma</string>
     <string name="reader_slider">Sayfa kaydırıcısını göster</string>
     <string name="clear_new_chapters_counters">Yeni bölüm bilgilerini de temizle</string>
     <string name="compact">Sıkı</string>

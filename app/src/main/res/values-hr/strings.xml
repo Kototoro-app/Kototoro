@@ -762,7 +762,7 @@
     <string name="rating">Ocjena</string>
     <string name="source">Izvor</string>
     <string name="author">Autor</string>
-    <string name="telegram_chat_id">Telegram chat ID</string>
+    <string name="telegram_chat_id">ID Telegram chata</string>
     <string name="backup_restored_background">Sigurnosna kopija će se obnoviti u pozadini</string>
     <string name="restoring_backup">Obnavljanje sigurnosne kopije</string>
     <string name="disable_captcha_notifications_summary">Nećeš primati obavijesti o rješavanju CAPTCHA za ovaj izvor, ali to može prouzročiti prekid pozadinskih operacija (provjeravanje novih poglavlja, dobivanje preporuka itd.)</string>
@@ -3061,8 +3061,8 @@
     <string name="reader_translation_ocr_recognizer_models_title">Modeli za prepoznavanje teksta</string>
     <string name="reader_translation_ocr_recognizer_model_selection">Model za prepoznavanje teksta</string>
     <string name="reader_translation_ocr_pipeline_strategy">Strategija OCR cjevovoda</string>
-    <string name="reader_translation_ocr_pipeline_page_text_first">Page Text First</string>
-    <string name="reader_translation_ocr_pipeline_bubble_detector_first">Bubble Detector First</string>
+    <string name="reader_translation_ocr_pipeline_page_text_first">Prvo tekst stranice</string>
+    <string name="reader_translation_ocr_pipeline_bubble_detector_first">Prvo detektor oblačića</string>
     <string name="reader_translation_ocr_pipeline_hybrid">Hybrid</string>
     <string name="reader_translation_pipeline_mode">Način cjevovoda</string>
     <string name="reader_translation_pipeline_mode_two_stage">Dvostupanjski (Lokalni OCR + API prijevod)</string>

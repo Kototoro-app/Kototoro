@@ -34,7 +34,7 @@
     <string name="source_groups_rolled_back">ਲਾਗੂ ਕਰਨ ਤੋਂ ਪਹਿਲਾਂ ਵਾਲੀ ਸਥਿਤੀ \'ਤੇ ਵਾਪਸ ਜਾਇਆ ਗਿਆ। ਜੋੜੀਆਂ ਗਈਆਂ ਰਿਪੋਜ਼ਟਰੀਆਂ ਅਤੇ ਇੰਸਟਾਲ ਕੀਤੇ ਪੈਕੇਜ ਰੱਖੇ ਗਏ ਸਨ।</string>
     <string name="source_groups_package_missing">ਪੈਕੇਜ %1$s ਇਸਦੀ ਰਿਪੋਜ਼ਟਰੀ ਵਿੱਚ ਨਹੀਂ ਮਿਲਿਆ</string>
     <string name="source_groups_requires_installer">ਪੈਕੇਜ %1$s ਨੂੰ ਸਿਸਟਮ ਇੰਸਟਾਲਰ ਦੀ ਲੋੜ ਹੈ</string>
-    <string name="source_test_all">Test all</string>
+    <string name="source_test_all">ਸਾਰੇ ਪਰਖੋ</string>
     <string name="source_test_title">ਸਰੋਤ ਟੈਸਟ ਕਰੋ</string>
     <string name="source_test_progress">%1$d / %2$d ਜਾਂਚ ਕੀਤੇ</string>
     <string name="source_test_running">ਚੱਲ ਰਿਹਾ: %1$s</string>
@@ -63,7 +63,7 @@
     <string name="source_test_msg_timeout">ਸਮਾਂ ਸਮਾਪਤ (%1$d s)</string>
     <string name="source_test_msg_total_timeout">ਸਰੋਤ ਦਾ ਕੁੱል ਸਮਾਂ ਵੱਧ ਗਿਆ (%1$d ਸਕਿੰਟ)</string>
     <string name="source_test_msg_prev_failed">ਛੱਡਿਆ ਗਿਆ: ਪਿਛਲਾ ਪੜਾਅ ਅਸਫ਼ਲ ਰਿਹਾ</string>
-    <string name="source_test_msg_no_cover">No cover URL</string>
+    <string name="source_test_msg_no_cover">ਕੋਈ ਕਵਰ URL ਨਹੀਂ ਹੈ</string>
     <string name="source_test_msg_covers">%1$d/%2$d ਕਵਰ ਲੋਡ ਹੋਏ</string>
     <string name="source_test_msg_covers_failed">%1$d/%2$d ਕਵਰ ਲੋਡ ਹੋਏ: %3$s</string>
     <string name="source_test_msg_details">ਖੁੱਲ੍ਹਿਆ: %1$s</string>

@@ -34,7 +34,7 @@
     <string name="source_groups_rolled_back">گەڕایەوە بۆ دۆخی پێش جێبەجێکردن. یەدەگە زیادکراوەکان و پاکەتە دامەزراوەکان پارێزران.</string>
     <string name="source_groups_package_missing">پاکەتی %1$s لە یەدەگەکەی نەدۆزرایەوە</string>
     <string name="source_groups_requires_installer">پاکەتی %1$s پێویستی بە دامەزرێنەری سیستەم هەیە</string>
-    <string name="source_test_all">Test all</string>
+    <string name="source_test_all">تاقیکردنەوەی هەمووی</string>
     <string name="source_test_title">تاقیکردنەوەی سەرچاوە</string>
     <string name="source_test_progress">%1$d / %2$d پشکەنرا</string>
     <string name="source_test_running">جێبەجێکردن: %1$s</string>
@@ -44,12 +44,12 @@
     <string name="source_test_stop">وەستاندن</string>
     <string name="source_test_resume">دەستپێکردنەوە</string>
     <string name="source_test_close">پێوەدان</string>
-    <string name="source_test_disable_failed">Disable failed</string>
+    <string name="source_test_disable_failed">پەکخستنی سەرنەکەوتووەکان</string>
     <string name="source_test_disabled">ناچالاککرا</string>
     <string name="source_test_status_pass">سەرکەوتوو</string>
     <string name="source_test_status_fail">سەرنەکەوتوو</string>
     <string name="source_test_status_skip">پەڕاندراو</string>
-    <string name="source_test_step_list">Main list</string>
+    <string name="source_test_step_list">لیستی سەرەکی</string>
     <string name="source_test_step_covers">وێنەکانی بەرگ</string>
     <string name="source_test_step_details">وردەکارییەکان</string>
     <string name="source_test_step_chapters">لیستی بەشەکان</string>

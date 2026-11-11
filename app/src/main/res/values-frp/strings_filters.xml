@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="search_bar_filters">Search bar filters</string>
-    <string name="show_language_preset_filter">Language preset</string>
-    <string name="fixed_language_preset">Fixed language preset</string>
-    <string name="show_content_type_filter">Content type</string>
-    <string name="fixed_content_type">Fixed content type</string>
-    <string name="show_source_tag_filter">Source type</string>
-    <string name="fixed_source_tag">Fixed source type</string>
+    <string name="search_bar_filters">Filtros de la bârra de rechèrche</string>
+    <string name="show_language_preset_filter">Prè-règllâjo de lengoua</string>
+    <string name="fixed_language_preset">Prè-règllâjo de lengoua fixo</string>
+    <string name="show_content_type_filter">Tipo de contegnu</string>
+    <string name="fixed_content_type">Tipo de contegnu fixo</string>
+    <string name="show_source_tag_filter">Tipo de sôrsa</string>
+    <string name="fixed_source_tag">Tipo de sôrsa fixo</string>
 </resources>

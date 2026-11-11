@@ -33,7 +33,7 @@
     <string name="book_notes_quote_prefix">Trích: %1$s</string>
     <string name="book_notes_bookmark_position">%1$s (trang %2$d)</string>
     <string name="book_notes_copied">Đã chép vào bộ nhớ tạm</string>
-    <string name="book_notes_export_filename">%1$s reading notes.md</string>
+    <string name="book_notes_export_filename">Ghi chú đọc sách %1$s.md</string>
     <string name="book_notes_export_title">Xuất ghi chú từ &quot;%1$s&quot;</string>
     <string name="book_notes_export_summary">%1$d ghi chú · Xuất Markdown tiêu chuẩn</string>
     <string name="book_notes_copy_markdown">Sao chép nội dung Markdown</string>

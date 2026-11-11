@@ -2,11 +2,11 @@
 <resources>
     <string name="sync_settings_enabled_title">Sync settings</string>
     <string name="sync_settings_enabled_summary">Configurações de leitor, player e aparência. Senhas, tokens e caminhos nunca são sincronizados.</string>
-    <string name="sync_remote_delete_incomplete">Could not delete %1$d remote file(s). Local sync state was kept; try again.</string>
-    <string name="sync_enable_required">Turn on Google Drive sync first.</string>
+    <string name="sync_remote_delete_incomplete">Não foi possível excluir %1$d arquivo(s) remoto(s). O estado de sincronização local foi mantido; tente novamente.</string>
+    <string name="sync_enable_required">Ative a sincronização com o Google Drive primeiro.</string>
     <string name="google_drive_authorization_required">A autorização do Google está incompleta ou expirou. Conecte sua conta novamente.</string>
     <string name="google_drive_authorization_canceled">A autorização do Google foi cancelada ou expirou.</string>
-    <string name="google_drive_browser_failed">Could not open the system browser for Google authorization.</string>
+    <string name="google_drive_browser_failed">Não foi possível abrir o navegador do sistema para a autorização do Google.</string>
     <string name="google_drive_credential_store_failed">Could not access credential store. Check that it is available and unlocked, then try again.</string>
     <string name="google_drive_settings_failed">Could not save local settings. Check data directory and try again.</string>
     <string name="google_drive_protocol_failed">O instantâneo na nuvem está danificado ou usa um formato não suportado. Nada foi enviado.</string>

@@ -34,8 +34,8 @@
     <string name="source_groups_rolled_back">लागू गर्नु अघिको स्थितिमा फर्काइयो। थपिएका रिपोजिटरीहरू र इन्स्टल गरिएका प्याकेजहरू राखिएका थिए।</string>
     <string name="source_groups_package_missing">प्याकेज %1$s यसको रिपोजिटरीमा फेला परेन</string>
     <string name="source_groups_requires_installer">प्याकेज %1$s लाई प्रणाली इन्स्टलर आवश्यक छ</string>
-    <string name="source_test_all">Test all</string>
-    <string name="source_test_title">Test sources</string>
+    <string name="source_test_all">सबै परीक्षण गर्नुहोस्</string>
+    <string name="source_test_title">स्रोतहरू परीक्षण गर्नुहोस्</string>
     <string name="source_test_progress">%1$d / %2$d जाँच गरिएको</string>
     <string name="source_test_running">चल्दैछ: %1$s</string>
     <string name="source_test_summary">उपलब्ध: %1$d, अनुपलब्ध: %2$d, Cloudflare: %3$d</string>
@@ -44,7 +44,7 @@
     <string name="source_test_stop">Stop</string>
     <string name="source_test_resume">Resume</string>
     <string name="source_test_close">Close</string>
-    <string name="source_test_disable_failed">Disable failed</string>
+    <string name="source_test_disable_failed">असफल भएकाहरूलाई निसाएक्टिभ गर्नुहोस्</string>
     <string name="source_test_disabled">Disabled</string>
     <string name="source_test_status_pass">सफल भयो</string>
     <string name="source_test_status_fail">असफल</string>
@@ -63,7 +63,7 @@
     <string name="source_test_msg_timeout">Timeout (%1$d s)</string>
     <string name="source_test_msg_total_timeout">स्रोतको कुल समय नाघ्यो (%1$d से.)</string>
     <string name="source_test_msg_prev_failed">छोडियो: अघिल्लो चरण असफल भयो</string>
-    <string name="source_test_msg_no_cover">No cover URL</string>
+    <string name="source_test_msg_no_cover">कभर URL छैन</string>
     <string name="source_test_msg_covers">%1$d/%2$d कभर लोड गरियो</string>
     <string name="source_test_msg_covers_failed">%1$d/%2$d कभर लोड गरियो: %3$s</string>
     <string name="source_test_msg_details">खोलियो: %1$s</string>
@@ -84,8 +84,8 @@
     <string name="source_test_cloudflare">Cloudflare</string>
     <string name="source_test_msg_cloudflare">Cloudflare द्वारा अवरुद्ध, म्यानुअल प्रमाणीकरण आवश्यक</string>
     <string name="source_test_export">Export</string>
-    <string name="source_test_copy_json">Copy JSON</string>
-    <string name="source_lock_locked">Locked, tap to unlock</string>
+    <string name="source_test_copy_json">JSON प्रतिलिपि गर्नुहोस्</string>
+    <string name="source_lock_locked">लक गरिएको छ, अनलक गर्न ट्याप गर्नुहोस्</string>
     <string name="source_lock_unlocked">Lock state</string>
     <string name="source_lock_action">Lock</string>
     <string name="source_unlock_action">Unlock</string>
@@ -95,8 +95,8 @@
     <string name="source_groups_delete_confirm">समूह \"%1$s\" मेटाउने?</string>
     <string name="extension_file_delete_failed">%1$s मेटाउन सकिएन।</string>
     <string name="source_groups_export_lost">Export target lost. Please try exporting again.</string>
-    <string name="extension_repo_update_failed">Update failed: %1$s</string>
-    <string name="source_groups_updated">Group updated</string>
+    <string name="extension_repo_update_failed">अद्यावधिक असफल भयो: %1$s</string>
+    <string name="source_groups_updated">समूह अद्यावधिक गरियो</string>
     <string name="source_groups_newer_schema">यो समूह फाइल नयाँ संस्करणको हो। एप अद्यावधिक गर्नुहोस्।</string>
     <string name="source_groups_confirm_domains">डोमेन ओभरराइडहरू (%1$d स्रोतहरू):</string>
 </resources>

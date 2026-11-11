@@ -445,7 +445,7 @@
     <string name="welcome_plugin_acknowledge">Înțeleg că aceste depozite terțe sunt configurate pe propriul meu risc.</string>
     <string name="welcome_preferences_summary">Alege limbile și tipurile de conținut. Poți schimba acest lucru mai târziu în setările sursei.</string>
     <string name="welcome_spaces_title">Separă-ți spațiile</string>
-    <string name="welcome_spaces_summary">Spaces give manga, novels, and anime independent navigation, browsing preferences, and reading or playback context. Advanced options and custom spaces are available later in Settings &gt; User &gt; Spaces.</string>
+    <string name="welcome_spaces_summary">Spațiile oferă manga, romane și anime navigare independentă, preferințe de căutare și context de citire sau redare. Opțiunile avansate și spațiile personalizate sunt disponibile mai târziu în Setări &gt; Utilizator &gt; Spații.</string>
     <string name="welcome_ready_summary">Setup is complete. Kototoro will enable sources matching your selected languages and formats. You can run this wizard again from Settings &gt; Content sources &gt; Setup wizard.</string>
     <string name="welcome_jar_install_success">Kototoro: S-au preluat și montat cu succes %1$d motoare de parsare recente din rețeaua cloud!</string>
     <string name="welcome_jar_install_up_to_date">Kototoro: Verificarea în cloud s-a încheiat, motoarele locale sunt la zi! (Încărcat %1$d surse în total)</string>
@@ -456,8 +456,8 @@
     <string name="check_updates">Caută actualizări</string>
     <string name="home_overview_title">Dintr-o privire</string>
     <string name="sync_status">Sync</string>
-    <string name="home_sync_status_auto">WebDAV Auto Sync</string>
-    <string name="home_sync_status_ready">WebDAV Sync Ready</string>
+    <string name="home_sync_status_auto">Sincronizare automată WebDAV</string>
+    <string name="home_sync_status_ready">Sincronizare WebDAV pregătită</string>
     <string name="home_sync_status_not_configured">Nefigurata</string>
     <string name="home_sync_subtitle_ready">Pregătit</string>
     <string name="home_sync_subtitle_configure">Deschide setările pentru configurare</string>
@@ -667,7 +667,7 @@
     <string name="video_swipe_seek_range_full">Întregul video pe lățimea ecranului</string>
     <string name="video_swipe_seek_range_minutes">%1$d min pe lățimea ecranului</string>
     <string name="video_volume_boost">Amplificare volum</string>
-    <string name="video_auto_next">Auto Play Next</string>
+    <string name="video_auto_next">Redare automată urmează</string>
     <string name="video_landscape_sensor">Mod senzor peisaj</string>
     <string name="video_subtitle_track">Pistă subtitrări</string>
     <string name="video_audio_track">Pistă audio</string>
@@ -879,7 +879,7 @@
     <string name="details_tracking_suggestion_summary">S-a găsit un element foarte similar pe %1$s: %2$s</string>
     <string name="details_tracking_suggestion_view">Vezi candidatul</string>
     <string name="details_tracking_suggestion_ignore">Nu este aceeași lucrare</string>
-    <string name="anime_offline_database">Anime Offline Database</string>
+    <string name="anime_offline_database">Bază de date anime offline</string>
     <string name="anime_offline_database_summary_installed">Instalat %1$s • actualizat %2$s</string>
     <string name="anime_offline_database_summary_installed_unknown">Instalat local</string>
     <string name="anime_offline_database_summary_not_installed">Nădescărcat încă</string>
@@ -1416,7 +1416,7 @@
     <string name="video_renderer_auto">Auto (GPU)</string>
     <string name="video_renderer_gpu">GPU</string>
     <string name="video_renderer_gpu_next">GPU Next (Vulkan)</string>
-    <string name="video_renderer_mediacodec_embed">MediaCodec Embed</string>
+    <string name="video_renderer_mediacodec_embed">MediaCodec încorporat</string>
     <string name="video_fallback_super_res_disabled">Super-rezoluția a fost dezactivată temporar pentru a îmbunătăți stabilitatea</string>
     <string name="video_fallback_renderer_downgraded">S-a trecut la un randator mai compatibil pentru a îmbunătăți redarea</string>
     <string name="video_fallback_conservative_mode">Acest dispozitiv folosește un mod de redare conservator pentru compatibilitate</string>
@@ -2113,7 +2113,7 @@
     <string name="any">Oricare</string>
     <string name="filter_search_warning">Această sursă nu acceptă căutarea cu filtre. Filtrele au fost șterse</string>
     <string name="demographic_kodomo">Kodomo</string>
-    <string name="content_type_one_shot">One shot</string>
+    <string name="content_type_one_shot">One-shot</string>
     <string name="content_type_doujinshi">Doujinshi</string>
     <string name="content_type_image_set">Set de imagini</string>
     <string name="content_type_artist_cg">CG artist</string>
@@ -3119,17 +3119,17 @@
     <string name="mal_category_anime_upcoming">În curând</string>
     <string name="mal_category_anime_tv">Top serii TV</string>
     <string name="mal_category_anime_movie">Top filme</string>
-    <string name="mal_category_anime_ova">Top OVA</string>
+    <string name="mal_category_anime_ova">OVA de top</string>
     <string name="mal_category_anime_special">Top speciale</string>
     <string name="mal_category_anime_popular">Cele mai populare anime</string>
     <string name="mal_category_anime_favorite">Anime cu cele mai multe favorite</string>
     <string name="mal_category_manga_top">Top manga</string>
     <string name="mal_category_manga_manga">Top serii manga</string>
     <string name="mal_category_manga_novels">Top romane</string>
-    <string name="mal_category_manga_manhwa">Top Manhwa</string>
-    <string name="mal_category_manga_manhua">Top Manhua</string>
-    <string name="mal_category_manga_oneshots">Top One-shots</string>
-    <string name="mal_category_manga_doujin">Top Doujinshi</string>
+    <string name="mal_category_manga_manhwa">Manhwa de top</string>
+    <string name="mal_category_manga_manhua">Manhua de top</string>
+    <string name="mal_category_manga_oneshots">One-shot-uri de top</string>
+    <string name="mal_category_manga_doujin">Doujinshi de top</string>
     <string name="mal_category_manga_popular">Cele mai populare manga</string>
     <string name="mal_category_manga_favorite">Manga favorite</string>
     <string name="mu_category_top_rated">Cele mai bune</string>
@@ -3383,7 +3383,7 @@
     <string name="glass_material_fluent_accent_acrylic_default">Fluent Accent Acrylic Default</string>
     <string name="glass_material_fluent_thin_acrylic">Fluent Thin Acrylic</string>
     <string name="glass_material_fluent_acrylic_base">Fluent Acrylic Base</string>
-    <string name="glass_material_fluent_acrylic_default">Fluent Acrylic Default</string>
+    <string name="glass_material_fluent_acrylic_default">Fluent Acrylic Implicit</string>
     <string name="glass_material_fluent_mica">Fluent Mica</string>
     <string name="glass_material_fluent_mica_alt">Fluent Mica Alt</string>
     <string name="mark_as_safe">Marchează ca sigur</string>
@@ -4022,7 +4022,7 @@
     <string name="kitsu_relation_prequel">Prequel</string>
     <string name="kitsu_relation_alternative_setting">Cadru alternativ</string>
     <string name="kitsu_relation_alternative_version">Versiune alternativă</string>
-    <string name="kitsu_relation_side_story">Side story</string>
+    <string name="kitsu_relation_side_story">Poveste laterală</string>
     <string name="kitsu_relation_parent_story">Poveste mamă</string>
     <string name="kitsu_relation_summary">Rezumat</string>
     <string name="kitsu_relation_spinoff">Spin-off</string>

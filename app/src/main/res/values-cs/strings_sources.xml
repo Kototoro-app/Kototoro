@@ -10,8 +10,8 @@
     <string name="source_groups_apply">Použít</string>
     <string name="source_groups_confirm_title">Použít „%1$s“?</string>
     <string name="source_groups_confirm_intro">Tato skupina přidá do vašeho zařízení následující.</string>
-    <string name="source_groups_confirm_repos">Repositories to add:</string>
-    <string name="source_groups_confirm_packages">Packages to install:</string>
+    <string name="source_groups_confirm_repos">Repozitáře k přidání:</string>
+    <string name="source_groups_confirm_packages">Balíčky k instalaci:</string>
     <string name="source_groups_confirm_more">+%1$d další</string>
     <string name="source_groups_export">Exportovat</string>
     <string name="source_groups_delete">Smazat</string>

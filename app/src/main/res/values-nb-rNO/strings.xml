@@ -2005,7 +2005,7 @@
     <string name="unsupported_novel_source">Denne romankilden støttes ikke</string>
     <string name="unsupported_video_source">Denne videokilden støttes ikke</string>
     <string name="show_pages_thumbs">Vis sidetråkminer</string>
-    <string name="show_pages_thumbs_summary">Enable the \"Pages\" tab on the details screen</string>
+    <string name="show_pages_thumbs_summary">Aktiver «Sider»-fanen på detaljskjermen</string>
     <string name="error_no_data_received">Ingen data ble mottatt fra serveren</string>
     <string name="unsupported_backup_message">Velg en gyldig Kototoro-sikkerhetskopi</string>
     <string name="hours_short">%d t</string>
@@ -2284,7 +2284,7 @@
     <string name="clear_browser_data">Tøm nettleserdata</string>
     <string name="clear_browser_data_summary">Tøm nettleserdata som mellomlager og informasjonskapsler. Advarsel: Autorisering i innholdskilder kan bli ugyldig</string>
     <string name="no_write_permission_to_file">Har ikke skrivepermisjon til filen</string>
-    <string name="exclude_nsfw_from_suggestions_summary">Adult manga will not be shown in suggestions. This option may work inaccurate with some sources</string>
+    <string name="exclude_nsfw_from_suggestions_summary">Voksenmanga vil ikke bli vist i forslag. Dette alternativet kan fungere unøyaktig med enkelte kilder</string>
     <string name="include_disabled_sources">Inkluder deaktiverte kilder</string>
     <string name="suggestions_disabled_sources_summary">Vis forslag fra alle innholdskilder, inkludert deaktiverte</string>
     <string name="tags_warnings">Uthev farlige sjangere</string>
@@ -3292,7 +3292,7 @@
     <string name="pref_nav_floating">Flytende navigasjonslinje</string>
     <string name="pref_nav_floating_summary">Legg til en marg rundt bunnnavigasjonslinjen slik at den virker flytende</string>
     <string name="pref_nav_layered_surface">Lagdelte overflater</string>
-    <string name="pref_nav_layered_surface_summary">Add rounded elevated surfaces around the top and navigation bars</string>
+    <string name="pref_nav_layered_surface_summary">Legg til avrundede, hevede overflater rundt topp- og navigasjonslinjene</string>
     <string name="pref_nav_indicator_style">Stil for navigasjonsindikator</string>
     <string name="pref_nav_indicator_style_summary">Hvordan det valgte elementet utheves i den flytende navigasjonslinjen</string>
     <string name="pref_nav_indicator_style_labels_below">Etiketter under ikoner</string>
@@ -3322,7 +3322,7 @@
     <string name="loading_circle_style_thin_wavy">Tynn bølg.</string>
     <string name="reader">Leser</string>
     <string name="pref_blur_mode">Glassmateriale</string>
-    <string name="pref_blur_mode_summary">Choose a glass material preset for blur radius and noise tuning</string>
+    <string name="pref_blur_mode_summary">Velg en glassmaterialforhåndsinnstilling for uskarphetsradius og støyjustering</string>
     <string name="pref_glass_effect">Glassuskarphet</string>
     <string name="pref_glass_effect_summary">Gjør innhold bak støttede Compose-overflater uskarpt</string>
     <string name="pref_material_expressive_components">Material 3 Expressive-komponenter</string>
@@ -3351,11 +3351,11 @@
     <string name="pref_haze_opacity">Glassets overflatetetthet</string>
     <string name="pref_haze_opacity_summary">Kontrollerer glassoverflatens opasitet uavhengig av valgt materialforhåndsinnstilling, selv når uskarphet er av</string>
     <string name="pref_glass_blur_strength">Uskarphetsradius</string>
-    <string name="pref_glass_blur_strength_summary">Sets the final blur radius used by the current glass material preset, in dp</string>
+    <string name="pref_glass_blur_strength_summary">Angir den endelige uskarphetsradiusen som brukes av gjeldende glassmaterialforhåndsinnstilling, i dp</string>
     <string name="pref_glass_noise_strength">Glassstøyfaktor</string>
     <string name="pref_glass_noise_strength_summary">Angir den endelige støymengden som brukes på den gjeldende glassforhåndsinnstillingen, fra 0,00 til 1,00</string>
     <string name="appearance_group_immersive">Oppslukende lag</string>
-    <string name="appearance_immersive_summary">Tint and blur under the top and bottom bars, and blur quality</string>
+    <string name="appearance_immersive_summary">Fargetone og uskarphet under topp- og bunnlinjene, samt uskarphetskvalitet</string>
     <string name="pref_glass_immersive_strength">Styrke for oppslukende farge</string>
     <string name="pref_glass_immersive_strength_summary">Kontrollerer intensiteten til topp- og bunnfargen uavhengig av den valgte forhåndsinnstillingen</string>
     <string name="pref_glass_immersive_top">Topplag</string>
@@ -3558,12 +3558,12 @@
     <string name="pref_glass_scope_menu">Menyer</string>
     <string name="pref_glass_follow_global">Følg global</string>
     <string name="pref_glass_follow_global_summary_value">Følger global · %1$s</string>
-    <string name="pref_glass_scope_global_desc">Baseline every role falls back to unless overridden</string>
+    <string name="pref_glass_scope_global_desc">Grunnlinje som alle roller faller tilbake til med mindre annet er angitt</string>
     <string name="pref_glass_scope_top_bar_desc">Bred glass-topplinje (f.eks. topplinjen i innstillinger)</string>
     <string name="pref_glass_scope_bottom_bar_desc">Bunnnavigasjonsdokk (flytende kapsel / full bredde)</string>
     <string name="pref_glass_scope_pill_desc">Små kapsler: favorittgruppe, kompakte faneelementer, knappegrupper i topplinje, valgt indikator i bunnnavigasjon, leser-/romanverktøylinjer, rombytter</string>
     <string name="pref_glass_scope_bottom_panel_desc">Bunnpaneler på detalj- og leserskjermer</string>
-    <string name="pref_glass_scope_menu_desc">Dropdown menus and popovers</string>
+    <string name="pref_glass_scope_menu_desc">Nedtrekksmenyer og sprettoppvinduer</string>
     <string name="pref_glass_role_delta">Rolledeltaer</string>
     <string name="pref_glass_local_overrides_count">%1$d lokale overstyringer</string>
     <string name="pref_glass_role_section_hint">Per-rolle-overstyringer – alle parametere kan følge den globale grunnmuren eller finjusteres her</string>
@@ -3626,7 +3626,7 @@
     <string name="novel_ai_ask_not_configured">Konfigurer en KI-oversettelses-API først i KI-innstillinger</string>
     <string name="novel_ai_ask_failed">KI-forespørsel feilet: %s</string>
     <string name="novel_ai_ask_selected_label">Markert tekst</string>
-    <string name="novel_ai_ask_context_label">Nearby context is used to improve the answer but is not shown</string>
+    <string name="novel_ai_ask_context_label">Nærliggende kontekst brukes til å forbedre svaret, men vises ikke</string>
     <string name="novel_ai_ask_suggestions">Spør</string>
     <string name="novel_ai_question_summary">Hva er hovedpoenget med denne passasjen?</string>
     <string name="novel_ai_question_character_motivation">Hva er karakterenes følelser og motiver her?</string>

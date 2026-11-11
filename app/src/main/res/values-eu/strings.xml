@@ -243,7 +243,7 @@
     <string name="external_storage">Kanpoko biltegia</string>
     <string name="domain">Domeinua</string>
     <string name="app_update_available">Aplikazioaren bertsio berri bat eskuragarri dago</string>
-    <string name="app_update_mirror_summary">Used for this update download and saved as the global GitHub mirror.</string>
+    <string name="app_update_mirror_summary">Eguneratze hau deskargatzeko erabilia eta GitHub-eko ispilu global gisa gordea.</string>
     <string name="app_update_source">Eguneratze-iturria</string>
     <string name="app_update_source_github">GitHub (ibilbide globala)</string>
     <string name="app_update_source_gitcode">GitCode (Txinako ibilbidea)</string>
@@ -3301,7 +3301,7 @@
     <string name="pref_nav_height">Nabigazio-barraren altuera</string>
     <string name="pref_nav_floating_height">Nabigazio-barra flotatzaile altuera</string>
     <string name="pref_nav_height_summary">Barraren lodiera (altuera dp-tan) — honek barra \"lodia\" edo \"mehea\" bihurtzen du</string>
-    <string name="pref_reader_toolbar_floating_summary">Make the reader bottom toolbar float above the screen edge</string>
+    <string name="pref_reader_toolbar_floating_summary">Irakurlearen beheko tresna-barra pantailaren ertzaren gainean flotatzen jarri</string>
     <string name="pref_loading_circle_style">Karga-adierazle eta aurrerapen-estiloa</string>
     <string name="pref_loading_circle_style_summary">Karga-ikonoen eta aurrerapen-barren itxura kudeatzen du.</string>
     <string name="pref_rail_animation_intensity">Zerrendaren animazio intentsitatea</string>
@@ -3364,9 +3364,9 @@
     <string name="glass_material_cupertino_thick">Cupertino Thick</string>
     <string name="glass_material_fluent_accent_acrylic_base">Fluent Accent Acrylic Base</string>
     <string name="glass_material_fluent_accent_acrylic_default">Fluent Accent Acrylic Default</string>
-    <string name="glass_material_fluent_thin_acrylic">Fluent Thin Acrylic</string>
-    <string name="glass_material_fluent_acrylic_base">Fluent Acrylic Base</string>
-    <string name="glass_material_fluent_acrylic_default">Fluent Acrylic Default</string>
+    <string name="glass_material_fluent_thin_acrylic">Fluent akriliko fina</string>
+    <string name="glass_material_fluent_acrylic_base">Fluent akriliko oinarria</string>
+    <string name="glass_material_fluent_acrylic_default">Fluent akriliko lehenetsia</string>
     <string name="glass_material_fluent_mica">Fluent Mica</string>
     <string name="glass_material_fluent_mica_alt">Fluent Mica Alt</string>
     <string name="mark_as_safe">Markatu ez-NSFW gisa</string>

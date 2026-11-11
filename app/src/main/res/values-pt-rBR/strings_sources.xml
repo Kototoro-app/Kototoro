@@ -4,8 +4,8 @@
     <string name="source_groups_save_current">Salvar estado atual como grupo</string>
     <string name="source_groups_import">Importar</string>
     <string name="source_groups_empty">Nenhum grupo</string>
-    <string name="source_groups_name_title">Group name</string>
-    <string name="source_groups_name_hint">Group name</string>
+    <string name="source_groups_name_title">Nome do grupo</string>
+    <string name="source_groups_name_hint">Nome do grupo</string>
     <string name="source_groups_default_name">Grupo %1$d</string>
     <string name="source_groups_apply">Aplicar</string>
     <string name="source_groups_confirm_title">Aplicar \"%1$s\"?</string>
@@ -21,7 +21,7 @@
     <string name="source_groups_applied">Grupo aplicado</string>
     <string name="source_groups_apply_errors">%1$d etapa(s) falharam ao aplicar o grupo</string>
     <string name="source_groups_manual_install">Instale estes %1$d pacotes APK normais manualmente na aba Pacotes:</string>
-    <string name="source_groups_invalid_file">Invalid group file</string>
+    <string name="source_groups_invalid_file">Arquivo de grupo inválido</string>
     <string name="source_groups_file_too_large">Arquivo muito grande (máx. 2 MB)</string>
     <string name="source_groups_error_generic">Erro: %1$s</string>
     <string name="source_groups_meta">%1$d rep. · %2$d pacotes · %3$d fontes (%4$d ativ.)</string>
@@ -34,7 +34,7 @@
     <string name="source_groups_rolled_back">Revertido ao estado anterior. Os repositórios e pacotes adicionados foram mantidos.</string>
     <string name="source_groups_package_missing">O pacote %1$s não foi encontrado no repositório</string>
     <string name="source_groups_requires_installer">O pacote %1$s precisa do instalador do sistema</string>
-    <string name="source_test_all">Test all</string>
+    <string name="source_test_all">Testar tudo</string>
     <string name="source_test_title">Testar fontes</string>
     <string name="source_test_progress">%1$d / %2$d verificados</string>
     <string name="source_test_running">Executando: %1$s</string>
@@ -49,7 +49,7 @@
     <string name="source_test_status_pass">Aprovado</string>
     <string name="source_test_status_fail">Falhou</string>
     <string name="source_test_status_skip">Ignorado</string>
-    <string name="source_test_step_list">Main list</string>
+    <string name="source_test_step_list">Lista principal</string>
     <string name="source_test_step_covers">Imagens de capa</string>
     <string name="source_test_step_details">Detalhes</string>
     <string name="source_test_step_chapters">Lista de cap.</string>
@@ -60,7 +60,7 @@
     <string name="source_test_msg_empty">Lista vazia</string>
     <string name="source_test_msg_no_items">Sem item p/ testar</string>
     <string name="source_test_msg_no_repo">A fonte não pôde ser carregada</string>
-    <string name="source_test_msg_timeout">Timed out (%1$d s)</string>
+    <string name="source_test_msg_timeout">Tempo limite esgotado (%1$d s)</string>
     <string name="source_test_msg_total_timeout">Tempo total da fonte excedido (%1$d s)</string>
     <string name="source_test_msg_prev_failed">Ignorado: etapa anterior falhou</string>
     <string name="source_test_msg_no_cover">Sem URL de capa</string>
@@ -70,7 +70,7 @@
     <string name="source_test_msg_no_chapters">Lista de capítulos vazia</string>
     <string name="source_test_msg_chapters">%1$d capítulos</string>
     <string name="source_test_msg_pages">%1$d páginas, 1ª img carregada</string>
-    <string name="source_test_msg_text_chapter">Text chapter opened</string>
+    <string name="source_test_msg_text_chapter">Capítulo de texto aberto</string>
     <string name="source_test_msg_no_pages">Lista de páginas vazia</string>
     <string name="source_test_msg_image_failed">Falha na imagem: %1$s</string>
     <string name="source_test_msg_video_stream">%1$d vídeos, stream acessível</string>
@@ -83,9 +83,9 @@
     <string name="source_test_status_cloudflare">Cloudflare: verif. manual</string>
     <string name="source_test_cloudflare">Cloudflare</string>
     <string name="source_test_msg_cloudflare">Bloqueado pelo Cloudflare, precisa verif. manual</string>
-    <string name="source_test_export">Export results</string>
+    <string name="source_test_export">Exportar resultados</string>
     <string name="source_test_copy_json">Copiar JSON</string>
-    <string name="source_lock_locked">Locked, tap to unlock</string>
+    <string name="source_lock_locked">Bloqueado, toque para desbloquear</string>
     <string name="source_lock_unlocked">Bloquear estado atual</string>
     <string name="source_lock_action">Bloquear</string>
     <string name="source_unlock_action">Desbloquear</string>
@@ -95,7 +95,7 @@
     <string name="source_groups_delete_confirm">Excluir o grupo \"%1$s\"?</string>
     <string name="extension_file_delete_failed">Cannot delete %1$s.</string>
     <string name="source_groups_export_lost">O destino da exportação foi perdido. Tente exportar novamente.</string>
-    <string name="extension_repo_update_failed">Update failed: %1$s</string>
+    <string name="extension_repo_update_failed">Falha na atualização: %1$s</string>
     <string name="source_groups_updated">Grupo atualizado</string>
     <string name="source_groups_newer_schema">Este arquivo de grupo é de uma versão mais nova. Atualize o app.</string>
     <string name="source_groups_confirm_domains">Substituições de domínio (%1$d fontes):</string>

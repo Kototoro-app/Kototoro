@@ -32,7 +32,7 @@
     <string name="book_notes_quote_prefix">نقل‌قول: %1$s</string>
     <string name="book_notes_bookmark_position">%1$s (صفحه %2$d)</string>
     <string name="book_notes_copied">در کلیپ‌بورد کپی شد</string>
-    <string name="book_notes_export_filename">%1$s reading notes.md</string>
+    <string name="book_notes_export_filename">یادداشت‌های مطالعه %1$s.md</string>
     <string name="book_notes_export_title">برون‌بری یادداشت‌ها از «%1$s»</string>
     <string name="book_notes_export_summary">%1$d یادداشت · برون‌بری استاندارد مارک‌داون</string>
     <string name="book_notes_copy_markdown">کپی محتوای مارک‌داون</string>

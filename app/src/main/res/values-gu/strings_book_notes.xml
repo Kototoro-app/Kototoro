@@ -33,7 +33,7 @@
     <string name="book_notes_quote_prefix">અવતરણ: %1$s</string>
     <string name="book_notes_bookmark_position">%1$s (પૃષ્ઠ %2$d)</string>
     <string name="book_notes_copied">ક્લિપબોર્ડ પર કૉપિ</string>
-    <string name="book_notes_export_filename">%1$s reading notes.md</string>
+    <string name="book_notes_export_filename">%1$s વાંચનની નોંધો.md</string>
     <string name="book_notes_export_title">\"%1$s\" માંથી નોંધો નિકાસ કરો</string>
     <string name="book_notes_export_summary">%1$d નોંધો · પ્રમાણભૂત માર્કડાઉન નિકાસ</string>
     <string name="book_notes_copy_markdown">માર્કડાઉન સામગ્રી કોપી કરો</string>
@@ -55,7 +55,7 @@
     <string name="book_notes_markdown_thought">💭 **વિચાર**: %1$s</string>
     <string name="book_notes_markdown_bookmark">🔖 **બુકમાર્ક**: પૃષ્ઠ %1$d%2$s</string>
     <string name="book_notes_markdown_progress"> (પ્રગતિ %1$d%%)</string>
-    <string name="book_notes_overview_empty">No notes yet</string>
-    <string name="book_notes_copy_content">Copy content</string>
-    <string name="book_notes_save_failed">Save failed: %1$s</string>
+    <string name="book_notes_overview_empty">હજી સુધી કોઈ નોંધ નથી</string>
+    <string name="book_notes_copy_content">સામગ્રી કૉપિ કરો</string>
+    <string name="book_notes_save_failed">સેવ કરવામાં નિષ્ફળ: %1$s</string>
 </resources>

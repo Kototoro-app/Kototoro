@@ -663,7 +663,7 @@
     <string name="any">N’importe</string>
     <string name="filter_search_warning">Cette source ne prend pas en charge la recherche avec des filtres. Vos filtres ont été effacés</string>
     <string name="demographic_kodomo">Kodomo</string>
-    <string name="content_type_one_shot">One shot</string>
+    <string name="content_type_one_shot">One-shot</string>
     <string name="screen_orientation">Orientation de l\'écran</string>
     <string name="content_type_doujinshi">Dōjinshi</string>
     <string name="content_type_artist_cg">Artiste en infographie</string>

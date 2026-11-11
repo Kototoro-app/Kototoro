@@ -3940,7 +3940,7 @@
     <string name="mangabaka_token_hint">Luo henkilökohtainen käyttöoikeustunniste MangaBakan tilin asetuksissa ja liitä se tähän. Tämä tunniste antaa täyden pääsyn MangaBaka-tilillesi.</string>
     <string name="mangabaka_auth_failed">Kirjautuminen tai kirjaston lataaminen epäonnistui. Tarkista tunniste, käyttöoikeudet ja yhteys ja yritä uudelleen.</string>
     <string name="favourite_categories_in_space">Tässä tilassa näytettävät luokat</string>
-    <string name="favourite_categories_in_space_hint">Categories are shared by every Space. This only changes which of them are listed here, so the same category can be shown in one Space and hidden in another. A Space that would hide every category keeps showing all of them.</string>
+    <string name="favourite_categories_in_space_hint">Kategoriat jaetaan kaikkien tilojen kesken. Tämä muuttaa vain sitä, mitkä niistä näkyvät tässä, joten sama kategoria voidaan näyttää yhdessä tilassa ja piilottaa toisessa. Tila, joka piilottaisi kaikki kategoriat, näyttää silti ne kaikki.</string>
     <string name="choose_categories_to_show">Näytettävät kategoriat</string>
     <string name="show_all_categories">Näytä kaikki kategoriat</string>
     <string name="category_hidden_from_shelf">Piilotettu hyllyltä</string>
@@ -4006,7 +4006,7 @@
     <string name="kitsu_dub_es">Espanjan dub</string>
     <string name="kitsu_dub_fr">Ranskan dub</string>
     <string name="kitsu_dub_de">Saksan dub</string>
-    <string name="kitsu_dub_ko">Korean dub</string>
+    <string name="kitsu_dub_ko">Koreankielinen dubbaus</string>
     <string name="kitsu_dub_it">Ital. dubbaus</string>
     <string name="source_preferences">Lähteen asetukset ja sisällön suodattimet</string>
     <string name="source_preferences_summary">Lajittelu, ryhmittely, aikuisten sisällön suodattimet ja tunnistemusta</string>
@@ -4058,7 +4058,7 @@
     <string name="manga_note_saved">Ruutumerkintä tall.</string>
     <string name="video_note_saved">Videomerkintä tall.</string>
     <string name="sort_by_last_read">Lukuaika</string>
-    <string name="settings_source_legado_runtime_title">Runtime (Legado)</string>
+    <string name="settings_source_legado_runtime_title">Suoritusaika (Legado)</string>
     <string name="settings_source_check_login_title">Kirjautumisen tila</string>
     <string name="settings_source_clear_login_summary">Tyhjentää lähteen sourceVariable-, loginInfo- ja kirjautumislomakevälimuistin</string>
     <string name="card_progress_percent_left">%1$d%% jälj.</string>

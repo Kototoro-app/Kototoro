@@ -1133,7 +1133,7 @@
     <string name="welcome_plugin_acknowledge">Я разумею, што настрайваю гэтыя староннія рэпазітарыі на свой страх і рызыку.</string>
     <string name="welcome_preferences_summary">Выберыце мовы і тыпы кантэнту. Гэта можна змяніць пазней у наладах крыніц.</string>
     <string name="welcome_spaces_title">Раздзяляйце прасторы</string>
-    <string name="welcome_spaces_summary">Spaces give manga, novels, and anime independent navigation, browsing preferences, and reading or playback context. Advanced options and custom spaces are available later in Settings &gt; User &gt; Spaces.</string>
+    <string name="welcome_spaces_summary">Прасторы забяспечваюць незалежную навігацыю, налады прагляду і кантэкст чытання або прайгравання для мангі, раманаў і анімэ. Дадатковыя параметры і карыстальніцкія прасторы даступныя пазней у раздзеле Налады &gt; Карыстальнік &gt; Прасторы.</string>
     <string name="welcome_ready_summary">Setup is complete. Kototoro will enable sources matching your selected languages and formats. You can run this wizard again from Settings › Content sources › Setup wizard.</string>
     <string name="welcome_jar_install_success">Kototoro: паспяхова загружана і падключана апошніх рухавічкоў парсераў: %1$d з воблачнай сеткі!</string>
     <string name="welcome_jar_install_up_to_date">Kototoro: воблачная праверка завершана, лакальныя парсеры актуальныя! (Загружана крыніц: %1$d)</string>
@@ -1503,7 +1503,7 @@
     <string name="details_tracking_suggestion_summary">Знойдзены вельмі падобны элемент на %1$s: %2$s</string>
     <string name="details_tracking_suggestion_view">Праглядзець</string>
     <string name="details_tracking_suggestion_ignore">Не гэтая праца</string>
-    <string name="anime_offline_database">Anime Offline Database</string>
+    <string name="anime_offline_database">Аўтаномная база даных анімэ</string>
     <string name="anime_offline_database_summary_installed">Усталявана %1$s • абноўлена %2$s</string>
     <string name="anime_offline_database_summary_installed_unknown">Усталявана лакальна</string>
     <string name="anime_offline_database_summary_not_installed">Яшчэ не спампавана</string>
@@ -1767,7 +1767,7 @@
     <string name="reader_mode_vertical">Зверху ўніз (пастаронкава)</string>
     <string name="reader_mode_vertical_continuous">Зверху ўніз (лянтай)</string>
     <string name="reader_dual_page">Дзве старонкі ў ландшафце / на вялікіх экранах</string>
-    <string name="reader_super_resolution">AI Super Resolution</string>
+    <string name="reader_super_resolution">Штучны інтэлект (павышэнне разрознення)</string>
     <string name="reader_super_resolution_summary">Павялічвае разрозненне выяваў з дапамогай RealCUGAN (можа значна спажываць рэсурсы і батарэю)</string>
     <string name="reader_super_resolution_engine">Рухавік Super Resolution</string>
     <string name="reader_super_resolution_model">Нейрасеткавая мадэль</string>

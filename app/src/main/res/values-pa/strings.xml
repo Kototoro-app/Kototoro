@@ -3278,7 +3278,7 @@
     <string name="pref_bangumi_mirror">Bangumi ਮਿਰਰ</string>
     <string name="pref_bangumi_mirror_summary">ਜਨਤਕ Bangumi ਖੋਜ, ਬ੍ਰਾਊਜ਼ਿੰਗ ਅਤੇ ਵੇਰਵਿਆਂ ਲਈ ਮਿਰਰ ਵਰਤੋ। OAuth ਪ੍ਰਮਾਣੀਕਰਨ ਅਜੇ ਵੀ ਅਧਿਕਾਰਤ ਸਾਈਟ ਦੀ ਵਰਤੋਂ ਕਰਦਾ ਹੈ।</string>
     <string name="pref_bangumi_mirror_custom_base">ਕਸਟਮ Bangumi ਮਿਰਰ ਬੇਸ URL</string>
-    <string name="pref_bangumi_mirror_custom_base_summary">Enter the web base URL, for example https://bangumi.pro. The API host is inferred as api.&lt;host&gt; unless you set it below.</string>
+    <string name="pref_bangumi_mirror_custom_base_summary">ਵੈਬ ਬੇਸ URL ਦਾਖਲ ਕਰੋ, ਉਦਾਹਰਣ ਲਈ https://bangumi.pro। API ਹੋਸਟ ਨੂੰ api.&lt;host&gt; ਵਜੋਂ ਮੰਨਿਆ ਜਾਂਦਾ ਹੈ ਜਦੋਂ ਤੱਕ ਤੁਸੀਂ ਇਸਨੂੰ ਹੇਠਾਂ ਸੈੱਟ ਨਹੀਂ ਕਰਦੇ।</string>
     <string name="pref_bangumi_mirror_custom_api_base">ਕਸਟਮ Bangumi ਮਿਰਰ API URL</string>
     <string name="pref_bangumi_mirror_custom_api_base_summary">ਵਿਕਲਪਕ API ਬੇਸ URL, ਉਦਾਹਰਣ ਲਈ https://api.bangumi.pro। ਵੈੱਬ ਬੇਸ URL ਤੋਂ ਇਸਦਾ ਅਨੁਮਾਨ ਲਗਾਉਣ ਲਈ ਖਾਲੀ ਛੱਡੋ।</string>
     <string name="hide_search_filter">ਖੋਜ ਫਿਲਟਰ ਲੁਕਾਓ</string>
@@ -3317,7 +3317,7 @@
     <string name="loading_circle_style_thick_straight">ਮੋਟਾ ਸਿੱਧਾ</string>
     <string name="loading_circle_style_thick_wavy">ਮੋਟਾ ਲਹਿਰਦਾਰ</string>
     <string name="loading_circle_style_thin_straight">ਪਤਲਾ ਸਿੱਧਾ</string>
-    <string name="loading_circle_style_thin_wavy">Thin Wavy</string>
+    <string name="loading_circle_style_thin_wavy">ਪਤਲੀ ਲਹਿਰਦਾਰ</string>
     <string name="reader">ਰੀਡਰ</string>
     <string name="pref_blur_mode">ਗਲਾਸ ਸਮੱਗਰੀ</string>
     <string name="pref_blur_mode_summary">ਧੁੰਦਲੇਪਣ ਦੇ ਘੇਰੇ ਅਤੇ ਸ਼ੋਰ ਨੂੰ ਵਿਵਸਥਿਤ ਕਰਨ ਲਈ ਗਲਾਸ ਸਮੱਗਰੀ ਪ੍ਰੀਸੈੱਟ ਚੁਣੋ</string>
@@ -3360,9 +3360,9 @@
     <string name="pref_glass_immersive_top_summary">ਸਥਿਤੀ ਬਾਰ ਅਤੇ ਸਿਖਰ ਬਾਰ ਦੇ ਹੇਠਾਂ ਸਮੱਗਰੀ ਨੂੰ ਰੰਗ ਅਤੇ ਧੁੰਦਲਾ ਕਰੋ</string>
     <string name="pref_glass_immersive_bottom">ਹੇਠਲੀ ਇੰਮਰਸਿਵ ਪਰਤ</string>
     <string name="pref_glass_immersive_bottom_summary">ਹੇਠਲੇ ਬਾਰ ਦੇ ਆਲੇ-ਦੁਆਲੇ ਸਮੱਗਰੀ ਨੂੰ ਰੰਗ ਅਤੇ ਧੁੰਦਲਾ ਕਰੋ; ਫਲੋਟਿੰਗ ਗਲਾਸ ਬਾਰ ਇਸ ਤੋਂ ਬਿਨਾਂ ਵਧੀਆ ਪੜ੍ਹਦੀ ਹੈ</string>
-    <string name="pref_glass_edge_blur">Edge blur</string>
+    <string name="pref_glass_edge_blur">ਕਿਨਾਰੇ ਦਾ ਧੁੰਦਲਾਪਣ</string>
     <string name="pref_glass_edge_blur_summary">Blurs and fades content under bars; needs Android 12 or newer</string>
-    <string name="pref_glass_blur_quality">Blur quality</string>
+    <string name="pref_glass_blur_quality">ਧੁੰਦਲੇਪਣ ਦੀ ਗੁਣਵੱਤਾ</string>
     <string name="pref_glass_blur_quality_summary">ਰੈਜ਼ੋਲੂਸ਼ਨ ਜਿਸ ਤੋਂ ਗਲਾਸ ਅਤੇ ਕਿਨਾਰੇ ਦਾ ਧੁੰਦਲਾਪਣ ਗਣਨਾ ਕੀਤਾ ਜਾਂਦਾ ਹੈ। ਘੱਟ GPU ਅਤੇ ਬੈਟਰੀ ਬਚਾਉਂਦਾ ਹੈ; ਉੱਚਾ ਧੁੰਦਲੇਪਣ ਤੋਂ ਬਾਹਰ ਜਾਣ ਵਾਲੇ ਟੈਕਸਟ ਨੂੰ ਤਿੱਖਾ ਰੱਖਦਾ ਹੈ</string>
     <string name="pref_glass_blur_quality_performance">ਪ੍ਰਦਰਸ਼ਨ</string>
     <string name="pref_glass_blur_quality_balanced">ਸੰਤੁਲਿਤ</string>
@@ -3397,7 +3397,7 @@
     <string name="pref_list_to_details_transition_hero">Hero ਫੈਲਾਓ (ਡਿਫੌਲਟ)</string>
     <string name="pref_list_to_details_transition_legacy">ਪੁਰਾਣੀ ਪੰਨਾ ਸਲਾਈਡ</string>
     <string name="jar_plugins_updates_available">JAR ਪਲੱਗਇਨਾਂ ਲਈ ਅੱਪਡੇਟ ਉਪਲਬਧ ਹਨ!</string>
-    <string name="jar_plugins_update_all">Update All</string>
+    <string name="jar_plugins_update_all">ਸਾਰੇ ਅੱਪਡੇਟ ਕਰੋ</string>
     <string name="jar_plugins_updating">Updating plugins...</string>
     <string name="crash_logs">ਕ੍ਰੈਸ਼ ਲੌਗ</string>
     <string name="crash_logs_summary">adb ਤੋਂ ਬिना ਕਰੈਸ਼ ਰਿਪੋਰਟਾਂ ਦੇਖੋ ਅਤੇ ਸਾਂਝੀਆਂ ਕਰੋ</string>
@@ -3591,7 +3591,7 @@
     <string name="pref_glass_param_hairline_alpha">ਹੇਅਰਲਾਈਨ ਤਾਕਤ</string>
     <string name="pref_glass_param_shadow">ਪਰਛਾਂਵਾਂ</string>
     <string name="pref_glass_param_shadow_radius">ਪਰਛਾਵੇਂ ਦਾ ਘੇਰਾ</string>
-    <string name="pref_glass_param_shadow_offset">Shadow offset</string>
+    <string name="pref_glass_param_shadow_offset">ਛਾਂ ਦਾ ਆਫਸੈੱਟ</string>
     <string name="pref_glass_param_shadow_alpha">ਪਰਛਾਵੇਂ ਦੀ ਤਾਕਤ</string>
     <string name="pref_glass_param_press_highlight">ਦਬਾਓ ਹਾਈਲਾਈਟ</string>
     <string name="pref_glass_param_press_inner_radius">ਅੰਦਰੂਨੀ ਪਰਛਾਵੇਂ ਦਾ ਘੇਰਾ ਦਬਾਓ</string>
@@ -3621,7 +3621,7 @@
     <string name="novel_selection_excerpt">ਕਿਤਾਬ ਦਾ ਹਵਾਲਾ</string>
     <string name="novel_selection_ask_ai">Ask AI</string>
     <string name="novel_selection_listen">ਸੁਣੋ</string>
-    <string name="novel_excerpt_saved">Saved to gallery</string>
+    <string name="novel_excerpt_saved">ਗੈਲਰੀ ਵਿੱਚ ਸੁਰੱਖਿਅਤ ਕੀਤਾ ਗਿਆ</string>
     <string name="novel_excerpt_share_failed">ਹਵਾਲਾ ਚਿੱਤਰ ਨਹੀਂ ਬਣਾ ਸਕਿਆ</string>
     <string name="novel_ai_ask_title">ਇਸ ਕਿਤਾਬ ਬਾਰੇ AI ਨੂੰ ਪੁੱਛੋ</string>
     <string name="novel_ai_ask_hint">ਤੁਸੀਂ ਕੀ ਪੁੱਛਣਾ ਚਾਹੁੰਦੇ ਹੋ?</string>
@@ -3641,12 +3641,12 @@
     <string name="novel_selection_position_unavailable">ਇਹ ਚੋਣ ਅਧਿਆਇ ਵਿੱਚ ਨਹੀਂ ਲੱਭੀ ਜਾ ਸਕਦੀ</string>
     <string name="novel_selection_note_title">ਨੋਟ ਸ਼ਾਮਲ ਕਰੋ</string>
     <string name="novel_selection_note_hint">ਨੋਟ ਲਿਖੋ</string>
-    <string name="novel_selection_note_saved">Note saved</string>
+    <string name="novel_selection_note_saved">ਨੋਟ ਸੁਰੱਖਿਅਤ ਕੀਤਾ ਗਿਆ</string>
     <string name="novel_markings_title">ਨੋਟ ਅਤੇ ਹਾਈਲਾਈਟਸ</string>
     <string name="novel_markings_summary">%1$d ਸੁਰੱਖਿਅਤ ਆਈਟਮਾਂ</string>
     <string name="novel_markings_empty">ਕੋਈ ਨੋਟ ਜਾਂ ਹਾਈਲਾਈਟ ਨਹੀਂ ਹੈ</string>
     <string name="novel_marking_chapter">ਅਧਿਆਇ %1$d</string>
-    <string name="novel_marking_no_note">No note added</string>
+    <string name="novel_marking_no_note">ਕੋਈ ਨੋਟ ਨਹੀਂ ਜੋੜਿਆ ਗਿਆ</string>
     <string name="novel_marking_edit_note">ਨੋਟ ਸੋਧੋ</string>
     <string name="novel_marking_edit_note_title">ਨੋਟ ਸੋਧੋ</string>
     <string name="novel_marking_delete">ਡਿਲੀਟ ਕਰੋ</string>
@@ -3664,7 +3664,7 @@
     <string name="novel_reader_display_mode">ਡਿਸਪਲੇਅ ਮੋਡ</string>
     <string name="novel_reader_typography_section">ਟਾਈਪੋਗ੍ਰਾਫੀ</string>
     <string name="novel_reader_translation_section">ਅਨੁਵਾਦ</string>
-    <string name="novel_reader_translation_enabled">Translate text</string>
+    <string name="novel_reader_translation_enabled">ਟੈਕਸਟ ਦਾ ਅਨੁਵਾਦ ਕਰੋ</string>
     <string name="novel_reader_translation_start">ਅਨੁਵਾਦ ਸ਼ੁਰੂ ਕਰੋ</string>
     <string name="novel_reader_translation_cache_hint">ਅਨੁਵਾਦ ਦੇ ਨਤੀਜੇ ਇਸ ਕਿਤਾਬ ਵਿੱਚ ਸਟੋਰ ਕੀਤੇ ਜਾਂਦੇ ਹਨ</string>
     <string name="novel_reader_bookmarks_notes">ਬੁੱਕਮਾਰਕ ਅਤੇ ਨੋਟਸ</string>
@@ -3740,7 +3740,7 @@
     <string name="novel_excerpt_background_mist">ਧੁੰਦ ਸਲੇਟੀ</string>
     <string name="novel_excerpt_background_tea">ਚਾਹ ਭੂਰਾ</string>
     <string name="novel_excerpt_background_ink">ਸਿਆਹੀ ਕਾਲਾ</string>
-    <string name="novel_excerpt_background_dusk">Dusk blue</string>
+    <string name="novel_excerpt_background_dusk">ਸ਼ਾਮ ਦਾ ਨੀلا</string>
     <string name="novel_excerpt_label_excerpted_on">%1$s \'ਤੇ ਅੰਸ਼</string>
     <string name="novel_excerpt_label_excerpted_on_vertical">%1$s · ਅੰਸ਼ ਲਿਆ</string>
     <string name="novel_excerpt_note_with_idea">ਵਿਚਾਰ: %1$s</string>

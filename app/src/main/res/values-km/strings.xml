@@ -1122,8 +1122,8 @@
     </plurals>
     <string name="show_suspicious_content">បង្ហាញមាតิกាគួរឱ្យសង្ស័យ</string>
     <string name="theme_name_dynamic">ថាមវន្ត</string>
-    <string name="theme_name_ios">iOS Blue</string>
-    <string name="theme_name_expressive">Expressive (Test)</string>
+    <string name="theme_name_ios">iOS ពណ៌ខៀវ</string>
+    <string name="theme_name_expressive">Expressive (စမ်းသပ်မှု)</string>
     <string name="color_theme">ពណ៌ស្បែក</string>
     <string name="appearance_color_scheme_ios_note">រចនាប័ទ្ម iOS គឺកំណត់ជា iOS Blue តាមលំនាំដើម អ្នកអាចប្តូរពណ៌ស្បែកទីនេះបាន។</string>
     <string name="interface_style">រចនាប័ទ្មចំណុចប្រទាក់</string>
@@ -1131,7 +1131,7 @@
     <string name="interface_style_material3_summary">ការគ្រប់គ្រង គម្លាត និងផ្ទៃស្របតាមប្រព័ន្ធ Android</string>
     <string name="interface_style_material3_expressive">md3 expressive</string>
     <string name="interface_style_material3_expressive_summary">ការគ្រប់គ្រងសមស្របធំជាង រូបរាងលេចធ្លោ និងកម្រិតអត្ថបទដិតជាង</string>
-    <string name="interface_style_ios">ios (modern)</string>
+    <string name="interface_style_ios">ios (ទំនើប)</string>
     <string name="interface_style_ios_summary">ការគ្រប់គ្រងរមូលជាង ផ្ទៃស្រទន់ជាង កញ្ចក់ Backdrop និងម៉ឺនុយទន់ជាង</string>
     <string name="appearance_style_override_note">មានប្រសិទ្ធភាពក្នុងរចនាប័ទ្មបច្ចុប្បន្ន %1$s៖ %2$s</string>
     <string name="appearance_style_default_value">លំនាំដើមរចនាប័ទ្ម %1$s បច្ចុប្បន្ន៖ %2$s</string>

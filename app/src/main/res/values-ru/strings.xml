@@ -4007,7 +4007,7 @@
     <string name="mangabaka_token_hint">Создайте личный токен доступа в настройках аккаунта MangaBaka и вставьте его сюда. Этот токен дает полный доступ к вашему аккаунту MangaBaka.</string>
     <string name="mangabaka_auth_failed">Не удалось войти или загрузить библиотеку. Проверьте токен, права и соединение, затем повторите попытку.</string>
     <string name="favourite_categories_in_space">Категории для этого пространства</string>
-    <string name="favourite_categories_in_space_hint">Categories are shared by every Space. This only changes which of them are listed here, so the same category can be shown in one Space and hidden in another. A Space that would hide every category keeps showing all of them.</string>
+    <string name="favourite_categories_in_space_hint">Категории общие для каждого Пространства. Это настраивает только то, какие из них отображаются здесь, поэтому одна и та же категория может показываться в одном Пространстве и быть скрыта в другом. Пространство, в котором скрыты все категории, продолжает отображать их все.</string>
     <string name="choose_categories_to_show">Категории для показа</string>
     <string name="show_all_categories">Показать все категории</string>
     <string name="category_hidden_from_shelf">Скрыто с полки</string>

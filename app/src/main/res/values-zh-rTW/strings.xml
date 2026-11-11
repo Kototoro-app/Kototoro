@@ -2036,7 +2036,7 @@
     <string name="reader_translation_task_stat_ocr_cache">OCR 緩存: %1$s</string>
     <string name="reader_translation_task_stat_ocr_eng">選中 OCR 引擎: %1$s</string>
     <string name="reader_translation_task_stat_pipe_fb">Pipeline 回退: %1$s</string>
-    <string name="reader_translation_task_stat_pipe_strat">OCR Pipeline: %1$s</string>
+    <string name="reader_translation_task_stat_pipe_strat">OCR Pipeline：%1$s</string>
     <string name="reader_translation_task_stat_render">渲染: %1$sms</string>
     <string name="reader_translation_task_stat_render_bubble">已渲染氣泡: %1$s</string>
     <string name="reader_translation_task_stat_render_cache">渲染緩存: %1$s</string>
@@ -2697,7 +2697,7 @@
     <string name="interface_style">界面風格</string>
     <string name="interface_style_material3">md3 (legacy)</string>
     <string name="interface_style_material3_summary">保留 Android 原生的控制項、間距和表面層級</string>
-    <string name="interface_style_ios">ios (modern)</string>
+    <string name="interface_style_ios">ios (現代風格)</string>
     <string name="interface_style_ios_summary">更圓潤的控制項、更克制的表面、分組 Haze 和柔和選單</string>
     <string name="appearance_style_override_note">目前 %1$s 風格下實際使用：%2$s</string>
     <string name="appearance_style_default_value">目前 %1$s 風格預設值：%2$s</string>

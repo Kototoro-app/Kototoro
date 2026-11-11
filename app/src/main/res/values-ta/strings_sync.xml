@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="sync_settings_enabled_title">Sync app settings</string>
+    <string name="sync_settings_enabled_title">செயலி அமைப்புகளை ஒத்திசை</string>
     <string name="sync_settings_enabled_summary">படிப்பான், இயக்கி மற்றும் தோற்ற அமைப்புகள். கடவுச்சொற்கள், டோக்கன்கள் மற்றும் சாதனப் பாதைகள் ஒத்திசைக்கப்படாது.</string>
     <string name="sync_remote_delete_incomplete">Could not delete %1$d remote files. Local sync kept; retry.</string>
     <string name="sync_enable_required">Enable Google Drive sync first.</string>
