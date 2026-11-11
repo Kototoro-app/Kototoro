@@ -36,4 +36,32 @@
         <item quantity="one">%1$d dakika</item>
         <item quantity="other">%1$d dakika</item>
     </plurals>
+    <plurals name="feed_timeline_updates">
+        <item quantity="one">%1$d güncelleme</item>
+        <item quantity="other">%1$d güncelleme</item>
+    </plurals>
+    <plurals name="old_chapters_in_total">
+        <item quantity="one">Toplam %1$d eski bölüm</item>
+        <item quantity="other">Toplam %1$d eski bölüm</item>
+    </plurals>
+    <plurals name="home_updates_new_chapters">
+        <item quantity="one">%1$d yeni bölüm</item>
+        <item quantity="other">%1$d yeni bölüm</item>
+    </plurals>
+    <plurals name="home_enabled_sources">
+        <item quantity="one">%1$d etkin kaynak</item>
+        <item quantity="other">%1$d etkin kaynak</item>
+    </plurals>
+    <plurals name="history_grouped_sources">
+        <item quantity="one">%1$d kaynak</item>
+        <item quantity="other">%1$d kaynak</item>
+    </plurals>
+    <plurals name="tracker_failing_titles_summary">
+        <item quantity="one">%1$d başlık art arda %2$d veya daha fazla kontrolde başarısız oldu</item>
+        <item quantity="other">%1$d başlık art arda %2$d veya daha fazla kontrolde başarısız oldu</item>
+    </plurals>
+    <plurals name="tracker_failed_in_a_row">
+        <item quantity="one">Art arda %1$d kez başarısız oldu</item>
+        <item quantity="other">Art arda %1$d kez başarısız oldu</item>
+    </plurals>
 </resources>

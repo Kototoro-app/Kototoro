@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="video_subtitle_settings">সাবটাইটেল সেটিংস</string>
+    <string name="video_subtitle_style">টাইপোগ্রাফি</string>
+    <string name="video_subtitle_font_size">ফন্টের আকার</string>
+    <string name="video_subtitle_border_size">বর্ডারের আকার</string>
+    <string name="video_subtitle_position">অবস্থান (মার্জিন)</string>
+    <string name="video_subtitle_color_text">টেキスト</string>
+    <string name="video_subtitle_color_border">বর্ডার</string>
+    <string name="video_subtitle_layout">লেআউট</string>
+    <string name="video_subtitle_colors">রংসমূহ</string>
+    <string name="video_subtitle_align_left">বাম</string>
+    <string name="video_subtitle_align_center">কেন্দ্র</string>
+    <string name="video_subtitle_align_right">ডান</string>
+    <string name="video_subtitle_color_alpha">আলফা</string>
+    <string name="video_subtitle_color_red">লাল</string>
+    <string name="video_subtitle_color_green">সবুজ</string>
+    <string name="video_subtitle_color_blue">নীল</string>
+    <string name="video_subtitle_background_style">ব্যাকগ্রাউন্ড শৈলী</string>
+    <string name="video_subtitle_background_none">বন্ধ</string>
+    <string name="video_subtitle_background_bar">সম্পূর্ণ প্রস্থ</string>
+    <string name="video_subtitle_background_block">টেক্সট ব্লক</string>
+    <string name="video_subtitle_background_lines">প্রতি লাইনে</string>
+    <string name="video_subtitle_background_corner_radius">কোণার ব্যাসার্ধ</string>
+    <string name="video_subtitle_background_padding_horizontal">অনুভূমিক প্যাডিং</string>
+    <string name="video_subtitle_background_padding_vertical">উল্লম্ব প্যাডিং</string>
+    <string name="video_subtitle_background_hint">ব্যাকগ্রাউন্ড সম্পূর্ণ প্রস্থের বার না তৈরি করে সাবটাইটেল টেক্সট অনুসরণ করে।</string>
+    <string name="video_subtitle_font_family">ফন্ট</string>
+    <string name="video_subtitle_font_sans">স্যান্স</string>
+    <string name="video_subtitle_font_serif">সেরিফ</string>
+    <string name="video_subtitle_font_monospace">মনোস্পেস</string>
+    <string name="video_subtitle_color_bg">ব্যাকগ্রাউন্ড</string>
+    <string name="video_subtitle_background">ব্যাকগ্রাউন্ড</string>
+</resources>

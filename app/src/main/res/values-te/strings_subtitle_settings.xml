@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="video_subtitle_style">టైపోగ్రఫీ</string>
+    <string name="video_subtitle_font_size">ఫాంట్ సైజ్</string>
+    <string name="video_subtitle_border_size">బార్డర్ సైజ్</string>
+    <string name="video_subtitle_position">స్థానం (మార్జిన్)</string>
+    <string name="video_subtitle_color_text">టెక్స్ట్</string>
+    <string name="video_subtitle_color_border">బార్డర్</string>
+    <string name="video_subtitle_color_bg">నేపథ్యం</string>
+    <string name="video_subtitle_layout">లేఅవుట్</string>
+    <string name="video_subtitle_colors">రంగులు</string>
+    <string name="video_subtitle_align_left">ఎడమ</string>
+    <string name="video_subtitle_align_center">మధ్యలో</string>
+    <string name="video_subtitle_align_right">కుడి</string>
+    <string name="video_subtitle_color_alpha">ఆల్ఫా</string>
+    <string name="video_subtitle_color_red">ఎరుపు</string>
+    <string name="video_subtitle_color_green">ఆకుపచ్చ</string>
+    <string name="video_subtitle_color_blue">నీలం</string>
+    <string name="video_subtitle_background">నేపథ్యం</string>
+    <string name="video_subtitle_background_style">నేపథ్య శైలి</string>
+    <string name="video_subtitle_background_none">ఆఫ్</string>
+    <string name="video_subtitle_background_lines">ప్రతి లైన్</string>
+    <string name="video_subtitle_background_corner_radius">మూలల వ్యాసార్థం</string>
+    <string name="video_subtitle_background_padding_horizontal">హారిజాంటల్ పాడింగ్</string>
+    <string name="video_subtitle_background_padding_vertical">వెర్టికల్ పాడింగ్</string>
+    <string name="video_subtitle_background_hint">పూర్తి వెడల్పు బార్‌కు బదులుగా నేపథ్యం సబ్‌టైటిల్ టెక్స్ట్‌ను అనుసరిస్తుంది.</string>
+    <string name="video_subtitle_font_family">ఫాంట్</string>
+    <string name="video_subtitle_font_sans">సాన్స్</string>
+    <string name="video_subtitle_font_serif">సెరిఫ్</string>
+    <string name="video_subtitle_font_monospace">మోనోస్పేస్</string>
+    <string name="video_subtitle_settings">ఉపశీర్షికల సెట్టింగ్‌లు</string>
+    <string name="video_subtitle_background_bar">పూర్తి వెడల్పు</string>
+    <string name="video_subtitle_background_block">టెక్స్ట్ బ్లాక్</string>
+</resources>

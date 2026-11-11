@@ -36,4 +36,32 @@
         <item quantity="one">%1$d ساعت</item>
         <item quantity="other">%1$d ساعت</item>
     </plurals>
+    <plurals name="feed_timeline_updates">
+        <item quantity="one">%1$d به‌روزرسانی</item>
+        <item quantity="other">%1$d به‌روزرسانی</item>
+    </plurals>
+    <plurals name="history_grouped_sources">
+        <item quantity="one">%1$d منبع</item>
+        <item quantity="other">%1$d منبع</item>
+    </plurals>
+    <plurals name="home_enabled_sources">
+        <item quantity="one">%1$d منبع فعال</item>
+        <item quantity="other">%1$d منبع فعال</item>
+    </plurals>
+    <plurals name="home_updates_new_chapters">
+        <item quantity="one">%1$d فصل جدید</item>
+        <item quantity="other">%1$d فصل جدید</item>
+    </plurals>
+    <plurals name="old_chapters_in_total">
+        <item quantity="one">%1$d فصل قدیمی در مجموع</item>
+        <item quantity="other">%1$d فصل قدیمی در مجموع</item>
+    </plurals>
+    <plurals name="tracker_failed_in_a_row">
+        <item quantity="one">%1$d بار متوالی ناموفق بود</item>
+        <item quantity="other">%1$d بار متوالی ناموفق بود</item>
+    </plurals>
+    <plurals name="tracker_failing_titles_summary">
+        <item quantity="one">%1$d عنوان در %2$d بررسی متوالی یا بیشتر ناموفق بود</item>
+        <item quantity="other">%1$d عنوان در %2$d بررسی متوالی یا بیشتر ناموفق بودند</item>
+    </plurals>
 </resources>

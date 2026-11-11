@@ -36,4 +36,32 @@
         <item quantity="one">%1$d perc</item>
         <item quantity="other">%1$d perc</item>
     </plurals>
+    <plurals name="feed_timeline_updates">
+        <item quantity="one">%1$d frissítés</item>
+        <item quantity="other">%1$d frissítés</item>
+    </plurals>
+    <plurals name="history_grouped_sources">
+        <item quantity="one">%1$d forrás</item>
+        <item quantity="other">%1$d forrás</item>
+    </plurals>
+    <plurals name="home_enabled_sources">
+        <item quantity="one">%1$d engedélyezett forrás</item>
+        <item quantity="other">%1$d engedélyezett forrás</item>
+    </plurals>
+    <plurals name="home_updates_new_chapters">
+        <item quantity="one">%1$d új fejezet</item>
+        <item quantity="other">%1$d új fejezet</item>
+    </plurals>
+    <plurals name="old_chapters_in_total">
+        <item quantity="one">Összesen %1$d régi fejezet</item>
+        <item quantity="other">Összesen %1$d régi fejezet</item>
+    </plurals>
+    <plurals name="tracker_failed_in_a_row">
+        <item quantity="one">%1$d alkalommal sikertelen egymás után</item>
+        <item quantity="other">%1$d alkalommal sikertelen egymás után</item>
+    </plurals>
+    <plurals name="tracker_failing_titles_summary">
+        <item quantity="one">%1$d cím nem ment át legalább %2$d ellenőrzésen egymás után</item>
+        <item quantity="other">%1$d cím nem ment át legalább %2$d ellenőrzésen egymás után</item>
+    </plurals>
 </resources>

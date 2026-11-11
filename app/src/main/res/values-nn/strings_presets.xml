@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="source_presets">Kjeldevalg</string>
+    <string name="create_preset">Ny mal</string>
+    <string name="edit_preset">Rediger mal</string>
+    <string name="preset_name">Malnamn</string>
+    <string name="preset_languages">Språk</string>
+    <string name="preset_sources">Kjelder</string>
+    <string name="preset_created">Mal opprettet</string>
+    <string name="preset_saved">Mal lagra</string>
+    <string name="preset_deleted">Mal sletta</string>
+    <string name="preset_activated">Mal aktivert</string>
+    <string name="preset_deactivated">Mal deaktivert</string>
+    <string name="no_presets">Ingen malar</string>
+    <string name="no_presets_text">Opprett eit førehandsval for å raskt veksle mellom ulike kjeldeoppsett</string>
+    <string name="manage_preset_sources">Behandle kjelder</string>
+</resources>

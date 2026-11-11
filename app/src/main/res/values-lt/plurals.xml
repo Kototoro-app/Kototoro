@@ -45,4 +45,32 @@
         <item quantity="few">prieš %1$d mėn</item>
         <item quantity="other">prieš %1$d mėn</item>
     </plurals>
+    <plurals name="feed_timeline_updates">
+        <item quantity="one">%1$d atnaujinimas</item>
+        <item quantity="other">%1$d atnaujinimai</item>
+    </plurals>
+    <plurals name="history_grouped_sources">
+        <item quantity="one">%1$d šaltinis</item>
+        <item quantity="other">%1$d šaltiniai</item>
+    </plurals>
+    <plurals name="home_enabled_sources">
+        <item quantity="one">%1$d įjungtas šaltinis</item>
+        <item quantity="other">%1$d įjungti šaltiniai</item>
+    </plurals>
+    <plurals name="home_updates_new_chapters">
+        <item quantity="one">%1$d naujas skyrius</item>
+        <item quantity="other">%1$d nauji skyriai</item>
+    </plurals>
+    <plurals name="old_chapters_in_total">
+        <item quantity="one">Iš viso %1$d senas skyrius</item>
+        <item quantity="other">Iš viso %1$d senų skyrių</item>
+    </plurals>
+    <plurals name="tracker_failed_in_a_row">
+        <item quantity="one">Nepavyko %1$d kartą iš eilės</item>
+        <item quantity="other">Nepavyko %1$d kartus iš eilės</item>
+    </plurals>
+    <plurals name="tracker_failing_titles_summary">
+        <item quantity="one">%1$d pavadinimui nepavyko %2$d patikrinimai ar daugiau iš eilės</item>
+        <item quantity="other">%1$d pavadinimams nepavyko %2$d patikrinimai ar daugiau iš eilės</item>
+    </plurals>
 </resources>

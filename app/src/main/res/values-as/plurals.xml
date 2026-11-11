@@ -36,4 +36,32 @@
         <item quantity="one">%1$d নতুন অধ্যায়</item>
         <item quantity="other">%1$d নতুন অধ্যাযয়সমূহ</item>
     </plurals>
+    <plurals name="feed_timeline_updates">
+        <item quantity="one">%1$d টা আপডেট</item>
+        <item quantity="other">%1$d টা আপডেট</item>
+    </plurals>
+    <plurals name="history_grouped_sources">
+        <item quantity="one">%1$d টা উৎস</item>
+        <item quantity="other">%1$d টা উৎস</item>
+    </plurals>
+    <plurals name="home_enabled_sources">
+        <item quantity="one">%1$d টা সচল উৎস</item>
+        <item quantity="other">%1$d টা সচল উৎস</item>
+    </plurals>
+    <plurals name="home_updates_new_chapters">
+        <item quantity="one">%1$d টা নতুন অধ্যায়</item>
+        <item quantity="other">%1$d টা নতুন অধ্যায়</item>
+    </plurals>
+    <plurals name="old_chapters_in_total">
+        <item quantity="one">মুঠতে %1$d টা পুৰণি অধ্যায়</item>
+        <item quantity="other">মুঠতে %1$d টা পুৰণি অধ্যায়</item>
+    </plurals>
+    <plurals name="tracker_failed_in_a_row">
+        <item quantity="one">একেৰাহে %1$d বাৰ বিফল হ\'ল</item>
+        <item quantity="other">একেৰাহে %1$d বাৰ বিফল হ\'ল</item>
+    </plurals>
+    <plurals name="tracker_failing_titles_summary">
+        <item quantity="one">%1$d টা শিৰোনামে একেৰাহে %2$d বাৰ বা ততোধিক পৰীক্ষাত বিফল হৈছে</item>
+        <item quantity="other">%1$d টা শিৰোনামে একেৰাহে %2$d বাৰ বা ততোধিক পৰীক্ষাত বিফল হৈছে</item>
+    </plurals>
 </resources>

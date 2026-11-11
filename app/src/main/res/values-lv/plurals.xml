@@ -1,2 +1,67 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources></resources>
+<resources>
+    <plurals name="chapters">
+        <item quantity="one">%1$d nodaļa</item>
+        <item quantity="other">%1$d nodaļas</item>
+    </plurals>
+    <plurals name="days_ago">
+        <item quantity="one">Pirms %1$d dienas</item>
+        <item quantity="other">Pirms %1$d dienām</item>
+    </plurals>
+    <plurals name="feed_timeline_updates">
+        <item quantity="one">%1$d atjauninājums</item>
+        <item quantity="other">%1$d atjauninājumi</item>
+    </plurals>
+    <plurals name="history_grouped_sources">
+        <item quantity="one">%1$d avots</item>
+        <item quantity="other">%1$d avoti</item>
+    </plurals>
+    <plurals name="home_enabled_sources">
+        <item quantity="one">%1$d iespējots avots</item>
+        <item quantity="other">%1$d iespējoti avoti</item>
+    </plurals>
+    <plurals name="home_updates_new_chapters">
+        <item quantity="one">%1$d jauna nodaļa</item>
+        <item quantity="other">%1$d jaunas nodaļas</item>
+    </plurals>
+    <plurals name="hours">
+        <item quantity="one">%1$d stunda</item>
+        <item quantity="other">%1$d stundas</item>
+    </plurals>
+    <plurals name="hours_ago">
+        <item quantity="one">Pirms %1$d stundas</item>
+        <item quantity="other">Pirms %1$d stundām</item>
+    </plurals>
+    <plurals name="items">
+        <item quantity="one">%1$d vienība</item>
+        <item quantity="other">%1$d vienības</item>
+    </plurals>
+    <plurals name="minutes">
+        <item quantity="one">%1$d minūte</item>
+        <item quantity="other">%1$d minūtes</item>
+    </plurals>
+    <plurals name="minutes_ago">
+        <item quantity="one">Pirms %1$d minūtes</item>
+        <item quantity="other">Pirms %1$d minūtēm</item>
+    </plurals>
+    <plurals name="months_ago">
+        <item quantity="one">Pirms %1$d mēneša</item>
+        <item quantity="other">Pirms %1$d mēnešiem</item>
+    </plurals>
+    <plurals name="new_chapters">
+        <item quantity="one">%1$d jauna nodaļa</item>
+        <item quantity="other">%1$d jaunas nodaļas</item>
+    </plurals>
+    <plurals name="old_chapters_in_total">
+        <item quantity="one">%1$d veca nodaļa kopā</item>
+        <item quantity="other">%1$d vecas nodaļas kopā</item>
+    </plurals>
+    <plurals name="tracker_failed_in_a_row">
+        <item quantity="one">Neizdevās %1$d reizi pēc kārtas</item>
+        <item quantity="other">Neizdevās %1$d reizes pēc kārtas</item>
+    </plurals>
+    <plurals name="tracker_failing_titles_summary">
+        <item quantity="one">%1$d nosaukums neizturēja %2$d vai vairāk pārbaudes pēc kārtas</item>
+        <item quantity="other">%1$d nosaukumi neizturēja %2$d vai vairāk pārbaudes pēc kārtas</item>
+    </plurals>
+</resources>

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="video_subtitle_settings">ตั้งค่าคำบรรยาย</string>
+    <string name="video_subtitle_style">ตัวอักษร</string>
+    <string name="video_subtitle_font_size">ขนาดฟอนต์</string>
+    <string name="video_subtitle_border_size">ขนาดขอบ</string>
+    <string name="video_subtitle_position">ตำแหน่ง (ระยะขอบ)</string>
+    <string name="video_subtitle_color_text">ข้อความ</string>
+    <string name="video_subtitle_color_border">ขอบ</string>
+    <string name="video_subtitle_color_bg">พื้นหลัง</string>
+    <string name="video_subtitle_layout">เค้าโครง</string>
+    <string name="video_subtitle_colors">สี</string>
+    <string name="video_subtitle_align_left">ซ้าย</string>
+    <string name="video_subtitle_align_center">กึ่งกลาง</string>
+    <string name="video_subtitle_align_right">ขวา</string>
+    <string name="video_subtitle_color_alpha">ความทึบ</string>
+    <string name="video_subtitle_color_red">แดง</string>
+    <string name="video_subtitle_color_green">เขียว</string>
+    <string name="video_subtitle_color_blue">น้ำเงิน</string>
+    <string name="video_subtitle_background">พื้นหลัง</string>
+    <string name="video_subtitle_background_style">สไตล์พื้นหลัง</string>
+    <string name="video_subtitle_background_none">ปิด</string>
+    <string name="video_subtitle_background_bar">เต็มแถบ</string>
+    <string name="video_subtitle_background_block">บล็อกข้อความ</string>
+    <string name="video_subtitle_background_lines">ทีละบรรทัด</string>
+    <string name="video_subtitle_background_corner_radius">รัศมีมุมโค้ง</string>
+    <string name="video_subtitle_background_padding_horizontal">ระยะเว้นแนวนอน</string>
+    <string name="video_subtitle_background_padding_vertical">ระยะเว้นแนวตั้ง</string>
+    <string name="video_subtitle_background_hint">พื้นหลังจะตามข้อความคำบรรยายแทนที่จะเป็นแถบเต็มความกว้าง</string>
+    <string name="video_subtitle_font_family">แบบอักษร</string>
+    <string name="video_subtitle_font_sans">แซนส์</string>
+    <string name="video_subtitle_font_serif">เซริฟ</string>
+    <string name="video_subtitle_font_monospace">โมโนสเปซ</string>
+</resources>

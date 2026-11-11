@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="show_language_preset_filter">Kalbos šablonas</string>
+    <string name="fixed_language_preset">Fiksuotas kalbos šablonas</string>
+    <string name="show_content_type_filter">Turinio tipas</string>
+    <string name="show_source_tag_filter">Šaltinio tipas</string>
+    <string name="fixed_source_tag">Fiksuotas šalt. tipas</string>
+    <string name="search_bar_filters">Paieškos juostos filtrai</string>
+    <string name="fixed_content_type">Fiksuotas turinio tipas</string>
+</resources>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="discover_category_all">هەموو پۆلەکان</string>
+    <string name="discover_category_anime_rank">ئەنیمێ</string>
+    <string name="discover_category_book_rank">کتێب</string>
+    <string name="discover_category_music_rank">مۆسیقا</string>
+    <string name="discover_category_game_rank">یاری</string>
+    <string name="discover_category_real_rank">ڕاستەقینە</string>
+    <string name="discover_category_calendar">خشتەی ڕۆژانە</string>
+</resources>

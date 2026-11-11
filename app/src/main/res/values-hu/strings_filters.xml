@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_bar_filters">Keresősáv szűrői</string>
+    <string name="show_language_preset_filter">Nyelvi sablon</string>
+    <string name="fixed_language_preset">Rögzített nyelvi sablon</string>
+    <string name="show_content_type_filter">Tartalomtípus</string>
+    <string name="show_source_tag_filter">Forrástípus</string>
+    <string name="fixed_source_tag">Rögzített forrástípus</string>
+    <string name="fixed_content_type">Rögzített tartalomtípus</string>
+</resources>

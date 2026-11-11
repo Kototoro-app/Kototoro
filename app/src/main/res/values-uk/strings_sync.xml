@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sync_settings_enabled_title">Синхр. налаштування</string>
+    <string name="sync_settings_enabled_summary">Налаштування читалки, плеєра та вигляду. Паролі, токени та шляхи пристрою не синхронізуються.</string>
+    <string name="sync_remote_delete_incomplete">Не вдалося видалити віддалені файли (%1$d). Локальний стан збережено; спробуйте знову.</string>
+    <string name="sync_enable_required">Увімкніть синхронізацію Google Drive.</string>
+    <string name="google_drive_authorization_required">Авторизація Google не завершена або термін її дії минув. Підключіть обліковий запис знову.</string>
+    <string name="google_drive_authorization_canceled">Авторизацію Google скасовано або минув час очікування.</string>
+    <string name="google_drive_browser_failed">Не вдалося відкрити системний браузер для авторизації Google.</string>
+    <string name="google_drive_credential_store_failed">Немає доступу до сховища облікових даних. Перевірте, чи воно розблоковане, і спробуйте знову.</string>
+    <string name="google_drive_settings_failed">Не вдалося зберегти налаштування. Перевірте каталог даних і спробуйте знову.</string>
+    <string name="google_drive_protocol_failed">Хмарний знімок пошкоджено або він використовує непідтримуваний формат. Нічого не завантажено.</string>
+    <string name="google_drive_conflict_failed">Інші пристрої оновлюють дані у хмарі. Спробуйте синхронізувати пізніше.</string>
+    <string name="google_drive_network_failed">Помилка Google Drive. Перевірте мережу й спробуйте знову.</string>
+    <string name="google_drive_access_failed">Google Drive відмовив у доступі. Перевірте надані дозволи та налаштування API Drive.</string>
+    <string name="google_drive_browser_complete">Отримано зворотний виклик браузера. Поверніться до Kototoro, щоб перевірити результат підключення.</string>
+    <string name="google_drive_browser_rejected">Цей зворотний виклик авторизації було відхилено. Поверніться до Kototoro та спробуйте знову.</string>
+    <string name="google_drive_stage_download">Завантаження</string>
+    <string name="google_drive_stage_merge">Об\'єднання</string>
+    <string name="google_drive_desktop_scope">Синхронізує вашу бібліотеку, категорії, прогрес читання, статистику та історію оновлень. Налаштування та розширення зберігаються у хмарі, але поки не застосовуються на ПК. Автоматична синхронізація працює, поки відкрито Kototoro.</string>
+    <string name="google_drive_authorization_pending">Очікування авторизації Google у браузері…</string>
+    <string name="google_drive_client_configuration_failed">Google відхилив конфігурацію клієнта OAuth. Перевірте тип настільного клієнта, проєкт Google Cloud і налаштування згоди.</string>
+    <string name="google_drive_client_secret_required">У цій збірці відсутній секрет настільного клієнта OAuth Google. Налаштуйте його та перезберіть; повторний вхід не допоможе.</string>
+    <string name="google_drive_stage_upload">Вивантаження</string>
+</resources>

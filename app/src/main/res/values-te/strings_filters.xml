@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_bar_filters">సెర్చ్ బార్ ఫిల్టర్లు</string>
+    <string name="show_language_preset_filter">భాషా ప్రీసెట్</string>
+    <string name="fixed_language_preset">స్థిర భాషా ప్రీసెట్</string>
+    <string name="show_content_type_filter">కంటెంట్ రకం</string>
+    <string name="fixed_content_type">స్థిర కంటెంట్ రకం</string>
+    <string name="show_source_tag_filter">మూల రకం</string>
+    <string name="fixed_source_tag">స్థిర మూల రకం</string>
+</resources>

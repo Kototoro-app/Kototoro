@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="source_presets">اعدادات المصادر</string>
+    <string name="create_preset">اعداد جديد</string>
+    <string name="edit_preset">تعديل الاعداد</string>
+    <string name="preset_name">اسم الاعداد</string>
+    <string name="preset_languages">اللغات</string>
+    <string name="preset_sources">المصادر</string>
+    <string name="preset_created">تم انشاء الاعداد</string>
+    <string name="preset_saved">تم حفظ الاعداد</string>
+    <string name="preset_deleted">تم حذف الاعداد</string>
+    <string name="preset_activated">تم تفعيل الاعداد</string>
+    <string name="preset_deactivated">تم الغاء تفعيل الاعداد</string>
+    <string name="no_presets">مفيش اعدادات لسه</string>
+    <string name="no_presets_text">اعمل اعداد عشان تبدل بسرعة بين اعدادات المصادر المختلفة</string>
+    <string name="manage_preset_sources">ادارة المصادر</string>
+</resources>

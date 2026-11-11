@@ -1,2 +1,67 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources></resources>
+<resources>
+    <plurals name="chapters">
+        <item quantity="one">%1$d глава</item>
+        <item quantity="other">%1$d главақәа</item>
+    </plurals>
+    <plurals name="days_ago">
+        <item quantity="one">%1$d шықәса рыҟара ахь</item>
+        <item quantity="other">%1$d шықәсақәа рыҟара ахь</item>
+    </plurals>
+    <plurals name="feed_timeline_updates">
+        <item quantity="one">%1$d аҿыцреи</item>
+        <item quantity="other">%1$d аҿыцрақәа</item>
+    </plurals>
+    <plurals name="history_grouped_sources">
+        <item quantity="one">%1$d ажьара</item>
+        <item quantity="other">%1$d ажьарақәа</item>
+    </plurals>
+    <plurals name="home_enabled_sources">
+        <item quantity="one">%1$d иҭаҧҟоу ажьара</item>
+        <item quantity="other">%1$d иҭаҧҟоу ажьарақәа</item>
+    </plurals>
+    <plurals name="home_updates_new_chapters">
+        <item quantity="one">%1$d аҿыц глава</item>
+        <item quantity="other">%1$d аҿыц главақәа</item>
+    </plurals>
+    <plurals name="hours">
+        <item quantity="one">%1$d сахьҭ</item>
+        <item quantity="other">%1$d сахьҭқәа</item>
+    </plurals>
+    <plurals name="hours_ago">
+        <item quantity="one">%1$d сахьҭ рыҟара ахь</item>
+        <item quantity="other">%1$d сахьҭқәа рыҟара ахь</item>
+    </plurals>
+    <plurals name="items">
+        <item quantity="one">%1$d астати</item>
+        <item quantity="other">%1$d астати</item>
+    </plurals>
+    <plurals name="minutes">
+        <item quantity="one">%1$d минуҭ</item>
+        <item quantity="other">%1$d минуҭқәа</item>
+    </plurals>
+    <plurals name="minutes_ago">
+        <item quantity="one">%1$d минуҭ рыҟара ахь</item>
+        <item quantity="other">%1$d минуҭқәа рыҟара ахь</item>
+    </plurals>
+    <plurals name="months_ago">
+        <item quantity="one">%1$d мчыбжьы рыҟара ахь</item>
+        <item quantity="other">%1$d мчыбжьқәа рыҟара ахь</item>
+    </plurals>
+    <plurals name="new_chapters">
+        <item quantity="one">%1$d аҿыц глава</item>
+        <item quantity="other">%1$d аҿыц главақәа</item>
+    </plurals>
+    <plurals name="old_chapters_in_total">
+        <item quantity="one">%1$d раԥхьатәи глава</item>
+        <item quantity="other">%1$d раԥхьатәи главақәа</item>
+    </plurals>
+    <plurals name="tracker_failed_in_a_row">
+        <item quantity="one">Аиҭагылара %1$d-нтә</item>
+        <item quantity="other">Аиҭагылара %1$d-нтә</item>
+    </plurals>
+    <plurals name="tracker_failing_titles_summary">
+        <item quantity="one">%1$d зҵаара %2$d-нтә аиҭагылара аҵыхәтәа</item>
+        <item quantity="other">%1$d зҵаарақәа %2$d-нтә аиҭагылара аҵыхәтәа</item>
+    </plurals>
+</resources>

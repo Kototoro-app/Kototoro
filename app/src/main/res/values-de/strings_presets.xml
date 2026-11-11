@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="source_presets">Quellenvorlagen</string>
+    <string name="create_preset">Neue Vorlage</string>
+    <string name="edit_preset">Vorlage bearb.</string>
+    <string name="preset_name">Vorlagenname</string>
+    <string name="preset_languages">Sprachen</string>
+    <string name="preset_sources">Quellen</string>
+    <string name="preset_created">Vorlage erstellt</string>
+    <string name="preset_deleted">Vorlage gelöscht</string>
+    <string name="preset_activated">Vorlage aktiviert</string>
+    <string name="preset_deactivated">Vorlage deaktiviert</string>
+    <string name="no_presets">Keine Vorlagen</string>
+    <string name="manage_preset_sources">Quellen verwalten</string>
+    <string name="preset_saved">Gespeichert</string>
+    <string name="no_presets_text">Erstelle eine Vorgabe zum schnellen Wechseln zwischen Konfigurationen</string>
+</resources>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_bar_filters">搜索栏筛选</string>
+    <string name="show_language_preset_filter">语言预设</string>
+    <string name="fixed_language_preset">固定语言预设</string>
+    <string name="show_content_type_filter">内容类型</string>
+    <string name="fixed_content_type">固定内容类型</string>
+    <string name="show_source_tag_filter">图源类型</string>
+    <string name="fixed_source_tag">固定图源类型</string>
+</resources>

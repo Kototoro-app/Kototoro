@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="source_presets">源豫設</string>
+    <string name="create_preset">立豫設</string>
+    <string name="edit_preset">改豫設</string>
+    <string name="preset_name">豫設名</string>
+    <string name="preset_languages">諸言</string>
+    <string name="preset_sources">諸源</string>
+    <string name="preset_created">豫設已立</string>
+    <string name="preset_saved">豫設已存</string>
+    <string name="preset_deleted">豫設已刪</string>
+    <string name="preset_activated">豫設已啟</string>
+    <string name="preset_deactivated">豫設已息</string>
+    <string name="no_presets">尚無豫設</string>
+    <string name="no_presets_text">創豫設以速切源之制</string>
+    <string name="manage_preset_sources">理源</string>
+</resources>

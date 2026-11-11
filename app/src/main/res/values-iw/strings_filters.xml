@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_bar_filters">מסנני סרגל חיפוש</string>
+    <string name="show_language_preset_filter">הגדרת שפה מראש</string>
+    <string name="fixed_language_preset">הגדרת שפה קבועה מראש</string>
+    <string name="show_content_type_filter">סוג תוכן</string>
+    <string name="fixed_content_type">סוג תוכן קבוע</string>
+    <string name="show_source_tag_filter">סוג מקור</string>
+    <string name="fixed_source_tag">סוג מקור קבוע</string>
+</resources>

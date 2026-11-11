@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sync_settings_enabled_title">Synkronoi asetukset</string>
+    <string name="sync_settings_enabled_summary">Luku-, toisto- ja ulkoasuasetukset. Salasanoja, tunnuksia ja laitepolkuja ei koskaan synkronoida.</string>
+    <string name="sync_remote_delete_incomplete">Etätiedoston %1$d poisto epäonnistui. Paikallinen tila säilyi, yritä uudelleen.</string>
+    <string name="sync_enable_required">Ota ensin Google Drive -synkronointi.</string>
+    <string name="google_drive_authorization_required">Googlen valtuutus on kesken tai vanhentunut. Yhdistä tili uudelleen.</string>
+    <string name="google_drive_authorization_canceled">Googlen valtuutus peruttiin tai sen aika vanheni.</string>
+    <string name="google_drive_browser_failed">Järjestelmäelainta ei voitu avata Google-valtuutusta varten.</string>
+    <string name="google_drive_credential_store_failed">Järjestelmän tunnistetietoihin ei saatu yhteyttä. Tarkista, että se on käytettävissä ja lukitsematon, ja yritä uudelleen.</string>
+    <string name="google_drive_settings_failed">Paikallisia asetuksia ei voitu tallentaa. Tarkista tietohakemisto ja yritä uudelleen.</string>
+    <string name="google_drive_protocol_failed">Pilvivarmuuskopio on vioittunut tai käyttää tukematonta muotoa. Mitään ei ladattu.</string>
+    <string name="google_drive_network_failed">Google Drive -synkronointi epäonnistui. Tarkista yhteys ja yritä uudelleen.</string>
+    <string name="google_drive_access_failed">Google Drive eväsi pääsyn. Tarkista myönnetyt käyttöoikeudet ja Drive API -määritykset.</string>
+    <string name="google_drive_browser_complete">Selaimen takaisinkutsu vastaanotettu. Palaa Kototoro-sovellukseen tarkistamaan tilin yhteystulos.</string>
+    <string name="google_drive_browser_rejected">Tämä valtuutuksen takaisinkutsu hylättiin. Palaa Kototoro-sovellukseen ja yritä yhdistää uudelleen.</string>
+    <string name="google_drive_stage_download">Ladataan</string>
+    <string name="google_drive_stage_merge">Yhdistetään</string>
+    <string name="google_drive_stage_upload">Lähetetään</string>
+    <string name="google_drive_desktop_scope">Synkronoi kirjastosi, luokat, lukemisen edistymisen, tilastot ja päivitystietueet. Asetukset ja laajennukset säilytetään pilvessä, mutta niitä ei vielä oteta käyttöön työpöydällä. Automaattinen synkronointi toimii Kototoro-sovelluksen ollessa avoinna.</string>
+    <string name="google_drive_authorization_pending">Odotetaan Google-valtuutusta selaimessa…</string>
+    <string name="google_drive_client_configuration_failed">Google hylkäsi OAuth-asiakasohjelman määritykset. Tarkista työpöytäasiakkaan tyyppi, Google Cloud -projekti ja suostumusasetukset.</string>
+    <string name="google_drive_client_secret_required">Tästä koontiversiosta puuttuu OAuth-salaisuus. Määritä se ja rakenna uudelleen; uudelleenkirjautuminen ei korjaa tätä.</string>
+    <string name="google_drive_conflict_failed">Muut laitteet päivittävät pilvitietoja. Yritä myöhemmin uudelleen.</string>
+</resources>

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="source_presets">Predvolby zdrojů</string>
+    <string name="create_preset">Nová preset</string>
+    <string name="edit_preset">Upravit preset</string>
+    <string name="preset_name">Název presetu</string>
+    <string name="preset_languages">Jazyky</string>
+    <string name="preset_sources">Zdroje</string>
+    <string name="preset_created">Preset vytvořen</string>
+    <string name="preset_saved">Preset uložen</string>
+    <string name="preset_deleted">Předvolba smazána</string>
+    <string name="preset_activated">Předvolba aktivována</string>
+    <string name="preset_deactivated">Předvolba deaktivována</string>
+    <string name="no_presets">Žádné presety</string>
+    <string name="no_presets_text">Vytvořte předvolbu pro rychlé přepínání mezi různými konfiguracemi zdrojů</string>
+    <string name="manage_preset_sources">Spravovat zdroje</string>
+</resources>

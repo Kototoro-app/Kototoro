@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="source_presets">Šaltinio šablonai</string>
+    <string name="create_preset">Naujas šabl.</string>
+    <string name="edit_preset">Redaguoti</string>
+    <string name="preset_name">Šabl. pavad.</string>
+    <string name="preset_languages">Kalbos</string>
+    <string name="preset_sources">Šaltiniai</string>
+    <string name="preset_created">Šablonas sukurta</string>
+    <string name="preset_activated">Šablonas aktyvuotas</string>
+    <string name="preset_deactivated">Nustatymas išjungtas</string>
+    <string name="no_presets">Nėra nustatymų</string>
+    <string name="no_presets_text">Sukurkite išankstinį nustatymą, kad greitai perjungtumėte šaltinių konfigūracijas</string>
+    <string name="preset_saved">Parinktis išsaugota</string>
+    <string name="preset_deleted">Parinktis pašalinta</string>
+    <string name="manage_preset_sources">Tvarkyti šaltinius</string>
+</resources>

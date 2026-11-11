@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="video_subtitle_settings">උಪසිරැසි සැකසුම්</string>
+    <string name="video_subtitle_style">අක්ෂර රූප</string>
+    <string name="video_subtitle_position">පිහිටීම (ኅවා)</string>
+    <string name="video_subtitle_color_text">පෙළ</string>
+    <string name="video_subtitle_color_border">මායිම</string>
+    <string name="video_subtitle_color_bg">පසුබිම</string>
+    <string name="video_subtitle_layout">レイアウト</string>
+    <string name="video_subtitle_colors">වර්ණ</string>
+    <string name="video_subtitle_align_left">වම</string>
+    <string name="video_subtitle_align_center">මධ්‍යය</string>
+    <string name="video_subtitle_align_right">දකුණ</string>
+    <string name="video_subtitle_color_alpha">ඇල්ෆා</string>
+    <string name="video_subtitle_color_red">රතු</string>
+    <string name="video_subtitle_color_green">කොළ</string>
+    <string name="video_subtitle_color_blue">නිල්</string>
+    <string name="video_subtitle_background">පසුබිම</string>
+    <string name="video_subtitle_background_style">පසුබිම් විලාසය</string>
+    <string name="video_subtitle_background_none">අක්‍රීය</string>
+    <string name="video_subtitle_background_bar">පූර්ණ පළල</string>
+    <string name="video_subtitle_background_block">පෙළ කොටුව</string>
+    <string name="video_subtitle_background_lines">පේළියකට</string>
+    <string name="video_subtitle_background_corner_radius">කෝණ අරය</string>
+    <string name="video_subtitle_background_padding_horizontal">තිරස් පෑඩින්</string>
+    <string name="video_subtitle_background_padding_vertical">සිරස් පෑඩින්</string>
+    <string name="video_subtitle_background_hint">පසුබිම සම්පූර්ණ පළල තීරුවක් සෑදීමට වඩා උපසිරැසි පෙළ අනුගමනය කරයි.</string>
+    <string name="video_subtitle_font_family">අකුරු</string>
+    <string name="video_subtitle_font_sans">Sans</string>
+    <string name="video_subtitle_font_serif">Serif</string>
+    <string name="video_subtitle_font_monospace">Monospace</string>
+    <string name="video_subtitle_font_size">අකුරු ප්‍රමාණය</string>
+    <string name="video_subtitle_border_size">මායිම් ප්‍රමාණය</string>
+</resources>

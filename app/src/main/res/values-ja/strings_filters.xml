@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_bar_filters">検索バーのフィルター</string>
+    <string name="show_language_preset_filter">言語プリセット</string>
+    <string name="fixed_language_preset">固定言語プリセット</string>
+    <string name="show_content_type_filter">コンテンツタイプ</string>
+    <string name="fixed_content_type">固定コンテンツタイプ</string>
+    <string name="show_source_tag_filter">ソースタイプ</string>
+    <string name="fixed_source_tag">固定ソースタイプ</string>
+</resources>

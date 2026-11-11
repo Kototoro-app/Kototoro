@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="source_presets">قوالب المصادر</string>
+    <string name="create_preset">إعداد جديد</string>
+    <string name="edit_preset">تعديل الإعداد</string>
+    <string name="preset_name">اسم الإعداد</string>
+    <string name="preset_languages">اللغات</string>
+    <string name="preset_sources">المصادر</string>
+    <string name="preset_created">تم إنشاء الإعداد</string>
+    <string name="preset_saved">تم حفظ الإعداد</string>
+    <string name="preset_deleted">تم حذف الإعداد</string>
+    <string name="preset_activated">تم تفعيل الإعداد</string>
+    <string name="preset_deactivated">تم إلغاء تفعيل الإعداد</string>
+    <string name="no_presets">لا توجد إعدادات</string>
+    <string name="no_presets_text">أنشئ إعداداً مسبقاً للتبديل بسرعة بين تكوينات المصادر المختلفة</string>
+    <string name="manage_preset_sources">إدارة المصادر</string>
+</resources>

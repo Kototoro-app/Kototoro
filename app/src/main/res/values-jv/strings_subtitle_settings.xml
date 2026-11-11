@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="video_subtitle_settings">Setelan subtitel</string>
+    <string name="video_subtitle_style">Tipografi</string>
+    <string name="video_subtitle_border_size">Ukuran Wates</string>
+    <string name="video_subtitle_position">Posisi (Wates)</string>
+    <string name="video_subtitle_color_text">Teks</string>
+    <string name="video_subtitle_color_border">Wates</string>
+    <string name="video_subtitle_color_bg"> Latar mburi</string>
+    <string name="video_subtitle_layout">Tata letak</string>
+    <string name="video_subtitle_colors">Werna</string>
+    <string name="video_subtitle_align_left">Kiri</string>
+    <string name="video_subtitle_align_center">Tengah</string>
+    <string name="video_subtitle_align_right">Tengen</string>
+    <string name="video_subtitle_color_alpha">Alfa</string>
+    <string name="video_subtitle_color_red">Abang</string>
+    <string name="video_subtitle_color_green">Ijo</string>
+    <string name="video_subtitle_color_blue">Biru</string>
+    <string name="video_subtitle_background">Latar mburi</string>
+    <string name="video_subtitle_background_style">Gaya latar mburi</string>
+    <string name="video_subtitle_background_none">Pateni</string>
+    <string name="video_subtitle_background_bar">Jembar kebak</string>
+    <string name="video_subtitle_background_block">Blok teks</string>
+    <string name="video_subtitle_background_lines">Per baris</string>
+    <string name="video_subtitle_background_corner_radius">Jari-jari pojok</string>
+    <string name="video_subtitle_background_padding_horizontal">Jarak horisontal</string>
+    <string name="video_subtitle_background_padding_vertical">Jarak vertikal</string>
+    <string name="video_subtitle_background_hint">Latar mburi ngetutake teks subtitel tinimbang nggawe garis ambane kebak.</string>
+    <string name="video_subtitle_font_family">Aksara</string>
+    <string name="video_subtitle_font_sans">Sans</string>
+    <string name="video_subtitle_font_serif">Serif</string>
+    <string name="video_subtitle_font_monospace">Monospace</string>
+    <string name="video_subtitle_font_size">Ukuran Font</string>
+</resources>

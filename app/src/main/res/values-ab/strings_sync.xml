@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sync_settings_enabled_title">Асинхронизациа</string>
+    <string name="sync_settings_enabled_summary">Асинхронизациа</string>
+    <string name="sync_remote_delete_incomplete">Иҽазымшәаз %1$d</string>
+    <string name="sync_enable_required">Иаҿку Google Drive</string>
+    <string name="google_drive_authorization_required">Иҭахып Google ахьӡ</string>
+    <string name="google_drive_authorization_canceled">Иԥыхәалоуп Google</string>
+    <string name="google_drive_browser_failed">Абраузер еиқәымхаӡем</string>
+    <string name="google_drive_credential_store_failed">Аусура еиқәымхаӡем</string>
+    <string name="google_drive_settings_failed">Иҽазымшәаз</string>
+    <string name="google_drive_protocol_failed">Иҽазымшәаз афаил</string>
+    <string name="google_drive_conflict_failed">Иҽазымшәаз асинхронизациа</string>
+    <string name="google_drive_network_failed">Иҽазымшәаз аинтернет</string>
+    <string name="google_drive_access_failed">Google Drive еиқәымхаӡем</string>
+    <string name="google_drive_browser_complete">Абраузер аҭак</string>
+    <string name="google_drive_browser_rejected">Иҽазымшәаз аҭак</string>
+    <string name="google_drive_stage_download">Иҭагалоуп</string>
+    <string name="google_drive_stage_merge">Еидыҵара</string>
+    <string name="google_drive_stage_upload">Икıаҵоуп</string>
+    <string name="google_drive_desktop_scope">Асинхронизациа аҟны</string>
+    <string name="google_drive_authorization_pending">Иаҩхаҵоуп Google…</string>
+    <string name="google_drive_client_configuration_failed">Google еиқәымхаӡем</string>
+    <string name="google_drive_client_secret_required">Google API ыҟам</string>
+</resources>

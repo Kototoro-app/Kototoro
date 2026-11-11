@@ -55,7 +55,7 @@
     <string name="loading_">載入中…</string>
     <string name="close">關閉</string>
     <string name="clear_history">清除歷史紀錄</string>
-    <string name="suggestions_info">所有的資料都在此裝置上進本機分析，並不會傳送至任何其他地方。</string>
+    <string name="suggestions_info">所有資料均僅於本裝置上進行本機分析，絕不會傳送至任何地方。</string>
     <string name="exclude_nsfw_from_history_summary">標記為 NSFW 的漫畫將永遠不會被加入到歷史資料中，您的進度也不會被儲存</string>
     <string name="backup_information">建立整包備份，用於本地保存或 WebDAV 還原。</string>
     <string name="crash_text">發生了一些問題。請向開發人員提交一個錯誤告告，以幫助我們修復它。</string>
@@ -429,7 +429,7 @@
     <string name="brightness">亮度</string>
     <string name="reader_control_ltr">人體工學閱讀器控制</string>
     <string name="services">服務</string>
-    <string name="enabled_d_of_d" tools:ignore="PluralsCandidate">%2$d 之 %1$d 啟用</string>
+    <string name="enabled_d_of_d">%2$d 之 %1$d 啟用</string>
     <string name="user_agent">UserAgent 標頭</string>
     <string name="sync_host_description">您可以使用自建同步伺服器或預設伺服器。如果您不確定您在做什麼，請勿變更此項。</string>
     <string name="reader_info_pattern">Ch. %1$d/%2$d Pg. %3$d/%4$d</string>
@@ -1240,7 +1240,7 @@
     <string name="favorite_count">收藏數</string>
     <string name="favourites_group_adult">成人收藏</string>
     <string name="favourites_group_general">收藏</string>
-    <string name="favourites_hidden_adult_subtitle">在設置中關閉"隱藏成人內容"即可顯示</string>
+    <string name="favourites_hidden_adult_subtitle">在設置中關閉\"隱藏成人內容\"即可顯示</string>
     <string name="favourites_hidden_adult_title">成人收藏已隱藏</string>
     <string name="fetching_content">正在獲取內容…</string>
     <string name="fetching_video_quality">正在獲取在線畫質…</string>
@@ -1253,7 +1253,7 @@
     <string name="filter_extensions_by_selected_content_languages">按語言過濾擴展：已選內容語言</string>
     <string name="filter_need_login">需要登錄</string>
     <string name="filter_no_group">未分組</string>
-    <string name="filter_overwrite_confirm">名爲 "%s" 的篩選器已存在，是否覆蓋？</string>
+    <string name="filter_overwrite_confirm">名爲 \"%s\" 的篩選器已存在，是否覆蓋？</string>
     <string name="fixed">修復成功</string>
     <string name="fixing_manga">正在修復漫畫</string>
     <string name="folder_multiple_manga">文件夾（多個漫畫）</string>
@@ -1303,7 +1303,7 @@
     <string name="home_sync_status_auto">WebDAV 自動備份</string>
     <string name="home_sync_status_not_configured">未配置</string>
     <string name="home_sync_status_ready">WebDAV 備份已配置</string>
-    <string name="home_sync_subtitle_configure"></string>
+    <string name="home_sync_subtitle_configure">開啟設定進行配置</string>
     <string name="home_sync_subtitle_ready">已就緒</string>
     <string name="home_updates_empty_subtitle">有新章節的訂閱內容會顯示在這裏</string>
     <string name="home_updates_empty_title">暫無最近更新</string>
@@ -1761,7 +1761,7 @@
     <string name="reader_super_resolution_summary">使用 RealCUGAN 提升圖像分辨率（可能顯著增加電池和性能消耗）</string>
     <string name="reader_translation_advanced_settings">高級模型設置</string>
     <string name="reader_translation_api_custom_headers">自定義請求頭（JSON）</string>
-    <string name="reader_translation_api_custom_headers_summary">以 JSON 格式添加自定義 HTTP 請求頭（例如 {"Model": "gpt-4"}）</string>
+    <string name="reader_translation_api_custom_headers_summary">以 JSON 格式添加自定義 HTTP 請求頭（例如 {\"Model\": \"gpt-4\"}）</string>
     <string name="reader_translation_api_endpoint">翻譯 API Endpoint</string>
     <string name="reader_translation_api_endpoint_missing">請先填寫翻譯 API endpoint</string>
     <string name="reader_translation_api_endpoint_summary">兼容 OpenAI/LibreTranslate 的地址，例如 https://example.com/translate</string>
@@ -1832,7 +1832,7 @@
     <string name="reader_translation_model_downloading_percent">正在下載資源包… %1$d%%</string>
     <string name="reader_translation_ocr_det_mlkit">ML Kit（Google 設備端，無需下載）</string>
     <string name="reader_translation_ocr_det_model_selection">文字檢測模型</string>
-    <string name="reader_translation_ocr_det_model_selection_summary">選擇用於定位頁面上文字區域的模型。"自動"默認使用 PP-OCRv5 檢測器。</string>
+    <string name="reader_translation_ocr_det_model_selection_summary">選擇用於定位頁面上文字區域的模型。\"自動\"默認使用 PP-OCRv5 檢測器。</string>
     <string name="reader_translation_ocr_detector_models_title">文字檢測模型</string>
     <string name="reader_translation_ocr_engine">文字提取方式</string>
     <string name="reader_translation_ocr_engine_mlkit">ML Kit（設備端，無需下載）</string>
@@ -2265,12 +2265,7 @@
     <string name="translation_settings">翻譯</string>
     <string name="trust_and_add">信任並添加</string>
     <string name="trust_extension_repository">信任倉庫指紋</string>
-    <string name="trust_extension_repository_message">倉庫: %1$s
-網站: %2$s
-SHA-256 指紋:
-%3$s
-
-請在信任此倉庫前與發佈者覈實該指紋。</string>
+    <string name="trust_extension_repository_message">倉庫: %1$s\n網站: %2$s\nSHA-256 指紋:\n%3$s\n\n請在信任此倉庫前與發佈者覈實該指紋。</string>
     <string name="tts_audio_cache">TTS 音頻緩存</string>
     <string name="tts_audio_cache_limit">TTS 音頻緩存限制</string>
     <string name="tts_clipboard_empty">剪貼板爲空</string>
@@ -2341,9 +2336,7 @@ SHA-256 指紋:
     <string name="unified_sources_delete_selected_message">刪除選中的 %1$d 個擴展包？</string>
     <string name="unified_sources_delete_selected_no_packages">當前選擇中未找到可刪除的擴展包。</string>
     <string name="unified_sources_delete_selected_only_skipped_jars">選擇中包含 JAR 源。爲避免意外刪除，已跳過其擴展包: %1$s</string>
-    <string name="unified_sources_delete_selected_with_skipped_jars">刪除選中的 %1$d 個擴展包？
-
-已跳過 JAR 擴展包以避免意外刪除: %2$s</string>
+    <string name="unified_sources_delete_selected_with_skipped_jars">刪除選中的 %1$d 個擴展包？\n\n已跳過 JAR 擴展包以避免意外刪除: %2$s</string>
     <string name="unified_sources_empty_response_body">響應內容爲空</string>
     <string name="unified_sources_http_error">HTTP %1$d</string>
     <string name="unified_sources_imported_plugin">已導入插件: %1$s</string>
@@ -2379,11 +2372,7 @@ SHA-256 指紋:
     <string name="unsupported_novel_source">不支持此小說源</string>
     <string name="unsupported_video_source">不支持此視頻源</string>
     <string name="untrusted_extension">未信任</string>
-    <string name="untrusted_extension_message">%1$s（%2$s）已安裝，但其簽名與所選倉庫指紋不匹配。
-
-倉庫指紋: %3$s
-
-請先移除已安裝的擴展包，再從該倉庫重新安裝。</string>
+    <string name="untrusted_extension_message">%1$s（%2$s）已安裝，但其簽名與所選倉庫指紋不匹配。\n\n倉庫指紋: %3$s\n\n請先移除已安裝的擴展包，再從該倉庫重新安裝。</string>
     <string name="untrusted_section">未信任</string>
     <string name="update_all_extensions">全部更新</string>
     <string name="update_all_packages">全部更新</string>
@@ -2610,7 +2599,7 @@ SHA-256 指紋:
     <string name="you_may_like">猜你喜歡</string>
 
     <!-- 批量源遷移 -->
-    <string name="source_migration_from_label">來源源</string>
+    <string name="source_migration_from_label">從來源</string>
     <string name="source_migration_to_label">目標源</string>
     <string name="source_migration_cancel">取消遷移</string>
     <string name="source_migration_concurrency">搜索併發數：%1$d</string>
@@ -2622,10 +2611,12 @@ SHA-256 指紋:
     <string name="migration_no_sources">收藏中無可遷移的源</string>
     <string name="content_type_filter">內容類型</string>
     <string name="source_type_filter">源類型</string>
-    <plurals name="source_count">
+        <plurals name="source_count">
+        <item quantity="one">%d 個來源</item>
         <item quantity="other">%d 個源</item>
     </plurals>
-    <plurals name="sources_imported_successfully">
+        <plurals name="sources_imported_successfully">
+        <item quantity="one">已成功匯入 %d 個來源</item>
         <item quantity="other">成功匯入 %d 個源</item>
     </plurals>
 
@@ -3107,7 +3098,8 @@ SHA-256 指紋:
     <string name="eink_refresh_every">重新整理間隔</string>
     <string name="eink_refresh_color">重新整理顏色</string>
     <string name="milliseconds_value">%1$d 毫秒</string>
-    <plurals name="pages_value">
+        <plurals name="pages_value">
+        <item quantity="one">每頁</item>
         <item quantity="other">每 %1$d 頁</item>
     </plurals>
     <string name="reader_background">閱讀背景</string>
@@ -3280,7 +3272,7 @@ SHA-256 指紋:
     <string name="sync_freq_daily">每天</string>
     <string name="sync_freq_weekly">每週</string>
     <string name="webdav_sync_attention_title">同步注意事項</string>
-    <string name="webdav_legacy_restore_block_summary">此裝置從舊版備份格式恢復。為避免覆蓋較新的遠端資料，已臨時阻止自動 WebDAV 上傳。請檢查恢復的資料，然後使用"立即上傳備份"建立新的資料基線。</string>
+    <string name="webdav_legacy_restore_block_summary">此裝置從舊版備份格式恢復。為避免覆蓋較新的遠端資料，已臨時阻止自動 WebDAV 上傳。請檢查恢復的資料，然後使用\"立即上傳備份\"建立新的資料基線。</string>
     <string name="webdav_connection_check_in_progress">正在檢查 WebDAV 連線…</string>
     <string name="webdav_upload_in_progress">正在上傳備份到 WebDAV…</string>
     <string name="webdav_restore_in_progress">正在從 WebDAV 恢復最新備份…</string>
@@ -3952,7 +3944,8 @@ SHA-256 指紋:
     <string name="migration_candidates_title">候選</string>
     <string name="migration_search_hint">在目標來源中搜索</string>
     <string name="migration_sources_title">按來源換源</string>
-    <plurals name="migration_health_banner">
+        <plurals name="migration_health_banner">
+        <item quantity="one">%1$d 個來源可能失效，影響 %2$d 本收藏</item>
         <item quantity="other">%1$d 個來源可能已失效，涉及 %2$d 部收藏</item>
     </plurals>
     <string name="migration_health_banner_disable">不再提示</string>
@@ -3968,11 +3961,13 @@ SHA-256 指紋:
     <string name="migration_health_suspicious">偶發失敗</string>
     <string name="migration_health_suspicious_summary">最近的更新檢查有失敗，通常是本裝置網路臨時問題，源本身可能正常</string>
     <string name="migration_health_disabled">已停用</string>
-    <plurals name="migration_health_disabled_summary">
+        <plurals name="migration_health_disabled_summary">
+        <item quantity="one">%d 本收藏 · 於來源中關閉，但仍會開啟並檢查更新</item>
         <item quantity="other">%d 部收藏 · 已在來源管理中關閉，仍可閱讀並檢查更新</item>
     </plurals>
     <string name="migration_next">下一步</string>
-    <plurals name="migration_health_hint">
+        <plurals name="migration_health_hint">
+        <item quantity="one">%d 個來源可能失效</item>
         <item quantity="other">%d 個來源可能失效</item>
     </plurals>
     <string name="migration_no_available_sources">還沒有啟用這類來源</string>
@@ -4000,13 +3995,16 @@ SHA-256 指紋:
     <string name="library_duplicates_keep">保留</string>
     <string name="library_duplicates_chapters">%d 話</string>
     <string name="library_duplicates_merge_all_message">每組都會合併到高亮的那一本。其餘條目會移出收藏和歷史，已下載的內容會保留。</string>
-    <plurals name="library_duplicates_entries">
+        <plurals name="library_duplicates_entries">
+        <item quantity="one">%d 個項目</item>
         <item quantity="other">%d 個條目</item>
     </plurals>
-    <plurals name="library_duplicates_merge_all">
+        <plurals name="library_duplicates_merge_all">
+        <item quantity="one">合併 %d 個群組</item>
         <item quantity="other">全部合併 %d 組</item>
     </plurals>
-    <plurals name="library_duplicates_merged">
+        <plurals name="library_duplicates_merged">
+        <item quantity="one">已合併 %d 個群組。沒有剩餘重複項目</item>
         <item quantity="other">已合併 %d 組，沒有剩餘的重複</item>
     </plurals>
     <string name="duplicate_read_percent">已讀 %d%%</string>

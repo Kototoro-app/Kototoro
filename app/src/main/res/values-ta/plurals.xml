@@ -36,4 +36,32 @@
         <item quantity="one">%1$d மணி</item>
         <item quantity="other">%1$d மணிநேரம்</item>
     </plurals>
+    <plurals name="feed_timeline_updates">
+        <item quantity="one">%1$d புதுப்பிப்பு</item>
+        <item quantity="other">%1$d புதுப்பிப்புகள்</item>
+    </plurals>
+    <plurals name="history_grouped_sources">
+        <item quantity="one">%1$d மூலம்</item>
+        <item quantity="other">%1$d மூலங்கள்</item>
+    </plurals>
+    <plurals name="home_enabled_sources">
+        <item quantity="one">%1$d இயக்கப்பட்ட மூலம்</item>
+        <item quantity="other">%1$d இயக்கப்பட்ட மூலங்கள்</item>
+    </plurals>
+    <plurals name="home_updates_new_chapters">
+        <item quantity="one">%1$d புதிய அத்தியாயம்</item>
+        <item quantity="other">%1$d புதிய அத்தியாயங்கள்</item>
+    </plurals>
+    <plurals name="old_chapters_in_total">
+        <item quantity="one">மொத்தம் %1$d பழைய அத்தியாயம்</item>
+        <item quantity="other">மொத்தம் %1$d பழைய அத்தியாயங்கள்</item>
+    </plurals>
+    <plurals name="tracker_failed_in_a_row">
+        <item quantity="one">தொடர்ந்து %1$d முறை தோல்வியடைந்தது</item>
+        <item quantity="other">தொடர்ந்து %1$d முறை தோல்வியடைந்தன</item>
+    </plurals>
+    <plurals name="tracker_failing_titles_summary">
+        <item quantity="one">%1$d தலைப்பு தொடர்ந்து %2$d முறை அல்லது அதற்கு மேல் சோதனைகளில் தோல்வியடைந்தது</item>
+        <item quantity="other">%1$d தலைப்புகள் தொடர்ந்து %2$d முறை அல்லது அதற்கு மேல் சோதனைகளில் தோல்வியடைந்தன</item>
+    </plurals>
 </resources>

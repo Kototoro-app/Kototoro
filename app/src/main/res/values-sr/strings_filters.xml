@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_bar_filters">Filteri pretrage</string>
+    <string name="show_language_preset_filter">Unapred zad. jezik</string>
+    <string name="fixed_language_preset">Fiksirani jezik</string>
+    <string name="show_content_type_filter">Tip sadržaja</string>
+    <string name="fixed_content_type">Fiksirani tip sadržaja</string>
+    <string name="show_source_tag_filter">Tip izvora</string>
+    <string name="fixed_source_tag">Fiksirani tip izvora</string>
+</resources>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="discover_category_all">جميع التصنيفات</string>
+    <string name="discover_category_anime_rank">أنمي</string>
+    <string name="discover_category_book_rank">كتاب</string>
+    <string name="discover_category_music_rank">موسيقى</string>
+    <string name="discover_category_game_rank">لعبة</string>
+    <string name="discover_category_real_rank">واقعي</string>
+    <string name="discover_category_calendar">الجدول اليومي</string>
+</resources>

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="source_presets">بريسيتات المصادر</string>
+    <string name="create_preset">بريسيت جديد</string>
+    <string name="edit_preset">تعديل البريسيت</string>
+    <string name="preset_name">اسم البريسيت</string>
+    <string name="preset_languages">اللغات</string>
+    <string name="preset_sources">المصادر</string>
+    <string name="preset_created">تم إنشاء البريسيت</string>
+    <string name="preset_saved">تم حفظ البريسيت</string>
+    <string name="preset_deleted">تم حذف البريسيت</string>
+    <string name="preset_activated">تم تفعيل البريسيت</string>
+    <string name="preset_deactivated">تم إيقاف البريسيت</string>
+    <string name="no_presets">مفيش جاهز</string>
+    <string name="no_presets_text">اصنع بريسيت عشان تبدل بسرعة بين إعدادات المصادر المختلفة</string>
+    <string name="manage_preset_sources">إدارة المصادر</string>
+</resources>

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="video_subtitle_settings">उपशीर्षक सेटिङहरू</string>
+    <string name="video_subtitle_style">टाइपोग्राफी</string>
+    <string name="video_subtitle_font_size">फन्ट साइज</string>
+    <string name="video_subtitle_border_size">किनारा साइज</string>
+    <string name="video_subtitle_position">स्थिति (मार्जिन)</string>
+    <string name="video_subtitle_color_text">पाठ</string>
+    <string name="video_subtitle_color_border">किनारा</string>
+    <string name="video_subtitle_color_bg">पृष्ठभूमि</string>
+    <string name="video_subtitle_layout">लेआउट</string>
+    <string name="video_subtitle_colors">रङहरू</string>
+    <string name="video_subtitle_align_left">बायाँ</string>
+    <string name="video_subtitle_align_center">बीचमा</string>
+    <string name="video_subtitle_align_right">दायाँ</string>
+    <string name="video_subtitle_color_alpha">अल्फा</string>
+    <string name="video_subtitle_color_red">रातो</string>
+    <string name="video_subtitle_color_green">हरियो</string>
+    <string name="video_subtitle_color_blue">नीलो</string>
+    <string name="video_subtitle_background">पृष्ठभूमि</string>
+    <string name="video_subtitle_background_style">पृष्ठभूमि शैली</string>
+    <string name="video_subtitle_background_none">बन्द</string>
+    <string name="video_subtitle_background_bar">पूरा चौडाइ</string>
+    <string name="video_subtitle_background_block">पाठ ब्लक</string>
+    <string name="video_subtitle_background_lines">प्रति लाइन</string>
+    <string name="video_subtitle_background_corner_radius">कुनाको गोलाइ</string>
+    <string name="video_subtitle_background_padding_horizontal">तेस्रो प्याडिङ</string>
+    <string name="video_subtitle_background_padding_vertical">ठाडो प्याडिङ</string>
+    <string name="video_subtitle_background_hint">पृष्ठभूमिले पूरा चौडाइको पट्टी बनाउनुको सट्टा उपशीर्षक पाठलाई पछ्याउँछ।</string>
+    <string name="video_subtitle_font_family">फन्ट</string>
+    <string name="video_subtitle_font_sans">सान्स</string>
+    <string name="video_subtitle_font_serif">सेरिफ</string>
+    <string name="video_subtitle_font_monospace">मोनोस्पेस</string>
+</resources>

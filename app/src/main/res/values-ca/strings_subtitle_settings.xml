@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="video_subtitle_settings">Subtítols</string>
+    <string name="video_subtitle_style">Tipografia</string>
+    <string name="video_subtitle_font_size">Mida lletra</string>
+    <string name="video_subtitle_border_size">Mida de vora</string>
+    <string name="video_subtitle_position">Posició (marge)</string>
+    <string name="video_subtitle_color_text">Text</string>
+    <string name="video_subtitle_color_border">Vora</string>
+    <string name="video_subtitle_color_bg">Fons</string>
+    <string name="video_subtitle_layout">Disposició</string>
+    <string name="video_subtitle_colors">Colors</string>
+    <string name="video_subtitle_align_left">Esquerra</string>
+    <string name="video_subtitle_align_center">Centre</string>
+    <string name="video_subtitle_align_right">Dreta</string>
+    <string name="video_subtitle_color_alpha">Alfa</string>
+    <string name="video_subtitle_color_red">Vermell</string>
+    <string name="video_subtitle_color_green">Verd</string>
+    <string name="video_subtitle_color_blue">Blau</string>
+    <string name="video_subtitle_background">Fons</string>
+    <string name="video_subtitle_background_style">Estil del fons</string>
+    <string name="video_subtitle_background_none">Cap</string>
+    <string name="video_subtitle_background_bar">Ple</string>
+    <string name="video_subtitle_background_block">Bloc de text</string>
+    <string name="video_subtitle_background_lines">Per línia</string>
+    <string name="video_subtitle_background_corner_radius">Radi cantonada</string>
+    <string name="video_subtitle_background_padding_horizontal">Farciment horitzontal</string>
+    <string name="video_subtitle_background_padding_vertical">Farciment vertical</string>
+    <string name="video_subtitle_background_hint">El fons segueix el text del subtítol en lloc de formar una barra d\'amplada total.</string>
+    <string name="video_subtitle_font_family">Lletra</string>
+    <string name="video_subtitle_font_sans">Sans</string>
+    <string name="video_subtitle_font_serif">Serif</string>
+    <string name="video_subtitle_font_monospace">Monoespai</string>
+</resources>

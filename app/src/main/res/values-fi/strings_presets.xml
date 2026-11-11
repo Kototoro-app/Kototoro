@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="source_presets">Lähdeasetukset</string>
+    <string name="create_preset">Uusi asetus</string>
+    <string name="edit_preset">Muokkaa</string>
+    <string name="preset_name">Asetuksen nimi</string>
+    <string name="preset_languages">Kielet</string>
+    <string name="preset_sources">Lähteet</string>
+    <string name="preset_created">Esiasetus luotu</string>
+    <string name="preset_saved">Tallennettu</string>
+    <string name="preset_deleted">Poistettu</string>
+    <string name="preset_activated">Otettu käyttöön</string>
+    <string name="preset_deactivated">Poistettu käytöstä</string>
+    <string name="no_presets">Ei esiasetuksia</string>
+    <string name="no_presets_text">Luo esiasetus vaihtaaksesi nopeasti eri lähdemääritysten välillä</string>
+    <string name="manage_preset_sources">Hallitse lähteitä</string>
+</resources>

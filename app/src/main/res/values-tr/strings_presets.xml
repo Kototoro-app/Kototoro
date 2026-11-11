@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="preset_name">Şablon adı</string>
+    <string name="preset_languages">Diller</string>
+    <string name="preset_sources">Kaynaklar</string>
+    <string name="preset_deleted">Şablon silindi</string>
+    <string name="preset_deactivated">Şablon devre dışı</string>
+    <string name="create_preset">Yeni ön ayar</string>
+    <string name="manage_preset_sources">Kaynakları yönet</string>
+    <string name="source_presets">Kaynak şablonu</string>
+    <string name="preset_created">Şablon oluştu</string>
+    <string name="preset_activated">Ön ayar aktif</string>
+    <string name="no_presets">Ön ayar yok</string>
+    <string name="no_presets_text">Farklı kaynak ayarları arasında hızlı geçiş için şablon oluşturun</string>
+    <string name="edit_preset">Ayarı düzenle</string>
+    <string name="preset_saved">Ayar kayıtlı</string>
+</resources>

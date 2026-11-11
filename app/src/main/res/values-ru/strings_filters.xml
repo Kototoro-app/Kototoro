@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_bar_filters">Фильтры в поиске</string>
+    <string name="show_language_preset_filter">Пресет языка</string>
+    <string name="fixed_language_preset">Фиксированный пресет языка</string>
+    <string name="show_content_type_filter">Тип контента</string>
+    <string name="fixed_content_type">Фикс. тип контента</string>
+    <string name="show_source_tag_filter">Тип источника</string>
+    <string name="fixed_source_tag">Фикс. тип источника</string>
+</resources>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="discover_category_all">ทุกหมวดหมู่</string>
+    <string name="discover_category_anime_rank">อนิเมะ</string>
+    <string name="discover_category_book_rank">หนังสือ</string>
+    <string name="discover_category_music_rank">เพลง</string>
+    <string name="discover_category_game_rank">เกม</string>
+    <string name="discover_category_real_rank">คนจริง</string>
+    <string name="discover_category_calendar">ตารางประจำวัน</string>
+</resources>

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="source_presets">स्रोत प्रिसेटहरू</string>
+    <string name="create_preset">नयाँ प्रिसेट</string>
+    <string name="edit_preset">Edit</string>
+    <string name="preset_name">प्रिसेटको नाम</string>
+    <string name="preset_languages">भाषाहरू</string>
+    <string name="preset_sources">स्रोतहरू</string>
+    <string name="preset_created">Created</string>
+    <string name="preset_saved">Saved</string>
+    <string name="preset_deleted">प्रिसेट हटाइयो</string>
+    <string name="preset_activated">प्रिसेट सक्रिय गरियो</string>
+    <string name="preset_deactivated">Deactivated</string>
+    <string name="no_presets">No presets</string>
+    <string name="no_presets_text">विभिन्न स्रोत कन्फिगरेसनहरूबीच छिटो स्विच गर्न प्रिसेट सिर्जना गर्नुहोस्</string>
+    <string name="manage_preset_sources">Sources</string>
+</resources>

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="source_presets">Pratet sumber</string>
+    <string name="create_preset">Preset baru</string>
+    <string name="edit_preset">Sunting pratet</string>
+    <string name="preset_name">Nama pratet</string>
+    <string name="preset_languages">Bahasa</string>
+    <string name="preset_sources">Sumber</string>
+    <string name="preset_created">Pratet dicipta</string>
+    <string name="preset_saved">Pratet disimpan</string>
+    <string name="preset_deleted">Pratet dipadam</string>
+    <string name="preset_activated">Pratet diaktifkan</string>
+    <string name="preset_deactivated">Pratet dinyahaktif</string>
+    <string name="no_presets">Tiada pratet lagi</string>
+    <string name="no_presets_text">Cipta pratet untuk beralih antara konfigurasi sumber dengan pantas</string>
+    <string name="manage_preset_sources">Urus sumber</string>
+</resources>

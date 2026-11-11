@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="video_subtitle_settings">Настройки субтитров</string>
+    <string name="video_subtitle_style">Оформление</string>
+    <string name="video_subtitle_font_size">Размер</string>
+    <string name="video_subtitle_border_size">Размер рамки</string>
+    <string name="video_subtitle_position">Позиция (отступ)</string>
+    <string name="video_subtitle_color_text">Текст</string>
+    <string name="video_subtitle_color_border">Рамка</string>
+    <string name="video_subtitle_color_bg">Фон</string>
+    <string name="video_subtitle_layout">Макет</string>
+    <string name="video_subtitle_colors">Цвета</string>
+    <string name="video_subtitle_align_left">Слева</string>
+    <string name="video_subtitle_align_center">По центру</string>
+    <string name="video_subtitle_align_right">Справа</string>
+    <string name="video_subtitle_color_alpha">Альфа</string>
+    <string name="video_subtitle_color_red">Красный</string>
+    <string name="video_subtitle_color_green">Зеленый</string>
+    <string name="video_subtitle_color_blue">Синий</string>
+    <string name="video_subtitle_background">Фон</string>
+    <string name="video_subtitle_background_style">Стиль фона</string>
+    <string name="video_subtitle_background_none">Откл.</string>
+    <string name="video_subtitle_background_bar">На всю шир.</string>
+    <string name="video_subtitle_background_block">Блок текста</string>
+    <string name="video_subtitle_background_lines">По строкам</string>
+    <string name="video_subtitle_background_corner_radius">Радиус углов</string>
+    <string name="video_subtitle_background_padding_horizontal">Горизонтальный отступ</string>
+    <string name="video_subtitle_background_padding_vertical">Вертикальный отступ</string>
+    <string name="video_subtitle_background_hint">Фон следует за текстом субтитров, а не растягивается на всю ширину.</string>
+    <string name="video_subtitle_font_family">Шрифт</string>
+    <string name="video_subtitle_font_sans">Sans</string>
+    <string name="video_subtitle_font_serif">Serif</string>
+    <string name="video_subtitle_font_monospace">Monospace</string>
+</resources>

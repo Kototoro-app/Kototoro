@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="discover_category_all">සියලුම කාණ්ඩ</string>
+    <string name="discover_category_anime_rank">ანიమే</string>
+    <string name="discover_category_book_rank">පොත</string>
+    <string name="discover_category_music_rank">संगीत</string>
+    <string name="discover_category_game_rank">ක්‍රීඩාව</string>
+    <string name="discover_category_real_rank">සැබෑ</string>
+    <string name="discover_category_calendar">දෛනික කාලසටහන</string>
+</resources>

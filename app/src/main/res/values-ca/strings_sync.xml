@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sync_settings_enabled_title">Sincronitza ajustos</string>
+    <string name="sync_settings_enabled_summary">Ajustos de lector, reproductor i aspecte. Les contrasenyes, tokens i rutes no se sincronitzen.</string>
+    <string name="sync_remote_delete_incomplete">No s\'han suprimit %1$d fitxers. S\'ha mantingut l\'estat; torna-ho a provar.</string>
+    <string name="sync_enable_required">Primer activeu la sincronització.</string>
+    <string name="google_drive_authorization_required">L\'autorització de Google és incompleta o ha caducat. Connecteu el compte de nou.</string>
+    <string name="google_drive_authorization_canceled">L\'autorització de Google s\'ha cancel·lat o ha vençut.</string>
+    <string name="google_drive_browser_failed">No s\'ha obert el navegador per a l\'autorització de Google.</string>
+    <string name="google_drive_credential_store_failed">No s\'ha accedit al magatzem de credencials. Comproveu que estigui disponible i desbloquejat.</string>
+    <string name="google_drive_settings_failed">No s\'ha desat. Comproveu el directori de dades.</string>
+    <string name="google_drive_protocol_failed">La instantània del núvol està malmesa o utilitza un format no compatible. No s\'ha pujat res.</string>
+    <string name="google_drive_conflict_failed">Altres dispositius actualitzen dades. Torneu-ho a provar.</string>
+    <string name="google_drive_network_failed">Error de Google Drive. Comproveu la connexió.</string>
+    <string name="google_drive_access_failed">Google Drive ha denegat l\'accés. Comproveu els permisos concedits i la configuració de l\'API de Drive.</string>
+    <string name="google_drive_browser_complete">Retorn rebut. Torneu a Kototoro per comprovar la connexió del compte.</string>
+    <string name="google_drive_browser_rejected">S\'ha rebutjat aquesta devolució de trucada d\'autorització. Torneu a Kototoro i torneu a connectar-vos.</string>
+    <string name="google_drive_stage_download">Descarregant</string>
+    <string name="google_drive_stage_merge">Fusionant</string>
+    <string name="google_drive_stage_upload">Pujant</string>
+    <string name="google_drive_desktop_scope">Sincronitza biblioteca, categories, progrés, estadístiques i registres. Ajustos i extensions es guarden al núvol però no s\'apliquen a l\'escriptori. La sincronització automàtica s\'executa amb Kototoro obert.</string>
+    <string name="google_drive_authorization_pending">S\'està esperant l\'autorització de Google al navegador...</string>
+    <string name="google_drive_client_configuration_failed">Google ha rebutjat la configuració OAuth. Comproveu el tipus de client d\'escriptori i projecte.</string>
+    <string name="google_drive_client_secret_required">Falta el secret OAuth de Google. Configureu-lo i torneu a compilar; tornar a entrar no ho arreglarà.</string>
+</resources>

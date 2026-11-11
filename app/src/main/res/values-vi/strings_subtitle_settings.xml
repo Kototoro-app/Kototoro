@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="video_subtitle_settings">Cầi đặt phụ đề</string>
+    <string name="video_subtitle_style">Kiểu chữ</string>
+    <string name="video_subtitle_font_size">Cỡ chữ</string>
+    <string name="video_subtitle_border_size">Cỡ viền</string>
+    <string name="video_subtitle_position">Vị trí (Lề)</string>
+    <string name="video_subtitle_color_text">Chữ</string>
+    <string name="video_subtitle_color_border">Viền</string>
+    <string name="video_subtitle_color_bg">Nền</string>
+    <string name="video_subtitle_layout">Bố cục</string>
+    <string name="video_subtitle_colors">Màu sắc</string>
+    <string name="video_subtitle_align_left">Trái</string>
+    <string name="video_subtitle_align_center">Giữa</string>
+    <string name="video_subtitle_align_right">Phải</string>
+    <string name="video_subtitle_color_alpha">Độ mờ</string>
+    <string name="video_subtitle_color_red">Đỏ</string>
+    <string name="video_subtitle_color_green">Xanh lá</string>
+    <string name="video_subtitle_color_blue">Xanh</string>
+    <string name="video_subtitle_background">Nền</string>
+    <string name="video_subtitle_background_style">Kiểu nền</string>
+    <string name="video_subtitle_background_none">Tắt</string>
+    <string name="video_subtitle_background_bar">Đầy rộng</string>
+    <string name="video_subtitle_background_block">Khối chữ</string>
+    <string name="video_subtitle_background_lines">Theo dòng</string>
+    <string name="video_subtitle_background_corner_radius">Bán kính góc</string>
+    <string name="video_subtitle_background_padding_horizontal">Đệm ngang</string>
+    <string name="video_subtitle_background_padding_vertical">Đệm dọc</string>
+    <string name="video_subtitle_background_hint">Nền đi theo chữ phụ đề thay vì tạo thành thanh dài hết cỡ.</string>
+    <string name="video_subtitle_font_family">Phông</string>
+    <string name="video_subtitle_font_sans">Sans</string>
+    <string name="video_subtitle_font_serif">Serif</string>
+    <string name="video_subtitle_font_monospace">Đơn nét</string>
+</resources>

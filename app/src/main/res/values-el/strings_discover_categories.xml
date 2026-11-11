@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="discover_category_all">Όλες οι κατηγ.</string>
+    <string name="discover_category_anime_rank">Anime</string>
+    <string name="discover_category_book_rank">Βιβλίο</string>
+    <string name="discover_category_music_rank">Μουσική</string>
+    <string name="discover_category_game_rank">Παιχνίδι</string>
+    <string name="discover_category_real_rank">Real</string>
+    <string name="discover_category_calendar">Πρόγραμμα</string>
+</resources>

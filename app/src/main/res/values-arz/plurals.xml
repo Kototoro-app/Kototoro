@@ -1,3 +1,67 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <plurals name="chapters">
+        <item quantity="one">%1$d فصل</item>
+        <item quantity="other">%1$d فصول</item>
+    </plurals>
+    <plurals name="days_ago">
+        <item quantity="one">منذ %1$d يوم</item>
+        <item quantity="other">منذ %1$d أيام</item>
+    </plurals>
+    <plurals name="feed_timeline_updates">
+        <item quantity="one">%1$d تحديث</item>
+        <item quantity="other">%1$d تحديثات</item>
+    </plurals>
+    <plurals name="history_grouped_sources">
+        <item quantity="one">%1$d مصدر</item>
+        <item quantity="other">%1$d مصادر</item>
+    </plurals>
+    <plurals name="home_enabled_sources">
+        <item quantity="one">%1$d مصدر مفعل</item>
+        <item quantity="other">%1$d مصادر مفعلة</item>
+    </plurals>
+    <plurals name="home_updates_new_chapters">
+        <item quantity="one">%1$d فصول جديد</item>
+        <item quantity="other">%1$d فصول جديدة</item>
+    </plurals>
+    <plurals name="hours">
+        <item quantity="one">%1$d ساعة</item>
+        <item quantity="other">%1$d ساعات</item>
+    </plurals>
+    <plurals name="hours_ago">
+        <item quantity="one">منذ %1$d ساعة</item>
+        <item quantity="other">منذ %1$d ساعات</item>
+    </plurals>
+    <plurals name="items">
+        <item quantity="one">%1$d عنصر</item>
+        <item quantity="other">%1$d عناصر</item>
+    </plurals>
+    <plurals name="minutes">
+        <item quantity="one">%1$d دقيقة</item>
+        <item quantity="other">%1$d دقائق</item>
+    </plurals>
+    <plurals name="minutes_ago">
+        <item quantity="one">منذ %1$d دقيقة</item>
+        <item quantity="other">منذ %1$d دقائق</item>
+    </plurals>
+    <plurals name="months_ago">
+        <item quantity="one">منذ %1$d شهر</item>
+        <item quantity="other">منذ %1$d أشهر</item>
+    </plurals>
+    <plurals name="new_chapters">
+        <item quantity="one">%1$d فصول جديد</item>
+        <item quantity="other">%1$d فصول جديدة</item>
+    </plurals>
+    <plurals name="old_chapters_in_total">
+        <item quantity="one">%1$d فصل قديم بالإجمالي</item>
+        <item quantity="other">%1$d فصول قديمة بالإجمالي</item>
+    </plurals>
+    <plurals name="tracker_failed_in_a_row">
+        <item quantity="one">فشل %1$d مرة على التوالي</item>
+        <item quantity="other">فشل %1$d مرات على التوالي</item>
+    </plurals>
+    <plurals name="tracker_failing_titles_summary">
+        <item quantity="one">فشل %1$d عنوان في اجتياز %2$d فحوصات أو أكثر على التوالي</item>
+        <item quantity="other">فشلت %1$d عناوين في اجتياز %2$d فحوصات أو أكثر على التوالي</item>
+    </plurals>
 </resources>

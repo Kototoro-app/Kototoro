@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="chapters">
+        <item quantity="one">පරිච්ඡේදය %1$d ක්</item>
+        <item quantity="other">පරිච්ඡේද %1$d ක්</item>
+    </plurals>
+    <plurals name="days_ago">
+        <item quantity="one">%1$d දවසකට පෙර</item>
+        <item quantity="other">දින %1$d කට පෙර</item>
+    </plurals>
+    <plurals name="feed_timeline_updates">
+        <item quantity="one">යාවත්කාලීන කිරීම %1$d ක්</item>
+        <item quantity="other">යාවත්කාලීන කිරීම් %1$d ක්</item>
+    </plurals>
+    <plurals name="history_grouped_sources">
+        <item quantity="one">මූලාශ්‍රය %1$d ක්</item>
+        <item quantity="other">මූලාශ්‍ර %1$d ක්</item>
+    </plurals>
+    <plurals name="home_enabled_sources">
+        <item quantity="one">සක්‍රීය මූලාශ්‍රය %1$d ක්</item>
+        <item quantity="other">සක්‍රීය මූලාශ්‍ර %1$d ක්</item>
+    </plurals>
+    <plurals name="home_updates_new_chapters">
+        <item quantity="one">නව පරිච්ඡේදය %1$d ක්</item>
+        <item quantity="other">නව පරිච්ඡේද %1$d ක්</item>
+    </plurals>
+    <plurals name="hours">
+        <item quantity="one">පැය %1$d ක්</item>
+        <item quantity="other">පැය %1$d ක්</item>
+    </plurals>
+    <plurals name="hours_ago">
+        <item quantity="one">පැය %1$d කට පෙර</item>
+        <item quantity="other">පැය %1$d කට පෙර</item>
+    </plurals>
+    <plurals name="items">
+        <item quantity="one">%1$d අයිතමයක්</item>
+        <item quantity="other">%1$d අයිතම</item>
+    </plurals>
+    <plurals name="minutes">
+        <item quantity="one">මිනිත්තුව %1$d ක්</item>
+        <item quantity="other">මිනිත්තු %1$d ක්</item>
+    </plurals>
+    <plurals name="minutes_ago">
+        <item quantity="one">මිනිත්තු %1$d කට පෙර</item>
+        <item quantity="other">මිනිත්තු %1$d කට පෙර</item>
+    </plurals>
+    <plurals name="months_ago">
+        <item quantity="one">%1$d මාසයකට පෙර</item>
+        <item quantity="other">මාස %1$d කට පෙර</item>
+    </plurals>
+    <plurals name="new_chapters">
+        <item quantity="one">නව පරිච්ඡේදය %1$d ක්</item>
+        <item quantity="other">නව පරිච්ඡේද %1$d ක්</item>
+    </plurals>
+    <plurals name="old_chapters_in_total">
+        <item quantity="one">මුළු පැරණි පරිච්ඡේද %1$d ක්</item>
+        <item quantity="other">මුළු පැරණි පරිච්ඡේද %1$d ක්</item>
+    </plurals>
+    <plurals name="tracker_failed_in_a_row">
+        <item quantity="one">%1$d වතාවක් අසමත් විය</item>
+        <item quantity="other">වතා %1$d ක් අසමත් විය</item>
+    </plurals>
+    <plurals name="tracker_failing_titles_summary">
+        <item quantity="one">ශීර්ෂකය %1$d ක් පරීක්ෂාවන් %2$d ක් හෝ වැඩි ගණනක් අසමත් විය</item>
+        <item quantity="other">ශීර්ෂක %1$d ක් පරීක්ෂාවන් %2$d ක් හෝ වැඩි ගණනක් අසමත් විය</item>
+    </plurals>
+</resources>

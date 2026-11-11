@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sync_settings_enabled_title">Same app ordinances</string>
+    <string name="sync_settings_enabled_summary">Lector, pleyere and semblaunce settynges. Passwords, tokens and device paths be never y-synced.</string>
+    <string name="sync_remote_delete_incomplete">Ne couthe noght do away %1$d remote file(s). Local sync state was y-kept; assay eft.</string>
+    <string name="sync_enable_required">Do on Google Drive sync first.</string>
+    <string name="google_drive_authorization_required">Google authorization is unperformid or passid. Knit þi count eft.</string>
+    <string name="google_drive_authorization_canceled">Google authorization was forlaton or passid.</string>
+    <string name="google_drive_browser_failed">Ne couthe noght open þe system browser for Google authorization.</string>
+    <string name="google_drive_credential_store_failed">Ne couthe come to þe system credential store. Se þat it be redy and unsperrit, þan assay eft.</string>
+    <string name="google_drive_settings_failed">Ne couthe save local sync settynges. Se þe data directory and assay eft.</string>
+    <string name="google_drive_protocol_failed">Pe cloud snapshot is harmid or usith unsupportid format. Noght was up-laden.</string>
+    <string name="google_drive_conflict_failed">Oper devices be up-datyng cloud data. Assay syncyng eft later.</string>
+    <string name="google_drive_network_failed">Google Drive sync failid. Se þi knyttynge and assay eft.</string>
+    <string name="google_drive_access_failed">Google Drive wernid ingang. Se þe grauntid leve and Drive API configuration.</string>
+    <string name="google_drive_browser_complete">Browser callback y-toke. Turne aȝeyn to Kototoro to se þe count knyttynge result.</string>
+    <string name="google_drive_browser_rejected">Pis authorization callback was wernid. Turne aȝeyn to Kototoro and assay knyttynge eft.</string>
+    <string name="google_drive_stage_download">Doun-laden</string>
+    <string name="google_drive_stage_merge">Meltyng</string>
+    <string name="google_drive_stage_upload">Up-laden</string>
+    <string name="google_drive_desktop_scope">Syncith þi librairie, categories, redyng progresse, statistics and up-date recordes. Settynges and extensions be y-kept in cloud but be not y-applied on desktop ȝit. Automatic sync renneth whyl Kototoro is open.</string>
+    <string name="google_drive_authorization_pending">Abydyng for Google authorization in þi browser…</string>
+    <string name="google_drive_client_configuration_failed">Google wernid þe OAuth client configuration. Se þe Desktop client type, Google Cloud project and consent settynges.</string>
+    <string name="google_drive_client_secret_required">Pis make lacketh þe Google desktop OAuth client secret. Configure it and re-make; signyng in eft ne shal heal pis.</string>
+</resources>

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="source_presets">Forrásbeállítások</string>
+    <string name="create_preset">Új sablon</string>
+    <string name="edit_preset">Sablon szerk.</string>
+    <string name="preset_name">Sablon neve</string>
+    <string name="preset_languages">Nyelvek</string>
+    <string name="preset_sources">Források</string>
+    <string name="preset_created">Sablon létrehozva</string>
+    <string name="preset_saved">Sablon elmentve</string>
+    <string name="preset_deleted">Sablon törölve</string>
+    <string name="preset_activated">Sablon aktiválva</string>
+    <string name="preset_deactivated">Sablon deaktiválva</string>
+    <string name="no_presets">Még nincs sablon</string>
+    <string name="no_presets_text">H hozz létre egy sablont a különböző forráskonfigurációk közötti gyors váltáshoz</string>
+    <string name="manage_preset_sources">Források kezelése</string>
+</resources>

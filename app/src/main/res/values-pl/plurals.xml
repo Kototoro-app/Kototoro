@@ -1,32 +1,38 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <plurals name="new_chapters">
+        <plurals name="new_chapters">
         <item quantity="one">%1$d nowy rozdział</item>
+        <item quantity="other">%1$d nowych rozdz.</item>
         <item quantity="few">%1$d nowe rozdziały</item>
         <item quantity="many">%1$d nowych rozdziałów</item>
     </plurals>
-    <plurals name="minutes_ago">
+        <plurals name="minutes_ago">
         <item quantity="one">%1$d minutę temu</item>
+        <item quantity="other">%1$d min. temu</item>
         <item quantity="few">%1$d minuty temu</item>
         <item quantity="many">%1$d minut temu</item>
     </plurals>
-    <plurals name="hours_ago">
+        <plurals name="hours_ago">
         <item quantity="one">%1$d godzinę temu</item>
+        <item quantity="other">%1$d godz. temu</item>
         <item quantity="few">%1$d godziny temu</item>
         <item quantity="many">%1$d godzin temu</item>
     </plurals>
-    <plurals name="days_ago">
+        <plurals name="days_ago">
         <item quantity="one">%1$d dzień temu</item>
+        <item quantity="other">%1$d dni temu</item>
         <item quantity="few">%1$d dni temu</item>
         <item quantity="many">%1$d dni temu</item>
     </plurals>
-    <plurals name="items">
+        <plurals name="items">
         <item quantity="one">%1$d przedmiot</item>
+        <item quantity="other">%1$d poz.</item>
         <item quantity="few">%1$d przedmioty</item>
         <item quantity="many">%1$d przedmiotów</item>
     </plurals>
-    <plurals name="chapters">
+        <plurals name="chapters">
         <item quantity="one">%1$d rozdział</item>
+        <item quantity="other">%1$d rozdziałów</item>
         <item quantity="few">%1$d rozdziały</item>
         <item quantity="many">%1$d rozdziałów</item>
     </plurals>
@@ -47,5 +53,33 @@
         <item quantity="few">%1$d minuty</item>
         <item quantity="many">%1$d minut</item>
         <item quantity="other">%1$d minut</item>
+    </plurals>
+    <plurals name="feed_timeline_updates">
+        <item quantity="one">%1$d aktualizacja</item>
+        <item quantity="other">%1$d aktualizacji</item>
+    </plurals>
+    <plurals name="history_grouped_sources">
+        <item quantity="one">%1$d źródło</item>
+        <item quantity="other">%1$d źródeł</item>
+    </plurals>
+    <plurals name="home_enabled_sources">
+        <item quantity="one">%1$d włączone źródło</item>
+        <item quantity="other">%1$d włączonych źródeł</item>
+    </plurals>
+    <plurals name="home_updates_new_chapters">
+        <item quantity="one">%1$d nowy rozdział</item>
+        <item quantity="other">%1$d nowych rozdziałów</item>
+    </plurals>
+    <plurals name="old_chapters_in_total">
+        <item quantity="one">Łącznie %1$d stary rozdział</item>
+        <item quantity="other">Łącznie %1$d starych rozdziałów</item>
+    </plurals>
+    <plurals name="tracker_failed_in_a_row">
+        <item quantity="one">Błąd %1$d raz z rzędu</item>
+        <item quantity="other">Błąd %1$d razy z rzędu</item>
+    </plurals>
+    <plurals name="tracker_failing_titles_summary">
+        <item quantity="one">%1$d tytuł nie przeszedł %2$d lub więcej sprawdz. z rzędu</item>
+        <item quantity="other">%1$d tytułów nie przeszło %2$d lub więcej sprawdz. z rzędu</item>
     </plurals>
 </resources>

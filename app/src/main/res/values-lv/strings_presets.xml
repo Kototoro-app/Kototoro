@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="source_presets">Avota sagataves</string>
+    <string name="create_preset">Jauna sagat.</string>
+    <string name="edit_preset">Rediģēt</string>
+    <string name="preset_name">Sagat. nosauk.</string>
+    <string name="preset_languages">Valodas</string>
+    <string name="preset_sources">Avoti</string>
+    <string name="preset_created">Sagatave izveid.</string>
+    <string name="preset_saved">Sagatave sagl.</string>
+    <string name="preset_deleted">Sagatave dzēsta</string>
+    <string name="preset_activated">Sagatave aktivizēta</string>
+    <string name="preset_deactivated">Sagatave deaktivizēta</string>
+    <string name="no_presets">Nav iestatījumu</string>
+    <string name="no_presets_text">Izveidojiet iestatījumu, lai ātri pārslēgtos starp dažādām avotu konfigurācijām</string>
+    <string name="manage_preset_sources">Pārvaldīt avotus</string>
+</resources>

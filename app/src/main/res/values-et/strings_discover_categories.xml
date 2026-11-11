@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="discover_category_all">Kõik kategooriad</string>
+    <string name="discover_category_anime_rank">Anime</string>
+    <string name="discover_category_book_rank">Raamat</string>
+    <string name="discover_category_music_rank">Muusika</string>
+    <string name="discover_category_game_rank">Mäng</string>
+    <string name="discover_category_real_rank">Päris</string>
+    <string name="discover_category_calendar">Päevakava</string>
+</resources>

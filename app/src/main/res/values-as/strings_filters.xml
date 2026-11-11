@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_bar_filters">সন্ধান বাৰ ফিল্টাৰ</string>
+    <string name="show_language_preset_filter">ভাষা প্ৰিছেট</string>
+    <string name="fixed_language_preset">স্থিৰ ভাষা প্ৰিছেট</string>
+    <string name="show_content_type_filter">সমলৰ প্ৰকাৰ</string>
+    <string name="fixed_content_type">স্থিৰ সমল প্ৰকাৰ</string>
+    <string name="show_source_tag_filter">উৎস প্ৰকাৰ</string>
+    <string name="fixed_source_tag">স্থিৰ উৎস প্ৰকাৰ</string>
+</resources>

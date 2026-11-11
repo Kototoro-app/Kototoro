@@ -45,4 +45,32 @@
         <item quantity="many">%1$d minuts</item>
         <item quantity="other">%1$d minuts</item>
     </plurals>
+    <plurals name="feed_timeline_updates">
+        <item quantity="one">%1$d actualització</item>
+        <item quantity="other">%1$d actualitzacions</item>
+    </plurals>
+    <plurals name="history_grouped_sources">
+        <item quantity="one">%1$d font</item>
+        <item quantity="other">%1$d fonts</item>
+    </plurals>
+    <plurals name="home_enabled_sources">
+        <item quantity="one">%1$d font activada</item>
+        <item quantity="other">%1$d fonts activades</item>
+    </plurals>
+    <plurals name="home_updates_new_chapters">
+        <item quantity="one">%1$d capítol nou</item>
+        <item quantity="other">%1$d capítols nous</item>
+    </plurals>
+    <plurals name="old_chapters_in_total">
+        <item quantity="one">%1$d capítol antic en total</item>
+        <item quantity="other">%1$d capítols antics en total</item>
+    </plurals>
+    <plurals name="tracker_failed_in_a_row">
+        <item quantity="one">Ha fallat %1$d vegada seguida</item>
+        <item quantity="other">Ha fallat %1$d vegades seguides</item>
+    </plurals>
+    <plurals name="tracker_failing_titles_summary">
+        <item quantity="one">%1$d títol ha fallat %2$d o més comprovacions seguides</item>
+        <item quantity="other">%1$d títols han fallat %2$d o més comprovacions seguides</item>
+    </plurals>
 </resources>

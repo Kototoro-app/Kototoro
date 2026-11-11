@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="source_presets">উৎস প্ৰিছেটসমূহ</string>
+    <string name="create_preset">নতুন প্ৰিছেট</string>
+    <string name="edit_preset">সম্পাদনা</string>
+    <string name="preset_name">প্ৰিছেটৰ নাম</string>
+    <string name="preset_languages">ভাষাসমূহ</string>
+    <string name="preset_sources">উৎসসমূহ</string>
+    <string name="preset_created">সৃষ্টি কৰা হ’ল</string>
+    <string name="preset_saved">সংৰক্ষণ হ’ল</string>
+    <string name="preset_deleted">মচি পেলোৱা হ’ল</string>
+    <string name="preset_activated">সক্ৰিয় কৰা হ’ল</string>
+    <string name="preset_deactivated">নিষ্ক্ৰিয়</string>
+    <string name="no_presets">কোনো প্ৰিছেট নাই</string>
+    <string name="no_presets_text">বিভিন্ন উৎস বিন্যাসৰ মাজত দ্ৰুতভাৱে স্থানান্তৰিত হ\'বলৈ এটা প্ৰিছেট সৃষ্টি কৰক</string>
+    <string name="manage_preset_sources">উৎস পৰিচালনা</string>
+</resources>

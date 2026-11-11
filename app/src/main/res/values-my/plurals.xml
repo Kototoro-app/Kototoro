@@ -1,30 +1,67 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <plurals name="new_chapters">
+        <plurals name="new_chapters">
+        <item quantity="one">အခန်းသစ် %1$d ခန်း</item>
         <item quantity="other">%1$d စာမျက်နှာအသစ်</item>
     </plurals>
-    <plurals name="chapters">
+        <plurals name="chapters">
+        <item quantity="one">အခန်း %1$d ခန်း</item>
         <item quantity="other">%1$d စာမျက်နှာ</item>
     </plurals>
-    <plurals name="minutes_ago">
+        <plurals name="minutes_ago">
+        <item quantity="one">လွန်ခဲ့သော မိနစ် %1$d ခန့်က</item>
         <item quantity="other">%1$d မိနစ်အကြာက</item>
     </plurals>
-    <plurals name="hours_ago">
+        <plurals name="hours_ago">
+        <item quantity="one">လွန်ခဲ့သော နာရီ %1$d နာရီက</item>
         <item quantity="other">%1$d နာရီအကြာက</item>
     </plurals>
-    <plurals name="items">
+        <plurals name="items">
+        <item quantity="one">ပစ္စည်း %1$d ခု</item>
         <item quantity="other">%1$d အချက်အလက်</item>
     </plurals>
-    <plurals name="days_ago">
+        <plurals name="days_ago">
+        <item quantity="one">လွန်ခဲ့သော ရက် %1$d ရက်က</item>
         <item quantity="other">%1$d ရက်အကြာက</item>
     </plurals>
-    <plurals name="months_ago">
+        <plurals name="months_ago">
+        <item quantity="one">လွန်ခဲ့သော လ %1$d လက</item>
         <item quantity="other">%1$d လအကြာက</item>
     </plurals>
-    <plurals name="hours">
+        <plurals name="hours">
+        <item quantity="one">နာရီ %1$d နာရီ</item>
         <item quantity="other">%1$d နာရီအကြာက</item>
     </plurals>
-    <plurals name="minutes">
+        <plurals name="minutes">
+        <item quantity="one">မိနစ် %1$d မိနစ်</item>
         <item quantity="other">%1$d မိနစ်</item>
+    </plurals>
+    <plurals name="feed_timeline_updates">
+        <item quantity="one">အပ်ဒိတ် %1$d ခု</item>
+        <item quantity="other">အပ်ဒိတ် %1$d ခု</item>
+    </plurals>
+    <plurals name="history_grouped_sources">
+        <item quantity="one">ရင်းမြစ် %1$d ခု</item>
+        <item quantity="other">ရင်းမြစ် %1$d ခု</item>
+    </plurals>
+    <plurals name="home_enabled_sources">
+        <item quantity="one">ဖွင့်ထားသော ရင်းမြစ် %1$d ခု</item>
+        <item quantity="other">ဖွင့်ထားသော ရင်းမြစ် %1$d ခု</item>
+    </plurals>
+    <plurals name="home_updates_new_chapters">
+        <item quantity="one">အခန်းသစ် %1$d ခန်း</item>
+        <item quantity="other">အခန်းသစ် %1$d ခန်း</item>
+    </plurals>
+    <plurals name="old_chapters_in_total">
+        <item quantity="one">စုစုပေါင်း ဟောင်းနေသော အခန်း %1$d ခန်း</item>
+        <item quantity="other">စုစုပေါင်း ဟောင်းနေသော အခန်း %1$d ခန်း</item>
+    </plurals>
+    <plurals name="tracker_failed_in_a_row">
+        <item quantity="one">ဆက်တိုက် %1$d ကြိမ် မအောင်မြင်ပါ</item>
+        <item quantity="other">ဆက်တိုက် %1$d ကြိမ် မအောင်မြင်ပါ</item>
+    </plurals>
+    <plurals name="tracker_failing_titles_summary">
+        <item quantity="one">ခေါင်းစဉ် %1$d ခုသည် အနည်းဆုံး စစ်ဆေးမှု %2$d ကြိမ် ဆက်တိုက် မအောင်မြင်ပါ</item>
+        <item quantity="other">ခေါင်းစဉ် %1$d ခုသည် အနည်းဆုံး စစ်ဆေးမှု %2$d ကြိမ် ဆက်တိုက် မအောင်မြင်ပါ</item>
     </plurals>
 </resources>

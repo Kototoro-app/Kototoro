@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sync_settings_enabled_title">Sync app-instellingen</string>
+    <string name="sync_settings_enabled_summary">Lezer-, speler- en weergave-instellingen. Wachtwoorden, tokens en apparaatpaden worden nooit gesynchroniseerd.</string>
+    <string name="sync_remote_delete_incomplete">Kan %1$d externe bestand(en) niet wissen. Lokale sync behouden; probeer opnieuw.</string>
+    <string name="sync_enable_required">Schakel Google Drive-sync eerst in.</string>
+    <string name="google_drive_authorization_required">Google-autorisatie is onvolledig of verlopen. Verbind je account opnieuw.</string>
+    <string name="google_drive_authorization_canceled">Google-autorisatie is geannuleerd of verlopen.</string>
+    <string name="google_drive_browser_failed">Kan de systeembrowser niet openen voor Google-autorisatie.</string>
+    <string name="google_drive_credential_store_failed">Geen toegang tot de inloggegevensopslag. Controleer of deze beschikbaar en ontgrendeld is en probeer het opnieuw.</string>
+    <string name="google_drive_settings_failed">Kan lokale sync-instellingen niet opslaan. Controleer de gegevensmap.</string>
+    <string name="google_drive_protocol_failed">De cloudreservekopie is beschadigd of gebruikt een niet-ondersteund formaat. Er is niets geüpload.</string>
+    <string name="google_drive_conflict_failed">Andere apparaten werken clouddata bij. Probeer later opnieuw.</string>
+    <string name="google_drive_network_failed">Google Drive-sync mislukt. Controleer de verbinding en probeer opnieuw.</string>
+    <string name="google_drive_access_failed">Google Drive heeft de toegang geweigerd. Controleer de verleende rechten en Drive API-configuratie.</string>
+    <string name="google_drive_browser_complete">Browserterugroepfunctie ontvangen. Keer terug naar Kototoro om de accountverbinding te controleren.</string>
+    <string name="google_drive_browser_rejected">Deze autorisatieterugroepfunctie is geweigerd. Keer terug naar Kototoro en probeer opnieuw te verbinden.</string>
+    <string name="google_drive_stage_download">Downloaden</string>
+    <string name="google_drive_stage_merge">Samenvoegen</string>
+    <string name="google_drive_stage_upload">Uploaden</string>
+    <string name="google_drive_desktop_scope">Synchroniseert je bibliotheek, categorieën, leesvoortgang, statistieken en geschiedenis. Instellingen en extensies staan in de cloud maar werken nog niet op desktop. Automatisch syncen werkt als Kototoro open is.</string>
+    <string name="google_drive_authorization_pending">Wachten op Google-autorisatie in je browser…</string>
+    <string name="google_drive_client_configuration_failed">Google heeft de OAuth-clientconfiguratie geweigerd. Controleer het desktopclienttype, het Google Cloud-project en de toestemmingsinstellingen.</string>
+    <string name="google_drive_client_secret_required">Deze build mist het OAuth-clientgeheim voor Google-desktop. Configureer dit en herbouw; opnieuw inloggen verhelpt dit niet.</string>
+</resources>

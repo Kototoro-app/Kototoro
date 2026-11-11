@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_bar_filters">खोज पट्टी फिल्टरहरू</string>
+    <string name="show_language_preset_filter">भाषा प्रिसेट</string>
+    <string name="fixed_language_preset">स्थिर भाषा प्रिसेट</string>
+    <string name="show_content_type_filter">सामग्री प्रकार</string>
+    <string name="fixed_content_type">स्थिर सामग्री प्रकार</string>
+    <string name="show_source_tag_filter">स्रोत प्रकार</string>
+    <string name="fixed_source_tag">स्थिर स्रोत प्रकार</string>
+</resources>

@@ -36,4 +36,32 @@
         <item quantity="one">%1$d tund</item>
         <item quantity="other">%1$d tundi</item>
     </plurals>
+    <plurals name="feed_timeline_updates">
+        <item quantity="one">%1$d värskendus</item>
+        <item quantity="other">%1$d värskendust</item>
+    </plurals>
+    <plurals name="history_grouped_sources">
+        <item quantity="one">%1$d allikas</item>
+        <item quantity="other">%1$d allikat</item>
+    </plurals>
+    <plurals name="home_enabled_sources">
+        <item quantity="one">%1$d lubatud allikas</item>
+        <item quantity="other">%1$d lubatud allikat</item>
+    </plurals>
+    <plurals name="home_updates_new_chapters">
+        <item quantity="one">%1$d uus peatükk</item>
+        <item quantity="other">%1$d uut peatükki</item>
+    </plurals>
+    <plurals name="old_chapters_in_total">
+        <item quantity="one">Kokku %1$d vana peatükk</item>
+        <item quantity="other">Kokku %1$d vana peatükki</item>
+    </plurals>
+    <plurals name="tracker_failed_in_a_row">
+        <item quantity="one">Ebaõnnestus %1$d kord järjest</item>
+        <item quantity="other">Ebaõnnestus %1$d korda järjest</item>
+    </plurals>
+    <plurals name="tracker_failing_titles_summary">
+        <item quantity="one">%1$d pealkiri ebaõnnestus järjest %2$d või enamal kontrollil</item>
+        <item quantity="other">%1$d pealkirja ebaõnnestus järjest %2$d või enamal kontrollil</item>
+    </plurals>
 </resources>

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sync_settings_enabled_title">アプリ設定を同期</string>
+    <string name="sync_settings_enabled_summary">リーダー、プレイヤー、外観の設定。パスワード、トークン、デバイスのパスは同期されません。</string>
+    <string name="sync_remote_delete_incomplete">リモートファイル %1$d 件を削除できませんでした。ローカルの同期状態は保持されます。再試行してください。</string>
+    <string name="sync_enable_required">最初にGoogle Driveの同期を有効にしてください。</string>
+    <string name="google_drive_authorization_required">Googleの認証が不完全であるか、期限切れです。アカウントを再接続してください。</string>
+    <string name="google_drive_authorization_canceled">Googleの認証がキャンセルされたか、タイムアウトしました。</string>
+    <string name="google_drive_browser_failed">Google認証用のシステムブラウザを開けませんでした。</string>
+    <string name="google_drive_credential_store_failed">システム資格情報ストアにアクセスできませんでした。利用可能でロック解除されているか確認し、再試行してください。</string>
+    <string name="google_drive_settings_failed">ローカルの同期設定を保存できませんでした。データディレクトリを確認して再試行してください。</string>
+    <string name="google_drive_protocol_failed">クラウドのスナップショットが破損しているか、サポートされていない形式です。何もアップロードされませんでした。</string>
+    <string name="google_drive_conflict_failed">他のデバイスがクラウドデータを更新中です。しばらくしてから同期を再試行してください。</string>
+    <string name="google_drive_network_failed">Google Driveの同期に失敗しました。接続を確認して再試行してください。</string>
+    <string name="google_drive_access_failed">Google Driveへのアクセスが拒否されました。付与された権限とDrive APIの設定を確認してください。</string>
+    <string name="google_drive_browser_complete">ブラウザのコールバックを受信しました。Kototoroに戻ってアカウントの接続結果を確認してください。</string>
+    <string name="google_drive_browser_rejected">この認証コールバックは拒否されました。Kototoroに戻って接続をやり直してください。</string>
+    <string name="google_drive_stage_download">ダウンロード中</string>
+    <string name="google_drive_stage_merge">マージ中</string>
+    <string name="google_drive_stage_upload">アップロード中</string>
+    <string name="google_drive_desktop_scope">ライブラリ、カテゴリ、読書進捗、統計、更新履歴を同期します。設定と拡張機能はクラウドに保存されますが、デスクトップにはまだ適用されません。自動同期はKototoroが開いている間実行されます。</string>
+    <string name="google_drive_authorization_pending">ブラウザでのGoogle認証を待機中…</string>
+    <string name="google_drive_client_configuration_failed">GoogleがOAuthクライアント設定を拒否しました。デスクトップのクライアントタイプ、Google Cloudプロジェクト、同意画面の設定を確認してください。</string>
+    <string name="google_drive_client_secret_required">このビルドにはGoogleデスクトップOAuthクライアントシークレットがありません。設定して再ビルドしてください。サインインし直してもこれは解決しません。</string>
+</resources>

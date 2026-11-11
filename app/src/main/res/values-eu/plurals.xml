@@ -1,2 +1,67 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources></resources>
+<resources>
+    <plurals name="chapters">
+        <item quantity="one">Kapitulu %1$d</item>
+        <item quantity="other">%1$d kapitulu</item>
+    </plurals>
+    <plurals name="days_ago">
+        <item quantity="one">Duela egun %1$d</item>
+        <item quantity="other">Duela %1$d egun</item>
+    </plurals>
+    <plurals name="feed_timeline_updates">
+        <item quantity="one">Eguneratze %1$d</item>
+        <item quantity="other">%1$d eguneratze</item>
+    </plurals>
+    <plurals name="history_grouped_sources">
+        <item quantity="one">Iturri %1$d</item>
+        <item quantity="other">%1$d iturri</item>
+    </plurals>
+    <plurals name="home_enabled_sources">
+        <item quantity="one">Iturri gaituta %1$d</item>
+        <item quantity="other">%1$d iturri gaituta</item>
+    </plurals>
+    <plurals name="home_updates_new_chapters">
+        <item quantity="one">Kapitulu berri %1$d</item>
+        <item quantity="other">%1$d kapitulu berri</item>
+    </plurals>
+    <plurals name="hours">
+        <item quantity="one">Ordu %1$d</item>
+        <item quantity="other">%1$d ordu</item>
+    </plurals>
+    <plurals name="hours_ago">
+        <item quantity="one">Duela ordu %1$d</item>
+        <item quantity="other">Duela %1$d ordu</item>
+    </plurals>
+    <plurals name="items">
+        <item quantity="one">%1$d elementu</item>
+        <item quantity="other">%1$d elementu</item>
+    </plurals>
+    <plurals name="minutes">
+        <item quantity="one">Minutu %1$d</item>
+        <item quantity="other">%1$d minutu</item>
+    </plurals>
+    <plurals name="minutes_ago">
+        <item quantity="one">Duela minutu %1$d</item>
+        <item quantity="other">Duela %1$d minutu</item>
+    </plurals>
+    <plurals name="months_ago">
+        <item quantity="one">Duela hilabete %1$d</item>
+        <item quantity="other">Duela %1$d hilabete</item>
+    </plurals>
+    <plurals name="new_chapters">
+        <item quantity="one">Kapitulu berri %1$d</item>
+        <item quantity="other">%1$d kapitulu berri</item>
+    </plurals>
+    <plurals name="old_chapters_in_total">
+        <item quantity="one">Guztira kapitulu zahar %1$d</item>
+        <item quantity="other">Guztira %1$d kapitulu zahar</item>
+    </plurals>
+    <plurals name="tracker_failed_in_a_row">
+        <item quantity="one">Huts egin du jarraian %1$d aldiz</item>
+        <item quantity="other">Huts egin du %1$d aldiz jarraian</item>
+    </plurals>
+    <plurals name="tracker_failing_titles_summary">
+        <item quantity="one">Izenburu %1$d-ek huts egin du jarraian %2$d egiaztapen edo gehiagotan</item>
+        <item quantity="other">%1$d izenburuk huts egin dute jarraian %2$d egiaztapen edo gehiagotan</item>
+    </plurals>
+</resources>

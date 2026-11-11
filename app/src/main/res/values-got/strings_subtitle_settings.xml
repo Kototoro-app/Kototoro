@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="video_subtitle_settings">Undargaba gastig.</string>
+    <string name="video_subtitle_style">Bokatewist</string>
+    <string name="video_subtitle_font_size">Bokateweta</string>
+    <string name="video_subtitle_border_size">Marmarateweta</string>
+    <string name="video_subtitle_position">Stads (Marko)</string>
+    <string name="video_subtitle_color_text">Bokos</string>
+    <string name="video_subtitle_color_border">Marmara</string>
+    <string name="video_subtitle_color_bg">Afrahtja</string>
+    <string name="video_subtitle_layout">Ufarlag</string>
+    <string name="video_subtitle_colors">Blons</string>
+    <string name="video_subtitle_align_left">Hleiþra</string>
+    <string name="video_subtitle_align_center">Midja</string>
+    <string name="video_subtitle_align_right">Taitsu</string>
+    <string name="video_subtitle_color_alpha">Alfa</string>
+    <string name="video_subtitle_color_red">Rauþs</string>
+    <string name="video_subtitle_color_green">Grōni</string>
+    <string name="video_subtitle_color_blue">Blēw</string>
+    <string name="video_subtitle_background">Afrahtja</string>
+    <string name="video_subtitle_background_style">Afrahtjan sewist</string>
+    <string name="video_subtitle_background_none">Af</string>
+    <string name="video_subtitle_background_bar">Allsiduhus</string>
+    <string name="video_subtitle_background_block">Bokastab</string>
+    <string name="video_subtitle_background_lines">Bi linja</string>
+    <string name="video_subtitle_background_corner_radius">Hornohrains</string>
+    <string name="video_subtitle_background_padding_horizontal">Airis hlauts</string>
+    <string name="video_subtitle_background_padding_vertical">Ufar hlauts</string>
+    <string name="video_subtitle_background_hint">Sa afrahtja afgaggaid bi undargabardos bokos ak ni allsiduhus.</string>
+    <string name="video_subtitle_font_family">Boka</string>
+    <string name="video_subtitle_font_sans">Sans</string>
+    <string name="video_subtitle_font_serif">Serif</string>
+    <string name="video_subtitle_font_monospace">Monospace</string>
+</resources>

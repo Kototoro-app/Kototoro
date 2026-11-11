@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="source_presets">Welle-settes</string>
+    <string name="create_preset">Nywe sette</string>
+    <string name="edit_preset">Amende sette</string>
+    <string name="preset_name">Settename</string>
+    <string name="preset_languages">Langages</string>
+    <string name="preset_sources">Welles</string>
+    <string name="preset_created">Sette maked</string>
+    <string name="preset_saved">Sette sauved</string>
+    <string name="preset_deleted">Set fordon</string>
+    <string name="preset_activated">Set quyked</string>
+    <string name="preset_deactivated">Sette quenched</string>
+    <string name="no_presets">Nul settes yet</string>
+    <string name="no_presets_text">Make a sette for to chaunge swiftly bitwene dyvers welle-ordynaunces</string>
+    <string name="manage_preset_sources">Gouerne welles</string>
+</resources>

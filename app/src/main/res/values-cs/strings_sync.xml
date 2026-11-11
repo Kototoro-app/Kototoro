@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sync_settings_enabled_title">Sync nastavení</string>
+    <string name="sync_settings_enabled_summary">Nastavení čtečky, přehrávače a vzhledu. Hesla, tokeny a cesty k zařízení se nesynchronizují.</string>
+    <string name="sync_remote_delete_incomplete">Nelze smazat %1$d soubor(ů). Místní stav zachován, zkuste to znovu.</string>
+    <string name="sync_enable_required">Nejprve zapněte Google Drive sync.</string>
+    <string name="google_drive_authorization_required">Autorizace Google je neúplná nebo vypršela. Připojte svůj účet znovu.</string>
+    <string name="google_drive_authorization_canceled">Autorizace Google byla zrušena nebo vypršel její limit.</string>
+    <string name="google_drive_browser_failed">Nepodařilo se otevřít systémový prohlížeč pro autorizaci Google.</string>
+    <string name="google_drive_credential_store_failed">Nelze přistoupit k systémovému úložišti pověření. Zkontrolujte, zda je k dispozici a odemčené, a zkuste to znovu.</string>
+    <string name="google_drive_settings_failed">Nelze uložit nastavení. Zkontrolujte adresář a zkuste to znovu.</string>
+    <string name="google_drive_protocol_failed">Snímek v cloudu je poškozený nebo používá nepodporovaný formát. Nic nebylo nahráno.</string>
+    <string name="google_drive_conflict_failed">Zařízení aktualizují cloud. Zkuste to později.</string>
+    <string name="google_drive_network_failed">Google Drive sync selhal. Zkontrolujte připojení.</string>
+    <string name="google_drive_access_failed">Google Drive odepřel přístup. Zkontrolujte udělená oprávnění a konfiguraci rozhraní Drive API.</string>
+    <string name="google_drive_browser_complete">Odpověď z prohlížeče přijata. Vraťte se do aplikace Kototoro a zkontrolujte výsledek připojení účtu.</string>
+    <string name="google_drive_browser_rejected">Tato autorizační odpověď byla odmítnuta. Vraťte se do aplikace Kototoro a zkuste se připojit znovu.</string>
+    <string name="google_drive_stage_download">Stahování</string>
+    <string name="google_drive_stage_merge">Slučování</string>
+    <string name="google_drive_stage_upload">Nahrávání</string>
+    <string name="google_drive_desktop_scope">Synchronizuje vaši knihovnu, kategorie, postup čtení, statistiky a záznamy aktualizací. Nastavení a rozšíření se ukládají do cloudu, ale v desktopové verzi se zatím neaplikují. Automatická synchronizace probíhá, když je Kototoro otevřené.</string>
+    <string name="google_drive_authorization_pending">Čeká se na autorizaci Google v prohlížeči…</string>
+    <string name="google_drive_client_configuration_failed">Google odmítl konfiguraci klienta OAuth. Zkontrolujte typ desktopového klienta, projekt Google Cloud a nastavení souhlasu.</string>
+    <string name="google_drive_client_secret_required">V tomto sestavení chybí tajný klíč desktopového OAuth klienta Google. Nastavte jej a proveďte nové sestavení, opětovné přihlášení to nevyřeší.</string>
+</resources>

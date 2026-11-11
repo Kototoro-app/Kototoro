@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_bar_filters">검색창 필터</string>
+    <string name="show_language_preset_filter">언어 프리셋</string>
+    <string name="fixed_language_preset">고정 언어 프리셋</string>
+    <string name="show_content_type_filter">콘텐츠 유형</string>
+    <string name="fixed_content_type">고정 콘텐츠 유형</string>
+    <string name="show_source_tag_filter">소스 유형</string>
+    <string name="fixed_source_tag">고정 소스 유형</string>
+</resources>

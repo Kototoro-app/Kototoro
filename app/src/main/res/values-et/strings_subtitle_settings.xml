@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="video_subtitle_settings">Subtiitrite seaded</string>
+    <string name="video_subtitle_style">Tüüpograafia</string>
+    <string name="video_subtitle_border_size">Äärise suurus</string>
+    <string name="video_subtitle_position">Asukoht (veeris)</string>
+    <string name="video_subtitle_color_text">Tekst</string>
+    <string name="video_subtitle_color_border">Äärvis</string>
+    <string name="video_subtitle_color_bg">Taust</string>
+    <string name="video_subtitle_layout">Paigutus</string>
+    <string name="video_subtitle_colors">Värvid</string>
+    <string name="video_subtitle_align_left">Vasak</string>
+    <string name="video_subtitle_align_center">Keskel</string>
+    <string name="video_subtitle_align_right">Parem</string>
+    <string name="video_subtitle_color_alpha">Alfa</string>
+    <string name="video_subtitle_color_red">Punane</string>
+    <string name="video_subtitle_color_green">Roheline</string>
+    <string name="video_subtitle_color_blue">Sinine</string>
+    <string name="video_subtitle_background">Taust</string>
+    <string name="video_subtitle_background_style">Tausta stiil</string>
+    <string name="video_subtitle_background_none">Väljas</string>
+    <string name="video_subtitle_background_bar">Täislaius</string>
+    <string name="video_subtitle_background_block">Tekstiplokk</string>
+    <string name="video_subtitle_background_lines">Rea kaupa</string>
+    <string name="video_subtitle_background_corner_radius">Nurga raadius</string>
+    <string name="video_subtitle_background_padding_horizontal">Rõhtne siseveeris</string>
+    <string name="video_subtitle_background_padding_vertical">Püstine siseveeris</string>
+    <string name="video_subtitle_background_hint">Taust järgib subtiitrite teksti, mitte ei moodusta täislaiuses riba.</string>
+    <string name="video_subtitle_font_family">Font</string>
+    <string name="video_subtitle_font_sans">Sans</string>
+    <string name="video_subtitle_font_serif">Serif</string>
+    <string name="video_subtitle_font_monospace">Monospace</string>
+    <string name="video_subtitle_font_size">Kirjasuurus</string>
+</resources>

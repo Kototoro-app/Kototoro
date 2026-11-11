@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="source_presets">Пресети джерел</string>
+    <string name="create_preset">Новий пресет</string>
+    <string name="edit_preset">Редагувати</string>
+    <string name="preset_name">Назва пресету</string>
+    <string name="preset_languages">Мови</string>
+    <string name="preset_sources">Джерела</string>
+    <string name="preset_created">Пресет створено</string>
+    <string name="preset_saved">Збережено</string>
+    <string name="preset_deleted">Пресет видалено</string>
+    <string name="preset_activated">Пресет активовано</string>
+    <string name="preset_deactivated">Пресет деактивовано</string>
+    <string name="no_presets">Немає пресетів</string>
+    <string name="no_presets_text">Створіть пресет для швидкого перемикання між різними конфігураціями джерел</string>
+    <string name="manage_preset_sources">Джерела</string>
+</resources>

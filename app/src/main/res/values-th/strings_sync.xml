@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sync_settings_enabled_title">ซิงค์การตั้งค่าแอป</string>
+    <string name="sync_settings_enabled_summary">การตั้งค่าตัวอ่าน เครื่องเล่น และรูปลักษณ์ จะไม่ซิงค์รหัสผ่าน โทเค็น และเส้นทางอุปกรณ์</string>
+    <string name="sync_remote_delete_incomplete">ไม่สามารถลบไฟล์รีโมท %1$d ไฟล์ได้ คงสถานะการซิงค์ภายในเครื่องไว้ ลองใหม่อีกครั้ง</string>
+    <string name="sync_enable_required">เปิดการซิงค์ Google Drive ก่อน</string>
+    <string name="google_drive_authorization_required">การยืนยันตัวตน Google ไม่สมบูรณ์หรือหมดอายุแล้ว โปรดเชื่อมต่อบัญชีใหม่อีกครั้ง</string>
+    <string name="google_drive_authorization_canceled">การยืนยันตัวตน Google ถูกยกเลิกหรือหมดเวลา</string>
+    <string name="google_drive_browser_failed">ไม่สามารถเปิดเบราว์เซอร์ระบบเพื่อยืนยันตัวตนของ Google ได้</string>
+    <string name="google_drive_credential_store_failed">ไม่สามารถเข้าถึงที่เก็บข้อมูลรับรองของระบบได้ ตรวจสอบว่าพร้อมใช้งานและไม่ได้ล็อก จากนั้นลองอีกครั้ง</string>
+    <string name="google_drive_settings_failed">ไม่สามารถบันทึกการตั้งค่าการซิงค์ภายในเครื่องได้ ตรวจสอบไดเรกทอรีข้อมูลแล้วลองอีกครั้ง</string>
+    <string name="google_drive_protocol_failed">สแนปชอตคลาวด์เสียหายหรือไม่รองรับรูปแบบนี้ ไม่ได้อัปโหลดสิ่งใด</string>
+    <string name="google_drive_conflict_failed">อุปกรณ์อื่นกำลังอัปเดตข้อมูลบนคลาวด์ ลองซิงค์ใหม่อีกครั้งภายหลัง</string>
+    <string name="google_drive_network_failed">การซิงค์ Google Drive ล้มเหลว ตรวจสอบการเชื่อมต่อของคุณแล้วลองอีกครั้ง</string>
+    <string name="google_drive_access_failed">Google Drive ปฏิเสธการเข้าถึง ตรวจสอบสิทธิ์ที่ให้ไว้และการกำหนดค่า Drive API</string>
+    <string name="google_drive_browser_complete">ได้รับคอลแบ็กจากเบราว์เซอร์แล้ว กลับไปที่ Kototoro เพื่อตรวจสอบผลการเชื่อมต่อบัญชี</string>
+    <string name="google_drive_browser_rejected">การคอลแบ็กเพื่อยืนยันตัวตนนี้ถูกปฏิเสธ กลับไปที่ Kototoro แล้วลองเชื่อมต่อใหม่อีกครั้ง</string>
+    <string name="google_drive_stage_download">กำลังดาวน์โหลด</string>
+    <string name="google_drive_stage_merge">กำลังรวม</string>
+    <string name="google_drive_stage_upload">อัปโหลด</string>
+    <string name="google_drive_desktop_scope">ซิงค์คลัง หมวดหมู่ ความคืบหน้าในการอ่าน สถิติ และบันทึกการอัปเดตของคุณ การตั้งค่าและส่วนขยายจะถูกเก็บบนคลาวด์แต่ยังไม่มีผลบนเดสก์ท็อปในขณะนี้ การซิงค์อัตโนมัติจะทำงานในขณะที่ Kototoro เปิดอยู่</string>
+    <string name="google_drive_authorization_pending">กำลังรอการยืนยันตัวตนของ Google ในเบราว์เซอร์ของคุณ…</string>
+    <string name="google_drive_client_configuration_failed">Google ปฏิเสธการกำหนดค่าไคลเอนต์ OAuth ตรวจสอบประเภทไคลเอนต์เดสก์ท็อป โปรเจกต์ Google Cloud และการตั้งค่าความยินยอม</string>
+    <string name="google_drive_client_secret_required">รุ่นนี้ไม่มีรหัสลับไคลเอนต์ OAuth บนเดสก์ท็อปของ Google กำหนดค่าและคอมไพล์ใหม่ การลงชื่อเข้าใช้ใหม่อาจไม่ช่วยแก้ปัญหานี้</string>
+</resources>

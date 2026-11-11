@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="video_subtitle_settings">字幕設定</string>
+    <string name="video_subtitle_style">字體樣式</string>
+    <string name="video_subtitle_font_size">字體大小</string>
+    <string name="video_subtitle_border_size">邊框大小</string>
+    <string name="video_subtitle_position">位置（邊距）</string>
+    <string name="video_subtitle_color_text">文字</string>
+    <string name="video_subtitle_color_border">邊框</string>
+    <string name="video_subtitle_color_bg">背景</string>
+    <string name="video_subtitle_layout">版面配置</string>
+    <string name="video_subtitle_colors">顏色</string>
+    <string name="video_subtitle_align_left">靠左</string>
+    <string name="video_subtitle_align_center">置中</string>
+    <string name="video_subtitle_align_right">靠右</string>
+    <string name="video_subtitle_color_alpha">透明度</string>
+    <string name="video_subtitle_color_red">紅</string>
+    <string name="video_subtitle_color_green">綠</string>
+    <string name="video_subtitle_color_blue">藍</string>
+    <string name="video_subtitle_background">背景</string>
+    <string name="video_subtitle_background_style">背景樣式</string>
+    <string name="video_subtitle_background_none">關閉</string>
+    <string name="video_subtitle_background_bar">全寬</string>
+    <string name="video_subtitle_background_block">文字塊</string>
+    <string name="video_subtitle_background_lines">每行</string>
+    <string name="video_subtitle_background_corner_radius">圓角半徑</string>
+    <string name="video_subtitle_background_padding_horizontal">水平內邊距</string>
+    <string name="video_subtitle_background_padding_vertical">垂直內邊距</string>
+    <string name="video_subtitle_background_hint">背景會跟隨字幕文字，而不是形成全寬橫條。</string>
+    <string name="video_subtitle_font_family">字型</string>
+    <string name="video_subtitle_font_sans">無襯線體</string>
+    <string name="video_subtitle_font_serif">襯線體</string>
+    <string name="video_subtitle_font_monospace">等寬體</string>
+</resources>

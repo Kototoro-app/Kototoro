@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="source_presets">소스 프리셋</string>
+    <string name="create_preset">새 프리셋</string>
+    <string name="edit_preset">프리셋 편집</string>
+    <string name="preset_name">프리셋 이름</string>
+    <string name="preset_languages">언어</string>
+    <string name="preset_sources">소스</string>
+    <string name="preset_created">프리셋이 생성되었습니다</string>
+    <string name="preset_saved">프리셋이 저장되었습니다</string>
+    <string name="preset_deleted">프리셋이 삭제되었습니다</string>
+    <string name="preset_activated">프리셋이 활성화되었습니다</string>
+    <string name="preset_deactivated">프리셋이 비활성화되었습니다</string>
+    <string name="no_presets">프리셋 없음</string>
+    <string name="no_presets_text">프리셋을 만들어 다양한 소스 구성 간을 빠르게 전환하세요</string>
+    <string name="manage_preset_sources">소스 관리</string>
+</resources>

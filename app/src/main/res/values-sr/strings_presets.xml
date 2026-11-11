@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="source_presets">Šabloni izvora</string>
+    <string name="create_preset">Novi šablon</string>
+    <string name="edit_preset">Uredi šablon</string>
+    <string name="preset_name">Naziv šablona</string>
+    <string name="preset_languages">Jezici</string>
+    <string name="preset_sources">Izvori</string>
+    <string name="preset_created">Šablon kreiran</string>
+    <string name="preset_saved">Šablon sačuvan</string>
+    <string name="preset_deleted">Šablon obrisan</string>
+    <string name="preset_activated">Šablon aktiviran</string>
+    <string name="preset_deactivated">Šablon isključen</string>
+    <string name="no_presets">Nema podešavanja</string>
+    <string name="no_presets_text">Kreirajte podešavanje za brzo prebacivanje između različitih konfiguracija izvora</string>
+    <string name="manage_preset_sources">Upravljaj izvorima</string>
+</resources>

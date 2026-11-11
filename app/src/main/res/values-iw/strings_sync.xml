@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sync_settings_enabled_summary">הגדרות קורא, נגן ומראה. סיסמאות, אסימונים ונתיבי מכשיר לעולם אינם מסונכרנים.</string>
+    <string name="sync_remote_delete_incomplete">לא ניתן למחוק %1$d קבצים מרוחקים. מצב הסנכרון המקומי נשמר; נא לנסות שוב.</string>
+    <string name="sync_enable_required">יש להפעיל תחילה את סנכרון Google Drive.</string>
+    <string name="google_drive_authorization_required">הרשאת Google חסרה או פג תוקפה. יש לחבר את החשבון מחדש.</string>
+    <string name="google_drive_authorization_canceled">הרשאת Google בוטלה או פג הזמן הקצוב.</string>
+    <string name="google_drive_browser_failed">לא ניתן לפתוח את הדפדפן עבור אישור מול Google.</string>
+    <string name="google_drive_credential_store_failed">אין גישה לאחסון האישורים של המערכת. יש לוודא שהוא זמין ולא נעול, ולנסות שוב.</string>
+    <string name="google_drive_settings_failed">שמירת הגדרות הסנכרון המקומיות נכשלה. יש לבדוק את תיקיית הנתונים ולנסות שוב.</string>
+    <string name="google_drive_protocol_failed">גיבוי הענן פגום או במבנה לא נתמך. שום דבר לא הועלה.</string>
+    <string name="google_drive_conflict_failed">מכשירים אחרים מעדכנים את נתוני הענן. יש לנסות לסנכרן שוב מאוחר יותר.</string>
+    <string name="google_drive_network_failed">סנכרון Google Drive נכשל. יש לבדוק את החיבור ולנסות שוב.</string>
+    <string name="google_drive_access_failed">Google Drive סירב גישה. יש לבדוק את הרשאות הגישה ואת הגדרות ה-API.</string>
+    <string name="google_drive_browser_complete">התקבלה קריאה חוזרת מהדפדפן. יש לחזור אל Kototoro כדי לבדוק את מצב החיבור לחשבון.</string>
+    <string name="google_drive_browser_rejected">קריאת ההרשאה החוזרת נדחתה. יש לחזור אל Kototoro ולנסות להתחבר שוב.</string>
+    <string name="google_drive_stage_download">מוריד</string>
+    <string name="google_drive_stage_merge">מאחד</string>
+    <string name="google_drive_stage_upload">מעלה</string>
+    <string name="google_drive_desktop_scope">מבצע סנכרון לספרייה, לקטגוריות, להתקדמות הקריאה, לסטטיסטיקה ולתיעוד העדכונים. ההגדרות וההרחבות נשמרות בענן אך עדיין אינן מיושמות בשולחן העבודה. סנכרון אוטומטי פועל בזמן ש-Kototoro פתוח.</string>
+    <string name="google_drive_authorization_pending">מחכה לאישור Google בדפדפן…</string>
+    <string name="google_drive_client_configuration_failed">Google דחתה את הגדרת לקוח ה-OAuth. יש לבדוק את סוג הלקוח השולחני, פרויקט Google Cloud והגדרות ההסכמה.</string>
+    <string name="google_drive_client_secret_required">בגרסה זו חסר סוד לקוח ה-OAuth השולחני של Google. יש להגדיר אותו ולבנות מחדש; התחברות מחדש לא תתקן זאת.</string>
+    <string name="sync_settings_enabled_title">סנכרון הגדרות האפליקציה</string>
+</resources>

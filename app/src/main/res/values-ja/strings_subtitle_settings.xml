@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="video_subtitle_settings">字幕設定</string>
+    <string name="video_subtitle_style">スタイル</string>
+    <string name="video_subtitle_font_size">文字サイズ</string>
+    <string name="video_subtitle_border_size">枠線の太さ</string>
+    <string name="video_subtitle_position">位置（余白）</string>
+    <string name="video_subtitle_color_text">文字色</string>
+    <string name="video_subtitle_color_border">枠線の色</string>
+    <string name="video_subtitle_color_bg">背景色</string>
+    <string name="video_subtitle_layout">配置</string>
+    <string name="video_subtitle_colors">カラー</string>
+    <string name="video_subtitle_align_left">左揃え</string>
+    <string name="video_subtitle_align_center">中央揃え</string>
+    <string name="video_subtitle_align_right">右揃え</string>
+    <string name="video_subtitle_color_alpha">不透明度</string>
+    <string name="video_subtitle_color_red">赤</string>
+    <string name="video_subtitle_color_green">緑</string>
+    <string name="video_subtitle_color_blue">青</string>
+    <string name="video_subtitle_background">背景</string>
+    <string name="video_subtitle_background_style">背景スタイル</string>
+    <string name="video_subtitle_background_none">オフ</string>
+    <string name="video_subtitle_background_bar">全幅</string>
+    <string name="video_subtitle_background_block">テキストブロック</string>
+    <string name="video_subtitle_background_lines">行ごと</string>
+    <string name="video_subtitle_background_corner_radius">角丸の半径</string>
+    <string name="video_subtitle_background_padding_horizontal">左右のパディング</string>
+    <string name="video_subtitle_background_padding_vertical">上下のパディング</string>
+    <string name="video_subtitle_background_hint">背景は全幅のバーではなく、字幕のテキストに追従します。</string>
+    <string name="video_subtitle_font_family">フォント</string>
+    <string name="video_subtitle_font_sans">サンセリフ</string>
+    <string name="video_subtitle_font_serif">セリフ</string>
+    <string name="video_subtitle_font_monospace">等幅</string>
+</resources>

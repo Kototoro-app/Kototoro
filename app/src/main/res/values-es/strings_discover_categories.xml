@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="discover_category_all">Todas</string>
+    <string name="discover_category_anime_rank">Anime</string>
+    <string name="discover_category_book_rank">Libros</string>
+    <string name="discover_category_music_rank">Música</string>
+    <string name="discover_category_game_rank">Juegos</string>
+    <string name="discover_category_real_rank">Real</string>
+    <string name="discover_category_calendar">Calendario</string>
+</resources>

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sync_settings_enabled_title">同步应用设置</string>
+    <string name="sync_settings_enabled_summary">阅读器、播放器和外观设置。密码、令牌和设备路径绝不会被同步。</string>
+    <string name="sync_remote_delete_incomplete">无法删除 %1$d 个远程文件。已保留本地同步状态，请重试。</string>
+    <string name="sync_enable_required">请先开启 Google Drive 同步。</string>
+    <string name="google_drive_authorization_required">Google 授权不完整或已过期。请重新连接您的账号。</string>
+    <string name="google_drive_authorization_canceled">Google 授权已取消或超时。</string>
+    <string name="google_drive_browser_failed">无法打开系统浏览器进行 Google 授权。</string>
+    <string name="google_drive_credential_store_failed">无法访问系统凭据存储。请检查其是否可用且已解锁，然后重试。</string>
+    <string name="google_drive_settings_failed">无法保存本地同步设置。请检查数据目录并重试。</string>
+    <string name="google_drive_protocol_failed">云端快照已损坏或使用了不受支持的格式。未上传任何内容。</string>
+    <string name="google_drive_conflict_failed">其他设备正在更新云端数据。请稍后重试同步。</string>
+    <string name="google_drive_network_failed">Google Drive 同步失败。请检查您的连接并重试。</string>
+    <string name="google_drive_access_failed">Google Drive 拒绝访问。请检查授予的权限和 Drive API 配置。</string>
+    <string name="google_drive_browser_complete">已收到浏览器回调。请返回 Kototoro 检查账号连接结果。</string>
+    <string name="google_drive_browser_rejected">此授权回调已被拒绝。请返回 Kototoro 并尝试重新连接。</string>
+    <string name="google_drive_stage_download">正在下载</string>
+    <string name="google_drive_stage_merge">正在合并</string>
+    <string name="google_drive_stage_upload">正在上传</string>
+    <string name="google_drive_desktop_scope">同步您的图库、分类、阅读进度、统计数据和更新记录。设置和扩展程序会保留在云端，但暂不会应用到桌面端。自动同步会在 Kototoro 打开时运行。</string>
+    <string name="google_drive_authorization_pending">正在浏览器中等待 Google 授权…</string>
+    <string name="google_drive_client_configuration_failed">Google 拒绝了 OAuth 客户端配置。请检查桌面客户端类型、Google Cloud 项目和同意屏幕设置。</string>
+    <string name="google_drive_client_secret_required">此构建缺少 Google 桌面 OAuth 客户端密钥。请配置后重新构建，重新登录无法修复此问题。</string>
+</resources>

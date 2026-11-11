@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_bar_filters">Meklēšanas filtri</string>
+    <string name="show_language_preset_filter">Valodas iepriesta</string>
+    <string name="fixed_language_preset">Fiksēts valodas iepriests</string>
+    <string name="show_content_type_filter">Satura veids</string>
+    <string name="fixed_content_type">Fiksēts satura veids</string>
+    <string name="show_source_tag_filter">Avota veids</string>
+    <string name="fixed_source_tag">Fiksēts avota veids</string>
+</resources>

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sync_settings_enabled_title">ဆက်တင် စင့်ခ်လုပ်ရန်</string>
+    <string name="sync_settings_enabled_summary">ဖတ်ရှုသူ၊ ပလေယာနှင့် ပုံစံဆက်တင်များ။ စကားဝှက်များ၊ တိုကင်များနှင့် စက်ပစ္စည်းလမ်းကြောင်းများကို စင့်ခ်မလုပ်ပါ။</string>
+    <string name="sync_remote_delete_incomplete">ဖိုင် %1$d ခု မဖျက်နိုင်ပါ။ ဒေသတွင်း အခြေအနေ ထိန်းထားသည်၊ ထပ်ကြိုးစားပါ။</string>
+    <string name="sync_enable_required">Google Drive စင့်ခ် ဦးစွာဖွင့်ပါ။</string>
+    <string name="google_drive_authorization_required">Google အတည်ပြုချက် မပြီးပြတ်သေးပါ သို့မဟုတ် သက်တမ်းကုန်သွားပါပြီ။ အကောင့်ကို ထပ်ချိတ်ဆက်ပါ။</string>
+    <string name="google_drive_authorization_canceled">Google ခွင့်ပြုချက် ပယ်ဖျက် သို့မဟုတ် အချိန်ကုန်သွားသည်။</string>
+    <string name="google_drive_browser_failed">Google အခွင့်အာဏာအတွက် စနစ်ဘရောက်ဆာကို ဖွင့်မရပါ။</string>
+    <string name="google_drive_credential_store_failed">စနစ် အထောက်အထားစိစစ်ရေး သိမ်းဆည်းမှုကို ဝင်ရောက်၍မရပါ။ ရနိုင်ပြီး သော့ဖွင့်ထားခြင်း ရှိမရှိ စစ်ဆေးပြီး ထပ်ကြိုးစားပါ။</string>
+    <string name="google_drive_settings_failed">စင့်ခ်ဆက်တင် မသိမ်းနိုင်ပါ။ လမ်းကြောင်းစစ်ပြီး ထပ်ကြိုးစားပါ။</string>
+    <string name="google_drive_protocol_failed">ကလောက်ဖိုင် ပျက်နေ သို့မဟုတ် ပံ့ပိုးမထားသော ပုံစံဖြစ်နေသည်။</string>
+    <string name="google_drive_conflict_failed">အခြားစက်ပစ္စည်းများ ကလောက်ဒေတာ အပ်ဒိတ်လုပ်နေသည်။ ထပ်ကြိုးစားပါ။</string>
+    <string name="google_drive_network_failed">Google Drive စင့်ခ်မအောင်မြင်ပါ။ ချိတ်ဆက်မှုစစ်ပြီး ထပ်ကြိုးစားပါ။</string>
+    <string name="google_drive_access_failed">Google Drive ဝင်ခွင့်ငြင်းပယ်ခံရသည်။ ခွင့်ပြုချက်များ စစ်ဆေးပါ။</string>
+    <string name="google_drive_browser_complete">ဘရောက်ဆာ တုံ့ပြန်မှုကို လက်ခံရရှိသည်။ အကောင့်ချိတ်ဆက်မှု ရလဒ်ကို စစ်ဆေးရန် Kototoro သို့ ပြန်သွားပါ။</string>
+    <string name="google_drive_browser_rejected">ဤ အခွင့်အာဏာ တုံ့ပြန်မှုကို ငြင်းပယ်ခဲ့သည်။ Kototoro သို့ ပြန်သွားပြီး ချိတ်ဆက်မှုကို ထပ်ကြိုးစားပါ။</string>
+    <string name="google_drive_stage_merge">ပေါင်းနေသည်</string>
+    <string name="google_drive_stage_upload">တင်နေသည်</string>
+    <string name="google_drive_desktop_scope">စာကြည့်တိုက်၊ အမျိုးအစား၊ ဖတ်ရှုမှု၊ စာရင်းအင်းနှင့် မှတ်တမ်းများ စင့်ခ်လုပ်သည်။ ဆက်တင်နှင့် တိုးချဲ့မှုများကို ကလောက်တွင် သိမ်းသော်လည်း ဒက်စတော့တွင် အသုံးမပြုသေးပါ။ Kototoro ဖွင့်ထားစဉ် အလိုအလျောက် စင့်ခ်လုပ်သည်။</string>
+    <string name="google_drive_authorization_pending">ဘရောက်ဆာတွင် Google အခွင့်အာဏာကို စောင့်ဆိုင်းနေသည်…</string>
+    <string name="google_drive_client_configuration_failed">Google သည် OAuth ဖွဲ့စည်းမှုကို ငြင်းပယ်ခဲ့သည်။ ဒက်စတော့အမျိုးအစားနှင့် Google Cloud ပရောဂျက်ကို စစ်ဆေးပါ။</string>
+    <string name="google_drive_client_secret_required">Google ဒက်စတော့ OAuth လျှို့ဝှက်ချက် ပျောက်နေသည်။ ပြန်ဆောက်ပါ၊ ထပ်ဝင်ရုံဖြင့် မပြင်နိုင်ပါ။</string>
+    <string name="google_drive_stage_download">ဒေါင်းလုဒ်လုပ်နေသည်</string>
+</resources>

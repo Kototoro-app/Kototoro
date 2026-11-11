@@ -28,4 +28,40 @@
         <item quantity="one">%1$d måned siden</item>
         <item quantity="other">%1$d måneder siden</item>
     </plurals>
+    <plurals name="feed_timeline_updates">
+        <item quantity="one">%1$d oppdatering</item>
+        <item quantity="other">%1$d oppdateringer</item>
+    </plurals>
+    <plurals name="history_grouped_sources">
+        <item quantity="one">%1$d kilde</item>
+        <item quantity="other">%1$d kilder</item>
+    </plurals>
+    <plurals name="home_enabled_sources">
+        <item quantity="one">%1$d aktivert kilde</item>
+        <item quantity="other">%1$d aktiverte kilder</item>
+    </plurals>
+    <plurals name="home_updates_new_chapters">
+        <item quantity="one">%1$d nytt kapittel</item>
+        <item quantity="other">%1$d nye kapitler</item>
+    </plurals>
+    <plurals name="hours">
+        <item quantity="one">%1$d time</item>
+        <item quantity="other">%1$d timer</item>
+    </plurals>
+    <plurals name="minutes">
+        <item quantity="one">%1$d minutt</item>
+        <item quantity="other">%1$d minutter</item>
+    </plurals>
+    <plurals name="old_chapters_in_total">
+        <item quantity="one">%1$d gammelt kapittel totalt</item>
+        <item quantity="other">%1$d gamle kapitler totalt</item>
+    </plurals>
+    <plurals name="tracker_failed_in_a_row">
+        <item quantity="one">Feilet %1$d gang på rad</item>
+        <item quantity="other">Feilet %1$d ganger på rad</item>
+    </plurals>
+    <plurals name="tracker_failing_titles_summary">
+        <item quantity="one">%1$d tittel feilet %2$d sjekker eller mer på rad</item>
+        <item quantity="other">%1$d titler feilet %2$d sjekker eller mer på rad</item>
+    </plurals>
 </resources>

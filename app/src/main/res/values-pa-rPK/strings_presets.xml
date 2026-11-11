@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="source_presets">ਸਰੋਤ ਪ੍ਰੀਸੈੱਟ</string>
+    <string name="create_preset">ਨਵਾਂ ਪ੍ਰੀਸੈੱਟ</string>
+    <string name="edit_preset">ਪ੍ਰੀਸੈੱਟ ਸੋਧੋ</string>
+    <string name="preset_name">ਪ੍ਰੀਸੈੱਟ ਦਾ ਨਾਮ</string>
+    <string name="preset_languages">ਭਾਸ਼ਾਵਾਂ</string>
+    <string name="preset_sources">ਸਰੋਤ</string>
+    <string name="preset_created">ਪ੍ਰੀਸੈੱਟ ਬਣਾਇਆ ਗਿਆ</string>
+    <string name="preset_deleted">ਪ੍ਰੀਸੈੱਟ ਹਟਾਇਆ ਗਿਆ</string>
+    <string name="preset_activated">ਪ੍ਰੀਸੈੱਟ ਚਾਲੂ</string>
+    <string name="preset_deactivated">ਪ੍ਰੀਸੈੱਟ ਬੰਦ</string>
+    <string name="no_presets">ਕੋਈ ਪ੍ਰੀਸੈੱਟ ਨਹੀਂ</string>
+    <string name="no_presets_text">ਵੱਖ-ਵੱਖ ਸਰੋਤ ਸੰਰਚਨਾਵਾਂ ਵਿੱਚ ਤੇਜ਼ੀ ਨਾਲ ਸਵਿਚ ਕਰਨ ਲਈ ਇੱਕ ਪ੍ਰੀਸੈੱਟ ਬਣਾਓ</string>
+    <string name="manage_preset_sources">ਸਰੋਤ ਪ੍ਰਬੰਧਿਤ ਕਰੋ</string>
+    <string name="preset_saved">ਪ੍ਰੀਸੈੱਟ ਸੇਵ ਹੋਇਆ</string>
+</resources>

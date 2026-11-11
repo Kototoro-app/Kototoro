@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sync_settings_enabled_title">Đồng bộ cài đặt app</string>
+    <string name="sync_settings_enabled_summary">Cài đặt đọc, phát và giao diện. Mật khẩu, token và đường dẫn thiết bị không bao giờ đồng bộ.</string>
+    <string name="sync_remote_delete_incomplete">Không thể xóa %1$d tệp từ xa. Đã giữ đồng bộ cục bộ; thử lại.</string>
+    <string name="sync_enable_required">Bật đồng bộ Google Drive trước.</string>
+    <string name="google_drive_authorization_required">Việc cấp quyền Google chưa hoàn tất hoặc đã hết hạn. Hãy kết nối lại tài khoản.</string>
+    <string name="google_drive_authorization_canceled">Đã hủy hoặc hết thời gian cấp quyền Google.</string>
+    <string name="google_drive_browser_failed">Không thể mở trình duyệt hệ thống để ủy quyền Google.</string>
+    <string name="google_drive_credential_store_failed">Không thể truy cập kho thông tin xác thực. Kiểm tra xem kho đã mở khóa chưa rồi thử lại.</string>
+    <string name="google_drive_settings_failed">Không thể lưu cài đặt đồng bộ cục bộ. Kiểm tra thư mục dữ liệu và thử lại.</string>
+    <string name="google_drive_protocol_failed">Bản sao lưu đám mây bị hỏng hoặc sai định dạng. Không có gì được tải lên.</string>
+    <string name="google_drive_conflict_failed">Các thiết bị khác đang cập nhật dữ liệu đám mây. Thử đồng bộ lại sau.</string>
+    <string name="google_drive_network_failed">Đồng bộ Google Drive thất bại. Kiểm tra kết nối và thử lại.</string>
+    <string name="google_drive_access_failed">Google Drive từ chối truy cập. Kiểm tra các quyền đã cấp và cấu hình Drive API.</string>
+    <string name="google_drive_browser_complete">Đã nhận phản hồi từ trình duyệt. Quay lại Kototoro để kiểm tra kết quả kết nối tài khoản.</string>
+    <string name="google_drive_browser_rejected">Phản hồi ủy quyền này đã bị từ chối. Quay lại Kototoro và thử kết nối lại.</string>
+    <string name="google_drive_stage_download">Đang tải xuống</string>
+    <string name="google_drive_stage_merge">Đang gộp</string>
+    <string name="google_drive_stage_upload">Đang tải</string>
+    <string name="google_drive_desktop_scope">Đồng bộ thư viện, danh mục, tiến độ đọc, thống kê và lịch sử cập nhật của bạn. Cài đặt và tiện ích mở rộng được lưu trữ trên đám mây nhưng chưa được áp dụng trên máy tính. Đồng bộ tự động chạy khi Kototoro đang mở.</string>
+    <string name="google_drive_authorization_pending">Đang chờ ủy quyền Google trong trình duyệt...</string>
+    <string name="google_drive_client_configuration_failed">Google đã từ chối cấu hình máy khách OAuth. Kiểm tra loại ứng dụng khách cho Máy tính, dự án Google Cloud và cài đặt màn hình đồng thuận.</string>
+    <string name="google_drive_client_secret_required">Bản dựng thiếu client secret OAuth máy tính của Google. Cấu hình và build lại; đăng nhập lại không giúp ích.</string>
+</resources>

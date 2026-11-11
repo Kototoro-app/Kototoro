@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sync_settings_enabled_title">Sinkron setelan app</string>
+    <string name="sync_settings_enabled_summary">Setelan pamaca, pamuter lan tampilan. Sandhi, token lan path piranti ora tau disinkronake.</string>
+    <string name="sync_remote_delete_incomplete">Ora bisa mbusak %1$d berkas remot. Kahanan sinkronisasi lokal tetep disimpen; coba maneh.</string>
+    <string name="google_drive_authorization_required">Otorisasi Google ora lengkap utawa wis kadaluwarsa. Sambungake akun maneh.</string>
+    <string name="google_drive_authorization_canceled">Otorisasi Google dibatalake utawa wektune entek.</string>
+    <string name="google_drive_browser_failed">Ora bisa mbukak browser sistem kanggo otorisasi Google.</string>
+    <string name="google_drive_credential_store_failed">Ora bisa ngakses panyimpenan kredensial sistem. Priksa manawa kasedhiya lan ora dikunci, banjur coba maneh.</string>
+    <string name="google_drive_settings_failed">Ora bisa nyimpen setelan sinkronisasi lokal. Priksa direktori data lan coba maneh.</string>
+    <string name="google_drive_protocol_failed">Cemawisan awan rusak utawa nggunakake format sing ora didhukung. Ora ana sing diunggah.</string>
+    <string name="google_drive_conflict_failed">Piranti liyane lagi nganyari data awan. Coba sinkronisasi maneh mengko.</string>
+    <string name="google_drive_network_failed">Sinkronisasi Google Drive gagal. Priksa sambunganmu lan coba maneh.</string>
+    <string name="google_drive_access_failed">Google Drive nolak akses. Priksa ijin sing diwenehake lan konfigurasi Drive API.</string>
+    <string name="google_drive_browser_complete">Wangsulan browser ditampa. Bali menyang Kototoro kanggo mriksa hasil sambungan akun.</string>
+    <string name="google_drive_browser_rejected">Wangsulan otorisasi iki ditolak. Bali menyang Kototoro lan coba sambung maneh.</string>
+    <string name="google_drive_stage_download">Ngundhuh</string>
+    <string name="google_drive_stage_merge">Nggabung</string>
+    <string name="google_drive_stage_upload">Ngunggah</string>
+    <string name="google_drive_desktop_scope">Nyinkronake perpustakaan, kategori, progres maca, statistik, lan cathetan nganyari. Setelan lan ekstensi disimpen ing awan nanging durung ditrapake ing desktop. Sinkronisasi otomatis mlaku nalika Kototoro dibukak.</string>
+    <string name="google_drive_authorization_pending">Ngenteni otorisasi Google ing browser...</string>
+    <string name="google_drive_client_configuration_failed">Google nolak konfigurasi klien OAuth. Priksa jinis klien Desktop, proyek Google Cloud, lan setelan idin.</string>
+    <string name="google_drive_client_secret_required">Build iki kekurangan rahasia klien OAuth desktop Google. Konfigurasi lan build maneh; mlebu maneh ora bakal ndandani iki.</string>
+    <string name="sync_enable_required">Aktifake sinkronisasi Google Drive dhisik.</string>
+</resources>

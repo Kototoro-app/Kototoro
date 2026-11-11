@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sync_settings_enabled_title">Параметрлерді синхрондау</string>
+    <string name="sync_settings_enabled_summary">Оқу құралы, плеер, дизайн. Құпия сөз пен жолдар синхрондалмайды.</string>
+    <string name="sync_remote_delete_incomplete">%1$d қашықтағы файл(дар) жойылмады. Жергілікті синхрондау күйі сақталды, қайталап көріңіз.</string>
+    <string name="sync_enable_required">Google Drive синхрондауын қосыңыз.</string>
+    <string name="google_drive_authorization_required">Google авторизациясы аяқталмаған немесе мерзімі біткен. Аккаунтыңызды қайта қосыңыз.</string>
+    <string name="google_drive_authorization_canceled">Google авторизациясы бас тартылды немесе уақыты өтті.</string>
+    <string name="google_drive_browser_failed">Google авторизациясы үшін жүйелік браузерді ашу мүмкін емес.</string>
+    <string name="google_drive_credential_store_failed">Тіркелгі деректер қоймасына кіру мүмкін емес. Құлпын ашып, қайталаңыз.</string>
+    <string name="google_drive_settings_failed">Жергілікті синхрондау параметрлері сақталмады. Каталогты тексеріңіз.</string>
+    <string name="google_drive_protocol_failed">Бұлттық көшірме зақымдалған немесе қолдау көрсетілмейтін пішімді пайдаланады. Ештеңе жүктелмеді.</string>
+    <string name="google_drive_conflict_failed">Басқа құрылғылар бұлтты жаңартуда. Кейінірек көріңіз.</string>
+    <string name="google_drive_network_failed">Google Drive синхрондалмады. Желіні тексеріп, қайталаңыз.</string>
+    <string name="google_drive_access_failed">Google Drive кіруге тыйым салды. Берілген рұқсаттар мен Drive API конфигурациясын тексеріңіз.</string>
+    <string name="google_drive_browser_complete">Браузер жауабы келді. Нәтижені тексеру үшін Kototoro қолданбасына оралыңыз.</string>
+    <string name="google_drive_browser_rejected">Бұл авторизация кері байланысы қабылданбады. Kototoro қолданбасына оралып, қайта қосылып көріңіз.</string>
+    <string name="google_drive_stage_download">Жүктелуде</string>
+    <string name="google_drive_stage_merge">Біріктіру</string>
+    <string name="google_drive_stage_upload">Жүктелуде</string>
+    <string name="google_drive_desktop_scope">Кітапханаңызды, санаттарды, оқу барысын, статистиканы және жаңарту жазбаларын синхрондайды. Параметрлер мен кеңейтімдер бұлтта сақталады, бірақ әзірге жұмыс үстелінде қолданылмайды. Автоматты синхрондау Kototoro ашық тұрғанда жұмыс істейді.</string>
+    <string name="google_drive_authorization_pending">Браузерде Google авторизациясы күтілуде...</string>
+    <string name="google_drive_client_configuration_failed">Google OAuth клиент конфигурациясын қабылдамады. Жұмыс үстелі клиент түрін, Google Cloud жобасын және келісім параметрлерін тексеріңіз.</string>
+    <string name="google_drive_client_secret_required">Бұл жинақта Google жұмыс үстелі OAuth клиент құпия сөзі жоқ. Оны баптап, қайта жинаңыз; қайта кіру бұны түзете алмайды.</string>
+</resources>

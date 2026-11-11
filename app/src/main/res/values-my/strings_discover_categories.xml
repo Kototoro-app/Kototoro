@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="discover_category_all">အမျိုးအစားအားလုံး</string>
+    <string name="discover_category_anime_rank">အန်နီမေး</string>
+    <string name="discover_category_book_rank">စာအုပ်</string>
+    <string name="discover_category_music_rank">တေးဂီတ</string>
+    <string name="discover_category_game_rank">ဂိမ်း</string>
+    <string name="discover_category_real_rank">အစစ်</string>
+    <string name="discover_category_calendar">နေ့စဉ် အချိန်ဇယား</string>
+</resources>

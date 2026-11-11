@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sync_settings_enabled_title">هاوکاتکردنی ڕێکخستن</string>
+    <string name="sync_settings_enabled_summary">ڕێکخستنەکانی خوێنەر، یاریکەر و دەرکەوتن. وشەپنهانی، تۆکن و ڕێڕەوی ئامێر هەرگیز هاوکات نابن.</string>
+    <string name="sync_remote_delete_incomplete">نەتوانرا %1$d پەڕگەی دوورەدەست بسڕدرێتەوە. دۆخی خۆجێیی پارێزرا؛ دووبارە هەوڵ بدە.</string>
+    <string name="sync_enable_required">سەرەتا Google Drive چالاک بکە.</string>
+    <string name="google_drive_authorization_required">ڕێگەپێدانی Google تەواو نییە یان بەسەرچووە. هەژمارەکەت دووبارە پەیوەست بکەرەوە.</string>
+    <string name="google_drive_authorization_canceled">ڕێگەپێدانی Google هەڵوەشایەوە یان کاتی بەسەرچووە.</string>
+    <string name="google_drive_browser_failed">ناتوانرا وێبگەڕی سیستەم بۆ ڕێپێدانی گووگڵ بکرێتەوە.</string>
+    <string name="google_drive_credential_store_failed">ناتوانرا دەستیپێبگات بە کۆگای بڕوانامەی سیستەم. دڵنیابە لەوەی بەردەست و کردنەوەیە، پاشان دووبارە هەوڵبەرەوە.</string>
+    <string name="google_drive_settings_failed">نەتوانرا ڕێکخستن پاشەکەوت بکرێت. بوخچەی داتا بپشکنە و دووبارە هەوڵ بدە.</string>
+    <string name="google_drive_protocol_failed">وێنەی هەورەکە خراپبووە یان فۆرماتێکی پشتگیرینەکراو بەکاردەهێنێت. هیچ شتێک نەبەررزکرایەوە.</string>
+    <string name="google_drive_conflict_failed">ئامێرەکانی تر داتای هەور نوێ دەکەنەوە. دواتر هەوڵی هاوکاتکردنەوە بدەرەوە.</string>
+    <string name="google_drive_network_failed">هاوکاتکردنی Google Drive سەرکەوتوو نەبوو. پەیوەندی بپشکنە.</string>
+    <string name="google_drive_access_failed">Google Drive ڕێپێدانی ڕەتکردەوە. مۆڵەتە بەخشراوەکان و ڕێکخستنی Drive API پشکنە.</string>
+    <string name="google_drive_browser_complete">بانگکەرەوەی وێبگەڕ وەرگیرا. بگەڕێوە بۆ Kototoro بۆ پشکنی ئەنجامی پەیوەندی هەژمارەکە.</string>
+    <string name="google_drive_browser_rejected">ئەم بانگکەرەوەی ڕێپێدانە ڕەتکرایەوە. بگەڕێوە بۆ Kototoro و دووبارە هەوڵی پەیوەندیکردن بدەرەوە.</string>
+    <string name="google_drive_stage_download">دابەزاندن</string>
+    <string name="google_drive_stage_merge">تێکەڵکردن</string>
+    <string name="google_drive_stage_upload">بارکردن</string>
+    <string name="google_drive_desktop_scope">کتێبخانە، پۆلێنەکان، پێشکەوتنی خوندنەوە، ئامارەکان و تۆمارەکانی نوێکردنەوەت هاوکات دەکات. ڕێکخستنەکان و پاشکۆکان لە هەوردا دەپارێزرێن بەڵام هێشتا لەسەر دێکتۆپ جێبەجێ نەکراون. هاوکاتکردنی خۆکار لە کاتی کراوەبوونی کۆتۆتۆرۆ بەڕێوەدەچێت.</string>
+    <string name="google_drive_authorization_pending">چاوەڕێی ڕێپێدانی گووگڵە لە وێبگەڕەکەتدا…</string>
+    <string name="google_drive_client_configuration_failed">گووگڵ ڕێکخستنی کڵایەنت OAuth ڕەتکردەوە. جۆری کڵایێنتی دێسکتاپ، پرۆژەی Google Cloud و ڕێکخستنەکانی ڕەزامەندی پشکنە.</string>
+    <string name="google_drive_client_secret_required">ئەم دروستکراوە نهێنی کڵایێنتی دێسکتاپ OAuthـی گووگڵی نییە. ڕێکی بخە و دووبارە دروستبکەرەوە؛ چوونەژوورەوە دووبارە ئەمە چارەسەر ناکات.</string>
+</resources>

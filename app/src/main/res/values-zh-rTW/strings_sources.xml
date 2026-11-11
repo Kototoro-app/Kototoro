@@ -19,14 +19,12 @@
     <string name="source_groups_invalid_file">無效的分組檔案</string>
     <string name="source_groups_file_too_large">分組檔案過大（最大 2 MB）</string>
     <string name="source_groups_error_generic">錯誤：%1$s</string>
-    <string name="source_groups_meta">%1$d 個倉庫 · %2$d 個擴展包 · %3$d 個源</string>
+    <string name="source_groups_meta">%1$d 個倉庫 · %2$d 個擴展包 · %3$d 個來源（%4$d 個已啟用）</string>
     <string name="source_groups_progress">第 %1$d / %2$d 步</string>
     <string name="source_groups_error_repo">無法新增倉庫 %1$s</string>
     <string name="source_groups_error_package">無法安裝擴展包 %1$s</string>
     <string name="source_groups_error_source">無法設定源 %1$s</string>
     <string name="source_groups_error_jar_priority">無法應用 JAR 優先順序順序</string>
-    <string name="source_groups_domain_skipped">未在此裝置上安裝的源未套用網域：%1$d 個</string>
-    <string name="source_groups_rolled_back">已回滾到套用前的狀態。已新增的倉庫和已安裝的擴展包會保留。</string>
     <string name="source_groups_package_missing">在所屬倉庫中未找到擴展包 %1$s</string>
     <string name="source_groups_requires_installer">擴展包 %1$s 需要通過系統安裝程式安裝</string>
     <string name="source_test_all">全部測試</string>
@@ -58,7 +56,7 @@
     <string name="source_test_msg_timeout">超時（%1$d 秒）</string>
     <string name="source_test_msg_total_timeout">源總耗時超限（%1$d 秒）</string>
     <string name="source_test_msg_prev_failed">已跳過：上一步失敗</string>
-    <string name="source_test_msg_no_cover">沒有封面地址</string>
+    <string name="source_test_msg_no_cover">沒有封面網址</string>
     <string name="source_test_msg_covers">已載入 %1$d/%2$d 張封面</string>
     <string name="source_test_msg_covers_failed">已載入 %1$d/%2$d 張封面：%3$s</string>
     <string name="source_test_msg_details">已開啟：%1$s</string>
@@ -85,4 +83,20 @@
     <string name="source_groups_export_lost">匯出目標已丟失，請重新匯出。</string>
     <string name="extension_repo_update_failed">更新失敗：%1$s</string>
     <string name="source_groups_confirm_domains">網域覆寫（%1$d 個來源）：</string>
+    <string name="source_groups_confirm_title">要套用 \"%1$s\" 嗎？</string>
+    <string name="source_groups_confirm_intro">此群組將把以下內容新增至您的裝置。</string>
+    <string name="source_groups_confirm_repos">要新增的儲存庫：</string>
+    <string name="source_groups_confirm_packages">要安裝的套件：</string>
+    <string name="source_groups_confirm_more">其餘 %1$d 個</string>
+    <string name="source_groups_domain_skipped">未對此裝置上未安裝的 %1$d 個來源套用網域</string>
+    <string name="source_groups_rolled_back">已還原至套用前的狀態。已保留新增的儲存庫與安裝的套件。</string>
+    <string name="source_test_copy_json">複製 JSON</string>
+    <string name="source_lock_action">鎖定</string>
+    <string name="source_unlock_action">解除鎖定</string>
+    <string name="edit_repository">編輯儲存庫</string>
+    <string name="source_groups_create_clean">建立空白群組</string>
+    <string name="source_groups_error_apply_state">無法套用群組來源狀態</string>
+    <string name="source_groups_delete_confirm">要刪除群組 \"%1$s\" 嗎？</string>
+    <string name="source_groups_updated">群組已更新</string>
+    <string name="source_groups_newer_schema">此群組檔案來自較新版本，請更新應用程式。</string>
 </resources>

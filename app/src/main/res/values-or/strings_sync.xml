@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sync_settings_enabled_title">ଆପ୍ ସେଟିଂସ୍ ସିଙ୍କ୍</string>
+    <string name="sync_settings_enabled_summary">ପାଠକ, ପ୍ଲେୟାର୍ ଏବଂ ଦୃଶ୍ୟମାନ ସେଟିଂସ୍। ପାସୱାର୍ଡ, ଟୋକନ୍ ଏବଂ ଡିଭାଇସ୍ ପାଥ୍ କେବେବି ସିଙ୍କ୍ ହୁଏ ନାହିଁ।</string>
+    <string name="sync_remote_delete_incomplete">%1$d ଟି ରିମୋଟ୍ ଫାଇଲ୍ ଡିଲିଟ୍ ହେଲା ନାହିଁ। ସିଙ୍କ୍ ସ୍ଥିତି ରହିଲା; ପୁଣି ଚେଷ୍ଟା କରନ୍ତୁ।</string>
+    <string name="sync_enable_required">ପ୍ରଥମେ Google Drive ସିଙ୍କ୍ ଅନ୍ କରନ୍ତୁ।</string>
+    <string name="google_drive_authorization_required">Google ପ୍ରାଧିକରଣ ଅସମ୍ପୂର୍ଣ୍ଣ କିମ୍ବା ମିଆଦ ସରୁଛି। ଆକାଉଣ୍ଟ ପୁନର୍ବାର ସଂଯୋଗ କରନ୍ତୁ।</string>
+    <string name="google_drive_authorization_canceled">Google ପ୍ରାଧିକରଣ ବାତିଲ୍ କରାଯାଇଛି କିମ୍ବା ସମୟ ସମାପ୍ତ ହୋଇଛି।</string>
+    <string name="google_drive_browser_failed">Google ଅଧିକାର ପାଇଁ ସିଷ୍ଟମ୍ ବ୍ରାଉଜର୍ ଖୋଲିପାରିଲା ନାହିଁ।</string>
+    <string name="google_drive_credential_store_failed">ସିଷ୍ଟମ୍ କ୍ରେଡେନ୍ସିଆଲ୍ ଷ୍ଟୋର୍ ଅଭିଗମ୍ୟ ନୁହେଁ। ଏହା ଉପଲବ୍ଧ ଏବଂ ଅନଲକ୍ ଅଛି କି ନାହିଁ ଯାଞ୍ଚ କରନ୍ତୁ, ଏବଂ ପୁଣି ଚେଷ୍ଟା କରନ୍ତୁ।</string>
+    <string name="google_drive_settings_failed">ସ୍ଥାନୀୟ ସିଙ୍କ୍ ସେଟିଂସ୍ ସଞ୍ଚୟ ହେଲା ନାହିଁ। ଡାଟା ଡାଇରେକ୍ଟୋରୀ ଯାଞ୍ଚ କରି ପୁଣି ଚେଷ୍ଟା କରନ୍ତୁ।</string>
+    <string name="google_drive_protocol_failed">କ୍ଲାଉଡ୍ ସ୍ନାପସଟ୍ କ୍ଷତିଗ୍ରସ୍ତ ଅଟେ କିମ୍ବା ଏକ ଅସମର୍ଥିତ ଫର୍ମାଟ୍ ବ୍ୟବହାର କରୁଛି। କିଛି ଅପଲୋଡ୍ ହୋଇନାହିଁ।</string>
+    <string name="google_drive_conflict_failed">ଅନ୍ୟ ଡିଭାଇସ୍ କ୍ଲାଉଡ୍ ଡାଟା ଅପଡେଟ୍ କରୁଛନ୍ତି। ପରେ ଚେଷ୍ଟା କରନ୍ତୁ।</string>
+    <string name="google_drive_network_failed">Google Drive ସିଙ୍କ୍ ବିଫଳ ହେଲା। ଆପଣଙ୍କ ସଂଯୋଗ ଯାଞ୍ଚ କରି ପୁଣି ଚେଷ୍ଟା କରନ୍ତୁ।</string>
+    <string name="google_drive_access_failed">Google Drive ପ୍ରବେଶ ଅସ୍ୱୀକାର କଲା। ପ୍ରଦତ୍ତ ଅନୁମତି ଏବଂ Drive API कन्ଫିଗରସନ୍ ଯାଞ୍ଚ କରନ୍ତୁ।</string>
+    <string name="google_drive_browser_complete">ବ୍ରାଉଜର୍ କଲବ୍ୟାକ୍ ପ୍ରାପ୍ତ ହେଲା। ଆକାଉଣ୍ଟ୍ ସଂଯୋଗ ଫଳାଫଳ ଯାଞ୍ଚ କରିବାକୁ Kototoroକୁ ଫେରନ୍ତୁ।</string>
+    <string name="google_drive_browser_rejected">ଏହି ଅଧିକାର କଲବ୍ୟାକ୍ ପ୍ରତ୍ୟାଖ୍ୟାନ କରାଯାଇଛି। Kototoroକୁ ଫେରି ପୁଣି ସଂଯୋଗ କରିବାକୁ ଚେଷ୍ଟା କରନ୍ତୁ।</string>
+    <string name="google_drive_stage_download">ଡାଉନଲୋଡ୍ ହେଉଛି</string>
+    <string name="google_drive_stage_merge">ମର୍ଜ ହେଉଛି</string>
+    <string name="google_drive_stage_upload">ଅପଲୋଡ୍</string>
+    <string name="google_drive_desktop_scope">ଆପଣଙ୍କ ଲାଇବ୍ରେରୀ, କାଟାଗୋରୀ, ପଢ଼ିବା ପ୍ରଗତି, ପରିସଂଖ୍ୟାନ ଏବଂ ଅପଡେଟ୍ ରେକର୍ଡଗୁଡ଼ିକୁ ସିଙ୍କ୍ କରିଥାଏ। ସେଟିଂସ୍ ଏବଂ ଏକ୍ସଟେନ୍ସନ୍‌ଗୁଡ଼ିକ କ୍ଲାଉଡ୍‌ରେ ସଂରକ୍ଷିତ ରହିଥାଏ କିନ୍ତୁ ବର୍ତ୍ତମାନ ଡେସ୍କଟପ୍‌ରେ ପ୍ରୟୋଗ କରାଯାଇ ନାହିଁ। Kototoro ଖୋଲା ଥିବା ସମୟରେ ଅଟୋମେଟିକ୍ ସିଙ୍କ୍ ଚାଲିଥାଏ।</string>
+    <string name="google_drive_authorization_pending">ବ୍ରାଉଜର୍‌ରେ Google ଅଧିକାରକୁ ଅପେକ୍ଷା କରାଯାଇଛି…</string>
+    <string name="google_drive_client_configuration_failed">Google OAuth କ୍ଲାଏଣ୍ଟ କନଫିଗରସନ୍ ପ୍ରତ୍ୟାଖ୍ୟାନ କଲା। ଡେସ୍କଟପ୍ କ୍ଲାଏଣ୍ଟ ପ୍ରକାର, Google Cloud ପ୍ରୋଜେକ୍ଟ ଏବଂ ସମ୍ମତି ସେଟିଂସ୍ ଯାଞ୍ଚ କରନ୍ତୁ।</string>
+    <string name="google_drive_client_secret_required">ଏହି ବିଲ୍‌ରେ Google ଡେସ୍କଟପ୍ OAuth କ୍ଲାଏଣ୍ଟ ସିକ୍ରେଟ୍ ନାହିଁ। ଏହାକୁ କନଫିଗର୍ କରି ପୁନଃନିର୍ମାଣ କରନ୍ତୁ; ପୁନର୍ବାର ସାଇନ୍ ઇନ୍ କରିବା ଦ୍ୱାରା ଏହା ଠିକ୍ ହେବ ନାହିଁ।</string>
+</resources>

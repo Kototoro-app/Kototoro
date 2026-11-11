@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="source_presets">Прэсеты крыніц</string>
+    <string name="create_preset">Новы прэсет</string>
+    <string name="edit_preset">Рэдагаваць</string>
+    <string name="preset_name">Назва прэсета</string>
+    <string name="preset_languages">Мовы</string>
+    <string name="preset_sources">Крыніцы</string>
+    <string name="preset_created">Прэсет створаны</string>
+    <string name="preset_saved">Прэсет захаваны</string>
+    <string name="preset_deleted">Прэсет выдалены</string>
+    <string name="preset_activated">Прэсет актываваны</string>
+    <string name="preset_deactivated">Прэсет дэактываваны</string>
+    <string name="no_presets">Няма прэсетаў</string>
+    <string name="no_presets_text">Стварыце прэсет, каб хутка пераключацца паміж рознымі канфігурацыямі крыніц</string>
+    <string name="manage_preset_sources">Кіраваць крын.</string>
+</resources>

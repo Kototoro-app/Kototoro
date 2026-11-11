@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="video_subtitle_settings">उपशीर्षक सेटिंग्स</string>
+    <string name="video_subtitle_style">टाइपोग्राफी</string>
+    <string name="video_subtitle_border_size">बॉर्डर साइज़</string>
+    <string name="video_subtitle_position">स्थिति (मार्जिन)</string>
+    <string name="video_subtitle_color_text">टेक्स्ट</string>
+    <string name="video_subtitle_color_border">बॉर्डर</string>
+    <string name="video_subtitle_color_bg">बैकग्राउंड</string>
+    <string name="video_subtitle_layout">लेआउट</string>
+    <string name="video_subtitle_colors">रंग</string>
+    <string name="video_subtitle_align_left">बाएँ</string>
+    <string name="video_subtitle_align_center">केंद्र</string>
+    <string name="video_subtitle_align_right">दाएँ</string>
+    <string name="video_subtitle_color_alpha">अल्फा</string>
+    <string name="video_subtitle_color_red">लाल</string>
+    <string name="video_subtitle_color_green">हरा</string>
+    <string name="video_subtitle_color_blue">नीला</string>
+    <string name="video_subtitle_background">बैकग्राउंड</string>
+    <string name="video_subtitle_background_style">बैकग्राउंड शैली</string>
+    <string name="video_subtitle_background_none">बंद</string>
+    <string name="video_subtitle_background_bar">पूर्ण चौड़ाई</string>
+    <string name="video_subtitle_background_lines">प्रति लाइन</string>
+    <string name="video_subtitle_background_corner_radius">कॉर्नर रेडियस</string>
+    <string name="video_subtitle_background_padding_horizontal">क्षैतिज पैडिंग</string>
+    <string name="video_subtitle_background_padding_vertical">लंबवत पैडिंग</string>
+    <string name="video_subtitle_background_hint">बैकग्राउंड पूर्ण चौड़ाई वाली पट्टी बनाने के बजाय उपशीर्षक टेक्स्ट का अनुसरण करता है।</string>
+    <string name="video_subtitle_font_family">फ़ॉन्ट</string>
+    <string name="video_subtitle_font_sans">सैंस</string>
+    <string name="video_subtitle_font_serif">सेरिफ़</string>
+    <string name="video_subtitle_font_monospace">मोनोस्पेस</string>
+    <string name="video_subtitle_font_size">फॉन्ट आकार</string>
+    <string name="video_subtitle_background_block">अक्षर ब्लॉक</string>
+</resources>

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="video_subtitle_settings">Setări subtitrări</string>
+    <string name="video_subtitle_style">Tipografie</string>
+    <string name="video_subtitle_font_size">Dim. font</string>
+    <string name="video_subtitle_border_size">Dim. contur</string>
+    <string name="video_subtitle_position">Poziție (Margine)</string>
+    <string name="video_subtitle_color_text">Text</string>
+    <string name="video_subtitle_color_border">Contur</string>
+    <string name="video_subtitle_color_bg">Fundal</string>
+    <string name="video_subtitle_layout">Aspect</string>
+    <string name="video_subtitle_colors">Culori</string>
+    <string name="video_subtitle_align_left">Stânga</string>
+    <string name="video_subtitle_align_center">Centru</string>
+    <string name="video_subtitle_align_right">Dreapta</string>
+    <string name="video_subtitle_color_alpha">Alfa</string>
+    <string name="video_subtitle_color_red">Roșu</string>
+    <string name="video_subtitle_color_green">Verde</string>
+    <string name="video_subtitle_color_blue">Albastru</string>
+    <string name="video_subtitle_background">Fundal</string>
+    <string name="video_subtitle_background_style">Stil fundal</string>
+    <string name="video_subtitle_background_none">Oprit</string>
+    <string name="video_subtitle_background_bar">Lăț. maximă</string>
+    <string name="video_subtitle_background_block">Bloc text</string>
+    <string name="video_subtitle_background_lines">Pe rând</string>
+    <string name="video_subtitle_background_corner_radius">Rază colțuri</string>
+    <string name="video_subtitle_background_padding_horizontal">Spațiere orizontală</string>
+    <string name="video_subtitle_background_padding_vertical">Spațiere verticală</string>
+    <string name="video_subtitle_background_hint">Fundalul urmează textul subtitrării în loc să formeze o bară pe toată lățimea.</string>
+    <string name="video_subtitle_font_family">Font</string>
+    <string name="video_subtitle_font_sans">Sans</string>
+    <string name="video_subtitle_font_serif">Serif</string>
+    <string name="video_subtitle_font_monospace">Monospace</string>
+</resources>

@@ -1,30 +1,67 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <plurals name="months_ago">
+        <plurals name="months_ago">
+        <item quantity="one">%1$d เดือนที่แล้ว</item>
         <item quantity="other">%1$d เดือนที่ผ่านมา</item>
     </plurals>
-    <plurals name="chapters">
+        <plurals name="chapters">
+        <item quantity="one">%1$d ตอน</item>
         <item quantity="other">%1$d ตอน</item>
     </plurals>
-    <plurals name="new_chapters">
+        <plurals name="new_chapters">
+        <item quantity="one">%1$d ตอนใหม่</item>
         <item quantity="other">%1$d ตอนใหม่</item>
     </plurals>
-    <plurals name="items">
+        <plurals name="items">
+        <item quantity="one">%1$d รายการ</item>
         <item quantity="other">%1$d รายการ</item>
     </plurals>
-    <plurals name="days_ago">
+        <plurals name="days_ago">
+        <item quantity="one">%1$d วันที่แล้ว</item>
         <item quantity="other">%1$d วันที่ผ่านมา</item>
     </plurals>
-    <plurals name="minutes_ago">
+        <plurals name="minutes_ago">
+        <item quantity="one">%1$d นาทีที่แล้ว</item>
         <item quantity="other">%1$d นาทีที่แล้ว</item>
     </plurals>
-    <plurals name="hours_ago">
+        <plurals name="hours_ago">
+        <item quantity="one">%1$d ชั่วโมงที่แล้ว</item>
         <item quantity="other">%1$d ชั่วโมงที่แล้ว</item>
     </plurals>
-    <plurals name="hours">
+        <plurals name="hours">
+        <item quantity="one">%1$d ชั่วโมง</item>
         <item quantity="other">%1$d ชั่วโมง</item>
     </plurals>
-    <plurals name="minutes">
+        <plurals name="minutes">
+        <item quantity="one">%1$d นาที</item>
         <item quantity="other">%1$d นาที</item>
+    </plurals>
+    <plurals name="feed_timeline_updates">
+        <item quantity="one">%1$d การอัปเดต</item>
+        <item quantity="other">%1$d การอัปเดต</item>
+    </plurals>
+    <plurals name="history_grouped_sources">
+        <item quantity="one">%1$d แหล่ง</item>
+        <item quantity="other">%1$d แหล่ง</item>
+    </plurals>
+    <plurals name="home_enabled_sources">
+        <item quantity="one">เปิดใช้งาน %1$d แหล่ง</item>
+        <item quantity="other">เปิดใช้งาน %1$d แหล่ง</item>
+    </plurals>
+    <plurals name="home_updates_new_chapters">
+        <item quantity="one">%1$d ตอนใหม่</item>
+        <item quantity="other">%1$d ตอนใหม่</item>
+    </plurals>
+    <plurals name="old_chapters_in_total">
+        <item quantity="one">รวมตอนเก่า %1$d ตอน</item>
+        <item quantity="other">รวมตอนเก่า %1$d ตอน</item>
+    </plurals>
+    <plurals name="tracker_failed_in_a_row">
+        <item quantity="one">ล้มเหลว %1$d ครั้งติดต่อกัน</item>
+        <item quantity="other">ล้มเหลว %1$d ครั้งติดต่อกัน</item>
+    </plurals>
+    <plurals name="tracker_failing_titles_summary">
+        <item quantity="one">%1$d เรื่องล้มเหลวในการตรวจสอบ %2$d ครั้งขึ้นไปติดต่อกัน</item>
+        <item quantity="other">%1$d เรื่องล้มเหลวในการตรวจสอบ %2$d ครั้งขึ้นไปติดต่อกัน</item>
     </plurals>
 </resources>

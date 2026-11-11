@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sync_settings_enabled_title">ਐਪ ਸੈਟਿੰਗਾਂ ਸਿੰਕ ਕਰੋ</string>
+    <string name="sync_settings_enabled_summary">ਪੜ੍ਹਨ ਵਾਲੇ, ਪਲੇਅਰ ਅਤੇ ਦਿੱਖ ਦੀਆਂ ਸੈਟਿੰਗਾਂ। ਪਾਸਵਰਡ, ਟੋਕਨ ਅਤੇ ਡਿਵਾਈਸ ਮਾਰਗ ਕਦੇ ਵੀ ਸਿੰਕ ਨਹੀਂ ਕੀਤੇ ਜਾਂਦੇ।</string>
+    <string name="sync_remote_delete_incomplete">%1$d ਰਿਮੋਟ ਫਾਈਲ(ਾਂ) ਨੂੰ ਨਹੀਂ ਹਟਾਇਆ ਜਾ ਸਕਿਆ। ਸਥਾਨਕ ਸਿੰਕ ਸਥਿਤੀ ਰੱਖੀ ਗਈ ਸੀ; ਦੁਬਾਰਾ ਕੋਸ਼ਿਸ਼ ਕਰੋ।</string>
+    <string name="sync_enable_required">ਪਹਿਲਾਂ Google Drive ਸਿੰਕ ਚਾਲੂ ਕਰੋ।</string>
+    <string name="google_drive_authorization_required">Google ਪ੍ਰਮਾਣੀਕਰਨ ਅਧੂਰਾ ਹੈ ਜਾਂ ਮਿਆਦ ਪੁੱਗ ਗਈ ਹੈ। ਆਪਣੇ ਖਾਤੇ ਨੂੰ ਦੁਬਾਰਾ ਕਨੈਕਟ ਕਰੋ।</string>
+    <string name="google_drive_authorization_canceled">Google ਪ੍ਰਮਾਣੀਕਰਨ ਰੱਦ ਕਰ ਦਿੱਤਾ ਗਿਆ ਸੀ ਜਾਂ ਸਮਾਂ ਸਮਾਪਤ ਹੋ ਗਿਆ ਸੀ।</string>
+    <string name="google_drive_browser_failed">Google ਪ੍ਰਮਾਣੀਕਰਨ ਲਈ ਸਿਸਟਮ ਬ੍ਰਾਊਜ਼ਰ ਨਹੀਂ ਖੋਲ੍ਹਿਆ ਜਾ ਸਕਿਆ।</string>
+    <string name="google_drive_credential_store_failed">ਸਿਸਟਮ ਪ੍ਰਮਾਣ ਪੱਤਰ ਸਟੋਰ ਤੱਕ ਪਹੁੰਚ ਨਹੀਂ ਕੀਤੀ ਜਾ ਸਕੀ। ਜਾਂਚ ਕਰੋ ਕਿ ਇਹ ਉਪਲਬਧ ਹੈ ਅਤੇ ਅਨਲੌਕ ਹੈ, ਫਿਰ ਦੁਬਾਰਾ ਕੋਸ਼ਿਸ਼ ਕਰੋ।</string>
+    <string name="google_drive_settings_failed">ਸਥਾਨਕ ਸਿੰਕ ਸੈਟਿੰਗਾਂ ਸੁਰੱਖਿਅਤ ਨਹੀਂ ਕੀਤੀਆਂ ਜਾ ਸਕੀਆਂ। ਡਾਟਾ ਡਾਇਰੈਕਟਰੀ ਦੀ ਜਾਂਚ ਕਰੋ ਅਤੇ ਦੁਬਾਰਾ ਕੋਸ਼ਿਸ਼ ਕਰੋ।</string>
+    <string name="google_drive_protocol_failed">ਕਲਾਉਡ ਸਨੈਪਸ਼ਾਟ ਖਰਾਬ ਹੈ ਜਾਂ ਅਸਮਰੱਥ ਫਾਰਮੈਟ ਦੀ ਵਰਤੋਂ ਕਰਦਾ ਹੈ। ਕੁਝ ਵੀ ਅੱਪਲੋਡ ਨਹੀਂ ਕੀਤਾ ਗਿਆ ਸੀ।</string>
+    <string name="google_drive_conflict_failed">ਹੋਰ ਡਿਵਾਈਸਾਂ ਕਲਾਉਡ ਡਾਟਾ ਅੱਪਡੇਟ ਕਰ ਰਹੀਆਂ ਹਨ। ਬਾਅਦ ਵਿੱਚ ਦੁਬਾਰਾ ਸਿੰਕ ਕਰਨ ਦੀ ਕੋਸ਼ਿਸ਼ ਕਰੋ।</string>
+    <string name="google_drive_network_failed">Google Drive ਸਿੰਕ ਅਸਫਲ ਰਿਹਾ। ਆਪਣੇ ਕਨੈਕਸ਼ਨ ਦੀ ਜਾਂਚ ਕਰੋ ਅਤੇ ਦੁਬਾਰਾ ਕੋਸ਼ਿਸ਼ ਕਰੋ।</string>
+    <string name="google_drive_access_failed">Google Drive ਨੇ ਪਹੁੰਚ ਤੋਂ ਇਨਕਾਰ ਕਰ ਦਿੱਤਾ। ਦਿੱਤੀਆਂ ਗਈਆਂ ਇਜਾਜ਼ਤਾਂ ਅਤੇ Drive API ਸੰਰਚਨਾ ਦੀ ਜਾਂਚ ਕਰੋ।</string>
+    <string name="google_drive_browser_complete">ਬ੍ਰਾਊਜ਼ਰ ਕਾਲਬੈਕ ਪ੍ਰਾਪਤ ਹੋਇਆ। ਖਾਤਾ ਕਨੈਕਸ਼ਨ ਨਤੀਜੇ ਦੀ ਜਾਂਚ ਕਰਨ ਲਈ Kototoro ਤੇ ਵਾਪਸ ਜਾਓ।</string>
+    <string name="google_drive_browser_rejected">ਇਹ ਪ੍ਰਮਾਣੀਕਰਨ ਕਾਲਬੈਕ ਰੱਦ ਕਰ ਦਿੱਤਾ ਗਿਆ ਸੀ। Kototoro ਤੇ ਵਾਪਸ ਜਾਓ ਅਤੇ ਦੁਬਾਰਾ ਕਨੈਕਟ ਕਰਨ ਦੀ ਕੋਸ਼ਿਸ਼ ਕਰੋ।</string>
+    <string name="google_drive_stage_download">ਡਾਊਨਲੋਡ ਹੋ ਰਿਹਾ</string>
+    <string name="google_drive_stage_merge">ਮਰਜ ਹੋ ਰਿਹਾ</string>
+    <string name="google_drive_stage_upload">ਅੱਪਲੋਡ ਹੋ ਰਿਹਾ</string>
+    <string name="google_drive_desktop_scope">ਤੁਹਾਡੀ ਲਾਇਬ੍ਰੇਰੀ, ਸ਼੍ਰੇਣੀਆਂ, ਪੜ੍ਹਨ ਦੀ ਪ੍ਰਗਤੀ, ਅੰਕੜੇ ਅਤੇ ਅੱਪਡੇਟ ਰਿਕਾਰਡ ਸਿੰਕ ਕਰਦਾ ਹੈ। ਸੈਟਿੰਗਾਂ ਅਤੇ ਐਕਸਟੈਂਸ਼ਨਾਂ ਨੂੰ ਕਲਾਉਡ ਵਿੱਚ ਸੁਰੱਖਿਅਤ ਰੱਖਿਆ ਜਾਂਦਾ ਹੈ ਪਰ ਡੈਸਕਟਾਪ ਉੱਤੇ ਅਜੇ ਲਾਗੂ ਨਹੀਂ ਕੀਤਾ ਜਾਂਦਾ ਹੈ। Kototoro ਖੁੱਲ੍ਹਾ ਹੋਣ ਦੌਰਾਨ ਸਵੈਚਲਿਤ ਸਿੰਕ ਚੱਲਦਾ ਹੈ।</string>
+    <string name="google_drive_authorization_pending">ਤੁਹਾਡੇ ਬ੍ਰਾਊਜ਼ਰ ਵਿੱਚ Google ਪ੍ਰਮਾਣੀਕਰਨ ਦੀ ਉਡੀਕ ਕੀਤੀ ਜਾ ਰਹੀ ਹੈ...</string>
+    <string name="google_drive_client_configuration_failed">Google ਨੇ OAuth ਕਲਾਇੰਟ ਸੰਰਚਨਾ ਨੂੰ ਰੱਦ ਕਰ ਦਿੱਤਾ। ਡੈਸਕਟਾਪ ਕਲਾਇੰਟ ਕਿਸਮ, Google Cloud ਪ੍ਰੋਜੈਕਟ ਅਤੇ ਸਹਿਮਤੀ ਸੈਟਿੰਗਾਂ ਦੀ ਜਾਂਚ ਕਰੋ।</string>
+    <string name="google_drive_client_secret_required">ਇਸ ਬਿਲਡ ਵਿੱਚ Google ਡੈਸਕਟਾਪ OAuth ਕਲਾਇੰਟ ਸੀਕ੍ਰੇਟ ਗੁੰਮ ਹੈ। ਇਸਨੂੰ ਕੌਂਫਿਗਰ ਕਰੋ ਅਤੇ ਦੁਬਾਰਾ ਬਿਲਡ ਕਰੋ; ਦੁਬਾਰਾ ਸਾਈਨ ਇਨ ਕਰਨ ਨਾਲ ਇਸ ਨੂੰ the ਠੀਕ ਨਹੀਂ ਕੀਤਾ ਜਾਵੇਗਾ।</string>
+</resources>

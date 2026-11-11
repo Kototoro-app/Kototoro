@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="show_language_preset_filter">Dil şablonu</string>
+    <string name="fixed_language_preset">Sabit dil şablonu</string>
+    <string name="show_content_type_filter">İçerik türü</string>
+    <string name="fixed_content_type">Sabit içerik türü</string>
+    <string name="show_source_tag_filter">Kaynak türü</string>
+    <string name="fixed_source_tag">Sabit kaynak türü</string>
+    <string name="search_bar_filters">Arama filtreleri</string>
+</resources>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="discover_category_all">Акатегориақәа</string>
+    <string name="discover_category_anime_rank">Аниме</string>
+    <string name="discover_category_book_rank">Ашәҟәы</string>
+    <string name="discover_category_music_rank">Амузыка</string>
+    <string name="discover_category_game_rank">Амаҵәа</string>
+    <string name="discover_category_real_rank">Анцәа</string>
+    <string name="discover_category_calendar">Амш аҩыра</string>
+</resources>

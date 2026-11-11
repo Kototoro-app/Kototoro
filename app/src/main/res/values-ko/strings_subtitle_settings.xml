@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="video_subtitle_settings">자막 설정</string>
+    <string name="video_subtitle_style">서체</string>
+    <string name="video_subtitle_font_size">글꼴 크기</string>
+    <string name="video_subtitle_border_size">테두리 크기</string>
+    <string name="video_subtitle_position">위치(여백)</string>
+    <string name="video_subtitle_color_text">텍스트</string>
+    <string name="video_subtitle_color_border">테두리</string>
+    <string name="video_subtitle_color_bg">배경</string>
+    <string name="video_subtitle_layout">레이아웃</string>
+    <string name="video_subtitle_colors">색상</string>
+    <string name="video_subtitle_align_left">왼쪽</string>
+    <string name="video_subtitle_align_center">가운데</string>
+    <string name="video_subtitle_align_right">오른쪽</string>
+    <string name="video_subtitle_color_alpha">알파</string>
+    <string name="video_subtitle_color_red">빨간색</string>
+    <string name="video_subtitle_color_green">초록색</string>
+    <string name="video_subtitle_color_blue">파란색</string>
+    <string name="video_subtitle_background">배경</string>
+    <string name="video_subtitle_background_style">배경 스타일</string>
+    <string name="video_subtitle_background_none">끄기</string>
+    <string name="video_subtitle_background_bar">전체 너비</string>
+    <string name="video_subtitle_background_block">텍스트 블록</string>
+    <string name="video_subtitle_background_lines">줄 단위</string>
+    <string name="video_subtitle_background_corner_radius">모서리 반경</string>
+    <string name="video_subtitle_background_padding_horizontal">가로 여백</string>
+    <string name="video_subtitle_background_padding_vertical">세로 여백</string>
+    <string name="video_subtitle_background_hint">전체 너비 막대 대신 자막 텍스트를 따라 배경이 표시됩니다.</string>
+    <string name="video_subtitle_font_family">글꼴</string>
+    <string name="video_subtitle_font_sans">고딕</string>
+    <string name="video_subtitle_font_serif">명조</string>
+    <string name="video_subtitle_font_monospace">고정폭</string>
+</resources>

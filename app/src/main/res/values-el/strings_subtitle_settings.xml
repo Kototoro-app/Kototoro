@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="video_subtitle_settings">Ρυθμίσεις υπότιτλων</string>
+    <string name="video_subtitle_style">Τυπογραφία</string>
+    <string name="video_subtitle_font_size">Μέγεθος</string>
+    <string name="video_subtitle_border_size">Περίγραμμα</string>
+    <string name="video_subtitle_position">Θέση (Περιθώριο)</string>
+    <string name="video_subtitle_color_text">Κείμενο</string>
+    <string name="video_subtitle_color_border">Περίγραμμα</string>
+    <string name="video_subtitle_color_bg">Φόντο</string>
+    <string name="video_subtitle_layout">Διάταξη</string>
+    <string name="video_subtitle_colors">Χρώματα</string>
+    <string name="video_subtitle_align_left">Αριστερά</string>
+    <string name="video_subtitle_align_center">Κέντρο</string>
+    <string name="video_subtitle_align_right">Δεξιά</string>
+    <string name="video_subtitle_color_alpha">Άλφα</string>
+    <string name="video_subtitle_color_red">Κόκκινο</string>
+    <string name="video_subtitle_color_green">Πράσινο</string>
+    <string name="video_subtitle_color_blue">Μπλε</string>
+    <string name="video_subtitle_background">Φόντο</string>
+    <string name="video_subtitle_background_style">Στυλ φόντου</string>
+    <string name="video_subtitle_background_none">Ανενεργό</string>
+    <string name="video_subtitle_background_lines">Ανά γραμμή</string>
+    <string name="video_subtitle_background_corner_radius">Ακτίνα γωνίας</string>
+    <string name="video_subtitle_background_padding_horizontal">Οριζόντιο γέμισμα</string>
+    <string name="video_subtitle_background_padding_vertical">Κατακόρυφο γέμισμα</string>
+    <string name="video_subtitle_background_hint">Το φόντο ακολουθεί το κείμενο αντί να σχηματίζει μπάρα πλήρους πλάτους.</string>
+    <string name="video_subtitle_font_family">Σειρά</string>
+    <string name="video_subtitle_font_sans">Sans</string>
+    <string name="video_subtitle_font_serif">Serif</string>
+    <string name="video_subtitle_font_monospace">Monospace</string>
+    <string name="video_subtitle_background_bar">Πλήρες εύρος</string>
+    <string name="video_subtitle_background_block">Μπλοκ κειμ.</string>
+</resources>

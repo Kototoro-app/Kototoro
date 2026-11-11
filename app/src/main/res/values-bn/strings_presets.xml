@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="source_presets">সোর্স প্রিসেট</string>
+    <string name="create_preset">নতুন প্রিসেট</string>
+    <string name="edit_preset">প্রিসেট বদল</string>
+    <string name="preset_name">প্রিসেটের নাম</string>
+    <string name="preset_languages">ভাষাসমূহ</string>
+    <string name="preset_sources">সোর্সসমূহ</string>
+    <string name="preset_created">প্রিসেট তৈরি</string>
+    <string name="preset_saved">প্রিসেট সেভ হলো</string>
+    <string name="preset_deleted">প্রিসেট মুছেছে</string>
+    <string name="preset_activated">প্রিসেট চালু</string>
+    <string name="preset_deactivated">প্রিসেট বন্ধ করা হয়েছে</string>
+    <string name="no_presets">কোনো প্রিসেট নেই</string>
+    <string name="no_presets_text">বিভিন্ন সোর্স কনফিগারেশনের মধ্যে দ্রুত স্যুইচ করতে একটি প্রিসেট তৈরি করুন</string>
+    <string name="manage_preset_sources">সোর্স পরিচালনা</string>
+</resources>

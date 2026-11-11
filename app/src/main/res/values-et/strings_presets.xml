@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="source_presets">Allika eelseaded</string>
+    <string name="create_preset">Uus eelseade</string>
+    <string name="preset_name">Eelseade nimi</string>
+    <string name="preset_languages">Keeled</string>
+    <string name="preset_sources">Allikad</string>
+    <string name="preset_created">Eelseade loodud</string>
+    <string name="preset_saved">Salvestatud</string>
+    <string name="preset_deleted">Kustutatud</string>
+    <string name="preset_activated">Aktiveeritud</string>
+    <string name="preset_deactivated">Deaktiveeritud</string>
+    <string name="no_presets">Eelseadeid pole</string>
+    <string name="no_presets_text">Loo eelseade, et kiiresti erinevate allikakonfiguratsioonide vahel lülituda</string>
+    <string name="manage_preset_sources">Halda allikaid</string>
+    <string name="edit_preset">Muuda eelsead.</string>
+</resources>

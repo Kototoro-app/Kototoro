@@ -45,4 +45,32 @@
         <item quantity="few">%1$d minuty</item>
         <item quantity="other">%1$d minut</item>
     </plurals>
+    <plurals name="feed_timeline_updates">
+        <item quantity="one">%1$d aktualizace</item>
+        <item quantity="other">%1$d aktualizací</item>
+    </plurals>
+    <plurals name="history_grouped_sources">
+        <item quantity="one">%1$d zdroj</item>
+        <item quantity="other">%1$d zdrojů</item>
+    </plurals>
+    <plurals name="home_enabled_sources">
+        <item quantity="one">%1$d aktivní zdroj</item>
+        <item quantity="other">%1$d aktivních zdrojů</item>
+    </plurals>
+    <plurals name="home_updates_new_chapters">
+        <item quantity="one">%1$d nová kapitola</item>
+        <item quantity="other">%1$d nových kapitol</item>
+    </plurals>
+    <plurals name="old_chapters_in_total">
+        <item quantity="one">Celkem %1$d stará kapitola</item>
+        <item quantity="other">Celkem %1$d starých kapitol</item>
+    </plurals>
+    <plurals name="tracker_failed_in_a_row">
+        <item quantity="one">Selhalo %1$dkrát v řadě</item>
+        <item quantity="other">Selhalo %1$dkrát v řadě</item>
+    </plurals>
+    <plurals name="tracker_failing_titles_summary">
+        <item quantity="one">%1$d titul selhal při %2$d nebo více kontrolách v řadě</item>
+        <item quantity="other">%1$d titulů selhalo při %2$d nebo více kontrolách v řadě</item>
+    </plurals>
 </resources>

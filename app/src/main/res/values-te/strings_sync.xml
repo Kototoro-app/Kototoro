@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sync_settings_enabled_title">సింక్ సెట్టింగ్‌లు</string>
+    <string name="sync_settings_enabled_summary">రీడర్, ప్లేయర్ మరియు ప్రదర్శన సెట్టింగ్‌లు. పాస్‌వర్డ్‌లు, టోకెన్‌లు మరియు పరికర మార్గాలు సింక్ కావు.</string>
+    <string name="sync_enable_required">మొదట Google Drive సింక్ ఆన్ చేయండి.</string>
+    <string name="google_drive_authorization_required">Google అధికారికరణ అసంపూర్ణంగా ఉంది లేదా గడువు ముగిసింది. మీ ఖాతాను మళ్లీ కనెక్ట్ చేయండి.</string>
+    <string name="google_drive_authorization_canceled">Google అధికారికరణ రద్దు చేయబడింది లేదా సమయం ముగిసింది.</string>
+    <string name="google_drive_browser_failed">Google అధికారీకరణ కోసం సిస్టమ్ బ్రౌజర్‌ను తెరవలేకపోయింది.</string>
+    <string name="google_drive_credential_store_failed">సిస్టమ్ క్రెడెన్షియల్ స్టోర్‌ను యాక్సెస్ చేయలేకపోయింది. అది అన్‌లాక్ చేయబడిందో లేదో తనిఖీ చేసి, మళ్లీ ప్రయత్నించండి.</string>
+    <string name="google_drive_settings_failed">స్థానిక సింక్ సెట్టింగ్‌లను సేవ్ చేయలేకపోయింది. డేటా డైరెక్టరీని తనిఖీ చేయండి.</string>
+    <string name="google_drive_protocol_failed">క్లౌడ్ స్నాప్‌షాట్ దెబ్బతింది లేదా మద్దతు లేని ఫార్మాట్‌ను ఉపయోగిస్తోంది. ఏదీ అప్‌లోడ్ చేయబడలేదు.</string>
+    <string name="google_drive_conflict_failed">ఇతర పరికరాలు క్లౌడ్ డేటాను అప్‌డేట్ చేస్తున్నాయి. తర్వాత సింక్ చేయండి.</string>
+    <string name="google_drive_network_failed">Google Drive సింక్ విఫలమైంది. కనెక్షన్ తనిఖీ చేసి, మళ్లీ ప్రయత్నించండి.</string>
+    <string name="google_drive_access_failed">Google Drive యాక్సెస్‌ని నిరాకరించింది. ఇచ్చిన అనుమతులు మరియు Drive API కాన్ఫిగరేషన్‌ని తనిఖీ చేయండి.</string>
+    <string name="google_drive_browser_complete">బ్రౌజర్ కాల్‌బ్యాక్ వచ్చింది. ఖాతా కనెక్షన్ ఫలితాన్ని తనిఖీ చేయడానికి Kototoroకి వెళ్లండి.</string>
+    <string name="google_drive_browser_rejected">ఈ ఆథరైజేషన్ తిరస్కరించబడింది. Kototoroకి తిరిగి వచ్చి మళ్లీ కనెక్ట్ చేయడానికి ప్రయత్నించండి.</string>
+    <string name="google_drive_stage_merge">కలుపుతోంది</string>
+    <string name="google_drive_desktop_scope">మీ లైబ్రరీ, వర్గాలు, పఠన పురోగతి, గణాంకాలు మరియు అప్‌డేట్ రికార్డ్‌లను సింక్ చేస్తుంది. సెట్టింగ్‌లు మరియు పొడిగింపులు క్లౌడ్‌లో భద్రపరచబడతాయి కానీ డెస్క్‌టాప్‌లో ఇంకా వర్తించవు. Kototoro తెరిచి ఉన్నప్పుడు ఆటోమేటిక్ సింక్ నడుస్తుంది.</string>
+    <string name="google_drive_authorization_pending">మీ బ్రౌజర్‌లో Google అధికారీకరణ కోసం వేచి ఉంది…</string>
+    <string name="google_drive_client_configuration_failed">Google OAuth క్లైంట్ కాన్ఫిగరేషన్‌ని తిరస్కరించింది. డెస్క్‌టాప్ క్లైంట్ రకం, Google Cloud ప్రాజెక్ట్ మరియు సమ్మతి సెట్టింగ్‌లను తనిఖీ చేయండి.</string>
+    <string name="google_drive_client_secret_required">ఈ బిల్డ్‌లో Google డెస్క్‌టాప్ OAuth క్లైంట్ రహస్యం లేదు. దాన్ని కాన్ఫిగర్ చేసి రీబిల్డ్ చేయండి; మళ్లీ సైన్ ఇన్ చేయడం వల్ల ఇది పరిష్కరించబడదు.</string>
+    <string name="sync_remote_delete_incomplete">%1$d రిమోట్ ఫైల్(ల)ను తొలగించడం సాధ్యపడలేదు. స్థానిక సింక్ స్థితి ఉంచబడింది; మళ్లీ ప్రయత్నించండి.</string>
+    <string name="google_drive_stage_download">డౌన్‌లోడ్ చేస్తోంది</string>
+    <string name="google_drive_stage_upload">అప్‌లోడ్ చేస్తోంది</string>
+</resources>

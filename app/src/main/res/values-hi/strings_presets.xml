@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="source_presets">स्रोत प्रीसेट</string>
+    <string name="create_preset">नया प्रीसेट</string>
+    <string name="edit_preset">प्रीसेट बदलें</string>
+    <string name="preset_name">प्रीसेट नाम</string>
+    <string name="preset_languages">भाषाएँ</string>
+    <string name="preset_sources">स्रोत</string>
+    <string name="preset_created">प्रीसेट बनाया गया</string>
+    <string name="preset_saved">प्रीसेट सहेजा</string>
+    <string name="preset_deleted">प्रीसेट हटाया गया</string>
+    <string name="preset_activated">प्रीसेट सक्रिय</string>
+    <string name="preset_deactivated">प्रीसेट निष्कि.</string>
+    <string name="no_presets">कोई प्रीसेट नहीं</string>
+    <string name="no_presets_text">अलग-अलग स्रोत कॉन्फ़िगरेशन के बीच तुरंत स्विच करने के लिए एक प्रीसेट बनाएँ</string>
+    <string name="manage_preset_sources">स्रोत प्रबंधित</string>
+</resources>

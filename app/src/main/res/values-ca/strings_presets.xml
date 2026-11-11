@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="source_presets">Prestes d\'origen</string>
+    <string name="create_preset">Nou prest</string>
+    <string name="edit_preset">Edita el prest</string>
+    <string name="preset_name">Nom del prest</string>
+    <string name="preset_languages">Idiomes</string>
+    <string name="preset_sources">Orígens</string>
+    <string name="preset_created">Prest creat</string>
+    <string name="preset_saved">Prest desat</string>
+    <string name="preset_deleted">Prest esborrat</string>
+    <string name="preset_activated">Prest activat</string>
+    <string name="preset_deactivated">Prest desactivat</string>
+    <string name="no_presets">Sense preajustos</string>
+    <string name="no_presets_text">Crea un prest per canviar ràpidament entre diferents configuracions d\'orígens</string>
+    <string name="manage_preset_sources">Gestiona orígens</string>
+</resources>

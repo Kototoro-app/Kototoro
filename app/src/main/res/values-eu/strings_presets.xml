@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="edit_preset">Editatu</string>
+    <string name="preset_name">Aurrer. izena</string>
+    <string name="preset_languages">Hizkuntzak</string>
+    <string name="preset_sources">Iturriak</string>
+    <string name="preset_created">Aurrer. sortuta</string>
+    <string name="preset_saved">Aurrer. gordeta</string>
+    <string name="preset_deleted">Aurrer. ezabatuta</string>
+    <string name="preset_activated">Aurrer. aktibatuta</string>
+    <string name="preset_deactivated">Aurrer. desaktibatuta</string>
+    <string name="no_presets">Aurrer. gabekoak</string>
+    <string name="no_presets_text">Sortu aurrehautapen bat iturri-konfigurazioen artean azkar aldatzeko</string>
+    <string name="manage_preset_sources">Kudeatu iturriak</string>
+    <string name="source_presets">Aurrezarpenak</string>
+    <string name="create_preset">Berria</string>
+</resources>

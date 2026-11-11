@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sync_settings_enabled_title">Synchronizuj</string>
+    <string name="sync_settings_enabled_summary">Ustawienia czytnika, odtwarzacza i wyglądu. Hasła, tokeny i ścieżki urządzeń nie są synchronizowane.</string>
+    <string name="sync_remote_delete_incomplete">Nie udało się usunąć %1$d plików zdalnych. Zachowano lokalny stan synchronizacji.</string>
+    <string name="sync_enable_required">Włącz najpierw Google Drive.</string>
+    <string name="google_drive_authorization_required">Autoryzacja Google jest niekompletna lub wygasła. Połącz konto ponownie.</string>
+    <string name="google_drive_authorization_canceled">Anulowano autoryzację Google lub minął jej czas.</string>
+    <string name="google_drive_browser_failed">Nie udało się otworzyć przeglądarki systemowej do autoryzacji Google.</string>
+    <string name="google_drive_credential_store_failed">Brak dostępu do systemowego magazynu poświadczeń. Sprawdź, czy jest dostępny i odblokowany, a następnie spróbuj ponownie.</string>
+    <string name="google_drive_settings_failed">Nie udało się zapisać ustawień. Sprawdź folder danych i spróbuj ponownie.</string>
+    <string name="google_drive_protocol_failed">Migawka w chmurze jest uszkodzona lub używa nieobsługiwanego formatu. Nic nie zostało przesłane.</string>
+    <string name="google_drive_conflict_failed">Inne urządzenie aktualizuje chmurę. Spróbuj ponownie później.</string>
+    <string name="google_drive_network_failed">Błąd synchronizacji. Sprawdź połączenie i spróbuj ponownie.</string>
+    <string name="google_drive_access_failed">Google Drive odmówił dostępu. Sprawdź przyznane uprawnienia i konfigurację API Dysku.</string>
+    <string name="google_drive_browser_complete">Otrzymano wywołanie zwrotne z przeglądarki. Wróć do Kototoro, aby sprawdzić wynik połączenia z kontem.</string>
+    <string name="google_drive_browser_rejected">To wywołanie zwrotne autoryzacji zostało odrzucone. Wróć do Kototoro i spróbuj połączyć się ponownie.</string>
+    <string name="google_drive_stage_download">Pobieranie</string>
+    <string name="google_drive_stage_merge">Scalanie</string>
+    <string name="google_drive_stage_upload">Przesyłanie</string>
+    <string name="google_drive_desktop_scope">Synchronizuje bibliotekę, kategorie, postępy czytania, statystyki oraz historię aktualizacji. Ustawienia i rozszerzenia są zachowywane w chmurze, ale nie są jeszcze stosowane na komputerze. Automatyczna synchronizacja działa, gdy Kototoro jest otwarte.</string>
+    <string name="google_drive_authorization_pending">Oczekiwanie na autoryzację Google w przeglądarce…</string>
+    <string name="google_drive_client_configuration_failed">Google odrzucił konfigurację klienta OAuth. Sprawdź typ klienta komputerowego, projekt Google Cloud i ustawienia zgody.</string>
+    <string name="google_drive_client_secret_required">Ta wersja nie zawiera klucza tajnego klienta OAuth dla komputerów. Skonfiguruj go i przebuduj aplikację; ponowne logowanie tego nie naprawi.</string>
+</resources>

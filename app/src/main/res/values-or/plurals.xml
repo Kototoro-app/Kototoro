@@ -20,4 +20,48 @@
 		<item quantity="one">%1$dଟିଏ ଅଧ୍ୟାୟ</item>
 		<item quantity="other">%1$dଟି ଅଧ୍ୟାୟ</item>
 	</plurals>
+    <plurals name="feed_timeline_updates">
+        <item quantity="one">%1$dଟି ଅପଡେଟ୍</item>
+        <item quantity="other">%1$dଟି ଅପଡେଟ୍</item>
+    </plurals>
+    <plurals name="history_grouped_sources">
+        <item quantity="one">%1$dଟି ସୋର୍ସ</item>
+        <item quantity="other">%1$dଟି ସୋର୍ସ</item>
+    </plurals>
+    <plurals name="home_enabled_sources">
+        <item quantity="one">%1$dଟି ସକ୍ରିୟ ସୋର୍ସ</item>
+        <item quantity="other">%1$dଟି ସକ୍ରିୟ ସୋର୍ସ</item>
+    </plurals>
+    <plurals name="home_updates_new_chapters">
+        <item quantity="one">%1$dଟି ନୂଆ ଅଧ୍ୟାୟ</item>
+        <item quantity="other">%1$dଟି ନୂଆ ଅଧ୍ୟାୟ</item>
+    </plurals>
+    <plurals name="hours">
+        <item quantity="one">%1$d ଘଣ୍ଟା</item>
+        <item quantity="other">%1$d ଘଣ୍ଟା</item>
+    </plurals>
+    <plurals name="items">
+        <item quantity="one">%1$dଟି ଆଇଟମ୍</item>
+        <item quantity="other">%1$dଟି ଆଇଟମ୍</item>
+    </plurals>
+    <plurals name="minutes">
+        <item quantity="one">%1$d ମିନିଟ୍</item>
+        <item quantity="other">%1$d ମିନିଟ୍</item>
+    </plurals>
+    <plurals name="months_ago">
+        <item quantity="one">%1$d ମାସ ପୂର୍ବେ</item>
+        <item quantity="other">%1$d ମାସ ପୂର୍ବେ</item>
+    </plurals>
+    <plurals name="old_chapters_in_total">
+        <item quantity="one">ମୋଟ %1$dଟି ପୁରୁଣା ଅଧ୍ୟାୟ</item>
+        <item quantity="other">ମୋଟ %1$dଟି ପୁରୁଣା ଅଧ୍ୟାୟ</item>
+    </plurals>
+    <plurals name="tracker_failed_in_a_row">
+        <item quantity="one">ଲଗାତାର %1$d ଥର ବିଫଳ ହୋଇଛି</item>
+        <item quantity="other">ଲଗାତାର %1$d ଥର ବିଫଳ ହୋଇଛି</item>
+    </plurals>
+    <plurals name="tracker_failing_titles_summary">
+        <item quantity="one">%1$dଟି ଟାଇଟଲ୍ ଲଗାତାର %2$dଥର କିମ୍ବା ଅଧିକ ଚେକ୍‌ରେ ବିଫଳ ହୋଇଛି</item>
+        <item quantity="other">%1$dଟି ଟାଇଟଲ୍ ଲଗାତାର %2$dଥର କିମ୍ବା ଅଧିକ ଚେକ୍‌ରେ ବିଫଳ ହୋଇଛନ୍ତି</item>
+    </plurals>
 </resources>

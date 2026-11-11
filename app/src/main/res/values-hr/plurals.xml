@@ -45,4 +45,32 @@
         <item quantity="few">%1$d minute</item>
         <item quantity="other">%1$d minuta</item>
     </plurals>
+    <plurals name="feed_timeline_updates">
+        <item quantity="one">%1$d ažuriranje</item>
+        <item quantity="other">%1$d ažuriranja</item>
+    </plurals>
+    <plurals name="history_grouped_sources">
+        <item quantity="one">%1$d izvor</item>
+        <item quantity="other">%1$d izvora</item>
+    </plurals>
+    <plurals name="home_enabled_sources">
+        <item quantity="one">%1$d omogućen izvor</item>
+        <item quantity="other">%1$d omogućenih izvora</item>
+    </plurals>
+    <plurals name="home_updates_new_chapters">
+        <item quantity="one">%1$d novo poglavlje</item>
+        <item quantity="other">%1$d nova poglavlja</item>
+    </plurals>
+    <plurals name="old_chapters_in_total">
+        <item quantity="one">Ukupno %1$d staro poglavlje</item>
+        <item quantity="other">Ukupno %1$d starih poglavlja</item>
+    </plurals>
+    <plurals name="tracker_failed_in_a_row">
+        <item quantity="one">Neuspjelo %1$d put zaredom</item>
+        <item quantity="other">Neuspjelo %1$d puta zaredom</item>
+    </plurals>
+    <plurals name="tracker_failing_titles_summary">
+        <item quantity="one">%1$d naslov nije uspio %2$d ili više provjera zaredom</item>
+        <item quantity="other">%1$d naslova nije uspjelo %2$d ili više provjera zaredom</item>
+    </plurals>
 </resources>

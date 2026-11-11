@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_bar_filters">檢索欄篩選</string>
+    <string name="show_language_preset_filter">語言豫設</string>
+    <string name="fixed_language_preset">定語豫設</string>
+    <string name="show_content_type_filter">內臺類別</string>
+    <string name="fixed_content_type">定類別</string>
+    <string name="show_source_tag_filter">源類別</string>
+    <string name="fixed_source_tag">定源類別</string>
+</resources>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_bar_filters">Penapis bar carian</string>
+    <string name="show_language_preset_filter">Pratetap bahasa</string>
+    <string name="fixed_language_preset">Pratetap bahasa tetap</string>
+    <string name="show_content_type_filter">Jenis kandungan</string>
+    <string name="fixed_content_type">Jenis kandungan tetap</string>
+    <string name="show_source_tag_filter">Jenis sumber</string>
+    <string name="fixed_source_tag">Jenis sumber tetap</string>
+</resources>

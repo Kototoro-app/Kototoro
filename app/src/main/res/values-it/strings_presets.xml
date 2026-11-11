@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="source_presets">Preimpostazioni</string>
+    <string name="create_preset">Nuova</string>
+    <string name="edit_preset">Modifica</string>
+    <string name="preset_name">Nome</string>
+    <string name="preset_languages">Lingue</string>
+    <string name="preset_sources">Fonti</string>
+    <string name="preset_created">Preset creato</string>
+    <string name="preset_saved">Preset salvato</string>
+    <string name="preset_deleted">Preset eliminato</string>
+    <string name="preset_activated">Preset attivato</string>
+    <string name="preset_deactivated">Preset disattivato</string>
+    <string name="no_presets">Nessun preset</string>
+    <string name="no_presets_text">Crea una preimpostazione per passare rapidamente tra diverse configurazioni di fonti</string>
+    <string name="manage_preset_sources">Gestisci fonti</string>
+</resources>

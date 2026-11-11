@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sync_settings_enabled_summary">إعدادات القارئ، والمشغل، والمظهر. لا يتم أبداً مزامنة كلمات المرور، والرموز، ومسارات الأجهزة.</string>
+    <string name="sync_remote_delete_incomplete">تعذر حذف %1$d ملف عن بُعد. تم الاحتفاظ بحالة المزامنة المحلية؛ حاول مجدداً.</string>
+    <string name="sync_enable_required">فعّل مزامنة Google Drive أولاً.</string>
+    <string name="google_drive_authorization_required">تفويض Google غير مكتمل أو منتهي الصلاحية. اربط حسابك مجدداً.</string>
+    <string name="google_drive_authorization_canceled">تم إلغاء تفويض Google أو انتهت مهلته.</string>
+    <string name="google_drive_browser_failed">تعذر فتح متصفح النظام لتفويض Google.</string>
+    <string name="google_drive_credential_store_failed">تعذر الوصول إلى مخزن بيانات اعتماد النظام. تأكد من أنه متاح وغير مقفل ثم حاول مرة أخرى.</string>
+    <string name="google_drive_settings_failed">تعذر حفظ إعدادات المزامنة المحلية. تحقق من مجلد البيانات وحاول مرة أخرى.</string>
+    <string name="google_drive_protocol_failed">نسخة السحابة الاحتياطية تالفة أو تستخدم تنسيقاً غير مدعوم. لم يتم رفع أي شيء.</string>
+    <string name="google_drive_conflict_failed">أجهزة أخرى تقوم بتحديث بيانات السحابة. حاول المزامنة مرة أخرى لاحقاً.</string>
+    <string name="google_drive_network_failed">فشلت مزامنة Google Drive. تحقق من اتصالك وحاول مرة أخرى.</string>
+    <string name="google_drive_access_failed">رفض Google Drive منح الصلاحية. تحقق من الأذونات الممنوحة وإعدادات واجهة برمجة تطبيقات Drive.</string>
+    <string name="google_drive_browser_complete">تم تلقي رد المتصفح. ارجع إلى Kototoro للتحقق من نتيجة اتصال الحساب.</string>
+    <string name="google_drive_browser_rejected">تم رفض طلب التفويض هذا. ارجع إلى Kototoro وحاول الاتصال مرة أخرى.</string>
+    <string name="google_drive_stage_download">جارٍ التحميل</string>
+    <string name="google_drive_stage_merge">جارٍ الدمج</string>
+    <string name="google_drive_stage_upload">جارٍ الرفع</string>
+    <string name="google_drive_desktop_scope">يزامن مكتبتك، والفئات، وتقدم القراءة، والإحصاءات، وسجلات التحديث. يتم الاحتفاظ بالإعدادات والإضافات في السحابة ولكن لا يتم تطبيقها على سطح المكتب بعد. تتم المزامنة التلقائية أثناء فتح Kototoro.</string>
+    <string name="google_drive_authorization_pending">في انتظار تفويض Google في متصفحك...</string>
+    <string name="google_drive_client_configuration_failed">رفض Google تكوين عميل OAuth. تحقق من نوع عميل سطح المكتب، ومروع Google Cloud، وإعدادات الموافقة.</string>
+    <string name="google_drive_client_secret_required">هذه النسخة تفتقد سر عميل OAuth لسطح المكتب من Google. قم بتكوينه وإعادة البناء؛ تسجيل الدخول مرة أخرى لن يحل هذا.</string>
+    <string name="sync_settings_enabled_title">مزامنة خيارات التطبيق</string>
+</resources>

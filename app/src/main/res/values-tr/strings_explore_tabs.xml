@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="explore_tab_tracking_sites">Takip Siteleri</string>
+    <string name="explore_tab_sources">Kaynaklar</string>
+</resources>

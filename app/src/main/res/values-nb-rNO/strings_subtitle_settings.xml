@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="video_subtitle_settings">Tekstingsvalg</string>
+    <string name="video_subtitle_style">Typografi</string>
+    <string name="video_subtitle_font_size">Skriftstørrelse</string>
+    <string name="video_subtitle_border_size">Kantstørrelse</string>
+    <string name="video_subtitle_position">Posisjon (marg)</string>
+    <string name="video_subtitle_color_text">Tekst</string>
+    <string name="video_subtitle_color_border">Kant</string>
+    <string name="video_subtitle_color_bg">Bakgrunn</string>
+    <string name="video_subtitle_layout">Utseende</string>
+    <string name="video_subtitle_colors">Farger</string>
+    <string name="video_subtitle_align_left">Venstre</string>
+    <string name="video_subtitle_align_center">Senter</string>
+    <string name="video_subtitle_align_right">Høyre</string>
+    <string name="video_subtitle_color_alpha">Alfa</string>
+    <string name="video_subtitle_color_red">Rød</string>
+    <string name="video_subtitle_color_green">Grønn</string>
+    <string name="video_subtitle_color_blue">Blå</string>
+    <string name="video_subtitle_background">Bakgrunn</string>
+    <string name="video_subtitle_background_style">Bakgrunnsstil</string>
+    <string name="video_subtitle_background_none">Av</string>
+    <string name="video_subtitle_background_bar">Full bredde</string>
+    <string name="video_subtitle_background_block">Tekstblokk</string>
+    <string name="video_subtitle_background_lines">Per linje</string>
+    <string name="video_subtitle_background_corner_radius">Hjørneradius</string>
+    <string name="video_subtitle_background_padding_horizontal">Horisontal marg</string>
+    <string name="video_subtitle_background_padding_vertical">Vertikal marg</string>
+    <string name="video_subtitle_background_hint">Bakgrunnen følger underteksten i stedet for å danne en stolpe i full bredde.</string>
+    <string name="video_subtitle_font_family">Skrift</string>
+    <string name="video_subtitle_font_sans">Sans</string>
+    <string name="video_subtitle_font_serif">Serif</string>
+    <string name="video_subtitle_font_monospace">Monospace</string>
+</resources>

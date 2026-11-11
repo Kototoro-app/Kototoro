@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sync_settings_enabled_title">Sync settings</string>
+    <string name="sync_settings_enabled_summary">रिडर, प्लेयर र देखावट सेटिङहरू। पासवर्ड, टोकन र यन्त्र मार्गहरू कहिल्यै सिंक हुँदैनन्।</string>
+    <string name="sync_remote_delete_incomplete">%1$d रिमोट फाइल(हरू) मेटाउन सकिएन। स्थानीय सिंक अवस्था राखियो; फेरि प्रयास गर्नुहोस्।</string>
+    <string name="sync_enable_required">पहिले Google Drive सिंक अन गर्नुहोस्।</string>
+    <string name="google_drive_authorization_required">Google प्रमाणीकरण अपूर्ण छ वा म्याद समाप्त भएको छ। आफ्नो खाता फेरि जडान गर्नुहोस्।</string>
+    <string name="google_drive_authorization_canceled">Google प्रमाणीकरण रद्द गरियो वा समय समाप्त भयो।</string>
+    <string name="google_drive_browser_failed">Google प्रमाणीकरणका लागि प्रणाली ब्राउजर खोल्न सक Theen।</string>
+    <string name="google_drive_credential_store_failed">Could not access credential store. Check it is available and unlocked, then try again.</string>
+    <string name="google_drive_settings_failed">Could not save sync settings. Check data directory and try again.</string>
+    <string name="google_drive_protocol_failed">क्लाउड स्न्यापसट बिग्रिएको छ वा असमर्थित ढाँचा प्रयोग गर्दछ। केही पनि अपलोड गरिएन।</string>
+    <string name="google_drive_conflict_failed">Other devices updating cloud data. Try syncing later.</string>
+    <string name="google_drive_network_failed">Google Drive sync failed. Check connection and try again.</string>
+    <string name="google_drive_access_failed">Google Drive ले पहुँच अस्वीकार गर्यो। दिइएको अनुमति र Drive API कन्फिगरेसन जाँच गर्नुहोस्।</string>
+    <string name="google_drive_browser_complete">ब्राउजर कलरब्याक प्राप्त भयो। खाता जडान परिणाम जाँच गर्न Kototoro मा फर्कनुहोस्।</string>
+    <string name="google_drive_browser_rejected">यो प्रमाणीकरण कलरब्याक अस्वीकार गरियो। Kototoro मा फर्कनुहोस् र फेरि जडान गर्ने प्रयास गर्नुहोस्।</string>
+    <string name="google_drive_stage_download">डाउनलोड हुँदैछ</string>
+    <string name="google_drive_stage_merge">गाभ्दैछ</string>
+    <string name="google_drive_stage_upload">Uploading</string>
+    <string name="google_drive_desktop_scope">तपाईंको पुस्तकालय, वर्गहरू, पढ्ने प्रगति, तथ्याङ्क र अद्यावधिक रेकर्डहरू सिंक गर्छ। सेटिङहरू र एक्सटेन्सनहरू क्लाउडमा सुरक्षित राखिन्छन् तर डेस्कटपमा अझै लागू हुँदैनन्। Kototoro खुला रहेको बेला स्वचालित सिंक चल्छ।</string>
+    <string name="google_drive_authorization_pending">तपाईंको ब्राउजरमा Google प्रमाणीकरणको प्रतीक्षा गर्दै…</string>
+    <string name="google_drive_client_configuration_failed">Google ले OAuth क्लाइन्ट कन्फिगरेसन अस्वीकार गर्यो। डेस्कटप क्लाइन्ट प्रकार, Google Cloud प्रोजेक्ट र सहमति सेटिङहरू जाँच गर्नुहोस्।</string>
+    <string name="google_drive_client_secret_required">यो निर्माणमा Google डेस्कटप OAuth क्लाइन्ट गोप्य कुञ्जी छैन। यसलाई कन्फिगर गर्नुहोस् र पुनर्संरचना गर्नुहोस्; फेरि साइन इन गर्दा यसले समाधान गर्दैन।</string>
+</resources>

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="video_subtitle_settings">Paramètres sous-titres</string>
+    <string name="video_subtitle_style">Typographie</string>
+    <string name="video_subtitle_border_size">Taille bordure</string>
+    <string name="video_subtitle_position">Position (Marge)</string>
+    <string name="video_subtitle_color_text">Texte</string>
+    <string name="video_subtitle_color_border">Bordure</string>
+    <string name="video_subtitle_color_bg">Arrière-plan</string>
+    <string name="video_subtitle_layout">Disposition</string>
+    <string name="video_subtitle_colors">Couleurs</string>
+    <string name="video_subtitle_align_left">Gauche</string>
+    <string name="video_subtitle_align_center">Centrer</string>
+    <string name="video_subtitle_align_right">Droite</string>
+    <string name="video_subtitle_color_alpha">Alpha</string>
+    <string name="video_subtitle_color_red">Rouge</string>
+    <string name="video_subtitle_color_green">Vert</string>
+    <string name="video_subtitle_color_blue">Bleu</string>
+    <string name="video_subtitle_background">Arrière-plan</string>
+    <string name="video_subtitle_background_none">Aucun</string>
+    <string name="video_subtitle_background_bar">Pleine larg.</string>
+    <string name="video_subtitle_background_block">Bloc texte</string>
+    <string name="video_subtitle_background_lines">Par ligne</string>
+    <string name="video_subtitle_background_corner_radius">Rayon des coins</string>
+    <string name="video_subtitle_background_padding_horizontal">Marge horizontale</string>
+    <string name="video_subtitle_background_padding_vertical">Marge verticale</string>
+    <string name="video_subtitle_background_hint">L\'arrière-plan suit le texte du sous-titre au lieu de former une barre sur toute la largeur.</string>
+    <string name="video_subtitle_font_family">Police</string>
+    <string name="video_subtitle_font_sans">Sans</string>
+    <string name="video_subtitle_font_serif">Serif</string>
+    <string name="video_subtitle_font_monospace">Monospace</string>
+    <string name="video_subtitle_font_size">Taille</string>
+    <string name="video_subtitle_background_style">Style de fond</string>
+</resources>

@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <plurals name="items">
+        <plurals name="items">
         <item quantity="one">%1$d элемент</item>
+        <item quantity="other">%1$d элементов</item>
         <item quantity="few">%1$d элемента</item>
         <item quantity="many">%1$d элементов</item>
     </plurals>
@@ -11,23 +12,27 @@
         <item quantity="many">%1$d новых глав</item>
         <item quantity="other">%1$d новых глав</item>
     </plurals>
-    <plurals name="chapters">
+        <plurals name="chapters">
         <item quantity="one">%1$d глава</item>
+        <item quantity="other">%1$d глав</item>
         <item quantity="few">%1$d главы</item>
         <item quantity="many">%1$d глав</item>
     </plurals>
-    <plurals name="minutes_ago">
+        <plurals name="minutes_ago">
         <item quantity="one">%1$d минуту назад</item>
+        <item quantity="other">%1$d мин. назад</item>
         <item quantity="few">%1$d минуты назад</item>
         <item quantity="many">%1$d минут назад</item>
     </plurals>
-    <plurals name="hours_ago">
+        <plurals name="hours_ago">
         <item quantity="one">%1$d час назад</item>
+        <item quantity="other">%1$d ч. назад</item>
         <item quantity="few">%1$d часа назад</item>
         <item quantity="many">%1$d часов назад</item>
     </plurals>
-    <plurals name="days_ago">
+        <plurals name="days_ago">
         <item quantity="one">%1$d день назад</item>
+        <item quantity="other">%1$d дн. назад</item>
         <item quantity="few">%1$d дня назад</item>
         <item quantity="many">%1$d дней назад</item>
     </plurals>
@@ -48,5 +53,33 @@
         <item quantity="few">%1$d минуты</item>
         <item quantity="many">%1$d минут</item>
         <item quantity="other">%1$d минут</item>
+    </plurals>
+    <plurals name="feed_timeline_updates">
+        <item quantity="one">%1$d обновление</item>
+        <item quantity="other">%1$d обновлений</item>
+    </plurals>
+    <plurals name="history_grouped_sources">
+        <item quantity="one">%1$d источник</item>
+        <item quantity="other">%1$d источников</item>
+    </plurals>
+    <plurals name="home_enabled_sources">
+        <item quantity="one">%1$d включенный источник</item>
+        <item quantity="other">%1$d включенных источников</item>
+    </plurals>
+    <plurals name="home_updates_new_chapters">
+        <item quantity="one">%1$d новая глава</item>
+        <item quantity="other">%1$d новых глав</item>
+    </plurals>
+    <plurals name="old_chapters_in_total">
+        <item quantity="one">%1$d старая глава всего</item>
+        <item quantity="other">%1$d старых глав всего</item>
+    </plurals>
+    <plurals name="tracker_failed_in_a_row">
+        <item quantity="one">Ошибка %1$d раз подряд</item>
+        <item quantity="other">Ошибка %1$d раз подряд</item>
+    </plurals>
+    <plurals name="tracker_failing_titles_summary">
+        <item quantity="one">%1$d тайтл не прошёл %2$d проверки подряд</item>
+        <item quantity="other">%1$d тайтлов не прошло %2$d проверок подряд</item>
     </plurals>
 </resources>

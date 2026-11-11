@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_bar_filters">ਖੋਜ ਪੱਟੀ ਫਿਲਟਰ</string>
+    <string name="show_language_preset_filter">ਭਾਸ਼ਾ ਪ੍ਰੀਸੈੱਟ</string>
+    <string name="fixed_language_preset">ਸਥਿਰ ਭਾਸ਼ਾ ਪ੍ਰੀਸੈੱਟ</string>
+    <string name="show_content_type_filter">ਸਮੱਗਰੀ ਦੀ ਕਿਸਮ</string>
+    <string name="fixed_content_type">ਸਥਿਰ ਸਮੱਗਰੀ ਕਿਸਮ</string>
+    <string name="show_source_tag_filter">ਸਰੋਤ ਕਿਸਮ</string>
+    <string name="fixed_source_tag">ਸਥਿਰ ਸਰੋਤ ਕਿਸਮ</string>
+</resources>
