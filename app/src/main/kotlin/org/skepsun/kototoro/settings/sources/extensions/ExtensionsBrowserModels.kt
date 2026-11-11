@@ -73,6 +73,7 @@ internal fun buildExtensionsBrowserItems(
     installed: List<InstalledExtensionEntry>,
     available: List<RepoAvailableExtension>,
     downloadStates: Map<String, ExtensionInstallDownloadState>,
+    installing: Set<String> = emptySet(),
     selectedExtensionLanguages: Set<String>,
     collapsedLanguageGroups: Set<ExtensionsLanguageGroupKey>,
     query: String,
@@ -92,7 +93,7 @@ internal fun buildExtensionsBrowserItems(
         val normalizedLanguage = extension.normalizeExtensionLanguageCode()
         val installedEntry = installedMap[installedSearchKey]
         val downloadState = downloadStates[extension.pkgName]
-        val isDownloading = downloadState != null
+        val isDownloading = downloadState != null || extension.pkgName in installing
         val isTrusted = installedEntry == null || isTrustedPackage(installedEntry.pkgName, extension.signatureHash)
         when {
             installedEntry != null && !isTrusted -> {

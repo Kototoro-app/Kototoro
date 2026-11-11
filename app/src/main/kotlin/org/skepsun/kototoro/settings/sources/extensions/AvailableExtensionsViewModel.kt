@@ -12,6 +12,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import org.skepsun.kototoro.aniyomi.AniyomiExtensionManager
 import org.skepsun.kototoro.R
@@ -39,6 +41,8 @@ class AvailableExtensionsViewModel @Inject constructor(
     private val aniyomiExtensionManager: AniyomiExtensionManager,
     private val signatureValidator: InstalledExtensionSignatureValidator,
     private val ireaderExtensionManager: IReaderExtensionManager,
+    private val catalogRepository: org.skepsun.kototoro.settings.sources.unified.UnifiedSourceCatalogRepository,
+    private val tsundokuExtensionManager: org.skepsun.kototoro.tsundoku.TsundokuExtensionManager,
 ) : BaseViewModel() {
 
     val type: ExternalExtensionType = enumValueOf(savedStateHandle.require<String>(ARG_EXTENSION_TYPE))
@@ -59,7 +63,9 @@ class AvailableExtensionsViewModel @Inject constructor(
     val items: StateFlow<List<AvailableExtensionListItem>> = combine(
         rawExtensions,
         installedExtensions,
-        installService.downloadStates,
+        combine(installService.downloadStates.map { it.keys }.distinctUntilChanged(), installService.installing) { downloading, installing ->
+            downloading + installing
+        },
     ) { available, installed, downloads ->
         available.map { extension ->
             val installedSearchKey = type.normalizePackageNameForMatching(extension.pkgName)
@@ -74,7 +80,8 @@ class AvailableExtensionsViewModel @Inject constructor(
                 state = state,
             )
         }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    }.flowOn(Dispatchers.Default).distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val availableCount: StateFlow<Int> = items.map { it.size }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
@@ -98,7 +105,7 @@ class AvailableExtensionsViewModel @Inject constructor(
 
     fun install(item: AvailableExtensionListItem) {
         val extension = item.extension
-        if (item.state == AvailableExtensionState.INSTALLED || extension.pkgName in installService.downloadStates.value) {
+        if (item.state == AvailableExtensionState.INSTALLED || extension.pkgName in installService.downloadStates.value || extension.pkgName in installService.installing.value) {
             return
         }
         launchLoadingJob(Dispatchers.IO) {
@@ -107,17 +114,33 @@ class AvailableExtensionsViewModel @Inject constructor(
                     is ExtensionInstallResult.RequiresInstaller -> {
                         result.session.awaitUserAction()?.let { onInstallIntent.call(it) }
                         result.session.awaitCompletion()
-                        refresh()
+                        clearInstalledAvailability(extension)
                         onMessage.call(appContext.getString(R.string.unified_sources_package_installed))
                     }
                     ExtensionInstallResult.Completed -> {
-                        refresh()
+                        reloadInstalledManager(extension)
+                        clearInstalledAvailability(extension)
                         onMessage.call(appContext.getString(R.string.unified_sources_package_installed))
                     }
                 }
             } catch (e: Throwable) {
                 errorEvent.call(e)
             }
+        }
+    }
+
+    private suspend fun clearInstalledAvailability(extension: RepoAvailableExtension) {
+        val pkg = extension.pkgName
+        catalogRepository.clearAvailabilityForPackage(extension.type, pkg, extension.type.normalizePackageNameForMatching(pkg))
+    }
+
+    private suspend fun reloadInstalledManager(extension: RepoAvailableExtension) {
+        when (extension.type) {
+            ExternalExtensionType.MIHON -> mihonExtensionManager.loadExtensions()
+            ExternalExtensionType.ANIYOMI -> aniyomiExtensionManager.loadExtensions()
+            ExternalExtensionType.IREADER -> ireaderExtensionManager.loadExtensions()
+            ExternalExtensionType.TSUNDOKU -> tsundokuExtensionManager.loadExtensions()
+            else -> Unit
         }
     }
 }

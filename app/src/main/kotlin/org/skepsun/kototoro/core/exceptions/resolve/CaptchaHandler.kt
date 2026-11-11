@@ -47,6 +47,7 @@ import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.parser.favicon.faviconUri
 import org.skepsun.kototoro.core.prefs.SourceSettings
 import org.skepsun.kototoro.core.util.ext.checkNotificationPermission
+import org.skepsun.kototoro.explore.data.SourceAvailabilityRepository
 import org.skepsun.kototoro.core.util.ext.findCloudFlareException
 import org.skepsun.kototoro.core.util.ext.getNotificationIconSize
 import org.skepsun.kototoro.core.util.ext.goAsync
@@ -68,6 +69,7 @@ class CaptchaHandler @Inject constructor(
     private val databaseProvider: Provider<MangaDatabase>,
     private val coilProvider: Provider<ImageLoader>,
     private val captchaAutoResolveCoordinator: CaptchaAutoResolveCoordinator,
+    private val sourceAvailabilityRepository: SourceAvailabilityRepository,
 ) : EventListener() {
 
     private val exceptionMap = MutableScatterMap<ContentSource, CloudFlareProtectedException>()
@@ -121,6 +123,7 @@ class CaptchaHandler @Inject constructor(
             !SourceSettings(context, source).isCaptchaAutoResolveDisabled &&
             captchaAutoResolveCoordinator.resolveInBackground(source, exception)
         ) {
+            sourceAvailabilityRepository.clearCloudflare(source)
             return@withContext true
         }
         mutex.withLock {
@@ -129,6 +132,8 @@ class CaptchaHandler @Inject constructor(
                 exceptionMap[source] = exception
             } else {
                 removedException = exceptionMap.remove(source)
+                // The challenge is solved: a stored CLOUDFLARE badge would otherwise outlive it.
+                if (exception == null) sourceAvailabilityRepository.clearCloudflare(source)
             }
             val dao = databaseProvider.get().getSourcesDao()
             dao.setCfState(source.name, exception?.state ?: CloudFlareHelper.PROTECTION_NOT_DETECTED)

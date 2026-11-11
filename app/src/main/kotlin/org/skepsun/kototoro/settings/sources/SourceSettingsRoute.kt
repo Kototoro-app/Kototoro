@@ -173,6 +173,13 @@ fun SourceSettingsRoute(
         viewModel.onResume()
     }
 
+    // Configuration changes must reach the parsers without an app restart: cached repository
+    // instances (extension sources in particular, which snapshot their preferences when
+    // constructed) are dropped and rebuilt from the updated settings on the next request.
+    LaunchedEffect(controller, viewModel) {
+        controller.sourcePrefs.observeChanges().collect { viewModel.invalidateRepository() }
+    }
+
     val sourcePrefChanges = remember(controller) { controller.sourcePrefs.observeChanges().map { Any() } }
     val legadoSourcePrefChanges = remember(controller) { controller.legadoSourcePrefs.observeChanges().map { Any() } }
     val legadoBookPrefChanges = remember(controller) { controller.legadoBookPrefs.observeChanges().map { Any() } }

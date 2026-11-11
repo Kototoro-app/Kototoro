@@ -57,7 +57,7 @@ import org.skepsun.kototoro.core.model.jsonsource.TVBoxStoredConfig
 @HiltViewModel
 class SourceSettingsViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
-    mangaRepositoryFactory: ContentRepository.Factory,
+    private val mangaRepositoryFactory: ContentRepository.Factory,
     private val cookieJar: MutableCookieJar,
     private val mangaSourcesRepository: ContentSourcesRepository,
     private val jsonSourceManager: JsonSourceManager,
@@ -69,6 +69,12 @@ class SourceSettingsViewModel @Inject constructor(
     private val initialSource = ContentSource(savedStateHandle.get<String>(AppRouter.KEY_SOURCE))
     val repository = mangaRepositoryFactory.create(initialSource)
     val source = repository.source
+
+    /**
+     * Drop the cached repository (and its content cache) so that configuration changes —
+     * domains, user agents, extension preferences — reach the parsers without an app restart.
+     */
+    fun invalidateRepository() = mangaRepositoryFactory.invalidate(source)
 
     val onActionDone = MutableEventFlow<ReversibleAction>()
     val username = MutableStateFlow<String?>(null)

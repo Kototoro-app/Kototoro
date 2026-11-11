@@ -52,6 +52,13 @@ class ContentRepositoryInstanceCache @Inject constructor() {
         }
     }
 
+    /** Drop the cached instance for [source], returning it when one was held. */
+    fun remove(source: ContentSource): ContentRepository? {
+        return synchronized(cache) {
+            cache.remove(source)?.get()
+        }
+    }
+
     fun clear() {
         synchronized(cache) {
             cache.clear()

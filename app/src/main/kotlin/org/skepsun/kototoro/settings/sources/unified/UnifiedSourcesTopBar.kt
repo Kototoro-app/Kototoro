@@ -127,7 +127,7 @@ private fun ToolbarFilterIconButton(
                 contentColor = MaterialTheme.colorScheme.onPrimary,
             ) {
                 Text(
-                    text = activeCount.coerceAtMost(9).toString(),
+                    text = activeCount.coerceAtMost(99).toString(),
                     modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
                     style = MaterialTheme.typography.labelSmall,
                 )

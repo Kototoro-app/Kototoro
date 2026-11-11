@@ -103,6 +103,7 @@ class WebDavAutoRestoreRunner @Inject constructor(
                     sections = buildRestoreSections(candidate.writerGeneration),
                     progress = null,
                     restoreMode = BackupRepository.RestoreMode.MERGE,
+                    preserveLocalSources = true,
                 )
             }
             val restoreContext = backupRepository.resolveRestoreSemanticContext(restoreResult.backupIndex)

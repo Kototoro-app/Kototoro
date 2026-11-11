@@ -25,7 +25,6 @@
     <string name="source_groups_error_package">无法安装扩展包 %1$s</string>
     <string name="source_groups_error_source">无法设置源 %1$s</string>
     <string name="source_groups_error_jar_priority">无法应用 JAR 优先级顺序</string>
-    <string name="source_groups_repo_fingerprint">仓库 %1$s 的签名密钥已被注册</string>
     <string name="source_groups_package_missing">在所属仓库中未找到扩展包 %1$s</string>
     <string name="source_groups_requires_installer">扩展包 %1$s 需要通过系统安装程序安装</string>
     <string name="source_groups_export_lost">导出目标已丢失，请重新导出。</string>
@@ -36,6 +35,8 @@
     <string name="source_test_summary">可用：%1$d，不可用：%2$d，Cloudflare：%3$d</string>
     <string name="source_test_cancelled_note">测试已取消，仅列出已完成的源。</string>
     <string name="source_test_cancel">取消</string>
+    <string name="source_test_stop">停止</string>
+    <string name="source_test_resume">继续</string>
     <string name="source_test_close">关闭</string>
     <string name="source_test_disable_failed">禁用失败的源</string>
     <string name="source_test_disabled">已禁用</string>
@@ -81,4 +82,5 @@
     <string name="source_lock_unlocked">锁定当前状态</string>
     <string name="extension_file_delete_failed">无法删除 %1$s。</string>
     <string name="extension_repo_update_failed">更新失败：%1$s</string>
+    <string name="source_groups_confirm_domains">域名覆盖（%1$d 个来源）：</string>
 </resources>

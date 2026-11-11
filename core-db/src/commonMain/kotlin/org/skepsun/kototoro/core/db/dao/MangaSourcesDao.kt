@@ -87,6 +87,10 @@ abstract class MangaSourcesDao {
     @Upsert
     abstract suspend fun upsert(entry: MangaSourceEntity)
 
+    /** Drops every source row (snapshot restore of the sources section); rows are rebuilt from the backup. */
+    @Query("DELETE FROM sources")
+    abstract suspend fun deleteAll()
+
     @Query("SELECT * FROM sources WHERE pinned = 1")
     abstract suspend fun findAllPinned(): List<MangaSourceEntity>
 

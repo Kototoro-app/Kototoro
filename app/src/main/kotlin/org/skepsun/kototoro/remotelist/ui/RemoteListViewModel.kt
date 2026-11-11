@@ -45,6 +45,7 @@ import org.skepsun.kototoro.core.util.ext.getCauseUrl
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
 import org.skepsun.kototoro.explore.data.ContentSourcesRepository
 import org.skepsun.kototoro.explore.data.SourceAvailabilityRepository
+import org.skepsun.kototoro.explore.data.classifyAvailability
 import org.skepsun.kototoro.explore.domain.ExploreRepository
 import org.skepsun.kototoro.filter.ui.FilterCoordinator
 import org.skepsun.kototoro.list.domain.ContentListMapper
@@ -298,12 +299,12 @@ open class RemoteListViewModel @Inject constructor(
                         order = filterState.sortOrder,
                         filter = filterState.listFilter,
                     )
-                    if (shouldUpdateSourceAvailability(append)) {
-                        if (list.isEmpty()) {
-                            sourceAvailabilityRepository.markEmpty(source)
-                        } else {
-                            sourceAvailabilityRepository.markAvailable(source)
-                        }
+                    if (list.isNotEmpty()) {
+                        // Any successful non-empty page (filtered or appended too) proves the source works.
+                        if (!source.isLocal) sourceAvailabilityRepository.markAvailable(source)
+                    } else if (shouldUpdateSourceAvailability(append)) {
+                        // An empty page only counts against the source for an unfiltered first page.
+                        sourceAvailabilityRepository.markEmpty(source)
                     }
                     val prevList = mangaList.value.orEmpty()
                     Log.d(
@@ -360,7 +361,7 @@ open class RemoteListViewModel @Inject constructor(
                     e.printStackTraceDebug()
                     listError.value = e
                     if (shouldUpdateSourceAvailability(append)) {
-                        sourceAvailabilityRepository.markEmpty(source)
+                        sourceAvailabilityRepository.setAvailability(source, classifyAvailability(e))
                     }
                     if (!mangaList.value.isNullOrEmpty()) {
                         errorEvent.call(e)

@@ -65,6 +65,7 @@ import org.skepsun.kototoro.core.db.entity.RestoreCheckpointDao
 import org.skepsun.kototoro.core.db.entity.RestoreCheckpointEntity
 import org.skepsun.kototoro.core.parser.kotatsu.KotatsuParserSource
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.prefs.BackupSettingsFilter
 import org.skepsun.kototoro.core.util.CompositeResult
 import org.skepsun.kototoro.core.util.progress.Progress
 import org.skepsun.kototoro.explore.data.ContentSourcesRepository
@@ -388,7 +389,7 @@ class BackupRepository @Inject constructor(
                             database.getSourcesDao().findAll().asFlow()
                         }
                     ).filter { format != ExportFormat.KOTATSU || it.source in kotatsuSourceNames }
-                        .map { SourceBackup(it, SourceBackup.lockCode(sourceLocks.get(it.source))) }
+                        .map { SourceBackup(it, exportLockCode(sourceLocks.get(it.source))) }
                         .let { native ->
                             if (format == ExportFormat.KOTATSU) {
                                 native
@@ -405,7 +406,7 @@ class BackupRepository @Inject constructor(
                                                 addedIn = 0,
                                                 isPinned = it.isPinned,
                                                 isEnabled = it.enabled,
-                                                lock = SourceBackup.lockCode(sourceLocks.get(it.id)),
+                                                lock = exportLockCode(sourceLocks.get(it.id)),
                                             ),
                                         )
                                     }
@@ -556,6 +557,7 @@ class BackupRepository @Inject constructor(
         progress: FlowCollector<Progress>?,
         restoreMode: RestoreMode = RestoreMode.MERGE,
         checkpointId: String? = null,
+        preserveLocalSources: Boolean = false,
     ): RestoreBackupResult {
         val restoreStartedAt = SystemClock.elapsedRealtime()
         val effectiveSections = sections.withImplicitRestoreSections()
@@ -667,18 +669,29 @@ class BackupRepository @Inject constructor(
                         getBookmarksDao().upsert(it.bookmarks.map { b -> b.toEntity() })
                     }
 
-                    BackupSection.SOURCES -> sectionInput.readJsonArray<SourceBackup>(serializer()).restoreToDb(
-                        "SOURCES",
-                        trackSourceChanges = true,
-                    ) {
-                        // JSON sources have no MangaSourceEntity row; only their lock is restored here.
-                        if (!it.source.startsWith("JSON_")) getSourcesDao().upsert(it.toEntity())
-                        when (it.lock) {
-                            SourceBackup.LOCK_ON -> sourceLocks.set(it.source, true)
-                            SourceBackup.LOCK_OFF -> sourceLocks.set(it.source, false)
-                            SourceBackup.LOCK_NONE -> sourceLocks.set(it.source, null)
-                            else -> Unit // old backup: keep the local lock
+                    BackupSection.SOURCES -> {
+                        val restoredLocks = LinkedHashMap<String, Int>()
+                        val sourcesResult = sectionInput.readJsonArray<SourceBackup>(serializer()).restoreToDb(
+                            "SOURCES",
+                            trackSourceChanges = true,
+                        ) {
+                            if (it.source.startsWith("JSON_")) {
+                                // JSON sources keep their own table; only an existing row gets the backup state,
+                                // and a merge leaves the local state alone.
+                                if (restoreMode == RestoreMode.SNAPSHOT_REPLACE && getJsonSourceDao().getById(it.source) != null) {
+                                    val now = System.currentTimeMillis()
+                                    getJsonSourceDao().setEnabled(it.source, it.isEnabled, now)
+                                    getJsonSourceDao().setPinned(it.source, it.isPinned, now)
+                                }
+                            } else when (sourceRowRestoreAction(preserveLocalSources)) {
+                                // Automatic restore: never overwrite a local row (enabled, pin, order, Cloudflare state, last use).
+                                SourceRowRestoreAction.INSERT_IF_ABSENT -> getSourcesDao().insertIfAbsent(listOf(it.toEntity()))
+                                SourceRowRestoreAction.UPSERT -> getSourcesDao().upsert(it.toEntity())
+                            }
+                            if (it.lock != SourceBackup.LOCK_UNKNOWN) restoredLocks[it.source] = it.lock
                         }
+                        restoreSourceLocks(restoredLocks, restoreMode, preserveLocalSources)
+                        sourcesResult
                     }
 
                     BackupSection.SOURCE_ORIGINS -> sectionInput.readJsonArray<SourceOriginBackup>(serializer()).restoreToDb(
@@ -691,10 +704,21 @@ class BackupRepository @Inject constructor(
                         getExternalExtensionRepoDao().upsert(it.toEntity())
                     }
 
-                    BackupSection.EXTENSION_GROUPS -> sectionInput.readJsonArray<SourceGroup>(serializer())
-                        .restoreWithoutTransaction("EXTENSION_GROUPS") {
-                            storeSourceGroup(it)
+                    BackupSection.EXTENSION_GROUPS -> {
+                        val replace = restoreMode == RestoreMode.SNAPSHOT_REPLACE
+                        val staging = File(appContext.filesDir, "source_groups.restoring")
+                        val targetDir = if (replace) staging.also { it.deleteRecursively() } else sourceGroupsDir()
+                        val groupsResult = sectionInput.readJsonArray<SourceGroup>(serializer())
+                            .restoreWithoutTransaction("EXTENSION_GROUPS") {
+                                storeSourceGroup(it, targetDir)
+                            }
+                        if (replace && groupsResult.isAllSuccess) {
+                            groupsResult + runCatching { swapSourceGroupsDir(staging) }
+                        } else {
+                            if (replace) staging.deleteRecursively()
+                            groupsResult
                         }
+                    }
 
                     BackupSection.SCROBBLING -> sectionInput.readJsonArray<ScrobblingBackup>(serializer()).restoreToDb("SCROBBLING") {
                         getScrobblingDao().upsert(it.toEntity())
@@ -879,11 +903,7 @@ class BackupRepository @Inject constructor(
     }
 
     private fun dumpSettings(): String {
-        val map = settings.getAllValues().toMutableMap()
-        map.remove(AppSettings.KEY_APP_PASSWORD)
-        map.remove(AppSettings.KEY_PROXY_PASSWORD)
-        map.remove(AppSettings.KEY_PROXY_LOGIN)
-        map.remove(AppSettings.KEY_INCOGNITO_MODE)
+        val map = settings.getAllValues().filterKeys { BackupSettingsFilter.isBackupableKey(it) }
         return JSONObject(map).toString()
     }
 
@@ -999,6 +1019,38 @@ class BackupRepository @Inject constructor(
         categoryIdMapping[candidate.categoryId.toLong()] = localCategoryId
     }
 
+    /**
+     * Applies the lock codes of a restored SOURCES section in one batch. A merge keeps locks that already exist
+     * locally; "unlocked" never writes a marker (the key is removed instead).
+     */
+    private fun restoreSourceLocks(codes: Map<String, Int>, mode: RestoreMode, preserveLocalSources: Boolean) {
+        // Only state the restore really replaced counts as the user's own; a merge keeps local locks and their marks.
+        if (mode == RestoreMode.SNAPSHOT_REPLACE) sourceLocks.setGroupApplied(emptySet())
+        if (!preserveLocalSources) {
+            appContext.getSharedPreferences("group_applied_pins", Context.MODE_PRIVATE).edit().clear().commit()
+        }
+        if (codes.isEmpty()) return
+        val merge = mode == RestoreMode.MERGE
+        val set = LinkedHashMap<String, Boolean?>()
+        val unlock = ArrayList<String>()
+        for ((name, code) in codes) {
+            if (merge && sourceLocks.get(name) != null) continue
+            when (code) {
+                SourceBackup.LOCK_ON -> set[name] = true
+                SourceBackup.LOCK_OFF -> set[name] = false
+                SourceBackup.LOCK_NONE -> if (!merge) unlock += name
+            }
+        }
+        if (set.isNotEmpty()) {
+            sourceLocks.setAll(set)
+        }
+        if (unlock.isNotEmpty()) sourceLocks.remove(unlock)
+    }
+
+    /** Unlocked sources are exported without a lock code (older readers and merges then keep their local lock). */
+    private fun exportLockCode(locked: Boolean?): Int =
+        if (locked == null) SourceBackup.LOCK_UNKNOWN else SourceBackup.lockCode(locked)
+
     private suspend fun clearRestoreTargets(
         sections: Set<BackupSection>,
         actOn: Set<BackupSection> = sections,
@@ -1038,8 +1090,10 @@ class BackupRepository @Inject constructor(
             if (BackupSection.SOURCE_ORIGINS in actOn) {
                 database.getSourceOriginsDao().deleteAll()
             }
-            if (BackupSection.EXTENSION_GROUPS in actOn) {
-                sourceGroupsDir().listFiles().orEmpty().forEach { it.delete() }
+            if (BackupSection.SOURCES in actOn) {
+                // The section replaces the sources table and the source locks; JSON source rows are kept.
+                database.getSourcesDao().deleteAll()
+                sourceLocks.remove(sourceLocks.locks.value.keys.toList())
             }
         }
     }
@@ -1207,6 +1261,37 @@ class BackupRepository @Inject constructor(
 
     private fun sourceGroupsDir() = java.io.File(appContext.filesDir, "source_groups")
 
+    private fun swapSourceGroupsDir(staging: File) {
+        val dir = sourceGroupsDir()
+        staging.mkdirs()
+        val previous = File(appContext.filesDir, "source_groups.previous")
+        // An interrupted earlier swap left the only copy aside: put it back before starting over.
+        if (!dir.exists() && previous.exists()) check(previous.renameTo(dir)) { "Cannot restore source groups" }
+        previous.deleteRecursively()
+        val hadPrevious = dir.exists()
+        if (hadPrevious) check(dir.renameTo(previous)) { "Cannot move aside source groups" }
+        try {
+            try {
+                java.nio.file.Files.move(
+                    staging.toPath(),
+                    dir.toPath(),
+                    java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+                )
+            } catch (e: java.nio.file.AtomicMoveNotSupportedException) {
+                java.nio.file.Files.move(
+                    staging.toPath(),
+                    dir.toPath(),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                )
+            }
+        } catch (e: Throwable) {
+            dir.deleteRecursively()
+            if (hadPrevious) previous.renameTo(dir)
+            throw e
+        }
+        previous.deleteRecursively()
+    }
+
     private fun readStoredSourceGroups(): List<SourceGroup> = sourceGroupsDir()
         .listFiles { f -> f.isFile && f.extension == "json" }.orEmpty()
         .filter { it.length() in 1..SOURCE_GROUP_MAX_BYTES }
@@ -1216,9 +1301,9 @@ class BackupRepository @Inject constructor(
         }
 
     /** Restores a group file; an existing group with the same id is kept (merge, never overwrite). */
-    private fun storeSourceGroup(group: SourceGroup) {
-        if (!group.isValid()) return
-        val dir = sourceGroupsDir().also { it.mkdirs() }
+    private fun storeSourceGroup(group: SourceGroup, dir: File) {
+        check(group.isValid()) { "Invalid source group ${group.id}" }
+        dir.mkdirs()
         val target = java.io.File(dir, "${group.id}.json")
         if (target.exists()) return
         val temp = java.io.File(dir, "${group.id}.json.tmp")
@@ -1290,3 +1375,8 @@ internal object LegacyJarRepoCompat {
         }
     }
 }
+
+internal enum class SourceRowRestoreAction { INSERT_IF_ABSENT, UPSERT }
+
+internal fun sourceRowRestoreAction(preserveLocalSources: Boolean): SourceRowRestoreAction =
+    if (preserveLocalSources) SourceRowRestoreAction.INSERT_IF_ABSENT else SourceRowRestoreAction.UPSERT

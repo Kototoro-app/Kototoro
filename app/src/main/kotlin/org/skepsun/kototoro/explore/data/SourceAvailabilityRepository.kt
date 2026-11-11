@@ -5,9 +5,21 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import org.skepsun.kototoro.core.model.ContentSourceAvailability
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.util.ext.findCloudFlareException
 import org.skepsun.kototoro.parsers.model.ContentSource
 import javax.inject.Inject
 import javax.inject.Singleton
+
+/**
+ * Single mapping from a failed availability probe to a stored state: a Cloudflare exception
+ * anywhere in the cause chain is CLOUDFLARE, every other failure is EMPTY.
+ */
+fun classifyAvailability(error: Throwable): ContentSourceAvailability =
+    if (error.findCloudFlareException() != null) {
+        ContentSourceAvailability.CLOUDFLARE
+    } else {
+        ContentSourceAvailability.EMPTY
+    }
 
 @Singleton
 class SourceAvailabilityRepository @Inject constructor(
@@ -20,13 +32,26 @@ class SourceAvailabilityRepository @Inject constructor(
     }
 
     fun getAvailability(source: ContentSource): ContentSourceAvailability {
-        val name = source.name
-        return when {
-            name in getSet(KEY_EMPTY_SOURCES) -> ContentSourceAvailability.EMPTY
-            name in getSet(KEY_CLOUDFLARE_SOURCES) -> ContentSourceAvailability.CLOUDFLARE
-            name in getSet(KEY_AVAILABLE_SOURCES) -> ContentSourceAvailability.AVAILABLE
-            else -> ContentSourceAvailability.UNKNOWN
+        return resolveAvailability(
+            name = source.name,
+            empty = getSet(KEY_EMPTY_SOURCES),
+            cloudflare = getSet(KEY_CLOUDFLARE_SOURCES),
+            available = getSet(KEY_AVAILABLE_SOURCES),
+        )
+    }
+
+    /** Forgets a stored CLOUDFLARE verdict (the challenge was solved); EMPTY / AVAILABLE verdicts are left alone. */
+    @Synchronized
+    fun clearCloudflare(source: ContentSource) {
+        val cloudflare = getSet(KEY_CLOUDFLARE_SOURCES)
+        if (source.name in cloudflare) {
+            settings.prefs.edit { putStringSet(KEY_CLOUDFLARE_SOURCES, cloudflare - source.name) }
         }
+    }
+
+    /** Forgets every stored verdict for the named sources (extension updated, reinstalled or removed). */
+    fun clearAvailability(sourceNames: Collection<String>) {
+        setAvailabilities(sourceNames.associateWith { ContentSourceAvailability.UNKNOWN })
     }
 
     fun observeAvailability(source: ContentSource): Flow<ContentSourceAvailability> {
@@ -34,6 +59,8 @@ class SourceAvailabilityRepository @Inject constructor(
     }
 
     fun markAvailable(source: ContentSource) {
+        // No prefs write when the verdict is already AVAILABLE (called on every successful page).
+        if (getAvailability(source) == ContentSourceAvailability.AVAILABLE) return
         setAvailability(source.name, ContentSourceAvailability.AVAILABLE)
     }
 
@@ -46,17 +73,26 @@ class SourceAvailabilityRepository @Inject constructor(
     }
 
     private fun setAvailability(sourceName: String, availability: ContentSourceAvailability) {
+        setAvailabilities(mapOf(sourceName to availability))
+    }
+
+    /** Applies all [updates] with a single read-modify-write and a single prefs commit. */
+    @Synchronized
+    fun setAvailabilities(updates: Map<String, ContentSourceAvailability>) {
+        if (updates.isEmpty()) return
         val available = getSet(KEY_AVAILABLE_SOURCES).toMutableSet()
         val empty = getSet(KEY_EMPTY_SOURCES).toMutableSet()
         val cloudflare = getSet(KEY_CLOUDFLARE_SOURCES).toMutableSet()
-        available.remove(sourceName)
-        empty.remove(sourceName)
-        cloudflare.remove(sourceName)
-        when (availability) {
-            ContentSourceAvailability.AVAILABLE -> available += sourceName
-            ContentSourceAvailability.EMPTY -> empty += sourceName
-            ContentSourceAvailability.CLOUDFLARE -> cloudflare += sourceName
-            ContentSourceAvailability.UNKNOWN -> Unit
+        for ((sourceName, availability) in updates) {
+            available.remove(sourceName)
+            empty.remove(sourceName)
+            cloudflare.remove(sourceName)
+            when (availability) {
+                ContentSourceAvailability.AVAILABLE -> available += sourceName
+                ContentSourceAvailability.EMPTY -> empty += sourceName
+                ContentSourceAvailability.CLOUDFLARE -> cloudflare += sourceName
+                ContentSourceAvailability.UNKNOWN -> Unit
+            }
         }
         settings.prefs.edit {
             putStringSet(KEY_AVAILABLE_SOURCES, available)
@@ -70,10 +106,23 @@ class SourceAvailabilityRepository @Inject constructor(
         val available = getSet(KEY_AVAILABLE_SOURCES)
         val cloudflare = getSet(KEY_CLOUDFLARE_SOURCES)
         return buildMap(empty.size + available.size + cloudflare.size) {
-            available.forEach { put(it, ContentSourceAvailability.AVAILABLE) }
-            cloudflare.forEach { put(it, ContentSourceAvailability.CLOUDFLARE) }
-            empty.forEach { put(it, ContentSourceAvailability.EMPTY) }
+            for (name in available + cloudflare + empty) {
+                put(name, resolveAvailability(name, empty, cloudflare, available))
+            }
         }
+    }
+
+    /** The one precedence rule for a name that sits in several sets: EMPTY, then CLOUDFLARE, then AVAILABLE. */
+    private fun resolveAvailability(
+        name: String,
+        empty: Set<String>,
+        cloudflare: Set<String>,
+        available: Set<String>,
+    ): ContentSourceAvailability = when {
+        name in empty -> ContentSourceAvailability.EMPTY
+        name in cloudflare -> ContentSourceAvailability.CLOUDFLARE
+        name in available -> ContentSourceAvailability.AVAILABLE
+        else -> ContentSourceAvailability.UNKNOWN
     }
 
     private fun getSet(key: String): Set<String> {
@@ -81,8 +130,8 @@ class SourceAvailabilityRepository @Inject constructor(
     }
 
     private companion object {
-        const val KEY_AVAILABLE_SOURCES = "available_sources"
-        const val KEY_EMPTY_SOURCES = "empty_sources"
-        const val KEY_CLOUDFLARE_SOURCES = "cloudflare_sources"
+        const val KEY_AVAILABLE_SOURCES = AppSettings.KEY_AVAILABLE_SOURCES
+        const val KEY_EMPTY_SOURCES = AppSettings.KEY_EMPTY_SOURCES
+        const val KEY_CLOUDFLARE_SOURCES = AppSettings.KEY_CLOUDFLARE_SOURCES
     }
 }

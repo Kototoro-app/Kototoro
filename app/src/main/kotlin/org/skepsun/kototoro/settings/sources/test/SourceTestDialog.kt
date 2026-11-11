@@ -1,9 +1,10 @@
 package org.skepsun.kototoro.settings.sources.test
 
-import android.content.Intent
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -22,19 +23,25 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.app.ShareCompat
+import androidx.core.content.FileProvider
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.sourcetest.SourceTestProgressHeader
@@ -46,11 +53,14 @@ import org.skepsun.kototoro.core.ui.text.LocalUiStrings
 import org.skepsun.kototoro.core.ui.text.UiStrings
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.settings.compose.SettingsAlertDialog
+import java.io.File
+import java.time.Instant
 
 /**
  * "Test all" dialog for the sources tab. Starts testing [sources] when shown and cancels
  * the run when dismissed.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun SourceTestDialog(
 	sources: List<ContentSource>,
@@ -59,40 +69,43 @@ internal fun SourceTestDialog(
 ) {
 	LaunchedEffect(Unit) { viewModel.testAll(sources) }
 	val context = LocalContext.current
+	val clipboard = LocalClipboardManager.current
+	val scope = rememberCoroutineScope()
 	val progress by viewModel.progress.collectAsStateWithLifecycle()
 	var expandedKeys by remember { mutableStateOf(emptySet<String>()) }
 	val failedCount = progress.results.count {
 		it.overall == StepStatus.FAIL && it.sourceKey !in progress.disabledKeys
 	}
-	val closeButton: @Composable () -> Unit = {
-		TvTextButton(
-			onClick = onDismiss,
-			enabled = progress.finished && failedCount > 0,
-			modifier = Modifier.alpha(if (progress.finished && failedCount == 0) 0f else 1f),
-		) {
-			Text(stringResource(R.string.source_test_close))
-		}
-	}
+	val stopped = progress.finished && progress.cancelled && progress.done < progress.total
 	SettingsAlertDialog(
 		title = stringResource(R.string.source_test_title),
 		onDismissRequest = {
 			viewModel.cancel()
 			onDismiss()
 		},
+		// The two dialog buttons are flow control; result actions live in the content.
 		confirmButton = {
 			when {
 				!progress.finished -> TvTextButton(onClick = viewModel::cancel) {
-					Text(stringResource(R.string.source_test_cancel))
+					Text(stringResource(R.string.source_test_stop))
 				}
-				failedCount > 0 -> TvTextButton(onClick = viewModel::disableFailed) {
-					Text(stringResource(R.string.source_test_disable_failed))
+				stopped -> TvTextButton(onClick = viewModel::resume) {
+					Text(stringResource(R.string.source_test_resume))
 				}
 				else -> TvTextButton(onClick = onDismiss) {
 					Text(stringResource(R.string.source_test_close))
 				}
 			}
 		},
-		dismissButton = closeButton,
+		dismissButton = if (stopped) {
+			{
+				TvTextButton(onClick = onDismiss) {
+					Text(stringResource(R.string.source_test_close))
+				}
+			}
+		} else {
+			null
+		},
 		text = {
 			Column(modifier = Modifier.fillMaxWidth()) {
 				val passedCount = progress.results.count { it.overall == StepStatus.PASS }
@@ -148,19 +161,40 @@ internal fun SourceTestDialog(
 						HorizontalDivider()
 					}
 				}
-				TvTextButton(
-					onClick = {
-						val intent = Intent(Intent.ACTION_SEND).apply {
-							type = "text/plain"
-							putExtra(Intent.EXTRA_TEXT, viewModel.exportJson())
-						}
-						val title = context.getString(R.string.source_test_export)
-						context.startActivity(Intent.createChooser(intent, title))
-					},
-					enabled = progress.finished,
-					modifier = Modifier.align(Alignment.End),
+				FlowRow(
+					modifier = Modifier.fillMaxWidth(),
+					horizontalArrangement = Arrangement.End,
+					verticalArrangement = Arrangement.Center,
 				) {
-					Text(stringResource(R.string.source_test_export))
+					if (progress.finished && failedCount > 0) {
+						TvTextButton(onClick = viewModel::disableFailed) {
+							Text(stringResource(R.string.source_test_disable_failed))
+						}
+					}
+					TvTextButton(
+						onClick = { clipboard.setText(AnnotatedString(viewModel.exportJson())) },
+						enabled = progress.finished,
+					) {
+						Text(stringResource(R.string.source_test_copy_json))
+					}
+					TvTextButton(
+						onClick = {
+							val json = viewModel.exportJson()
+							scope.launch(Dispatchers.IO) {
+								val file = File(context.cacheDir, "kototoro-source-test-${Instant.now().epochSecond}.json")
+								file.writeText(json)
+								val uri = FileProvider.getUriForFile(context, "${BuildConfig.APPLICATION_ID}.files", file)
+								ShareCompat.IntentBuilder(context)
+									.setType("application/json")
+									.setStream(uri)
+									.setChooserTitle(context.getString(R.string.source_test_export))
+									.startChooser()
+							}
+						},
+						enabled = progress.finished,
+					) {
+						Text(stringResource(R.string.source_test_export))
+					}
 				}
 			}
 		},

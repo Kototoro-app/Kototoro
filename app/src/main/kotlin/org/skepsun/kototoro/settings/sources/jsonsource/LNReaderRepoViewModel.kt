@@ -9,6 +9,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
@@ -30,6 +32,7 @@ class LNReaderRepoViewModel @Inject constructor(
     @JsonSourceHttpClient private val okHttpClient: OkHttpClient,
     private val appSettings: AppSettings,
     private val mirrorRepository: org.skepsun.kototoro.core.github.GitHubMirrorCatalogRepository,
+    private val packageRemovalCleanup: org.skepsun.kototoro.extensions.install.PackageRemovalCleanup,
 ) : BaseViewModel() {
 
     private val repository = LNReaderRepository(okHttpClient, jsonSourceManager, appSettings, mirrorRepository)
@@ -71,29 +74,24 @@ class LNReaderRepoViewModel @Inject constructor(
     /** IDs of locally installed LNREADER sources */
     private val installedSourceIds: StateFlow<Set<String>> = jsonSourceManager
         .observeAllJsonSources()
-        .combine(MutableStateFlow(Unit)) { sources, _ ->
+        .map { sources ->
             sources.filter { it.type == JsonSourceType.LNREADER }
                 .map { it.id }
                 .toSet()
         }
+        .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
 
     /** Available languages from the plugin list */
     val availableLanguages: StateFlow<List<String>> = _plugins
-        .combine(MutableStateFlow(Unit)) { plugins, _ ->
-            val languages = plugins.mapNotNull { plugin ->
-                val normalized = plugin.normalizedLanguageCode()
-                Log.d(
-                    TAG,
-                    "language raw='${plugin.lang}' normalized='$normalized' plugin=${plugin.id}",
-                )
-                normalized.takeIf { it.isNotBlank() }
+        .map { plugins ->
+            plugins.mapNotNull { plugin ->
+                plugin.normalizedLanguageCode().takeIf { it.isNotBlank() }
             }
                 .distinct()
                 .sorted()
-            Log.d(TAG, "language filter availableLanguages=$languages")
-            languages
         }
+        .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     /** Filtered + grouped plugin list for display */
@@ -190,6 +188,7 @@ class LNReaderRepoViewModel @Inject constructor(
             idsToRemove.forEach { id ->
                 try {
                     jsonSourceManager.deleteSource(id)
+                    packageRemovalCleanup.afterJsonSourcesDeleted(listOf(id))
                     android.util.Log.d("LNReaderRepoVM", "Deleted source $id for ${plugin.name}")
                 } catch (e: Exception) {
                     android.util.Log.e("LNReaderRepoVM", "Failed to delete source $id", e)

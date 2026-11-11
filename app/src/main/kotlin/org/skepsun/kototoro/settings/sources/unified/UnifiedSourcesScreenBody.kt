@@ -99,12 +99,15 @@ fun UnifiedSourcesScreen(
     onTestSelectedSources: () -> Unit,
     onDeleteSelectedSources: () -> Unit,
     onToggleSelectedSourcesNsfw: () -> Unit,
+    onLockSelectedSources: () -> Unit = {},
+    onUnlockSelectedSources: () -> Unit = {},
     onSourcePinnedChange: (String, Boolean) -> Unit,
     onBrowseSource: (UnifiedSourceItem) -> Unit,
     onOpenSourceSettings: (UnifiedSourceItem) -> Unit,
     onAddRepository: (UnifiedSourceRepositoryItem?) -> Unit,
     onRefreshRepository: (UnifiedSourceRepositoryItem) -> Unit,
     onDeleteRepository: (UnifiedSourceRepositoryItem) -> Unit,
+    onEditRepository: (UnifiedSourceRepositoryItem) -> Unit = {},
     onUpdateAllPackages: () -> Unit,
     onPackagePrimaryAction: (String) -> Unit,
     onPackageSystemInstall: (String) -> Unit,
@@ -214,6 +217,8 @@ fun UnifiedSourcesScreen(
                             onEnableSelectedSources = onEnableSelectedSources,
                             onDisableSelectedSources = onDisableSelectedSources,
                             onToggleSelectedSourcesNsfw = onToggleSelectedSourcesNsfw,
+                            onLockSelectedSources = onLockSelectedSources,
+                            onUnlockSelectedSources = onUnlockSelectedSources,
                             onTestSelectedSources = onTestSelectedSources,
                             onDeleteSelectedSources = onDeleteSelectedSources,
                         )
@@ -257,6 +262,7 @@ fun UnifiedSourcesScreen(
                                     onAddRepository = onAddRepository,
                                     onRefreshRepository = onRefreshRepository,
                                     onDeleteRepository = onDeleteRepository,
+                                    onEditRepository = onEditRepository,
                                 )
                                 UNIFIED_SOURCES_TAB_PACKAGES -> UnifiedPackageList(
                                     modifier = pageModifier,
@@ -685,6 +691,8 @@ private fun UnifiedSourceSelectionBar(
     onEnableSelectedSources: () -> Unit,
     onDisableSelectedSources: () -> Unit,
     onToggleSelectedSourcesNsfw: () -> Unit,
+    onLockSelectedSources: () -> Unit = {},
+    onUnlockSelectedSources: () -> Unit = {},
     onTestSelectedSources: () -> Unit,
     onDeleteSelectedSources: () -> Unit,
 ) {
@@ -721,6 +729,18 @@ private fun UnifiedSourceSelectionBar(
             CompactActionChip(
                 onClick = onDisableSelectedSources,
                 label = { Text(stringResource(R.string.disable)) },
+            )
+        }
+        item(key = "lock_selected") {
+            CompactActionChip(
+                onClick = onLockSelectedSources,
+                label = { Text(stringResource(R.string.source_lock_action)) },
+            )
+        }
+        item(key = "unlock_selected") {
+            CompactActionChip(
+                onClick = onUnlockSelectedSources,
+                label = { Text(stringResource(R.string.source_unlock_action)) },
             )
         }
         item(key = "toggle_nsfw_selected") {

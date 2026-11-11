@@ -76,6 +76,21 @@ fun KototoroExploreSourcesScreen(
 ) {
     val items by viewModel.content.collectAsStateWithLifecycle()
     var composeSelectionIds: LongSet by remember { mutableStateOf(longSetOf()) }
+    // Selection never outlives its rows: ids no longer in the list are dropped.
+    val prunedSelection: LongSet = remember(items, composeSelectionIds) {
+        if (composeSelectionIds.isEmpty()) {
+            composeSelectionIds
+        } else {
+            val visible = HashSet<Long>()
+            items.forEach { if (it is ContentSourceItem) visible.add(it.id) }
+            val out = androidx.collection.MutableLongSet(composeSelectionIds.size)
+            composeSelectionIds.forEach { id -> if (id in visible) out.add(id) }
+            out
+        }
+    }
+    LaunchedEffect(prunedSelection) {
+        if (prunedSelection.size != composeSelectionIds.size) composeSelectionIds = prunedSelection
+    }
     val hapticFeedback = LocalHapticFeedback.current
     val isGrid by viewModel.isGrid.collectAsStateWithLifecycle()
     val isTvPresentation = LocalUiPresentationConfig.current.isTv
@@ -170,7 +185,7 @@ fun KototoroExploreSourcesScreen(
                             if (listModel.buttonTextRes != 0) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                                    contentDescription = "More",
+                                    contentDescription = stringResource(R.string.more),
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
@@ -252,8 +267,8 @@ fun KototoroExploreSourcesScreen(
             }
         }
 
-        if (composeSelectionIds.isNotEmpty()) {
-            val selectedSources = viewModel.sourcesSnapshot(composeSelectionIds)
+        val selectedSources = if (prunedSelection.isNotEmpty()) viewModel.sourcesSnapshot(prunedSelection) else emptyList()
+        if (selectedSources.isNotEmpty()) {
             val isSingleSelection = selectedSources.size == 1
             val canPin = selectedSources.all { !it.isPinned }
             val canUnpin = selectedSources.all { it.isPinned }
@@ -269,7 +284,7 @@ fun KototoroExploreSourcesScreen(
             }
 
             ExploreSelectionTopBar(
-                selectedCount = composeSelectionIds.size,
+                selectedCount = selectedSources.size,
                 isSingleSelection = isSingleSelection,
                 canPin = canPin,
                 canUnpin = canUnpin,
@@ -369,7 +384,7 @@ fun ExploreSelectionTopBar(
             }
         }
         Text(
-            text = "$selectedCount selected",
+            text = stringResource(R.string.selected_count, selectedCount),
             style = MaterialTheme.typography.titleLarge,
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
@@ -492,7 +507,7 @@ fun ExploreSelectionTopBar(
                                 )
                                 CompactDropdownMenuItem(
                                     text = {
-                                        CompactDropdownMenuText(text = "Shortcut")
+                                        CompactDropdownMenuText(text = stringResource(R.string.create_shortcut))
                                     },
                                     onClick = {
                                         showOverflowMenu = false

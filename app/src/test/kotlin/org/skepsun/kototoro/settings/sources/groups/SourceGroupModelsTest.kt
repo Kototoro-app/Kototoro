@@ -48,7 +48,7 @@ class SourceGroupModelsTest {
 
 	@Test
 	fun `unsupported schema is rejected`() {
-		assertFalse(group.copy(schema = 2).isValid())
+		assertFalse(group.copy(schema = 3).isValid())
 	}
 
 	@Test

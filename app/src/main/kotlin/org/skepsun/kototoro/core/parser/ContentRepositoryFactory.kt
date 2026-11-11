@@ -62,6 +62,20 @@ class ContentRepositoryFactory @Inject constructor(
         return createWithDiagnostics(source).repository
     }
 
+    /**
+     * Drop the cached repository instance for [source] along with its cached content, so the next
+     * create rebuilds the parser (or re-instantiates the extension source) from the current
+     * source configuration. Extension sources snapshot their preferences when constructed, so a
+     * configuration change without this invalidation only takes effect after a process restart.
+     */
+    @AnyThread
+    fun invalidate(source: ContentSource) {
+        val resolved = sourceResolutionPipeline.resolveWithTrace(source).resolvedSource
+        repositoryInstanceCache.remove(resolved)?.let { cached ->
+            (cached as? CachingContentRepository)?.invalidateCache()
+        }
+    }
+
     @AnyThread
     fun createWithDiagnostics(source: ContentSource): CreationResult {
         invalidateCacheIfGlobalExtensionsChanged()

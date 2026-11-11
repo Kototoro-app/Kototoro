@@ -7,10 +7,11 @@ import okhttp3.OkHttpClient
 import okhttp3.Response
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.LocalizedAppContext
-import org.skepsun.kototoro.core.exceptions.CloudFlareException
+import org.skepsun.kototoro.core.model.ContentSourceAvailability
 import org.skepsun.kototoro.core.model.getTitle
 import org.skepsun.kototoro.core.network.ContentHttpClient
 import org.skepsun.kototoro.core.parser.ContentRepository
+import org.skepsun.kototoro.explore.data.classifyAvailability
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentListFilter
 import org.skepsun.kototoro.parsers.model.ContentSource
@@ -247,16 +248,9 @@ class SourceTester @Inject constructor(
 		const val VERIFY_STREAM_PEEK_BYTES = 4L * 1024
 	}
 
-	private fun isCloudflareBlocked(e: Throwable): Boolean {
-		var current: Throwable? = e
-		var depth = 0
-		while (current != null && depth < 5) {
-			if (current is CloudFlareException) return true
-			current = current.cause
-			depth++
-		}
-		return false
-	}
+	/** Same decision as the bulk availability probes: any Cloudflare exception in the cause chain. */
+	private fun isCloudflareBlocked(e: Throwable): Boolean =
+		classifyAvailability(e) == ContentSourceAvailability.CLOUDFLARE
 
 	private fun describe(e: Throwable): String {
 		val message = e.message?.take(160)

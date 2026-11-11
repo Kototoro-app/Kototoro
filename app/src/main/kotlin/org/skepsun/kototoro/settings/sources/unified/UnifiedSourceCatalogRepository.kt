@@ -15,8 +15,11 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
 import kotlinx.serialization.json.Json
+import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.aniyomi.AniyomiExtensionManager
 import org.skepsun.kototoro.aniyomi.model.AniyomiAnimeSource
 import org.skepsun.kototoro.core.LocalizedAppContext
@@ -69,6 +72,24 @@ import javax.inject.Singleton
  */
 private const val CATALOG_COALESCE_MS = 150L
 
+/** Debounce that lets the first emission through immediately so first paint is not delayed. */
+internal fun <T> Flow<T>.debounceAfterFirst(timeoutMillis: Long): Flow<T> {
+    val upstream = this
+    return kotlinx.coroutines.flow.flow {
+        var first = true
+        emitAll(
+            upstream.debounce {
+                if (first) {
+                    first = false
+                    0L
+                } else {
+                    timeoutMillis
+                }
+            },
+        )
+    }
+}
+
 @Singleton
 class UnifiedSourceCatalogRepository @Inject constructor(
     @ApplicationContext private val appContext: Context,
@@ -87,8 +108,11 @@ class UnifiedSourceCatalogRepository @Inject constructor(
     private val json: Json,
 ) {
 
+    @Volatile
+    private var lastCatalogState: UnifiedSourceCatalogState? = null
+
     fun observeState(): Flow<UnifiedSourceCatalogState> {
-        return combine(
+        val upstream = combine(
             observeRepositories(),
             observePackages(),
             observeSources(),
@@ -102,7 +126,15 @@ class UnifiedSourceCatalogRepository @Inject constructor(
             Log.e("UnifiedSourceCatalog", "Error in observeState flow", e)
             emit(UnifiedSourceCatalogState())
         }
-            .debounce(CATALOG_COALESCE_MS)
+        return upstream
+            .debounceAfterFirst(CATALOG_COALESCE_MS)
+            .onStart { lastCatalogState?.let { emit(it) } }
+            .onEach { state ->
+                // Never cache an empty state (e.g. the catch fallback): it would flash an empty catalog on the next open.
+                if (state.repositories.isNotEmpty() || state.packages.isNotEmpty() || state.sources.isNotEmpty()) {
+                    lastCatalogState = state
+                }
+            }
             .distinctUntilChanged()
     }
 
@@ -420,7 +452,7 @@ class UnifiedSourceCatalogRepository @Inject constructor(
             settings.observeAsFlow(AppSettings.KEY_SOURCE_SFW_OVERRIDES) { sourceSfwOverrides },
         ) { _, _ -> Unit }
         return combine(dbChanges, runtimeChanges, settingsChanges, nsfwOverrideChanges) { _, _, _, _ -> Unit }
-            .debounce(CATALOG_COALESCE_MS)
+            .debounceAfterFirst(CATALOG_COALESCE_MS)
             .mapLatest {
                 runCatching { buildSourceItems() }.getOrElse { e ->
                     Log.e("UnifiedSourceCatalog", "Failed to buildSourceItems", e)
@@ -457,6 +489,25 @@ class UnifiedSourceCatalogRepository @Inject constructor(
 
     suspend fun getSourcesForPackage(packageId: String): List<UnifiedSourceItem> {
         return buildSourceItems().filter { it.packageId == packageId }
+    }
+
+    /** Names of the sources the package currently provides. */
+    suspend fun sourceNamesForPackage(type: ExternalExtensionType, vararg packageNames: String): List<String> {
+        val kind = when (type) {
+            ExternalExtensionType.MIHON -> UnifiedSourceKind.MIHON
+            ExternalExtensionType.ANIYOMI -> UnifiedSourceKind.ANIYOMI
+            ExternalExtensionType.IREADER -> UnifiedSourceKind.IREADER
+            ExternalExtensionType.TSUNDOKU -> UnifiedSourceKind.TSUNDOKU
+            ExternalExtensionType.JAR -> UnifiedSourceKind.JAR
+            ExternalExtensionType.CLOUDSTREAM -> UnifiedSourceKind.CLOUDSTREAM
+        }
+        val ids = packageNames.mapTo(HashSet()) { packageId(kind, it) }
+        return buildSourceItems().filter { it.packageId in ids }.map { it.source.name }
+    }
+
+    /** A new build invalidates the old probe verdicts (EMPTY / CLOUDFLARE badges) of the package's sources. */
+    suspend fun clearAvailabilityForPackage(type: ExternalExtensionType, vararg packageNames: String) {
+        sourceAvailabilityRepository.clearAvailability(sourceNamesForPackage(type, *packageNames))
     }
 
     private fun observeRuntimeSourceChanges(): Flow<Unit> {
@@ -502,15 +553,17 @@ class UnifiedSourceCatalogRepository @Inject constructor(
                 }.getOrNull()
             }
             .sortedWith(compareBy({ it.kind.ordinal }, { it.title.lowercase() }))
-        Log.d(
-            "UnifiedSourceCatalog",
-            "buildSourceItems available=${availableSources.size} installedApk=${installedApkSources.size} " +
-                "mihonWrapped=${mihonExtensionManager.getMihonMangaSources().size} " +
-                "tsundokuWrapped=${tsundokuExtensionManager.getTsundokuNovelSources().size} " +
-                "mihonInstalled=${mihonExtensionManager.installedExtensions.value.size} " +
-                "mihonItems=${items.count { it.kind == UnifiedSourceKind.MIHON }} total=${items.size} " +
-                "ms=${android.os.SystemClock.elapsedRealtime() - startedAt}",
-        )
+        if (BuildConfig.DEBUG) {
+            Log.d(
+                "UnifiedSourceCatalog",
+                "buildSourceItems available=${availableSources.size} installedApk=${installedApkSources.size} " +
+                    "mihonWrapped=${mihonExtensionManager.getMihonMangaSources().size} " +
+                    "tsundokuWrapped=${tsundokuExtensionManager.getTsundokuNovelSources().size} " +
+                    "mihonInstalled=${mihonExtensionManager.installedExtensions.value.size} " +
+                    "mihonItems=${items.count { it.kind == UnifiedSourceKind.MIHON }} total=${items.size} " +
+                    "ms=${android.os.SystemClock.elapsedRealtime() - startedAt}",
+            )
+        }
         return items
     }
 

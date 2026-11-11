@@ -5,6 +5,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -14,9 +15,14 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.ui.text.style.TextOverflow
@@ -55,7 +61,10 @@ fun SourceGroupsDialog(
 	val groups by viewModel.groups.collectAsStateWithLifecycle()
 	val applyState by viewModel.progress.collectAsStateWithLifecycle()
 	val message by viewModel.message.collectAsStateWithLifecycle()
+	val pendingApply by viewModel.pendingApply.collectAsStateWithLifecycle()
 	var showNameDialog by remember { mutableStateOf(false) }
+	var showCleanDialog by remember { mutableStateOf(false) }
+	var pendingDeleteGroup by remember { mutableStateOf<SourceGroup?>(null) }
 	var pendingExportId by rememberSaveable { mutableStateOf<String?>(null) }
 	val context = LocalContext.current
 	LaunchedEffect(applyState.finished) {
@@ -108,6 +117,17 @@ fun SourceGroupsDialog(
 					)
 				}
 				OutlinedButton(
+					onClick = { showCleanDialog = true },
+					enabled = !applyState.running,
+					modifier = Modifier.fillMaxWidth(),
+				) {
+					Text(
+						text = stringResource(R.string.source_groups_create_clean),
+						maxLines = 1,
+						overflow = TextOverflow.Ellipsis,
+					)
+				}
+				OutlinedButton(
 					onClick = { importLauncher.launch(IMPORT_MIME_TYPES) },
 					enabled = !applyState.running,
 					modifier = Modifier.fillMaxWidth(),
@@ -132,6 +152,7 @@ fun SourceGroupsDialog(
 				}
 
 				groups.forEach { group ->
+					var menuExpanded by remember(group.id) { mutableStateOf(false) }
 					Surface(
 						shape = RoundedCornerShape(16.dp),
 						color = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -153,6 +174,7 @@ fun SourceGroupsDialog(
 									group.repos.size,
 									group.packages.size,
 									group.sourceStates.size,
+									group.sourceStates.count { it.enabled },
 								),
 								style = MaterialTheme.typography.bodySmall,
 								color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -162,7 +184,7 @@ fun SourceGroupsDialog(
 								modifier = Modifier.padding(top = 8.dp),
 							) {
 								FilledTonalButton(
-									onClick = { viewModel.applyGroup(group.id) },
+									onClick = { viewModel.requestApply(group.id) },
 									enabled = !applyState.running,
 								) {
 									Text(text = stringResource(R.string.source_groups_apply), maxLines = 1)
@@ -176,14 +198,33 @@ fun SourceGroupsDialog(
 								) {
 									Text(text = stringResource(R.string.source_groups_export), maxLines = 1)
 								}
-								TvTextButton(
-									onClick = { viewModel.delete(group.id) },
-									enabled = !applyState.running,
-									colors = ButtonDefaults.textButtonColors(
-										contentColor = MaterialTheme.colorScheme.error,
-									),
-								) {
-									Text(text = stringResource(R.string.source_groups_delete), maxLines = 1)
+								Box {
+									IconButton(
+										onClick = { menuExpanded = true },
+										enabled = !applyState.running,
+									) {
+										Icon(
+											imageVector = Icons.Default.MoreVert,
+											contentDescription = stringResource(R.string.more),
+										)
+									}
+									DropdownMenu(
+										expanded = menuExpanded,
+										onDismissRequest = { menuExpanded = false },
+									) {
+										DropdownMenuItem(
+											text = {
+												Text(
+													text = stringResource(R.string.source_groups_delete),
+													color = MaterialTheme.colorScheme.error,
+												)
+											},
+											onClick = {
+												menuExpanded = false
+												pendingDeleteGroup = group
+											},
+										)
+									}
 								}
 							}
 						}
@@ -234,7 +275,128 @@ fun SourceGroupsDialog(
 			},
 		)
 	}
+
+	if (showCleanDialog) {
+		val defaultName = stringResource(R.string.source_groups_default_name, groups.size + 1)
+		var name by remember { mutableStateOf(defaultName) }
+		SettingsAlertDialog(
+			title = stringResource(R.string.source_groups_create_clean),
+			onDismissRequest = { showCleanDialog = false },
+			confirmButton = {
+				SettingsDialogActionButton(
+					text = stringResource(R.string.save),
+					onClick = {
+						showCleanDialog = false
+						viewModel.createCleanGroup(name.ifBlank { defaultName })
+					},
+				)
+			},
+			dismissButton = {
+				SettingsDialogActionButton(
+					text = stringResource(R.string.cancel),
+					onClick = { showCleanDialog = false },
+				)
+			},
+			text = {
+				OutlinedTextField(
+					value = name,
+					onValueChange = { name = it },
+					singleLine = true,
+					label = { Text(stringResource(R.string.source_groups_name_hint)) },
+				)
+			},
+		)
+	}
+
+	pendingApply?.let { (_, preview) ->
+		SettingsAlertDialog(
+			title = stringResource(R.string.source_groups_confirm_title, preview.groupName),
+			onDismissRequest = viewModel::cancelPendingApply,
+			confirmButton = {
+				SettingsDialogActionButton(
+					text = stringResource(R.string.source_groups_apply),
+					onClick = viewModel::confirmPendingApply,
+				)
+			},
+			dismissButton = {
+				SettingsDialogActionButton(
+					text = stringResource(R.string.cancel),
+					onClick = viewModel::cancelPendingApply,
+				)
+			},
+			text = {
+				val lines = buildList {
+					if (preview.reposToAdd.isNotEmpty()) {
+						add(stringResource(R.string.source_groups_confirm_repos))
+						addAll(preview.reposToAdd.map { "• $it" })
+					}
+					if (preview.packagesToInstall.isNotEmpty()) {
+						add(stringResource(R.string.source_groups_confirm_packages))
+						addAll(preview.packagesToInstall.map { "• $it" })
+					}
+					if (preview.domainOverrideCount > 0) {
+						add(stringResource(R.string.source_groups_confirm_domains, preview.domainOverrideCount))
+						addAll(preview.domainOverrideSample.map { "• $it" })
+					}
+				}
+				val shown = lines.take(CONFIRM_MAX_LINES)
+				Column(
+					verticalArrangement = Arrangement.spacedBy(4.dp),
+					modifier = Modifier.verticalScroll(rememberScrollState()),
+				) {
+					Text(
+						text = stringResource(R.string.source_groups_confirm_intro),
+						style = MaterialTheme.typography.bodyMedium,
+					)
+					shown.forEach { line ->
+						Text(
+							text = line,
+							style = MaterialTheme.typography.bodySmall,
+							maxLines = 2,
+							overflow = TextOverflow.Ellipsis,
+						)
+					}
+					if (lines.size > shown.size) {
+						Text(
+							text = stringResource(R.string.source_groups_confirm_more, lines.size - shown.size),
+							style = MaterialTheme.typography.bodySmall,
+						)
+					}
+				}
+			},
+		)
+	}
+
+	pendingDeleteGroup?.let { targetGroup ->
+		SettingsAlertDialog(
+			title = stringResource(R.string.delete),
+			onDismissRequest = { pendingDeleteGroup = null },
+			confirmButton = {
+				SettingsDialogActionButton(
+					text = stringResource(R.string.delete),
+					onClick = {
+						viewModel.delete(targetGroup.id)
+						pendingDeleteGroup = null
+					},
+				)
+			},
+			dismissButton = {
+				SettingsDialogActionButton(
+					text = stringResource(R.string.cancel),
+					onClick = { pendingDeleteGroup = null },
+				)
+			},
+			text = {
+				Text(
+					text = stringResource(R.string.source_groups_delete_confirm, targetGroup.name),
+					style = MaterialTheme.typography.bodyMedium,
+				)
+			},
+		)
+	}
 }
+
+private const val CONFIRM_MAX_LINES = 10
 
 @Composable
 private fun ApplyProgressSection(state: ApplyProgress) {

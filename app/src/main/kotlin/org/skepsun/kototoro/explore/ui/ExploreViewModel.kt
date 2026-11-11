@@ -201,7 +201,7 @@ class ExploreViewModel @Inject constructor(
     }
 
     fun requestPinShortcut(source: ContentSource) {
-        launchLoadingJob(Dispatchers.Default) {
+        launchJob(Dispatchers.Default) {
             shortcutManager.requestPinShortcut(source)
         }
     }
@@ -314,38 +314,54 @@ class ExploreViewModel @Inject constructor(
                     result += ListHeader(
                         textRes = R.string.source_pinned,
                         buttonTextRes = if (allSourcesEnabled) R.string.manage else R.string.catalog,
-                        badge = if (!allSourcesEnabled && hasNewSources) "" else null,
                     )
                     pinned.mapTo(result) { ContentSourceItem(it, isGrid) }
                 }
 
+                // null key = sources without a locale ("Other"), resolved via resources at render time.
                 val grouped = unpinned.groupBy {
-                    it.mangaSource.getLocale()?.getDisplayName(java.util.Locale.getDefault())?.replaceFirstChar { c -> c.uppercase() } ?: "Other"
-                }.toSortedMap()
+                    it.mangaSource.getLocale()?.getDisplayName(java.util.Locale.getDefault())?.replaceFirstChar { c -> c.uppercase() }
+                }.toSortedMap(nullsLast<String>())
 
                 grouped.forEach { (language, sourcesInLang) ->
-                    result += ListHeader(
-                        text = language,
-                        buttonTextRes = if (allSourcesEnabled && result.none { it is ListHeader && it.buttonTextRes == R.string.manage }) R.string.manage else if (result.none { it is ListHeader && it.buttonTextRes == R.string.catalog }) R.string.catalog else 0,
-                        badge = if (!allSourcesEnabled && hasNewSources && result.none { it is ListHeader && it.badge != null }) "" else null,
-                    )
+                    val buttonRes = if (allSourcesEnabled && result.none { it is ListHeader && it.buttonTextRes == R.string.manage }) {
+                        R.string.manage
+                    } else if (result.none { it is ListHeader && it.buttonTextRes == R.string.catalog }) {
+                        R.string.catalog
+                    } else {
+                        0
+                    }
+                    result += if (language != null) {
+                        ListHeader(text = language, buttonTextRes = buttonRes)
+                    } else {
+                        ListHeader(textRes = R.string.other, buttonTextRes = buttonRes)
+                    }
                     sourcesInLang.mapTo(result) { ContentSourceItem(it, isGrid) }
                 }
             } else {
                 result += ListHeader(
                     textRes = R.string.remote_sources,
                     buttonTextRes = if (allSourcesEnabled) R.string.manage else R.string.catalog,
-                    badge = if (!allSourcesEnabled && hasNewSources) "" else null,
                 )
                 filteredSources.mapTo(result) { ContentSourceItem(it, isGrid) }
             }
         } else {
-            result += EmptyHint(
-                icon = R.drawable.ic_empty_common,
-                textPrimary = emptySourceTitle(groupTab),
-                textSecondary = emptySourceSubtitle(groupTab),
-                actionStringRes = R.string.catalog,
-            )
+            result += if (sources.isNotEmpty()) {
+                // Sources exist but the active tab/tag/preset filter hides all of them.
+                EmptyHint(
+                    icon = R.drawable.ic_empty_common,
+                    textPrimary = R.string.no_sources_found,
+                    textSecondary = R.string.no_sources_found_desc,
+                    actionStringRes = R.string.catalog,
+                )
+            } else {
+                EmptyHint(
+                    icon = R.drawable.ic_empty_common,
+                    textPrimary = emptySourceTitle(groupTab),
+                    textSecondary = emptySourceSubtitle(groupTab),
+                    actionStringRes = R.string.catalog,
+                )
+            }
         }
         return result
     }

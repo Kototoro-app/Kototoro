@@ -17,6 +17,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -29,6 +30,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
@@ -38,8 +40,6 @@ import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
 import okhttp3.OkHttpClient
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
@@ -54,7 +54,6 @@ import org.skepsun.kototoro.core.lnreader.LNReaderRepository
 import org.skepsun.kototoro.core.lnreader.LNReaderPluginMetadata
 import org.skepsun.kototoro.core.model.jsonsource.TVBoxStoredConfig
 import org.skepsun.kototoro.core.model.ContentSourceAvailability
-import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.network.jsonsource.JsonSourceHttpClient
 import org.skepsun.kototoro.core.network.jsonsource.LegadoHttpClient
 import org.skepsun.kototoro.core.prefs.AppSettings
@@ -91,7 +90,7 @@ import javax.inject.Inject
 
 private const val TAG = "UnifiedSourcesVM"
 private const val REFRESH_PACKAGES_TIMEOUT_MS = 30_000L
-private const val SOURCE_TEST_MAX_PARALLELISM = 3
+private const val REPOSITORY_SWAP_RESTORE_TIMEOUT_MS = 8_000L
 /** Coalesces bursts of catalog inputs into one rebuild (install progress ticks, DB churn). */
 private const val CATALOG_RECOMPOSE_COALESCE_MS = 150L
 /** Minimum gap between silent (non-user) catalog seeds; re-entering the screen reuses the snapshot. */
@@ -194,7 +193,7 @@ class UnifiedSourcesViewModel @Inject constructor(
     private val catalogRepository: UnifiedSourceCatalogRepository,
     private val contentSourcesRepository: ContentSourcesRepository,
     private val sourceAvailabilityRepository: SourceAvailabilityRepository,
-    private val contentRepositoryFactory: ContentRepository.Factory,
+    private val packageRemovalCleanup: org.skepsun.kototoro.extensions.install.PackageRemovalCleanup,
     private val jsonSourceManager: JsonSourceManager,
     private val legadoHttpClient: LegadoHttpClient,
     @JsonSourceHttpClient private val okHttpClient: OkHttpClient,
@@ -223,6 +222,10 @@ class UnifiedSourcesViewModel @Inject constructor(
     private val availableJsonPackages = MutableStateFlow<List<UnifiedSourcePackageItem>>(emptyList())
     private val installingLnReaderPackageIds = MutableStateFlow<Set<String>>(emptySet())
     private val pendingUninstallIntents = ArrayDeque<Intent>()
+
+    /** System uninstalls handed to the OS: package to its source names (gone once the package is removed). */
+    private data class PendingUninstall(val packageName: String, val sourceNames: List<String>, val type: ExternalExtensionType?)
+    private val pendingUninstalls = java.util.concurrent.ConcurrentHashMap<String, PendingUninstall>()
     private val lnReaderPackageSnapshot = combine(
         availableLnReaderPlugins,
         installingLnReaderPackageIds,
@@ -244,6 +247,8 @@ class UnifiedSourcesViewModel @Inject constructor(
      * Each entry is retired once the authoritative rebuild reports the same value.
      */
     private val _enabledOverrides = MutableStateFlow<Map<String, Boolean>>(emptyMap())
+    @Volatile
+    private var pendingRepositoryEdit: Pair<UnifiedSourceRepositoryItem, UnifiedSourcesUiState.Ready>? = null
     private val _events = MutableSharedFlow<UnifiedSourcesEvent>(extraBufferCapacity = 1)
     val events: SharedFlow<UnifiedSourcesEvent> = _events.asSharedFlow()
     val updateAllInProgress: StateFlow<Boolean> = batchUpdateState.inProgress
@@ -269,9 +274,7 @@ class UnifiedSourcesViewModel @Inject constructor(
                 viewModelScope.launch(Dispatchers.IO) {
                     runCatching {
                         withTimeoutOrNull(REFRESH_PACKAGES_TIMEOUT_MS) {
-                            refreshAvailableExternalPackages()
-                            refreshAvailableLnReaderPackages()
-                            refreshAvailableJsonPackages()
+                            refreshAllCatalogPackages(externalExtensionTypes())
                             UnifiedCatalogSeedCache.store(
                                 externalExtensions = availableExternalExtensions.value,
                                 lnReaderPlugins = availableLnReaderPlugins.value,
@@ -303,11 +306,16 @@ class UnifiedSourcesViewModel @Inject constructor(
         combine(
             catalogRepository.observeState(),
             availableExternalExtensions,
-            installService.downloadStates,
+            combine(
+                installService.downloadStates.distinctUntilChanged { a, b ->
+                    a.size == b.size && a.all { (k, v) -> b.containsKey(k) && b[k]?.progressPercent == v.progressPercent }
+                },
+                installService.installing,
+            ) { downloads, installing -> downloads to installing },
             lnReaderPackageSnapshot,
-        ) { catalog, availableExtensions, downloadStates, lnReaderSnapshot ->
+        ) { catalog, availableExtensions, downloadInputs, lnReaderSnapshot ->
             catalog
-                .withAvailableExternalPackages(availableExtensions, downloadStates)
+                .withAvailableExternalPackages(availableExtensions, downloadInputs.first, downloadInputs.second)
                 .withAvailableLnReaderPackages(lnReaderSnapshot.plugins, lnReaderSnapshot.installingPackageIds)
                 .withAvailableJsonPackages(lnReaderSnapshot.jsonPackages)
         },
@@ -319,7 +327,7 @@ class UnifiedSourcesViewModel @Inject constructor(
     }
         // Bursts (install progress ticks, DB writes from reading history) collapse into one rebuild,
         // and an identical rebuild is not re-emitted downstream.
-        .debounce(CATALOG_RECOMPOSE_COALESCE_MS)
+        .debounceAfterFirst(CATALOG_RECOMPOSE_COALESCE_MS)
         .distinctUntilChanged()
         .flowOn(Dispatchers.Default).catch { e ->
         Log.e(TAG, "Error in fullCatalogState flow", e)
@@ -537,9 +545,7 @@ class UnifiedSourcesViewModel @Inject constructor(
                     if (refreshRepositories) {
                         types.forEach { type -> extensionRepoRepository.refresh(type) }
                     }
-                    refreshAvailableExternalPackages(types)
-                    refreshAvailableLnReaderPackages()
-                    refreshAvailableJsonPackages()
+                    refreshAllCatalogPackages(types)
                     if (showLoading) {
                         emitRefreshFailures(types)
                     }
@@ -590,7 +596,9 @@ class UnifiedSourcesViewModel @Inject constructor(
 
     fun installPackage(packageId: String, mode: ExtensionInstallMode) {
         val item = currentPackage(packageId) ?: return
-        if (item.state == UnifiedSourcePackageState.INSTALLED || item.packageName in installService.downloadStates.value) {
+        if (item.state == UnifiedSourcePackageState.INSTALLED || item.packageName in installService.downloadStates.value ||
+            item.packageName in installService.installing.value
+        ) {
             return
         }
         if (item.state == UnifiedSourcePackageState.UPDATE_AVAILABLE) {
@@ -729,6 +737,7 @@ class UnifiedSourcesViewModel @Inject constructor(
 
     fun onUninstallActivityResult() {
         viewModelScope.launch {
+            withContext(Dispatchers.IO) { cleanUpCompletedUninstalls() }
             dispatchNextPendingUninstall()
         }
     }
@@ -760,53 +769,68 @@ class UnifiedSourcesViewModel @Inject constructor(
         title: String? = null,
         enableImportedSources: Boolean = true,
     ) {
-        val cleanUrl = url.trim()
-        if (cleanUrl.isBlank()) return
         launchLoadingJob(Dispatchers.IO) {
-            when (kind) {
-                UnifiedSourceKind.LEGADO -> {
-                    if (settings.legadoRepoUrls.containsRepositoryUrl(cleanUrl)) {
-                        emitMessage(appContext.getString(R.string.unified_sources_repository_already_exists))
-                        return@launchLoadingJob
-                    }
-                    val packageItem = fetchAvailableLegadoPackage(cleanUrl, title)
-                    settings.legadoRepoUrls = settings.legadoRepoUrls + cleanUrl
-                    availableJsonPackages.update { packages ->
-                        (packages.filterNot { it.repositoryId == packageItem.repositoryId } + packageItem)
-                            .sortedBy { it.name.lowercase() }
-                    }
-                    emitMessage(appContext.getString(R.string.unified_sources_repository_added))
+            addRepositoryFromUrlImpl(kind, url, title, enableImportedSources)
+        }
+    }
+
+    private suspend fun addRepositoryFromUrlImpl(
+        kind: UnifiedSourceKind,
+        url: String,
+        title: String?,
+        enableImportedSources: Boolean,
+        replacingExternalBaseUrl: String? = null,
+    ): Boolean {
+        val cleanUrl = url.trim()
+        if (cleanUrl.isBlank()) return false
+        return when (kind) {
+            UnifiedSourceKind.LEGADO -> {
+                if (settings.legadoRepoUrls.containsRepositoryUrl(cleanUrl)) {
+                    emitMessage(appContext.getString(R.string.unified_sources_repository_already_exists))
+                    return false
                 }
-                UnifiedSourceKind.JS -> {
-                    importJsonRepository(
-                        kind = kind,
-                        content = fetchRemoteText(cleanUrl),
-                        sourceLocator = cleanUrl,
-                        sourceTitle = title,
-                        enableImportedSources = enableImportedSources,
-                    )
+                val packageItem = fetchAvailableLegadoPackage(cleanUrl, title)
+                settings.legadoRepoUrls = settings.legadoRepoUrls + cleanUrl
+                availableJsonPackages.update { packages ->
+                    (packages.filterNot { it.repositoryId == packageItem.repositoryId } + packageItem)
+                        .sortedBy { it.name.lowercase() }
                 }
-                UnifiedSourceKind.TVBOX -> {
-                    if (settings.tvBoxRepoUrls.containsRepositoryUrl(cleanUrl)) {
-                        emitMessage(appContext.getString(R.string.unified_sources_repository_already_exists))
-                        return@launchLoadingJob
-                    }
-                    val packageItem = fetchAvailableTvBoxPackage(cleanUrl, title)
-                    settings.tvBoxRepoUrls = settings.tvBoxRepoUrls + cleanUrl
-                    availableJsonPackages.update { packages ->
-                        (packages.filterNot { it.repositoryId == packageItem.repositoryId } + packageItem)
-                            .sortedBy { it.name.lowercase() }
-                    }
-                    emitMessage(appContext.getString(R.string.unified_sources_repository_added))
+                emitMessage(appContext.getString(R.string.unified_sources_repository_added))
+                true
+            }
+            UnifiedSourceKind.JS -> {
+                importJsonRepository(
+                    kind = kind,
+                    content = fetchRemoteText(cleanUrl),
+                    sourceLocator = cleanUrl,
+                    sourceTitle = title,
+                    enableImportedSources = enableImportedSources,
+                )
+            }
+            UnifiedSourceKind.TVBOX -> {
+                if (settings.tvBoxRepoUrls.containsRepositoryUrl(cleanUrl)) {
+                    emitMessage(appContext.getString(R.string.unified_sources_repository_already_exists))
+                    return false
                 }
-                UnifiedSourceKind.LNREADER -> addLnReaderRepository(cleanUrl)
-                UnifiedSourceKind.CLOUDSTREAM,
-                UnifiedSourceKind.MIHON,
-                UnifiedSourceKind.ANIYOMI,
-                UnifiedSourceKind.IREADER,
-                UnifiedSourceKind.JAR,
-                UnifiedSourceKind.TSUNDOKU -> prepareExternalRepository(kind, cleanUrl)
-                UnifiedSourceKind.NATIVE -> emitMessage(appContext.getString(R.string.unified_sources_native_no_repository))
+                val packageItem = fetchAvailableTvBoxPackage(cleanUrl, title)
+                settings.tvBoxRepoUrls = settings.tvBoxRepoUrls + cleanUrl
+                availableJsonPackages.update { packages ->
+                    (packages.filterNot { it.repositoryId == packageItem.repositoryId } + packageItem)
+                        .sortedBy { it.name.lowercase() }
+                }
+                emitMessage(appContext.getString(R.string.unified_sources_repository_added))
+                true
+            }
+            UnifiedSourceKind.LNREADER -> addLnReaderRepository(cleanUrl)
+            UnifiedSourceKind.CLOUDSTREAM,
+            UnifiedSourceKind.MIHON,
+            UnifiedSourceKind.ANIYOMI,
+            UnifiedSourceKind.IREADER,
+            UnifiedSourceKind.JAR,
+            UnifiedSourceKind.TSUNDOKU -> prepareExternalRepository(kind, cleanUrl, replacingExternalBaseUrl)
+            UnifiedSourceKind.NATIVE -> {
+                emitMessage(appContext.getString(R.string.unified_sources_native_no_repository))
+                false
             }
         }
     }
@@ -905,52 +929,182 @@ class UnifiedSourcesViewModel @Inject constructor(
         val ready = uiState.value as? UnifiedSourcesUiState.Ready ?: return
         val repository = ready.allRepositories.firstOrNull { it.id == repositoryId } ?: return
         launchLoadingJob(Dispatchers.IO) {
-            when (repository.kind) {
-                UnifiedSourceKind.LEGADO -> {
-                    if (settings.legadoRepoUrls.containsRepositoryUrl(repository.url)) {
-                        settings.legadoRepoUrls = settings.legadoRepoUrls.withoutRepositoryUrl(repository.url)
-                        availableJsonPackages.update { packages ->
-                            packages.filterNot { it.repositoryId == repository.id }
-                        }
-                        emitMessage(appContext.getString(R.string.unified_sources_repository_deleted))
-                    } else {
-                        deleteImportedJsonRepositorySources(repository, ready)
+            deleteRepositoryImpl(repository, ready)
+        }
+    }
+
+    private suspend fun deleteRepositoryImpl(
+        repository: UnifiedSourceRepositoryItem,
+        ready: UnifiedSourcesUiState.Ready,
+    ) {
+        when (repository.kind) {
+            UnifiedSourceKind.LEGADO -> {
+                if (settings.legadoRepoUrls.containsRepositoryUrl(repository.url)) {
+                    settings.legadoRepoUrls = settings.legadoRepoUrls.withoutRepositoryUrl(repository.url)
+                    availableJsonPackages.update { packages ->
+                        packages.filterNot { it.repositoryId == repository.id }
                     }
-                }
-                UnifiedSourceKind.TVBOX -> {
-                    if (settings.tvBoxRepoUrls.containsRepositoryUrl(repository.url)) {
-                        settings.tvBoxRepoUrls = settings.tvBoxRepoUrls.withoutRepositoryUrl(repository.url)
-                        availableJsonPackages.update { packages ->
-                            packages.filterNot { it.repositoryId == repository.id }
-                        }
-                        emitMessage(appContext.getString(R.string.unified_sources_repository_deleted))
-                    } else {
-                        deleteImportedJsonRepositorySources(repository, ready)
-                    }
-                }
-                UnifiedSourceKind.JS -> {
+                    emitMessage(appContext.getString(R.string.unified_sources_repository_deleted))
+                } else {
                     deleteImportedJsonRepositorySources(repository, ready)
                 }
-                UnifiedSourceKind.LNREADER -> {
-                    settings.lnReaderRepoUrls = settings.lnReaderRepoUrls - repository.url
-                    refreshAvailableLnReaderPackages()
+            }
+            UnifiedSourceKind.TVBOX -> {
+                if (settings.tvBoxRepoUrls.containsRepositoryUrl(repository.url)) {
+                    settings.tvBoxRepoUrls = settings.tvBoxRepoUrls.withoutRepositoryUrl(repository.url)
+                    availableJsonPackages.update { packages ->
+                        packages.filterNot { it.repositoryId == repository.id }
+                    }
                     emitMessage(appContext.getString(R.string.unified_sources_repository_deleted))
+                } else {
+                    deleteImportedJsonRepositorySources(repository, ready)
                 }
-                UnifiedSourceKind.CLOUDSTREAM,
-                UnifiedSourceKind.MIHON,
-                UnifiedSourceKind.ANIYOMI,
-                UnifiedSourceKind.IREADER,
-                UnifiedSourceKind.JAR,
-                UnifiedSourceKind.TSUNDOKU -> deleteExternalRepository(repository)
-                UnifiedSourceKind.NATIVE -> emitMessage(appContext.getString(R.string.unified_sources_native_no_repository))
+            }
+            UnifiedSourceKind.JS -> {
+                deleteImportedJsonRepositorySources(repository, ready)
+            }
+            UnifiedSourceKind.LNREADER -> {
+                settings.lnReaderRepoUrls = settings.lnReaderRepoUrls - repository.url
+                refreshAvailableLnReaderPackages()
+                emitMessage(appContext.getString(R.string.unified_sources_repository_deleted))
+            }
+            UnifiedSourceKind.CLOUDSTREAM,
+            UnifiedSourceKind.MIHON,
+            UnifiedSourceKind.ANIYOMI,
+            UnifiedSourceKind.IREADER,
+            UnifiedSourceKind.JAR,
+            UnifiedSourceKind.TSUNDOKU -> deleteExternalRepository(repository)
+            UnifiedSourceKind.NATIVE -> emitMessage(appContext.getString(R.string.unified_sources_native_no_repository))
+        }
+    }
+
+    fun editRepository(
+        oldRepository: UnifiedSourceRepositoryItem,
+        newKind: UnifiedSourceKind,
+        newUrl: String,
+        newName: String,
+    ) {
+        val trimmedUrl = newUrl.trim()
+        val trimmedName = newName.trim()
+        if (oldRepository.kind == newKind && oldRepository.url == trimmedUrl && oldRepository.name == trimmedName) {
+            return
+        }
+        val ready = uiState.value as? UnifiedSourcesUiState.Ready ?: return
+        // Everything runs in one sequential job so the add-side "already exists" check cannot race the delete.
+        launchLoadingJob(Dispatchers.IO) {
+            if (oldRepository.kind == newKind &&
+                normalizeRepositoryUrlForAction(oldRepository.url) == normalizeRepositoryUrlForAction(trimmedUrl)
+            ) {
+                // Only the name changed: update it in place, never delete the repository.
+                renameRepositoryInPlace(oldRepository, trimmedName)
+                return@launchLoadingJob
+            }
+            // Capture per-source state (matched by source name) so it survives the repository swap.
+            val captured = if (newKind.isJsonBackedKind() && oldRepository.kind.isJsonBackedKind()) {
+                ready.allSources.filter { it.repositoryId == oldRepository.id }
+            } else {
+                emptyList()
+            }
+            // Add the new repository first: if that fails the old one is left untouched.
+            val awaitsTrust = newKind.toExternalExtensionType() != null
+            // External repositories are only added after the trust dialog; keep the old one until then.
+            pendingRepositoryEdit = if (awaitsTrust) oldRepository to ready else null
+            val replacing = if (awaitsTrust && oldRepository.kind == newKind) externalBaseUrlFor(oldRepository) else null
+            val added = addRepositoryFromUrlImpl(
+                newKind,
+                trimmedUrl,
+                trimmedName.takeIf { it.isNotBlank() },
+                true,
+                replacingExternalBaseUrl = replacing,
+            )
+            if (!added) {
+                pendingRepositoryEdit = null
+                return@launchLoadingJob
+            }
+            if (awaitsTrust) return@launchLoadingJob
+            deleteRepositoryImpl(oldRepository, ready)
+            if (captured.isNotEmpty()) {
+                restoreCapturedSourceState(repositoryIdForAction(newKind, trimmedUrl), captured)
             }
         }
     }
 
+    private suspend fun renameRepositoryInPlace(repository: UnifiedSourceRepositoryItem, newName: String) {
+        if (newName.isBlank()) return
+        when (repository.kind) {
+            UnifiedSourceKind.LEGADO,
+            UnifiedSourceKind.TVBOX -> {
+                val isUrlListRepo = if (repository.kind == UnifiedSourceKind.LEGADO) {
+                    settings.legadoRepoUrls.containsRepositoryUrl(repository.url)
+                } else {
+                    settings.tvBoxRepoUrls.containsRepositoryUrl(repository.url)
+                }
+                if (isUrlListRepo) {
+                    val packageItem = if (repository.kind == UnifiedSourceKind.LEGADO) {
+                        fetchAvailableLegadoPackage(repository.url, newName)
+                    } else {
+                        fetchAvailableTvBoxPackage(repository.url, newName)
+                    }
+                    availableJsonPackages.update { packages ->
+                        (packages.filterNot { it.repositoryId == repository.id } + packageItem)
+                            .sortedBy { it.name.lowercase() }
+                    }
+                } else {
+                    jsonSourceManager.observeAllJsonSources()
+                        .first()
+                        .filter { it.jsonRepositoryIdForAction() == repository.id }
+                        .forEach { entity ->
+                            val config = entity.withRepositoryTitle(newName)
+                            if (config != entity.config) {
+                                jsonSourceManager.updateSource(entity.copy(config = config))
+                            }
+                        }
+                }
+            }
+            else -> Unit // These repositories take their name from the remote index; nothing to rename in place.
+        }
+    }
+
+    private suspend fun restoreCapturedSourceState(newRepositoryId: String, captured: List<UnifiedSourceItem>) {
+        val fresh = withTimeoutOrNull(REPOSITORY_SWAP_RESTORE_TIMEOUT_MS) {
+            uiState
+                .filterIsInstance<UnifiedSourcesUiState.Ready>()
+                .first { state -> state.allSources.any { it.repositoryId == newRepositoryId } }
+        }?.allSources?.filter { it.repositoryId == newRepositoryId } ?: return
+        val oldByName = captured.associateBy { it.source.name }
+        val matches = fresh.mapNotNull { item -> oldByName[item.source.name]?.let { item to it } }
+        if (matches.isEmpty()) return
+        // Enabled state first: locked sources ignore enable changes, and the lock is re-applied last.
+        for (enabled in listOf(true, false)) {
+            val group = matches.filter { (_, old) -> old.isEnabled == enabled }.map { (item, _) -> item.source }
+            if (group.isNotEmpty()) contentSourcesRepository.setSourcesEnabled(group, enabled)
+        }
+        val pinned = matches.filter { (_, old) -> old.isPinned }.map { (item, _) -> item.source }
+        if (pinned.isNotEmpty()) contentSourcesRepository.setIsPinned(pinned, true)
+        for ((item, old) in matches) {
+            old.lock?.let { contentSourcesRepository.setSourceLock(item.source, it) }
+        }
+    }
+
+    fun cancelExternalRepository() {
+        pendingRepositoryEdit = null
+    }
+
     fun confirmExternalRepository(repo: ExternalExtensionRepo) {
+        val pendingEdit = pendingRepositoryEdit
+        pendingRepositoryEdit = null
         launchLoadingJob(Dispatchers.IO) {
-            when (val result = extensionRepoRepository.confirmAddRepo(repo)) {
+            val replacing = pendingEdit?.first
+                ?.takeIf { it.kind.toExternalExtensionType() == repo.type }
+                ?.let { externalBaseUrlFor(it) }
+            when (val result = extensionRepoRepository.confirmAddRepo(repo, replacing)) {
                 is ExternalExtensionRepoRepository.AddRepoResult.Success -> {
+                    pendingEdit?.let { (old, ready) ->
+                        // A same-key edit already replaced the old repository inside confirmAddRepo.
+                        if (old.kind.toExternalExtensionType() == null || externalBaseUrlFor(old) != null) {
+                            deleteRepositoryImpl(old, ready)
+                        }
+                    }
                     emitMessage(appContext.getString(R.string.extension_repo_added_message, result.repo.displayName))
                     extensionRepoRepository.refresh(repo.type)
                     refreshAvailableExternalPackages(listOf(repo.type))
@@ -1080,66 +1234,17 @@ class UnifiedSourcesViewModel @Inject constructor(
         }
     }
 
-    fun testSources(sourceIds: Set<String>) {
-        if (sourceIds.isEmpty()) {
-            return
-        }
-        val sourceItems = (uiState.value as? UnifiedSourcesUiState.Ready)
-            ?.allSources
-            .orEmpty()
-            .filter { it.id in sourceIds }
-        if (sourceItems.isEmpty()) {
-            return
-        }
-        launchLoadingJob(Dispatchers.IO) {
-            val semaphore = Semaphore(SOURCE_TEST_MAX_PARALLELISM)
-            val results = sourceItems.map { item ->
-                async {
-                    val outcome = testSource(item, semaphore)
-                    item to outcome
-                }
-            }.awaitAll()
-            results.forEach { (item, outcome) ->
-                sourceAvailabilityRepository.setAvailability(
-                    item.source,
-                    outcome.availability,
-                )
+    fun setSourcesLock(sourceIds: Set<String>, locked: Boolean?) {
+        if (sourceIds.isEmpty()) return
+        val ready = uiState.value as? UnifiedSourcesUiState.Ready ?: return
+        val sourceItems = ready.allSources.filter { it.id in sourceIds }
+        if (sourceItems.isEmpty()) return
+        viewModelScope.launch(Dispatchers.IO) {
+            for (item in sourceItems) {
+                val targetLock = if (locked == true) item.isEnabled else locked
+                contentSourcesRepository.setSourceLock(item.source, targetLock)
             }
-            logTestSummary(results)
-            emitMessage(
-                appContext.getString(
-                    R.string.source_test_completed_with_unverified,
-                    results.count { it.second.isAvailable },
-                    results.count { it.second.availability == ContentSourceAvailability.EMPTY },
-                    results.count { it.second.availability == ContentSourceAvailability.UNKNOWN },
-                ),
-            )
         }
-    }
-
-    private suspend fun testSource(item: UnifiedSourceItem, semaphore: Semaphore): SourceTestOutcome {
-        val outcome = semaphore.withPermit {
-            probeSourceAvailability(item.source, { contentRepositoryFactory.create(item.source) })
-        }
-        if (outcome.failure != null) {
-            Log.w(
-                TAG,
-                "source_test_failed source=${item.source.name} type=${item.source::class.simpleName} " +
-                    "failure=${outcome.failure}",
-            )
-        }
-        return outcome
-    }
-
-    private fun logTestSummary(results: List<Pair<UnifiedSourceItem, SourceTestOutcome>>) {
-        val failureCounts = results.mapNotNull { it.second.failure }.groupingBy { it }.eachCount()
-        Log.w(
-            TAG,
-            "source_test_summary total=${results.size} available=${results.count { it.second.isAvailable }} " +
-                "unavailable=${results.count { it.second.availability == ContentSourceAvailability.EMPTY }} " +
-                "unverified=${results.count { it.second.availability == ContentSourceAvailability.UNKNOWN }} " +
-                "failures=$failureCounts",
-        )
     }
 
     fun setSourcePinned(sourceId: String, pinned: Boolean) {
@@ -1183,10 +1288,12 @@ class UnifiedSourcesViewModel @Inject constructor(
                 return PackageRemovalResult()
             }
             jsonSourceManager.deleteSourcesBatch(sourceIds)
+            packageRemovalCleanup.afterJsonSourcesDeleted(sourceIds)
             return PackageRemovalResult(removedDirectly = true)
         }
 
         val packageName = item.packageName ?: return PackageRemovalResult()
+        val packageSourceNames = ready.allSources.filter { it.packageId == item.id }.map { it.source.name }
         if (item.kind == UnifiedSourceKind.JAR) {
             val pluginDir = File(appContext.filesDir, "plugins")
             val jarFile = File(pluginDir, "$packageName.jar")
@@ -1201,6 +1308,7 @@ class UnifiedSourcesViewModel @Inject constructor(
                 .apply()
             ExtensionRemovalLog.record(appContext, "jar", packageName)
             GlobalExtensionManager.initialize(appContext)
+            packageRemovalCleanup.afterPackageRemoved(packageName, packageSourceNames)
             return PackageRemovalResult(removedDirectly = true)
         }
 
@@ -1223,6 +1331,7 @@ class UnifiedSourcesViewModel @Inject constructor(
                 .apply()
             ExtensionRemovalLog.record(appContext, "cloudstream", packageName)
             cloudstreamRuntimeManager.initialize()
+            packageRemovalCleanup.afterPackageRemoved(packageName, packageSourceNames)
             return PackageRemovalResult(removedDirectly = true)
         }
 
@@ -1238,16 +1347,42 @@ class UnifiedSourcesViewModel @Inject constructor(
             ExtensionRemovalLog.record(appContext, checkNotNull(ecosystem), packageName)
         }
         if (item.installLocation == UnifiedSourcePackageInstallLocation.LOCAL_APK && deletedLocal) {
+            packageRemovalCleanup.afterPackageRemoved(packageName, packageSourceNames)
             return PackageRemovalResult(
                 removedDirectly = true,
                 reloadExternalExtensionManagers = true,
             )
         }
 
+        val uninstallIntent = buildUninstallIntent(item.kind, packageName)
+        uninstallIntent.data?.schemeSpecificPart?.let { systemPkg ->
+            pendingUninstalls[systemPkg] = PendingUninstall(packageName, packageSourceNames, item.kind.toExternalExtensionType())
+        }
         return PackageRemovalResult(
             reloadExternalExtensionManagers = deletedLocal,
-            uninstallIntent = buildUninstallIntent(item.kind, packageName),
+            uninstallIntent = uninstallIntent,
         )
+    }
+
+    private fun isPackageInstalledOnDevice(packageName: String): Boolean = try {
+        @Suppress("DEPRECATION")
+        appContext.packageManager.getPackageInfo(packageName, 0)
+        true
+    } catch (_: android.content.pm.PackageManager.NameNotFoundException) {
+        false
+    }
+
+    /** After the system uninstaller returns: packages that are really gone get the same cleanup as a direct removal. */
+    private suspend fun cleanUpCompletedUninstalls() {
+        val gone = pendingUninstalls.filterKeys { !isPackageInstalledOnDevice(it) }
+        if (gone.isEmpty()) return
+        val types = HashSet<ExternalExtensionType?>()
+        gone.forEach { (systemPkg, info) ->
+            pendingUninstalls.remove(systemPkg)
+            packageRemovalCleanup.afterPackageRemoved(info.packageName, info.sourceNames)
+            types += info.type
+        }
+        types.forEach { reloadExternalExtensionManagers(it) }
     }
 
     private fun buildUninstallIntent(kind: UnifiedSourceKind, packageName: String): Intent {
@@ -1327,7 +1462,7 @@ class UnifiedSourcesViewModel @Inject constructor(
         enableAfterInstall: Boolean? = null,
     ) {
         val extension = item.installPayload ?: return
-        if (extension.pkgName in installService.downloadStates.value) {
+        if (extension.pkgName in installService.downloadStates.value || extension.pkgName in installService.installing.value) {
             return
         }
         if (fromBatch) {
@@ -1374,7 +1509,7 @@ class UnifiedSourcesViewModel @Inject constructor(
         enableAfterInstall: Boolean?,
     ) {
         if (item.kind.isHotReloadableExternalKind()) {
-            reloadExternalExtensionManagers()
+            reloadExternalExtensionManagers(item.kind.toExternalExtensionType())
             refreshPackageCatalog(
                 refreshRepositories = false,
                 showLoading = false,
@@ -1387,11 +1522,11 @@ class UnifiedSourcesViewModel @Inject constructor(
                 reloadInstalledExtensions = false,
             )
         }
-        if (enableAfterInstall != null) {
-            val sources = catalogRepository.getSourcesForPackage(item.id).map { it.source }
-            if (sources.isNotEmpty()) {
-                contentSourcesRepository.setSourcesEnabled(sources, enableAfterInstall)
-            }
+        val packageSources = catalogRepository.getSourcesForPackage(item.id).map { it.source }
+        // A new build invalidates the old probe verdicts (EMPTY / CLOUDFLARE badges of the previous version).
+        sourceAvailabilityRepository.clearAvailability(packageSources.map { it.name })
+        if (enableAfterInstall != null && packageSources.isNotEmpty()) {
+            contentSourcesRepository.setSourcesEnabled(packageSources, enableAfterInstall)
         }
         emitMessage(appContext.getString(R.string.unified_sources_package_installed))
         if (fromBatch) {
@@ -1482,42 +1617,54 @@ class UnifiedSourcesViewModel @Inject constructor(
         val reloadExternalExtensionManagers: Boolean = false,
     )
 
-    private suspend fun prepareExternalRepository(kind: UnifiedSourceKind, url: String) {
+    private suspend fun prepareExternalRepository(
+        kind: UnifiedSourceKind,
+        url: String,
+        replacingBaseUrl: String? = null,
+    ): Boolean {
         val type = kind.toExternalExtensionType()
             ?: throw IllegalArgumentException(
                 appContext.getString(R.string.unified_sources_unsupported_repository_kind, kind.name),
             )
-        when (val result = extensionRepoRepository.prepareAddRepo(type, url)) {
+        return when (val result = extensionRepoRepository.prepareAddRepo(type, url, replacingBaseUrl)) {
             is ExternalExtensionRepoRepository.PrepareAddRepoResult.Ready -> {
                 _events.emit(UnifiedSourcesEvent.TrustExternalRepository(result.repo))
+                true
             }
-            is ExternalExtensionRepoRepository.PrepareAddRepoResult.DuplicateFingerprint -> emitMessage(
-                appContext.getString(
-                    R.string.extension_repo_duplicate_fingerprint_message,
-                    result.existingRepo.displayName,
-                ),
-            )
-            is ExternalExtensionRepoRepository.PrepareAddRepoResult.FetchFailed -> emitMessage(
-                result.error.getDisplayMessage(appContext.resources),
-            )
-            ExternalExtensionRepoRepository.PrepareAddRepoResult.InvalidUrl -> emitMessage(
-                appContext.getString(R.string.extension_repo_invalid_url_message),
-            )
-            is ExternalExtensionRepoRepository.PrepareAddRepoResult.RepoAlreadyExists -> emitMessage(
-                appContext.getString(R.string.extension_repo_already_exists_message),
-            )
+            is ExternalExtensionRepoRepository.PrepareAddRepoResult.DuplicateFingerprint -> {
+                emitMessage(
+                    appContext.getString(
+                        R.string.extension_repo_duplicate_fingerprint_message,
+                        result.existingRepo.displayName,
+                    ),
+                )
+                false
+            }
+            is ExternalExtensionRepoRepository.PrepareAddRepoResult.FetchFailed -> {
+                emitMessage(result.error.getDisplayMessage(appContext.resources))
+                false
+            }
+            ExternalExtensionRepoRepository.PrepareAddRepoResult.InvalidUrl -> {
+                emitMessage(appContext.getString(R.string.extension_repo_invalid_url_message))
+                false
+            }
+            is ExternalExtensionRepoRepository.PrepareAddRepoResult.RepoAlreadyExists -> {
+                emitMessage(appContext.getString(R.string.extension_repo_already_exists_message))
+                false
+            }
         }
     }
 
-    private suspend fun addLnReaderRepository(url: String) {
+    private suspend fun addLnReaderRepository(url: String): Boolean {
         val current = settings.lnReaderRepoUrls
         if (url in current) {
             emitMessage(appContext.getString(R.string.unified_sources_repository_already_exists))
-            return
+            return false
         }
         settings.lnReaderRepoUrls = current + url
         refreshAvailableLnReaderPackages()
         emitMessage(appContext.getString(R.string.unified_sources_repository_added))
+        return true
     }
 
     private suspend fun refreshExternalRepository(repository: UnifiedSourceRepositoryItem) {
@@ -1535,6 +1682,15 @@ class UnifiedSourcesViewModel @Inject constructor(
         extensionRepoRepository.refresh(repo)
         refreshAvailableExternalPackages(listOf(type))
         emitMessage(appContext.getString(R.string.unified_sources_repository_refreshed))
+    }
+
+    /** Stored base URL of an external repository item, or null when it is not (or no longer) registered. */
+    private suspend fun externalBaseUrlFor(repository: UnifiedSourceRepositoryItem): String? {
+        val type = repository.kind.toExternalExtensionType() ?: return null
+        val url = normalizeRepositoryUrlForAction(repository.url)
+        return extensionRepoRepository.getByType(type)
+            .firstOrNull { normalizeRepositoryUrlForAction(it.baseUrl) == url }
+            ?.baseUrl
     }
 
     private suspend fun deleteExternalRepository(repository: UnifiedSourceRepositoryItem) {
@@ -1560,7 +1716,7 @@ class UnifiedSourcesViewModel @Inject constructor(
         sourceLocator: String?,
         sourceTitle: String?,
         enableImportedSources: Boolean? = null,
-    ) {
+    ): Boolean {
         val result = when (kind) {
             UnifiedSourceKind.LEGADO -> jsonSourceManager.importLegadoJson(
                 jsonContent = content,
@@ -1596,6 +1752,7 @@ class UnifiedSourcesViewModel @Inject constructor(
                 emitMessage(appContext.getString(R.string.unified_sources_imported_sources, count))
             }
             .onFailure { error -> emitMessage(error.getDisplayMessage(appContext.resources)) }
+        return result.isSuccess
     }
 
     private suspend fun deleteImportedJsonRepositorySources(
@@ -1613,6 +1770,7 @@ class UnifiedSourcesViewModel @Inject constructor(
         }
         if (ids.isNotEmpty()) {
             jsonSourceManager.deleteSourcesBatch(ids)
+            packageRemovalCleanup.afterJsonSourcesDeleted(ids)
         }
         emitMessage(appContext.getString(R.string.unified_sources_repository_sources_deleted))
     }
@@ -1661,54 +1819,77 @@ class UnifiedSourcesViewModel @Inject constructor(
         _events.emit(UnifiedSourcesEvent.Message(message))
     }
 
-    private suspend fun refreshAvailableExternalPackages(types: List<ExternalExtensionType> = externalExtensionTypes()) {
-        availableExternalExtensions.value = types
-            .flatMap { type -> extensionRepoRepository.getCatalogExtensions(type) }
-            .let { refreshed ->
-                val refreshedTypes = types.toSet()
-                availableExternalExtensions.value.filterNot { it.type in refreshedTypes } + refreshed
-            }
+    /**
+     * The package groups are independent ecosystems; awaiting them one after another made a cold
+     * screen open pay the summed latency of every index — including dead repositories.
+     */
+    private suspend fun refreshAllCatalogPackages(types: List<ExternalExtensionType>) = coroutineScope {
+        listOf(
+            async { refreshAvailableExternalPackages(types) },
+            async { refreshAvailableLnReaderPackages() },
+            async { refreshAvailableJsonPackages() },
+        ).awaitAll()
     }
 
-    private suspend fun refreshAvailableLnReaderPackages() {
-        val plugins = settings.lnReaderRepoUrls.flatMap { repoUrl ->
-            lnReaderRepository.fetchPluginIndex(repoUrl)
-                .getOrNull()
-                .orEmpty()
-                .map { plugin ->
-                    LnReaderAvailablePlugin(
-                        plugin = plugin,
-                        repoUrl = repoUrl,
-                        repoName = repositoryTitleForAction(repoUrl, fallback = "LNReader"),
-                    )
+    private suspend fun refreshAvailableExternalPackages(types: List<ExternalExtensionType> = externalExtensionTypes()) = coroutineScope {
+        // Fetch every ecosystem's catalog concurrently: a slow or dead repository must not stall
+        // the other types' indexes behind it on a cold screen open.
+        val refreshed = types
+            .map { type -> async { extensionRepoRepository.getCatalogExtensions(type) } }
+            .awaitAll()
+            .flatten()
+        val refreshedTypes = types.toSet()
+        availableExternalExtensions.value = availableExternalExtensions.value.filterNot { it.type in refreshedTypes } + refreshed
+    }
+
+    private suspend fun refreshAvailableLnReaderPackages() = coroutineScope {
+        val plugins = settings.lnReaderRepoUrls
+            .map { repoUrl ->
+                async {
+                    lnReaderRepository.fetchPluginIndex(repoUrl)
+                        .getOrNull()
+                        .orEmpty()
+                        .map { plugin ->
+                            LnReaderAvailablePlugin(
+                                plugin = plugin,
+                                repoUrl = repoUrl,
+                                repoName = repositoryTitleForAction(repoUrl, fallback = "LNReader"),
+                            )
+                        }
                 }
-        }
+            }
+            .awaitAll()
+            .flatten()
         availableLnReaderPlugins.value = plugins.withPreferredLnReaderVersions()
         fillMissingLnReaderIcons(availableLnReaderPlugins.value.map { it.plugin })
     }
 
-    private suspend fun refreshAvailableJsonPackages() {
-        val legadoPackages = settings.legadoRepoUrls.mapNotNull { repoUrl ->
-            try {
-                fetchAvailableLegadoPackage(repoUrl)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to load Legado repository $repoUrl", e)
-                null
+    private suspend fun refreshAvailableJsonPackages() = coroutineScope {
+        val fetches = settings.legadoRepoUrls.map { repoUrl ->
+            async {
+                try {
+                    fetchAvailableLegadoPackage(repoUrl)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to load Legado repository $repoUrl", e)
+                    null
+                }
+            }
+        } + settings.tvBoxRepoUrls.map { repoUrl ->
+            async {
+                try {
+                    fetchAvailableTvBoxPackage(repoUrl)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to load TVBox repository $repoUrl", e)
+                    null
+                }
             }
         }
-        val tvBoxPackages = settings.tvBoxRepoUrls.mapNotNull { repoUrl ->
-            try {
-                fetchAvailableTvBoxPackage(repoUrl)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to load TVBox repository $repoUrl", e)
-                null
-            }
-        }
-        availableJsonPackages.value = (legadoPackages + tvBoxPackages).sortedBy { it.name.lowercase() }
+        val packages = fetches.awaitAll().filterNotNull()
+        availableJsonPackages.value = packages.sortedBy { it.name.lowercase() }
     }
 
     private suspend fun fetchAvailableLegadoPackage(
@@ -1808,16 +1989,17 @@ class UnifiedSourcesViewModel @Inject constructor(
             }
     }
 
-    private suspend fun reloadExternalExtensionManagers() {
-        mihonExtensionManager.loadExtensions()
-        aniyomiExtensionManager.loadExtensions()
-        ireaderExtensionManager.loadExtensions()
-        tsundokuExtensionManager.loadExtensions()
+    private suspend fun reloadExternalExtensionManagers(only: ExternalExtensionType? = null) {
+        if (only == null || only == ExternalExtensionType.MIHON) mihonExtensionManager.loadExtensions()
+        if (only == null || only == ExternalExtensionType.ANIYOMI) aniyomiExtensionManager.loadExtensions()
+        if (only == null || only == ExternalExtensionType.IREADER) ireaderExtensionManager.loadExtensions()
+        if (only == null || only == ExternalExtensionType.TSUNDOKU) tsundokuExtensionManager.loadExtensions()
     }
 
     private fun UnifiedSourceCatalogState.withAvailableExternalPackages(
         availableExtensions: List<RepoAvailableExtension>,
         downloadStates: Map<String, ExtensionInstallDownloadState>,
+        installing: Set<String>,
     ): UnifiedSourceCatalogState {
         val externalInstalledPackages = packages
             .filter { it.kind.isExternalExtensionKind() && !it.packageName.isNullOrBlank() }
@@ -1834,6 +2016,7 @@ class UnifiedSourcesViewModel @Inject constructor(
             extension.toUnifiedPackageItem(
                 installedPackage = installedPackage,
                 downloadState = downloadStates[extension.pkgName],
+                isInstalling = extension.pkgName in installing,
             )
         }
         val installedWithoutCatalogMatch = packages.filterNot { item ->
@@ -1904,12 +2087,13 @@ class UnifiedSourcesViewModel @Inject constructor(
     private fun RepoAvailableExtension.toUnifiedPackageItem(
         installedPackage: UnifiedSourcePackageItem?,
         downloadState: ExtensionInstallDownloadState?,
+        isInstalling: Boolean = false,
     ): UnifiedSourcePackageItem {
         val isInstalled = installedPackage != null
         val isTrusted = installedPackage == null ||
             signatureValidator.isTrusted(installedPackage.packageName.orEmpty(), signatureHash)
         val state = when {
-            downloadState != null -> UnifiedSourcePackageState.INSTALLING
+            downloadState != null || isInstalling -> UnifiedSourcePackageState.INSTALLING
             isInstalled && !isTrusted -> UnifiedSourcePackageState.UNTRUSTED
             !isCompatible -> UnifiedSourcePackageState.INCOMPATIBLE
             !isInstalled -> UnifiedSourcePackageState.AVAILABLE
@@ -2388,6 +2572,23 @@ private fun JsonSourceEntity.jsonPackageIdForAction(): String? {
         }
         JsonSourceType.JS -> packageIdForAction(UnifiedSourceKind.JS, id)
         JsonSourceType.LNREADER -> packageIdForAction(UnifiedSourceKind.LNREADER, id)
+    }
+}
+
+private fun JsonSourceEntity.withRepositoryTitle(title: String): String {
+    return when (type) {
+        JsonSourceType.LEGADO -> {
+            val meta = JsonSourceImportMetadata.parse(config) ?: return config
+            JsonSourceImportMetadata.attach(config, meta.sourceLocator, title, meta.importKind)
+        }
+        JsonSourceType.TVBOX -> runCatching {
+            val root = org.json.JSONObject(config)
+            val meta = root.optJSONObject("meta") ?: return@runCatching config
+            meta.put("sourceTitle", title)
+            root.toString()
+        }.getOrDefault(config)
+        JsonSourceType.JS,
+        JsonSourceType.LNREADER -> config
     }
 }
 

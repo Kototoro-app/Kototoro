@@ -682,19 +682,58 @@ class ContentSourcesRepository @Inject constructor(
         return dao.observeIsEnabled(source.name).onStart { assimilateNewSources() }
     }
 
-    fun observeEnabledSourcesCount(): Flow<Int> {
+    /** Enabled and total counts, always derived from one source set and one NSFW filter. */
+    private data class SourceCounts(val total: Int, val enabled: Int)
+
+    private fun observeSourceCounts(): Flow<SourceCounts> {
         return combine(
             observeIsNsfwDisabled(),
-            observeAllEnabled().flatMapLatest { isAllSourcesEnabled ->
-                dao.observeAll(!isAllSourcesEnabled, SourcesSortOrder.MANUAL)
-            }
-        ) { skipNsfw, sources ->
-            sources.count {
-                it.source.toContentSourceOrNull()?.let { s ->
-                    (!skipNsfw || !s.isNsfw())
-                } == true
-            }
-        }.distinctUntilChanged().onStart { assimilateNewSources() }
+            observeAllEnabled(),
+            dao.observeAll(false, SourcesSortOrder.MANUAL),
+            jsonDao.observeAllSummaries(),
+            combine(
+                observeJarParserSourceChanges(),
+                observeExternalExtensionChanges(),
+                cloudstreamRuntimeManager.sources,
+                observeLocks(),
+            ) { _, _, _, locks -> locks },
+        ) { skipNsfw, allEnabled, rows, jsonSummaries, locks ->
+            computeSourceCounts(skipNsfw, allEnabled, rows, jsonSummaries, locks)
+        }.flowOn(Dispatchers.Default)
+    }
+
+    private fun computeSourceCounts(
+        skipNsfw: Boolean,
+        allEnabled: Boolean,
+        rows: List<MangaSourceEntity>,
+        jsonSummaries: List<JsonSourceSummary>,
+        locks: Map<String, Boolean>,
+    ): SourceCounts {
+        // Same pool as the unified catalog: built-in + Cloudstream, Mihon/Aniyomi/IReader/Tsundoku, JSON.
+        val sources = LinkedHashMap<String, ContentSource>()
+        allContentSources.forEach { sources[it.name] = it }
+        getEnabledMihonSources().forEach { sources[it.name] = it }
+        getEnabledAniyomiSources().forEach { sources[it.name] = it }
+        getEnabledIReaderSources().forEach { sources[it.name] = it }
+        getEnabledTsundokuNovelSources().forEach { sources[it.name] = it }
+        jsonSummaries.forEach { sources[it.id] = JsonSourceListSource(it) }
+        val enabledRows = rows.filter { it.isEnabled }.mapToSet { it.source }
+        val jsonById = jsonSummaries.associateBy { it.id }
+        var total = 0
+        var enabled = 0
+        for ((name, source) in sources) {
+            if (skipNsfw && source.isNsfw()) continue
+            total++
+            // Same rule as UnifiedSourceCatalogRepository: JSON uses its own flag, the rest the db row.
+            // A lock overrides the stored flag, exactly as the unified list shows it.
+            val isEnabled = locks[name] ?: jsonById[name]?.enabled ?: (allEnabled || name in enabledRows)
+            if (isEnabled) enabled++
+        }
+        return SourceCounts(total = total, enabled = enabled)
+    }
+
+    fun observeEnabledSourcesCount(): Flow<Int> {
+        return observeSourceCounts().map { it.enabled }.distinctUntilChanged().onStart { assimilateNewSources() }
     }
 
     fun observeAvailableSourcesCount(): Flow<Int> {
@@ -712,30 +751,7 @@ class ContentSourcesRepository @Inject constructor(
     }
 
     fun observeTotalSourcesCount(): Flow<Int> {
-        return combine(
-            observeJarParserSourceChanges(),
-            observeExternalExtensionChanges(),
-            cloudstreamRuntimeManager.sources,
-            jsonDao.observeAllSummaries(),
-        ) { _, _, cs, jsonSummaries ->
-            val set = HashSet<String>()
-            allContentSources.forEach { set.add(it.name) }
-            cs.forEach { set.add(it.name) }
-            jsonSummaries.forEach { set.add(it.id) }
-            mihonExtensionManager.installedExtensions.value.forEach { ext ->
-                ext.sources.forEach { set.add(it.name) }
-            }
-            aniyomiExtensionManager.installedExtensions.value.forEach { ext ->
-                ext.sources.forEach { set.add(it.name) }
-            }
-            ireaderExtensionManager.installedExtensions.value.forEach { ext ->
-                ext.sources.forEach { set.add(it.name) }
-            }
-            tsundokuExtensionManager.installedExtensions.value.forEach { ext ->
-                ext.sources.forEach { set.add(it.name) }
-            }
-            set.size
-        }.distinctUntilChanged().onStart { assimilateNewSources() }
+        return observeSourceCounts().map { it.total }.distinctUntilChanged().onStart { assimilateNewSources() }
     }
 
     fun observeBuiltInSourcesCount(): Flow<Int> {
@@ -942,7 +958,10 @@ class ContentSourcesRepository @Inject constructor(
             settings.observeAsFlow(AppSettings.KEY_EXPLORE_HIDE_EMPTY_SOURCES) { isEmptySourcesHiddenInExplore },
         ) { sources, hideEmptySources ->
             if (hideEmptySources) {
-                sources.filterNot { it.availability == ContentSourceAvailability.EMPTY }
+                sources.filterNot {
+                    it.availability == ContentSourceAvailability.EMPTY ||
+                        it.availability == ContentSourceAvailability.CLOUDFLARE
+                }
             } else {
                 sources
             }
@@ -1030,6 +1049,21 @@ class ContentSourcesRepository @Inject constructor(
     }
 
     /**
+     * Batched [setSourceLock]. Entries whose lock is already [lockedEnabled] are left alone, and unlocking a source that
+     * has no lock writes nothing (no marker flood).
+     */
+    suspend fun setSourceLocks(entries: Map<ContentSource, Boolean?>) {
+        val store = lockStore ?: return
+        val changed = entries.filter { (source, lock) -> store.get(source.name) != lock }
+        if (changed.isEmpty()) return
+        store.setAll(changed.mapKeys { it.key.name })
+        for (lock in listOf(true, false)) {
+            val sources = changed.filterValues { it == lock }.keys
+            if (sources.isNotEmpty()) setSourcesEnabledImpl(sources, lock, force = true)
+        }
+    }
+
+    /**
      * Once per process and again after every external change of the lock prefs (settings sync): forces every locked source into its locked state. The lock map lives in its own
      * preferences, so a backup restore / sync can leave the DB row disagreeing with the lock (the list
      * shows the lock, Explore uses the DB). The lock always wins.
@@ -1053,8 +1087,19 @@ class ContentSourcesRepository @Inject constructor(
         }
     }
 
+    /**
+     * Every source name the app knows about, with no NSFW / preset / language filtering:
+     * all db rows plus every manager pool (built-in, JAR/plugin, Mihon, Aniyomi, IReader, Tsundoku, Cloudstream, JSON).
+     */
+    private suspend fun getUnfilteredPoolNames(): Set<String> {
+        val names = LinkedHashSet<String>()
+        getAllAvailableSourcesForListing().mapTo(names) { it.name }
+        dao.findAll().mapTo(names) { it.source }
+        return names
+    }
+
     suspend fun setSourcesEnabledExclusive(sources: Set<ContentSource>) {
-        val allSources = queryAllSources(includeDisabledSources = true)
+        val allNames = getUnfilteredPoolNames()
         val enabledNames = sources.map { it.name }.toSet()
         val locks = lockStore?.locks?.value.orEmpty()
 
@@ -1063,20 +1108,21 @@ class ContentSourcesRepository @Inject constructor(
         val nativeSourcesToEnable = mutableListOf<String>()
         val nativeSourcesToDisable = mutableListOf<String>()
 
-        for (s in allSources) {
-            val isEnabled = locks[s.name] ?: (s.name in enabledNames)
-            if (s.name.startsWith("JSON_")) {
-                if (isEnabled) jsonSourcesToEnable.add(s.name) else jsonSourcesToDisable.add(s.name)
+        for (name in allNames) {
+            val isEnabled = locks[name] ?: (name in enabledNames)
+            if (name.startsWith("JSON_")) {
+                if (isEnabled) jsonSourcesToEnable.add(name) else jsonSourcesToDisable.add(name)
             } else {
-                if (isEnabled) nativeSourcesToEnable.add(s.name) else nativeSourcesToDisable.add(s.name)
+                if (isEnabled) nativeSourcesToEnable.add(name) else nativeSourcesToDisable.add(name)
             }
         }
 
         if (jsonSourcesToEnable.isNotEmpty()) jsonSourceManager.toggleSourcesBatch(jsonSourcesToEnable, true)
         if (jsonSourcesToDisable.isNotEmpty()) jsonSourceManager.toggleSourcesBatch(jsonSourcesToDisable, false)
 
+        // Rows must exist before the UPDATEs below; done outside withLocalChanges to avoid re-entering it.
+        assimilateNewSources(force = true)
         sourceStateModifiedStore.withLocalChanges(db) {
-            assimilateNewSources()
             for (name in nativeSourcesToEnable) dao.setEnabled(name, true, BuildConfig.VERSION_CODE)
             for (name in nativeSourcesToDisable) dao.setEnabled(name, false, BuildConfig.VERSION_CODE)
         }
@@ -1116,6 +1162,23 @@ class ContentSourcesRepository @Inject constructor(
     suspend fun setSourceSortKey(source: String, sortKey: Int) {
         sourceStateModifiedStore.withLocalChanges(db, setOf(source)) {
             dao.setSortKey(source, sortKey)
+        }
+    }
+
+    /**
+     * Gives the native sources a collision-free manual order: [leading] first (in the given order),
+     * then every other row in its existing order.
+     */
+    suspend fun applySourceOrder(leading: List<String>) {
+        sourceStateModifiedStore.withLocalChanges(db) {
+            val existing = dao.findAll().sortedBy { it.sortKey }.map { it.source }
+            val known = existing.toHashSet()
+            val head = leading.distinct().filter { it in known }
+            val headSet = head.toHashSet()
+            val order = head + existing.filter { it !in headSet }
+            for ((index, name) in order.withIndex()) {
+                dao.setSortKey(name, index)
+            }
         }
     }
 
@@ -1186,12 +1249,14 @@ class ContentSourcesRepository @Inject constructor(
         }
         var maxSortKey = dao.getMaxSortKey()
         val isAllEnabled = settings.isAllSourcesEnabled
+        // A new row of a locked source is created in its locked state, so the row never disagrees with the lock.
+        val locks = lockStore?.locks?.value.orEmpty()
         val entities = new.map { x ->
             MangaSourceEntity(
                 source = x.name,
                 // A parser marked broken starts disabled even under "all sources enabled"; the user can enable it in
-                // extension management.
-                isEnabled = isAllEnabled && !x.isBroken,
+                // extension management. Group locks still win.
+                isEnabled = locks[x.name] ?: (isAllEnabled && !x.isBroken),
                 sortKey = ++maxSortKey,
                 addedIn = BuildConfig.VERSION_CODE,
                 lastUsedAt = 0,
@@ -1204,6 +1269,11 @@ class ContentSourcesRepository @Inject constructor(
             "assimilate completed force=$force new=${entities.size} durationMs=${SystemClock.elapsedRealtime() - startedAt}"
         }
         return true
+    }
+
+    /** Creates the db rows of every installed source that has none yet (public entry point of the assimilation). */
+    suspend fun syncSourceRows() {
+        assimilateNewSources(force = true)
     }
 
     /**
@@ -1276,27 +1346,30 @@ class ContentSourcesRepository @Inject constructor(
     }
 
     private suspend fun materializeAllEnabledState() {
-        val allSources = queryAllSources(includeDisabledSources = true)
-        val nativeSources = mutableListOf<String>()
-        val jsonSources = mutableListOf<String>()
-        for (source in allSources) {
-            if (source.name.startsWith("JSON_")) {
-                jsonSources.add(source.name)
+        val allNames = getUnfilteredPoolNames()
+        val locks = lockStore?.locks?.value.orEmpty()
+        val nativeOn = mutableListOf<String>()
+        val nativeOff = mutableListOf<String>()
+        val jsonOn = mutableListOf<String>()
+        val jsonOff = mutableListOf<String>()
+        for (name in allNames) {
+            val isEnabled = locks[name] ?: true
+            val target = if (name.startsWith("JSON_")) {
+                if (isEnabled) jsonOn else jsonOff
             } else {
-                nativeSources.add(source.name)
+                if (isEnabled) nativeOn else nativeOff
             }
+            target.add(name)
         }
 
-        if (jsonSources.isNotEmpty()) {
-            jsonSourceManager.toggleSourcesBatch(jsonSources, true)
-        }
+        if (jsonOn.isNotEmpty()) jsonSourceManager.toggleSourcesBatch(jsonOn, true)
+        if (jsonOff.isNotEmpty()) jsonSourceManager.toggleSourcesBatch(jsonOff, false)
 
-        if (nativeSources.isNotEmpty()) {
+        if (nativeOn.isNotEmpty() || nativeOff.isNotEmpty()) {
+            assimilateNewSources(force = true)
             sourceStateModifiedStore.withLocalChanges(db) {
-                assimilateNewSources()
-                for (name in nativeSources) {
-                    dao.setEnabled(name, true, BuildConfig.VERSION_CODE)
-                }
+                for (name in nativeOn) dao.setEnabled(name, true, BuildConfig.VERSION_CODE)
+                for (name in nativeOff) dao.setEnabled(name, false, BuildConfig.VERSION_CODE)
             }
         }
 
@@ -1473,6 +1546,8 @@ class ContentSourcesRepository @Inject constructor(
         sortOrder: SourcesSortOrder?,
     ): MutableList<ContentSourceInfo> {
         val isAllEnabled = settings.isAllSourcesEnabled
+        // The getter rebuilds the full set from three live flows; resolve it once per pass, not per row.
+        val registrySources = allContentSources
         val result = ArrayList<ContentSourceInfo>(size)
         for (entity in this) {
             val source = entity.source.toContentSourceOrNull() ?: continue
@@ -1482,7 +1557,7 @@ class ContentSourcesRepository @Inject constructor(
                 continue
             }
             // Allow native sources, Mihon sources, and JSON sources
-            val isKnownSource = source in allContentSources ||
+            val isKnownSource = source in registrySources ||
                                 source is org.skepsun.kototoro.mihon.model.MihonMangaSource ||
                                 source is org.skepsun.kototoro.aniyomi.model.AniyomiAnimeSource ||
                                 source is org.skepsun.kototoro.ireader.model.IReaderMangaSource ||
@@ -1570,13 +1645,12 @@ class ContentSourcesRepository @Inject constructor(
 
         // Try JSON sources
         if (startsWith("JSON_")) {
-            // This is a bit expensive but necessary for pinning/top sources to work correctly
-            val jsonSources = kotlinx.coroutines.runBlocking {
-                jsonSourceManager.observeAllJsonSources().first().map {
-                    org.skepsun.kototoro.core.jsonsource.JsonContentSource(it)
-                }
+            // The name is the entity id; hit the manager's per-id cache instead of re-running a
+            // full-table observe per resolved source, which froze every listing pass.
+            val entity = kotlinx.coroutines.runBlocking { jsonSourceManager.getById(this@toContentSourceOrNull) }
+            if (entity != null) {
+                return org.skepsun.kototoro.core.jsonsource.JsonContentSource(entity)
             }
-            jsonSources.find { it.name == this }?.let { return it }
         }
 
         if (!allowFallback) return null

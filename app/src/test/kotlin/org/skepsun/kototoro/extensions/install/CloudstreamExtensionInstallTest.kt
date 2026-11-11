@@ -75,7 +75,7 @@ class CloudstreamExtensionInstallTest {
             every { entry(any()) } returns GitHubMirrorCatalog.NATIVE
             every { entries } returns MutableStateFlow(listOf(GitHubMirrorCatalog.NATIVE))
         }
-        return ExtensionInstallService(context, OkHttpClient(), settings, mirrors, runtime, mockk())
+        return ExtensionInstallService(context, OkHttpClient(), settings, mirrors, runtime, mockk(), mockk(relaxed = true))
     }
 
     private fun extension(url: String) = RepoAvailableExtension(

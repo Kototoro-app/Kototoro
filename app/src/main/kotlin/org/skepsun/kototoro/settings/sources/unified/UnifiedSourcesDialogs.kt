@@ -176,6 +176,87 @@ internal fun UnifiedRepositoryUrlDialog(
     )
 }
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+internal fun UnifiedEditRepositoryDialog(
+    repository: UnifiedSourceRepositoryItem,
+    onDismiss: () -> Unit,
+    onConfirm: (UnifiedSourceKind, String, String) -> Unit,
+) {
+    var selectedKind by rememberSaveable(repository) { mutableStateOf(repository.kind) }
+    var urlValue by rememberSaveable(repository) { mutableStateOf(repository.url) }
+    var nameValue by rememberSaveable(repository) { mutableStateOf(repository.name) }
+    val selectableKinds = listOf(
+        UnifiedSourceKind.MIHON,
+        UnifiedSourceKind.ANIYOMI,
+        UnifiedSourceKind.IREADER,
+        UnifiedSourceKind.TSUNDOKU,
+        UnifiedSourceKind.CLOUDSTREAM,
+        UnifiedSourceKind.JAR,
+        UnifiedSourceKind.LNREADER,
+        UnifiedSourceKind.LEGADO,
+        UnifiedSourceKind.TVBOX,
+    )
+    val context = androidx.compose.ui.platform.LocalContext.current
+    SettingsAlertDialog(
+        title = stringResource(R.string.edit_repository),
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            SettingsDialogActionButton(
+                text = stringResource(android.R.string.ok),
+                enabled = urlValue.isNotBlank(),
+                onClick = { onConfirm(selectedKind, urlValue.trim(), nameValue.trim()) },
+            )
+        },
+        dismissButton = {
+            SettingsDialogActionButton(
+                text = stringResource(android.R.string.cancel),
+                onClick = onDismiss,
+            )
+        },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+            ) {
+                Text(
+                    text = stringResource(R.string.type),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                androidx.compose.foundation.layout.FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    selectableKinds.forEach { kind ->
+                        CompactFilterChip(
+                            selected = kind == selectedKind,
+                            onClick = { selectedKind = kind },
+                            text = context.getString(kind.dialogLabelResId()),
+                        )
+                    }
+                }
+                OutlinedTextField(
+                    value = nameValue,
+                    onValueChange = { nameValue = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    label = { Text(stringResource(R.string.name)) },
+                )
+                OutlinedTextField(
+                    value = urlValue,
+                    onValueChange = { urlValue = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    label = { Text(stringResource(R.string.repository_url)) },
+                )
+            }
+        },
+    )
+}
+
 @Composable
 internal fun UnifiedInlineRepositoryDialog(
     kind: UnifiedSourceKind,

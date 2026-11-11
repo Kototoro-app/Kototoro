@@ -151,5 +151,7 @@ interface ContentRepository {
         fun createWithDiagnostics(source: ContentSource): ContentRepositoryFactory.CreationResult {
             return delegate.createWithDiagnostics(source)
         }
+
+        fun invalidate(source: ContentSource) = delegate.invalidate(source)
     }
 }

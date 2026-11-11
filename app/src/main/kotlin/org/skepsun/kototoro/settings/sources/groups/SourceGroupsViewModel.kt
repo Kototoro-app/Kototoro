@@ -47,6 +47,15 @@ class SourceGroupsViewModel @Inject constructor(
 		}
 	}
 
+	fun createCleanGroup(name: String) {
+		viewModelScope.launch {
+			runAction(R.string.source_groups_saved) {
+				repository.createCleanGroup(name)
+				_groups.value = repository.list()
+			}
+		}
+	}
+
 	fun delete(id: String) {
 		viewModelScope.launch {
 			runAction(null) {
@@ -56,7 +65,34 @@ class SourceGroupsViewModel @Inject constructor(
 		}
 	}
 
-	fun applyGroup(id: String) {
+	private val _pendingApply = MutableStateFlow<Pair<String, SourceGroupApplyPreview>?>(null)
+
+	/** Group waiting for the user to confirm the repositories and packages it would add. */
+	val pendingApply: StateFlow<Pair<String, SourceGroupApplyPreview>?> = _pendingApply.asStateFlow()
+
+	/** Applies right away when the group adds nothing; otherwise asks for confirmation first. */
+	fun requestApply(id: String) {
+		viewModelScope.launch {
+			var direct = false
+			runAction(null) {
+				val preview = repository.previewApply(id)
+				if (preview.needsConfirmation) _pendingApply.value = id to preview else direct = true
+			}
+			if (direct) applyGroup(id)
+		}
+	}
+
+	fun cancelPendingApply() {
+		_pendingApply.value = null
+	}
+
+	fun confirmPendingApply() {
+		val id = _pendingApply.value?.first ?: return
+		_pendingApply.value = null
+		applyGroup(id)
+	}
+
+	private fun applyGroup(id: String) {
 		viewModelScope.launch {
 			runAction(null) {
 				val errors = repository.apply(id)
@@ -77,9 +113,12 @@ class SourceGroupsViewModel @Inject constructor(
 
 	fun importGroup(uri: Uri) {
 		viewModelScope.launch {
-			runAction(R.string.source_groups_imported) {
-				repository.importFromUri(uri)
+			runAction(null) {
+				val result = repository.importFromUri(uri)
 				_groups.value = repository.list()
+				_message.value = context.getString(
+					if (result.updated) R.string.source_groups_updated else R.string.source_groups_imported,
+				)
 			}
 		}
 	}
@@ -98,6 +137,8 @@ class SourceGroupsViewModel @Inject constructor(
 			throw e
 		} catch (e: SourceGroupTooLargeException) {
 			_message.value = context.getString(R.string.source_groups_file_too_large)
+		} catch (e: SourceGroupNewerSchemaException) {
+			_message.value = context.getString(R.string.source_groups_newer_schema)
 		} catch (e: SourceGroupFormatException) {
 			_message.value = context.getString(R.string.source_groups_invalid_file)
 		} catch (e: Exception) {

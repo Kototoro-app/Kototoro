@@ -42,6 +42,7 @@ class ExtensionInstallService @Inject constructor(
     private val mirrorRepository: GitHubMirrorCatalogRepository,
     private val cloudstreamRuntimeManager: org.skepsun.kototoro.cloudstream.runtime.CloudstreamRuntimeManager,
     private val systemPackageInstaller: SystemPackageInstaller,
+    private val sourceOriginsDao: org.skepsun.kototoro.core.db.dao.SourceOriginsDao,
 ) {
     private val githubHttpClient by lazy {
         httpClient.newBuilder()
@@ -63,9 +64,35 @@ class ExtensionInstallService @Inject constructor(
 
     val downloadStates: StateFlow<Map<String, ExtensionInstallDownloadState>> = _downloadStates.asStateFlow()
 
+    private val _installing = MutableStateFlow<Set<String>>(emptySet())
+
+    /** Packages with an [install] call in flight (covers the post-download phase, unlike [downloadStates]). */
+    val installing: StateFlow<Set<String>> = _installing.asStateFlow()
+
     suspend fun install(
         extension: RepoAvailableExtension,
         mode: ExtensionInstallMode = ExtensionInstallMode.LOCAL_APK,
+    ): ExtensionInstallResult {
+        val pkg = extension.pkgName
+        var added = false
+        _installing.update { current ->
+            added = pkg !in current
+            if (added) current + pkg else current
+        }
+        if (!added) {
+            // Another install for this package is already running (e.g. double tap): ignore this request.
+            return ExtensionInstallResult.Completed
+        }
+        try {
+            return performInstall(extension, mode)
+        } finally {
+            _installing.update { it - pkg }
+        }
+    }
+
+    private suspend fun performInstall(
+        extension: RepoAvailableExtension,
+        mode: ExtensionInstallMode,
     ): ExtensionInstallResult {
         val rawUrl = extension.archiveUrl ?: when (extension.type) {
             ExternalExtensionType.CLOUDSTREAM -> "${extension.repoUrl}/${extension.archiveName}"
@@ -85,7 +112,8 @@ class ExtensionInstallService @Inject constructor(
                 // A download for this package is already running (e.g. double tap): ignore this request.
                 return ExtensionInstallResult.Completed
             }
-            updateDownloadState(extension.pkgName, bytesRead = 0L, contentLength = -1L)
+            // Initial state: published without arming the throttle so the first real tick is not swallowed.
+            _downloadStates.update { it + (extension.pkgName to ExtensionInstallDownloadState(extension.pkgName, 0L, -1L)) }
             try {
                 call.awaitSuccess().use { response ->
                     val body = requireNotNull(response.body) { "Missing APK response body" }
@@ -110,6 +138,7 @@ class ExtensionInstallService @Inject constructor(
                 lastError = e
             } finally {
                 activeCalls.remove(extension.pkgName)
+                lastProgressEmitNanos.remove(extension.pkgName)
                 _downloadStates.update { it - extension.pkgName }
             }
         }
@@ -177,6 +206,7 @@ class ExtensionInstallService @Inject constructor(
 
         val ecosystem = extension.type.toLocalApkEcosystem()
         if (ecosystem != null) {
+            recordPackageOrigin(extension)
             if (mode == ExtensionInstallMode.LOCAL_APK) {
                 LocalApkExtensionSupport.storeManagedApk(
                     context = context,
@@ -197,6 +227,36 @@ class ExtensionInstallService @Inject constructor(
         return ExtensionInstallResult.RequiresInstaller(installSession)
     }
 
+    /**
+     * Remembers which repository a MIHON / ANIYOMI / IREADER / TSUNDOKU package came from (JAR and Cloudstream keep it
+     * in their version prefs), so a saved source group keeps the package's repoUrl. The row is keyed per package,
+     * not per source, and never touches the per-source origin rows.
+     */
+    private suspend fun recordPackageOrigin(extension: RepoAvailableExtension) {
+        val installedName = extension.type.toInstalledPackageName(extension.pkgName)
+        val now = System.currentTimeMillis()
+        try {
+            sourceOriginsDao.upsert(
+                org.skepsun.kototoro.core.db.entity.SourceOriginEntity(
+                    sourceKey = "PKG_${extension.type.name}_$installedName",
+                    kind = extension.type.name,
+                    displayName = extension.name,
+                    packageName = installedName,
+                    repositoryUrl = extension.repoUrl,
+                    repositoryName = extension.repoName,
+                    versionName = extension.versionName,
+                    versionCode = extension.versionCode,
+                    lastSeenAt = now,
+                    updatedAt = now,
+                ),
+            )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            android.util.Log.w("KototoroInit", "recording package origin failed for ${extension.pkgName}", e)
+        }
+    }
+
     fun onInstallerActivityReturned() {
         systemPackageInstaller.onInstallerActivityReturned()
     }
@@ -205,7 +265,13 @@ class ExtensionInstallService @Inject constructor(
         activeCalls[packageName]?.cancel()
     }
 
-    private fun updateDownloadState(packageName: String, bytesRead: Long, contentLength: Long) {
+    private val lastProgressEmitNanos = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
+    private fun updateDownloadState(packageName: String, bytesRead: Long, contentLength: Long, done: Boolean = false) {
+        val now = System.nanoTime()
+        val last = lastProgressEmitNanos[packageName]
+        if (!done && last != null && now - last < 250_000_000L) return
+        lastProgressEmitNanos[packageName] = now
         _downloadStates.update { states ->
             states + (packageName to ExtensionInstallDownloadState(packageName, bytesRead, contentLength))
         }
@@ -216,7 +282,7 @@ class ExtensionInstallService @Inject constructor(
     ) : eu.kanade.tachiyomi.network.ProgressListener {
 
         override fun update(bytesRead: Long, contentLength: Long, done: Boolean) {
-            updateDownloadState(packageName, bytesRead, contentLength)
+            updateDownloadState(packageName, bytesRead, contentLength, done)
         }
     }
 }
