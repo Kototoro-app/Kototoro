@@ -812,7 +812,7 @@ private fun UpdateDescription(
         version?.let {
             buildString {
                 append(context.getString(R.string.new_version_s, it.name))
-                val downloadSize = it.patchSize ?: it.apkSize
+                val downloadSize = it.apkSize
                 if (downloadSize > 0L) {
                     appendLine()
                     append(context.getString(R.string.size_s, FileSize.BYTES.format(context, downloadSize)))

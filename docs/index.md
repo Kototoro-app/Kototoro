@@ -39,8 +39,8 @@ features:
     details: Set up free or self-hosted WebDAV storage for multi-device backup and synchronization.
   - title: Windows & iOS Previews
     details: A shared Kotlin Multiplatform core runs the same library, backup format, and Mihon / Aniyomi / Tsundoku extensions on Windows and iOS.
-  - title: Fast OTA Updates
-    details: Save bandwidth with pure-Kotlin bspatch incremental delta updates direct from GitHub Releases.
+  - title: In-App Updates
+    details: Check and download ABI-matched releases directly from GitHub Releases with built-in mirror speed testing.
 ---
 
 ## Start With The Right Page
@@ -57,7 +57,6 @@ features:
 - Read [Architecture Review](./architecture/architecture-review.md) if you want a project-level architectural assessment before changing major subsystems.
 - Read [Architecture Roadmap](./architecture/architecture-roadmap.md) if you want to understand the active epics and planning.
 - Read [Favourites Library Improvement Plan](./architecture/favourites-komikku-alignment-implementation-plan-2026-09.md) for the full-list snapshot migration inspired by Komikku.
-- Read [Incremental OTA Updates](./architecture/incremental-updates.md) to learn how Kototoro achieves NDK-free pure Kotlin bspatch delta updating.
 - Read [Dynamic Plugin System Architecture](./architecture/dynamic_plugin_system.md) to understand how Kototoro and Kotatsu extension JARs are loaded dynamically using zero-overhead ClassLoaders.
 - Read [Plugin Development Guide](./plugin_development_guide.md) to learn how to build and publish third-party plugins in an independent repository using GitHub Actions.
 - Read [UI Improvement](./architecture/ui_improvement.md) to track UI enhancements.
@@ -74,7 +73,7 @@ features:
 - Broad source support: built-in, Kotatsu-Redo, Mihon, Aniyomi, IReader, Legado, TVBox
 - Local file import: CBZ, EPUB, TXT, MKV, MP4 and more
 - Dynamic zero-overhead UI plugins via external classloaders
-- Fast pure-Kotlin OTA delta updates
+- In-app updates from GitHub Releases with ABI selection and mirror speed testing
 - Built-in browser with Cloudflare challenge bypass
 - Reading statistics, quick-access widget, and Telegram backup bot
 

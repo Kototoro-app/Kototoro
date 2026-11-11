@@ -952,7 +952,6 @@
     <string name="aniyomi_sources">Aniyomi</string>
     <string name="aniyomi_sources_directory">Répertoire des extensions Aniyomi</string>
     <string name="app_name">Kototoro</string>
-    <string name="assembling_apk">Assemblage de la mise à jour incrémentielle. Veuillez patienter…</string>
     <string name="auth_title">Authentification</string>
     <string name="auto_double_foldable">Deux pages automatique sur pliable</string>
     <string name="available_extension_count">%d disponible(s)</string>

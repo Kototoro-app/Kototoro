@@ -11,7 +11,6 @@ Kototoro 是一个开源的 Android 应用，将漫画、小说和视频整合�
 - 广泛的图源支持：Mihon、Aniyomi、IReader、Legado、TVBox、Cloudstream3、Tsuki 扩展 + 动态解析器
 - 自定义媒体空间（Spaces）：内置漫画/小说/动漫空间，支持按内容类型、语言与来源自定义浏览范围
 - 动态 UI 插件系统（通过外部 classloader）
-- 纯 Kotlin 实现的 OTA 增量更新（bspatch）
 - WebDAV 多设备同步
 
 # 开发和调试工具
@@ -679,12 +678,6 @@ KMP/iOS 方案与进度见 `docs/architecture/kmp-ios-plan-2026-10.md`。KMP 模
 - 动态监听 APK 安装/卸载事件（BroadcastReceiver）
 - 处理 Cloudflare 挑战和 Cookie 同步
 
-**增量 OTA 更新**（参考 `docs/architecture/incremental-updates.md`）：
-- CI/CD 使用 `bsdiff` 生成增量补丁
-- 纯 Kotlin 实现的 `bspatch` 算法（无 NDK 依赖）
-- 严格的版本匹配验证
-- 自动回退到完整 APK 下载
-
 **数据库**：
 - Room 数据库（`MangaDatabase`）在 KMP 模块 `core-db/`，DATABASE_VERSION = 87（`core-db/src/commonMain/.../core/db/MangaDatabase.kt`）；导出的 schema 仍位于 `app/schemas/org.skepsun.kototoro.core.db.MangaDatabase/`（已提交，由 `core-db` 的 Room 插件导出，`app` 的 androidTest 以 assets 读取）
 - 迁移文件 `core-db/src/androidMain/kotlin/org/skepsun/kototoro/core/db/migrations/Migration1To2.kt` 到 `Migration83To84.kt`（另含历史遗留的降级迁移 `Migration24To23.kt`，仍保留在 `getDatabaseMigrations` 列表中，位于 `core-db` 的 `MangaDatabaseMigrations.kt`）；84→85 起的迁移在 commonMain（`Migration84To85.kt` 到 `Migration86To87.kt`，注册在 `sharedDatabaseMigrations()`），Android/Windows/iOS 三端共用
@@ -754,7 +747,7 @@ RELEASE_KEY_PASSWORD=***
 1. 更新 `versionCode` 和 `versionName`
 2. 创建 Git 标签（如 `v1.0.0`）
 3. 推送标签触发 GitHub Actions 自动构建
-4. CI 自动生成 APK 和增量补丁并创建 Release
+4. CI 自动生成 APK 并创建 Release
 
 ### 更新日志格式
 GitHub Release 正文按最近版本（如 v2.4.0）的固定格式手写，CI 自动生成的提交列表只作为末尾附录：
@@ -786,7 +779,6 @@ GitHub Release 正文按最近版本（如 v2.4.0）的固定格式手写，CI �
 - `docs/development.md` - 开发入门
 - `docs/getting-started.md` - 用户快速上手
 - `docs/architecture/external-extension-integration-guide.md` - 外部扩展集成详解
-- `docs/architecture/incremental-updates.md` - 增量更新机制
 - `docs/architecture/dynamic_plugin_system.md` - 动态 UI 插件系统
 - `docs/architecture/custom-spaces.md` - 自定义媒体空间架构
 - `docs/architecture/entity-system-removal-handoff-2026-09.md` - 实体/work 体系移除与数据迁移交接（旧实体文档已归档到 `docs/archive/entity-system/`）

@@ -20,8 +20,6 @@ data class AppVersion(
     val url: String,
     val apkSize: Long,
     val apkUrl: String,
-    val patchSize: Long? = null,
-    val patchUrl: String? = null,
     val description: String,
     val source: AppUpdateSource = AppUpdateSource.GITHUB,
 ) : Parcelable {

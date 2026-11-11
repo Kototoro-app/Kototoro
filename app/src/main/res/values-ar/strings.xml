@@ -898,7 +898,6 @@
     <string name="aniyomi_sources">أنيومي</string>
     <string name="aniyomi_sources_directory">دليل إضافات أنيومي</string>
     <string name="app_name">كوتوتورو</string>
-    <string name="assembling_apk">تجميع التحديث التدريجي. يرجى الانتظار…</string>
     <string name="auth_title">المصادقة</string>
     <string name="auto_double_foldable">صفحتان تلقائيتان على الأجهزة القابلة للطي</string>
     <string name="available_extension_count">%d متاح</string>

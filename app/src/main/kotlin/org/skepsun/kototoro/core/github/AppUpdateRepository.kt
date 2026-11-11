@@ -133,19 +133,7 @@ class AppUpdateRepository @Inject constructor(
                 available.retainAll { it.versionId.variantType.isEmpty() }
             }
 
-            val latest = available.maxByOrNull { it.versionId }?.takeIf { it.versionId > currentVersion }
-            if (latest != null && latest.patchUrl != null) {
-                // Incremental patches are generated only against the immediately preceding release.
-                val sorted = available.sortedByDescending { it.versionId }
-                val previousReleaseIndex = sorted.indexOf(latest) + 1
-                val isImmediatePrecursor = previousReleaseIndex < sorted.size &&
-                    currentVersion == sorted[previousReleaseIndex].versionId
-                if (!isImmediatePrecursor) {
-                    // Fall back to the full APK when the installed version skipped a release.
-                    return@runCatchingCancellable latest.copy(patchUrl = null, patchSize = null)
-                }
-            }
-            latest
+            available.maxByOrNull { it.versionId }?.takeIf { it.versionId > currentVersion }
         }.onFailure {
             it.printStackTrace()
         }.onSuccess {
@@ -176,12 +164,10 @@ internal fun parseUpdateReleases(
     supportedAbis: List<String>,
 ): List<AppVersion> = jsonArray.mapJSONNotNull { json ->
     val assets = json.optJSONArray("assets")?.toAssetList().orEmpty()
-    val apkAssets = assets.filter { it.isApkAsset() }
-    if (apkAssets.isEmpty()) {
+    if (assets.isEmpty()) {
         return@mapJSONNotNull null
     }
-    val apkAsset = apkAssets.findBestAsset(supportedAbis) ?: apkAssets.first()
-    val patchAsset = assets.filter { it.isPatchAsset() }.findBestAsset(supportedAbis)
+    val apkAsset = assets.findBestAsset(supportedAbis) ?: assets.first()
     val apkUrl = apkAsset.optString("browser_download_url").takeIf { it.isNotBlank() }
         ?: return@mapJSONNotNull null
     val tagName = json.optString("tag_name")
@@ -199,8 +185,6 @@ internal fun parseUpdateReleases(
         name = versionName,
         apkSize = apkAsset.optLong("size", 0L),
         apkUrl = apkUrl,
-        patchSize = patchAsset?.optLong("size", 0L),
-        patchUrl = patchAsset?.optString("browser_download_url")?.takeIf { it.isNotBlank() },
         description = json.optString("body"),
         source = source,
     )
@@ -235,7 +219,7 @@ private fun JSONArray.toAssetList(): List<JSONObject> {
     val assetList = ArrayList<JSONObject>(length())
     for (i in 0 until length()) {
         val item = getJSONObject(i)
-        if (item.isApkAsset() || item.isPatchAsset()) {
+        if (item.isApkAsset()) {
             assetList += item
         }
     }
@@ -245,10 +229,6 @@ private fun JSONArray.toAssetList(): List<JSONObject> {
 private fun JSONObject.isApkAsset(): Boolean {
     return optString("content_type") == CONTENT_TYPE_APK ||
         optString("name").endsWith(".apk", ignoreCase = true)
-}
-
-private fun JSONObject.isPatchAsset(): Boolean {
-    return optString("name").endsWith(".patch", ignoreCase = true)
 }
 
 private fun List<JSONObject>.findBestAsset(supportedAbis: List<String>): JSONObject? {

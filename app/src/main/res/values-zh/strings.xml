@@ -442,7 +442,6 @@
     <string name="crop_stitch_top_to_bottom">从上到下</string>
     <string name="crop_stitch_left_to_right">从左到右</string>
     <string name="crop_stitch_right_to_left">从右到左</string>
-    <string name="assembling_apk">正在组装增量更新包，请稍候…</string>
     <string name="auth_complete">授权</string>
     <string name="auth_not_supported_by">不支持在%s上登录</string>
     <string name="auth_required">登录后可查看此内容</string>

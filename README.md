@@ -40,8 +40,8 @@ Kototoro is an open-source Android app that brings manga, novels, and video into
   *(本地文件导入，支持 CBZ、EPUB、TXT、MKV 等格式)*
 - Dynamic zero-overhead UI plugins via external classloaders
   *(通过外部 classloader 实现的零开销动态 UI 插件)*
-- Fast pure-Kotlin OTA delta updates (bspatch) 
-  *(纯 Kotlin 实现的快速 OTA 增量更新)*
+- In-app updates from GitHub Releases with ABI selection and mirror speed testing
+  *(应用内通过 GitHub Releases 检查更新，支持按 ABI 匹配与镜像测速)*
 - Site favorites import and synchronization for supported services 
   *(站点收藏导入与同步)*
 - Built-in browser with Cloudflare challenge bypass, with automatic background handling inspired by kotatsu-redo 
