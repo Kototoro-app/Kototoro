@@ -8,17 +8,14 @@
 [![Translation Docs](https://img.shields.io/badge/docs-auto--translation-blue)](https://kototoro-app.github.io/Kototoro/automatic-translation)
 [![爱发电赞助我们](https://img.shields.io/badge/❤%20支持我们-爱发电-orange)](https://www.ifdian.net/a/kototoro)
 
-Kototoro is an open-source Android app that brings manga, novels, and video into one reader. It combines broad source compatibility with local OCR + translation, video super-resolution, and WebDAV-based multi-device sync. A shared Kotlin Multiplatform core also powers **Windows** and **iOS** preview builds.
+Kototoro is an open-source, Compose-first app that brings manga, novels, and video into one reader. It combines broad source compatibility with local OCR + translation, video super-resolution, and WebDAV-based multi-device sync. A shared Kotlin Multiplatform core also powers **Windows** and **iOS** preview builds.
 
-> **Compose-first, end to end**: Kototoro may be one of the first genuinely all-Compose manga, novel, and video reading apps. Compose is not just used for the surrounding screens: the comic/novel reader and the video player are Compose too. The former XML, Fragment, and hybrid transition layers have been reduced to the bare minimum, so the core reading and playback experience is now built around Jetpack Compose.
+*(Kototoro 是一款开源的 Compose 优先应用，将漫画、小说和视频整合到一个阅读器中，兼具广泛的图源兼容性、本地 OCR + 机器翻译、视频超分辨率加载以及基于 WebDAV 的多设备同步能力，并通过同一套 Kotlin Multiplatform 内核提供 **Windows** 与 **iOS** 预览版。)*
+
+> [!NOTE]
+> **Project status:** Originally derived from Kotatsu, Kototoro is now independently developed as an all-Compose, multi-format reading and playback platform — legacy XML, Fragment, and hybrid layers are largely gone, and it is no longer a Kotatsu fork.
 >
-> **中文简介**：Kototoro 是一款开源的 Android 应用程序，将漫画、小说和视频整合到了一个阅读器中。它结合了极好的图源兼容性、本地 OCR + 机器翻译、视频超分辨率加载以及基于 WebDAV 的多设备同步功能。基于同一套 Kotlin Multiplatform 内核，Kototoro 也提供 **Windows** 与 **iOS** 预览版。
->
-> **Compose 优先，端到端构建**：Kototoro 可能是最早一批真正意义上的全 Jetpack Compose 漫画、小说和视频阅读器之一。Compose 不只是用于外围页面，漫画/小说阅读器和视频播放器本身也全部采用 Compose 构建。旧的 XML、Fragment 以及混合过渡层已经基本清空，核心阅读与播放体验如今都围绕 Jetpack Compose 打造。
->
-> **Project status**: Originally derived from Kotatsu, Kototoro is now independently developed as a multi-format, Compose-first reading/player platform. It borrows some Kotatsu UI patterns and source code as historical inspiration, but it is no longer a Kotatsu fork.
->
-> **项目定位**：Kototoro 最初源于 Kotatsu，现已独立开发，成为一个多格式、Compose 优先的阅读/播放器平台。它借鉴了 Kotatsu 的部分界面与源代码作为历史基础，但已经不再是一个 Kotatsu 分叉项目。
+> **项目定位：** Kototoro 最初源于 Kotatsu，现已独立开发为全 Jetpack Compose 的多格式阅读与播放平台；旧 XML、Fragment 与混合过渡层已基本清空，不再作为 Kotatsu 的分支项目维护。
 
 ## Why Kototoro / 核心特性
 
