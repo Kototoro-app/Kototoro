@@ -71,6 +71,8 @@ internal val DisplayOptionsScrimColor = Color.Black.copy(alpha = 0.08f)
 @Composable
 fun DisplayOptionsSheet(
     supportsDisplayModeMenu: Boolean,
+    // Favourites only: lets the user silence the "sources may be broken" banner.
+    supportsSourceHealthToggle: Boolean = false,
     currentListMode: ListMode,
     onListModeSelected: (ListMode) -> Unit,
     supportsGridSizeSlider: Boolean,
@@ -101,6 +103,9 @@ fun DisplayOptionsSheet(
     val showExtraInfo by settings.observeAsState(
         org.skepsun.kototoro.core.prefs.AppSettings.KEY_SHOW_EXTRA_INFO_ON_CARDS,
     ) { showExtraInfoOnCards }
+    val showSourceHealth by settings.observeAsState(
+        org.skepsun.kototoro.core.prefs.AppSettings.KEY_SOURCE_HEALTH_BANNER,
+    ) { isSourceHealthBannerEnabled }
     if (BuildConfig.DEBUG) {
         DisposableEffect(Unit) {
             Log.d(
@@ -170,6 +175,20 @@ fun DisplayOptionsSheet(
                                 color = MaterialTheme.colorScheme.onSurface,
                                 modifier = Modifier.weight(1f),
                             )
+                            if (supportsSourceHealthToggle) {
+                                FilterChip(
+                                    selected = showSourceHealth,
+                                    onClick = { settings.isSourceHealthBannerEnabled = !showSourceHealth },
+                                    label = {
+                                        Icon(
+                                            painter = painterResource(R.drawable.ic_alert_outline),
+                                            contentDescription = stringResource(R.string.migration_health_banner_setting),
+                                            modifier = Modifier.size(FilterChipDefaults.IconSize),
+                                        )
+                                    },
+                                    modifier = Modifier.tvFocusable(shape = CircleShape, addFocusTarget = false),
+                                )
+                            }
                             FilterChip(
                                 selected = showExtraInfo,
                                 onClick = { settings.showExtraInfoOnCards = !showExtraInfo },

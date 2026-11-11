@@ -1328,6 +1328,7 @@ fun KototoroApp(
                         selectedSortOrder = selectedSortOrder,
                         onSortOrderSelected = onDisplaySortOrderSelected,
                         displayOptionsExtraContent = displayOptionsExtraContent,
+                        supportsSourceHealthToggle = isFavoritesRoute,
                     )
                     MainBottomChrome(
                         isLandscapeNavigation = isLandscapeNavigation,

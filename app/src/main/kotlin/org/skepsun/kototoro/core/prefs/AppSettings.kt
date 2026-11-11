@@ -1810,6 +1810,13 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
             prefs.edit { putBoolean(KEY_SHOW_SOURCE_ON_CARDS, value) }
         }
 
+    /** Whether the favourites screen warns about sources that look broken. */
+    var isSourceHealthBannerEnabled: Boolean
+        get() = prefs.getBoolean(KEY_SOURCE_HEALTH_BANNER, true)
+        set(value) {
+            prefs.edit { putBoolean(KEY_SOURCE_HEALTH_BANNER, value) }
+        }
+
     var showExtraInfoOnCards: Boolean
         get() = prefs.getBoolean(KEY_SHOW_EXTRA_INFO_ON_CARDS, false)
         set(value) {
@@ -3385,6 +3392,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_GITHUB_MIRROR = "github_mirror"
         const val KEY_GITHUB_MIRROR_SYNC_URL = "github_mirror_sync_url"
         const val KEY_APP_UPDATE_SOURCE = "app_update_source"
+        const val KEY_SOURCE_HEALTH_BANNER = "source_health_banner"
         const val KEY_SHOW_EXTRA_INFO_ON_CARDS = "show_extra_info_on_cards"
         const val KEY_HUGGINGFACE_MIRROR = "huggingface_mirror"
         const val KEY_BANGUMI_MIRROR = "bangumi_mirror"

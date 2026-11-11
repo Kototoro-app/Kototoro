@@ -12,7 +12,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
@@ -21,6 +23,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 
@@ -32,7 +36,11 @@ fun SourceHealthBanner(
     viewModel: SourceHealthBannerViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    AnimatedVisibility(visible = state.sourceCount > 0, modifier = modifier) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val appSettings = remember(context.applicationContext) { AppSettings(context.applicationContext) }
+    val enabled by appSettings.observeAsState(AppSettings.KEY_SOURCE_HEALTH_BANNER) { isSourceHealthBannerEnabled }
+    LaunchedEffect(enabled) { if (enabled) viewModel.refresh() }
+    AnimatedVisibility(visible = enabled && state.sourceCount > 0, modifier = modifier) {
         Surface(
             color = MaterialTheme.colorScheme.errorContainer,
             shape = MaterialTheme.shapes.large,
@@ -47,6 +55,7 @@ fun SourceHealthBanner(
                     modifier = Modifier.weight(1f),
                 )
                 TvTextButton(onClick = onOpen) { Text(stringResource(R.string.migration_title)) }
+                TvTextButton(onClick = viewModel::disable) { Text(stringResource(R.string.migration_health_banner_disable)) }
                 IconButton(
                     onClick = viewModel::dismiss,
                     modifier = Modifier.tvIconButtonRing(),

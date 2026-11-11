@@ -218,6 +218,7 @@ fun KototoroTopBar(
     selectedSortOrder: ListSortOrder? = null,
     onSortOrderSelected: (ListSortOrder) -> Unit = {},
     displayOptionsExtraContent: (@Composable (() -> Unit) -> Unit)? = null,
+    supportsSourceHealthToggle: Boolean = false,
     topBarStyle: TopBarStyle = TopBarStyle.EXPANDED_SEARCH,
     favoritesTabsPosition: FavoritesTabsPosition = FavoritesTabsPosition.BOTTOM_RAIL,
     verticalBarActions: VerticalBarActionsHost? = null,
@@ -752,6 +753,7 @@ fun KototoroTopBar(
         ) {
             org.skepsun.kototoro.list.ui.compose.DisplayOptionsSheet(
                 supportsDisplayModeMenu = supportsDisplayModeMenu,
+                supportsSourceHealthToggle = supportsSourceHealthToggle,
                 currentListMode = pendingListMode,
                 onListModeSelected = {
                     pendingListMode = it

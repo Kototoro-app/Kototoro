@@ -4,6 +4,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.ui.BaseViewModel
 import org.skepsun.kototoro.migration.domain.MigrationSettings
 import org.skepsun.kototoro.migration.domain.SourceHealthUseCase
@@ -15,6 +16,7 @@ data class HealthBannerState(val sourceCount: Int = 0, val key: String? = null)
 class SourceHealthBannerViewModel @Inject constructor(
     private val sourceHealthUseCase: SourceHealthUseCase,
     private val settings: MigrationSettings,
+    private val appSettings: AppSettings,
 ) : BaseViewModel() {
 
     private val _state = MutableStateFlow(HealthBannerState())
@@ -26,6 +28,10 @@ class SourceHealthBannerViewModel @Inject constructor(
 
     fun refresh() {
         launchJob(Dispatchers.Default) {
+            if (!appSettings.isSourceHealthBannerEnabled) {
+                _state.value = HealthBannerState()
+                return@launchJob
+            }
             val attention = sourceHealthUseCase().filter { it.status.needsAttention }
             val key = attention.map { it.source.name }.sorted().joinToString(",")
             _state.value = if (attention.isEmpty() || key == settings.dismissedHealthKey) {
@@ -34,6 +40,11 @@ class SourceHealthBannerViewModel @Inject constructor(
                 HealthBannerState(attention.size, key)
             }
         }
+    }
+
+    fun disable() {
+        appSettings.isSourceHealthBannerEnabled = false
+        _state.value = HealthBannerState()
     }
 
     fun dismiss() {

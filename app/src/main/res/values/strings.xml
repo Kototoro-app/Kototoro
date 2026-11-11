@@ -4021,6 +4021,8 @@
         <item quantity="one">%1$d source may be broken, affecting %2$d favourites</item>
         <item quantity="other">%1$d sources may be broken, affecting %2$d favourites</item>
     </plurals>
+    <string name="migration_health_banner_disable">Don\'t show again</string>
+    <string name="migration_health_banner_setting">Broken source warnings</string>
     <string name="migration_health_banner_action">Migrate these %d</string>
     <string name="migration_health_needs_attention">Needs attention</string>
     <string name="migration_health_ok">OK</string>

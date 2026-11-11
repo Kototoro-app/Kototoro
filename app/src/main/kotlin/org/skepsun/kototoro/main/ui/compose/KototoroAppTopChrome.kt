@@ -118,6 +118,7 @@ internal fun BoxScope.MainTopChrome(
     selectedSortOrder: org.skepsun.kototoro.list.domain.ListSortOrder? = null,
     onSortOrderSelected: (org.skepsun.kototoro.list.domain.ListSortOrder) -> Unit = {},
     displayOptionsExtraContent: (@Composable (() -> Unit) -> Unit)? = null,
+    supportsSourceHealthToggle: Boolean = false,
     topBarStyle: TopBarStyle = TopBarStyle.EXPANDED_SEARCH,
     favoritesTabsPosition: FavoritesTabsPosition = FavoritesTabsPosition.BOTTOM_RAIL,
 ) {
@@ -198,6 +199,7 @@ internal fun BoxScope.MainTopChrome(
                 topBarStyle = topBarStyle,
                 favoritesTabsPosition = favoritesTabsPosition,
                 displayOptionsExtraContent = displayOptionsExtraContent,
+                supportsSourceHealthToggle = supportsSourceHealthToggle,
                 modifier = contentModifier,
             )
         }
