@@ -3,6 +3,12 @@ package org.skepsun.kototoro.tracker.domain
 import kotlinx.datetime.TimeZone
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
+import org.skepsun.kototoro.core.jsonsource.ContentGroup
+import org.skepsun.kototoro.core.jsonsource.OriginGroup
+import org.skepsun.kototoro.tracker.data.FeedLogRow
+import org.skepsun.kototoro.tracker.domain.feed.FeedCardRow
+import org.skepsun.kototoro.tracker.domain.feed.FeedDeriver
+import org.skepsun.kototoro.tracker.domain.feed.FeedSnapshotAssembler
 import org.skepsun.kototoro.tracker.data.TrackLogEntity
 
 class UpdateLifecycleTest {
@@ -14,6 +20,43 @@ class UpdateLifecycleTest {
         id, 1, chapters.joinToString("\n") { it.title }, chapters.maxOf { it.discoveredAt }, unseen,
         encodeUpdateChapters(chapters.toList()),
     )
+
+    @Test
+    fun `one batch split across branches and days needs distinct presentation identities`() {
+        val groups = dailyUpdateGroups(listOf(log(3328,
+            chapter(1, day, branch = "A"), chapter(2, day, branch = "B"),
+            chapter(3, 2 * day, branch = "A"),
+        )), TimeZone.UTC)
+        assertEquals(3, groups.size)
+        assertEquals(groups.size, groups.map { it.key }.distinct().size)
+    }
+
+    @Test
+    fun `feed keys stay unique across split batches and stable when a daily batch grows`() {
+        fun derive(logs: List<TrackLogEntity>): List<FeedCardRow> {
+            val assembler = FeedSnapshotAssembler(
+                { _, _ -> ContentGroup.entries.first() },
+                { OriginGroup.entries.first() },
+            )
+            val snapshot = assembler.buildSnapshot(logs.map {
+                FeedLogRow(it.id, 1, 1, null, it.chapters, it.createdAt,
+                    it.isUnread, null, false, 1, "Work", null, null, null, "TEST", "/work", null,
+                    null, false, 0f, it.chapterMetadata)
+            }, emptyList(), emptyList(), emptyList(), emptyList())
+            return FeedDeriver.derive(
+                FeedDeriver.Input(snapshot)).visibleRows
+        }
+        val batch = log(3328, chapter(1, day, branch = "A"), chapter(2, day, branch = "B"),
+            chapter(3, 2 * day, branch = "A"))
+        val rows = derive(listOf(batch))
+        assertEquals(3, rows.size)
+        assertEquals(3, rows.map { it.key }.distinct().size)
+        assertTrue(rows.all { it.logIds == listOf(3328L) }, "Actions still address the source logs")
+        val grown = derive(listOf(batch, log(3329, chapter(4, day + 1, branch = "A"))))
+        assertEquals(rows.map { it.key }.toSet(), grown.map { it.key }.toSet())
+        val mixed = derive(listOf(batch, TrackLogEntity(3330, 1, "Old chapter", day, false)))
+        assertEquals(4, mixed.map { it.key }.distinct().size)
+    }
 
     @Test
     fun `Jan 1 publications discovered Jan 3 belong on Jan 3 even after reading`() {

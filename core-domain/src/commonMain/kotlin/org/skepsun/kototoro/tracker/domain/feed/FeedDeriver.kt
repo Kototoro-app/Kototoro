@@ -71,6 +71,7 @@ object FeedDeriver {
                 chapterMetadata = if (group.chapters.isEmpty()) "" else encodeUpdateChapters(group.chapters),
                 updateCount = group.count,
                 updateChapters = group.chapters,
+                key = group.key,
             )
         } + rows.filter { it.logId <= 0 }
         val textQuery = LibraryTextQuery(input.query)

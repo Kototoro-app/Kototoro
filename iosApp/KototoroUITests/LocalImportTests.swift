@@ -2871,6 +2871,36 @@ final class LocalImportTests: XCTestCase {
     }
 
     @MainActor
+    func testNovelPageTurnsKeepTopControlsAndTextBoundsStable() throws {
+        openNovelControls(mode: "PAGED", resetToStart: false)
+        let text = app.staticTexts.matching(NSPredicate(format: "identifier IN %@",
+            ["novel.firstParagraph", "novel.page"])).firstMatch
+        XCTAssertTrue(text.waitForExistence(timeout: 30), app.debugDescription)
+        let top = text.frame.minY
+        let more = app.buttons["novel.more"]
+        let controlsY = more.frame.midY
+        let window = app.windows.firstMatch
+        for index in 0..<4 {
+            let previous = text.label
+            window.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.5)).tap()
+            let changed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+                text.exists && text.label != previous
+            }, object: nil)
+            wait(for: [changed], timeout: 10)
+            XCTAssertEqual(text.frame.minY, top, accuracy: 1)
+            XCTAssertEqual(more.frame.midY, controlsY, accuracy: 1)
+            attach("小说翻页顶栏 \(index + 1)")
+        }
+        window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        XCTAssertTrue(more.waitForNonExistence(timeout: 10))
+        attach("小说翻页后隐藏顶栏")
+        window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        XCTAssertTrue(more.waitForExistence(timeout: 10))
+        XCTAssertEqual(more.frame.midY, controlsY, accuracy: 1)
+        attach("小说翻页后恢复顶栏")
+    }
+
+    @MainActor
     func testNovelPagedChromeHidesWithoutChangingTheDisplayedText() throws {
         openNovelControls(mode: "PAGED")
         let text = app.staticTexts["novel.firstParagraph"].label
@@ -2968,7 +2998,7 @@ final class LocalImportTests: XCTestCase {
         XCTAssertTrue(accessory.waitForExistence(timeout: 10), app.debugDescription)
     }
 
-    private func openNovelControls(mode: String) {
+    private func openNovelControls(mode: String, resetToStart: Bool = true) {
         app.terminate()
         app.launchArguments += ["-novel.reader.mode", mode]
         app.launch()
@@ -2979,8 +3009,10 @@ final class LocalImportTests: XCTestCase {
             progress.exists && progress.isEnabled
         }, object: nil)
         wait(for: [ready], timeout: 30)
-        progress.adjust(toNormalizedSliderPosition: 0)
-        XCTAssertTrue(app.staticTexts["novel.firstParagraph"].waitForExistence(timeout: 30), app.debugDescription)
+        if resetToStart {
+            progress.adjust(toNormalizedSliderPosition: 0)
+            XCTAssertTrue(app.staticTexts["novel.firstParagraph"].waitForExistence(timeout: 30), app.debugDescription)
+        }
     }
 
     private func setNovelFloating(_ action: String, enabled: Bool) {

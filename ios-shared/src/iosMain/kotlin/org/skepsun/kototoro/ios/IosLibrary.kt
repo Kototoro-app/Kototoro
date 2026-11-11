@@ -456,6 +456,14 @@ class IosLibrary {
         }
     }
 
+    /** The same unseen-work query as Android's records/feed badge, independent of pending chapter counts. */
+    @Throws(Exception::class)
+    suspend fun unseenUpdates(): List<IosSourceContent> = database.useReaderConnection { connection ->
+        connection.deferredTransaction {
+            records.findMany(database.getTracksDao().findUnreadWorkIds()).map(::IosSourceContent)
+        }
+    }
+
     @Throws(Exception::class)
     suspend fun checkUpdates(
         sources: IosSources,

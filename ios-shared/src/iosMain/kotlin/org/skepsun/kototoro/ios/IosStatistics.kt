@@ -173,7 +173,7 @@ class IosStatistics internal constructor(private val owner: IosLibrary) {
             org.skepsun.kototoro.tracker.domain.dailyUpdateGroups(logs, zone).forEach { group -> contents[group.mangaId]?.let { content ->
                 val full = updateContents[group.mangaId] ?: content
                 val keys = group.chapters.map { it.key }
-                timeline += IosTimelineEvent("update-${group.logs.maxBy { it.createdAt }.id}", content,
+                timeline += IosTimelineEvent("update-${group.key}", content,
                     group.discoveredAt, true, group.names.joinToString("、"), 0, group.count,
                     downloadChapters = resolveUpdateEventChapters(full, group.names, keys),
                     updateLogIds = group.logs.map { it.id }, updateChapterKeys = keys,

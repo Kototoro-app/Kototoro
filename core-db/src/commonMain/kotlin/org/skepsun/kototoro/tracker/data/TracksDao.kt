@@ -80,22 +80,11 @@ abstract class TracksDao : MangaQueryBuilder.ConditionCallback {
     @Query("SELECT COUNT(*) FROM tracks WHERE chapters_new > 0")
     abstract fun observeUpdateContentCount(): Flow<Int>
 
-    @Query(
-        """
-        SELECT COUNT(*)
-        FROM (
-            SELECT manga_id
-            FROM track_logs
-            WHERE unread = 1
-            UNION
-            SELECT manga_id
-            FROM tracks
-            WHERE chapters_new > 0
-                AND NOT EXISTS (SELECT 1 FROM track_logs WHERE track_logs.manga_id = tracks.manga_id)
-        )
-        """,
-    )
+    @Query("SELECT COUNT(*) FROM (" + UNREAD_WORK_IDS_QUERY + ")")
     abstract fun observeUnreadWorkCount(): Flow<Int>
+
+    @Query(UNREAD_WORK_IDS_QUERY)
+    abstract suspend fun findUnreadWorkIds(): List<Long>
 
     @Query("SELECT IFNULL(chapters_new, 0) FROM tracks WHERE manga_id = :mangaId LIMIT 1")
     abstract fun observeNewChapters(mangaId: Long): Flow<Int>
@@ -244,3 +233,12 @@ abstract class TracksDao : MangaQueryBuilder.ConditionCallback {
             "), 0)"
     }
 }
+
+/** Reminder badges count distinct unseen works; pending chapters only stand in when no event exists. */
+private const val UNREAD_WORK_IDS_QUERY = """
+    SELECT manga_id FROM track_logs WHERE unread = 1
+    UNION
+    SELECT manga_id FROM tracks
+    WHERE chapters_new > 0
+        AND NOT EXISTS (SELECT 1 FROM track_logs WHERE track_logs.manga_id = tracks.manga_id)
+"""

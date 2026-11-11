@@ -20,8 +20,8 @@ import javax.inject.Inject
  *
  * The [Content] a card carries is a display **stub** built from the narrow row —
  * the same discipline as `FavouritesCardMapper`: no description, no `sourceData`,
- * no chapters, empty urls. Item identity is the log id (the synthetic showAll row
- * uses the negated manga id, exactly like the legacy `fromAllTrackedContent`).
+ * no chapters, empty urls. Group keys identify displayed daily/branch rows independently of their member log ids;
+ * synthetic showAll rows keep their own log-based keys.
  *
  * Card fields follow the legacy `ContentListMapper.toFeedItems` mapping:
  * `count` is the chapter-list size (or the pending count of a synthetic row),
@@ -62,6 +62,7 @@ internal fun buildFeedCardModel(row: FeedCardRow, request: FeedCardMapper.Reques
         logIds = row.logIds,
         pendingCount = row.pendingCount,
         updateChapters = row.updateChapters,
+        key = row.key,
     )
 }
 

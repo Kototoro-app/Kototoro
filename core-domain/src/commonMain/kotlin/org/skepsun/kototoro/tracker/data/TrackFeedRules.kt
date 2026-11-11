@@ -7,6 +7,16 @@ import org.skepsun.kototoro.tracker.domain.mergeUpdateChapters
 import org.skepsun.kototoro.tracker.domain.refreshPendingUpdateCount
 import org.skepsun.kototoro.tracker.domain.reconcileUpdateNotifications
 
+/** Restore/sync repair shared by all hosts. The caller owns the write transaction. */
+suspend fun MangaDatabase.normalizeRestoredTrackFeedState(
+    localSources: List<String> = listOf("LOCAL", "LOCAL_NOVEL", "LOCAL_VIDEO"),
+) {
+    getTrackLogsDao().deleteOrphans()
+    getTracksDao().clearUnrecordedCounters(localSources)
+    getTracksDao().insertTracksFromUnreadLogs()
+    getTracksDao().gc()
+}
+
 fun mergeRestoredTrackNewChapters(local: TrackEntity, remote: TrackEntity): Int {
     val newer = if (remote.isNewerThan(local)) remote else local
     return if (newer.newChapters == 0) 0 else maxOf(local.newChapters, remote.newChapters)

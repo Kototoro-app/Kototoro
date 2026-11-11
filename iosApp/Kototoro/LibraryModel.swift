@@ -60,11 +60,10 @@ final class LibraryModel: ObservableObject {
         }
     }
     private(set) var updateChapterCounts: [String: Int] = [:]
-    /// New chapters not read yet, for the records tab's badge; works the updates feed hides are not counted.
-    var unreadUpdateChapters: Int {
-        updates.reduce(0) { total, update in
-            AdultContentFilter.hides(update.content, in: .feed) ? total : total + max(Int(update.newChapters), 0)
-        }
+    @Published private(set) var unseenUpdates: [IosSourceContent] = []
+    /// The records tab counts unseen works, as Android does; chapter counters belong to each work.
+    var unreadUpdatesCount: Int {
+        unseenUpdates.filter { !AdultContentFilter.hides($0, in: .feed) }.count
     }
     @Published private(set) var isCheckingUpdates = false
     /// The running check's counts (Android's checking notification); nil before the first report and when idle.
@@ -185,6 +184,7 @@ final class LibraryModel: ObservableObject {
         favourites = try await library.favourites()
         history = try await library.history()
         updates = try await library.updates()
+        unseenUpdates = try await library.unseenUpdates()
         categories = try await library.categories()
         recordsRevision += 1
     }
@@ -212,6 +212,12 @@ final class LibraryModel: ObservableObject {
     func markAllUpdatesRead() async {
         do { try await library?.markAllUpdatesRead(); try await refreshRecords() }
         catch { self.error = error.localizedDescription }
+    }
+
+    func markUpdateSeen(_ event: IosTimelineEvent) async throws {
+        guard let library else { return }
+        try await library.markUpdateSeen(event: event)
+        unseenUpdates = try await library.unseenUpdates()
     }
 
     func checkUpdates(_ sources: IosSources) async {

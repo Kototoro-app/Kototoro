@@ -175,7 +175,7 @@ internal fun DesktopFeedPanel(controller: DesktopController, state: DesktopAppSt
                 val label = feedDateLabel(row.createdAt)
                 (row to label.takeIf { it != previousLabel }).also { previousLabel = label }
             }
-            items(labelled, key = { it.first.logId }) { (row, label) ->
+            items(labelled, key = { it.first.key }) { (row, label) ->
                 FeedRow(controller, state, row, label, enabled)
             }
         }

@@ -12,6 +12,7 @@ import org.skepsun.kototoro.sync.google.domain.SyncContentStore
 import org.skepsun.kototoro.sync.google.domain.importSyncContent
 import org.skepsun.kototoro.tracker.data.mergeRestoredTrack
 import org.skepsun.kototoro.tracker.data.mergeRestoredTrackLog
+import org.skepsun.kototoro.tracker.data.normalizeRestoredTrackFeedState
 
 /**
  * Applies Android's library protocol atomically. Platform-specific sections remain in the upload unchanged.
@@ -25,6 +26,7 @@ class LibraryDriveSync(private val database: MangaDatabase, private val sourceEd
             applied.clear()
             val snapshot = remote?.normalizeToContentV3()
             if (snapshot != null) apply(snapshot)
+            database.normalizeRestoredTrackFeedState()
             if (snapshot != null && sourceEdits != null) applySourceStates(snapshot.sourceStates, sourceEdits, applied)
             val history = database.getHistoryDao().findAllEntriesIncludingDeleted()
             val favourites = database.getFavouritesDao().findAllEntriesIncludingDeleted()

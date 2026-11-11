@@ -314,7 +314,7 @@ fun FeedScreen(
 
 private fun feedItemKey(item: ListModel): Any = when (item) {
     is QuickFilter -> "feed_filters"
-    is FeedItem -> "feed_${item.id}"
+    is FeedItem -> "feed_${item.key}"
     is UpdatedContentHeader -> "updates_header"
     is ListHeader -> "header_${item.hashCode()}"
     is LoadingState -> "loading"

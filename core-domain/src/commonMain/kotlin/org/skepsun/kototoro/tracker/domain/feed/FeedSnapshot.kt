@@ -68,6 +68,7 @@ data class FeedCardRow(
     val pendingCount: Int = -1,
     val updateCount: Int = chapters.size,
     val updateChapters: List<org.skepsun.kototoro.tracker.domain.UpdateChapter> = emptyList(),
+    val key: String = "log:$logId",
 ) {
     val hasDisplay: Boolean
         get() = displayMangaId != null

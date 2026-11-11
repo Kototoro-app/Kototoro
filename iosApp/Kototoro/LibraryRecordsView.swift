@@ -892,7 +892,7 @@ private struct RecordsTimeline: View {
         guard let event = item.event, event.isUpdate, event.isUnseen, !seenEvents.contains(event.id) else { return }
         Task {
             do {
-                try await library.library?.markUpdateSeen(event: event)
+                try await library.markUpdateSeen(event)
                 seenEvents.insert(event.id)
             } catch { /* A later refresh can retry acknowledging this reminder. */ }
         }

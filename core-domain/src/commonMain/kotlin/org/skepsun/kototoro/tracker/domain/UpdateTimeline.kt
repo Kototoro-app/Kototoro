@@ -17,6 +17,10 @@ data class DailyUpdateGroup(
     val pendingCount: Int,
     val isUnseen: Boolean = pendingCount != 0 && logs.any { it.isUnread },
 ) {
+    /** A log can contribute to several branches or days, so its id cannot identify a displayed group. */
+    val key: String get() = listOf(mangaId.toString(), day, branch?.let { "branch:$it" } ?: "no-branch",
+        if (chapters.isEmpty()) "legacy" else "chapters").joinToString("") { "${it.length}:$it" }
+
     val count: Int get() = when {
         chapters.isNotEmpty() -> chapters.size
         names.isEmpty() || names.any { it == "New chapters" || it.startsWith("New chapters x ") } -> -1

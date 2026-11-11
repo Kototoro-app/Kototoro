@@ -21,6 +21,7 @@ data class FeedItem(
     val logIds: List<Long> = listOf(id),
     val pendingCount: Int = -1,
     val updateChapters: List<org.skepsun.kototoro.tracker.domain.UpdateChapter> = emptyList(),
+    val key: String = "log:$id",
 ) : ListModel {
 
     val imageUrl: String?
@@ -32,7 +33,7 @@ data class FeedItem(
     fun toContentWithOverride() = manga.withOverride(override)
 
     override fun areItemsTheSame(other: ListModel): Boolean {
-        return other is FeedItem && other.id == id
+        return other is FeedItem && other.key == key
     }
 
     override fun getChangePayload(previousState: ListModel): Any? = when {

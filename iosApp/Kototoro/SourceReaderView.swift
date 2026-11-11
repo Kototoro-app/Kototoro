@@ -1494,6 +1494,7 @@ struct SourceReaderView: View {
         }
         .background(settings.background.ignoresSafeArea())
         .background(EdgeSwipeBack(enabled: settings.value.edgeSwipeBack))
+        .scrollEdgeEffectStyle(.soft, for: .top)
         .toolbar(.hidden, for: .tabBar)
         // The top controls live in the system navigation bar, as on the details page, so they sit where its controls
         // do and the bar hands its back button over when the reader is popped. Bottom panels keep their own row.
@@ -2478,6 +2479,7 @@ private struct ReaderPageZoom<Content: View>: UIViewRepresentable {
         view.showsVerticalScrollIndicator = false
         view.showsHorizontalScrollIndicator = false
         view.contentInsetAdjustmentBehavior = .never
+        view.topEdgeEffect.style = .soft
         view.scrollsToTop = false
         view.backgroundColor = .clear
         view.clipsToBounds = true

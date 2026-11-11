@@ -558,6 +558,7 @@ final class ReaderStripController: UIViewController, UIScrollViewDelegate, UIGes
         scrollView.frame = view.bounds
         scrollView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         scrollView.contentInsetAdjustmentBehavior = .never
+        scrollView.topEdgeEffect.style = .soft
         scrollView.automaticallyAdjustsScrollIndicatorInsets = false
         scrollView.showsVerticalScrollIndicator = false
         scrollView.showsHorizontalScrollIndicator = false
