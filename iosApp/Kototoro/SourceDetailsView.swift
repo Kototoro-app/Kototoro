@@ -606,39 +606,17 @@ struct SourceDetailsView: View {
         let shown = shownContent
         return Section {
             VStack(alignment: .leading, spacing: 14) {
-                coverRow(shown)
-                GlassEffectContainer(spacing: 10) {
-                    HStack(spacing: 10) {
-                        primaryReadButton(identifier: "details.header.read")
-                            .buttonStyle(.glassProminent)
-                            .controlSize(.large)
-                            .frame(maxWidth: .infinity)
-                        if resumeChapter() != nil {
-                            Menu {
-                                if let details = model.details,
-                                   let first = model.isVideo ? model.visibleChapters.first : model.chapters.first {
-                                    Button(model.isVideo ? "从第一集开始播放" : "从第一章开始阅读") {
-                                        openChapter(first, from: details, initialPage: 0)
-                                    }
-                                }
-                            } label: {
-                                Image(systemName: "chevron.down")
-                                    .font(.body.weight(.semibold))
-                                    .frame(minWidth: 24, minHeight: 24)
-                            }
-                            .accessibilityLabel("阅读选项")
-                            .accessibilityIdentifier("details.readOptions")
-                            .menuIndicator(.hidden)
-                            .buttonStyle(.glass)
-                            .buttonBorderShape(.circle)
-                            .controlSize(.large)
-                            .disabled(model.chapters.isEmpty)
-                        }
-                    }
+                if model.isVideo {
+                    videoHeroHeader(shown)
+                    summaryContent(shown, showHeader: false)
+                        .padding(.top, 2)
+                } else {
+                    coverRow(shown)
+                    primaryPlayRow
+                        .onScrollVisibilityChange(threshold: 0.01) { headerReadVisible = $0 }
+                    infoCard(shown)
+                    summaryCard(shown)
                 }
-                .onScrollVisibilityChange(threshold: 0.01) { headerReadVisible = $0 }
-                infoCard(shown)
-                summaryCard(shown)
                 TrackingSyncBanner(content: model.details ?? model.content, tracking: library.library?.tracking,
                                    model: library.trackingAccounts)
             }
@@ -647,6 +625,113 @@ struct SourceDetailsView: View {
             .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
         }
         .listRowSeparator(.hidden)
+    }
+
+    private var primaryPlayRow: some View {
+        GlassEffectContainer(spacing: 10) {
+            HStack(spacing: 10) {
+                primaryReadButton(identifier: "details.header.read")
+                    .buttonStyle(.glassProminent)
+                    .controlSize(.large)
+                    .frame(maxWidth: .infinity)
+                if resumeChapter() != nil {
+                    Menu {
+                        if let details = model.details,
+                           let first = model.isVideo ? model.visibleChapters.first : model.chapters.first {
+                            Button(model.isVideo ? "从第一集开始播放" : "从第一章开始阅读") {
+                                openChapter(first, from: details, initialPage: 0)
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "chevron.down")
+                            .font(.body.weight(.semibold))
+                            .frame(minWidth: 24, minHeight: 24)
+                    }
+                    .accessibilityLabel("阅读选项")
+                    .accessibilityIdentifier("details.readOptions")
+                    .menuIndicator(.hidden)
+                    .buttonStyle(.glass)
+                    .buttonBorderShape(.circle)
+                    .controlSize(.large)
+                    .disabled(model.chapters.isEmpty)
+                }
+            }
+        }
+    }
+
+    private func videoHeroHeader(_ shown: IosSourceContent) -> some View {
+        VStack(spacing: 12) {
+            VStack(spacing: 12) {
+                Color.clear
+                    .frame(height: 176)
+                    .frame(maxWidth: .infinity)
+                    .contentShape(.rect)
+                    .accessibilityElement()
+                    .accessibilityLabel("封面")
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityIdentifier("details.cover")
+                    .onTapGesture { previewingCover = true }
+
+                VStack(spacing: 6) {
+                    titleText(shown, centered: true)
+
+                    if let alt = shown.altTitles.first, !alt.isEmpty {
+                        Text(alt)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                            .lineLimit(DetailsTitlePolicy.alternateTitleLines)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    videoMetadataLine(shown)
+                        .padding(.top, 2)
+                }
+
+                FlowLayout(spacing: 8) {
+                    sourceChip(shown)
+                    trackingChip(shown)
+                }
+
+                primaryPlayRow
+                    .onScrollVisibilityChange(threshold: 0.01) { headerReadVisible = $0 }
+            }
+            .anchorPreference(key: DetailsCoverBoundsKey.self, value: .bounds) { $0 }
+
+            if let resume = resume, resume.progress > 0 {
+                HStack(spacing: 8) {
+                    ProgressView(value: Double(resume.progress))
+                        .tint(Color.accentColor)
+                    Text("\(Int(resume.progress * 100))%")
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            GlassEffectContainer(spacing: 10) {
+                HStack(spacing: 10) {
+                    ratingBadge(shown)
+                    favouriteButton
+                    copyTitleButton(shown)
+                }
+                .frame(maxWidth: .infinity, alignment: .center)
+            }
+        }
+    }
+
+    private func videoMetadataLine(_ shown: IosSourceContent) -> some View {
+        HStack(spacing: 12) {
+            stateItem(shown).layoutPriority(1)
+            chapterInfo.layoutPriority(1)
+            if !shown.authors.isEmpty {
+                authorItem(shown)
+            }
+        }
+        .labelStyle(DetailsInfoLabelStyle())
+        .font(.subheadline)
+        .foregroundStyle(.secondary)
+        .lineLimit(1)
+        .frame(maxWidth: .infinity, alignment: .center)
     }
 
     private func coverRow(_ shown: IosSourceContent) -> some View {
@@ -666,28 +751,7 @@ struct SourceDetailsView: View {
                 .onTapGesture { previewingCover = true }
 
             VStack(alignment: .leading, spacing: 8) {
-                // Tapping toggles between the folded three lines and at most six, like Android; a title that needs
-                // more stays ellipsized in both states, so it can never expand the header without bound. The text is
-                // not selectable: `textSelection` installs the text interaction that swallows this tap on a device,
-                // and the copy button already hands over the whole title. The stretched frame keeps the empty space
-                // to the right of a short last line tappable.
-                let title = DetailsTitlePolicy.rendered(shown.title)
-                Text(title)
-                    .font(.title3.weight(.bold))
-                    .lineSpacing(2)
-                    .lineLimit(DetailsTitlePolicy.lineLimit(isExpanded: isTitleExpanded))
-                    // Take the height the wrapped text needs at the proposed width. Without this the header lays the
-                    // text out on one line and ellipsizes it, so a two- or three-line title could never be read.
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(.rect)
-                    .onTapGesture {
-                        withAnimation(.snappy) { isTitleExpanded.toggle() }
-                    }
-                    .accessibilityHint(isTitleExpanded ? Text("收起") : Text("展开"))
-                    .accessibilityIdentifier("details.title")
-                    // Applying tracking metadata replaces the title; the new one starts folded, as in Android.
-                    .onChange(of: title) { _, _ in isTitleExpanded = false }
+                titleText(shown, centered: false)
 
                 if let alt = shown.altTitles.first, !alt.isEmpty {
                     Text(alt)
@@ -698,88 +762,140 @@ struct SourceDetailsView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                if let src = sources.source(named: shown.sourceName) {
-                    Button {
-                        browseInitialQuery = nil
-                        destinationBrowse = src
-                    } label: {
-                        HStack(spacing: 5) {
-                            Image(systemName: "globe")
-                                .font(.caption2)
-                            Text(src.title)
-                                .font(.caption.weight(.medium))
-                            Image(systemName: "chevron.right")
-                                .font(.caption2.weight(.bold)).imageScale(.small)
-                        }
-                        .padding(.horizontal, 9)
-                        .padding(.vertical, 4)
-                        .background(Color(.secondarySystemFill), in: .capsule)
-                        .foregroundStyle(.primary)
-                        .detailsChipHitArea()
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.vertical, -DetailsChipHitArea.outset)
-                    .accessibilityIdentifier("details.source")
-                }
-
-                Button { managingTracking = true } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: "text.book.closed").font(.caption2)
-                        Text(shown.metadataSiteTitle.map { "追踪 · \($0)" } ?? "追踪与资料").font(.caption.weight(.medium))
-                        Image(systemName: "chevron.right").font(.caption2.weight(.bold)).imageScale(.small)
-                    }
-                    .padding(.horizontal, 9).padding(.vertical, 4)
-                    .background(Color.accentColor.opacity(0.1), in: .capsule)
-                    .detailsChipHitArea()
-                }
-                .buttonStyle(.plain)
-                .padding(.vertical, -DetailsChipHitArea.outset)
-                .disabled(library.library == nil)
-                .accessibilityIdentifier("details.metadata")
+                sourceChip(shown)
+                trackingChip(shown)
 
                 // Quick actions below the source and metadata labels.
                 GlassEffectContainer(spacing: 8) {
                     HStack(spacing: 8) {
-                        Button("复制标题", systemImage: "doc.on.doc") {
-                            UIPasteboard.general.string = shown.title
-                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                            toastMessage = String(localized: "已复制标题")
-                        }
-                        .labelStyle(.iconOnly)
-                        .buttonStyle(.glass)
-                        .buttonBorderShape(.circle)
-                        .tint(.primary)
-
-                        // The header is one list row, and a row keeps a single context menu (the tags' one won, so
-                        // a long press here never offered categories). A menu with a primary action is the control's
-                        // own: a tap keeps its meaning, a long press opens these choices.
-                        Menu {
-                            Button("收藏分类", systemImage: "folder") { editingCategories = true }
-                            if isFavourite {
-                                Button("取消收藏", systemImage: "heart.slash", role: .destructive, action: removeFavourite)
-                            }
-                        } label: {
-                            Label(isFavourite ? "已收藏" : "收藏", systemImage: isFavourite ? "heart.fill" : "heart")
-                        } primaryAction: {
-                            if isFavourite { removeFavourite() }
-                            else { editingCategories = true }
-                        }
-                        .labelStyle(.iconOnly)
-                        .buttonStyle(.glass)
-                        .buttonBorderShape(.circle)
-                        .tint(isFavourite ? .pink : .primary)
-                        .accessibilityIdentifier("details.favourite")
-
-                        if shown.rating > 0 {
-                            Label(String(format: "%.1f", Double(shown.rating) * 5), systemImage: "star.fill")
-                                .font(.caption.weight(.semibold)).foregroundStyle(.orange)
-                                .padding(.horizontal, 8).padding(.vertical, 5)
-                                .background(Color.orange.opacity(0.12), in: .capsule)
-                        }
+                        copyTitleButton(shown)
+                        favouriteButton
+                        ratingBadge(shown)
                     }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func titleText(_ shown: IosSourceContent, centered: Bool) -> some View {
+        // Tapping toggles between the folded three lines and at most six, like Android; a title that needs
+        // more stays ellipsized in both states, so it can never expand the header without bound. The text is
+        // not selectable: `textSelection` installs the text interaction that swallows this tap on a device,
+        // and the copy button already hands over the whole title. The stretched frame keeps the empty space
+        // to the right of a short last line tappable.
+        let title = DetailsTitlePolicy.rendered(shown.title)
+        return Text(title)
+            .font(centered ? .title2.weight(.bold) : .title3.weight(.bold))
+            .multilineTextAlignment(centered ? .center : .leading)
+            .lineSpacing(2)
+            .lineLimit(DetailsTitlePolicy.lineLimit(isExpanded: isTitleExpanded))
+            // Take the height the wrapped text needs at the proposed width. Without this the header lays the
+            // text out on one line and ellipsizes it, so a two- or three-line title could never be read.
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: centered ? .center : .leading)
+            .contentShape(.rect)
+            .onTapGesture {
+                withAnimation(.snappy) { isTitleExpanded.toggle() }
+            }
+            .accessibilityHint(isTitleExpanded ? Text("收起") : Text("展开"))
+            .accessibilityIdentifier("details.title")
+            // Applying tracking metadata replaces the title; the new one starts folded, as in Android.
+            .onChange(of: title) { _, _ in isTitleExpanded = false }
+    }
+
+    @ViewBuilder
+    private func sourceChip(_ shown: IosSourceContent) -> some View {
+        if let src = sources.source(named: shown.sourceName) {
+            Button {
+                browseInitialQuery = nil
+                destinationBrowse = src
+            } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: "globe")
+                        .font(.caption2)
+                    Text(src.title)
+                        .font(.caption.weight(.medium))
+                    Image(systemName: "chevron.right")
+                        .font(.caption2.weight(.bold)).imageScale(.small)
+                }
+                .padding(.horizontal, 9)
+                .padding(.vertical, 4)
+                .background(
+                    model.isVideo ? AnyShapeStyle(.regularMaterial) : AnyShapeStyle(Color(.secondarySystemFill)),
+                    in: .capsule
+                )
+                .foregroundStyle(.primary)
+                .detailsChipHitArea()
+            }
+            .buttonStyle(.plain)
+            .padding(.vertical, -DetailsChipHitArea.outset)
+            .accessibilityIdentifier("details.source")
+        }
+    }
+
+    private func trackingChip(_ shown: IosSourceContent) -> some View {
+        Button { managingTracking = true } label: {
+            HStack(spacing: 5) {
+                Image(systemName: "text.book.closed").font(.caption2)
+                Text(shown.metadataSiteTitle.map { "追踪 · \($0)" } ?? "追踪与资料").font(.caption.weight(.medium))
+                Image(systemName: "chevron.right").font(.caption2.weight(.bold)).imageScale(.small)
+            }
+            .padding(.horizontal, 9).padding(.vertical, 4)
+            .background(
+                model.isVideo ? AnyShapeStyle(.regularMaterial) : AnyShapeStyle(Color.accentColor.opacity(0.1)),
+                in: .capsule
+            )
+            .foregroundStyle(Color.accentColor)
+            .detailsChipHitArea()
+        }
+        .buttonStyle(.plain)
+        .padding(.vertical, -DetailsChipHitArea.outset)
+        .disabled(library.library == nil)
+        .accessibilityIdentifier("details.metadata")
+    }
+
+    private func copyTitleButton(_ shown: IosSourceContent) -> some View {
+        Button("复制标题", systemImage: "doc.on.doc") {
+            UIPasteboard.general.string = shown.title
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            toastMessage = String(localized: "已复制标题")
+        }
+        .labelStyle(.iconOnly)
+        .buttonStyle(.glass)
+        .buttonBorderShape(.circle)
+        .tint(.primary)
+    }
+
+    private var favouriteButton: some View {
+        // The header is one list row, and a row keeps a single context menu (the tags' one won, so
+        // a long press here never offered categories). A menu with a primary action is the control's
+        // own: a tap keeps its meaning, a long press opens these choices.
+        Menu {
+            Button("收藏分类", systemImage: "folder") { editingCategories = true }
+            if isFavourite {
+                Button("取消收藏", systemImage: "heart.slash", role: .destructive, action: removeFavourite)
+            }
+        } label: {
+            Label(isFavourite ? "已收藏" : "收藏", systemImage: isFavourite ? "heart.fill" : "heart")
+        } primaryAction: {
+            if isFavourite { removeFavourite() }
+            else { editingCategories = true }
+        }
+        .labelStyle(.iconOnly)
+        .buttonStyle(.glass)
+        .buttonBorderShape(.circle)
+        .tint(isFavourite ? .pink : .primary)
+        .accessibilityIdentifier("details.favourite")
+    }
+
+    @ViewBuilder
+    private func ratingBadge(_ shown: IosSourceContent) -> some View {
+        if shown.rating > 0 {
+            Label(String(format: "%.1f", Double(shown.rating) * 5), systemImage: "star.fill")
+                .font(.caption.weight(.semibold)).foregroundStyle(.orange)
+                .padding(.horizontal, 8).padding(.vertical, 5)
+                .background(Color.orange.opacity(0.12), in: .capsule)
         }
     }
 
@@ -918,12 +1034,24 @@ struct SourceDetailsView: View {
     @ViewBuilder
     private func summaryCard(_ shown: IosSourceContent) -> some View {
         let summary = shown.summary.map(Self.plainText) ?? ""
+        if !summary.isEmpty || !shown.tags.isEmpty {
+            summaryContent(shown, showHeader: true)
+                .padding(16)
+                .modifier(DetailsContentPanel())
+        }
+    }
+
+    @ViewBuilder
+    private func summaryContent(_ shown: IosSourceContent, showHeader: Bool) -> some View {
+        let summary = shown.summary.map(Self.plainText) ?? ""
         let hasSummary = !summary.isEmpty
         if hasSummary || !shown.tags.isEmpty {
             VStack(alignment: .leading, spacing: 10) {
-                Text("简介")
-                    .font(.subheadline.weight(.bold))
-                    .foregroundStyle(.primary)
+                if showHeader {
+                    Text("简介")
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(.primary)
+                }
 
                 if hasSummary {
                     // Selectable, so it takes no tap: on a device the text interaction swallows taps (see the
@@ -982,9 +1110,7 @@ struct SourceDetailsView: View {
                     .padding(.top, 2)
                 }
             }
-            .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .modifier(DetailsContentPanel())
         }
     }
 
@@ -1077,65 +1203,79 @@ struct SourceDetailsView: View {
             : model.chapterList(query: "", newestFirst: newestFirst)
         let preview = DetailsChapterPreview.items(all, currentID: resume?.chapterId, id: { $0.id },
                                                  limit: model.isVideo ? 8 : 5)
-        return Section {
-            VStack(alignment: .leading, spacing: model.isVideo ? 8 : 12) {
-                HStack(spacing: 12) {
-                    Text(model.isVideo ? "剧集" : "章节").font(.headline)
-                    Spacer(minLength: 0)
-                    if model.isVideo && model.lines.count > 1 {
-                        Picker("线路", selection: $model.selectedLine) {
-                            ForEach(model.lines, id: \.self) { Text($0 ?? String(localized: "默认")).tag($0) }
-                        }
-                        .labelsHidden()
-                        .font(.subheadline.weight(.medium))
-                        .accessibilityIdentifier("details.line")
-                    } else if !model.isVideo && model.branches.count > 1 {
-                        Picker("分支", selection: $model.selectedBranch) {
-                            ForEach(model.branches, id: \.self) { Text($0 ?? String(localized: "默认")).tag($0) }
-                        }
+        let content = VStack(alignment: .leading, spacing: model.isVideo ? 10 : 12) {
+            HStack(spacing: 12) {
+                Text(model.isVideo ? "剧集" : "章节").font(.headline)
+                if model.isVideo && model.lines.count > 1 {
+                    Picker("线路", selection: $model.selectedLine) {
+                        ForEach(model.lines, id: \.self) { Text($0 ?? String(localized: "默认")).tag($0) }
                     }
-                    Menu("排序", systemImage: "arrow.up.arrow.down") {
-                        DetailsChapterSortOptions(order: $chapterOrder, newestFirst: $newestFirst)
-                    }
-                    .labelStyle(.iconOnly)
-                    .accessibilityIdentifier("details.sort")
+                    .labelsHidden()
+                    .font(.subheadline.weight(.medium))
+                    .accessibilityIdentifier("details.line")
                 }
-                .buttonStyle(.borderless)
-                .pickerStyle(.menu)
-                .tint(model.isVideo ? .primary : .accentColor)
+                Spacer(minLength: 0)
+                if !model.isVideo && model.branches.count > 1 {
+                    Picker("分支", selection: $model.selectedBranch) {
+                        ForEach(model.branches, id: \.self) { Text($0 ?? String(localized: "默认")).tag($0) }
+                    }
+                }
+                Menu("排序", systemImage: "arrow.up.arrow.down") {
+                    DetailsChapterSortOptions(order: $chapterOrder, newestFirst: $newestFirst)
+                }
+                .labelStyle(.iconOnly)
+                .accessibilityIdentifier("details.sort")
+                if model.isVideo && !all.isEmpty {
+                    Button { showingAllChapters = true } label: {
+                        HStack(spacing: 4) {
+                            Text("全部 \(all.count) 集")
+                                .font(.subheadline.weight(.medium))
+                            Image(systemName: "chevron.right")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .tint(.primary)
+                    .accessibilityIdentifier("details.chapters.showAll")
+                }
+            }
+            .buttonStyle(.borderless)
+            .pickerStyle(.menu)
+            .tint(model.isVideo ? .primary : .accentColor)
 
-                if preview.isEmpty {
-                    Text("暂无章节").foregroundStyle(.secondary).accessibilityIdentifier("details.empty")
-                } else if model.isVideo && !Self.hasLongTitles(all) {
-                    ForEach(Self.rows(Array(preview)), id: \.first?.id) { row in
-                        HStack(spacing: 10) {
-                            ForEach(row, id: \.id) { chapter in
-                                episodeButton(chapter, from: details)
-                            }
-                            ForEach(row.count..<Self.rowSize, id: \.self) { _ in Color.clear.frame(maxWidth: .infinity) }
+            if preview.isEmpty {
+                Text("暂无章节").foregroundStyle(.secondary).accessibilityIdentifier("details.empty")
+            } else if model.isVideo && !Self.hasLongTitles(all) {
+                ForEach(Self.rows(Array(preview)), id: \.first?.id) { row in
+                    HStack(spacing: 10) {
+                        ForEach(row, id: \.id) { chapter in
+                            episodeButton(chapter, from: details)
                         }
-                    }
-                } else {
-                    VStack(spacing: 0) {
-                        ForEach(preview, id: \.id) { chapter in
-                            if chapter.id != preview.first?.id { Divider() }
-                            Button { openChapter(chapter, from: details) } label: {
-                                DetailsChapterLabel(chapter: chapter, resume: resume,
-                                                    isRead: model.isBeforeResume(chapter, resume: resume), isVideo: model.isVideo,
-                                                    book: details.bookOf(chapter: chapter)?.title,
-                                                    offline: model.isVideo ? nil : ChapterOfflineMark.of(details, chapter))
-                                    .padding(.vertical, 4)
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier("chapter.\(chapter.id)")
-                        }
+                        ForEach(row.count..<Self.rowSize, id: \.self) { _ in Color.clear.frame(maxWidth: .infinity) }
                     }
                 }
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(preview, id: \.id) { chapter in
+                        if chapter.id != preview.first?.id { Divider() }
+                        Button { openChapter(chapter, from: details) } label: {
+                            DetailsChapterLabel(chapter: chapter, resume: resume,
+                                                isRead: model.isBeforeResume(chapter, resume: resume), isVideo: model.isVideo,
+                                                book: details.bookOf(chapter: chapter)?.title,
+                                                offline: model.isVideo ? nil : ChapterOfflineMark.of(details, chapter))
+                                .padding(.vertical, 4)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("chapter.\(chapter.id)")
+                    }
+                }
+            }
+            if !model.isVideo {
                 Divider()
                 Button { showingAllChapters = true } label: {
                     HStack {
-                        Text(model.isVideo ? "全部 \(all.count) 集" : "全部 \(all.count) 章")
-                            .font(.subheadline.weight(model.isVideo ? .medium : .semibold))
+                        Text("全部 \(all.count) 章")
+                            .font(.subheadline.weight(.semibold))
                         Spacer()
                         Image(systemName: "chevron.right")
                             .font(.caption.weight(.semibold))
@@ -1145,11 +1285,21 @@ struct SourceDetailsView: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.borderless)
-                .tint(model.isVideo ? .primary : .accentColor)
+                .tint(.accentColor)
                 .accessibilityIdentifier("details.chapters.showAll")
             }
-            .padding(16)
-            .modifier(DetailsContentPanel())
+        }
+        return Section {
+            Group {
+                if model.isVideo {
+                    content
+                        .padding(.vertical, 6)
+                } else {
+                    content
+                        .padding(16)
+                        .modifier(DetailsContentPanel())
+                }
+            }
             .listRowBackground(Color.clear)
             .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 10, trailing: 0))
         }
