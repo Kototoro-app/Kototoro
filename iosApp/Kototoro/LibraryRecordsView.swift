@@ -481,6 +481,8 @@ private struct RecordsTimeline: View {
     @State private var bookmarkError: String?
     @EnvironmentObject private var library: LibraryModel
     @State private var seenEvents = Set<String>()
+    /// Days whose folded updates were opened.
+    @State private var expandedDays = Set<String>()
 
     /// A reading or update event, or the chapters of one work that finished downloading on one day.
     private struct TimelineItem: Identifiable, Hashable {
@@ -550,7 +552,7 @@ private struct RecordsTimeline: View {
                 return TimelineDayGroup(date: date, all: dayItems, history: dayItems.filter { !$0.isUpdate },
                                         updates: dayItems.filter(\.isUpdate))
             }
-            LazyVStack(spacing: 14) {
+            LazyVStack(spacing: 8, pinnedViews: [.sectionHeaders]) {
                 if filter == .all {
                     HStack {
                         Text("历史、书签与下载").frame(maxWidth: .infinity)
@@ -562,10 +564,7 @@ private struct RecordsTimeline: View {
                     .background(Color(uiColor: .systemGroupedBackground))
                 }
                 ForEach(dayGroups, id: \.date) { group in
-                    VStack(alignment: filter == .all ? .center : .leading, spacing: 8) {
-                        Text(dayTitle(group.date, items: group.all))
-                            .font(.caption.weight(.medium)).padding(.horizontal, 10).padding(.vertical, 4)
-                            .background(Color(uiColor: .systemGroupedBackground), in: Capsule())
+                    Section {
                         if dynamicTypeSize.isAccessibilitySize || filter != .all {
                             VStack(alignment: .leading, spacing: 6) {
                                 ForEach(group.all) { item in
@@ -577,9 +576,11 @@ private struct RecordsTimeline: View {
                         } else {
                             HStack(alignment: .top, spacing: 20) {
                                 lane(group.history, alignment: .trailing)
-                                lane(group.updates, alignment: .leading)
+                                updatesLane(group)
                             }
                         }
+                    } header: {
+                        dayHeader(group)
                     }
                 }
             }
@@ -694,6 +695,83 @@ private struct RecordsTimeline: View {
             : isVideo(item) ? String(localized: "播放记录") : String(localized: "阅读记录")
     }
 
+    /// The day's pill on the axis, pinned while its records scroll by; in the two-lane layout each lane's count sits over it.
+    private func dayHeader(_ group: TimelineDayGroup) -> some View {
+        let pill = Text(dayTitle(group.date, items: group.all))
+            .font(.caption.weight(.medium)).lineLimit(1).fixedSize().padding(.horizontal, 10).padding(.vertical, 4)
+            .background(Color(uiColor: .secondarySystemGroupedBackground), in: Capsule())
+        let twoLanes = filter == .all && !dynamicTypeSize.isAccessibilitySize
+        return Group {
+            if twoLanes {
+                HStack(spacing: 8) {
+                    laneCount(group.history.count).frame(maxWidth: .infinity, alignment: .trailing)
+                    pill
+                    laneCount(group.updates.count).frame(maxWidth: .infinity, alignment: .leading)
+                }
+            } else {
+                pill.frame(maxWidth: .infinity, alignment: filter == .all ? .center : .leading)
+            }
+        }
+        .padding(.top, 6).padding(.bottom, 2)
+        // Opaque, so the axis and the rows scrolling under the pinned header don't show through.
+        .background(Color(uiColor: .systemGroupedBackground))
+    }
+
+    private func laneCount(_ count: Int) -> some View {
+        Text(count == 0 ? "" : String(localized: "\(count) 项")).font(.caption2).foregroundStyle(.secondary)
+    }
+
+    /// A day's found updates arrive in bulk, so past [updateFoldLimit] rows the rest fold into one line.
+    private static let updateFoldLimit = 3
+
+    private func updatesLane(_ group: TimelineDayGroup) -> some View {
+        // One hidden row isn't worth a fold line of its own.
+        let foldable = group.updates.count > Self.updateFoldLimit + 1
+        let expanded = expandedDays.contains(group.date)
+        let shown = foldable && !expanded ? Array(group.updates.prefix(Self.updateFoldLimit)) : group.updates
+        let hidden = foldable && !expanded ? Array(group.updates.dropFirst(Self.updateFoldLimit)) : []
+        return VStack(alignment: .leading, spacing: 6) {
+            ForEach(shown) { item in eventRow(item, alignment: .leading, showsKind: false) }
+            if foldable {
+                Button {
+                    withAnimation(.snappy) {
+                        if expanded { expandedDays.remove(group.date) } else { expandedDays.insert(group.date) }
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        if !hidden.isEmpty {
+                            // The folded works' covers, fanned out so the line reads as a stack of more.
+                            let covers = Array(hidden.prefix(3))
+                            ZStack(alignment: .leading) {
+                                ForEach(Array(covers.enumerated()), id: \.element.id) { index, item in
+                                    CoverImage(runtime: runtime, content: item.content)
+                                        .frame(width: 20, height: 30)
+                                        .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
+                                        .overlay(RoundedRectangle(cornerRadius: 3, style: .continuous)
+                                            .stroke(Color(uiColor: .systemGroupedBackground), lineWidth: 1))
+                                        .offset(x: CGFloat(index) * 8)
+                                        .zIndex(Double(covers.count - index))
+                                }
+                            }
+                            .frame(width: 20 + CGFloat(max(covers.count - 1, 0)) * 8, height: 30, alignment: .leading)
+                            .accessibilityHidden(true)
+                        }
+                        if hidden.contains(where: { $0.event.map { $0.isUnseen && !seenEvents.contains($0.id) } ?? false }) {
+                            Circle().fill(.red).frame(width: 6, height: 6).accessibilityLabel("未查看更新")
+                        }
+                        Text(expanded ? String(localized: "收起") : String(localized: "另有 \(hidden.count) 条更新"))
+                        Image(systemName: expanded ? "chevron.up" : "chevron.down").font(.caption2.weight(.semibold))
+                    }
+                    .font(.caption).foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 6).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("timeline.updates.fold.\(group.date)")
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     private func lane(_ items: [TimelineItem], alignment: HorizontalAlignment) -> some View {
         VStack(alignment: alignment, spacing: 6) {
             ForEach(items) { item in eventRow(item, alignment: alignment, showsKind: false) }
@@ -753,7 +831,15 @@ private struct RecordsTimeline: View {
                 if alignment == .trailing { cover }
             }
             .frame(maxWidth: .infinity, alignment: alignment == .leading ? .leading : .trailing)
-            .padding(.vertical, 2).contentShape(Rectangle())
+            .padding(.vertical, 2)
+            // Reading, bookmarks and downloads are the reader's own doing, so they sit on a card; found updates stay flat.
+            .padding(item.isUpdate ? 0 : 8)
+            .background {
+                if !item.isUpdate {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color(uiColor: .secondarySystemGroupedBackground))
+                }
+            }
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .contextMenu {
@@ -770,6 +856,13 @@ private struct RecordsTimeline: View {
             }
         }
         .accessibilityIdentifier("timeline.\(item.id)")
+        .overlay(alignment: axisSide(showsKind: showsKind, alignment: alignment) == .leading ? .topLeading : .topTrailing) {
+            if let side = axisSide(showsKind: showsKind, alignment: alignment) {
+                // The node is 10 pt wide, centred on the axis: half the 20 pt lane gap away, or the 16 pt inset of one column.
+                // A card's title sits lower than a flat update's, which keeps the two lanes' first nodes from touching.
+                axisNode(for: item).offset(x: side == .trailing ? 15 : showsKind ? -20.5 : -15, y: item.isUpdate ? 7 : 18)
+            }
+        }
         // A sibling of the row button, aligned with its time line, so the two taps stay separate.
         .overlay(alignment: alignment == .leading ? .bottomTrailing : .bottomLeading) {
             if let event = item.event, event.isUpdate {
@@ -777,6 +870,21 @@ private struct RecordsTimeline: View {
                 RecordUpdateDownloadButton(event: event, runtime: runtime).offset(x: alignment == .leading ? 8 : -8, y: 14)
             }
         }
+    }
+
+    /// Which edge of a row faces the timeline axis; nil where the rows don't sit beside it (accessibility sizes).
+    private func axisSide(showsKind: Bool, alignment: HorizontalAlignment) -> HorizontalAlignment? {
+        if showsKind { return filter == .all ? nil : .leading }
+        return alignment == .leading ? .leading : .trailing
+    }
+
+    /// The item's stop on the axis, coloured by what kind of record it is.
+    private func axisNode(for item: TimelineItem) -> some View {
+        let color: Color = item.bookmark != nil ? .yellow : item.downloadCount != nil ? .green
+            : item.isUpdate ? .orange : .accentColor
+        return Circle().fill(color).frame(width: 7, height: 7)
+            .padding(1.5).background(Circle().fill(Color(uiColor: .systemGroupedBackground)))
+            .accessibilityHidden(true)
     }
 
     /// Opening an update acknowledges it, so its unseen dot goes away.

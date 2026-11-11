@@ -3882,6 +3882,16 @@
         }
       }
     },
+    "另有 %lld 条更新": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld more updates"
+          }
+        }
+      }
+    },
     "只为待选择作品填入唯一的同名／别名结果；多个同名结果保持待选择。名称一致仍需核对作者与版本。": {
       "localizations": {
         "en": {
