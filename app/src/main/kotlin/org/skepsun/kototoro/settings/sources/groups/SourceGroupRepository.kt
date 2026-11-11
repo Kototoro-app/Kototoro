@@ -116,7 +116,7 @@ class SourceGroupRepository @Inject constructor(
 ) {
 
 	private val groupsDir: File
-		get() = File(context.filesDir, GROUPS_DIR)
+		get() = SourceGroupsDirectory.resolve(context.filesDir)
 
 	private val applyScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 	private val applying = AtomicBoolean(false)
@@ -798,7 +798,6 @@ class SourceGroupRepository @Inject constructor(
 	private companion object {
 		const val TAG = "SourceGroups"
 		const val PROGRESS_BATCH = 50
-		const val GROUPS_DIR = "source_groups"
 		const val GROUP_APPLIED_PINS_PREFS = "group_applied_pins"
 		val LOCAL_APK_ECOSYSTEMS = listOf("mihon", "aniyomi", "ireader", "tsundoku")
 	}

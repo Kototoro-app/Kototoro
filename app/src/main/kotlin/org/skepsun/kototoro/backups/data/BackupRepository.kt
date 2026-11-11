@@ -66,6 +66,7 @@ import org.skepsun.kototoro.core.db.entity.RestoreCheckpointEntity
 import org.skepsun.kototoro.core.parser.kotatsu.KotatsuParserSource
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.BackupSettingsFilter
+import org.skepsun.kototoro.settings.sources.groups.SourceGroupsDirectory
 import org.skepsun.kototoro.core.util.CompositeResult
 import org.skepsun.kototoro.core.util.progress.Progress
 import org.skepsun.kototoro.explore.data.ContentSourcesRepository
@@ -1259,14 +1260,13 @@ class BackupRepository @Inject constructor(
         return result
     }
 
-    private fun sourceGroupsDir() = java.io.File(appContext.filesDir, "source_groups")
+    private fun sourceGroupsDir() = SourceGroupsDirectory.resolve(appContext.filesDir)
 
-    private fun swapSourceGroupsDir(staging: File) {
+    private fun swapSourceGroupsDir(staging: File) = synchronized(SourceGroupsDirectory.lock) {
+        // Resolving first puts back the only copy an interrupted earlier swap left aside.
         val dir = sourceGroupsDir()
         staging.mkdirs()
-        val previous = File(appContext.filesDir, "source_groups.previous")
-        // An interrupted earlier swap left the only copy aside: put it back before starting over.
-        if (!dir.exists() && previous.exists()) check(previous.renameTo(dir)) { "Cannot restore source groups" }
+        val previous = SourceGroupsDirectory.previous(appContext.filesDir)
         previous.deleteRecursively()
         val hadPrevious = dir.exists()
         if (hadPrevious) check(dir.renameTo(previous)) { "Cannot move aside source groups" }
@@ -1290,6 +1290,7 @@ class BackupRepository @Inject constructor(
             throw e
         }
         previous.deleteRecursively()
+        Unit
     }
 
     private fun readStoredSourceGroups(): List<SourceGroup> = sourceGroupsDir()

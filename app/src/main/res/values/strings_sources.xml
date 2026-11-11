@@ -30,7 +30,7 @@
     <string name="source_groups_error_package">Could not install package %1$s</string>
     <string name="source_groups_error_source">Could not set source %1$s</string>
     <string name="source_groups_error_jar_priority">Could not apply JAR priority order</string>
-    <string name="source_groups_domain_skipped">Domain not applied for %1$d sources that are not installed on this device</string>
+    <string name="source_groups_domain_skipped">Domain not applied for sources that are not installed on this device: %1$d</string>
     <string name="source_groups_rolled_back">Rolled back to the state before apply. Added repositories and installed packages were kept.</string>
     <string name="source_groups_package_missing">Package %1$s was not found in its repository</string>
     <string name="source_groups_requires_installer">Package %1$s needs the system installer</string>

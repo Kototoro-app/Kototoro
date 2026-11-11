@@ -25,6 +25,8 @@
     <string name="source_groups_error_package">無法安裝擴展包 %1$s</string>
     <string name="source_groups_error_source">無法設定源 %1$s</string>
     <string name="source_groups_error_jar_priority">無法應用 JAR 優先順序順序</string>
+    <string name="source_groups_domain_skipped">未在此裝置上安裝的源未套用網域：%1$d 個</string>
+    <string name="source_groups_rolled_back">已回滾到套用前的狀態。已新增的倉庫和已安裝的擴展包會保留。</string>
     <string name="source_groups_package_missing">在所屬倉庫中未找到擴展包 %1$s</string>
     <string name="source_groups_requires_installer">擴展包 %1$s 需要通過系統安裝程式安裝</string>
     <string name="source_test_all">全部測試</string>
