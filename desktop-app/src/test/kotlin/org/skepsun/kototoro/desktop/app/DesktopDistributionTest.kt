@@ -75,9 +75,13 @@ class DesktopDistributionTest {
         val bundledJava = image.resolve("runtime/bin/java.exe")
         assertTrue(Files.isRegularFile(bundledJava))
         val probes = System.getProperty("kototoro.desktop.probe.classes")
+        val probeClasspath = writeProbeClasspathJar(
+            directory.resolve("probe-classpath.jar"),
+            classpath + probes.split(java.io.File.pathSeparator).map { Path.of(it) },
+        )
         for (mode in listOf("source-browse", "window-early", "window")) {
             execute(listOf(bundledJava.toString(), "-Dfile.encoding=UTF-8", "-Dcompose.application.resources.dir=${app.resolve("resources")}",
-                "-Dskiko.library.path=$app", "-cp", classpath.joinToString(";") + ";" + probes,
+                "-Dskiko.library.path=$app", "-cp", probeClasspath.toString(),
                 DesktopDistributionWindowProbe::class.java.name, mode, directory.resolve("中文 $mode").toString(),
                 fixture.toString()), mode)
         }
