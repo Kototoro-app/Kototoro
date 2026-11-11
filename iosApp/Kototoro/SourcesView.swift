@@ -322,8 +322,9 @@ struct SourcesView: View {
     @State private var reordering = false
     @State private var migration: LibraryMigrationRequest?
     @State private var trackingPreview: TrackingPreviewSelection?
-    @State private var gridWidth: CGFloat = 0
-    @State private var tileHeight: CGFloat = 0
+    /// The grid page's content width, measured once at the page rather than by every grid or tile.
+    @State private var contentWidth: CGFloat = 0
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.openGlobalSearch) private var openGlobalSearch
 
     private struct DisplaySources {
@@ -528,9 +529,14 @@ struct SourcesView: View {
     private static let tileMinimum: CGFloat = 92
     private static let tileSpacing: CGFloat = 10
 
+    /// Side insets of each section's grid.
+    private static let gridInset: CGFloat = 16
+
     /// Matches the adaptive grid's column count, so the frame equals the rows the grid lays out.
     private func gridHeight(count: Int) -> CGFloat? {
-        guard gridWidth > 0, tileHeight > 0, count > 0 else { return nil }
+        let gridWidth = contentWidth - 2 * Self.gridInset
+        guard gridWidth >= Self.tileMinimum, count > 0 else { return nil }
+        let tileHeight = SourceTile.height(dynamicTypeSize)
         let columns = max(1, Int((gridWidth + Self.tileSpacing) / (Self.tileMinimum + Self.tileSpacing)))
         let rows = (count + columns - 1) / columns
         return CGFloat(rows) * tileHeight + CGFloat(rows - 1) * Self.tileSpacing
@@ -570,26 +576,25 @@ struct SourcesView: View {
                                     .buttonStyle(.plain)
                                     .accessibilityIdentifier("source.\(source.name)")
                                     .contextMenu { sourceActions(source) }
-                                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
-                                        if abs(tileHeight - height) > 0.5 { tileHeight = height }
-                                    }
                             }
-                        }
-                        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
-                            if abs(gridWidth - width) > 0.5 { gridWidth = width }
                         }
                         // Lazy grids report estimated heights for rows out of view, and returning from a source or
                         // the background re-estimates them, moving a deep position into another group. Neither one
                         // grid with sections nor scrollPosition(id:) keeps it (both reproduced the jump), so each
-                        // section takes its exact height: tiles share one height and rows follow the column count.
+                        // section takes its exact height: every tile has the same height from its fonts, and rows
+                        // follow the column count of the page's measured width.
                         .frame(height: gridHeight(count: section.sources.count), alignment: .top)
-                        .padding(.horizontal, 16)
+                        .padding(.horizontal, Self.gridInset)
                     }
                 }
                 emptyState(hasSections: !display.sections.isEmpty).padding(.top, 40)
                 if disabledCount > 0 { disabledFooter.padding(.horizontal, 20) }
             }
             .padding(.vertical, 8)
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
+                // A zero or collapsed report during a transition must not size every grid from it.
+                if width >= Self.tileMinimum + 2 * Self.gridInset, abs(contentWidth - width) > 0.5 { contentWidth = width }
+            }
         }
         .background(Color(uiColor: .systemGroupedBackground))
     }

@@ -416,6 +416,17 @@ struct SourceGroupHeader: View {
 struct SourceTile: View {
     let runtime: IosSources?
     let source: IosSource
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    /// The tile's height from the fonts it lays out, so every tile and the grids sized from it agree without any
+    /// measuring. [size] is only read to rebuild the tile when the text size changes.
+    static func height(_ size: DynamicTypeSize) -> CGFloat {
+        _ = size
+        let title = UIFont.preferredFont(forTextStyle: .caption1).lineHeight
+        let language = UIFont.preferredFont(forTextStyle: .caption2).lineHeight
+        // Icon with its 2 pt top inset, the two 4 pt gaps, the language capsule's 1 pt insets, and the tile's 8 pt insets.
+        return 2 + 40 + 4 + title + 4 + language + 2 + 16
+    }
 
     var body: some View {
         VStack(spacing: 4) {
@@ -438,6 +449,7 @@ struct SourceTile: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 8).padding(.horizontal, 6)
+        .frame(height: Self.height(dynamicTypeSize))
         .background(.background.secondary, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
