@@ -19,8 +19,10 @@ import org.skepsun.kototoro.parsers.model.ContentChapter
 import org.skepsun.kototoro.reader.novel.tts.TtsPlaybackSpeed
 import org.skepsun.kototoro.reader.novel.tts.TtsState
 import org.skepsun.kototoro.reader.novel.annotation.NovelMarkingEntity
+import org.skepsun.kototoro.reader.ui.compose.ReaderAutoScrollUiState
 import org.skepsun.kototoro.bookmarks.domain.Bookmark
 import javax.inject.Inject
+import kotlin.math.abs
 
 enum class NovelChaptersSheetTab {
     CHAPTERS,
@@ -53,6 +55,7 @@ data class NovelComposeReaderUiState(
     val chaptersSheetVisible: Boolean = false,
     val chaptersSheetInitialTab: NovelChaptersSheetTab = NovelChaptersSheetTab.CHAPTERS,
     val toolsSheetVisible: Boolean = false,
+    val autoScroll: ReaderAutoScrollUiState = ReaderAutoScrollUiState(),
     val chapters: List<ContentChapter> = emptyList(),
     val currentChapterIndex: Int = 0,
     val loading: Boolean = false,
@@ -127,7 +130,14 @@ data class NovelComposeChapterContent(
 data class NovelReaderMessage(val id: Long, val text: String, val durationMillis: Long)
 
 val NovelComposeReaderUiState.hasOverlay: Boolean
-    get() = (!chromeEnabled && (settingsSheetVisible || replaceRulesSheetVisible || markingsSheetVisible || chaptersSheetVisible || toolsSheetVisible)) ||
+    get() = (!chromeEnabled && (
+        settingsSheetVisible ||
+            replaceRulesSheetVisible ||
+            markingsSheetVisible ||
+            chaptersSheetVisible ||
+            toolsSheetVisible ||
+            autoScroll.visible
+        )) ||
         loading ||
         message != null ||
         (!chromeEnabled && ttsControlsVisible)
@@ -158,6 +168,27 @@ class NovelComposeReaderViewModel @Inject constructor() : ViewModel() {
     private var nextPageRequestId = 0L
     private var nextScrollRequestId = 0L
     private var nextBookmarkRequestId = 0L
+    private var continuousScrollDispatcher: ((Float) -> Float)? = null
+    private var continuousScrollPositionFlusher: (() -> Unit)? = null
+
+    fun bindContinuousScrollDispatcher(
+        dispatcher: ((Float) -> Float)?,
+        flushPosition: (() -> Unit)? = null,
+    ) {
+        continuousScrollDispatcher = dispatcher
+        continuousScrollPositionFlusher = flushPosition
+    }
+
+    fun flushContinuousScrollPosition() {
+        continuousScrollPositionFlusher?.invoke()
+    }
+
+    fun scrollByPixels(delta: Int): Boolean {
+        if (delta == 0) return false
+        if (_uiState.value.settings?.readingMode != ReadingMode.SCROLL) return false
+        val dispatcher = continuousScrollDispatcher ?: return false
+        return abs(dispatcher(delta.toFloat())) > 0.01f
+    }
 
     fun publishChrome(
         enabled: Boolean = true,
@@ -451,6 +482,7 @@ class NovelComposeReaderViewModel @Inject constructor() : ViewModel() {
             markingsSheetVisible = false,
             chaptersSheetVisible = false,
             toolsSheetVisible = false,
+            autoScroll = _uiState.value.autoScroll.copy(visible = false),
         )
     }
 
@@ -491,6 +523,7 @@ class NovelComposeReaderViewModel @Inject constructor() : ViewModel() {
             markingsSheetVisible = false,
             chaptersSheetVisible = false,
             toolsSheetVisible = false,
+            autoScroll = _uiState.value.autoScroll.copy(visible = false),
         )
     }
 
@@ -505,6 +538,7 @@ class NovelComposeReaderViewModel @Inject constructor() : ViewModel() {
             settingsSheetVisible = false,
             replaceRulesSheetVisible = false,
             toolsSheetVisible = false,
+            autoScroll = _uiState.value.autoScroll.copy(visible = false),
         )
     }
 
@@ -537,6 +571,7 @@ class NovelComposeReaderViewModel @Inject constructor() : ViewModel() {
             replaceRulesSheetVisible = false,
             markingsSheetVisible = false,
             toolsSheetVisible = false,
+            autoScroll = _uiState.value.autoScroll.copy(visible = false),
             chapters = chapters,
             currentChapterIndex = currentChapterIndex,
         )
@@ -553,6 +588,7 @@ class NovelComposeReaderViewModel @Inject constructor() : ViewModel() {
             replaceRulesSheetVisible = false,
             markingsSheetVisible = false,
             chaptersSheetVisible = false,
+            autoScroll = _uiState.value.autoScroll.copy(visible = false),
         )
     }
 
@@ -560,6 +596,39 @@ class NovelComposeReaderViewModel @Inject constructor() : ViewModel() {
         _uiState.value = _uiState.value.copy(
             toolsSheetVisible = false,
             ttsControlsVisible = false,
+        )
+    }
+
+    fun updateAutoScroll(transform: ReaderAutoScrollUiState.() -> ReaderAutoScrollUiState) {
+        _uiState.value = _uiState.value.copy(
+            autoScroll = _uiState.value.autoScroll.transform(),
+        )
+    }
+
+    fun showAutoScroll() {
+        _uiState.value = _uiState.value.copy(
+            controlsVisible = false,
+            settingsSheetVisible = false,
+            replaceRulesSheetVisible = false,
+            markingsSheetVisible = false,
+            chaptersSheetVisible = false,
+            toolsSheetVisible = false,
+            ttsControlsVisible = false,
+            autoScroll = _uiState.value.autoScroll.copy(visible = true),
+        )
+    }
+
+    fun toggleAutoScroll() {
+        if (_uiState.value.autoScroll.visible) {
+            dismissAutoScroll()
+        } else {
+            showAutoScroll()
+        }
+    }
+
+    fun dismissAutoScroll() {
+        _uiState.value = _uiState.value.copy(
+            autoScroll = _uiState.value.autoScroll.copy(visible = false),
         )
     }
 
@@ -571,6 +640,7 @@ class NovelComposeReaderViewModel @Inject constructor() : ViewModel() {
             chaptersSheetVisible = false,
             toolsSheetVisible = false,
             ttsControlsVisible = false,
+            autoScroll = _uiState.value.autoScroll.copy(visible = false),
         )
     }
 
@@ -592,6 +662,7 @@ class NovelComposeReaderViewModel @Inject constructor() : ViewModel() {
         _uiState.value = _uiState.value.copy(
             ttsControlsVisible = true,
             toolsSheetVisible = true,
+            autoScroll = _uiState.value.autoScroll.copy(visible = false),
         )
     }
 
