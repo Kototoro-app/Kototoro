@@ -24,7 +24,8 @@ import org.skepsun.kototoro.reader.ui.FULLY_READ_CHAPTER_ID
  */
 private fun String.isLocalChapterUrl(): Boolean =
     startsWith("file:") || startsWith("zip:") || startsWith("file+zip:") ||
-    startsWith("content:") || startsWith("epub:") || startsWith("localepub:")
+        startsWith("content+zip:") || startsWith("file+pdf:") || startsWith("content+pdf:") ||
+        startsWith("content:") || startsWith("epub:") || startsWith("localepub:")
 
 /**
  * Represents a group of chapters for UI display

@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.reader.ui
 
+import org.skepsun.kototoro.local.data.LocalPdfPages
 import org.skepsun.kototoro.core.prefs.isLight
 import android.app.assist.AssistContent
 import android.content.Intent
@@ -256,10 +257,10 @@ class ReaderActivity :
         }
         if (manga != null) {
             val source = manga.source.unwrap()
-            val contentType = if (manga.looksLikeLocalVideoContent()) {
-                ContentType.VIDEO
-            } else {
-                source.getContentType()
+            val contentType = when {
+                manga.looksLikeLocalVideoContent() -> ContentType.VIDEO
+                org.skepsun.kototoro.core.model.isLikelyLocalNovelContent(manga) -> ContentType.NOVEL
+                else -> source.getContentType()
             }
             if (contentType == ContentType.NOVEL || contentType == ContentType.HENTAI_NOVEL ||
                 contentType == ContentType.VIDEO || contentType == ContentType.HENTAI_VIDEO
@@ -1549,6 +1550,7 @@ class ReaderActivity :
     override fun onDestroy() {
         if (isFinishing && !isChangingConfigurations) {
             resetTranslationSession()
+            LocalPdfPages.clearPdfRenderers()
         }
         super.onDestroy()
     }

@@ -13,6 +13,8 @@ import org.skepsun.kototoro.core.model.LocalMangaSource
 import org.skepsun.kototoro.core.model.LocalNovelSource
 import org.skepsun.kototoro.core.model.LocalVideoSource
 import org.skepsun.kototoro.core.model.ContentSource as createContentSource
+import org.skepsun.kototoro.core.model.getContentType
+import org.skepsun.kototoro.core.model.looksLikeNovelUrl
 import org.skepsun.kototoro.core.model.looksLikeVideoUrl
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
 import org.skepsun.kototoro.parsers.model.ContentRating
@@ -21,6 +23,7 @@ import org.skepsun.kototoro.parsers.model.ContentChapter
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.model.ContentState
 import org.skepsun.kototoro.parsers.model.ContentTag
+import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.parsers.model.RATING_UNKNOWN
 import org.skepsun.kototoro.parsers.util.json.getBooleanOrDefault
 import org.skepsun.kototoro.parsers.util.json.getEnumValueOrNull
@@ -62,6 +65,10 @@ class ContentIndex(source: String?) {
             json.put(KEY_STATE, state.name)
         }
         json.put(KEY_SOURCE, manga.source.name)
+        val contentType = manga.source.getContentType()
+        if (contentType != ContentType.OTHER) {
+            json.put(KEY_CONTENT_TYPE, contentType.name)
+        }
         json.put(
             KEY_TAGS,
             JSONArray().also { a ->
@@ -117,8 +124,10 @@ class ContentIndex(source: String?) {
     }
 
     fun getContentInfo(): Content? = if (json.length() == 0) null else runCatching {
-        val rawSource = createContentSource(json.getStringOrNull(KEY_SOURCE))
-        val source = rawSource.recoverLocalVideoSource(
+        val persistedContentType = json.getEnumValueOrNull(KEY_CONTENT_TYPE, ContentType::class.java)
+        val rawSource = createContentSource(json.getStringOrNull(KEY_SOURCE), persistedContentType)
+        val source = rawSource.recoverLocalMediaSource(
+            persistedContentType = persistedContentType,
             url = json.getString(KEY_URL),
             publicUrl = json.getStringOrNull(KEY_PUBLIC_URL),
             chaptersJson = json.optJSONObject(KEY_CHAPTERS),
@@ -251,6 +260,14 @@ class ContentIndex(source: String?) {
         return value?.takeUnless { it === JSONObject.NULL }?.toString()
     }
 
+    fun setChapterFileName(chapterId: Long, filename: String) {
+        if (filename.isBlank()) return
+        val jo = json.optJSONObject(KEY_CHAPTERS)?.optJSONObject(chapterId.toString()) ?: return
+        jo.put(KEY_FILE, filename)
+    }
+
+    fun getContentType(): ContentType? = json.getEnumValueOrNull(KEY_CONTENT_TYPE, ContentType::class.java)
+
     fun hasChapterEntries(chapterId: Long): Boolean {
         val jo = json.optJSONObject(KEY_CHAPTERS)?.optJSONObject(chapterId.toString()) ?: return false
         return jo.has(KEY_ENTRIES) || jo.has(KEY_ORDER)
@@ -304,15 +321,18 @@ class ContentIndex(source: String?) {
 
     fun getChapters(source: ContentSource): List<ContentChapter> {
         val chaptersJson = json.optJSONObject(KEY_CHAPTERS) ?: return emptyList()
+        val persistedContentType = getContentType()
         val chapters = ArrayList<ContentChapter>(chaptersJson.length())
         for (k in chaptersJson.keys()) {
             val v = chaptersJson.getJSONObject(k)
-            val chapterSource = (v.getStringOrNull(KEY_SOURCE)?.let { createContentSource(it) } ?: source)
-                .recoverLocalVideoSource(
-                    url = v.getString(KEY_URL),
-                    publicUrl = null,
-                    chaptersJson = null,
-                )
+            val chapterSource = (
+                v.getStringOrNull(KEY_SOURCE)?.let { createContentSource(it, persistedContentType) } ?: source
+                ).recoverLocalMediaSource(
+                persistedContentType = persistedContentType,
+                url = v.getString(KEY_URL),
+                publicUrl = null,
+                chaptersJson = null,
+            )
             chapters.add(
                 ContentChapter(
                     id = k.toLong(),
@@ -382,6 +402,7 @@ class ContentIndex(source: String?) {
         private const val KEY_NSFW = "nsfw"
         private const val KEY_STATE = "state"
         private const val KEY_SOURCE = "source"
+        private const val KEY_CONTENT_TYPE = "content_type"
         private const val KEY_COVER_LARGE = "cover_large"
         private const val KEY_TAGS = "tags"
         private const val KEY_CHAPTERS = "chapters"
@@ -426,22 +447,56 @@ class ContentIndex(source: String?) {
     }
 }
 
-private fun ContentSource.recoverLocalVideoSource(
+private fun ContentSource.recoverLocalMediaSource(
+    persistedContentType: ContentType?,
     url: String?,
     publicUrl: String?,
     chaptersJson: JSONObject?,
 ): ContentSource {
-    if (this != LocalMangaSource) {
+    val isPureLocalManga = this == LocalMangaSource
+    if (!isPureLocalManga && getContentType() != ContentType.OTHER) {
         return this
     }
-    if (url.looksLikeVideoUrl() || publicUrl.looksLikeVideoUrl()) {
-        return LocalVideoSource
+    fun resolvedVideoSource(): ContentSource = if (isPureLocalManga) {
+        LocalVideoSource
+    } else {
+        createContentSource(name, ContentType.VIDEO)
+    }
+    fun resolvedNovelSource(): ContentSource = if (isPureLocalManga) {
+        LocalNovelSource
+    } else {
+        createContentSource(name, ContentType.NOVEL)
+    }
+    if (
+        persistedContentType == ContentType.VIDEO ||
+        persistedContentType == ContentType.HENTAI_VIDEO ||
+        url.looksLikeVideoUrl() ||
+        publicUrl.looksLikeVideoUrl()
+    ) {
+        return resolvedVideoSource()
+    }
+    if (
+        persistedContentType == ContentType.NOVEL ||
+        persistedContentType == ContentType.HENTAI_NOVEL ||
+        url.looksLikeNovelUrl() ||
+        publicUrl.looksLikeNovelUrl()
+    ) {
+        return resolvedNovelSource()
     }
     val chapters = chaptersJson ?: return this
     for (key in chapters.keys()) {
-        val chapterUrl = chapters.optJSONObject(key)?.getStringOrNull("url")
-        if (chapterUrl.looksLikeVideoUrl()) {
-            return LocalVideoSource
+        val chapterObj = chapters.optJSONObject(key)
+        val chapterUrl = chapterObj?.getStringOrNull("url")
+        val chapterFile = chapterObj?.getStringOrNull("file")
+        if (chapterUrl.looksLikeVideoUrl() || chapterFile.looksLikeVideoUrl()) {
+            return resolvedVideoSource()
+        }
+        if (
+            chapterUrl.looksLikeNovelUrl() ||
+            chapterFile?.endsWith(".epub", ignoreCase = true) == true ||
+            chapterFile?.endsWith(".txt", ignoreCase = true) == true
+        ) {
+            return resolvedNovelSource()
         }
     }
     return this

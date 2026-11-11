@@ -471,6 +471,20 @@ class LocalContentParser {
             if (file.isFile && file.name?.endsWith(".txt", ignoreCase = true) == true) {
                 return listOf(ContentPage(chapter.id, file.uri.toString(), null, LocalNovelSource))
             }
+            if (
+                file.isFile && (
+                    org.skepsun.kototoro.local.data.hasPdfExtension(file.name) ||
+                        file.type.equals("application/pdf", ignoreCase = true)
+                    )
+            ) {
+                return runInterruptible(Dispatchers.IO) {
+                    org.skepsun.kototoro.local.data.LocalPdfPages.buildContentPages(
+                        contentResolver = App.getInstance().contentResolver,
+                        uri = file.uri,
+                        source = chapter.source ?: LocalMangaSource,
+                    )
+                }
+            }
             if (file.isDirectory) {
                 return file.listFiles().orEmpty()
                     .filter { child -> child.isFile && child.name?.isImageName() == true }
@@ -496,6 +510,25 @@ class LocalContentParser {
         }
         return runInterruptible(Dispatchers.IO) {
             val chapterUri = chapter.url.toUri().resolve()
+            if (org.skepsun.kototoro.local.data.LocalPdfPages.isPdfPageUri(chapterUri)) {
+                return@runInterruptible listOf(
+                    ContentPage(
+                        id = chapterUri.toString().longHashCode(),
+                        url = chapterUri.toString(),
+                        preview = null,
+                        source = chapter.source ?: LocalMangaSource,
+                    ),
+                )
+            }
+            if (archive == null && chapterUri.isFileUri()) {
+                val chapterFile = chapterUri.toFile()
+                if (org.skepsun.kototoro.local.data.LocalPdfPages.isPdfDocument(chapterFile)) {
+                    return@runInterruptible org.skepsun.kototoro.local.data.LocalPdfPages.buildFilePages(
+                        file = chapterFile,
+                        source = chapter.source ?: LocalMangaSource,
+                    )
+                }
+            }
             val fsAndPath = archive?.let {
                 FsAndPath(it.fileSystem, chapterUri.fragment.orEmpty().toRootedPath(), isCloseable = false)
             } ?: chapterUri.resolveFsAndPath()
@@ -844,7 +877,11 @@ class LocalContentParser {
         val segments = relativePath.split('/').filter(String::isNotEmpty)
         if (segments.any { it == "." || it == ".." }) return null
         return segments.fold(this as UniFile?) { parent, name ->
-            parent?.findFile(name)
+            parent?.findFile(name) ?: if (name.endsWith(".cbz", ignoreCase = true)) {
+                parent?.findFile(name.substringBeforeLast('.'))
+            } else {
+                null
+            }
         }
     }
 
@@ -872,11 +909,20 @@ class LocalContentParser {
         action: suspend (File, ContentZipArchive?) -> T,
     ): T {
         // Chapter parsing still needs a real EPUB file; metadata can use the ZIP descriptor directly.
-        if (hasZipExtension(file.name.orEmpty()) &&
-            (metadataOnly || file.name?.endsWith(".epub", ignoreCase = true) != true)
-        ) {
+        val fileName = file.name.orEmpty()
+        val hasKnownZipExt = hasZipExtension(fileName)
+        val mayProbeZipMagic = !hasKnownZipExt && (
+            org.skepsun.kototoro.local.data.isZipMimeType(file.type) ||
+                (!fileName.contains('.') && fileName.isNotEmpty())
+            )
+        if ((hasKnownZipExt || mayProbeZipMagic) && (metadataOnly || !fileName.endsWith(".epub", ignoreCase = true))) {
             val archive = runInterruptible(Dispatchers.IO) {
-                ContentZipArchive.open(App.getInstance().contentResolver, file.uri)
+                val resolver = App.getInstance().contentResolver
+                if (hasKnownZipExt) {
+                    ContentZipArchive.open(resolver, file.uri)
+                } else {
+                    ContentZipArchive.openIfZip(resolver, file.uri)
+                }
             }
             if (archive != null) {
                 return archive.use { action(LocalSafArchiveCache.target(cacheDir, file.safCopyName()), it) }
@@ -1206,7 +1252,7 @@ class LocalContentParser {
             val resolved = resolve()
             return when {
                 resolved.isZipUri() -> FsAndPath(
-                    FileSystem.SYSTEM.openZip(resolved.schemeSpecificPart.toPath()),
+                    FileSystem.SYSTEM.openZip((resolved.path ?: resolved.schemeSpecificPart).toPath()),
                     resolved.fragment.orEmpty().toRootedPath(),
                     isCloseable = true,
                 )
@@ -1215,7 +1261,7 @@ class LocalContentParser {
                     val file = toFile()
                     if (file.isZipArchive) {
                         FsAndPath(
-                            FileSystem.SYSTEM.openZip(schemeSpecificPart.toPath()),
+                            FileSystem.SYSTEM.openZip(file.toOkioPath()),
                             fragment.orEmpty().toRootedPath(),
                             isCloseable = true,
                         )

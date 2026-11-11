@@ -209,9 +209,10 @@ class DetailsLoadUseCase @Inject constructor(
 
         if (skipNetworkLoad) {
             if (localContent != null) {
+                val baseManga = expandEpubChaptersIfNeeded(resolvedCachedStoredContent ?: manga)
                 emit(
                     ContentDetails(
-                        manga = resolvedCachedStoredContent ?: manga,
+                        manga = baseManga,
                         localContent = localContent,
                         override = override,
                         description = (cachedStoredContent?.description ?: localContent.manga.description ?: manga.description)?.parseAsHtml(withImages = true),
@@ -220,7 +221,7 @@ class DetailsLoadUseCase @Inject constructor(
                 )
                 return@coroutineScope
             } else if (hasCachedDetails) {
-                val cachedDetails = checkNotNull(resolvedCachedStoredContent)
+                val cachedDetails = expandEpubChaptersIfNeeded(checkNotNull(resolvedCachedStoredContent))
                 emit(
                     ContentDetails(
                         manga = cachedDetails,

@@ -13,7 +13,9 @@ import org.skepsun.kototoro.core.util.ext.deleteAwait
 import org.skepsun.kototoro.core.util.ext.isImage
 import org.skepsun.kototoro.core.util.ext.toFileNameSafe
 import org.skepsun.kototoro.core.zip.ZipOutput
+import android.net.Uri
 import org.skepsun.kototoro.local.data.ContentIndex
+import org.skepsun.kototoro.local.data.LocalPdfPages
 import org.skepsun.kototoro.local.data.input.LocalContentParser
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentChapter
@@ -26,7 +28,7 @@ class LocalContentDirOutput(
     cacheDir: File,
 ) : LocalContentOutput(rootFile, cacheDir) {
 
-    private data class ChapterOutput(val zip: ZipOutput, val targetName: String)
+    private data class ChapterOutput(val chapterId: Long, val zip: ZipOutput, val targetName: String)
 
     private val chaptersOutput = HashMap<ContentChapter, ChapterOutput>()
     val index = ContentIndex(rootFile.findFile(ENTRY_NAME_INDEX)?.openInputStream()?.bufferedReader()?.use { it.readText() })
@@ -48,11 +50,12 @@ class LocalContentDirOutput(
                 append(ext)
             }
         }
-        runInterruptible(Dispatchers.IO) {
+        val actualName = runInterruptible(Dispatchers.IO) {
             val target = rootFile.createFileOrThrow(name)
             file.inputStream().use { input -> target.openOutputStream().use(input::copyTo) }
+            target.name?.takeIf(String::isNotBlank) ?: name
         }
-        index.setCoverEntry(name)
+        index.setCoverEntry(actualName)
         flushIndex()
     }
 
@@ -61,6 +64,7 @@ class LocalContentDirOutput(
             val output = chaptersOutput.getOrPut(chapter.value) {
                 val targetName = chapterFileName(chapter)
                 ChapterOutput(
+                    chapterId = chapter.value.id,
                     zip = ZipOutput(File.createTempFile("chapter_", SUFFIX_TMP, cacheDir)),
                     targetName = targetName,
                 )
@@ -86,17 +90,19 @@ class LocalContentDirOutput(
 
     override suspend fun flushChapter(chapter: ContentChapter): Boolean = mutex.withLock {
         val output = chaptersOutput.remove(chapter) ?: return@withLock false
-        output.flushAndFinish()
+        val actualName = output.flushAndFinish()
+        index.setChapterFileName(output.chapterId, actualName)
         flushIndex()
         true
     }
 
     override suspend fun finish() = mutex.withLock {
-        flushIndex()
         for (output in chaptersOutput.values) {
-            output.flushAndFinish()
+            val actualName = output.flushAndFinish()
+            index.setChapterFileName(output.chapterId, actualName)
         }
         chaptersOutput.clear()
+        flushIndex()
     }
 
     override suspend fun cleanup() = mutex.withLock {
@@ -155,20 +161,30 @@ class LocalContentDirOutput(
         }
         // Already gone (removed by hand or by an interrupted earlier attempt): nothing left to delete.
         val chapterFile = rootFile.resolveRelative(fileName)?.takeIf { it.exists() } ?: return
+        val chapterUri = runCatching { chapterFile.uri }.getOrNull()
+        val chapterPath = chapterFile.filePath
         check(chapterFile.delete()) { "Failed to delete chapter file: $chapterFile" }
+        chapterUri?.let(LocalPdfPages::evictPdfRenderer)
+        chapterPath?.let { path -> LocalPdfPages.evictPdfRenderer(File(path)) }
     }
 
     private fun UniFile.resolveRelative(relativePath: String): UniFile? {
         val segments = relativePath.split('/').filter(String::isNotEmpty)
         if (segments.any { it == "." || it == ".." }) return null
-        return segments.fold(this as UniFile?) { parent, name -> parent?.findFile(name) }
+        return segments.fold(this as UniFile?) { parent, name ->
+            parent?.findFile(name) ?: if (name.endsWith(".cbz", ignoreCase = true)) {
+                parent?.findFile(name.substringBeforeLast('.'))
+            } else {
+                null
+            }
+        }
     }
 
     fun setIndex(newIndex: ContentIndex) {
         index.setFrom(newIndex)
     }
 
-    private suspend fun ChapterOutput.flushAndFinish() = runInterruptible(Dispatchers.IO) {
+    private suspend fun ChapterOutput.flushAndFinish(): String = runInterruptible(Dispatchers.IO) {
         val e: Throwable? = try {
             zip.finish()
             null
@@ -181,13 +197,44 @@ class LocalContentDirOutput(
             val target = rootFile.createFileOrThrow(targetName)
             zip.file.inputStream().use { input -> target.openOutputStream().use(input::copyTo) }
             zip.file.delete()
+            target.name?.takeIf(String::isNotBlank) ?: targetName
         } else {
             zip.file.delete()
             throw e
         }
     }
 
+    suspend fun addPageEbookChapter(
+        chapter: IndexedValue<ContentChapter>,
+        sourceFile: File,
+        extension: String,
+    ) = mutex.withLock {
+        val safeExtension = extension.trimStart('.').lowercase().ifEmpty { "pdf" }
+        val targetName = chapterFileNameWithExtension(chapter, safeExtension)
+        var targetUri: Uri? = null
+        var targetPath: String? = null
+        val actualName = runInterruptible(Dispatchers.IO) {
+            val target = rootFile.createFileOrThrow(targetName)
+            sourceFile.inputStream().use { input -> target.openOutputStream().use(input::copyTo) }
+            targetUri = runCatching { target.uri }.getOrNull()
+            targetPath = target.filePath
+            target.name?.takeIf(String::isNotBlank) ?: targetName
+        }
+        targetUri?.let(LocalPdfPages::evictPdfRenderer)
+        targetPath?.let { path -> LocalPdfPages.evictPdfRenderer(File(path)) }
+        index.addChapter(chapter, actualName, null)
+        index.setChapterFileName(chapter.value.id, actualName)
+        flushIndex()
+    }
+
     private fun chapterFileName(chapter: IndexedValue<ContentChapter>): String {
+        return chapterFileNameWithExtension(chapter, "cbz")
+    }
+
+    private fun chapterFileNameWithExtension(
+        chapter: IndexedValue<ContentChapter>,
+        extension: String,
+    ): String {
         index.getChapterFileName(chapter.value.id)?.let {
             return it
         }
@@ -203,7 +250,7 @@ class LocalContentDirOutput(
         }
         var i = 0
         while (true) {
-            val name = (if (i == 0) baseName else baseName + "_$i") + ".cbz"
+            val name = (if (i == 0) baseName else baseName + "_$i") + ".$extension"
             if (rootFile.findFile(name) == null) {
                 return name
             }

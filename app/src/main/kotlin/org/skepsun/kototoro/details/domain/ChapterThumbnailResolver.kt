@@ -147,6 +147,7 @@ class ChapterThumbnailResolver @Inject constructor(
         return uri.isFileUri() ||
             uri.isZipUri() ||
             uri.isContentZipUri() ||
+            org.skepsun.kototoro.local.data.LocalPdfPages.isPdfPageUri(uri) ||
             uri.scheme == "content" ||
             source.isLocal
     }

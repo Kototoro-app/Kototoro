@@ -7,12 +7,16 @@ import androidx.annotation.CheckResult
 import dagger.hilt.android.scopes.ViewModelScoped
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import org.skepsun.kototoro.core.model.LocalMangaSource
 import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.util.ext.isFileUri
 import org.skepsun.kototoro.core.util.ext.isContentZipUri
 import org.skepsun.kototoro.core.util.ext.isZipUri
+import org.skepsun.kototoro.core.util.ext.isPageEbookChapter
 import org.skepsun.kototoro.details.data.ContentDetails
+import org.skepsun.kototoro.local.data.isPdfPageUri
+import org.skepsun.kototoro.local.epub.EpubStorageManager
 import org.skepsun.kototoro.parsers.model.ContentChapter
 import org.skepsun.kototoro.parsers.model.ContentPage
 import org.skepsun.kototoro.reader.ui.pager.ReaderPage
@@ -30,7 +34,11 @@ private const val READER_WINDOW_LOG_TAG = "ReaderWindow"
 class ChaptersLoader @Inject constructor(
     private val mangaRepositoryFactory: ContentRepository.Factory,
     private val settings: AppSettings,
+    private val epubStorageManager: EpubStorageManager,
 ) {
+
+    @Volatile
+    private var mangaId: Long = 0L
 
     private val chapters = LongSparseArray<ContentChapter>()
     private val chapterPages = ChapterPages()
@@ -44,6 +52,7 @@ class ChaptersLoader @Inject constructor(
     var isChaptersReversed: Boolean = false
 
     suspend fun init(manga: ContentDetails) = mutex.withLock {
+        mangaId = manga.id
         chapters.clear()
         manga.allChapters.forEach {
             chapters.put(it.id, it)
@@ -154,7 +163,8 @@ class ChaptersLoader @Inject constructor(
     fun peekChapter(chapterId: Long): ContentChapter? = chapters[chapterId]
 
     fun isChapterLocal(chapterId: Long): Boolean {
-        return chapters[chapterId]?.isLocalPageSource() ?: false
+        val chapter = chapters[chapterId] ?: return false
+        return chapter.isLocalPageSource() || epubStorageManager.findPageEbookFile(mangaId, chapterId) != null
     }
 
     fun hasPages(chapterId: Long): Boolean {
@@ -200,11 +210,42 @@ class ChaptersLoader @Inject constructor(
 
     private suspend fun loadChapter(chapterId: Long): List<ReaderPage> {
         val chapter = checkNotNull(chapters[chapterId]) { "Requested chapter not found" }
-        val basePages = if (chapter.isLocalPageSource()) {
-            org.skepsun.kototoro.local.data.input.LocalContentParser(android.net.Uri.parse(chapter.url)).getPages(chapter)
-        } else {
-            val repo = mangaRepositoryFactory.create(chapter.source)
-            repo.getPages(chapter)
+        val basePages = when {
+            chapter.isLocalPageSource() -> {
+                org.skepsun.kototoro.local.data.input.LocalContentParser(
+                    android.net.Uri.parse(chapter.url),
+                ).getPages(chapter)
+            }
+
+            else -> {
+                val localPageEbook = epubStorageManager.findPageEbookFile(mangaId, chapterId)
+                if (localPageEbook != null) {
+                    val localUri = android.net.Uri.fromFile(localPageEbook)
+                    val localChapter = chapter.copy(url = localUri.toString(), source = LocalMangaSource)
+                    org.skepsun.kototoro.local.data.input.LocalContentParser(localUri).getPages(localChapter)
+                } else {
+                    val repo = mangaRepositoryFactory.create(chapter.source)
+                    val remotePages = repo.getPages(chapter)
+                    if (remotePages.size == 1 && chapter.isPageEbookChapter(remotePages)) {
+                        val pageUri = remotePages[0].url.toUri()
+                        if (
+                            pageUri.isFileUri() ||
+                            pageUri.isZipUri() ||
+                            pageUri.isContentZipUri() ||
+                            pageUri.isPdfPageUri() ||
+                            pageUri.scheme == "content"
+                        ) {
+                            org.skepsun.kototoro.local.data.input.LocalContentParser(pageUri).getPages(
+                                chapter.copy(url = remotePages[0].url),
+                            )
+                        } else {
+                            remotePages
+                        }
+                    } else {
+                        remotePages
+                    }
+                }
+            }
         }
         return basePages.mapIndexed { index, page ->
             ReaderPage(page, index, chapterId)
@@ -216,6 +257,7 @@ class ChaptersLoader @Inject constructor(
         return uri.isFileUri() ||
             uri.isZipUri() ||
             uri.isContentZipUri() ||
+            uri.isPdfPageUri() ||
             uri.scheme == "content" ||
             uri.scheme == "epub" ||
             uri.scheme == "localepub" ||
