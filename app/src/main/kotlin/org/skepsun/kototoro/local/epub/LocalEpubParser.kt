@@ -91,8 +91,7 @@ class LocalEpubParser(private val cbzFile: File, private val cache: EpubContentC
                     title = epubChapter.title,
                     number = (epubChapter.index + 1).toFloat(),
                     volume = 0,
-                    // URL格式：file:///path/to/file.cbz#chapter/0
-                    url = "file://${cbzFile.absolutePath}#chapter/${epubChapter.index}",
+                    url = buildEpubChapterUrl(cbzFile.absolutePath, epubChapter.index),
                     scanlator = title,
                     uploadDate = cbzFile.lastModified(),
                     branch = null,
@@ -106,7 +105,7 @@ class LocalEpubParser(private val cbzFile: File, private val cache: EpubContentC
                 id = mangaId,
                 title = title,
                 altTitles = emptySet(),
-                url = "file://${cbzFile.absolutePath}",
+                url = "file://${cbzFile.toURI().rawPath}",
                 publicUrl = cbzFile.absolutePath,
                 rating = -1f,
                 contentRating = null,

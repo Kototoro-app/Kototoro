@@ -130,8 +130,13 @@ private suspend fun updateIndex(rootKeys: Set<String>) {
     }
 
     private suspend fun upsert(manga: LocalContent) {
-        mangaDataRepository.storeContent(manga.manga, replaceExisting = true)
-        db.getLocalContentIndexDao().upsert(manga.toEntity())
+        val stored = mangaDataRepository.storeContentAndReturn(manga.manga, replaceExisting = true)
+        db.getLocalContentIndexDao().upsert(
+            LocalContentIndexEntity(
+                mangaId = stored.id,
+                path = manga.toUri().toString(),
+            ),
+        )
     }
 
     private fun LocalContent.toEntity() = LocalContentIndexEntity(
@@ -147,6 +152,6 @@ private suspend fun updateIndex(rootKeys: Set<String>) {
         private const val PREF_NAME = "_local_index"
         private const val KEY_VERSION = "ver"
         private const val KEY_ROOTS = "readable_roots"
-        private const val VERSION = 5
+        private const val VERSION = 6
     }
 }

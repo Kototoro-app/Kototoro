@@ -51,6 +51,7 @@ import org.skepsun.kototoro.local.data.isZipArchive
 import org.skepsun.kototoro.local.data.output.LocalContentOutput.Companion.ENTRY_NAME_INDEX
 import org.skepsun.kototoro.local.epub.LocalEpubParser
 import org.skepsun.kototoro.local.epub.buildEpubChapterUrl
+import org.skepsun.kototoro.local.epub.parseEpubChapterIndex
 import org.skepsun.kototoro.local.domain.model.LocalContent
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentChapter
@@ -160,21 +161,26 @@ class LocalContentParser {
             val parser = org.skepsun.kototoro.local.epub.LocalEpubParser(rootFile)
             val content = parser.parseContent()
             if (content != null) {
+                val fileUri = rootFile.toUri().toString()
                 val updatedChapters = content.chapters?.map {
-                    val index = it.url.substringAfterLast("chapter/").toIntOrNull() ?: 0
-                    it.copy(url = "localepub://${rootFile.absolutePath}#chapter/$index")
+                    val index = parseEpubChapterIndex(it.url)
+                        ?: it.url.substringAfterLast("chapter/").toIntOrNull()
+                        ?: 0
+                    it.copy(url = buildEpubChapterUrl(rootFile.absolutePath, index))
                 }
 
-                    var extractedCoverUrl: String? = null
-                    runCatching {
-                        okio.FileSystem.SYSTEM.openZip(rootFile.absolutePath.toPath()).use { zipFs ->
-                            extractedCoverUrl = zipFs.findFirstImageUrl(okio.Path.Companion.DIRECTORY_SEPARATOR.toPath())
-                        }
+                var extractedCoverUrl: String? = null
+                runCatching {
+                    okio.FileSystem.SYSTEM.openZip(rootFile.absolutePath.toPath()).use { zipFs ->
+                        extractedCoverUrl = zipFs.findFirstImageUrl(okio.Path.Companion.DIRECTORY_SEPARATOR.toPath())
                     }
+                }
                 val updatedContent = content.copy(
+                    url = fileUri,
+                    publicUrl = fileUri,
                     chapters = if (withDetails) updatedChapters else null,
                     // The parser resolves the declared cover; the first image is only a fallback.
-                    coverUrl = content.coverUrl?.takeIf(String::isNotBlank) ?: extractedCoverUrl ?: ""
+                    coverUrl = content.coverUrl?.takeIf(String::isNotBlank) ?: extractedCoverUrl ?: "",
                 )
                 return LocalContent(updatedContent, rootFile)
             }
@@ -189,23 +195,28 @@ class LocalContentParser {
                 val epubContent = if (withDetails) parser.parseContent()
                     else LocalContentParser(epubFile).getContent(withDetails = false).manga
                 if (epubContent != null) {
+                    val rootUri = rootFile.toUri().toString()
                     val updatedChapters = epubContent.chapters?.map {
-                        val idx = it.url.substringAfterLast("chapter/").toIntOrNull() ?: 0
-                        it.copy(url = "localepub://${epubFile.absolutePath}#chapter/$idx")
+                        val idx = parseEpubChapterIndex(it.url)
+                            ?: it.url.substringAfterLast("chapter/").toIntOrNull()
+                            ?: 0
+                        it.copy(url = buildEpubChapterUrl(epubFile.absolutePath, idx))
                     }
-                        var extractedCoverUrl: String? = null
-                        runCatching {
-                            val tempParser = LocalContentParser(epubFile)
-                            okio.FileSystem.SYSTEM.openZip(epubFile.absolutePath.toPath()).use { zipFs ->
-                                extractedCoverUrl = with(tempParser) {
-                                    zipFs.findFirstImageUrl(okio.Path.Companion.DIRECTORY_SEPARATOR.toPath())
-                                }
+                    var extractedCoverUrl: String? = null
+                    runCatching {
+                        val tempParser = LocalContentParser(epubFile)
+                        okio.FileSystem.SYSTEM.openZip(epubFile.absolutePath.toPath()).use { zipFs ->
+                            extractedCoverUrl = with(tempParser) {
+                                zipFs.findFirstImageUrl(okio.Path.Companion.DIRECTORY_SEPARATOR.toPath())
                             }
                         }
+                    }
                     val updatedContent = epubContent.copy(
-                        id = rootFile.absolutePath.longHashCode(),
+                        id = rootUri.longHashCode(),
+                        url = rootUri,
+                        publicUrl = rootUri,
                         chapters = if (withDetails) updatedChapters else null,
-                        coverUrl = epubContent.coverUrl?.takeIf(String::isNotBlank) ?: extractedCoverUrl ?: ""
+                        coverUrl = epubContent.coverUrl?.takeIf(String::isNotBlank) ?: extractedCoverUrl ?: "",
                     )
                     return LocalContent(updatedContent, rootFile)
                 }
@@ -245,9 +256,6 @@ class LocalContentParser {
                     largeCoverUrl = if (localCoverUrl != null) null else mangaInfo.largeCoverUrl,
                     chapters = if (withDetails) {
                         mangaInfo.chapters?.mapNotNull { c ->
-                            if (c.url.contains("#chapter/")) {
-                                return@mapNotNull c
-                            }
                             // 过滤掉隐藏的章节
                             if (c.id in hiddenChapterIds) {
                                 return@mapNotNull null
@@ -255,6 +263,17 @@ class LocalContentParser {
 
                             val fileName = index.getChapterFileName(c.id)
                             val path = fileName?.toPath()
+                            val epubChapterIndex = parseEpubChapterIndex(c.url)
+                            if (epubChapterIndex != null) {
+                                if (fileName != null && path != null && fileSystem.exists(rootPath / path)) {
+                                    val epubPath = File(rootFile, fileName).absolutePath
+                                    return@mapNotNull c.copy(
+                                        url = buildEpubChapterUrl(epubPath, epubChapterIndex),
+                                        source = resolvedLocalSource,
+                                    )
+                                }
+                                return@mapNotNull c
+                            }
                             if (path != null && fileSystem.exists(rootPath / path)) {
                                 // 已加载的本地章节
                                     c.copy(url = buildChildUriString(path, resolve = false), source = resolvedLocalSource)
@@ -274,11 +293,22 @@ class LocalContentParser {
                     } else {
                         // 如果不需要详情，也按索引过滤出实际存在的章节，并统一来源和URL
                         mangaInfo.chapters?.mapNotNull { c ->
-                            if (c.url.contains("#chapter/")) {
-                                return@mapNotNull c
+                            if (c.id in hiddenChapterIds) {
+                                return@mapNotNull null
                             }
                             val fileName = index.getChapterFileName(c.id)
                             val path = fileName?.toPath()
+                            val epubChapterIndex = parseEpubChapterIndex(c.url)
+                            if (epubChapterIndex != null) {
+                                if (fileName != null && path != null && fileSystem.exists(rootPath / path)) {
+                                    val epubPath = File(rootFile, fileName).absolutePath
+                                    return@mapNotNull c.copy(
+                                        url = buildEpubChapterUrl(epubPath, epubChapterIndex),
+                                        source = resolvedLocalSource,
+                                    )
+                                }
+                                return@mapNotNull c
+                            }
                             if (path != null && fileSystem.exists(rootPath / path)) {
                                     c.copy(url = buildChildUriString(path, resolve = false), source = resolvedLocalSource)
                                 } else if (fileName == null) {
@@ -528,7 +558,9 @@ class LocalContentParser {
                     publicUrl = file.uri.toString(),
                     coverUrl = stableCoverUrl ?: parsed.manga.coverUrl,
                     chapters = parsed.manga.chapters?.map { chapter ->
-                        val chapterUri = file.uri.withFragmentFrom(chapter.url.toUri()).toString()
+                        val chapterUri = parseEpubChapterIndex(chapter.url)?.let { chapterIndex ->
+                            buildEpubChapterUrl(file.uri.buildUpon().fragment(null).build().toString(), chapterIndex)
+                        } ?: file.uri.withFragmentFrom(chapter.url.toUri()).toString()
                         chapter.copy(url = chapterUri)
                     },
                 )
@@ -564,13 +596,16 @@ class LocalContentParser {
         val chapters = if (withDetails) {
             info.chapters?.mapNotNull { chapter ->
                 if (chapter.id in index.getHiddenChapterIds()) return@mapNotNull null
+                val epubChapterIndex = parseEpubChapterIndex(chapter.url)
                 val child = index.getChapterFileName(chapter.id)?.let { relativePath ->
                     file.resolveRelative(relativePath)
                 } ?: chapter.scanlator
-                    ?.takeIf { chapter.url.toUri().fragment.orEmpty().startsWith("chapter/") }
+                    ?.takeIf { epubChapterIndex != null }
                     ?.let { epubFilesByTitle.value[it] }
                 if (child != null) {
-                    val chapterUrl = child.uri.withFragmentFrom(chapter.url.toUri()).toString()
+                    val chapterUrl = epubChapterIndex?.let { chapterIndex ->
+                        buildEpubChapterUrl(child.uri.buildUpon().fragment(null).build().toString(), chapterIndex)
+                    } ?: child.uri.withFragmentFrom(chapter.url.toUri()).toString()
                     chapter.copy(url = chapterUrl, source = localSource)
                 } else {
                     chapter

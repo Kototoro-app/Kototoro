@@ -16,6 +16,7 @@ import org.skepsun.kototoro.local.data.importer.LocalImportKind
 import org.skepsun.kototoro.local.data.hasZipExtension
 import org.skepsun.kototoro.local.data.input.LocalContentParser
 import org.skepsun.kototoro.local.epub.parseEpubChapterReference
+import org.skepsun.kototoro.local.epub.resolveLocalEpubFile
 import org.skepsun.kototoro.local.domain.model.LocalContent
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentChapter
@@ -74,8 +75,19 @@ class LocalNovelRepository @Inject constructor(
 
     override suspend fun getDetails(manga: Content): Content {
         runCatching {
-            LocalContentParser(manga.url.toUri()).getContent(withDetails = true).manga
-        }.getOrNull()?.let { return it.withLocalNovelSource() }
+            val uri = manga.url.toUri()
+            val parser = if (uri.scheme == "file") {
+                resolveLocalEpubFile(manga.url, uri.path.takeIf { uri.fragment == null && '?' !in manga.url })
+                    ?.let(::LocalContentParser)
+                    ?: LocalContentParser(uri)
+            } else {
+                LocalContentParser(uri)
+            }
+            parser.getContent(withDetails = true).manga
+        }.getOrNull()?.let { parsed ->
+            val resolved = parsed.withLocalNovelSource()
+            return if (resolved.id != manga.id) resolved.copy(id = manga.id) else resolved
+        }
 
         // Try to find by filename pattern first (for multi-CBZ format)
         val entries = findNovelEntries()

@@ -7,13 +7,18 @@ import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.TempDir
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.db.dao.MangaDao
 import org.skepsun.kototoro.core.db.entity.MangaEntity
 import org.skepsun.kototoro.core.db.entity.MangaWithTags
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentSource
+import org.skepsun.kototoro.core.model.LocalMangaSource
+import org.skepsun.kototoro.core.model.LocalNovelSource
 import org.skepsun.kototoro.parsers.model.ContentType
+import org.skepsun.kototoro.parsers.util.longHashCode
+import java.io.File
 
 class StoredContentIdentityResolverTest {
 
@@ -128,6 +133,141 @@ class StoredContentIdentityResolverTest {
 		val card = content(id = 42L, url = "", publicUrl = "")
 
 		assertEquals(card, resolver.preserveStoredRemoteIdentity(card))
+	}
+
+
+	@Test
+	fun `resolveStoredContent re-anchors local EPUB folder to legacy path-hashed row`() = runTest {
+		val folder = File("/storage/emulated/0/Books/Series Name (Book 1) #1")
+		val folderUri = folder.toURI().toString()
+		val newId = folderUri.longHashCode()
+		val legacyId = folder.absolutePath.longHashCode()
+		coEvery {
+			mangaDao.findLocalFolderRowIdByIds(
+				source = LocalNovelSource.name,
+				legacyId = legacyId,
+				currentId = newId,
+			)
+		} returns legacyId
+
+		val resolved = resolver.resolveStoredContent(
+			Content(
+				id = newId,
+				title = "Book 1",
+				altTitles = emptySet(),
+				url = folderUri,
+				publicUrl = folderUri,
+				rating = -1f,
+				contentRating = null,
+				coverUrl = null,
+				tags = emptySet(),
+				state = null,
+				authors = emptySet(),
+				source = LocalNovelSource,
+			),
+		)
+
+		assertEquals(legacyId, resolved.id)
+	}
+
+	@Test
+	fun `resolveStoredContent re-anchors contained EPUB path via targeted query without full scan`() = runTest {
+		val folder = File("/storage/emulated/0/Books/Vol 1")
+		val folderUri = folder.toURI().toString()
+		val newId = folderUri.longHashCode()
+		val legacyId = folder.absolutePath.longHashCode()
+		val pathPrefix = "${folder.absolutePath}${File.separatorChar}"
+		val cleanUri = folderUri.trimEnd('/')
+		coEvery {
+			mangaDao.findLocalFolderRowIdByIds(
+				source = LocalNovelSource.name,
+				legacyId = legacyId,
+				currentId = newId,
+			)
+		} returns null
+		coEvery {
+			mangaDao.findLocalFolderRowIdByPath(
+				source = LocalNovelSource.name,
+				title = "Shared Title",
+				url = folderUri,
+				publicUrl = folderUri,
+				pathPrefix = pathPrefix,
+				fileUriPrefix = "file://$pathPrefix",
+				singleSlashUriPrefix = "file:$pathPrefix",
+				encodedUriPrefix = "$cleanUri/",
+				legacyEpubPrefix = "localepub://$pathPrefix",
+			)
+		} returns 200L
+
+		val resolved = resolver.resolveStoredContent(
+			Content(
+				id = newId,
+				title = "Shared Title",
+				altTitles = emptySet(),
+				url = folderUri,
+				publicUrl = folderUri,
+				rating = -1f,
+				contentRating = null,
+				coverUrl = null,
+				tags = emptySet(),
+				state = null,
+				authors = emptySet(),
+				source = LocalNovelSource,
+			),
+		)
+
+		assertEquals(200L, resolved.id)
+		coVerify(exactly = 0) { mangaDao.findAllBySource(any()) }
+	}
+
+	@Test
+	fun `resolveStoredContent skips DB lookups for local manga, SAF novels, single files, and indexed folders`(
+		@TempDir tempDir: File,
+	) = runTest {
+		val localMangaFolder = File("/storage/emulated/0/Manga/Series 1")
+		val localManga = Content(
+			id = localMangaFolder.toURI().toString().longHashCode(),
+			title = "Series 1",
+			altTitles = emptySet(),
+			url = localMangaFolder.toURI().toString(),
+			publicUrl = localMangaFolder.toURI().toString(),
+			rating = -1f,
+			contentRating = null,
+			coverUrl = null,
+			tags = emptySet(),
+			state = null,
+			authors = emptySet(),
+			source = LocalMangaSource,
+		)
+		val safNovel = localManga.copy(
+			id = 999L,
+			url = "content://com.android.externalstorage.documents/tree/primary%3ABooks/document/primary%3ABooks%2FVol1",
+			publicUrl = "content://com.android.externalstorage.documents/tree/primary%3ABooks/document/primary%3ABooks%2FVol1",
+			source = LocalNovelSource,
+		)
+		val singleEpubFile = File("/storage/emulated/0/Books/Standalone Book #1.epub")
+		val singleEpub = localManga.copy(
+			id = singleEpubFile.absolutePath.longHashCode(),
+			url = singleEpubFile.toURI().toString(),
+			publicUrl = singleEpubFile.toURI().toString(),
+			source = LocalNovelSource,
+		)
+		val indexedNovelDir = File(tempDir, "Indexed Novel Folder").apply {
+			mkdirs()
+			File(this, "index.json").writeText("{}")
+		}
+		val indexedFolderNovel = localManga.copy(
+			id = indexedNovelDir.toURI().toString().longHashCode(),
+			url = indexedNovelDir.toURI().toString(),
+			publicUrl = indexedNovelDir.toURI().toString(),
+			source = LocalNovelSource,
+		)
+
+		assertEquals(localManga, resolver.resolveStoredContent(localManga))
+		assertEquals(safNovel, resolver.resolveStoredContent(safNovel))
+		assertEquals(singleEpub, resolver.resolveStoredContent(singleEpub))
+		assertEquals(indexedFolderNovel, resolver.resolveStoredContent(indexedFolderNovel))
+		coVerify(exactly = 0) { db.getMangaDao() }
 	}
 
 	private fun content(

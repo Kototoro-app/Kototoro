@@ -29,6 +29,8 @@ import org.skepsun.kototoro.core.model.LocalNovelSource
 import org.skepsun.kototoro.core.util.ContentZipArchive
 import org.skepsun.kototoro.local.data.input.LocalContentParser
 import org.skepsun.kototoro.local.epub.LocalEpubParser
+import org.skepsun.kototoro.local.epub.parseEpubChapterReference
+import org.skepsun.kototoro.local.epub.resolveLocalEpubFile
 import org.skepsun.kototoro.local.novel.LocalNovelRepository
 import java.io.File
 import java.io.ByteArrayOutputStream
@@ -188,6 +190,26 @@ class LocalSafEpubParsingTest {
         val text = LocalEpubParser(book).getChapterContent(0).orEmpty()
         assertTrue(text.contains("The chapter text."), text)
         assertTrue(LocalSafArchiveCache.directory(directory).listFiles().orEmpty().isEmpty())
+    }
+
+    @Test
+    fun `imported EPUB folder with special characters keeps identity and resolves chapters`() = runBlocking {
+        val folder = File(directory, "Series Name (Book 1) #1").apply { mkdirs() }
+        val targetEpub = createEpub().copyTo(
+            File(folder, "Series Name (Book 1) #1.epub"),
+            overwrite = true,
+        )
+        val uniFolder = checkNotNull(UniFile.fromFile(folder))
+
+        val listed = LocalContentParser(uniFolder, directory).getContent(withDetails = false)
+        val detailed = LocalContentParser(Uri.parse(listed.manga.url)).getContent(withDetails = true)
+
+        assertEquals(listed.manga.id, detailed.manga.id)
+        assertEquals(listed.manga.url, detailed.manga.url)
+        val chapter = detailed.manga.chapters.orEmpty().single()
+        val parsedRef = requireNotNull(parseEpubChapterReference(chapter.url))
+        assertEquals(0, parsedRef.chapterIndex)
+        assertEquals(targetEpub.canonicalFile, resolveLocalEpubFile(parsedRef.fileReference)?.canonicalFile)
     }
 
     private fun document(book: File, name: String): UniFile {
