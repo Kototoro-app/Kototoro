@@ -23,7 +23,8 @@ final class LibraryPersistenceTests: XCTestCase {
         let title = app.navigationBars.staticTexts["记录"]
         XCTAssertTrue(title.waitForExistence(timeout: 10), app.debugDescription)
         XCTAssertEqual(title.frame.midX, app.frame.midX, accuracy: 2)
-        XCTAssertFalse(app.buttons["records.more"].exists)
+        // "Mark all read" lives in this menu now that updates share the timeline.
+        XCTAssertTrue(app.buttons["records.more"].exists)
         XCTAssertTrue(app.staticTexts["本期概览"].waitForExistence(timeout: 20), app.debugDescription)
         let compactTop = app.buttons["timeline.filter.all"].frame.minY
         app.selectRecordsFilter("reading")
