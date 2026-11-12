@@ -3150,6 +3150,7 @@ class DownloadWorker @AssistedInject constructor(
                 val request = OneTimeWorkRequestBuilder<DownloadWorker>()
                     .setConstraints(constraints)
                     .addTag(TAG)
+                    .keepResultsForAtLeast(30, TimeUnit.DAYS)
                     .setId(work.id)
                     .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
                     .build()
