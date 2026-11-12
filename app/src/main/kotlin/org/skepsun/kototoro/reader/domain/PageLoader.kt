@@ -86,7 +86,6 @@ import java.io.File
 import java.io.IOException
 import java.util.LinkedList
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.atomic.AtomicLong
 import java.util.zip.ZipFile
 import javax.inject.Inject
 import kotlin.coroutines.AbstractCoroutineContextElement
@@ -119,7 +118,7 @@ class PageLoader @Inject constructor(
     @Volatile
     private var repository: ContentRepository? = null
     private val prefetchQueue = LinkedList<ContentPage>()
-    private val prefetchSeq = AtomicLong(0)
+    private val prefetchSequence = PrefetchSequence()
     private val counter = AtomicInteger(0)
     private var prefetchQueueLimit = settings.readerPrefetchLimit
     private val edgeDetector = EdgeDetector(context)
@@ -145,13 +144,14 @@ class PageLoader @Inject constructor(
 
     @AnyThread
     fun prefetch(pages: List<ReaderPage>): Job {
-        val seq = prefetchSeq.incrementAndGet()
+        val seq = prefetchSequence.next()
         return loaderScope.launch {
             prefetchLock.withLock {
-                if (seq != prefetchSeq.get()) {
+                if (!prefetchSequence.isLatest(seq)) {
                     return@withLock
                 }
                 val keep = pages.mapTo(HashSet<Long>()) { it.toContentPage().taskKey() }
+                // loadPageAsync registers consumers under the same lock, so this check-and-cancel is atomic.
                 synchronized(tasks) {
                     for (i in tasks.size() - 1 downTo 0) {
                         val r = tasks.valueAt(i)
@@ -173,7 +173,7 @@ class PageLoader @Inject constructor(
                     }
                 }
             }
-            if (seq == prefetchSeq.get() && counter.get() == 0) {
+            if (prefetchSequence.isLatest(seq) && counter.get() == 0) {
                 onIdle()
             }
         }
@@ -345,7 +345,7 @@ class PageLoader @Inject constructor(
     }
 
     suspend fun invalidate(clearCache: Boolean) {
-        prefetchSeq.incrementAndGet()
+        prefetchSequence.invalidate()
         prefetchLock.withLock { prefetchQueue.clear() }
         synchronized(tasks) {
             tasks.clear()
@@ -564,7 +564,8 @@ class PageLoader @Inject constructor(
                             "JsPageResponse",
                             "resp code=${response.code} protocol=${response.protocol} redirected=${response.priorResponse != null} reqUrl=${response.request.url} prior=${response.priorResponse?.code} server=${response.header("server")} cf-ray=${response.header("cf-ray")} cf-mitigated=${response.header("cf-mitigated")}"
                         )
-                        val watcher = launch(start = CoroutineStart.UNDISPATCHED) {
+                        // Runs on the IO pool so closing the response is not starved by Default threads blocked in the body read.
+                        val watcher = launch(Dispatchers.IO, start = CoroutineStart.UNDISPATCHED) {
                             try {
                                 awaitCancellation()
                             } finally {
@@ -585,7 +586,6 @@ class PageLoader @Inject constructor(
                                 }
                                 body.withProgress(progress).use {
                                     it.source().timeout().timeout(PAGE_READ_TIMEOUT_SEC, java.util.concurrent.TimeUnit.SECONDS)
-                                    it.source().timeout().deadline(PAGE_DEADLINE_SEC, java.util.concurrent.TimeUnit.SECONDS)
                                     cache.set(pageUrl, it.source(), it.contentType()?.toMimeType())
                                 }
                             }.toUri()
@@ -660,7 +660,6 @@ class PageLoader @Inject constructor(
         private const val PREFETCH_LIMIT_DEFAULT = 6
         private const val PREFETCH_MIN_RAM_MB = 80L
         private const val PAGE_READ_TIMEOUT_SEC = 20L
-        private const val PAGE_DEADLINE_SEC = 90L
 
         fun createPageRequest(pageUrl: String, page: ContentPage): Request {
             val builder = Request.Builder()
