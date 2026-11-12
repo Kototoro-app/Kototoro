@@ -145,10 +145,10 @@ class DesktopVideoControlsTest {
                 image.encodeToData()?.use { Files.write(reports.resolve("video-actions-before-scroll.png"), it.bytes) }
             }
 
-            onNodeWithTag("video-actions").performTouchInput { swipeLeft() }
-            waitForIdle()
+            scrollActionsTo(forward = true) { onNodeWithContentDescription("video_add_note") }
             onNodeWithContentDescription("Play").assertIsDisplayed()
             onNodeWithContentDescription("video_add_note").assertIsDisplayed().performClick()
+            scrollActionsTo(forward = true) { onNodeWithText("video_mark_outro") }
             onNodeWithText("video_mark_outro").assertIsDisplayed()
             onNodeWithTag("video-actions-scroll-back").assertExists()
             Image.makeFromBitmap(onRoot().captureToImage().asSkiaBitmap()).use { image ->
@@ -158,7 +158,7 @@ class DesktopVideoControlsTest {
             assertTrue(actions.none { it is VideoPlayerAction.SeekTo })
             assertTrue(interactionStarts > 0 && interactionEnds > 0)
 
-            onNodeWithTag("video-actions").performTouchInput { swipeRight() }
+            scrollActionsTo(forward = false) { onNodeWithContentDescription("Previous chapter") }
             onNodeWithContentDescription("Previous chapter").assertIsDisplayed().performClick()
             assertEquals(VideoPlayerAction.PreviousChapter, actions.last())
 
@@ -215,5 +215,17 @@ class DesktopVideoControlsTest {
         waitForIdle()
         onNodeWithContentDescription("video_add_note").assertIsDisplayed().assertIsFocused()
         onNodeWithTag("video-actions-scroll-back").assertExists()
+    }
+
+    /** Half-width swipes until [target] is on screen; the buttons' widths decide how many that takes. */
+    @OptIn(ExperimentalTestApi::class)
+    private fun ComposeUiTest.scrollActionsTo(forward: Boolean, target: () -> SemanticsNodeInteraction) {
+        repeat(12) {
+            if (runCatching { target().assertIsDisplayed() }.isSuccess) return
+            onNodeWithTag("video-actions").performTouchInput {
+                if (forward) swipeLeft(startX = right, endX = centerX) else swipeRight(startX = left, endX = centerX)
+            }
+            waitForIdle()
+        }
     }
 }
