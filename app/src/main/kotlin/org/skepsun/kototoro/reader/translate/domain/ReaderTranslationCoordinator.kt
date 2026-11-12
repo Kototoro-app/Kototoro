@@ -3,6 +3,7 @@ package org.skepsun.kototoro.reader.translate.domain
 import com.google.mlkit.nl.languageid.LanguageIdentification
 import com.google.mlkit.nl.translate.TranslateLanguage
 import com.google.mlkit.nl.translate.Translation
+import com.google.mlkit.nl.translate.Translator
 import com.google.mlkit.nl.translate.TranslatorOptions
 import eu.kanade.tachiyomi.network.await
 import kotlinx.coroutines.Dispatchers
@@ -556,15 +557,36 @@ internal class ReaderTranslationCoordinator(
             .build()
         val translator = Translation.getClient(options)
         return try {
-            withTimeout(60_000) {
-                translator.downloadModelIfNeeded().awaitCancellable()
-            }
+            ensureMlKitModel(translator, source, target)
             withTimeout(15_000) {
                 translator.translate(text).awaitCancellable()
             }
         } finally {
             translator.close()
         }
+    }
+
+    /**
+     * Downloads the ML Kit language pack if needed. A timeout is rethrown as [java.io.IOException]: the
+     * callers rethrow every [kotlinx.coroutines.CancellationException], so the timeout would otherwise abort the
+     * page silently instead of being logged as a failed translation.
+     */
+    private suspend fun ensureMlKitModel(translator: Translator, source: String, target: String) {
+        log { "translate local mlkit model check source=$source target=$target" }
+        try {
+            withTimeout(MLKIT_MODEL_DOWNLOAD_TIMEOUT_MS) {
+                translator.downloadModelIfNeeded().awaitCancellable()
+            }
+        } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+            log { "translate local mlkit model download timed out source=$source target=$target" }
+            throw java.io.IOException("ML Kit language pack $source->$target was not downloaded in time", e)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            log { "translate local mlkit model download failed source=$source target=$target: ${e.javaClass.simpleName} ${e.message.orEmpty()}" }
+            throw e
+        }
+        log { "translate local mlkit model ready source=$source target=$target" }
     }
 
     private suspend fun translateLocalBatch(
@@ -607,10 +629,7 @@ internal class ReaderTranslationCoordinator(
             log { "translate local batch start size=${texts.size} source=$resolvedSourceLang target=$targetLang" }
 
             android.util.Log.d("ReaderTranslationCoordinator", "translateLocalBatch downloading model if needed...")
-            val downloadTask = translator.downloadModelIfNeeded()
-            withTimeout(60_000) {
-                downloadTask.awaitCancellable()
-            }
+            ensureMlKitModel(translator, source, target)
             android.util.Log.d("ReaderTranslationCoordinator", "translateLocalBatch model ready, starting translation...")
 
             val results = LinkedHashMap<String, String>(texts.size)
@@ -1158,5 +1177,9 @@ internal class ReaderTranslationCoordinator(
     private fun Char.isLatinLetterLike(): Boolean {
         if (isAsciiLetter()) return true
         return Character.UnicodeScript.of(code) == Character.UnicodeScript.LATIN
+    }
+
+    private companion object {
+        const val MLKIT_MODEL_DOWNLOAD_TIMEOUT_MS = 60_000L
     }
 }
