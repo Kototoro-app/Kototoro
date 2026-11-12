@@ -27,6 +27,7 @@ class ContentIntentResolutionTest {
             db = database,
             resolverProvider = mockk(),
             appShortcutManagerProvider = mockk(),
+            downloadSchedulerProvider = mockk(),
             storedContentIdentityResolver = mockk(),
             settings = mockk(relaxed = true),
         ),

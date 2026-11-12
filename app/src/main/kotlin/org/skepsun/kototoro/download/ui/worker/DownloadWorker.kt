@@ -3088,6 +3088,17 @@ class DownloadWorker @AssistedInject constructor(
             return workManager.getWorkInputData(workId)?.let { DownloadTask(it) }
         }
 
+        /** Execution and display content ids of every recorded download job, finished ones included. */
+        suspend fun getTrackedContentIds(): Set<Long> {
+            val ids = HashSet<Long>()
+            for (work in workManager.awaitWorkInfosByTag(TAG)) {
+                val task = workManager.getWorkInputData(work.id)?.let { DownloadTask(it) } ?: continue
+                ids += task.executionMangaId
+                task.displayMangaId?.let { ids += it }
+            }
+            return ids
+        }
+
         suspend fun cancel(id: UUID) {
             workManager.cancelWorkById(id).await()
         }

@@ -87,6 +87,7 @@ class TrackingSnapshotTest {
             db,
             Provider { error("Link resolution is outside this test") },
             Provider { error("Shortcuts are outside this test") },
+            Provider { error("Downloads are outside this test") },
             StoredContentIdentityResolver(db),
             settings,
         )

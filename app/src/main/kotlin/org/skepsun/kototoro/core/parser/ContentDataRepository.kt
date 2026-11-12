@@ -36,6 +36,7 @@ import org.skepsun.kototoro.parsers.util.nullIfEmpty
 import org.skepsun.kototoro.reader.domain.ReaderColorFilter
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingStatus
 import javax.inject.Inject
+import org.skepsun.kototoro.download.ui.worker.DownloadWorker
 import javax.inject.Provider
 import org.skepsun.kototoro.tracker.domain.ChapterSnapshotResult
 import org.skepsun.kototoro.tracker.domain.storeChapterSnapshot
@@ -45,6 +46,7 @@ class ContentDataRepository @Inject constructor(
     private val db: MangaDatabase,
     private val resolverProvider: Provider<ContentLinkResolver>,
     private val appShortcutManagerProvider: Provider<AppShortcutManager>,
+    private val downloadSchedulerProvider: Provider<DownloadWorker.Scheduler>,
     private val storedContentIdentityResolver: StoredContentIdentityResolver,
     private val settings: AppSettings,
 ) {
@@ -421,6 +423,9 @@ class ContentDataRepository @Inject constructor(
     }
 
     suspend fun cleanupDatabase() {
+        // The Downloads list is built from WorkManager records and drops entries whose manga row is gone,
+        // so works with no history/favourite (e.g. a downloaded but unwatched video) must keep their row.
+        val downloadedContentIds = downloadSchedulerProvider.get().getTrackedContentIds()
         db.withTransaction {
             gcChaptersCache()
             val idsFromShortcuts = appShortcutManagerProvider.get().getContentShortcuts()
@@ -428,6 +433,7 @@ class ContentDataRepository @Inject constructor(
                 findDisplayContentById(shortcutId, withChapters = false)?.id
                     ?: findContentById(shortcutId, withChapters = false)?.id
             }
+            preservedLocalIds += downloadedContentIds
             db.getMangaDao().cleanup(preservedLocalIds)
         }
     }
