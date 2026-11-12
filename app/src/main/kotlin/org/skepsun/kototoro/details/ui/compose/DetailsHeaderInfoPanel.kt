@@ -453,6 +453,7 @@ internal fun RatingStatusChip(
     linkedTrackingItems: List<LinkedTrackingItemUiModel>,
     onUpdateRating: (Float) -> Unit,
     onUpdateStatus: (ScrobblingStatus) -> Unit,
+    chipHeight: androidx.compose.ui.unit.Dp = 32.dp,
 ) {
     var expanded by remember(status, linkedTrackingItems) { mutableStateOf(false) }
     var menuAnchorBounds by remember { mutableStateOf<Rect?>(null) }
@@ -469,7 +470,7 @@ internal fun RatingStatusChip(
         modifier = Modifier.onGloballyPositioned { menuAnchorBounds = it.boundsInRoot() },
     ) {
         Surface(
-            modifier = Modifier.height(32.dp),
+            modifier = Modifier.height(chipHeight),
             shape = RoundedCornerShape(999.dp),
             color = MaterialTheme.colorScheme.surface.copy(alpha = 0.55f),
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.18f)),

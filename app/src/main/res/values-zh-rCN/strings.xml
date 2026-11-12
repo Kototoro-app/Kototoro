@@ -4093,4 +4093,19 @@ SHA-256 指纹:
     <string name="source_preferences_browsing">浏览与排序</string>
     <string name="extension_settings">拓展设置</string>
     <string name="cloudstream_plugin_reloaded">已重新加载 %1$s，设置已生效</string>
+    <string name="details_episodes">剧集</string>
+    <string name="details_all_episodes">全部 %1$d 集</string>
+    <string name="details_start_playing">开始播放</string>
+    <string name="details_play_from_first">从第 1 集开始播放</string>
+    <string name="details_no_episodes">暂无剧集</string>
+    <string name="details_cover">封面</string>
+    <string name="pref_details_style_manga">漫画详情页风格</string>
+    <string name="pref_details_style_novel">小说详情页风格</string>
+    <string name="pref_details_style_video">视频详情页风格</string>
+    <string name="details_style_manga">经典图集（全景封面）</string>
+    <string name="details_style_novel">书页排版（书脊封面）</string>
+    <string name="details_style_video">影院聚焦（居中封面）</string>
+    <string name="details_view_catalog">查看目录</string>
+    <string name="details_my_reading">我的阅读</string>
+    <string name="details_not_started">未开始</string>
 </resources>

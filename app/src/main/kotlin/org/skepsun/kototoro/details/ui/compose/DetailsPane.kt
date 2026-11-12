@@ -95,6 +95,7 @@ internal fun DetailsPaneContent(
     showCollapsedHandle: Boolean,
     isModernDetailsDockEnabled: Boolean,
     isModernDockCompact: Boolean,
+    hidePrimaryReadDock: Boolean = false,
     onSelectedTabIdChange: (Int) -> Unit,
     onActionClick: (DetailsAction) -> Unit,
     modifier: Modifier = Modifier,
@@ -174,6 +175,7 @@ internal fun DetailsPaneContent(
             historyInfo = historyInfo,
             branches = branches,
             isLoading = isLoading,
+            hidePrimaryReadDock = hidePrimaryReadDock,
             onActionClick = onActionClick,
         )
     }

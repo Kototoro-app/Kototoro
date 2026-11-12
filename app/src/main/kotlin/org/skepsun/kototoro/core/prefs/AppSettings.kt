@@ -738,6 +738,34 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         get() = prefs.getBoolean(KEY_DETAILS_PANORAMA_SCROLL_LINKED, true)
         set(value) = prefs.edit { putBoolean(KEY_DETAILS_PANORAMA_SCROLL_LINKED, value) }
 
+    var detailsStyleManga: org.skepsun.kototoro.core.ui.compose.DetailsMediaStyle
+        get() = org.skepsun.kototoro.core.ui.compose.parseDetailsMediaStyleOrNull(
+            prefs.getString(KEY_DETAILS_STYLE_MANGA, null),
+        ) ?: org.skepsun.kototoro.core.ui.compose.DetailsMediaStyle.MANGA
+        set(value) = prefs.edit { putString(KEY_DETAILS_STYLE_MANGA, value.name) }
+
+    var detailsStyleNovel: org.skepsun.kototoro.core.ui.compose.DetailsMediaStyle
+        get() = org.skepsun.kototoro.core.ui.compose.parseDetailsMediaStyleOrNull(
+            prefs.getString(KEY_DETAILS_STYLE_NOVEL, null),
+        ) ?: org.skepsun.kototoro.core.ui.compose.DetailsMediaStyle.NOVEL
+        set(value) = prefs.edit { putString(KEY_DETAILS_STYLE_NOVEL, value.name) }
+
+    var detailsStyleVideo: org.skepsun.kototoro.core.ui.compose.DetailsMediaStyle
+        get() = org.skepsun.kototoro.core.ui.compose.parseDetailsMediaStyleOrNull(
+            prefs.getString(KEY_DETAILS_STYLE_VIDEO, null),
+        ) ?: org.skepsun.kototoro.core.ui.compose.DetailsMediaStyle.VIDEO
+        set(value) = prefs.edit { putString(KEY_DETAILS_STYLE_VIDEO, value.name) }
+
+    fun detailsStyleForContentType(
+        contentType: org.skepsun.kototoro.parsers.model.ContentType?,
+    ): org.skepsun.kototoro.core.ui.compose.DetailsMediaStyle = when (contentType) {
+        org.skepsun.kototoro.parsers.model.ContentType.VIDEO,
+        org.skepsun.kototoro.parsers.model.ContentType.HENTAI_VIDEO -> detailsStyleVideo
+        org.skepsun.kototoro.parsers.model.ContentType.NOVEL,
+        org.skepsun.kototoro.parsers.model.ContentType.HENTAI_NOVEL -> detailsStyleNovel
+        else -> detailsStyleManga
+    }
+
 
     var historyListMode: ListMode
         get() = prefs.getEnumValue(KEY_LIST_MODE_HISTORY, listMode)
@@ -3514,6 +3542,9 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_BROWSE_PANORAMA_BLEND_HEIGHT = "browse_panorama_blend_height"
         const val KEY_PANORAMA_DOWNSAMPLE = "panorama_downsample"
         const val KEY_DETAILS_PANORAMA_LIMIT_TO_INFO_CARD_MIDPOINT = "details_panorama_limit_to_info_card_midpoint"
+        const val KEY_DETAILS_STYLE_MANGA = "details_style_manga"
+        const val KEY_DETAILS_STYLE_NOVEL = "details_style_novel"
+        const val KEY_DETAILS_STYLE_VIDEO = "details_style_video"
 
         const val KEY_BACKUP_TG_ENABLED = "backup_periodic_tg_enabled"
         const val KEY_BACKUP_TG_CHAT = "backup_periodic_tg_chat_id"

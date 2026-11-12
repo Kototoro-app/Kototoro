@@ -1,5 +1,7 @@
 package org.skepsun.kototoro.desktop.app
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -21,7 +23,11 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.jetbrains.skia.Image as SkiaImage
+import org.skepsun.kototoro.core.ui.compose.DetailsMediaStyle
 import org.skepsun.kototoro.core.source.SourceContent
+import org.skepsun.kototoro.core.ui.compose.VideoHeroBackdropLayer
+import org.skepsun.kototoro.core.ui.compose.detailsMediaStylePolicy
+import org.skepsun.kototoro.core.ui.theme.CoverDominantColor
 import java.nio.file.Files
 
 @Composable
@@ -64,17 +70,79 @@ private fun rememberDesktopCover(content: SourceContent, cache: DesktopCovers, l
     return cover
 }
 
-/** Blur only the artwork itself; controls use the stable themed surfaces above it. */
+/**
+ * Extracts and caches the cover's dominant hue using the shared CMP extractor and adapts the backdrop style
+ * per media family (crisp cinema hero for video vs soft blurred artwork wash for manga/novel).
+ */
 @Composable
-internal fun DesktopArtworkBackground(content: SourceContent, cache: DesktopCovers, modifier: Modifier) {
+internal fun DesktopArtworkBackground(
+    content: SourceContent,
+    cache: DesktopCovers,
+    modifier: Modifier,
+    styleOverride: DetailsMediaStyle? = null,
+) {
     val image = rememberDesktopCover(content, cache, large = true).bitmap
-    Box(modifier.clipToBounds().background(Canvas).background(desktopCanvasBrush())) {
+    val mediaStylePolicy = remember(content.source.contentType, styleOverride) {
+        detailsMediaStylePolicy(content.source.contentType, styleOverride)
+    }
+    val dominantKey = remember(content.source.name, content.url, content.coverUrl, content.largeCoverUrl) {
+        "${content.source.name}\n${content.url}\n${content.largeCoverUrl ?: content.coverUrl.orEmpty()}"
+    }
+    var dominantColor by remember(dominantKey) {
+        mutableStateOf(CoverDominantColor.cached(dominantKey))
+    }
+    LaunchedEffect(dominantKey, image) {
+        if (image == null) return@LaunchedEffect
+        CoverDominantColor.cached(dominantKey)?.let { cached ->
+            dominantColor = cached
+            return@LaunchedEffect
+        }
+        val extracted = withContext(DesktopDispatchers.decode) {
+            CoverDominantColor.extract(image)
+        }
+        if (extracted != null) {
+            CoverDominantColor.putCached(dominantKey, extracted)
+        }
+        dominantColor = extracted
+    }
+    val isDark = LocalDesktopDark.current
+    val baseCanvas = Canvas
+    val targetCanvas = remember(baseCanvas, dominantColor, isDark, mediaStylePolicy) {
+        CoverDominantColor.resolvePageBackground(
+            baseColor = baseCanvas,
+            dominantColor = dominantColor,
+            isDarkTheme = isDark,
+            strength = mediaStylePolicy.dominantBackgroundStrength,
+        )
+    }
+    val tintedCanvas by animateColorAsState(
+        targetValue = targetCanvas,
+        animationSpec = tween(durationMillis = 350),
+        label = "desktopDominantCanvas",
+    )
+
+    Box(modifier.clipToBounds().background(tintedCanvas).background(desktopCanvasBrush())) {
         if (image != null) {
-            Image(image, null, contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize().blur(40.dp).testTag("details-artwork"))
-            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(
-                Canvas.copy(alpha = .75f), Canvas.copy(alpha = .94f), Canvas,
-            ))))
+            if (mediaStylePolicy.useVideoHeroBackdrop) {
+                VideoHeroBackdropLayer(
+                    height = 420.dp,
+                    backgroundColor = tintedCanvas,
+                    blurRadius = 18.dp,
+                    useRealtimeBlur = true,
+                    diffusedArtwork = { m ->
+                        Image(image, null, contentScale = ContentScale.Crop, modifier = m)
+                    },
+                    sharpArtwork = { m ->
+                        Image(image, null, contentScale = ContentScale.Crop, modifier = m.testTag("details-artwork"))
+                    },
+                )
+            } else {
+                Image(image, null, contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize().blur(40.dp).testTag("details-artwork"))
+                Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(
+                    tintedCanvas.copy(alpha = .72f), tintedCanvas.copy(alpha = .92f), tintedCanvas,
+                ))))
+            }
         }
     }
 }

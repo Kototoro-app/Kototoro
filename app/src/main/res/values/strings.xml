@@ -4204,4 +4204,19 @@
     <string name="source_preferences_browsing">Browsing</string>
     <string name="extension_settings">Extension settings</string>
     <string name="cloudstream_plugin_reloaded">%1$s was reloaded to apply its settings</string>
+    <string name="details_episodes">Episodes</string>
+    <string name="details_all_episodes">All %1$d</string>
+    <string name="details_start_playing">Start playing</string>
+    <string name="details_play_from_first">Play from Episode 1</string>
+    <string name="details_no_episodes">No episodes</string>
+    <string name="details_cover">Cover</string>
+    <string name="pref_details_style_manga">Manga details style</string>
+    <string name="pref_details_style_novel">Novel details style</string>
+    <string name="pref_details_style_video">Video details style</string>
+    <string name="details_style_manga">Classic gallery (panorama)</string>
+    <string name="details_style_novel">Book editorial (spine cover)</string>
+    <string name="details_style_video">Cinema hero (centered)</string>
+    <string name="details_view_catalog">View catalog</string>
+    <string name="details_my_reading">My reading</string>
+    <string name="details_not_started">Not started</string>
 </resources>

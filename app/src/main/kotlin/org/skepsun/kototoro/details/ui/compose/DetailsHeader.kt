@@ -47,7 +47,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import org.skepsun.kototoro.core.ui.compose.DetailsTagChip
+import org.skepsun.kototoro.core.ui.compose.DetailsMediaStyle
+import org.skepsun.kototoro.core.ui.compose.DetailsMediaStylePolicy
 import org.skepsun.kototoro.core.ui.compose.DetailsTagChips
+import org.skepsun.kototoro.core.ui.compose.NovelCatalogEntryRow
+import org.skepsun.kototoro.core.ui.compose.NovelEditorialSynopsisBody
+import org.skepsun.kototoro.core.ui.compose.NovelHeroHeaderContent
+import org.skepsun.kototoro.core.ui.compose.NovelMetricItem
+import org.skepsun.kototoro.core.ui.compose.NovelMetricsStrip
+import org.skepsun.kototoro.core.ui.compose.VideoHeroHeaderContent
+import org.skepsun.kototoro.core.ui.compose.detailsMediaStylePolicy
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.focusProperties
@@ -155,6 +164,15 @@ fun DetailsHeader(
     fallbackCoverUrl: String?,
     sharedElementKey: String? = null,
     showWorkActions: Boolean = true,
+    isWideAdaptiveLayout: Boolean = false,
+    mediaStylePolicy: DetailsMediaStylePolicy = detailsMediaStylePolicy(resolvedContentType?.name),
+    currentEpisodeTitle: String? = null,
+    canPlayVideo: Boolean = false,
+    canPlayFromFirst: Boolean = false,
+    canPlayIncognito: Boolean = false,
+    onPlayClick: () -> Unit = {},
+    onPlayFromFirstClick: () -> Unit = {},
+    onPlayIncognitoClick: () -> Unit = {},
     outerHorizontalPadding: Dp = AppLayoutTokens.screenHorizontalPadding,
     onInfoCardBoundsSync: (Float, Float) -> Unit,
     onCoverClick: (String?) -> Unit,
@@ -350,7 +368,7 @@ fun DetailsHeader(
         }
     }
     val isNsfw = content?.isNsfw() == true
-    val infoItems = buildList {
+    val infoItems: List<DetailsInfoItem> = buildList {
         content?.let {
             add(
                 DetailsInfoItem(
@@ -402,6 +420,21 @@ fun DetailsHeader(
         }
     }
 
+    val renderCinemaHero = mediaStylePolicy.useCenteredHeroHeader && panoramaEnabled
+    val stateLabel = state?.let { stringResource(it.titleResId) } ?: stringResource(R.string.unknown)
+    val videoMetadataSummary = remember(stateLabel, chapterProgressLabel, primaryAuthor) {
+        listOfNotNull(
+            stateLabel,
+            chapterProgressLabel.takeIf { it != "-" },
+            primaryAuthor,
+        ).joinToString(" · ")
+    }
+    val playActionLabel = if (historyInfo.canContinue) {
+        stringResource(R.string._continue_play)
+    } else {
+        stringResource(R.string.details_start_playing)
+    }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -411,6 +444,253 @@ fun DetailsHeader(
             ),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        if (renderCinemaHero) {
+            VideoHeroHeaderContent(
+                title = titleForDisplay,
+                alternateTitlesText = alternateTitlesText,
+                metadataSummary = videoMetadataSummary,
+                heroClearanceHeight = if (isWideAdaptiveLayout) 128.dp else 164.dp,
+                titleColor = immersiveTitleColor,
+                secondaryTextColor = immersiveTitleColor.copy(alpha = 0.78f),
+                progressPercent = historyInfo.percent.takeIf { historyInfo.history != null && it > 0f },
+                onCoverClick = { onCoverClick(currentCoverUrl) },
+                onHeroBoundsChanged = onInfoCardBoundsSync,
+                sourceChips = {
+                    if (metadataDisplayModel != null || readingDisplayModel != null) {
+                        DetailsSourceSummaryRow(
+                            metadataDisplayModel = metadataDisplayModel,
+                            readingDisplayModel = readingDisplayModel,
+                            onMetadataIconClick = {
+                                when {
+                                    metadataSourceOption?.source != null -> onSourceClick(metadataSourceOption.source)
+                                    metadataSourceOption?.trackingService != null -> onTrackingSourceClick(metadataSourceOption)
+                                }
+                            },
+                            onMetadataNameClick = onOpenMetadataSourceSheet,
+                            onReadingIconClick = {
+                                when {
+                                    readingSourceOption?.source != null -> onSourceClick(readingSourceOption.source)
+                                    readingSourceOption?.trackingService != null -> onTrackingSourceClick(readingSourceOption)
+                                }
+                            },
+                            onReadingNameClick = onOpenReadingSourceSheet,
+                        )
+                    }
+                    supplementalActions.forEach { action ->
+                        SuggestionChip(
+                            onClick = { onOpenSupplementalAction(action) },
+                            modifier = Modifier.tvFocusable(shape = RoundedCornerShape(999.dp), addFocusTarget = false),
+                            label = { Text(action.title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                            colors = SuggestionChipDefaults.suggestionChipColors(
+                                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.42f),
+                            ),
+                            border = SuggestionChipDefaults.suggestionChipBorder(
+                                enabled = true,
+                                borderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+                            ),
+                        )
+                    }
+                },
+                primaryPlayAction = {
+                    if (showWorkActions) {
+                        VideoDetailsPlayButtonRow(
+                            playLabel = playActionLabel,
+                            episodeSubtitle = currentEpisodeTitle.takeIf { historyInfo.canContinue },
+                            enabled = canPlayVideo,
+                            showPlayFromFirst = historyInfo.canContinue && canPlayFromFirst,
+                            showIncognito = canPlayIncognito,
+                            onPlayClick = onPlayClick,
+                            onPlayFromFirstClick = onPlayFromFirstClick,
+                            onIncognitoClick = onPlayIncognitoClick,
+                        )
+                    }
+                },
+                quickActions = {
+                    DetailsHeaderIconButton(
+                        iconRes = R.drawable.ic_copy,
+                        onClick = {
+                            context.copyToClipboard(displayTitle, displayTitle)
+                            Toast.makeText(context, R.string.details_title_copied, Toast.LENGTH_SHORT).show()
+                        },
+                        contentDescription = stringResource(R.string.details_copy_title),
+                        buttonSize = 36.dp,
+                        iconSize = 18.dp,
+                    )
+                    if (showWorkActions) {
+                        DetailsHeaderIconButton(
+                            iconRes = if (isFavourite) R.drawable.ic_heart else R.drawable.ic_heart_outline,
+                            onClick = onFavoriteClick,
+                            filled = isFavourite,
+                            buttonSize = 36.dp,
+                            iconSize = 18.dp,
+                        )
+                        RatingStatusChip(
+                            rating = unifiedRating,
+                            canEditRating = canEditUnifiedRating,
+                            status = readingStatus,
+                            scrobblingStatuses = scrobblingStatuses,
+                            linkedTrackingItems = linkedTrackingItems,
+                            onUpdateRating = onUpdateUnifiedRating,
+                            onUpdateStatus = onUpdateReadingStatus,
+                            chipHeight = 36.dp,
+                        )
+                    }
+                },
+            )
+        } else if (mediaStylePolicy.style == DetailsMediaStyle.NOVEL) {
+            val novelMetadataLine = remember(stateLabel, chapterProgressLabel) {
+                listOfNotNull(
+                    stateLabel,
+                    chapterProgressLabel.takeIf { it != "-" },
+                ).joinToString(" · ")
+            }
+            NovelHeroHeaderContent(
+                title = titleForDisplay,
+                authorText = primaryAuthor.orEmpty(),
+                alternateTitlesText = alternateTitlesText,
+                bookMetadataLine = novelMetadataLine,
+                secondaryTextColor = if (panoramaEnabled) {
+                    immersiveTitleColor.copy(alpha = 0.78f)
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                onAuthorClick = primaryAuthor?.let { authorName -> { onAuthorClick(authorName) } },
+                modifier = Modifier.graphicsLayer {
+                    val textCollapseProgress = ((collapseProgressProvider() - 0.08f) / 0.44f).coerceIn(0f, 1f)
+                    alpha = 1f - textCollapseProgress
+                },
+                coverSlot = {
+                    DetailsCoverFrame(
+                        coverModel = coverModel,
+                        contentDescription = displayTitle,
+                        showNsfwBadge = isNsfw,
+                        sourceName = content?.source?.name,
+                        ownerKey = content?.url,
+                        coverUrl = currentCoverUrl,
+                        sharedElementKey = sharedElementKey,
+                        topBadgeText = ratingLabel,
+                        topBadgeIconRes = R.drawable.ic_star_small,
+                        isBookCover = true,
+                        onClick = { onCoverClick(currentCoverUrl) },
+                        onState = { state ->
+                            if (state is coil3.compose.AsyncImagePainter.State.Error) {
+                                hasCoverLoadFailed = true
+                            }
+                        },
+                        modifier = Modifier.graphicsLayer {
+                            val coverCollapseProgress = (collapseProgressProvider() / 0.48f).coerceIn(0f, 1f)
+                            alpha = (1f - coverCollapseProgress) * coverVisualAlphaProvider().coerceIn(0f, 1f)
+                        },
+                    )
+                },
+                titleExtraSlot = {
+                    SelectionContainer(
+                        modifier = Modifier
+                            .focusProperties { if (isTvPresentation) canFocus = false }
+                            .fillMaxWidth(),
+                    ) {
+                        Text(
+                            text = titleForDisplay,
+                            style = MaterialTheme.typography.headlineSmall.copy(
+                                fontWeight = FontWeight.SemiBold,
+                                lineHeight = 27.sp,
+                            ),
+                            color = if (panoramaEnabled) {
+                                immersiveTitleColor
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .animateContentSize()
+                                .tvFocusable(
+                                    shape = RoundedCornerShape(8.dp),
+                                    enabled = canExpandTitle,
+                                    addFocusTarget = false,
+                                )
+                                .clickable(enabled = canExpandTitle) {
+                                    isTitleExpanded = !isTitleExpanded
+                                },
+                            maxLines = detailsTitleMaxLines(isTitleExpanded),
+                            overflow = TextOverflow.Ellipsis,
+                            onTextLayout = { textLayoutResult ->
+                                val hasCollapsedOverflow = textLayoutResult.hasVisualOverflow ||
+                                    textLayoutResult.lineCount > COLLAPSED_TITLE_MAX_LINES
+                                if (canExpandTitle != hasCollapsedOverflow) {
+                                    canExpandTitle = hasCollapsedOverflow
+                                }
+                            },
+                        )
+                    }
+                },
+                sourceChipsSlot = {
+                    if (metadataDisplayModel != null || readingDisplayModel != null) {
+                        DetailsSourceSummaryRow(
+                            metadataDisplayModel = metadataDisplayModel,
+                            readingDisplayModel = readingDisplayModel,
+                            onMetadataIconClick = {
+                                when {
+                                    metadataSourceOption?.source != null -> onSourceClick(metadataSourceOption.source)
+                                    metadataSourceOption?.trackingService != null -> onTrackingSourceClick(metadataSourceOption)
+                                }
+                            },
+                            onMetadataNameClick = onOpenMetadataSourceSheet,
+                            onReadingIconClick = {
+                                when {
+                                    readingSourceOption?.source != null -> onSourceClick(readingSourceOption.source)
+                                    readingSourceOption?.trackingService != null -> onTrackingSourceClick(readingSourceOption)
+                                }
+                            },
+                            onReadingNameClick = onOpenReadingSourceSheet,
+                        )
+                    }
+                    supplementalActions.forEach { action ->
+                        SuggestionChip(
+                            onClick = { onOpenSupplementalAction(action) },
+                            modifier = Modifier.tvFocusable(shape = RoundedCornerShape(999.dp), addFocusTarget = false),
+                            label = { Text(action.title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                            colors = SuggestionChipDefaults.suggestionChipColors(
+                                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.42f),
+                            ),
+                            border = SuggestionChipDefaults.suggestionChipBorder(
+                                enabled = true,
+                                borderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+                            ),
+                        )
+                    }
+                },
+                quickActionsSlot = {
+                    DetailsHeaderIconButton(
+                        iconRes = R.drawable.ic_copy,
+                        onClick = {
+                            context.copyToClipboard(displayTitle, displayTitle)
+                            Toast.makeText(context, R.string.details_title_copied, Toast.LENGTH_SHORT).show()
+                        },
+                        contentDescription = stringResource(R.string.details_copy_title),
+                        buttonSize = 32.dp,
+                        iconSize = 17.dp,
+                    )
+                    if (showWorkActions) {
+                        DetailsHeaderIconButton(
+                            iconRes = if (isFavourite) R.drawable.ic_heart else R.drawable.ic_heart_outline,
+                            onClick = onFavoriteClick,
+                            filled = isFavourite,
+                            buttonSize = 32.dp,
+                            iconSize = 17.dp,
+                        )
+                        RatingStatusChip(
+                            rating = unifiedRating,
+                            canEditRating = canEditUnifiedRating,
+                            status = readingStatus,
+                            scrobblingStatuses = scrobblingStatuses,
+                            linkedTrackingItems = linkedTrackingItems,
+                            onUpdateRating = onUpdateUnifiedRating,
+                            onUpdateStatus = onUpdateReadingStatus,
+                        )
+                    }
+                },
+            )
+        } else {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -605,10 +885,50 @@ fun DetailsHeader(
                 }
             }
         }
+        }
 
         val showProgress = historyInfo.history != null && historyInfo.percent > 0f
         val showInfoCard = infoItems.isNotEmpty() || showProgress
-        if (showInfoCard) {
+        if (mediaStylePolicy.style == DetailsMediaStyle.NOVEL && !renderCinemaHero) {
+            val novelMetrics = listOfNotNull(
+                NovelMetricItem(
+                    label = stringResource(R.string.chapters),
+                    value = if (historyInfo.totalChapters > 0) "${historyInfo.totalChapters}" else chapterProgressLabel,
+                    subtitle = stateLabel,
+                    onClick = onOpenChapters,
+                ),
+                NovelMetricItem(
+                    label = stringResource(R.string.details_my_reading),
+                    value = if (showProgress) progressLabel else stringResource(R.string.details_not_started),
+                    subtitle = if (historyInfo.currentChapter >= 0 && historyInfo.totalChapters > 0) {
+                        "${historyInfo.currentChapter + 1}/${historyInfo.totalChapters}"
+                    } else {
+                        null
+                    },
+                ),
+                onDeviceSizeLabel?.takeIf { it.isNotBlank() }?.let { sizeLabel ->
+                    NovelMetricItem(
+                        label = stringResource(R.string.on_device),
+                        value = sizeLabel,
+                    )
+                },
+                ratingLabel?.takeIf { it.isNotBlank() }?.let { rating ->
+                    NovelMetricItem(
+                        label = stringResource(R.string.rating),
+                        value = "$rating ★",
+                    )
+                },
+            )
+            NovelMetricsStrip(
+                items = novelMetrics,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onGloballyPositioned { coordinates ->
+                        val bounds = coordinates.boundsInRoot()
+                        onInfoCardBoundsSync(bounds.top, bounds.bottom)
+                    },
+            )
+        } else if (showInfoCard) {
             DetailsInfoPanelSurface(
                 panoramaEnabled = panoramaEnabled,
                 modifier = Modifier
@@ -656,7 +976,11 @@ fun DetailsHeader(
                             Text(
                                 text = progressLabel,
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurface,
+                                color = if (panoramaEnabled) {
+                                immersiveTitleColor
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            },
                                 maxLines = 1,
                             )
                         }
@@ -678,9 +1002,13 @@ fun DetailsHeader(
             panoramaEnabled = panoramaEnabled,
             modifier = Modifier.fillMaxWidth(),
         ) {
+            val isNovelStyle = mediaStylePolicy.style == DetailsMediaStyle.NOVEL
             Column(
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(
+                    horizontal = if (isNovelStyle) 14.dp else 12.dp,
+                    vertical = if (isNovelStyle) 14.dp else 10.dp,
+                ),
+                verticalArrangement = Arrangement.spacedBy(if (isNovelStyle) 10.dp else 8.dp),
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -707,15 +1035,43 @@ fun DetailsHeader(
                             if (isTvPresentation) canFocus = false
                         },
                     ) {
-                        ExpandableDescriptionText(
-                            text = descriptionForDisplay,
-                            expanded = isDescriptionExpanded,
-                            onExpandedChange = { isDescriptionExpanded = it },
-                            collapsedMaxLines = collapsedDescriptionMaxLines,
-                        )
+                        if (isNovelStyle) {
+                            NovelEditorialSynopsisBody(
+                                text = descriptionForDisplay,
+                                expanded = isDescriptionExpanded,
+                                onExpandedChange = { isDescriptionExpanded = it },
+                                collapsedMaxLines = collapsedDescriptionMaxLines,
+                            )
+                        } else {
+                            ExpandableDescriptionText(
+                                text = descriptionForDisplay,
+                                expanded = isDescriptionExpanded,
+                                onExpandedChange = { isDescriptionExpanded = it },
+                                collapsedMaxLines = collapsedDescriptionMaxLines,
+                            )
+                        }
                     }
                 }
             }
+        }
+
+        if (mediaStylePolicy.style == DetailsMediaStyle.NOVEL && !renderCinemaHero) {
+            NovelCatalogEntryRow(
+                title = stringResource(R.string.details_view_catalog),
+                subtitle = if (historyInfo.totalChapters > 0) {
+                    stringResource(R.string.novel_chapters_count, historyInfo.totalChapters)
+                } else {
+                    chapterProgressLabel.takeIf { it != "-" }
+                },
+                onClick = onOpenChapters,
+                trailingIcon = {
+                    androidx.compose.material3.Icon(
+                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                },
+            )
         }
 
         if (!content?.tags.isNullOrEmpty()) {

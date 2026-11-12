@@ -408,9 +408,7 @@ internal fun resolveAvailableDetailsTabIds(
     if (settings.isPagesTabEnabled && !isNovel && !isVideo) {
         add(DETAILS_TAB_PAGES)
     }
-    if (!isVideo) {
-        add(DETAILS_TAB_BOOKMARKS)
-    }
+    add(DETAILS_TAB_BOOKMARKS)
 }
 
 internal fun resolveDetailsTabSelection(

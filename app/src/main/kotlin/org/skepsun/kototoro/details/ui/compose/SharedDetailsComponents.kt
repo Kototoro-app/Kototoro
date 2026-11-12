@@ -82,9 +82,12 @@ fun DetailsCoverFrame(
     @DrawableRes topBadgeIconRes: Int? = null,
     onClick: (() -> Unit)?,
     modifier: Modifier = Modifier,
+    isBookCover: Boolean = false,
     onState: ((coil3.compose.AsyncImagePainter.State) -> Unit)? = null,
 ) {
     val frameShape = remember { RoundedCornerShape(16.dp) }
+    val coverAspectRatio = if (isBookCover) 2f / 3f else 13f / 18f
+    val innerCoverShape = if (isBookCover) RoundedCornerShape(0.dp) else ContentCoverShape
     val context = LocalContext.current
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
@@ -126,28 +129,7 @@ fun DetailsCoverFrame(
             !hasResolvedCover
         )
 
-    Box(
-        modifier = modifier
-            .width(120.dp)
-            .shadow(
-                elevation = 18.dp,
-                shape = frameShape,
-                ambientColor = Color.Black.copy(alpha = 0.22f),
-                spotColor = Color.Black.copy(alpha = 0.28f),
-            )
-            .tvFocusable(shape = frameShape, enabled = onClick != null, borderWidth = 3.dp, addFocusTarget = false)
-            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-            .background(
-                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.54f),
-                shape = frameShape,
-            )
-            .border(
-                width = 1.dp,
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
-                shape = frameShape,
-            )
-            .padding(4.dp),
-    ) {
+    val coverInner: @Composable () -> Unit = {
         Box(
             modifier = Modifier.fillMaxWidth(),
             contentAlignment = Alignment.Center,
@@ -155,10 +137,10 @@ fun DetailsCoverFrame(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .aspectRatio(13f / 18f)
+                    .aspectRatio(coverAspectRatio)
                     .background(
                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.32f),
-                        shape = ContentCoverShape,
+                        shape = innerCoverShape,
                     ),
             )
             if (coverModel == null) {
@@ -169,7 +151,7 @@ fun DetailsCoverFrame(
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .aspectRatio(13f / 18f)
+                            .aspectRatio(coverAspectRatio)
                             .then(
                                 if (enableSharedElement) {
                                     with(sharedTransitionScope) {
@@ -180,21 +162,21 @@ fun DetailsCoverFrame(
                                     }
                                 } else Modifier
                             )
-                            .clip(ContentCoverShape)
+                            .clip(innerCoverShape)
                             .background(
                                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f),
-                                shape = ContentCoverShape,
+                                shape = innerCoverShape,
                             ),
                     )
                 } else {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .aspectRatio(13f / 18f)
-                            .clip(ContentCoverShape)
+                            .aspectRatio(coverAspectRatio)
+                            .clip(innerCoverShape)
                             .background(
                                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f),
-                                shape = ContentCoverShape,
+                                shape = innerCoverShape,
                             ),
                         contentAlignment = Alignment.Center,
                     ) {
@@ -213,7 +195,7 @@ fun DetailsCoverFrame(
                     imageLoader = imageLoader,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .aspectRatio(13f / 18f)
+                        .aspectRatio(coverAspectRatio)
                         .then(
                             if (enableSharedElement && !shouldShowStableForeground) {
                                 with(sharedTransitionScope) {
@@ -225,10 +207,10 @@ fun DetailsCoverFrame(
                             } else Modifier
                         )
                         .alpha(if (shouldShowStableForeground) 0f else 1f)
-                        .clip(ContentCoverShape)
+                        .clip(innerCoverShape)
                         .background(
                             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f),
-                            shape = ContentCoverShape,
+                            shape = innerCoverShape,
                         ),
                     contentScale = ContentScale.Crop,
                     placeholder = cachedPainter,
@@ -254,7 +236,7 @@ fun DetailsCoverFrame(
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .aspectRatio(13f / 18f)
+                            .aspectRatio(coverAspectRatio)
                             .then(
                                 if (enableSharedElement) {
                                     with(sharedTransitionScope) {
@@ -265,10 +247,10 @@ fun DetailsCoverFrame(
                                     }
                                 } else Modifier
                             )
-                            .clip(ContentCoverShape)
+                            .clip(innerCoverShape)
                             .background(
                                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f),
-                                shape = ContentCoverShape,
+                                shape = innerCoverShape,
                             ),
                     )
                 }
@@ -343,6 +325,42 @@ fun DetailsCoverFrame(
                     )
                 }
             }
+        }
+    }
+    if (isBookCover) {
+        val bookShape = remember { RoundedCornerShape(topStart = 4.dp, bottomStart = 4.dp, topEnd = 12.dp, bottomEnd = 12.dp) }
+        org.skepsun.kototoro.core.ui.compose.NovelBookCoverFrame(
+            modifier = modifier
+                .tvFocusable(shape = bookShape, enabled = onClick != null, borderWidth = 3.dp, addFocusTarget = false)
+                .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
+            width = 112.dp,
+        ) {
+            coverInner()
+        }
+    } else {
+        Box(
+            modifier = modifier
+                .width(120.dp)
+                .shadow(
+                    elevation = 18.dp,
+                    shape = frameShape,
+                    ambientColor = Color.Black.copy(alpha = 0.22f),
+                    spotColor = Color.Black.copy(alpha = 0.28f),
+                )
+                .tvFocusable(shape = frameShape, enabled = onClick != null, borderWidth = 3.dp, addFocusTarget = false)
+                .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+                .background(
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.54f),
+                    shape = frameShape,
+                )
+                .border(
+                    width = 1.dp,
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
+                    shape = frameShape,
+                )
+                .padding(4.dp),
+        ) {
+            coverInner()
         }
     }
 }

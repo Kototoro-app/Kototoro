@@ -113,9 +113,17 @@ import org.skepsun.kototoro.core.util.ext.mangaExtra
 import org.skepsun.kototoro.core.util.ext.observeEvent
 import org.skepsun.kototoro.core.util.ext.takeIfUsableImageUri
 import org.skepsun.kototoro.details.ui.DetailsViewModel
+import org.skepsun.kototoro.details.ui.model.ChapterListItem
+import org.skepsun.kototoro.details.ui.model.ContentBranch
 import org.skepsun.kototoro.details.ui.model.DetailsSourceOption
 import org.skepsun.kototoro.details.ui.model.DetailsSupplementAction
 import org.skepsun.kototoro.details.ui.model.HistoryInfo
+import org.skepsun.kototoro.core.ui.chapters.VideoEpisodePreviewItem
+import org.skepsun.kototoro.core.ui.chapters.VideoEpisodePreviewSection
+import org.skepsun.kototoro.core.ui.chapters.VideoLineOption
+import org.skepsun.kototoro.core.ui.chapters.stripEpisodeLinePrefix
+import org.skepsun.kototoro.core.ui.compose.DetailsMediaStylePolicy
+import org.skepsun.kototoro.core.ui.compose.detailsMediaStylePolicy
 import org.skepsun.kototoro.details.ui.compose.pane.DetailsPaneHost
 import org.skepsun.kototoro.details.ui.compose.state.CompactDetailsPaneAnchor
 import org.skepsun.kototoro.details.ui.compose.state.rememberDetailsPaneState
@@ -196,6 +204,16 @@ internal fun DetailsScrollableContent(
     onEntityClick: (EntityRelationItem) -> Unit,
     onActionClick: (DetailsAction) -> Unit,
     sharedElementKey: String? = null,
+    isWideAdaptiveLayout: Boolean = false,
+    mediaStylePolicy: DetailsMediaStylePolicy = detailsMediaStylePolicy(resolvedContentType?.name),
+    chapters: List<ChapterListItem> = emptyList(),
+    branches: List<ContentBranch> = emptyList(),
+    selectedBranch: String? = null,
+    isChaptersReversed: Boolean = false,
+    onSelectBranch: (String?) -> Unit = {},
+    onToggleChaptersReversed: () -> Unit = {},
+    onOpenChapter: (Long) -> Unit = {},
+    onPlayFromFirstClick: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val isWorkActionEnabled = isWorkDetails && !isTemporaryReadOnly
@@ -226,6 +244,15 @@ internal fun DetailsScrollableContent(
                     .padding(horizontal = outerHorizontalPadding, vertical = 8.dp),
             )
         }
+        val currentEpisodeTitle = remember(chapters, historyInfo.history?.chapterId, selectedBranch, context) {
+            val targetId = historyInfo.history?.chapterId
+            val currentItem = if (targetId != null) {
+                chapters.firstOrNull { it.chapter.id == targetId }
+            } else {
+                chapters.firstOrNull { it.isCurrent }
+            }
+            currentItem?.let { stripEpisodeLinePrefix(it.getTitle(context.resources), selectedBranch) }
+        }
         DetailsHeader(
             mangaDetails = mangaDetails,
             localSize = localSize,
@@ -254,6 +281,15 @@ internal fun DetailsScrollableContent(
             fallbackCoverUrl = fallbackCoverUrl,
             sharedElementKey = sharedElementKey,
             showWorkActions = isWorkActionEnabled,
+            isWideAdaptiveLayout = isWideAdaptiveLayout,
+            mediaStylePolicy = mediaStylePolicy,
+            currentEpisodeTitle = currentEpisodeTitle,
+            canPlayVideo = isWorkActionEnabled && (chapters.isNotEmpty() || historyInfo.totalChapters > 0),
+            canPlayFromFirst = isWorkActionEnabled && chapters.isNotEmpty(),
+            canPlayIncognito = !historyInfo.isIncognitoMode,
+            onPlayClick = { onActionClick(DetailsAction.Resume) },
+            onPlayFromFirstClick = onPlayFromFirstClick,
+            onPlayIncognitoClick = { onActionClick(DetailsAction.ResumeIncognito) },
             outerHorizontalPadding = outerHorizontalPadding,
 
             onInfoCardBoundsSync = onInfoCardBoundsSync,
@@ -305,6 +341,52 @@ internal fun DetailsScrollableContent(
                 onActionClick(DetailsAction.ManageTrackingBinding(match.service, match.remoteId, match.title, match.url))
             },
         )
+        if (!preferLightweightFirstFrame &&
+            mediaStylePolicy.useInlineEpisodePreview &&
+            !isWideAdaptiveLayout &&
+            isWorkActionEnabled &&
+            (chapters.isNotEmpty() || historyInfo.totalChapters > 0)
+        ) {
+            val defaultLineLabel = stringResource(R.string.system_default)
+            val previewItems = remember(chapters, selectedBranch, context) {
+                chapters.map { item ->
+                    VideoEpisodePreviewItem(
+                        id = item.chapter.id,
+                        title = stripEpisodeLinePrefix(item.getTitle(context.resources), selectedBranch),
+                        subtitle = item.description,
+                        isCurrent = item.isCurrent,
+                        isWatched = !item.isUnread && !item.isCurrent,
+                    )
+                }
+            }
+            val lineOptions = remember(branches, defaultLineLabel) {
+                branches.map { branch ->
+                    VideoLineOption(
+                        branch = branch.name,
+                        label = branch.name ?: defaultLineLabel,
+                        isSelected = branch.isSelected,
+                    )
+                }
+            }
+            DetailsReadableSurface(
+                panoramaEnabled = settings.isPanoramaCoverEnabled,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = outerHorizontalPadding, vertical = 6.dp),
+            ) {
+                VideoEpisodePreviewSection(
+                    episodes = previewItems,
+                    totalCount = chapters.size.coerceAtLeast(historyInfo.totalChapters),
+                    lines = lineOptions,
+                    isReversed = isChaptersReversed,
+                    onSelectLine = onSelectBranch,
+                    onToggleReverse = onToggleChaptersReversed,
+                    onShowAllClick = { onActionClick(DetailsAction.ToggleList) },
+                    onEpisodeClick = { episode -> onOpenChapter(episode.id) },
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                )
+            }
+        }
         if (!preferLightweightFirstFrame && relatedContent.isNotEmpty()) {
             DetailsRelatedContentSection(
                 items = relatedContent,

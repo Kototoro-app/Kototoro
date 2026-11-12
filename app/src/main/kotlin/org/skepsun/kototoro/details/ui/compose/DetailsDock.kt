@@ -145,6 +145,7 @@ internal fun DetailsPaneActionsRow(
     historyInfo: HistoryInfo,
     branches: List<ContentBranch>,
     isLoading: Boolean,
+    hidePrimaryReadDock: Boolean = false,
     onActionClick: (DetailsAction) -> Unit,
 ) {
     val isChapterSearchVisible = detailsPaneState.isChapterSearchVisible
@@ -154,8 +155,7 @@ internal fun DetailsPaneActionsRow(
         contentType != ContentType.HENTAI_VIDEO &&
         contentType != ContentType.NOVEL &&
         contentType != ContentType.HENTAI_NOVEL
-    val showBookmarksTab = contentType != ContentType.VIDEO &&
-        contentType != ContentType.HENTAI_VIDEO
+    val showBookmarksTab = true
     val compactModernDock = isModernDockEnabled && isModernDockCompact
     val showAllDockTabs = !compactModernDock
     val modernDragHandleRevealProgress = modernDockDragHandleRevealProgress(
@@ -355,13 +355,18 @@ internal fun DetailsPaneActionsRow(
                 } else {
                     minimumTabsDockWidth
                 }
-                val primaryDockMinWidth = if (isDualPaneChapterTools) {
-                    DualPaneDetailsPrimaryDockMinWidth
-                } else {
-                    ModernDetailsDockCompactPrimaryWidth
+                val isExpandedToolsMode = isModernDockEnabled &&
+                    (topBarMode == DetailsPaneTopBarMode.ExpandedChapterTools ||
+                        topBarMode == DetailsPaneTopBarMode.ExpandedGridTools)
+                val hideCollapsedReadDock = hidePrimaryReadDock && !isExpandedToolsMode && !isDualPaneChapterTools
+                val primaryDockMinWidth = when {
+                    hideCollapsedReadDock -> 0.dp
+                    isDualPaneChapterTools -> DualPaneDetailsPrimaryDockMinWidth
+                    else -> ModernDetailsDockCompactPrimaryWidth
                 }
+                val effectiveDockGap = if (hideCollapsedReadDock) 0.dp else dockGap
                 val tabsDockTargetWidth = desiredTabsDockWidth.coerceAtMost(
-                    (maxWidth - primaryDockMinWidth - dockGap).coerceAtLeast(minimumTabsDockWidth),
+                    (maxWidth - primaryDockMinWidth - effectiveDockGap).coerceAtLeast(minimumTabsDockWidth),
                 )
                 val tabsDockWidth by animateDpAsState(
                     targetValue = tabsDockTargetWidth,
@@ -371,9 +376,10 @@ internal fun DetailsPaneActionsRow(
                     ),
                     label = "detailsTabsDockWidth",
                 )
-                val expandedPrimaryDockWidth = (maxWidth - tabsDockTargetWidth - dockGap).coerceAtLeast(0.dp)
+                val expandedPrimaryDockWidth = (maxWidth - tabsDockTargetWidth - effectiveDockGap).coerceAtLeast(0.dp)
                 val primaryDockWidth by animateDpAsState(
                     targetValue = when {
+                        hideCollapsedReadDock -> 0.dp
                         compactModernDock -> ModernDetailsDockCompactPrimaryWidth
                         isModernDockEnabled &&
                             topBarMode == DetailsPaneTopBarMode.ExpandedChapterTools &&
@@ -632,29 +638,31 @@ internal fun DetailsPaneActionsRow(
                             }
 
                             else -> {
-                                ReadDock(
-                                    modifier = Modifier.weight(1f),
-                                    modernStyle = isModernDockEnabled,
-                                    compact = compactModernDock,
-                                    readLabel = resolveReadActionLabel(
+                                if (!hideCollapsedReadDock) {
+                                    ReadDock(
+                                        modifier = Modifier.weight(1f),
+                                        modernStyle = isModernDockEnabled,
+                                        compact = compactModernDock,
+                                        readLabel = resolveReadActionLabel(
+                                            contentType = contentType,
+                                            historyInfo = historyInfo,
+                                            isLoading = isLoading,
+                                        ),
                                         contentType = contentType,
+                                        branches = branches,
                                         historyInfo = historyInfo,
-                                        isLoading = isLoading,
-                                    ),
-                                    contentType = contentType,
-                                    branches = branches,
-                                    historyInfo = historyInfo,
-                                    isDownloadAvailable = historyInfo.canDownload,
-                                    isEnabled = !isLoading && historyInfo.isValid,
-                                    isMergeRepeatedChapters = isMergeRepeatedChapters,
-                                    showMergeRepeatedChapters = showMergeRepeatedChapters,
-                                    onToggleMergeRepeatedChapters = onToggleMergeRepeatedChapters,
-                                    onReadClick = { onActionClick(DetailsAction.Resume) },
-                                    onIncognitoClick = { onActionClick(DetailsAction.ResumeIncognito) },
-                                    onForgetClick = { onActionClick(DetailsAction.ForgetHistory) },
-                                    onDownloadClick = { onActionClick(DetailsAction.Download) },
-                                    onBranchSelected = { onActionClick(DetailsAction.SelectBranch(it)) },
-                                )
+                                        isDownloadAvailable = historyInfo.canDownload,
+                                        isEnabled = !isLoading && historyInfo.isValid,
+                                        isMergeRepeatedChapters = isMergeRepeatedChapters,
+                                        showMergeRepeatedChapters = showMergeRepeatedChapters,
+                                        onToggleMergeRepeatedChapters = onToggleMergeRepeatedChapters,
+                                        onReadClick = { onActionClick(DetailsAction.Resume) },
+                                        onIncognitoClick = { onActionClick(DetailsAction.ResumeIncognito) },
+                                        onForgetClick = { onActionClick(DetailsAction.ForgetHistory) },
+                                        onDownloadClick = { onActionClick(DetailsAction.Download) },
+                                        onBranchSelected = { onActionClick(DetailsAction.SelectBranch(it)) },
+                                    )
+                                }
                             }
                         }
                     }

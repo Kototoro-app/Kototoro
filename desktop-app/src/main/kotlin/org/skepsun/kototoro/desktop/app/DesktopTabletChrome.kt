@@ -1,6 +1,16 @@
 package org.skepsun.kototoro.desktop.app
 
+import org.skepsun.kototoro.core.ui.compose.DetailsMediaStyle
 import org.skepsun.kototoro.core.ui.compose.ExpandableDescriptionText
+import org.skepsun.kototoro.core.ui.compose.NovelBookCoverFrame
+import org.skepsun.kototoro.core.ui.compose.NovelCatalogEntryRow
+import org.skepsun.kototoro.core.ui.compose.NovelEditorialSynopsisBody
+import org.skepsun.kototoro.core.ui.compose.NovelHeroHeaderContent
+import org.skepsun.kototoro.core.ui.compose.NovelMetricItem
+import org.skepsun.kototoro.core.ui.compose.NovelMetricsStrip
+import org.skepsun.kototoro.core.ui.compose.VideoHeroHeaderContent
+import org.skepsun.kototoro.core.ui.compose.detailsMediaStylePolicy
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
@@ -216,6 +226,18 @@ internal fun DesktopMorePanel(controller: DesktopController, enabled: Boolean, o
                 state.language?.let { tag -> DesktopLanguages.bundled.firstOrNull { it.tag == tag }?.nativeName ?: tag }
                     ?: desktopText("more.languageSystem"),
                 enabled, { dialog = DesktopMoreDialog.LANGUAGE }, testTag = "language")
+            SettingsRowDivider()
+            SettingsValueRow(AndroidStrings["pref_details_style_manga"], null,
+                detailsStyleLabel(state.detailsStyleManga), enabled,
+                { dialog = DesktopMoreDialog.DETAILS_STYLE_MANGA }, testTag = "details-style-manga")
+            SettingsRowDivider()
+            SettingsValueRow(AndroidStrings["pref_details_style_novel"], null,
+                detailsStyleLabel(state.detailsStyleNovel), enabled,
+                { dialog = DesktopMoreDialog.DETAILS_STYLE_NOVEL }, testTag = "details-style-novel")
+            SettingsRowDivider()
+            SettingsValueRow(AndroidStrings["pref_details_style_video"], null,
+                detailsStyleLabel(state.detailsStyleVideo), enabled,
+                { dialog = DesktopMoreDialog.DETAILS_STYLE_VIDEO }, testTag = "details-style-video")
         }
         DesktopTrackerSettings(controller, state, enabled)
         DesktopAppUpdateSection(controller, state, enabled, onExitRequest)
@@ -277,27 +299,108 @@ internal fun DesktopMorePanel(controller: DesktopController, enabled: Boolean, o
             onPick = { tag -> controller.language(tag.takeUnless { it == "system" }); dialog = null },
             onDismiss = { dialog = null },
         )
+        DesktopMoreDialog.DETAILS_STYLE_MANGA -> DesktopChoiceSettingsDialog(
+            title = AndroidStrings["pref_details_style_manga"],
+            summary = null,
+            bodyTag = "details-style-manga-dialog",
+            optionTagPrefix = "details-style-manga",
+            options = DetailsMediaStyle.entries.map { detailsStyleLabel(it) to it.name },
+            selected = state.detailsStyleManga.name,
+            enabled = enabled,
+            onPick = { name ->
+                controller.detailsStyle(DetailsMediaStyle.MANGA, DetailsMediaStyle.valueOf(name))
+                dialog = null
+            },
+            onDismiss = { dialog = null },
+        )
+        DesktopMoreDialog.DETAILS_STYLE_NOVEL -> DesktopChoiceSettingsDialog(
+            title = AndroidStrings["pref_details_style_novel"],
+            summary = null,
+            bodyTag = "details-style-novel-dialog",
+            optionTagPrefix = "details-style-novel",
+            options = DetailsMediaStyle.entries.map { detailsStyleLabel(it) to it.name },
+            selected = state.detailsStyleNovel.name,
+            enabled = enabled,
+            onPick = { name ->
+                controller.detailsStyle(DetailsMediaStyle.NOVEL, DetailsMediaStyle.valueOf(name))
+                dialog = null
+            },
+            onDismiss = { dialog = null },
+        )
+        DesktopMoreDialog.DETAILS_STYLE_VIDEO -> DesktopChoiceSettingsDialog(
+            title = AndroidStrings["pref_details_style_video"],
+            summary = null,
+            bodyTag = "details-style-video-dialog",
+            optionTagPrefix = "details-style-video",
+            options = DetailsMediaStyle.entries.map { detailsStyleLabel(it) to it.name },
+            selected = state.detailsStyleVideo.name,
+            enabled = enabled,
+            onPick = { name ->
+                controller.detailsStyle(DetailsMediaStyle.VIDEO, DetailsMediaStyle.valueOf(name))
+                dialog = null
+            },
+            onDismiss = { dialog = null },
+        )
         null -> Unit
     }
 }
 
-private enum class DesktopMoreDialog { THEME, INTERFACE_STYLE, LANGUAGE }
+private enum class DesktopMoreDialog {
+    THEME,
+    INTERFACE_STYLE,
+    LANGUAGE,
+    DETAILS_STYLE_MANGA,
+    DETAILS_STYLE_NOVEL,
+    DETAILS_STYLE_VIDEO,
+}
+
+private fun detailsStyleLabel(style: DetailsMediaStyle): String = when (style) {
+    DetailsMediaStyle.MANGA -> AndroidStrings["details_style_manga"]
+    DetailsMediaStyle.NOVEL -> AndroidStrings["details_style_novel"]
+    DetailsMediaStyle.VIDEO -> AndroidStrings["details_style_video"]
+}
+
+private fun DesktopAppState.detailsStyleFor(contentType: String?): DetailsMediaStyle = when (contentType) {
+    "VIDEO", "HENTAI_VIDEO" -> detailsStyleVideo
+    "NOVEL", "HENTAI_NOVEL" -> detailsStyleNovel
+    else -> detailsStyleManga
+}
 
 
 /** Android tablet details keep artwork/metadata separate from the independently scrolling chapter list. */
 @Composable
 internal fun DesktopTabletDetails(controller: DesktopController, state: DesktopAppState) {
     val content = state.content ?: return
-    val directory = remember(content.id) { DesktopDetailsChapterState() }
+    val preferredStyle = state.detailsStyleFor(content.source.contentType)
+    val mediaStylePolicy = remember(content.source.contentType, preferredStyle) {
+        detailsMediaStylePolicy(content.source.contentType, preferredStyle)
+    }
+    val initialVideoGrid = remember(content.id, content.chapters, state.chapterBranch, mediaStylePolicy) {
+        if (!mediaStylePolicy.useInlineEpisodePreview) {
+            false
+        } else {
+            val branchChapters = chaptersOfBranch(content.chapters.orEmpty(), SourceChapter::branch, state.chapterBranch)
+            val titles = branchChapters.map { stripEpisodeLinePrefix(desktopChapterTitle(it), state.chapterBranch) }
+            titles.isNotEmpty() && !hasLongEpisodeTitles(titles)
+        }
+    }
+    val directory = remember(content.id) { DesktopDetailsChapterState(initialGrid = initialVideoGrid) }
+    val sourceDisplayName = remember(state.sources, content.source.name) {
+        state.sources.firstOrNull { it.source.name == content.source.name }?.displayName ?: content.source.name
+    }
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        DesktopArtworkBackground(content, controller.session.covers, Modifier.matchParentSize())
+        DesktopArtworkBackground(
+            content = content,
+            cache = controller.session.covers,
+            modifier = Modifier.matchParentSize(),
+            styleOverride = preferredStyle,
+        )
         val expanded = tabletLayoutClass(LocalDesktopWindowWidth.current.value.toInt(), true) == TabletLayoutClass.EXPANDED
         val summary: @Composable (Modifier) -> Unit = { modifier ->
             Column(modifier, verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Text(content.title, style = if (expanded) MaterialTheme.typography.headlineLarge else MaterialTheme.typography.titleLarge)
                 Text(content.authors.joinToString(" · ").ifBlank { desktopText("details.authorsUnknown") }, color = Muted)
-                Text(state.sources.firstOrNull { it.source.name == content.source.name }?.displayName ?: content.source.name,
-                    color = Accent, fontSize = 12.sp)
+                Text(sourceDisplayName, color = Accent, fontSize = 12.sp)
                 Button({ controller.read() }, enabled = !state.busy && !content.chapters.isNullOrEmpty(),
                     modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("preview-read")) {
                     Text(if (DesktopReaderKind.of(content) == DesktopReaderKind.VIDEO) desktopText("details.startWatching") else desktopText("details.startReading"))
@@ -317,7 +420,193 @@ internal fun DesktopTabletDetails(controller: DesktopController, state: DesktopA
             Column(modifier.then(if (expanded) Modifier.verticalScroll(rememberScrollState()) else Modifier)
                 .padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                if (expanded) {
+                if (mediaStylePolicy.useCenteredHeroHeader) {
+                    val allChapters = content.chapters.orEmpty()
+                    val branchChapters = remember(allChapters, state.chapterBranch) {
+                        chaptersOfBranch(allChapters, SourceChapter::branch, state.chapterBranch)
+                    }
+                    val currentEpisodeIndex = remember(branchChapters, state.detailsChapterId) {
+                        state.detailsChapterId?.let { id -> branchChapters.indexOfFirst { it.id == id } } ?: -1
+                    }
+                    val episodeProgress = remember(branchChapters.size, currentEpisodeIndex) {
+                        when {
+                            branchChapters.isEmpty() -> null
+                            currentEpisodeIndex >= 0 -> "${currentEpisodeIndex + 1}/${branchChapters.size}"
+                            else -> "0/${branchChapters.size}"
+                        }
+                    }
+                    val metadataLine = remember(content.state, episodeProgress, content.authors) {
+                        listOfNotNull(
+                            desktopContentStatusLabel(content.state),
+                            episodeProgress,
+                            content.authors.take(2).joinToString(" · ").takeIf { it.isNotBlank() },
+                        ).joinToString(" · ")
+                    }
+                    val progressFraction = if (currentEpisodeIndex >= 0 && branchChapters.isNotEmpty()) {
+                        (currentEpisodeIndex + 1).toFloat() / branchChapters.size.toFloat()
+                    } else {
+                        null
+                    }
+                    VideoHeroHeaderContent(
+                        title = content.title,
+                        alternateTitlesText = content.altTitles.firstOrNull { it.isNotBlank() }.orEmpty(),
+                        metadataSummary = metadataLine,
+                        heroClearanceHeight = if (expanded) 128.dp else 160.dp,
+                        progressPercent = progressFraction,
+                        sourceChips = {
+                            Surface(
+                                shape = RoundedCornerShape(999.dp),
+                                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+                            ) {
+                                Text(
+                                    text = sourceDisplayName,
+                                    color = Accent,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
+                                )
+                            }
+                        },
+                        primaryPlayAction = {
+                            Button(
+                                onClick = { controller.read() },
+                                enabled = !state.busy && allChapters.isNotEmpty(),
+                                shape = RoundedCornerShape(999.dp),
+                                modifier = Modifier
+                                    .widthIn(min = 200.dp, max = 360.dp)
+                                    .heightIn(min = 48.dp)
+                                    .testTag("preview-read"),
+                            ) {
+                                Text(desktopText("details.startWatching"))
+                            }
+                        },
+                        quickActions = {
+                            OutlinedButton(
+                                onClick = { controller.toggleFavourite() },
+                                enabled = !state.busy,
+                                shape = RoundedCornerShape(999.dp),
+                                modifier = Modifier.heightIn(min = 42.dp).testTag("preview-favourite"),
+                            ) {
+                                Text(if (state.isFavourite) desktopText("details.unfavourite") else desktopText("details.favourite"))
+                            }
+                            if (!state.readerIncognito) {
+                                DesktopIncognitoReadingButton(
+                                    !state.busy && allChapters.isNotEmpty(),
+                                    { controller.readIncognito() },
+                                    Modifier.heightIn(min = 42.dp),
+                                )
+                            }
+                        },
+                    )
+                } else if (mediaStylePolicy.style == DetailsMediaStyle.NOVEL) {
+                    val novelChapters = content.chapters.orEmpty()
+                    val novelMetadataLine = remember(content.state, novelChapters.size) {
+                        listOfNotNull(
+                            desktopContentStatusLabel(content.state),
+                            novelChapters.size.takeIf { it > 0 }?.let { "${it}" },
+                        ).joinToString(" · ")
+                    }
+                    NovelHeroHeaderContent(
+                        title = content.title,
+                        authorText = content.authors.firstOrNull { it.isNotBlank() }.orEmpty(),
+                        alternateTitlesText = content.altTitles.firstOrNull { it.isNotBlank() }.orEmpty(),
+                        bookMetadataLine = novelMetadataLine,
+                        coverSlot = {
+                            NovelBookCoverFrame(width = if (expanded) 136.dp else 120.dp) {
+                                DesktopCover(
+                                    content = content,
+                                    cache = controller.session.covers,
+                                    modifier = Modifier.fillMaxSize().background(Accent.copy(alpha = .06f)),
+                                    large = true,
+                                )
+                            }
+                        },
+                        titleExtraSlot = {
+                            Text(
+                                text = content.title,
+                                style = MaterialTheme.typography.headlineSmall,
+                                fontWeight = FontWeight.Bold,
+                            )
+                        },
+                        sourceChipsSlot = {
+                            Text(
+                                text = sourceDisplayName,
+                                color = Accent,
+                                style = MaterialTheme.typography.labelMedium,
+                            )
+                        },
+                        quickActionsSlot = {
+                            Button(
+                                onClick = { controller.read() },
+                                enabled = !state.busy && !content.chapters.isNullOrEmpty(),
+                                shape = RoundedCornerShape(999.dp),
+                                modifier = Modifier.heightIn(min = 42.dp).testTag("preview-read"),
+                            ) {
+                                Text(desktopText("details.read"))
+                            }
+                            OutlinedButton(
+                                onClick = { controller.toggleFavourite() },
+                                enabled = !state.busy,
+                                shape = RoundedCornerShape(999.dp),
+                                modifier = Modifier.heightIn(min = 42.dp).testTag("preview-favourite"),
+                            ) {
+                                Text(if (state.isFavourite) desktopText("details.unfavourite") else desktopText("details.favourite"))
+                            }
+                            if (!state.readerIncognito) {
+                                DesktopIncognitoReadingButton(
+                                    !state.busy && !content.chapters.isNullOrEmpty(),
+                                    { controller.readIncognito() },
+                                    Modifier.heightIn(min = 42.dp),
+                                )
+                            }
+                        },
+                    )
+                    val desktopChapters = content.chapters.orEmpty()
+                    val currentChapterIdx = state.detailsChapterId?.let { id ->
+                        desktopChapters.indexOfFirst { it.id == id }
+                    } ?: -1
+                    val desktopMetrics = buildList {
+                        add(
+                            NovelMetricItem(
+                                label = AndroidStrings["chapters"],
+                                value = "${desktopChapters.size}",
+                                subtitle = desktopContentStatusLabel(content.state),
+                            ),
+                        )
+                        add(
+                            NovelMetricItem(
+                                label = AndroidStrings["details_my_reading"],
+                                value = if (currentChapterIdx >= 0 && desktopChapters.isNotEmpty()) {
+                                    "${((currentChapterIdx + 1) * 100 / desktopChapters.size)}%"
+                                } else {
+                                    AndroidStrings["details_not_started"]
+                                },
+                                subtitle = if (currentChapterIdx >= 0 && desktopChapters.isNotEmpty()) {
+                                    "${currentChapterIdx + 1}/${desktopChapters.size}"
+                                } else {
+                                    null
+                                },
+                            ),
+                        )
+                        state.detailsReadingTime?.takeUnless { it.isEmpty }?.let { rt ->
+                            add(
+                                NovelMetricItem(
+                                    label = desktopText("details.readingTime"),
+                                    value = desktopReadingTimeText(rt),
+                                ),
+                            )
+                        }
+                        if (content.rating > 0f) {
+                            add(
+                                NovelMetricItem(
+                                    label = AndroidStrings["rating"],
+                                    value = "${(content.rating * 10f).toInt() / 10f} ★",
+                                ),
+                            )
+                        }
+                    }
+                    NovelMetricsStrip(items = desktopMetrics)
+                } else if (expanded) {
                     DesktopCover(content, controller.session.covers, Modifier.width(180.dp).aspectRatio(2f / 3f)
                         .align(Alignment.CenterHorizontally).clip(RoundedCornerShape(16.dp))
                         .background(Accent.copy(alpha = .06f)), large = true)
@@ -332,31 +621,67 @@ internal fun DesktopTabletDetails(controller: DesktopController, state: DesktopA
                         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(desktopText("details.synopsis"), style = MaterialTheme.typography.titleMedium)
                             // Android's description: three lines fading out, a click on the text unfolds it all.
-                            var expanded by remember(content.id) { mutableStateOf(false) }
-                            ExpandableDescriptionText(it.replace(Regex("<[^>]*>"), ""), expanded, { expanded = it },
-                                modifier = Modifier.testTag("details-description"))
+                            var expandedSynopsis by remember(content.id) { mutableStateOf(false) }
+                            val cleanedSynopsis = it.replace(Regex("<[^>]*>"), "")
+                            if (mediaStylePolicy.style == DetailsMediaStyle.NOVEL) {
+                                NovelEditorialSynopsisBody(
+                                    text = cleanedSynopsis,
+                                    expanded = expandedSynopsis,
+                                    onExpandedChange = { expandedSynopsis = it },
+                                    collapsedMaxLines = mediaStylePolicy.synopsisCollapsedMaxLines,
+                                    lineHeightScale = mediaStylePolicy.synopsisLineHeightScale,
+                                    modifier = Modifier.testTag("details-description"),
+                                )
+                            } else {
+                                ExpandableDescriptionText(
+                                    text = cleanedSynopsis,
+                                    expanded = expandedSynopsis,
+                                    onExpandedChange = { expandedSynopsis = it },
+                                    collapsedMaxLines = mediaStylePolicy.synopsisCollapsedMaxLines,
+                                    modifier = Modifier.testTag("details-description"),
+                                )
+                            }
                         }
                     }
+                }
+                if (mediaStylePolicy.style == DetailsMediaStyle.NOVEL) {
+                    val chapterCount = content.chapters?.size ?: 0
+                    NovelCatalogEntryRow(
+                        title = AndroidStrings["details_view_catalog"],
+                        subtitle = if (chapterCount > 0) desktopText("details.chapters", chapterCount) else null,
+                        onClick = {},
+                    )
                 }
                 DesktopDetailsInfo(content, enabled = !state.busy, warnings = state.sourceSettings,
                     readingTime = state.detailsReadingTime)
                 DesktopDetailsRelated(controller, state)
             }
         }
-        var tab by remember(content.id) { mutableStateOf(DesktopDetailsTab.CHAPTERS) }
+        val availableTabs = remember(mediaStylePolicy.showBookmarksTab) {
+            if (mediaStylePolicy.showBookmarksTab) DesktopDetailsTab.entries
+            else listOf(DesktopDetailsTab.CHAPTERS)
+        }
+        var tab by remember(content.id, availableTabs) { mutableStateOf(DesktopDetailsTab.CHAPTERS) }
+        val activeTab = if (tab in availableTabs) tab else DesktopDetailsTab.CHAPTERS
         val bookmarks = remember(state.bookmarks, content.id) { state.bookmarks.count { it.contentId == content.id } }
         val tabs: @Composable (Modifier) -> Unit = { tabsModifier ->
-            Row(tabsModifier, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                DesktopDetailsTab.entries.forEach { candidate ->
-                    val label = when (candidate) {
-                        DesktopDetailsTab.CHAPTERS -> desktopText("details.chapters", content.chapters?.size ?: 0)
-                        DesktopDetailsTab.BOOKMARKS -> desktopText("details.tabBookmarks", bookmarks)
-                    }
-                    OutlinedButton({ tab = candidate }, enabled = !state.busy,
-                        colors = ButtonDefaults.outlinedButtonColors(containerColor =
-                            if (tab == candidate) Accent.copy(alpha = .12f) else Color.Transparent),
-                        modifier = Modifier.weight(1f, fill = false).testTag("details-tab:${candidate.name}")) {
-                        Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (availableTabs.size > 1) {
+                Row(tabsModifier, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    availableTabs.forEach { candidate ->
+                        val label = when (candidate) {
+                            DesktopDetailsTab.CHAPTERS -> desktopText("details.chapters", content.chapters?.size ?: 0)
+                            DesktopDetailsTab.BOOKMARKS -> if (mediaStylePolicy.style == DetailsMediaStyle.NOVEL) {
+                                "${AndroidStrings["notes"]} · $bookmarks"
+                            } else {
+                                desktopText("details.tabBookmarks", bookmarks)
+                            }
+                        }
+                        OutlinedButton({ tab = candidate }, enabled = !state.busy,
+                            colors = ButtonDefaults.outlinedButtonColors(containerColor =
+                                if (activeTab == candidate) Accent.copy(alpha = .12f) else Color.Transparent),
+                            modifier = Modifier.weight(1f, fill = false).testTag("details-tab:${candidate.name}")) {
+                            Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
                     }
                 }
             }
@@ -370,7 +695,7 @@ internal fun DesktopTabletDetails(controller: DesktopController, state: DesktopA
                 chapters = { paneModifier ->
                     Column(paneModifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         tabs(Modifier.fillMaxWidth())
-                        when (tab) {
+                        when (activeTab) {
                             DesktopDetailsTab.CHAPTERS -> DesktopDetailsChapters(controller, state, directory,
                                 Modifier.weight(1f))
                             DesktopDetailsTab.BOOKMARKS -> DesktopDetailsBookmarks(controller, state,
@@ -382,7 +707,7 @@ internal fun DesktopTabletDetails(controller: DesktopController, state: DesktopA
         } else {
             Column(Modifier.fillMaxSize().testTag("details-stacked"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 tabs(Modifier.fillMaxWidth())
-                when (tab) {
+                when (activeTab) {
                     DesktopDetailsTab.CHAPTERS -> DesktopDetailsChapters(controller, state, directory,
                         Modifier.weight(1f), leadingContent = { metadata(Modifier.fillMaxWidth()) })
                     DesktopDetailsTab.BOOKMARKS -> DesktopDetailsBookmarks(controller, state, Modifier.weight(1f))

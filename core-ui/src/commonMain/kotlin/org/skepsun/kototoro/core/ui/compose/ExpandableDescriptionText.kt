@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 
@@ -35,11 +36,13 @@ fun ExpandableDescriptionText(
     onExpandedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
     collapsedMaxLines: Int = 3,
+    lineHeight: TextUnit = TextUnit.Unspecified,
 ) {
     var canExpand by remember(text) { mutableStateOf(false) }
+    val baseStyle = MaterialTheme.typography.bodyMedium
     Text(
         text = text,
-        style = MaterialTheme.typography.bodyMedium,
+        style = if (lineHeight != TextUnit.Unspecified) baseStyle.copy(lineHeight = lineHeight) else baseStyle,
         color = MaterialTheme.colorScheme.onSurface,
         modifier = modifier
             .fillMaxWidth()

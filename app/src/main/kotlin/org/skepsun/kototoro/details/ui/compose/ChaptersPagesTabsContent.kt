@@ -127,7 +127,7 @@ fun ChaptersPagesTabsContent(
     val isVideo = contentType == ContentType.VIDEO || contentType == ContentType.HENTAI_VIDEO
 
     val isPagesTabEnabled = settings.isPagesTabEnabled && !isNovel && !isVideo
-    val isBookmarksTabEnabled = !isVideo
+    val isBookmarksTabEnabled = true
     val isDownloadedFilterVisible = mangaDetails?.local != null
 
     val tabsList = remember(isPagesTabEnabled, isBookmarksTabEnabled, isNovel) {

@@ -6,6 +6,9 @@ package org.skepsun.kototoro.details.ui.compose
 import org.skepsun.kototoro.core.ui.adaptive.rememberAndroidTabletLayoutClass
 import org.skepsun.kototoro.core.ui.adaptive.TabletDetailsPanes
 import org.skepsun.kototoro.core.ui.adaptive.TabletLayoutClass
+import org.skepsun.kototoro.core.ui.compose.DetailsMediaStyle
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.runtime.derivedStateOf
 import android.os.Build
 import android.util.Log
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -117,8 +120,16 @@ import org.skepsun.kototoro.core.ui.compose.ImmersiveEdgeBlurTintScale
 import org.skepsun.kototoro.core.ui.compose.immersiveEdgeBlurRadius
 import org.skepsun.kototoro.core.ui.glass.LocalGlassPrefs
 import org.skepsun.kototoro.core.ui.glass.rememberGlassPrefsOrFallback
+import org.skepsun.kototoro.core.ui.theme.CoverDominantColor
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
+import org.skepsun.kototoro.core.ui.theme.isDarkTheme
+import org.skepsun.kototoro.core.ui.compose.detailsMediaStylePolicy
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import org.skepsun.kototoro.core.nav.ReaderIntent
+import org.skepsun.kototoro.core.util.ext.findActivity
+import org.skepsun.kototoro.reader.ui.ReaderNavigationCallback
 import org.skepsun.kototoro.core.exceptions.resolve.SnackbarErrorObserver
 import org.skepsun.kototoro.core.util.ext.isHttpUrl
 import org.skepsun.kototoro.core.util.ext.mangaExtra
@@ -362,6 +373,21 @@ private fun DetailsScreenContent(
     val initialContent = remember { PendingDetailsNavigation.lastContent() }
     val content = mangaDetails?.toContent() ?: initialContent
     val contentType = resolvedMetadataContentType
+    val detailsStyleManga by settings.observeAsState(AppSettings.KEY_DETAILS_STYLE_MANGA) { detailsStyleManga }
+    val detailsStyleNovel by settings.observeAsState(AppSettings.KEY_DETAILS_STYLE_NOVEL) { detailsStyleNovel }
+    val detailsStyleVideo by settings.observeAsState(AppSettings.KEY_DETAILS_STYLE_VIDEO) { detailsStyleVideo }
+    val preferredDetailsStyle = remember(contentType, detailsStyleManga, detailsStyleNovel, detailsStyleVideo) {
+        when (contentType) {
+            ContentType.VIDEO, ContentType.HENTAI_VIDEO -> detailsStyleVideo
+            ContentType.NOVEL, ContentType.HENTAI_NOVEL -> detailsStyleNovel
+            else -> detailsStyleManga
+        }
+    }
+    val mediaStylePolicy = remember(contentType, preferredDetailsStyle) {
+        detailsMediaStylePolicy(contentType?.name, preferredDetailsStyle)
+    }
+    val chapters by viewModel.chapters.collectAsStateWithLifecycle(initialValue = emptyList())
+    val selectedBranch by viewModel.selectedBranch.collectAsStateWithLifecycle(initialValue = null)
     LaunchedEffect(
         content?.id,
         content?.source?.name,
@@ -708,11 +734,15 @@ private fun DetailsScreenContent(
         stableStatusBarTopPadding + interfaceStyleTokens.mainTopBarHeight
     }
     val detailsHeaderTopSpacing = if (panoramaPrefs.isEnabled) {
-        compactPanoramaTopBarInset + panoramaExtraHeightDp
+        if (mediaStylePolicy.useVideoHeroBackdrop) {
+            compactPanoramaTopBarInset
+        } else {
+            compactPanoramaTopBarInset + panoramaExtraHeightDp
+        }
     } else {
         overlayTopBarInset
     }
-    val landscapeHeaderTopSpacing = if (panoramaPrefs.isEnabled) {
+    val landscapeHeaderTopSpacing = if (panoramaPrefs.isEnabled && !mediaStylePolicy.useVideoHeroBackdrop) {
         panoramaExtraHeightDp
     } else {
         0.dp
@@ -907,10 +937,77 @@ private fun DetailsScreenContent(
         }
     }
 
+    val openChapterById: (Long) -> Unit = remember(viewModel, context, appRouter, resolvedReadingLanguage, resolvedMetadataLanguage) {
+        { chapterId ->
+            val targetContent = viewModel.getContentOrNull() ?: content
+            val targetChapter = targetContent?.chapters?.firstOrNull { it.id == chapterId }
+                ?: chapters.firstOrNull { it.chapter.id == chapterId }?.chapter
+            if (targetContent != null && targetChapter != null) {
+                val navigationCallback = (context as? ReaderNavigationCallback)
+                    ?: (context.findActivity() as? ReaderNavigationCallback)
+                if (navigationCallback?.onChapterSelected(targetChapter) != true) {
+                    val targetState = ReaderState(targetChapter.id, 0, 0)
+                    viewModel.recordDetailsJump(targetState, "detail_chapter")
+                    appRouter.openReader(
+                        ReaderIntent.Builder(context)
+                            .manga(targetContent)
+                            .languages(
+                                translatedLanguage = resolvedReadingLanguage,
+                                sourceLanguage = resolvedMetadataLanguage,
+                            )
+                            .branch(viewModel.selectedBranchValue)
+                            .state(targetState)
+                            .build(),
+                    )
+                }
+            }
+        }
+    }
+    val playFromFirstEpisode: () -> Unit = remember(chapters, isChaptersReversed, openChapterById) {
+        {
+            val firstChapterId = if (isChaptersReversed) {
+                chapters.lastOrNull()?.chapter?.id
+            } else {
+                chapters.firstOrNull()?.chapter?.id
+            }
+            if (firstChapterId != null) {
+                openChapterById(firstChapterId)
+            }
+        }
+    }
+
     val effectiveGlassPrefs = rememberGlassPrefsOrFallback()
+    val reducedVisualEffects by settings.observeAsState(AppSettings.KEY_REDUCED_VISUAL_EFFECTS) {
+        isReducedVisualEffectsEnabled
+    }
     val routeLayerBackdrop = LocalLiquidGlassLayerBackdrop.current
-    val detailsBackgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = 1f)
-    val detailsBackdropBackground = MaterialTheme.colorScheme.background
+    val baseDetailsSurfaceColor = MaterialTheme.colorScheme.surface.copy(alpha = 1f)
+    val dominantCoverColor = rememberCoverDominantColor(
+        content = content,
+        coverUrl = currentPanoramaCoverUrl ?: normalizedFallbackCoverUrl,
+    )
+    val isDetailsDark = MaterialTheme.colorScheme.isDarkTheme()
+    val targetDetailsBackgroundColor = remember(
+        baseDetailsSurfaceColor,
+        dominantCoverColor,
+        isDetailsDark,
+        reducedVisualEffects,
+        mediaStylePolicy,
+    ) {
+        CoverDominantColor.resolvePageBackground(
+            baseColor = baseDetailsSurfaceColor,
+            dominantColor = dominantCoverColor,
+            isDarkTheme = isDetailsDark,
+            increasedContrast = reducedVisualEffects,
+            strength = mediaStylePolicy.dominantBackgroundStrength,
+        )
+    }
+    val detailsBackgroundColor by animateColorAsState(
+        targetValue = targetDetailsBackgroundColor,
+        animationSpec = tween(durationMillis = 350),
+        label = "detailsDominantBackgroundColor",
+    )
+    val detailsBackdropBackground = detailsBackgroundColor
     val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
     val detailsBackgroundBackdrop = if (isIosStyle) {
         rememberLayerBackdrop {
@@ -1052,25 +1149,65 @@ private fun DetailsScreenContent(
                                     .build()
                             }
                         }
-                        AnimatedPanoramaBackdrop(
-                            prefs = panoramaPrefs,
-                            model = request,
-                            placeholderMemoryCacheKey = panoramaPlaceholderCacheKey,
-                            snapshotKey = sharedElementKey,
-                            contentAlpha = 1f,
-                            contentAlphaProvider = panoramaContentAlphaProvider,
-                            backgroundColor = detailsBackgroundColor,
-                            crossfadeEnabled = false,
-                            onLoadError = {
-                                if (!hasPanoramaLoadFailed && normalizedFallbackCoverUrl != null && normalizedFallbackCoverUrl != normalizedPrimaryCoverUrl) {
-                                    hasPanoramaLoadFailed = true
-                                }
-                            },
-                            fadeToBackground = true,
-                            maxHeightPx = panoramaMaxHeightPx,
-                            scrollLinkedTranslationYPx = panoramaScrollLinkedTranslationPx,
-                            modifier = Modifier,
-                        )
+                        if (mediaStylePolicy.useVideoHeroBackdrop) {
+                            val isFullScreenVideoHero = !panoramaPrefs.limitToInfoCardMidpoint
+                            val videoHeroHeight = if (isWideAdaptiveLayout) {
+                                400.dp
+                            } else {
+                                compactPanoramaTopBarInset + 360.dp
+                            }
+                            val videoFadeDistancePx = if (isFullScreenVideoHero) {
+                                panoramaFadeDistancePx
+                            } else {
+                                with(density) { 220.dp.toPx() }
+                            }
+                            val videoBlurRadius = (18f * (panoramaPrefs.blurPercent / 100f).coerceIn(0.4f, 1.5f)).dp
+                            VideoDetailsBackdrop(
+                                model = request,
+                                placeholderMemoryCacheKey = panoramaPlaceholderCacheKey,
+                                snapshotKey = sharedElementKey,
+                                backgroundColor = detailsBackgroundColor,
+                                height = videoHeroHeight,
+                                scrollOffsetPxProvider = {
+                                    if (isWideAdaptiveLayout) {
+                                        landscapeLeftScrollState.value.toFloat()
+                                    } else {
+                                        scrollState.value.toFloat()
+                                    }
+                                },
+                                fadeDistancePx = videoFadeDistancePx,
+                                fullScreen = isFullScreenVideoHero,
+                                scrollLinked = panoramaPrefs.isScrollLinkedEnabled,
+                                blurRadius = videoBlurRadius,
+                                animateMotion = panoramaPrefs.isAnimationEnabled,
+                                animationSpeedPercent = panoramaPrefs.animationSpeedPercent,
+                                onLoadError = {
+                                    if (!hasPanoramaLoadFailed && normalizedFallbackCoverUrl != null && normalizedFallbackCoverUrl != normalizedPrimaryCoverUrl) {
+                                        hasPanoramaLoadFailed = true
+                                    }
+                                },
+                            )
+                        } else {
+                            AnimatedPanoramaBackdrop(
+                                prefs = panoramaPrefs,
+                                model = request,
+                                placeholderMemoryCacheKey = panoramaPlaceholderCacheKey,
+                                snapshotKey = sharedElementKey,
+                                contentAlpha = 1f,
+                                contentAlphaProvider = panoramaContentAlphaProvider,
+                                backgroundColor = detailsBackgroundColor,
+                                crossfadeEnabled = false,
+                                onLoadError = {
+                                    if (!hasPanoramaLoadFailed && normalizedFallbackCoverUrl != null && normalizedFallbackCoverUrl != normalizedPrimaryCoverUrl) {
+                                        hasPanoramaLoadFailed = true
+                                    }
+                                },
+                                fadeToBackground = true,
+                                maxHeightPx = panoramaMaxHeightPx,
+                                scrollLinkedTranslationYPx = panoramaScrollLinkedTranslationPx,
+                                modifier = Modifier,
+                            )
+                        }
                     }
                 }
             }
@@ -1377,6 +1514,16 @@ private fun DetailsScreenContent(
                                         onUpdateUnifiedRating = viewModel::updateUnifiedRating,
                                         onEntityClick = openEntityRelationItem,
                                         onActionClick = handleActionClick,
+                                        isWideAdaptiveLayout = true,
+                                        mediaStylePolicy = mediaStylePolicy,
+                                        chapters = chapters,
+                                        branches = branches,
+                                        selectedBranch = selectedBranch,
+                                        isChaptersReversed = isChaptersReversed,
+                                        onSelectBranch = viewModel::setSelectedBranch,
+                                        onToggleChaptersReversed = { viewModel.setChaptersReversed(!isChaptersReversed) },
+                                        onOpenChapter = openChapterById,
+                                        onPlayFromFirstClick = playFromFirstEpisode,
                                     )
                                 }
                             }
@@ -1569,10 +1716,35 @@ private fun DetailsScreenContent(
                                 onUpdateUnifiedRating = viewModel::updateUnifiedRating,
                                 onEntityClick = openEntityRelationItem,
                                 onActionClick = handleActionClick,
+                                isWideAdaptiveLayout = false,
+                                mediaStylePolicy = mediaStylePolicy,
+                                chapters = chapters,
+                                branches = branches,
+                                selectedBranch = selectedBranch,
+                                isChaptersReversed = isChaptersReversed,
+                                onSelectBranch = viewModel::setSelectedBranch,
+                                onToggleChaptersReversed = { viewModel.setChaptersReversed(!isChaptersReversed) },
+                                onOpenChapter = openChapterById,
+                                onPlayFromFirstClick = playFromFirstEpisode,
                             )
                     }
                 }
                 if (isWorkDetails) {
+                    val isVideoHeroPlayVisible by remember(
+                        mediaStylePolicy,
+                        panoramaPrefs.isEnabled,
+                        isWideAdaptiveLayout,
+                        density,
+                    ) {
+                        derivedStateOf {
+                            if (!mediaStylePolicy.useCenteredHeroHeader || !panoramaPrefs.isEnabled || isWideAdaptiveLayout) {
+                                false
+                            } else {
+                                val thresholdPx = with(density) { 260.dp.toPx() }
+                                scrollState.value < thresholdPx && !isCompactPaneFullyExpanded
+                            }
+                        }
+                    }
                     DetailsPaneHost(
                         state = detailsPaneState,
                         modifier = Modifier
@@ -1637,6 +1809,7 @@ private fun DetailsScreenContent(
                             showCollapsedHandle = true,
                             isModernDetailsDockEnabled = isModernDetailsDockEnabled,
                             isModernDockCompact = isModernDockCompact,
+                            hidePrimaryReadDock = isVideoHeroPlayVisible,
                             onSelectedTabIdChange = persistSelectedPaneTab,
                             onActionClick = handleActionClick,
                             )

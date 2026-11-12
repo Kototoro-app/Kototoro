@@ -18,10 +18,10 @@ import org.skepsun.kototoro.reader.ui.compose.design.ReaderPanelIcons
 
 /** Kept above the width-dependent panes so resizing does not discard search, order or the active lazy state. */
 @Stable
-internal class DesktopDetailsChapterState {
+internal class DesktopDetailsChapterState(initialGrid: Boolean = false) {
     var query by mutableStateOf("")
     var reversed by mutableStateOf(false)
-    var grid by mutableStateOf(false)
+    var grid by mutableStateOf(initialGrid)
     var locateRequest by mutableIntStateOf(0)
     var targetChapterId by mutableStateOf<Long?>(null)
     /** Android's batch mode; a mouse reaches it from the header toggle or by holding on a row. */
@@ -191,8 +191,14 @@ internal fun DesktopDetailsChapters(
                 is ChapterSection.Item -> {
                     val chapter = section.chapter
                     val isDownloaded = downloaded.any { DesktopDownloadStore.sameChapter(it, chapter) }
+                    val baseCard = desktopChapterCardData(chapter, current, bookmarked, downloaded, furthest)
+                    val cardData = if (DesktopReaderKind.of(state.content) == DesktopReaderKind.VIDEO) {
+                        baseCard.copy(title = stripEpisodeLinePrefix(baseCard.title, state.chapterBranch))
+                    } else {
+                        baseCard
+                    }
                     DesktopChapterDirectoryCard(
-                        chapter, desktopChapterCardData(chapter, current, bookmarked, downloaded, furthest), grid, enabled,
+                        chapter, cardData, grid, enabled,
                         isSelected = ui.selection.contains(chapter),
                         onClick = {
                             // In batch mode a click picks the row instead of leaving the list, like Android.
