@@ -33,4 +33,6 @@ data class HistoryEntity(
     // 对于EPUB内部章节：chapterId是内部章节ID，parentChapterId是父章节ID
     // 对于普通章节：parentChapterId为null或等于chapterId
     @ColumnInfo(name = "parent_chapter_id") val parentChapterId: Long? = null,
+    // Furthest chapter ever read; chapter_id only follows the last opened one. 0 means "not recorded".
+    @ColumnInfo(name = "furthest_chapter_id", defaultValue = "0") val furthestChapterId: Long = 0L,
 )

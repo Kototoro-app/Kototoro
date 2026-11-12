@@ -17,6 +17,7 @@ class HistoryBackup(
     @SerialName("percent") val percent: Float = BACKUP_PROGRESS_NONE,
     @SerialName("chapters") val chaptersCount: Int = 0,
     @SerialName("deleted_at") val deletedAt: Long = 0L,
+    @SerialName("furthest_chapter_id") val furthestChapterId: Long = 0L,
     @SerialName("manga") val manga: ContentBackup,
 ) {
     // History is owned by the manga itself.
@@ -33,6 +34,7 @@ class HistoryBackup(
         percent = entity.history.percent,
         chaptersCount = entity.history.chaptersCount,
         deletedAt = entity.history.deletedAt,
+        furthestChapterId = entity.history.furthestChapterId,
         manga = ContentBackup(MangaWithTags(entity.manga, entity.tags)),
     )
 
@@ -46,5 +48,6 @@ class HistoryBackup(
         percent = percent,
         deletedAt = deletedAt,
         chaptersCount = chaptersCount,
+        furthestChapterId = furthestChapterId,
     )
 }

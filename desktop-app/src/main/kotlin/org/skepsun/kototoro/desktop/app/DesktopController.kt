@@ -1,5 +1,7 @@
 package org.skepsun.kototoro.desktop.app
 
+import org.skepsun.kototoro.history.domain.ChapterOrder
+import org.skepsun.kototoro.history.domain.furthestReadChapterId
 import androidx.room.immediateTransaction
 import androidx.room.useWriterConnection
 import kotlinx.coroutines.*
@@ -230,6 +232,8 @@ data class DesktopAppState(
     val chapterBranch: String? = null,
     /** Current chapter projected from this work's history; never inherited from a different open work. */
     val detailsChapterId: Long? = null,
+    /** Furthest chapter ever read of the open work; reopening an earlier chapter leaves later ones read, as on Android. */
+    val detailsFurthestChapterId: Long? = null,
     /**
      * Android's `HistoryInfo.estimatedTime` for the open details, when `reading_time` is on and the work is long
      * enough to estimate; null keeps the row off the page.
@@ -1397,7 +1401,8 @@ class DesktopController(
         val readingTime = estimatedReadingTime(details, progress?.percent)
         mutableState.update { it.copy(screen = DesktopScreen.DETAILS, content = details,
             detailsOrigin = origin, detailsExpanded = false, isFavourite = favourite, chapterBranch = branch,
-            detailsChapterId = chapterId, bookmarks = bookmarks, detailsReadingTime = readingTime) }
+            detailsChapterId = chapterId, detailsFurthestChapterId = progress?.furthestChapterId?.takeIf { it != 0L },
+            bookmarks = bookmarks, detailsReadingTime = readingTime) }
         loadRelatedWorks(details)
     }
 
@@ -2301,12 +2306,13 @@ class DesktopController(
             session.library.removeHistory(content.id)
         } else {
             // One page of one chapter: percent lands at that chapter's end, as Android's mark-as-read does.
-            session.library.recordPage(content, target, page = 0, pageCount = 1)
+            session.library.recordPage(content, target, page = 0, pageCount = 1, resetFurthest = true)
         }
         val progress = session.library.progress(content.id)
         val message = if (read) desktopText("details.markedRead", desktopChapterTitle(chapter))
             else desktopText("details.markedUnread", desktopChapterTitle(chapter))
-        mutableState.update { it.copy(detailsChapterId = progress?.chapterId, message = message) }
+        mutableState.update { it.copy(detailsChapterId = progress?.chapterId,
+            detailsFurthestChapterId = progress?.furthestChapterId?.takeIf { id -> id != 0L }, message = message) }
     }
 
     /** Batch "mark as read": history lands on the last chapter of the given reading order, like Android's batch action. */
@@ -2315,10 +2321,12 @@ class DesktopController(
         require(chapters.isNotEmpty()) { desktopText("details.chapterMissing") }
         val targets = chapters.mapNotNull { desktopMarkReadTarget(content, it) }
         require(targets.isNotEmpty()) { desktopText("details.chapterMissing") }
-        session.library.recordPage(content, targets.last(), page = 0, pageCount = 1)
+        session.library.recordPage(content, targets.last(), page = 0, pageCount = 1, resetFurthest = true)
         val progress = session.library.progress(content.id)
         mutableState.update {
-            it.copy(detailsChapterId = progress?.chapterId, message = desktopText("details.markedReadCount", targets.size))
+            it.copy(detailsChapterId = progress?.chapterId,
+                detailsFurthestChapterId = progress?.furthestChapterId?.takeIf { id -> id != 0L },
+                message = desktopText("details.markedReadCount", targets.size))
         }
     }
 
@@ -3193,6 +3201,7 @@ class DesktopController(
         // Before the first page is recorded, so even the opening write belongs to the stop.
         beginReadingStop()
         val candidate = state.value.let { it.copy(screen = DesktopScreen.READER, chapter = selected, pages = pages,
+            detailsFurthestChapterId = it.furthestAfterOpening(selected.id),
             pageIndex = index, readerImages = emptyMap(), readerGeometry = session.readerGeometry(pages), readerScroll = restoredScroll,
             readerSettings = settings.copy(mode = mode),
             readerTargetPage = index, readerTargetScroll = if (startAtEnd) Float.MAX_VALUE else restoredScroll,
@@ -3392,6 +3401,7 @@ class DesktopController(
         mutableState.update {
             it.copy(content = content, isFavourite = favourite, bookmarks = bookmarks,
                 detailsOrigin = DesktopScreen.BOOKMARKS, detailsChapterId = progress?.chapterId,
+                detailsFurthestChapterId = progress?.furthestChapterId?.takeIf { it != 0L },
                 detailsExpanded = false, relatedWorks = emptyList(), relatedLoading = false)
         }
         startReading(DesktopReadingRequest.Bookmark(chapter, bookmark), incognito = true)
@@ -3876,7 +3886,13 @@ class DesktopController(
                 DesktopScreen.NOVEL -> it.novel?.chapter?.id
                 DesktopScreen.VIDEO -> it.video?.chapter?.id
                 else -> it.detailsChapterId
-            }) }
+            },
+            detailsFurthestChapterId = it.furthestAfterOpening(when (it.screen) {
+                DesktopScreen.READER -> it.chapter?.id
+                DesktopScreen.NOVEL -> it.novel?.chapter?.id
+                DesktopScreen.VIDEO -> it.video?.chapter?.id
+                else -> null
+            })) }
     }
 
     private fun sourceDescriptors() = session.sourceListings()
@@ -3980,4 +3996,11 @@ class DesktopController(
             }
         }
     }
+}
+
+/** The furthest chapter once [chapterId] was opened; the same rule [SourceLibrary.recordPage] applies when it saves. */
+private fun DesktopAppState.furthestAfterOpening(chapterId: Long?): Long? {
+    val opened = chapterId ?: return detailsFurthestChapterId
+    val order = content?.chapters?.map { ChapterOrder(it.id, it.number, it.volume) }
+    return furthestReadChapterId(detailsFurthestChapterId ?: 0L, opened, order).takeIf { it != 0L }
 }

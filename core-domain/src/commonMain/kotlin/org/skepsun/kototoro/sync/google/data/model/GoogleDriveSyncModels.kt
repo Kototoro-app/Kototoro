@@ -257,6 +257,7 @@ class SyncHistory(
     @SerialName("chapters") val chaptersCount: Int = 0,
     @SerialName("parent_chapter_id") val parentChapterId: Long? = null,
     @SerialName("deleted_at") val deletedAt: Long = 0L,
+    @SerialName("furthest_chapter_id") val furthestChapterId: Long = 0L,
 ) {
     constructor(entity: HistoryEntity) : this(
         mangaId = entity.mangaId,
@@ -269,6 +270,7 @@ class SyncHistory(
         chaptersCount = entity.chaptersCount,
         parentChapterId = entity.parentChapterId,
         deletedAt = entity.deletedAt,
+        furthestChapterId = entity.furthestChapterId,
     )
 
     fun toEntity(targetMangaId: Long = mangaId) = HistoryEntity(
@@ -282,6 +284,7 @@ class SyncHistory(
         deletedAt = deletedAt,
         chaptersCount = chaptersCount,
         parentChapterId = parentChapterId,
+        furthestChapterId = furthestChapterId,
     )
 }
 

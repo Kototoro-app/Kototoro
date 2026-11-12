@@ -147,6 +147,9 @@ Android 与桌面的 UI 按 CMP 共享呈现演进；Windows 与 macOS 始终共
 - `parser-api/` - 共享的解析器接口定义（KMP：纯叶子模型在 `commonMain`；`Content*` 等带二进制兼容垫片的类和 `org.koitharu.kotatsu.parsers.*` 外部 ABI 在 `androidMain`，不要改动其 JVM 签名）
 - `core-db/` - 共享 Room 数据库（KMP）：`MangaDatabase`、实体、DAO 在 `commonMain`，85 个旧迁移在 `androidMain`；包名不变，仍是 `org.skepsun.kototoro.core.db` 等
 - `core-domain/` - 共享业务规则（KMP）：身份键、同步合并/导入、更新计数、四类列表快照与派生、书架、排序/浏览分组，
+  章节已读判定（`history/domain/ChapterReadState.kt`：`chapterIsAfter` 章节先后、`furthestReadChapterId` 最远已读章节、
+  `chapterReadThrough`；`history.furthest_chapter_id` 在 v88 引入，Android/桌面/iOS 共用，回看旧章不再把后面已读的章变回未读，
+  显式“设为当前/标为已读未读”用 `resetFurthest` 重置；备份 `HistoryBackup` 与 Drive 同步 `SyncHistory` 带该字段，0 表示未记录），
   换源写入计划/章节映射、阅读进度/历史章节恢复与标题匹配。筛选复用 `core-db/ListFilterCriteria`，
   黑名单通过 `TagBlacklist` 消费平台词库；标签目录 `TagTaxonomy`（334 个永久 ID、别名索引与繁简标签钩子）
   也在此模块，平台只注入简→繁转换器。Android 资源、追踪 UI 枚举、语言分支策略与
@@ -679,8 +682,8 @@ KMP/iOS 方案与进度见 `docs/architecture/kmp-ios-plan-2026-10.md`。KMP 模
 - 处理 Cloudflare 挑战和 Cookie 同步
 
 **数据库**：
-- Room 数据库（`MangaDatabase`）在 KMP 模块 `core-db/`，DATABASE_VERSION = 87（`core-db/src/commonMain/.../core/db/MangaDatabase.kt`）；导出的 schema 仍位于 `app/schemas/org.skepsun.kototoro.core.db.MangaDatabase/`（已提交，由 `core-db` 的 Room 插件导出，`app` 的 androidTest 以 assets 读取）
-- 迁移文件 `core-db/src/androidMain/kotlin/org/skepsun/kototoro/core/db/migrations/Migration1To2.kt` 到 `Migration83To84.kt`（另含历史遗留的降级迁移 `Migration24To23.kt`，仍保留在 `getDatabaseMigrations` 列表中，位于 `core-db` 的 `MangaDatabaseMigrations.kt`）；84→85 起的迁移在 commonMain（`Migration84To85.kt` 到 `Migration86To87.kt`，注册在 `sharedDatabaseMigrations()`），Android/Windows/iOS 三端共用
+- Room 数据库（`MangaDatabase`）在 KMP 模块 `core-db/`，DATABASE_VERSION = 88（`core-db/src/commonMain/.../core/db/MangaDatabase.kt`）；导出的 schema 仍位于 `app/schemas/org.skepsun.kototoro.core.db.MangaDatabase/`（已提交，由 `core-db` 的 Room 插件导出，`app` 的 androidTest 以 assets 读取）
+- 迁移文件 `core-db/src/androidMain/kotlin/org/skepsun/kototoro/core/db/migrations/Migration1To2.kt` 到 `Migration83To84.kt`（另含历史遗留的降级迁移 `Migration24To23.kt`，仍保留在 `getDatabaseMigrations` 列表中，位于 `core-db` 的 `MangaDatabaseMigrations.kt`）；84→85 起的迁移在 commonMain（`Migration84To85.kt` 到 `Migration87To88.kt`，注册在 `sharedDatabaseMigrations()`），Android/Windows/iOS 三端共用
 - Android 必须继续使用框架 SQLite 驱动：旧迁移实现的是 `migrate(SupportSQLiteDatabase)`，换成 `BundledSQLiteDriver` 会抛 `NotImplementedError`
 - DAO 的过滤条件使用数据类型 `ListFilterCriteria`（`core-db`）；应用层的 `ListFilterOption`（带资源 id 与图标）在 Repository 边界用 `toCriteria()` 转换
 - 用户状态（收藏/历史/统计/偏好/追踪）直接挂在 `manga` 行上；实体图谱与 work 表已在 v84 移除（`Migration83To84` → `ProjectionOwnershipMigrationResolver`）

@@ -4,6 +4,9 @@ import android.content.Context
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.bookmarks.domain.Bookmark
 import org.skepsun.kototoro.core.ui.chapters.ChapterSection
+import org.skepsun.kototoro.history.domain.ChapterOrder
+import org.skepsun.kototoro.history.domain.chapterIsAfter
+import org.skepsun.kototoro.history.domain.chapterReadThrough
 import org.skepsun.kototoro.core.ui.chapters.shouldShowVolumeHeaders
 import org.skepsun.kototoro.core.ui.chapters.withVolumeSections
 import org.skepsun.kototoro.details.data.ContentDetails
@@ -48,6 +51,7 @@ fun ContentDetails.mapChapters(
     isGrid: Boolean,
     isDownloadedOnly: Boolean,
     shareProgressAcrossBranches: Boolean = false,
+    furthestChapterId: Long = 0L,
 ): List<ChapterListItem> {
     val resolvedBranch = when {
         branch == null -> null
@@ -92,6 +96,13 @@ fun ContentDetails.mapChapters(
     val currentChapter = remoteChapters.find { it.id == currentChapterId }
         ?: localChapters.find { it.id == currentChapterId }
         ?: if (shareProgressAcrossBranches) allChapters.find { it.id == currentChapterId } else null
+    // Reopening an earlier chapter moves the current one back; chapters already read further on stay read.
+    val furthestChapter = furthestChapterId.takeIf { it != 0L }?.let { id ->
+        remoteChapters.find { it.id == id }
+            ?: localChapters.find { it.id == id }
+            ?: if (shareProgressAcrossBranches) allChapters.find { it.id == id } else null
+    }
+    val readUpTo = chapterReadThrough(currentChapter?.toOrder(), furthestChapter?.toOrder())
 
     if (!isDownloadedOnly || local?.manga?.chapters == null) {
         for ((index, chapter) in remoteChapters.withIndex()) {
@@ -107,7 +118,7 @@ fun ContentDetails.mapChapters(
             val finalChapter = local ?: chapter
             val isUnread = when {
                 currentChapterId == FULLY_READ_CHAPTER_ID -> false
-                currentChapter != null -> chapter.isAfter(currentChapter)
+                readUpTo != null -> chapterIsAfter(chapter.number, chapter.volume, readUpTo.number, readUpTo.volume)
                 else -> true
             }
 
@@ -140,6 +151,8 @@ fun ContentDetails.mapChapters(
 
     return result
 }
+
+private fun ContentChapter.toOrder() = ChapterOrder(id, number, volume)
 
 private fun ContentChapter.isAfter(current: ContentChapter): Boolean {
     return org.skepsun.kototoro.core.ui.chapters.chapterIsAfter(number, volume, current.number, current.volume)

@@ -399,7 +399,10 @@ class IosLibrary {
         val chapterId = recovered ?: history.chapterId
         if (chapterId !in ids) return null
         return IosReadingPosition(chapterId.toString(), if (recovered == null) history.page else 0,
-            if (recovered == null) history.scroll else 0f, history.percent)
+            if (recovered == null) history.scroll else 0f, history.percent).also {
+            it.furthestChapterId = history.furthestChapterId.takeIf { furthest -> furthest != 0L && furthest in ids }
+                ?.toString().orEmpty()
+        }
     }
 
     @Throws(Exception::class)

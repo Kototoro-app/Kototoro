@@ -1,5 +1,7 @@
 package org.skepsun.kototoro.core.library
 
+import org.skepsun.kototoro.history.domain.ChapterOrder
+import org.skepsun.kototoro.history.domain.furthestReadChapterId
 import androidx.room.immediateTransaction
 import androidx.room.deferredTransaction
 import androidx.room.useReaderConnection
@@ -542,7 +544,8 @@ class SourceLibrary(
      * Android records EPUB chapters; the download is what the stored chapter list holds.
      */
     suspend fun recordPage(content: SourceContent, chapter: SourceChapter, page: Int, pageCount: Int,
-        lastVisiblePage: Int = page, scroll: Float = 0f, part: SourceChapterPart? = null) {
+        lastVisiblePage: Int = page, scroll: Float = 0f, part: SourceChapterPart? = null,
+        resetFurthest: Boolean = false) {
         // Android's StatsCollector upserts its row on every state change of an open reader; the row is written after
         // the history transaction closes, because a second writer connection cannot be opened from inside it.
         val stats = database.useWriterConnection { connection ->
@@ -569,6 +572,16 @@ class SourceLibrary(
                     chapterId = chapter.id, page = page, scroll = scroll,
                     percent = percent,
                     deletedAt = 0, chaptersCount = branch.size, parentChapterId = part?.parent?.id,
+                    // Reopening an earlier chapter must not mark the later ones unread again, as on Android.
+                    furthestChapterId = if (resetFurthest) {
+                        stored.id
+                    } else {
+                        furthestReadChapterId(
+                            previousFurthestId = previous?.takeIf { it.deletedAt == 0L }?.furthestChapterId ?: 0L,
+                            openedChapterId = stored.id,
+                            chapters = content.chapters?.map { ChapterOrder(it.id, it.number, it.volume) },
+                        )
+                    },
                 ))
                 val write = if (statsRecording) readingSessions.onPage(content.id, stored.id, page, percent, now) else null
                 if (lastVisiblePage == pageCount - 1 && (part == null || part.index == part.count - 1)) {

@@ -46,7 +46,7 @@ fun chapterMatchesQuery(query: String, title: String?, number: String?, volume: 
 
 /** A known volume takes precedence over chapter numbers, which may restart in the next volume. */
 fun chapterIsAfter(number: Float, volume: Int, currentNumber: Float, currentVolume: Int): Boolean =
-    if (volume > 0 && currentVolume > 0 && volume != currentVolume) volume > currentVolume else number > currentNumber
+    org.skepsun.kototoro.history.domain.chapterIsAfter(number, volume, currentNumber, currentVolume)
 
 /**
  * Branch chips are offered only when a work has more than one branch, sorted by [comparator]; an inconsistent

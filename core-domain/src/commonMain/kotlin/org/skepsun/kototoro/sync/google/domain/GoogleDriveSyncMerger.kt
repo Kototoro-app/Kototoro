@@ -212,6 +212,7 @@ object GoogleDriveSyncMerger {
         chaptersCount = chaptersCount,
         parentChapterId = parentChapterId,
         deletedAt = deletedAt,
+        furthestChapterId = furthestChapterId,
     )
 
     private fun SyncFavourite.withMangaId(id: Long) = if (id == mangaId) this else SyncFavourite(

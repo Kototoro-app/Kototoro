@@ -51,6 +51,14 @@ class SharedMigrationTest {
             val schedule = TrackScheduleEntity(MANGA_ID, fetchInterval = 3, nextCheckTime = 456, failCount = 1)
             db.getTrackScheduleDao().upsert(schedule)
             assertEquals(schedule, db.getTrackScheduleDao().find(MANGA_ID))
+
+            // v88: the furthest read chapter starts at the chapter the history already pointed at.
+            val history = db.getHistoryDao().find(MANGA_ID)!!
+            assertEquals(HISTORY_CHAPTER_ID, history.furthestChapterId)
+            // Reading an earlier chapter keeps it, and a writer that does not know it (0) leaves it alone.
+            db.getHistoryDao().upsert(history.copy(chapterId = 5L, furthestChapterId = 0L, updatedAt = 3))
+            assertEquals(5L, db.getHistoryDao().find(MANGA_ID)!!.chapterId)
+            assertEquals(HISTORY_CHAPTER_ID, db.getHistoryDao().find(MANGA_ID)!!.furthestChapterId)
         } finally {
             db.close()
         }
@@ -79,12 +87,17 @@ class SharedMigrationTest {
                     "VALUES ($MANGA_ID, 2, 0, 0, 0, 0, 0)",
             )
             connection.execSQL("INSERT INTO track_logs(manga_id, chapters, created_at, unread) VALUES ($MANGA_ID, 'Chapter 1', 123, 1)")
+            connection.execSQL(
+                "INSERT INTO history(manga_id, created_at, updated_at, chapter_id, page, scroll, percent, deleted_at, chapters) " +
+                    "VALUES ($MANGA_ID, 1, 2, $HISTORY_CHAPTER_ID, 3, 0, 0.5, 0, 20)",
+            )
             connection.execSQL("PRAGMA user_version = 84")
         }
     }
 
     private companion object {
         const val MANGA_ID = 7L
+        const val HISTORY_CHAPTER_ID = 20L
         val SCHEMA_DIR = File("../app/schemas/org.skepsun.kototoro.core.db.MangaDatabase")
     }
 }

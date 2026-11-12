@@ -86,6 +86,8 @@ kotlin {
             // The source protocol's preference tree: the shared per-source settings page draws it, so the DTOs (and
             // the folding rules next to them) are the only protocol shape a shared page may see.
             api project(':core-source')
+            // Chapter ordering and read-state rules live in :core-domain so every platform shares them.
+            implementation project(':core-domain')
             implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:${libs.versions.serialization.get()}"
         }
         // System back for shared sheets (the Windows host handles Esc itself).

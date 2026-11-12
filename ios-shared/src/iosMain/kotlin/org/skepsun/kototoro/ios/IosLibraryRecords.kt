@@ -18,7 +18,14 @@ class IosLibraryEntry internal constructor(
     val lastChapterTitle: String? = value.lastChapter?.let { it.title.takeIf(String::isNotBlank) ?: localized("第 %@ 话", chapterNumber(it.number)) }
 }
 
-data class IosReadingPosition(val chapterId: String, val index: Int, val scroll: Float, val progress: Float)
+data class IosReadingPosition(val chapterId: String, val index: Int, val scroll: Float, val progress: Float) {
+    /**
+     * The furthest chapter ever read, empty when none is recorded. Not part of equality, which is the resume point:
+     * reopening an earlier chapter moves the resume point back but leaves the chapters read further on read.
+     */
+    var furthestChapterId: String = ""
+        internal set
+}
 
 class IosBookmark internal constructor(internal val value: SourceBookmark) {
     val id: String get() = value.pageId.toString()

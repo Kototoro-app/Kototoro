@@ -33,6 +33,9 @@ internal fun DesktopReaderChaptersPanel(
 ) {
     val chapters = state.content?.chapters.orEmpty()
     val current = state.chapter
+    val furthest = remember(chapters, state.detailsFurthestChapterId) {
+        chapters.firstOrNull { it.id == state.detailsFurthestChapterId }
+    }
     val readingBranch = remember(chapters, current?.branch) {
         chaptersOfBranch(chapters, SourceChapter::branch, current?.branch)
     }
@@ -141,7 +144,7 @@ internal fun DesktopReaderChaptersPanel(
                         Modifier.testTag("reader-chapter-header:${desktopChapterSectionTitle(section)}"))
                     is ChapterSection.Item -> {
                         val chapter = section.chapter
-                        val data = desktopChapterCardData(chapter, current, bookmarked, downloaded)
+                        val data = desktopChapterCardData(chapter, current, bookmarked, downloaded, furthest)
                         val onClick = {
                             if (enabled) {
                                 if (current == null || !DesktopDownloadStore.sameChapter(chapter, current)) controller.read(chapter)

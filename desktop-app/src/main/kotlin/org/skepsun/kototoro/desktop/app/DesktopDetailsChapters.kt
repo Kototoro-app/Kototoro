@@ -48,6 +48,9 @@ internal fun DesktopDetailsChapters(
 ) {
     val chapters = state.content?.chapters.orEmpty()
     val current = remember(chapters, state.detailsChapterId) { chapters.firstOrNull { it.id == state.detailsChapterId } }
+    val furthest = remember(chapters, state.detailsFurthestChapterId) {
+        chapters.firstOrNull { it.id == state.detailsFurthestChapterId }
+    }
     val list = remember(chapters, state.chapterBranch, ui.query, ui.reversed) {
         desktopChapterList(chapters, state.chapterBranch, ui.query, ui.reversed)
     }
@@ -189,7 +192,7 @@ internal fun DesktopDetailsChapters(
                     val chapter = section.chapter
                     val isDownloaded = downloaded.any { DesktopDownloadStore.sameChapter(it, chapter) }
                     DesktopChapterDirectoryCard(
-                        chapter, desktopChapterCardData(chapter, current, bookmarked, downloaded), grid, enabled,
+                        chapter, desktopChapterCardData(chapter, current, bookmarked, downloaded, furthest), grid, enabled,
                         isSelected = ui.selection.contains(chapter),
                         onClick = {
                             // In batch mode a click picks the row instead of leaving the list, like Android.

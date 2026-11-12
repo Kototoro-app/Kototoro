@@ -2270,6 +2270,13 @@ class DetailsViewModel @Inject constructor(
         .withErrorHandling()
         .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, null)
 
+    private val furthestReadSync: StateFlow<Long> = history
+        .map { it?.furthestChapterId ?: 0L }
+        .distinctUntilChanged()
+        .onEach { furthestReadChapterId.value = it }
+        .withErrorHandling()
+        .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, 0L)
+
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     val favouriteCategories = currentObservedLocalMangaId.flatMapLatest { mangaId ->
         if (mangaId == null) {

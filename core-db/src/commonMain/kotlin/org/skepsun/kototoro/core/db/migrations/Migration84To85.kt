@@ -22,4 +22,4 @@ open class Migration84To85 : Migration(84, 85) {
 
 /** Migrations that run on every platform's driver; desktop and iOS builders register exactly these. */
 fun sharedDatabaseMigrations(): Array<Migration> =
-    arrayOf(Migration84To85(), Migration85To86(), Migration86To87())
+    arrayOf(Migration84To85(), Migration85To86(), Migration86To87(), Migration87To88())

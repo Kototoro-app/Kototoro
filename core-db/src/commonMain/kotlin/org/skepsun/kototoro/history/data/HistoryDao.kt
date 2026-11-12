@@ -134,6 +134,9 @@ abstract class HistoryDao {
             parentChapterId = entity.parentChapterId,
             deletedAt = entity.deletedAt,
         )
+        if (updated > 0 && entity.furthestChapterId != 0L) {
+            setFurthestChapter(entity.mangaId, entity.furthestChapterId)
+        }
         return if (updated == 0) {
             insert(entity)
             true
@@ -147,16 +150,26 @@ abstract class HistoryDao {
      * `deleted_at` — the semantics of an ordinary history write. Sync restores use
      * [upsertSync] instead because they must preserve tombstones.
      */
-    suspend fun update(entity: HistoryEntity): Int = update(
-        mangaId = entity.mangaId,
-        page = entity.page,
-        chapterId = entity.chapterId,
-        scroll = entity.scroll,
-        percent = entity.percent,
-        chapters = entity.chaptersCount,
-        updatedAt = entity.updatedAt,
-        parentChapterId = entity.parentChapterId,
-    )
+    suspend fun update(entity: HistoryEntity): Int {
+        val updated = update(
+            mangaId = entity.mangaId,
+            page = entity.page,
+            chapterId = entity.chapterId,
+            scroll = entity.scroll,
+            percent = entity.percent,
+            chapters = entity.chaptersCount,
+            updatedAt = entity.updatedAt,
+            parentChapterId = entity.parentChapterId,
+        )
+        // 0 means the writer does not know it (backups, sync), which must not wipe a recorded value.
+        if (updated > 0 && entity.furthestChapterId != 0L) {
+            setFurthestChapter(entity.mangaId, entity.furthestChapterId)
+        }
+        return updated
+    }
+
+    @Query("UPDATE history SET furthest_chapter_id = :furthestChapterId WHERE manga_id = :mangaId")
+    abstract suspend fun setFurthestChapter(mangaId: Long, furthestChapterId: Long)
 
     @Transaction
     open suspend fun upsert(entity: HistoryEntity): Boolean {

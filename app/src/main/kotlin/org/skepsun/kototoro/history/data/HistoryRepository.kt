@@ -26,6 +26,8 @@ import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ProgressIndicatorMode
 import org.skepsun.kototoro.core.ui.util.ReversibleHandle
 import org.skepsun.kototoro.core.model.toContentSources
+import org.skepsun.kototoro.history.domain.ChapterOrder
+import org.skepsun.kototoro.history.domain.furthestReadChapterId
 import org.skepsun.kototoro.history.domain.model.ContentWithHistory
 import org.skepsun.kototoro.history.domain.recoverHistoryChapterId
 import org.skepsun.kototoro.list.domain.ListSortOrder
@@ -212,7 +214,9 @@ class HistoryRepository @Inject constructor(
         scroll: Int,
         percent: Float,
         force: Boolean,
-        parentChapterId: Long? = null
+        parentChapterId: Long? = null,
+        // An explicit "I am here" (set as current chapter) replaces the furthest read chapter instead of keeping it.
+        resetFurthest: Boolean = false,
     ) {
         if (!force && shouldSkip(manga)) {
             return
@@ -222,6 +226,7 @@ class HistoryRepository @Inject constructor(
             val storedManga = mangaRepository.storeContentAndReturn(manga, replaceExisting = true)
             val branch = manga.chapters?.findById(chapterId)?.branch
             val now = System.currentTimeMillis()
+            val previous = db.getHistoryDao().findIncludingDeleted(storedManga.id)?.takeIf { it.deletedAt == 0L }
             db.getHistoryDao().upsert(
                 HistoryEntity(
                     mangaId = storedManga.id,
@@ -234,6 +239,15 @@ class HistoryRepository @Inject constructor(
                     chaptersCount = manga.chapters?.count { it.branch == branch } ?: 0,
                     deletedAt = 0L,
                     parentChapterId = parentChapterId,
+                    furthestChapterId = if (resetFurthest) {
+                        chapterId
+                    } else {
+                        furthestReadChapterId(
+                            previousFurthestId = previous?.furthestChapterId ?: 0L,
+                            openedChapterId = chapterId,
+                            chapters = manga.chapters?.map { ChapterOrder(it.id, it.number, it.volume) },
+                        )
+                    },
                 ),
             )
             newChaptersUseCaseProvider.get()(manga, chapterId, percent)
@@ -475,6 +489,7 @@ class HistoryRepository @Inject constructor(
         percent = percent,
         chaptersCount = chaptersCount,
         parentChapterId = parentChapterId,
+        furthestChapterId = furthestChapterId,
     )
 
     private fun HistoryWithContent.toContent() = manga.toContent(tags.toContentTags(), null)

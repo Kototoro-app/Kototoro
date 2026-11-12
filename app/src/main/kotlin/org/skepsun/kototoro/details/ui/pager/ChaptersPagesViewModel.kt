@@ -87,6 +87,9 @@ abstract class ChaptersPagesViewModel(
     val mangaDetails = MutableStateFlow<ContentDetails?>(null)
     val readingState = MutableStateFlow<ReaderState?>(null)
 
+    /** Furthest chapter ever read (0 when not recorded); unlike [readingState] it does not follow reopened chapters. */
+    val furthestReadChapterId = MutableStateFlow(0L)
+
     data class QualityProbeResult(val snapshot: Set<Long>, val qualities: List<String>)
     val onShowVideoQualityDialog = MutableEventFlow<QualityProbeResult>()
 
@@ -287,20 +290,23 @@ abstract class ChaptersPagesViewModel(
 
     private val baseChaptersFlow = combine(
         mangaDetails,
-        readingState.map { it?.chapterId ?: 0L }.distinctUntilChanged(),
+        combine(readingState, furthestReadChapterId) { state, furthest ->
+            ReadMarks(current = state?.chapterId ?: 0L, furthest = furthest)
+        }.distinctUntilChanged(),
         selectedBranch,
         newChaptersCount,
         bookmarks,
         isChaptersInGridView,
         isDownloadedOnly,
         isMergeRepeatedChapters,
-    ) { manga, currentChapterId, branch, news, bookmarks, grid, downloadedOnly, mergeRepeated ->
+    ) { manga, marks, branch, news, bookmarks, grid, downloadedOnly, mergeRepeated ->
         val baseChapters = if (mergeRepeated && manga != null) {
             val allBranches = manga.chapters.keys.toList()
             if (allBranches.size > 1) {
                 allBranches.flatMap { b ->
                     manga.mapChapters(
-                        currentChapterId = currentChapterId,
+                        currentChapterId = marks.current,
+                        furthestChapterId = marks.furthest,
                         newCount = news,
                         branch = b,
                         bookmarks = bookmarks,
@@ -311,7 +317,8 @@ abstract class ChaptersPagesViewModel(
                 }
             } else {
                 manga.mapChapters(
-                    currentChapterId = currentChapterId,
+                    currentChapterId = marks.current,
+                    furthestChapterId = marks.furthest,
                     newCount = news,
                     branch = branch,
                     bookmarks = bookmarks,
@@ -321,7 +328,8 @@ abstract class ChaptersPagesViewModel(
             }
         } else {
             manga?.mapChapters(
-                currentChapterId = currentChapterId,
+                currentChapterId = marks.current,
+                furthestChapterId = marks.furthest,
                 newCount = news,
                 branch = branch,
                 bookmarks = bookmarks,
@@ -470,6 +478,7 @@ abstract class ChaptersPagesViewModel(
                 scroll = 0,
                 percent = progress.percent,
                 force = true,
+                resetFurthest = true,
             )
         }
     }
@@ -743,3 +752,5 @@ internal fun List<ChapterListItem>.mergeRepeated(): List<ChapterListItem> {
         }
     }
 }
+
+private data class ReadMarks(val current: Long, val furthest: Long)

@@ -20,7 +20,16 @@ import org.skepsun.kototoro.core.source.SourceChapter
 import org.skepsun.kototoro.core.source.SourceContent
 import org.skepsun.kototoro.core.source.ChapterArtworkCodec
 import org.skepsun.kototoro.core.ui.chapters.*
+import org.skepsun.kototoro.history.domain.ChapterOrder
+import org.skepsun.kototoro.history.domain.chapterReadThrough
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderPanelIcons
+
+/** Everything up to this chapter of [chapter]'s own branch counts as read: the later of the current and furthest one. */
+private fun desktopChapterReadThrough(chapter: SourceChapter, current: SourceChapter?, furthest: SourceChapter?): ChapterOrder? =
+    chapterReadThrough(
+        current?.takeIf { it.branch == chapter.branch }?.let { ChapterOrder(it.id, it.number, it.volume) },
+        furthest?.takeIf { it.branch == chapter.branch }?.let { ChapterOrder(it.id, it.number, it.volume) },
+    )
 
 /** One projection for reader and details cards, over the existing history/bookmark/download stores. */
 internal fun desktopChapterCardData(
@@ -28,13 +37,15 @@ internal fun desktopChapterCardData(
     current: SourceChapter?,
     bookmarked: Set<Long>,
     downloaded: List<SourceChapter>,
+    furthest: SourceChapter? = null,
 ) = ChapterCardData(
     title = desktopChapterTitle(chapter),
     description = listOfNotNull(chapter.numberLabel()?.let { "#$it" },
         chapter.scanlator?.takeIf(String::isNotBlank) ?: chapter.branch?.takeIf(String::isNotBlank)).joinToString(" • "),
     isCurrent = current != null && DesktopDownloadStore.sameChapter(chapter, current),
-    isUnread = current == null || current.branch != chapter.branch ||
-        chapterIsAfter(chapter.number, chapter.volume, current.number, current.volume),
+    isUnread = desktopChapterReadThrough(chapter, current, furthest).let { through ->
+        through == null || chapterIsAfter(chapter.number, chapter.volume, through.number, through.volume)
+    },
     isBookmarked = chapter.id in bookmarked,
     isDownloaded = downloaded.any { DesktopDownloadStore.sameChapter(it, chapter) },
 )

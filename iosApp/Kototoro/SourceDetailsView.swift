@@ -163,7 +163,13 @@ final class SourceDetailsModel: ObservableObject {
               let index = chapterIndices[chapter.id] else { return false }
         let current = chapters[currentIndex]
         guard chapter.branch == current.branch, chapter.line == current.line else { return false }
-        return index < currentIndex
+        if index < currentIndex { return true }
+        // Reopening an earlier chapter must not turn the ones read further on back into unread.
+        if index != currentIndex, let far = chapterIndices[resume.furthestChapterId],
+           chapters[far].branch == current.branch, chapters[far].line == current.line {
+            return index <= far
+        }
+        return false
     }
 
     func refresh() async {
