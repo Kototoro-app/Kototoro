@@ -513,6 +513,11 @@
 -keep class coil3.request.ImageRequest** { *; }
 
 
+# ML Kit text recognition: native code calls back into these classes by name, and the recognizer's
+# internals are null (NullPointerException in recognizer.process) when R8 shrinks or rewrites them.
+-keep class com.google.mlkit.** { *; }
+-keep class com.google.android.gms.internal.mlkit_** { *; }
+
 # ONNX Runtime JNI classes
 -keep class ai.onnxruntime.** { *; }
 
