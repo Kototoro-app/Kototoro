@@ -51,16 +51,37 @@ suspend fun update() = mutex.withLock {
 }
 
 private suspend fun updateIndex(rootKeys: Set<String>) {
+    val dao = db.getLocalContentIndexDao()
+    val indexed = HashSet<Long>()
+    // One transaction per entry: a failed write inside a nested transaction marks the outer one for
+    // rollback even when caught, so a single bad entry (e.g. a foreign key violation) used to fail the
+    // whole rebuild on every list load. Stale rows are removed afterwards instead of clearing up front.
+    val index = suspend { content: LocalContent ->
+        runCatchingCancellable {
+            db.withTransaction { upsert(content) }
+        }.onSuccess {
+            indexed.add(it)
+        }.onFailure {
+            android.util.Log.w(
+                TAG,
+                "Skipped local entry id=${content.manga.id} source=${content.manga.source.name} " +
+                    "uri=${content.toUri()}: ${it.javaClass.simpleName}: ${it.message}",
+            )
+        }
+    }
+    localContentRepositoryProvider.get()
+        .getRawListAsFlow()
+        .collect { index(it) }
+    // novels
+    localNovelRepositoryProvider.get()
+        .getAllLocalNovels()
+        .forEach { index(it) }
     db.withTransaction {
-        val dao = db.getLocalContentIndexDao()
-        dao.clear()
-        localContentRepositoryProvider.get()
-            .getRawListAsFlow()
-            .collect { upsert(it) }
-        // novels
-        localNovelRepositoryProvider.get()
-            .getAllLocalNovels()
-            .forEach { upsert(it) }
+        for (row in dao.findAllPaths()) {
+            if (row.mangaId !in indexed) {
+                dao.delete(row.mangaId)
+            }
+        }
     }
     // Capture roots before scanning so a concurrent directory change remains pending.
     prefs.edit {
@@ -129,7 +150,7 @@ private suspend fun updateIndex(rootKeys: Set<String>) {
         }
     }
 
-    private suspend fun upsert(manga: LocalContent) {
+    private suspend fun upsert(manga: LocalContent): Long {
         val stored = mangaDataRepository.storeContentAndReturn(manga.manga, replaceExisting = true)
         db.getLocalContentIndexDao().upsert(
             LocalContentIndexEntity(
@@ -137,6 +158,7 @@ private suspend fun updateIndex(rootKeys: Set<String>) {
                 path = manga.toUri().toString(),
             ),
         )
+        return stored.id
     }
 
     private fun LocalContent.toEntity() = LocalContentIndexEntity(
@@ -149,6 +171,7 @@ private suspend fun updateIndex(rootKeys: Set<String>) {
 
     companion object {
 
+        private const val TAG = "LocalContentIndex"
         private const val PREF_NAME = "_local_index"
         private const val KEY_VERSION = "ver"
         private const val KEY_ROOTS = "readable_roots"
