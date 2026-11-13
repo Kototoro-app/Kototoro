@@ -83,6 +83,7 @@ import androidx.core.view.WindowInsetsCompat
 import android.net.Uri
 import java.net.URLDecoder
 import android.media.AudioManager
+import android.view.ScaleGestureDetector
 import android.provider.Settings
 import android.content.Context
 import java.io.File
@@ -338,6 +339,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     private var superResolutionDialogVisible by mutableStateOf(false)
     private var superResolutionDialogVersion by mutableStateOf(0)
     private var dlnaDialogState by mutableStateOf<DlnaDeviceDialogState?>(null)
+    private lateinit var videoZoomController: VideoZoomController
     private var gestureOverlayState by mutableStateOf(VideoGestureOverlayState())
     private var subtitleOverlayState by mutableStateOf(VideoSubtitleOverlayState())
     private var unlockButtonVisible by mutableStateOf(false)
@@ -656,6 +658,49 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         gestureOverlayState = gestureOverlayState.copy(center = text)
         overlayHandler.removeCallbacks(hideCenterRunnable)
         overlayHandler.postDelayed(hideCenterRunnable, durationMs)
+    }
+    private fun showZoomOverlay(scale: Float, durationMs: Long?) {
+        val text = if (kotlin.math.abs(scale - 1.0f) < 0.05f) {
+            "1.0x"
+        } else {
+            "%.1fx".format(java.util.Locale.US, scale)
+        }
+        gestureOverlayState = gestureOverlayState.copy(center = text)
+        overlayHandler.removeCallbacks(hideCenterRunnable)
+        if (durationMs != null) {
+            overlayHandler.postDelayed(hideCenterRunnable, durationMs)
+        }
+    }
+    private fun activeVideoSurface(): View? {
+        val isEnhancementActive = ::enhancementView.isInitialized &&
+            enhancementView.visibility == View.VISIBLE &&
+            enhancementView.alpha > 0f
+        return if (isEnhancementActive) {
+            enhancementView
+        } else if (::playerView.isInitialized) {
+            playerView.videoSurfaceView ?: playerView
+        } else {
+            null
+        }
+    }
+    private fun applyVideoZoomTransform(scale: Float, translationX: Float, translationY: Float) {
+        if (::playerView.isInitialized) {
+            val target = playerView.videoSurfaceView ?: playerView
+            target.pivotX = target.width / 2f
+            target.pivotY = target.height / 2f
+            target.scaleX = scale
+            target.scaleY = scale
+            target.translationX = translationX
+            target.translationY = translationY
+        }
+        if (::enhancementView.isInitialized) {
+            enhancementView.pivotX = enhancementView.width / 2f
+            enhancementView.pivotY = enhancementView.height / 2f
+            enhancementView.scaleX = scale
+            enhancementView.scaleY = scale
+            enhancementView.translationX = translationX
+            enhancementView.translationY = translationY
+        }
     }
     private fun showLongSeekOverlay(direction: Int) {
         overlayHandler.removeCallbacks(hideLeftRunnable)
@@ -1179,6 +1224,11 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         })
         devicePerformanceInfo = DevicePerformanceClassifier.classify(this)
         effectivePlaybackConfig = VideoPlaybackPolicy.resolve(appSettings, devicePerformanceInfo)
+        videoZoomController = VideoZoomController(
+            onTransformChanged = { scale, translationX, translationY ->
+                applyVideoZoomTransform(scale, translationX, translationY)
+            },
+        )
         installComposeContent()
         applySubtitleOverlayStyle()
         applyPlaybackBackground()
@@ -1293,6 +1343,12 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                 }
                 override fun onDoubleTap(e: MotionEvent): Boolean {
                     if (isScreenLocked) return true // no-op when locked
+                    if (::videoZoomController.isInitialized && videoZoomController.isZoomed) {
+                        videoZoomController.animateReset {
+                            showZoomOverlay(1.0f, durationMs = 600L)
+                        }
+                        return true
+                    }
                     val w = pv.width.takeIf { it > 0 } ?: -1
                     val x = e.x
                     val p = videoPlayer
@@ -1358,6 +1414,19 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                     if (isScreenLocked) return false // no-op when locked
                     if (isLongPressSpeeding) return false
 
+                    if (::videoZoomController.isInitialized && videoZoomController.isZoomed) {
+                        val content = activeVideoSurface()
+                        videoZoomController.panBy(
+                            dx = -distanceX,
+                            dy = -distanceY,
+                            viewportWidth = w,
+                            viewportHeight = h,
+                            contentWidth = content?.width ?: w,
+                            contentHeight = content?.height ?: h,
+                        )
+                        return true
+                    }
+
                     // 首次判定：竖向位移显著大于横向位移时进入垂直调整模式，反之进入水平进度调整模?
                     if (verticalAdjustMode == 0 && !isHorizontalScrubbing) {
                         val startY = e1?.y ?: e2.y
@@ -1422,8 +1491,84 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                 }
             })
 
+            val scaleDetector = if (!tvPresentationEnabled) {
+                ScaleGestureDetector(this, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
+                    override fun onScaleBegin(detector: ScaleGestureDetector): Boolean {
+                        if (isScreenLocked) return false
+                        setUiIsVisible(false)
+                        videoZoomController.onScaleBegin(detector.focusX, detector.focusY)
+                        showZoomOverlay(videoZoomController.scale, durationMs = null)
+                        return true
+                    }
+
+                    override fun onScale(detector: ScaleGestureDetector): Boolean {
+                        if (isScreenLocked) return false
+                        val content = activeVideoSurface()
+                        videoZoomController.onScale(
+                            scaleFactor = detector.scaleFactor,
+                            focusX = detector.focusX,
+                            focusY = detector.focusY,
+                            viewportWidth = pv.width,
+                            viewportHeight = pv.height,
+                            contentWidth = content?.width ?: pv.width,
+                            contentHeight = content?.height ?: pv.height,
+                        )
+                        showZoomOverlay(videoZoomController.scale, durationMs = null)
+                        return true
+                    }
+
+                    override fun onScaleEnd(detector: ScaleGestureDetector) {
+                        val content = activeVideoSurface()
+                        videoZoomController.onScaleEnd(
+                            viewportWidth = pv.width,
+                            viewportHeight = pv.height,
+                            contentWidth = content?.width ?: pv.width,
+                            contentHeight = content?.height ?: pv.height,
+                            onResetEnd = {
+                                showZoomOverlay(1.0f, durationMs = 600L)
+                            },
+                        )
+                        if (videoZoomController.isZoomed) {
+                            showZoomOverlay(videoZoomController.scale, durationMs = 600L)
+                        }
+                    }
+                })
+            } else {
+                null
+            }
+
             pv.setOnTouchListener { v, event ->
-                val handled = detector.onTouchEvent(event)
+                if (scaleDetector != null && !isScreenLocked) {
+                    if (event.actionMasked == MotionEvent.ACTION_POINTER_DOWN) {
+                        val cancelEvent = MotionEvent.obtain(event).apply { action = MotionEvent.ACTION_CANCEL }
+                        detector.onTouchEvent(cancelEvent)
+                        cancelEvent.recycle()
+
+                        if (isLongPressSpeeding) {
+                            val originalSpeed = appSettings.videoPlaybackSpeed.toDouble()
+                            videoPlayer?.setRate(originalSpeed)
+                            isLongPressSpeeding = false
+                        }
+                        if (isHorizontalScrubbing) {
+                            isHorizontalScrubbing = false
+                            isUserScrubbing = false
+                            hideSeekFeedback()
+                        }
+                        if (longSeekDirection != 0) {
+                            stopLongSeek()
+                        }
+                        verticalAdjustMode = 0
+                        verticalAdjustAccum = 0f
+                    }
+                    scaleDetector.onTouchEvent(event)
+                }
+
+                val isZoomPinching = ::videoZoomController.isInitialized && videoZoomController.isPinching
+                val handled = if (!isZoomPinching && event.pointerCount == 1) {
+                    detector.onTouchEvent(event)
+                } else {
+                    false
+                }
                 when (event.actionMasked) {
                     MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                         val wasVerticalAdjusting = verticalAdjustMode != 0
@@ -2134,6 +2279,9 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             subtitleSessionController.updateExternalTracks(activePlaybackSubtitles)
             subtitleSessionController.updateEmbeddedTracks(emptyList())
         }
+        if (::videoZoomController.isInitialized) {
+            videoZoomController.reset()
+        }
         videoPlayer?.load(
             PlaybackRequest(
                 requestId = requestId,
@@ -2540,6 +2688,9 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         cloudstreamFallbackJob = null
         closeSelectionDialog()
         actionDialogState = null
+        if (::videoZoomController.isInitialized) {
+            videoZoomController.reset()
+        }
         currentVideoSource = source
         availableVideos = emptyList()
         currentVideoIndex = 0
@@ -3413,6 +3564,9 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
 
     private fun fallbackToDirectOutput() {
         val wasEnhancementOutputAttached = enhancementOutputAttached
+        if (::videoZoomController.isInitialized) {
+            videoZoomController.reset()
+        }
         enhancementSessionEnabled = false
         enhancementOutputAttached = false
         enhancementDisplayedFirstFrame = false
@@ -4123,6 +4277,9 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     }
 
     fun applyAspectRatio() {
+        if (::videoZoomController.isInitialized) {
+            videoZoomController.reset()
+        }
         videoPlayer?.setAspectRatio(appSettings.videoAspectRatio)
     }
 
@@ -4265,6 +4422,9 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         if (isInPictureInPictureMode) {
             setUiIsVisible(false)
+            if (::videoZoomController.isInitialized) {
+                videoZoomController.reset()
+            }
         }
     }
 
