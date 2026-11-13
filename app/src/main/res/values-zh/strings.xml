@@ -1322,7 +1322,6 @@
     <string name="mark_as_safe">标记为非 NSFW</string>
     <string name="max_backups_count">最大备份数</string>
     <string name="mean_score_short">均分 %1$s</string>
-    <string name="memory_usage_pattern">%1$s - %2$s</string>
     <string name="migrate">换源</string>
     <string name="migrate_confirmation">将会把历史记录和收藏中 \"%2$s\" 内容源的 \"%1$s\" 替换成 \"%4$s\" 内容源的 \"%3$s\"（若资源存在）</string>
     <string name="migration_completed">换源成功</string>

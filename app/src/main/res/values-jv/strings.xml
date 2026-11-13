@@ -2154,7 +2154,6 @@
     <string name="handle_links_summary">Tangani tautan manga saka aplikasi eksternal (contone, browser web). Sampeyan uga kudu ngaktifake kanthi manual ing setelan sistem aplikasi</string>
     <string name="email">Email</string>
     <string name="captcha_required_message">Sumber iki mbutuhake ngrampungake captcha kanggo nerusake</string>
-    <string name="assembling_apk">Ngrakit nganyari inkremental. Mangga tunggu…</string>
     <string name="author">Pangarang</string>
     <string name="tags">Tag</string>
     <string name="title">Judul</string>

@@ -2152,7 +2152,6 @@
     <string name="handle_links_summary">Сыртқы қолданбалардан (мысалы, веб-шолғыш) манга сілтемелерін өңдеу. Сондай-ақ оны қолданбаның жүйелік параметрлерінде қолмен қосу қажет болуы мүмкін</string>
     <string name="email">Эл. пошта</string>
     <string name="captcha_required_message">Бұл көзді жалғастыру үшін капчаны шешу қажет</string>
-    <string name="assembling_apk">Инкрементті жаңарту жиналуда. Күте тұрыңыз...</string>
     <string name="author">Автор</string>
     <string name="tags">Агәыԥқәа</string>
     <string name="title">Ахьӡ</string>

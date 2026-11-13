@@ -280,7 +280,6 @@
     <string name="other_cache">Egyéb gyorsítótár</string>
     <string name="storage_usage">Tárhely használat</string>
     <string name="available">Elérhető</string>
-    <string name="memory_usage_pattern">%s - %s</string>
     <string name="removed_from_favourites">Eltávolítva a kedvencekből</string>
     <string name="options">Opciók</string>
     <string name="not_found_404">A tartalom nem elérhető vagy törölték</string>
@@ -2159,7 +2158,6 @@
     <string name="handle_links_summary">Mangahivatkozások kezelése külső alkalmazásokból (pl. webböngésző). Előfordulhat, hogy ezt az alkalmazás rendszerbeállításaiban is engedélyezned kell</string>
     <string name="email">E-mail</string>
     <string name="captcha_required_message">A folytatáshoz meg kell oldani egy CAPTCHA-t ezen a forráson</string>
-    <string name="assembling_apk">Növekményes frissítés összeállítása. Kérjük, várj…</string>
     <string name="author">Szerző</string>
     <string name="tags">Címkék</string>
     <string name="title">Cím</string>

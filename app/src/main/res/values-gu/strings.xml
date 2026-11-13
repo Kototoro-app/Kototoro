@@ -2152,7 +2152,6 @@
     <string name="handle_links_summary">બહારી એપ્લિકેશનો (દા.ત. વેબ બ્રાઉઝર) થી મંગા લિંક્સ હેન્ડલ કરો. તમારે તેને એપ્લિકેશનની સિસ્ટમ સેટિંગ્સમાં મેન્યુઅલી પણ સક્ષમ કરવાની જરૂર પડી શકે છે</string>
     <string name="email">ઇમેઇલ</string>
     <string name="captcha_required_message">આ સ્રોત ચાલુ રાખવા માટે કેપ્ચા ઉકેલવાની જરૂર છે</string>
-    <string name="assembling_apk">ઇન્ક્રિમેન્ટલ અપડેટ એસેમ્બલ કરી રહ્યું છે. કૃપા કરીને રાહ જુઓ…</string>
     <string name="author">લેખક</string>
     <string name="tags">ટૅગ્સ</string>
     <string name="title">શીર્ષક</string>

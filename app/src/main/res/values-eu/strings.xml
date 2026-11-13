@@ -2151,7 +2151,6 @@
     <string name="handle_links_summary">Kudeatu kanpoko aplikazioetako manga-estekak (adib. web-nabigatzailea). Baliteke aplikazioaren sistemaren ezarpenetan eskuz gaitu behar izatea ere</string>
     <string name="email">E-posta</string>
     <string name="captcha_required_message">Iturri honek captcha bat ebatzi behar du jarraitzeko</string>
-    <string name="assembling_apk">Eguneratze gehigarria prestatzen. Itxaron mesedez…</string>
     <string name="author">Egilea</string>
     <string name="tags">Etiketak</string>
     <string name="title">Izenburua</string>

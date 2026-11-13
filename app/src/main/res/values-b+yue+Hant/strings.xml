@@ -2152,7 +2152,6 @@
     <string name="handle_links_summary">處理來自外部應用程式（例如網頁瀏覽器）的漫畫連結。您可能還需要在應用程式的系統設定中手動啟用它</string>
     <string name="email">電子郵件</string>
     <string name="captcha_required_message">此來源需要完成驗證碼才能繼續</string>
-    <string name="assembling_apk">正在組合增量更新。請稍候…</string>
     <string name="author">作者</string>
     <string name="tags">標籤</string>
     <string name="title">標題</string>

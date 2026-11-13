@@ -2151,7 +2151,6 @@
     <string name="handle_links_summary">बाहरी অ্যাপ্লিকেশন থেকে মঙ্গা লিঙ্কগুলি পরিচালনা করুন (যেমন ওয়েব ব্রাউজার)। আপনাকে অ্যাপ্লিকেশনটির সিস্টেম সেটিংসে এটি ম্যানুয়ালি সক্ষম করতে হতে পারে</string>
     <string name="email">ඊමේල්</string>
     <string name="captcha_required_message">මෙම මූලාශ්‍රය දිගටම කරගෙන යාමට කැප්චා එකක් විසඳීම අවශ්‍ය වේ</string>
-    <string name="assembling_apk">වර්ධක යාවත්කාලීනය එකතු කරමින් පවතී. කරුණාකර රැඳී සිටින්න…</string>
     <string name="author">කර්තෘ</string>
     <string name="tags">टැග</string>
     <string name="title">ශීර්ෂය</string>

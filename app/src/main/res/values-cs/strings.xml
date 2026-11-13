@@ -233,7 +233,6 @@
     <string name="other_cache">Další mezipamět</string>
     <string name="storage_usage">Využívání uložiště</string>
     <string name="available">Dostupné</string>
-    <string name="memory_usage_pattern">%s -%s</string>
     <string name="removed_from_favourites">Odstraněno z oblíbených</string>
     <string name="options">Možnosti</string>
     <string name="not_found_404">Kontent nebyl nalezen nebo byl odstraněn</string>
@@ -2278,7 +2277,6 @@
     <string name="details_original_language_short">Původní</string>
     <string name="chapter_selection_hint_tv">Pomocí tlačítka stahování na řádku kapitoly vyberte kapitoly jednu po druhé.</string>
     <string name="chapter_range_selection_hint">Tip: vyberte dvě kapitoly a pak dlouze stiskněte viditelnou kapitolu mezi nimi pro vyplnění rozsahu.</string>
-    <string name="assembling_apk">Sestavování přírůstkové aktualizace. Čekejte prosím…</string>
     <string name="tags">Štítky</string>
     <string name="title">Název</string>
     <string name="advanced_search">Pokročilé hledání</string>

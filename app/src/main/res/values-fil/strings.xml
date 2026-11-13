@@ -250,7 +250,6 @@
     <string name="other_cache">Iba pang cache</string>
     <string name="storage_usage">Paggamit ng storage</string>
     <string name="available">Magagamit na</string>
-    <string name="memory_usage_pattern">%1$s - %2$s</string>
     <string name="removed_from_favourites">Inalis sa mga paborito</string>
     <string name="options">Mga pagpipilian</string>
     <string name="incognito_mode">Incognito na mode</string>
@@ -2262,7 +2261,6 @@
     <string name="details_original_language_short">Orihinal</string>
     <string name="chapter_selection_hint_tv">Gamitin ang pindutan ng pag-download sa hilera ng kabanata para piliin nang isa-isa.</string>
     <string name="chapter_range_selection_hint">Tip: pumili ng dalawang kabanata, pagkatapos ay pindutin nang matagal ang makikitang kabanata sa pagitan nila upang punan ang saklaw.</string>
-    <string name="assembling_apk">Sinasama ang incremental update. Mangyaring maghintay…</string>
     <string name="tags">Mga tag</string>
     <string name="title">Pamagat</string>
     <string name="advanced_search">Detalyadong paghahanap</string>

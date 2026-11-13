@@ -2152,7 +2152,6 @@
     <string name="handle_links_summary">Tvarkyti mangų nuorodas iš išorinių programų (pvz., naršyklės). Taip pat gali reikėti tai įjungti programos sistemos nustatymuose</string>
     <string name="email">El. paštas</string>
     <string name="captcha_required_message">Norint tęsti, šiame šaltinyje reikia išspręsti captchą</string>
-    <string name="assembling_apk">Surenkamas papildomas atnaujinimas. Prašome palaukti…</string>
     <string name="author">Autorius</string>
     <string name="tags">Žymos</string>
     <string name="title">Pavadinimas</string>

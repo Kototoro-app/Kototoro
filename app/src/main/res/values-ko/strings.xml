@@ -278,7 +278,6 @@
     <string name="pages_cache">페이지 캐시</string>
     <string name="other_cache">기타 캐시</string>
     <string name="storage_usage">저장소 사용량</string>
-    <string name="memory_usage_pattern">%s -%s</string>
     <string name="removed_from_favourites">즐겨찾기 목록에서 제거됨</string>
     <string name="reader_info_pattern">챕터.%1$d/%2$d 페이지.%3$d/%4$d</string>
     <string name="comics_archive">코믹스 모음</string>
@@ -2155,7 +2154,6 @@
     <string name="handle_links_summary">외부 애플리케이션(예: 웹 브라우저)의 만화 링크를 처리합니다. 기기 시스템 설정에서 수동으로 활성화해야 할 수도 있습니다</string>
     <string name="email">이메일</string>
     <string name="captcha_required_message">계속하려면 이 소스에서 캡차를 해결해야 합니다</string>
-    <string name="assembling_apk">증분 업데이트를 조립하는 중입니다. 잠시만 기다려 주세요…</string>
     <string name="author">작가</string>
     <string name="tags">태그</string>
     <string name="title">제목</string>

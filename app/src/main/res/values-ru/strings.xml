@@ -300,7 +300,6 @@
     <string name="last_2_hours">Последние 2 часа</string>
     <string name="categories_delete_confirm">Вы уверены, что хотите удалить выбранные категории избранного? \nВся манга в них будет потеряна и это не может быть отменено.</string>
     <string name="pages_cache">Кэш страниц</string>
-    <string name="memory_usage_pattern">%1$s - %2$s</string>
     <string name="storage_usage">Использование хранилища</string>
     <string name="available">Доступно</string>
     <string name="saved_manga">Сохранённая манга</string>
@@ -2280,7 +2279,6 @@
     <string name="details_original_language_short">Оригинал</string>
     <string name="chapter_selection_hint_tv">Используйте кнопку скачивания в строке главы для выбора глав по одной.</string>
     <string name="chapter_range_selection_hint">Совет: выберите две главы, затем удерживайте видимую главу между ними, чтобы заполнить диапазон.</string>
-    <string name="assembling_apk">Сборка инкрементального обновления. Подождите…</string>
     <string name="tags">Теги</string>
     <string name="title">Название</string>
     <string name="advanced_search">Расширенный поиск</string>

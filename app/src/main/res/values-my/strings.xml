@@ -2152,7 +2152,6 @@
     <string name="handle_links_summary">ပြင်ပအပလီကေးရှင်းများ (ဥပမာ ဝဘ်ဘရောက်ဆာ) မှ မန်ဂါလင့်ခ်များကို ကိုင်တွယ်ပါ။ အပလီကေးရှင်း၏ စနစ်ဆက်တင်များတွင်လည်း ၎င်းကို ကိုယ်တိုင်ဖွင့်ရန် လိုအပ်နိုင်သည်</string>
     <string name="email">အီးမေးလ်</string>
     <string name="captcha_required_message">ဤရင်းမြစ်သည် ဆက်လက်လုပ်ဆောင်ရန် ကက်ချာ (captcha) ကို ဖြေရှင်းရန် လိုအပ်သည်</string>
-    <string name="assembling_apk">တိုးတက်မှု အပ်ဒိတ်ကို စုစည်းနေသည်။ ကျေးဇူးပြု၍ ခဏစောင့်ပါ...</string>
     <string name="author">ရေးသားသူ</string>
     <string name="tags">ស្លាក</string>
     <string name="title">ចំណងជើង</string>

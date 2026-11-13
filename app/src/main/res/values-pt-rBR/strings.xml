@@ -307,7 +307,6 @@
     <string name="reader_info_pattern">Cap. %1$d/%2$d Pág. %3$d/%4$d</string>
     <string name="reader_info_bar">Mostrar barra de informações no leitor</string>
     <string name="folder_with_images">Pasta com imagens</string>
-    <string name="memory_usage_pattern">%1$s - %2$s</string>
     <string name="comics_archive">Arquivo de quadrinhos</string>
     <string name="importing_manga">Importando obra(s)</string>
     <string name="import_completed">Importação completa</string>
@@ -2277,7 +2276,6 @@
     <string name="details_original_language_short">Original</string>
     <string name="chapter_selection_hint_tv">Use o botão de download em uma linha de capítulo para selecionar os capítulos um a um.</string>
     <string name="chapter_range_selection_hint">Dica: selecione dois capítulos e pressione e segure um capítulo visível entre eles para preencher o intervalo.</string>
-    <string name="assembling_apk">Montando atualização incremental. Aguarde…</string>
     <string name="tags">Tags</string>
     <string name="title">Título</string>
     <string name="advanced_search">Busca avançada</string>

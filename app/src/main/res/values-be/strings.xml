@@ -349,7 +349,6 @@
     <string name="pages_cache">Кэш старонак</string>
     <string name="other_cache">Іншы кэш</string>
     <string name="storage_usage">Выкарыстанне памяці</string>
-    <string name="memory_usage_pattern">%s - %s</string>
     <string name="removed_from_favourites">Выдалена з абранага</string>
     <string name="options">Параметры</string>
     <string name="user_agent">Загаловак UserAgent</string>
@@ -2266,7 +2265,6 @@
     <string name="details_original_language_short">Арыгінал</string>
     <string name="chapter_selection_hint_tv">Выкарыстоўвайце кнопку спампоўвання ў радку раздзела, каб выбіраць раздзелы па адным.</string>
     <string name="chapter_range_selection_hint">Падказка: выберыце два раздзелы, затым утрымлівайце бачны раздзел паміж імі, каб запоўніць дыяпазон.</string>
-    <string name="assembling_apk">Зборка інкрэментальнага абнаўлення. Пачакайце…</string>
     <string name="tags">Тэгі</string>
     <string name="title">Назва</string>
     <string name="advanced_search">Пашыраны пошук</string>

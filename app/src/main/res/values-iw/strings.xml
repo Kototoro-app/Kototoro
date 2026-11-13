@@ -2152,7 +2152,6 @@
     <string name="handle_links_summary">טפל בקישורי מנגה מיישומים חיצוניים (למשל, דפדפן אינטרנט). ייתכן שיהיה עליך להפעיל זאת ידנית בהגדרות המערכת של היישום</string>
     <string name="email">אימייל</string>
     <string name="captcha_required_message">מקור זה דורש פתרון קפצ\'ה כדי להמשיך</string>
-    <string name="assembling_apk">מכין עדכון מצטבר. נא להמתין...</string>
     <string name="author">מחבר</string>
     <string name="tags">תגיות</string>
     <string name="title">כותרת</string>

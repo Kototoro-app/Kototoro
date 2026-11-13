@@ -2152,7 +2152,6 @@
     <string name="handle_links_summary">تعامل مع روابط المانجا من التطبيقات الخارجية (زي المتصفح). ممكن تحتاج تفعلها يدوي في إعدادات النظام للتطبيق</string>
     <string name="email">الإيميل</string>
     <string name="captcha_required_message">المصدر ده محتاج تحل كابتشا عشان تكمل</string>
-    <string name="assembling_apk">جاري تجهيز التحديث. استنى شوية…</string>
     <string name="author">المؤلف</string>
     <string name="tags">الوسوم</string>
     <string name="title">العنوان</string>

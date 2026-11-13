@@ -299,7 +299,6 @@
     <string name="other_cache">Öbür önbellek</string>
     <string name="storage_usage">Depolama</string>
     <string name="available">Mevcut</string>
-    <string name="memory_usage_pattern">%1$s - %2$s</string>
     <string name="options">Seçenekler</string>
     <string name="incognito_mode">Gizli mod</string>
     <string name="no_chapters">Bölüm yok</string>
@@ -3660,7 +3659,6 @@
     <string name="alternatives_hint">Önizle: dokun · Taşı: basılı tut</string>
     <string name="tracker_next_check">Sonraki: %s</string>
     <string name="scrobbler_search_auth_hint">Arama girişsiz yapılır. %s ile bağla.</string>
-    <string name="assembling_apk">Güncelleme birleştiriliyor...</string>
     <string name="details_no_reviews">İnceleme yok</string>
     <string name="details_remove_metadata_binding">Meta veri bağını kaldır</string>
     <string name="details_reading_source_unavailable">Yok</string>

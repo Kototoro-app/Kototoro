@@ -235,7 +235,6 @@
     <string name="pages_cache">पन्नो का कैशे</string>
     <string name="other_cache">अन्य कैशे</string>
     <string name="available">उपलब्ध</string>
-    <string name="memory_usage_pattern">%1$s - %2$s</string>
     <string name="removed_from_favourites">पसंदीदा से हटाया गया</string>
     <string name="options">विकल्प</string>
     <string name="not_found_404">सामग्री नहीं मिली या हटाई गई</string>
@@ -2162,7 +2161,6 @@
     <string name="handle_links_summary">बाहरी अनुप्रयोगों (जैसे वेब ब्राउज़र) से manga लिंक संभालें। आपको इसे एप्लिकेशन की सिस्टम सेटिंग्स में मैन्युअल रूप से सक्षम करने की भी आवश्यकता हो सकती है</string>
     <string name="email">ईमेल</string>
     <string name="captcha_required_message">जारी रखने के लिए इस स्रोत को कैप्चा हल करने की आवश्यकता है</string>
-    <string name="assembling_apk">इन्क्रिमेंटल अपडेट तैयार किया जा रहा है। कृपया प्रतीक्षा करें…</string>
     <string name="author">लेखक</string>
     <string name="tags">टैग</string>
     <string name="title">शीर्षक</string>

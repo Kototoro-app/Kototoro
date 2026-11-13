@@ -466,7 +466,6 @@
     <string name="invert_colors">Түстерді терістету</string>
     <string name="color_theme">Түс схемасы</string>
     <string name="brightness">Ашықтық</string>
-    <string name="memory_usage_pattern">%s - %s</string>
     <string name="exit_confirmation_summary">Шығып кету үшін «Кері» батырмасын екі рет басыңыз</string>
     <string name="bookmarks_removed">Бетбелгілер жойылды</string>
     <string name="theme_name_mion">Мион</string>
@@ -2156,7 +2155,6 @@
     <string name="handle_links_summary">Сыртқы қолданбалардан (мысалы, веб-браузер) манга сілтемелерін өңдеу. Сондай-ақ оны қолданбаның жүйелік параметрлерінде қолмен қосу қажет болуы мүмкін</string>
     <string name="email">Эл. почта</string>
     <string name="captcha_required_message">Жалғастыру үшін капчаны шешу қажет</string>
-    <string name="assembling_apk">Қосымша жаңарту құрастырылуда. Күте тұрыңыз…</string>
     <string name="author">Автор</string>
     <string name="tags">Тегтер</string>
     <string name="title">Атауы</string>
@@ -3608,7 +3606,7 @@
     <string name="edit_custom_space">Өзгерту</string>
     <string name="delete_custom_space">Жою</string>
     <string name="delete_custom_space_message">«%1$s» кеңістігі мен оның сақталған күйі жойылсын ба?</string>
-    <string name="custom_space_limit">%-ке дейін %1$d кеңістік</string>
+    <string name="custom_space_limit">%1$d-ке дейін кеңістік</string>
     <string name="content_types">Мазмұн түрлері</string>
     <string name="source_types">Дереккөз түрі</string>
     <string name="custom_space_rule_summary">%1$d мазмұн · %2$d тіл · %3$d дереккөз</string>

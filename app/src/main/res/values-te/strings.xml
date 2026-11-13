@@ -2148,7 +2148,6 @@
     <string name="handle_links_summary">బాహ్య అప్లికేషన్‌ల (ఉదా. వెబ్ బ్రౌజర్) నుండి మాంగా లింక్‌లను నిర్వహించండి. అప్లికేషన్ సిస్టమ్ సెట్టింగ్‌లలో మీరు దీన్ని మాన్యువల్‌గా ప్రారంభించాల్సి రావచ్చు</string>
     <string name="email">ఇమెయిల్</string>
     <string name="captcha_required_message">కొనసాగడానికి ఈ సోర్స్ క్యాప్చాను పరిష్కరించడం అవసరం</string>
-    <string name="assembling_apk">అప్‌డేట్‌ను సిద్ధం చేస్తోంది. వేచి ఉండండి…</string>
     <string name="author">రచయిత</string>
     <string name="tags">ట్యాగ్‌లు</string>
     <string name="title">శీర్షిక</string>

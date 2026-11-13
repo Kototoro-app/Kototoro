@@ -2154,7 +2154,6 @@
     <string name="handle_links_summary">बाह्य अनुप्रयोगहरू (जस्तै वेब ब्राउजर) बाट मङ्गा लिंकहरू ह्यान्डल गर्नुहोस्। तपाईंले अनुप्रयोगको प्रणाली सेटिङहरूमा पनि यसलाई म्यानुअल रूपमा सक्षम गर्नुपर्ने हुन सक्छ</string>
     <string name="email">इमेल</string>
     <string name="captcha_required_message">जारी राख्न यो स्रोतलाई क्याप्चा समाधान गर्न आवश्यक छ</string>
-    <string name="assembling_apk">इन्क्रिमेन्टल अपडेट जोडिटैछ। कृपया पर्खनुहोस्…</string>
     <string name="author">लेखक</string>
     <string name="tags">ट्यागहरू</string>
     <string name="title">शीर्षक</string>

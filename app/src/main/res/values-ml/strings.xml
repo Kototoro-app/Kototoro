@@ -2141,7 +2141,6 @@
     <string name="handle_links_summary">ബാഹ്യ ആപ്ലിക്കേഷനുകളിൽ നിന്നുള്ള മാംഗ ലിങ്കുകൾ കൈകാര്യം ചെയ്യുക (ഉദാ: വെബ് ബ്രൗസർ). ആപ്ലിക്കേഷന്റെ സിസ്റ്റം ക്രമീകരണങ്ങളിൽ നിങ്ങൾ ഇത് സ്വയം പ്രവർത്തനക്ഷമമാക്കേണ്ടി വന്നേക്കാം</string>
     <string name="email">ഇമെയിൽ</string>
     <string name="captcha_required_message">തുടരാൻ ഈ ഉറവിടത്തിന് ഒരു ക്യാപ്ച പരിഹരിക്കേണ്ടതുണ്ട്</string>
-    <string name="assembling_apk">ഇൻക്രിമെന്റൽ അപ്ഡേറ്റ് തയ്യാറാക്കുന്നു. ദയവായി കാത്തിരിക്കുക…</string>
     <string name="author">രചയിതാവ്</string>
     <string name="tags">ടാഗുകൾ</string>
     <string name="title">ശീർഷകം</string>

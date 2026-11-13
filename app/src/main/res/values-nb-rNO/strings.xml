@@ -2152,7 +2152,6 @@
     <string name="handle_links_summary">Håndter mangalenker fra eksterne apper (f.eks. nettleser). Du må kanskje også aktivere dette manuelt i systeminnstillingene for appen</string>
     <string name="email">E-post</string>
     <string name="captcha_required_message">Denne kilden krever løsning av en Captcha for å fortsette</string>
-    <string name="assembling_apk">Setter sammen inkrementell oppdatering. Vent litt …</string>
     <string name="author">Forfatter</string>
     <string name="tags">Etiketter</string>
     <string name="title">Tittel</string>

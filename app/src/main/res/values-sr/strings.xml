@@ -471,7 +471,6 @@
     <string name="invert_colors">Обрни боје</string>
     <string name="color_theme">Палета боја</string>
     <string name="brightness">Осветљеност</string>
-    <string name="memory_usage_pattern">%1$s - %2$s</string>
     <string name="preparing_">Припрема се…</string>
     <string name="exit_confirmation_summary">Притисни Назад двапут да би изашао из апликације</string>
     <string name="bookmarks_removed">Обележивачи су уклоњени</string>
@@ -2266,7 +2265,6 @@
     <string name="details_original_language_short">Original</string>
     <string name="chapter_selection_hint_tv">Koristite dugme za preuzimanje na redu poglavlja da biste ih birali jedno po jedno.</string>
     <string name="chapter_range_selection_hint">Savet: izaberite dva poglavlja, pa dugo pritisnite vidljivo poglavlje između njih da popunite opseg.</string>
-    <string name="assembling_apk">Sastavljanje dopunskog ažuriranja. Sačekajte…</string>
     <string name="tags">Oznake</string>
     <string name="title">Naslov</string>
     <string name="advanced_search">Napredna pretraga</string>

@@ -2152,7 +2152,6 @@
     <string name="handle_links_summary">معالجة روابط المانغا من التطبيقات الخارجية (مثل متصفح الويب). قد تحتاج أيضاً إلى تفعيلها يدوياً في إعدادات النظام للتطبيق</string>
     <string name="email">Al-barid</string>
     <string name="captcha_required_message">يتطلب هذا المصدر حل اختبار كابتشا للمتابعة</string>
-    <string name="assembling_apk">جاري تجميع التحديث التدريجي. يرجى الانتظار…</string>
     <string name="author">المؤلف</string>
     <string name="tags">الوسوم</string>
     <string name="title">العنوان</string>

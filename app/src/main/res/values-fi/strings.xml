@@ -2154,7 +2154,6 @@
     <string name="handle_links_summary">Käsittele mangalinkkejä ulkoisista sovelluksista (esim. verkkoselaimesta). Saatat joutua ottamaan tämän käyttöön manuaalisesti sovelluksen järjestelmäasetuksista</string>
     <string name="email">Sähköposti</string>
     <string name="captcha_required_message">Tämä lähde vaatii kuvakoodin ratkaisemista jatkaakseen</string>
-    <string name="assembling_apk">Kootaan inkrementaalista päivitystä. Odota…</string>
     <string name="author">Tekijä</string>
     <string name="tags">Tunnisteet</string>
     <string name="title">Otsikko</string>

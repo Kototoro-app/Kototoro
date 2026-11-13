@@ -2152,7 +2152,6 @@
     <string name="handle_links_summary">Apstrādāt mangavas saites no ārējām lietotnēm (piem., tīmekļa pārlūka). Iespējams, tas būs jāieslēdz arī manuāli sistēmas iestatījumos</string>
     <string name="email">E-pasts</string>
     <string name="captcha_required_message">Lai turpinātu, šim avotam ir jāatrisina CAPTCHA</string>
-    <string name="assembling_apk">Veido programmatūras atjauninājumu. Lūdzu, uzgaidiet…</string>
     <string name="author">Autors</string>
     <string name="tags">Birkas</string>
     <string name="title">Nosaukums</string>

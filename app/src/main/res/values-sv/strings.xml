@@ -2183,7 +2183,6 @@
     <string name="debug">Felsökning</string>
     <string name="chapter_selection_hint_tv">Använd nedladdningsknappen på en kapitelrad för att välja kapitel ett i taget.</string>
     <string name="chapter_range_selection_hint">Tips: välj två kapitel och tryck sedan länge på ett synligt kapitel mellan dem för att fylla intervallet.</string>
-    <string name="assembling_apk">Sätter ihop inkrementell uppdatering. Vänta…</string>
     <string name="tags">Taggar</string>
     <string name="title">Titel</string>
     <string name="advanced_search">Avancerad sökning</string>

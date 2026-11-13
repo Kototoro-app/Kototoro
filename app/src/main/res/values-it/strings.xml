@@ -307,7 +307,6 @@
     <string name="other_cache">Altra cache</string>
     <string name="storage_usage">Utilizzo dello spazio di archiviazione</string>
     <string name="available">Disponibile</string>
-    <string name="memory_usage_pattern">%1$s - %2$s</string>
     <string name="removed_from_favourites">Rimosso dai preferiti</string>
     <string name="options">Opzioni</string>
     <string name="no_chapters">Nessun capitolo</string>
@@ -2280,7 +2279,6 @@
     <string name="details_original_language_short">Originale</string>
     <string name="chapter_selection_hint_tv">Usa il pulsante di download su una riga per selezionare i capitoli uno per uno.</string>
     <string name="chapter_range_selection_hint">Suggerimento: seleziona due capitoli, poi tieni premuto un capitolo visibile in mezzo per riempire l\'intervallo.</string>
-    <string name="assembling_apk">Assemblaggio aggiornamento incrementale. Attendere…</string>
     <string name="tags">Tag</string>
     <string name="title">Titolo</string>
     <string name="advanced_search">Ricerca avanzata</string>

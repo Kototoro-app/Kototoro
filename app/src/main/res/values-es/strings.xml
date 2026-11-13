@@ -300,7 +300,6 @@
     <string name="folder_with_images">Carpeta con imágenes</string>
     <string name="categories_delete_confirm">¿Estás seguro de que quieres eliminar las categorías favoritas seleccionadas? \nTodos los mangas en ella se perderán y esto no se puede deshacer.</string>
     <string name="explore">Explorar</string>
-    <string name="memory_usage_pattern">%1$s - %2$s</string>
     <string name="exit_confirmation_summary">Pulse dos veces «Atrás» para salir de la aplicación</string>
     <string name="exit_confirmation">Confirmación de salida</string>
     <string name="pages_cache">Caché de páginas</string>
@@ -2264,7 +2263,6 @@
     <string name="details_original_language_short">Original</string>
     <string name="chapter_selection_hint_tv">Usa el botón de descarga en la fila de un capítulo para seleccionarlos uno a uno.</string>
     <string name="chapter_range_selection_hint">Consejo: selecciona dos capítulos y mantén pulsado uno intermedio para rellenar el rango.</string>
-    <string name="assembling_apk">Ensamblando actualización incremental. Espera…</string>
     <string name="tags">Etiquetas</string>
     <string name="title">Título</string>
     <string name="advanced_search">Búsqueda avanzada</string>

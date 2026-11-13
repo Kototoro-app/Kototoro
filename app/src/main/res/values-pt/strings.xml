@@ -316,7 +316,6 @@
     <string name="other_cache">Outros cache</string>
     <string name="storage_usage">Armazenamento usado</string>
     <string name="available">Disponível</string>
-    <string name="memory_usage_pattern">%s - %s</string>
     <string name="removed_from_favourites">Removido dos favoritos</string>
     <string name="options">Opções</string>
     <string name="not_found_404">Conteúdo não encontrado ou removido</string>
@@ -2276,7 +2275,6 @@
     <string name="details_original_language_short">Original</string>
     <string name="chapter_selection_hint_tv">Use o botão de descarga na linha para escolher capítulos.</string>
     <string name="chapter_range_selection_hint">Dica: selecione dois capítulos e pressione um entre eles.</string>
-    <string name="assembling_apk">A criar atualização incremental. Aguarde…</string>
     <string name="tags">Etiquetas</string>
     <string name="title">Título</string>
     <string name="advanced_search">Pesquisa avançada</string>

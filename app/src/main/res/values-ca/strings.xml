@@ -2152,7 +2152,6 @@
     <string name="handle_links_summary">Gestiona enllaços de manga externs (p. ex. navegador web). Potser ho haureu d\'activar manualment als ajustos del sistema</string>
     <string name="email">Correu</string>
     <string name="captcha_required_message">Aquesta font requereix resoldre un captcha per continuar</string>
-    <string name="assembling_apk">S\'està assemblant l\'actualització. Espereu...</string>
     <string name="author">Autor</string>
     <string name="tags">Etiquetes</string>
     <string name="title">Títol</string>

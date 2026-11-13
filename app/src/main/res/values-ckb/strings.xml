@@ -2150,7 +2150,6 @@
     <string name="handle_links_summary">بەڕێوەبردنی بەستەرەکانی مەنگا لە بەرنامە دەرەکییەکانەوە (بۆ نموونە وێبگەڕ). هەروەها ڕەنگە پێویست بکات بە دەست لە ڕێکخستنەکانی سیستەمی بەرنامەکە کارای بکەیت</string>
     <string name="email">ئیمەیل</string>
     <string name="captcha_required_message">ئەم سەرچاوەیە پێویستی بە چارەسەرکردنی کاپتچا هەیە بۆ بەردەوامبوون</string>
-    <string name="assembling_apk">کۆکردنەوەی نوێکاری زیاتری. تکایە چاوەڕوان بێ…</string>
     <string name="author">نووسەر</string>
     <string name="tags">پایتۆگ</string>
     <string name="title">ناونیشان</string>

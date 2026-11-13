@@ -277,7 +277,6 @@
     <string name="other_cache">Anderer Cache</string>
     <string name="storage_usage">Speichernutzung</string>
     <string name="available">Verfügbar</string>
-    <string name="memory_usage_pattern">%s - %s</string>
     <string name="removed_from_favourites">Aus den Favoriten entfernt</string>
     <string name="options">Optionen</string>
     <string name="automatic_scroll">Automatisches Blättern</string>
@@ -2161,7 +2160,6 @@
     <string name="handle_links_summary">Manga-Links aus externen Anwendungen (z. B. Webbrowser) verarbeiten. Möglicherweise müssen Sie dies auch manuell in den Systemeinstellungen der App aktivieren</string>
     <string name="email">E-Mail</string>
     <string name="captcha_required_message">Diese Quelle erfordert das Lösen eines Captchas, um fortzufahren</string>
-    <string name="assembling_apk">Inkrementelles Update wird erstellt. Bitte warten…</string>
     <string name="author">Autor</string>
     <string name="tags">Tags</string>
     <string name="title">Titel</string>

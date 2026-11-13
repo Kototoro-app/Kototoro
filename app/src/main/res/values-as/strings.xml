@@ -2152,7 +2152,6 @@
     <string name="handle_links_summary">বাহ্যিক এপ্লিকেচন (যেনে ৱেব ব্ৰাউজাৰ)ৰ পৰা manga লিংকসমূহ নিয়ন্ত্ৰণ কৰক। আপুনি এপ্লিকেচনৰ চিস্টেম ছেটিংছতো ইয়াক হাতবিধেৰে সক্ৰিয় কৰিব লাগিব পাৰে</string>
     <string name="email">ইমেইল</string>
     <string name="captcha_required_message">অৱসান ঘটাবলৈ এই উৎসটোক এটা কেপ্‌চা সমাধান কৰাৰ প্ৰয়োজন</string>
-    <string name="assembling_apk">ক্ৰমবৰ্ধমান আপডেট এচেম্বিল কৰা হৈছে। অনুগ্ৰহ কৰি অপেক্ষা কৰক…</string>
     <string name="author">লেখক</string>
     <string name="tags">টগসমূহ</string>
     <string name="title">শীৰ্ষক</string>

@@ -213,7 +213,6 @@
     <string name="pages_cache">Mellominnet for sider</string>
     <string name="other_cache">Mellomminnet for anna</string>
     <string name="available">Tilgjengeleg</string>
-    <string name="memory_usage_pattern">%s - %s</string>
     <string name="removed_from_favourites">Teken or likerlista</string>
     <string name="not_found_404">Fann ikkje innhaldet</string>
     <string name="automatic_scroll">Bla sjølvverkande</string>
@@ -2154,7 +2153,6 @@
     <string name="handle_links_summary">Handter mangalenker frå andre appar (t.d. nettlesar). Du må kanskje òg aktivere dette manuelt i systeminnstillingane for appen</string>
     <string name="email">E-post</string>
     <string name="captcha_required_message">Denne kjelda krev at du løyser ei captcha for å fortsette</string>
-    <string name="assembling_apk">Set saman oppdatering. Vent litt…</string>
     <string name="author">Forfattar</string>
     <string name="tags">Etiketter</string>
     <string name="title">Tittel</string>

@@ -2151,7 +2151,6 @@
     <string name="handle_links_summary">Mangakoppelingen van externe toepassingen (bijv. webbrowser) afhandelen. Mogelijk moet je dit ook handmatig inschakelen in de systeeminstellingen van de app</string>
     <string name="email">E-mail</string>
     <string name="captcha_required_message">Deze bron vereist het oplossen van een captcha om door te gaan</string>
-    <string name="assembling_apk">Incrementele update samenstellen. Even geduld…</string>
     <string name="author">Auteur</string>
     <string name="tags">Tags</string>
     <string name="title">Titel</string>

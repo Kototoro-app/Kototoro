@@ -326,7 +326,6 @@
     <string name="text_unsaved_changes_prompt">บันทึกหรือละทิ้งการเปลี่ยนแปลงที่ยังไม่ได้บันทึก\?</string>
     <string name="color_theme">โทนสี</string>
     <string name="brightness">ความสว่าง</string>
-    <string name="memory_usage_pattern">%s - %s</string>
     <string name="exit_confirmation_summary">กดย้อนกลับสองครั้งเพื่อออกจากแอป</string>
     <string name="bookmarks_removed">ลบบุ๊คมาร์กแล้ว</string>
     <string name="error_no_space_left">ไม่มีพื้นที่เหลือบนอุปกรณ์แล้ว</string>
@@ -2156,7 +2155,6 @@
     <string name="handle_links_summary">จัดการลิงก์มังงะจากแอปพลิเคชันภายนอก (เช่น เว็บบราว์เซอร์) คุณอาจต้องเปิดใช้งานด้วยตนเองในการตั้งค่าระบบของแอปพลิเคชัน</string>
     <string name="email">อีเมล</string>
     <string name="captcha_required_message">แหล่งข้อมูลนี้ต้องแก้แคปต์ชาเพื่อดำเนินการต่อ</string>
-    <string name="assembling_apk">กำลังประกอบอัปเดตแบบเพิ่มหน่วย โปรดรอสักครู่…</string>
     <string name="author">ผู้แต่ง</string>
     <string name="tags">แท็ก</string>
     <string name="title">ชื่อเรื่อง</string>

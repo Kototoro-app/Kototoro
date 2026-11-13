@@ -316,7 +316,6 @@
     <string name="server_error">Kesalahan di sisi server (%1$d). Silakan coba lagi nanti</string>
     <string name="compact">Padat</string>
     <string name="prefetch_content">Pramuat konten</string>
-    <string name="memory_usage_pattern">%1$s - %2$s</string>
     <string name="nothing_here">Tidak ada apapun di sini</string>
     <string name="reader_control_ltr_summary">Jangan ubah arah pergantian halaman ke mode pembaca, misalnya, menekan tombol kanan selalu beralih ke halaman berikutnya. Opsi ini hanya berlaku untuk perangkat masukan hardware</string>
     <string name="source_disabled">Sumber dinonaktifkan</string>
@@ -2279,7 +2278,6 @@
     <string name="details_original_language_short">Asli</string>
     <string name="chapter_selection_hint_tv">Gunakan tombol unduh pada baris bab untuk memilih bab satu per satu.</string>
     <string name="chapter_range_selection_hint">Tip: pilih dua bab, lalu tekan lama bab yang terlihat di antaranya untuk mengisi rentang.</string>
-    <string name="assembling_apk">Menyusun pembaruan inkremental. Harap tunggu…</string>
     <string name="tags">Tag</string>
     <string name="title">Judul</string>
     <string name="advanced_search">Pencarian lanjutan</string>

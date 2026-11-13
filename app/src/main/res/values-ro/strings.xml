@@ -2152,7 +2152,6 @@
     <string name="handle_links_summary">Gestionează linkurile manga din aplicații externe (de ex. browser). Poate fi nevoie să activați manual în setările sistemului</string>
     <string name="email">E-mail</string>
     <string name="captcha_required_message">Această sursă necesită rezolvarea unui captcha pentru a continua</string>
-    <string name="assembling_apk">Se asamblează actualizarea. Vă rugăm așteptați…</string>
     <string name="author">Autor</string>
     <string name="tags">Etichete</string>
     <string name="title">Titlu</string>

@@ -226,7 +226,6 @@
     <string name="other_cache">Cache lain-lain</string>
     <string name="storage_usage">Penggunaan storan</string>
     <string name="available">Tersedia</string>
-    <string name="memory_usage_pattern">%s - %s</string>
     <string name="removed_from_favourites">Dibuang daripada kegemaran</string>
     <string name="options">Pilihan</string>
     <string name="local_storage">Storan tempatan</string>
@@ -2260,7 +2259,6 @@
     <string name="details_original_language_short">Asal</string>
     <string name="chapter_selection_hint_tv">Gunakan butang muat turun pada baris bab untuk memilih bab satu persatu.</string>
     <string name="chapter_range_selection_hint">Petua: pilih dua bab, kemudian tekan lama bab yang kelihatan di antaranya untuk mengisi julat.</string>
-    <string name="assembling_apk">Menhimpunkan kemas kini ter incremental. Sila tunggu…</string>
     <string name="tags">Tag</string>
     <string name="title">Tajuk</string>
     <string name="advanced_search">Carian lanjutan</string>

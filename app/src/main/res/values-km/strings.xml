@@ -2149,7 +2149,6 @@
     <string name="handle_links_summary">จัดการតំណម៉ង់ហ្គាពីកម្មវិធីខាងក្រៅ (ឧ. កម្មវិធីរុករក)។ អ្នកប្រហែលជាត្រូវបើកវាដោយដៃក្នុងកំណត់ចំណាំប្រព័ន្ធ</string>
     <string name="email">អ៊ីមែល</string>
     <string name="captcha_required_message">ប្រភពនេះទាមទារការដោះស្រាយ captcha ដើម្បីបន្ត</string>
-    <string name="assembling_apk">កំពុងផ្សំបច្ចុប្បន្នភាពកើនឡើង។ សូមរង់ចាំ...</string>
     <string name="author">អ្នកនិពន្ធ</string>
     <string name="tags">ស្លាក</string>
     <string name="title">ចំណងជើង</string>

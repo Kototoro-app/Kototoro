@@ -404,7 +404,6 @@
     <string name="local_manga_directories">Thư mục manga cục bộ</string>
     <string name="pick_custom_directory">Chọn thư mục tuỳ chỉnh</string>
     <string name="reader_info_pattern">Ch. %1$d/%2$d Tr. %3$d/%4$d</string>
-    <string name="memory_usage_pattern">%s - %s</string>
     <string name="web_view_unavailable">WebView hiện không có sẵn: Kiểm tra xem ứng dụng WebView được cài chưa</string>
     <string name="manga_error_description_pattern">Chi tiết lỗi: &lt;br&gt;&lt;tt&gt;%1$s&lt;/tt&gt;&lt;br&gt;&lt;br&gt;1. Hãy thử &lt;a href=%2$s&gt;mở manga trong trình duyệt web&lt;/a&gt; để đảm bảo rằng manga này có trong nguồn&lt;br&gt;2. Hãy chắc chắn rằng bạn đang dùng &lt;a href=kototoro://about&gt;bản mới nhất của Kototoro&lt;/a&gt;&lt;br&gt;3. Nếu đã đáp ứng các yêu cầu trên, gửi báo cáo lỗi lên nhà phát triển.</string>
     <string name="text_history_holder_secondary">Tìm truyện để đọc trong phần «Khám phá»</string>
@@ -2278,7 +2277,6 @@
     <string name="details_original_language_short">Gốc</string>
     <string name="chapter_selection_hint_tv">Sử dụng nút tải xuống trên hàng chương để chọn từng chương một.</string>
     <string name="chapter_range_selection_hint">Mẹo: chọn hai chương, sau đó nhấn giữ một chương hiển thị ở giữa để chọn toàn bộ khoảng đó.</string>
-    <string name="assembling_apk">Đang tạo bản cập nhật bổ sung. Vui lòng đợi…</string>
     <string name="tags">Thẻ</string>
     <string name="title">Tiêu đề</string>
     <string name="advanced_search">Tìm kiếm nâng cao</string>

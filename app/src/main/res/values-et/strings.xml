@@ -357,7 +357,6 @@
     <string name="updated">Uuendatud</string>
     <string name="color_theme">Värvi skeema</string>
     <string name="brightness">Helendus</string>
-    <string name="memory_usage_pattern">%s - %s</string>
     <string name="preparing_">Valmistan…</string>
     <string name="share">Jaga</string>
     <string name="computing_">Arvutan…</string>
@@ -2161,7 +2160,6 @@
     <string name="handle_links_summary">Ava mangade lingid välistest rakendustest (nt veebibrauserist). Võimalik, et pead selle lubama ka rakenduse süsteemiseadetes</string>
     <string name="email">E-post</string>
     <string name="captcha_required_message">Allikas nõuab jätkamiseks captcha lahendamist</string>
-    <string name="assembling_apk">Uuenduse koostamine. Palun oota…</string>
     <string name="author">Autor</string>
     <string name="tags">Sildid</string>
     <string name="title">Pealkiri</string>

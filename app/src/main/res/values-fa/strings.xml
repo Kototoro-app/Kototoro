@@ -2154,7 +2154,6 @@
     <string name="handle_links_summary">مدیریت پیوندهای مانگا از برنامه‌های خارجی (مانند مرورگر وب). ممکن است لازم باشد آن را به صورت دستی در تنظیمات سیستم برنامه نیز فعال کنید</string>
     <string name="email">ایمیل</string>
     <string name="captcha_required_message">این منبع برای ادامه نیاز به حل کپچا دارد</string>
-    <string name="assembling_apk">در حال آماده‌سازی به‌روزرسانی افزایشی. لطفاً صبر کنید…</string>
     <string name="author">نویسنده</string>
     <string name="tags">برچسب‌ها</string>
     <string name="title">عنوان</string>

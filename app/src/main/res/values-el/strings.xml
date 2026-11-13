@@ -307,7 +307,6 @@
     <string name="exit_confirmation_summary">Πάτα Πίσω δύο φορές για να βγεις από την εφαρμογή</string>
     <string name="storage_usage">Χρησιμοποίηση χώρου αποθήκευσης</string>
     <string name="available">Διαθέσιμο</string>
-    <string name="memory_usage_pattern">%s - %s</string>
     <string name="options">Επιλογές</string>
     <string name="not_found_404">Το περιεχόμενο δεν βρέθηκε, και πιθανώς να έχει αφαιρεθεί</string>
     <string name="incognito_mode">Λειτουργία Incognito</string>
@@ -2158,7 +2157,6 @@
     <string name="handle_links_summary">Διαχείριση συνδέσμων manga από εξωτερικές εφαρμογές (π.χ. πρόγραμμα περιήγησης). Ενδέχεται να χρειαστεί να το ενεργοποιήσετε χειροκίνητα στις ρυθμίσεις συστήματος</string>
     <string name="email">Email</string>
     <string name="captcha_required_message">Αυτή η πηγή απαιτεί επίλυση captcha για να συνεχίσετε</string>
-    <string name="assembling_apk">Συναρμολόγηση ενημέρωσης. Παρακαλώ περιμένετε…</string>
     <string name="author">Συγγραφέας</string>
     <string name="tags">Ετικέτες</string>
     <string name="title">Τίτλος</string>

@@ -2275,7 +2275,6 @@
     <string name="details_original_language_short">Izvornik</string>
     <string name="chapter_selection_hint_tv">Upotrijebite gumb za preuzimanje u retku poglavlja za odabir pojedinačnih poglavlja.</string>
     <string name="chapter_range_selection_hint">Savjet: odaberite dva poglavlja, a zatim dugo pritisnite vidljivo poglavlje između njih da popunite raspon.</string>
-    <string name="assembling_apk">Sastavljanje inkrementalnog ažuriranja. Molimo pričekajte…</string>
     <string name="tags">Oznake</string>
     <string name="title">Naslov</string>
     <string name="advanced_search">Napredno pretraživanje</string>
