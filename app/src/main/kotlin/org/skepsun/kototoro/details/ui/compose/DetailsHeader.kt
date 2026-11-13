@@ -368,6 +368,7 @@ fun DetailsHeader(
         }
     }
     val isNsfw = content?.isNsfw() == true
+    val renderCinemaHero = mediaStylePolicy.useCenteredHeroHeader && panoramaEnabled
     val infoItems: List<DetailsInfoItem> = buildList {
         content?.let {
             add(
@@ -384,7 +385,7 @@ fun DetailsHeader(
                 ),
             )
         }
-        add(
+        if (!renderCinemaHero) add(
             DetailsInfoItem(
                 label = stringResource(R.string.state),
                 value = state?.let { stringResource(it.titleResId) } ?: stringResource(R.string.unknown),
@@ -400,7 +401,7 @@ fun DetailsHeader(
                 valueMuted = originalLanguage.isBlank() && readingLanguage.isBlank(),
             ),
         )
-        add(
+        if (!renderCinemaHero) add(
             DetailsInfoItem(
                 label = stringResource(R.string.chapters),
                 value = chapterProgressLabel,
@@ -420,13 +421,11 @@ fun DetailsHeader(
         }
     }
 
-    val renderCinemaHero = mediaStylePolicy.useCenteredHeroHeader && panoramaEnabled
     val stateLabel = state?.let { stringResource(it.titleResId) } ?: stringResource(R.string.unknown)
-    val videoMetadataSummary = remember(stateLabel, chapterProgressLabel, primaryAuthor) {
+    val videoMetadataSummary = remember(stateLabel, chapterProgressLabel) {
         listOfNotNull(
             stateLabel,
             chapterProgressLabel.takeIf { it != "-" },
-            primaryAuthor,
         ).joinToString(" · ")
     }
     val playActionLabel = if (historyInfo.canContinue) {
@@ -454,6 +453,7 @@ fun DetailsHeader(
                 secondaryTextColor = immersiveTitleColor.copy(alpha = 0.78f),
                 progressPercent = historyInfo.percent.takeIf { historyInfo.history != null && it > 0f },
                 onCoverClick = { onCoverClick(currentCoverUrl) },
+                onMetadataClick = onOpenChapters,
                 onHeroBoundsChanged = onInfoCardBoundsSync,
                 sourceChips = {
                     if (metadataDisplayModel != null || readingDisplayModel != null) {
@@ -894,7 +894,8 @@ fun DetailsHeader(
         }
 
         val showProgress = historyInfo.history != null && historyInfo.percent > 0f
-        val showInfoCard = infoItems.isNotEmpty() || showProgress
+        val showStandaloneProgress = showProgress && !renderCinemaHero
+        val showInfoCard = infoItems.isNotEmpty() || showStandaloneProgress
         if (mediaStylePolicy.style == DetailsMediaStyle.NOVEL && !renderCinemaHero) {
             val novelMetrics = listOfNotNull(
                 NovelMetricItem(
@@ -941,7 +942,7 @@ fun DetailsHeader(
                     .fillMaxWidth()
                     .onGloballyPositioned { coordinates ->
                         val bounds = coordinates.boundsInRoot()
-                        onInfoCardBoundsSync(bounds.top, bounds.bottom)
+                        if (!renderCinemaHero) onInfoCardBoundsSync(bounds.top, bounds.bottom)
                     },
             ) {
                 Column(
@@ -964,7 +965,7 @@ fun DetailsHeader(
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
                         )
                     }
-                    if (showProgress) {
+                    if (showStandaloneProgress) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()

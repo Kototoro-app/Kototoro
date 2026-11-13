@@ -76,13 +76,16 @@ internal fun DesktopDetailsInfo(
     warnings: DesktopSourceSettings = DesktopSourceSettings(),
     readingTime: DesktopReadingTime? = null,
     modifier: Modifier = Modifier,
+    heroVisible: Boolean = false,
 ) {
     val link = remember(content) { desktopContentLink(content) }
     val status = remember(content.state) { desktopContentStatusLabel(content.state) }
     val rating = remember(content.rating) {
         content.rating.takeIf { it > 0f }?.let { String.format(Locale.getDefault(), "%.1f", it * 10f) }
     }
-    val altTitles = remember(content.altTitles) { content.altTitles.filter(String::isNotBlank) }
+    val altTitles = remember(content.altTitles, heroVisible) {
+        content.altTitles.filter(String::isNotBlank).let { if (heroVisible) it.drop(1) else it }
+    }
     val tags = remember(content.tags) { content.tags.map { it.title }.filter(String::isNotBlank).distinct().sorted() }
     var copied by remember(link) { mutableStateOf(false) }
     Surface(
@@ -94,7 +97,7 @@ internal fun DesktopDetailsInfo(
             Text(desktopText("details.info"), style = MaterialTheme.typography.titleMedium)
             // Android's details fact grid: icon + value in two columns, the label read out by the icon.
             val facts = buildList {
-                status?.let {
+                status?.takeUnless { heroVisible }?.let {
                     add(fact(desktopText("details.statusLabel"), it, desktopContentStateIcon(content.state),
                         "details-status"))
                 }

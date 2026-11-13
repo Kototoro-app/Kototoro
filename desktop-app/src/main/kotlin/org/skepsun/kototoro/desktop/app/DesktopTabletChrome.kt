@@ -458,6 +458,7 @@ internal fun DesktopTabletDetails(controller: DesktopController, state: DesktopA
                         title = content.title,
                         alternateTitlesText = content.altTitles.firstOrNull { it.isNotBlank() }.orEmpty(),
                         metadataSummary = metadataLine,
+                        onMetadataClick = { tab = DesktopDetailsTab.CHAPTERS },
                         heroClearanceHeight = if (expanded) 128.dp else 160.dp,
                         progressPercent = progressFraction,
                         sourceChips = {
@@ -662,7 +663,7 @@ internal fun DesktopTabletDetails(controller: DesktopController, state: DesktopA
                     )
                 }
                 DesktopDetailsInfo(content, enabled = !state.busy, warnings = state.sourceSettings,
-                    readingTime = state.detailsReadingTime)
+                    readingTime = state.detailsReadingTime, heroVisible = mediaStylePolicy.useCenteredHeroHeader)
                 DesktopDetailsRelated(controller, state)
             }
         }

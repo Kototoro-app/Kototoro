@@ -14,6 +14,8 @@ import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import androidx.compose.ui.unit.dp
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
+import org.skepsun.kototoro.core.source.SourceContent
+import org.skepsun.kototoro.core.source.SourceRef
 import org.skepsun.kototoro.core.ui.chapters.VideoEpisodePreviewItem
 import org.skepsun.kototoro.core.ui.chapters.VideoEpisodePreviewSection
 import org.skepsun.kototoro.core.ui.chapters.VideoLineOption
@@ -33,6 +35,31 @@ import org.skepsun.kototoro.reader.ui.compose.design.ReaderPanelIcons
 
 @OptIn(ExperimentalTestApi::class)
 class SharedDetailsComponentsTest {
+    @Test
+    fun `cinema supplementary facts omit status and alias already shown in hero`() =
+        runDesktopComposeUiTest(width = 420, height = 800) {
+            val content = SourceContent(
+                id = 7, title = "Cinema", altTitles = linkedSetOf("Hero alias", "Extra alias"),
+                url = "/work", publicUrl = "/work", rating = 0.8f, contentRating = null,
+                coverUrl = null, tags = emptySet(), state = "FINISHED", authors = emptySet(),
+                source = SourceRef("fixture", "en", "VIDEO"), chapters = null,
+            )
+            var cinema by mutableStateOf(true)
+            setContent {
+                DesktopTheme {
+                    DesktopDetailsInfo(content, enabled = true, heroVisible = cinema)
+                }
+            }
+            onNodeWithTag("details-status").assertDoesNotExist()
+            onNodeWithText("Hero alias", substring = true).assertDoesNotExist()
+            onNodeWithText("Extra alias").assertExists()
+            onNodeWithTag("details-rating").assertExists()
+            onNodeWithTag("details-copy-link").assertExists()
+            runOnIdle { cinema = false }
+            onNodeWithTag("details-status").assertExists()
+            onNodeWithText("Hero alias", substring = true).assertExists()
+        }
+
     @Test
     fun `a long description toggles on click and a short one stays plain text`() =
         runDesktopComposeUiTest(width = 380, height = 640) {
@@ -80,10 +107,11 @@ class SharedDetailsComponentsTest {
         }
 
     @Test
-    fun `video hero header triggers cover and primary play callbacks`() =
+    fun `video hero header triggers cover chapter and primary play callbacks`() =
         runDesktopComposeUiTest(width = 420, height = 640) {
             var coverTapped = false
             var playTapped = false
+            var chaptersTapped = false
             setContent {
                 DesktopTheme {
                     Surface {
@@ -93,6 +121,7 @@ class SharedDetailsComponentsTest {
                             metadataSummary = "已完结 · 28/28 · Madhouse",
                             progressPercent = 0.5f,
                             onCoverClick = { coverTapped = true },
+                            onMetadataClick = { chaptersTapped = true },
                             primaryPlayAction = {
                                 Button(onClick = { playTapped = true }, modifier = Modifier.testTag("play-btn")) {
                                     Text("Play")
@@ -107,9 +136,11 @@ class SharedDetailsComponentsTest {
             onNodeWithText("50%").assertExists()
             onNodeWithTag("video-hero-cover-tap").performClick()
             onNodeWithTag("play-btn").performClick()
+            onNodeWithTag("video-hero-metadata-line").performClick()
             runOnIdle {
                 assertTrue(coverTapped)
                 assertTrue(playTapped)
+                assertTrue(chaptersTapped)
             }
         }
 

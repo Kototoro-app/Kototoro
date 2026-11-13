@@ -68,6 +68,7 @@ fun VideoHeroHeaderContent(
     secondaryTextColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
     progressPercent: Float? = null,
     onCoverClick: (() -> Unit)? = null,
+    onMetadataClick: (() -> Unit)? = null,
     onHeroBoundsChanged: ((topPx: Float, bottomPx: Float) -> Unit)? = null,
     posterSlot: (@Composable () -> Unit)? = null,
     sourceChips: @Composable () -> Unit = {},
@@ -193,6 +194,15 @@ fun VideoHeroHeaderContent(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(top = 2.dp)
+                            .then(
+                                if (onMetadataClick != null) {
+                                    Modifier
+                                        .tvFocusable(shape = RoundedCornerShape(8.dp), addFocusTarget = false)
+                                        .clickable(role = Role.Button, onClick = onMetadataClick)
+                                } else {
+                                    Modifier
+                                },
+                            )
                             .testTag("video-hero-metadata-line"),
                     )
                 }
