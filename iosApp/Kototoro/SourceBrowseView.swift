@@ -809,7 +809,7 @@ enum LocalImport {
                 let content = try await runtime.importLocal(path: url.path, fileName: url.lastPathComponent)
                 imported.append(content.title)
             } catch {
-                failed.append("\(url.lastPathComponent)：\(SourceErrorText.describe(error))")
+                failed.append(String(localized: "\(url.lastPathComponent)：\(SourceErrorText.describe(error))"))
             }
         }
         if failed.isEmpty { return imported.count > 1 ? String(localized: "已导入 \(imported.count) 个文件") : nil }

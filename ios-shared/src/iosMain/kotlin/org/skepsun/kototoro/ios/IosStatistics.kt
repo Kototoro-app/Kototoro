@@ -138,7 +138,8 @@ class IosStatistics internal constructor(private val owner: IosLibrary) {
                 val latest = sessionsById[id].orEmpty().maxByOrNull { it.endAt }
                 val lastAt = maxOf(stats?.lastActivityAt ?: 0, recent?.updatedAt ?: 0)
                 val chapterId = latest?.endChapterId ?: recent?.chapterId
-                val title = chapters[id to chapterId]?.title?.takeIf(String::isNotBlank)
+                val title = chapters[id to chapterId]?.let { localChapterTitle(it.source, it.title, it.sourceData) }
+                    ?.takeIf(String::isNotBlank)
                 val localDay = Instant.fromEpochMilliseconds(lastAt).toLocalDateTime(zone).date
                 IosStatsWork(content, stats, lastAt, title, latest?.endPercent ?: recent?.percent,
                     ReadingDayStats(localDay.toString(), localDay.atStartOfDayIn(zone).toEpochMilliseconds(), 0),
@@ -159,7 +160,8 @@ class IosStatistics internal constructor(private val owner: IosLibrary) {
                     val timestamp = minOf(now, dayEnd, latest?.endAt ?: legacyEnd ?: (day.startedAt + 1)) - 1
                     // Videos are played, not read.
                     val video = work.content.mediaKind == "VIDEO"
-                    val detail = latest?.let { chapters[it.mangaId to it.endChapterId]?.title }
+                    val detail = latest?.let { chapters[it.mangaId to it.endChapterId] }
+                        ?.let { localChapterTitle(it.source, it.title, it.sourceData) }
                         ?: if (!work.hasTimedStats) work.chapterTitle
                         else localized(if (video) "旧版播放统计" else "旧版阅读统计")
                     timeline += IosTimelineEvent("read-${work.content.id}-${day.date}", work.content,

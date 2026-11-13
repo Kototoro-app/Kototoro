@@ -275,8 +275,9 @@ private struct ContentSpacePanel: View {
                 .padding(.horizontal, 16)
                 .padding(.bottom, 14)
             } else {
-                Text(kind.isEmpty ? "汇总查看漫画、小说与视频" : ContentSpace.isCustom(kind)
-                     ? (CustomSpaceStore.shared.space(kind).map(CustomSpaceText.summary) ?? "") : "浏览来源与作品库")
+                Text(kind.isEmpty ? String(localized: "汇总查看漫画、小说与视频") : ContentSpace.isCustom(kind)
+                     ? (CustomSpaceStore.shared.space(kind).map(CustomSpaceText.summary) ?? "")
+                     : String(localized: "浏览来源与作品库"))
                     .font(.caption)
                     .padding(.horizontal, 16)
                     .padding(.bottom, 14)

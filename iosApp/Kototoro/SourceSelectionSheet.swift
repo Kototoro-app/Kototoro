@@ -201,7 +201,7 @@ private struct SourceFilterChips: View {
         VStack(alignment: .leading, spacing: 6) {
             Text(label).font(.caption).foregroundStyle(.secondary)
             FlowLayout(spacing: 6) {
-                chip("全部", chosen: selected.isEmpty, identifier(identifierKey(""))) {
+                chip(String(localized: "全部"), chosen: selected.isEmpty, identifier(identifierKey(""))) {
                     selected.removeAll()
                 }
                 ForEach(options, id: \.id) { option in

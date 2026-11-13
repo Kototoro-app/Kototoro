@@ -19,6 +19,55 @@ import kotlin.test.assertTrue
 class IosLocalImportTest {
 
     @Test
+    fun generatedLocalTitlesKeepTheirIdentityAcrossHistoryAndBookmarks() = runBlocking {
+        val dir = NSTemporaryDirectory() + NSUUID().UUIDString
+        FileSystem.SYSTEM.createDirectories(dir.toPath())
+        try {
+            val file = "$dir/plain.txt"
+            FileSystem.SYSTEM.write(file.toPath()) { writeUtf8("A novel without chapter headings.") }
+            val sources = IosSources(null, null, "$dir/local", "$dir/images")
+            val work = sources.details(sources.importLocal(file, "plain.txt"))
+            val chapter = work.chapters.single()
+            assertEquals("第 1 部分", chapter.value.title)
+            assertEquals(localized("第 %@ 部分", 1), chapter.title)
+            // Existing installs have the same chapter identity but no generated-title metadata yet.
+            val legacy = IosSourceContent(work.value.copy(chapters = work.value.chapters!!.map { it.copy(sourceData = null) }))
+            val legacyChapter = legacy.chapters.single()
+            val library = IosLibrary("$dir/library.db")
+            try {
+                library.setFavourite(legacy, true)
+                library.recordPosition(legacy, legacyChapter, 0, 1, 0f)
+                library.toggleNovelBookmark(legacy, legacyChapter, 0, 1, "note")
+                val position = library.position(legacy)
+                library.saveDetails(work)
+                assertEquals(position, library.position(work))
+                assertEquals(chapter.title, library.history().single().lastChapterTitle)
+                val bookmark = library.bookmarkGroups().single().bookmarks.single()
+                assertEquals(chapter.title, bookmark.chapterTitle)
+                library.removeBookmark(work, bookmark)
+                assertTrue(library.bookmarkGroups().isEmpty())
+            } finally { library.close() }
+            val reopened = IosLibrary("$dir/library.db")
+            try { assertEquals(chapter.title, reopened.history().single().lastChapterTitle) }
+            finally { reopened.close() }
+            assertEquals(chapter.id, sources.details(work).chapters.single().id)
+        } finally { FileSystem.SYSTEM.deleteRecursively(dir.toPath()) }
+    }
+
+    @Test
+    fun emptyTextImportUsesTheAppErrorTranslation() = runBlocking {
+        val dir = NSTemporaryDirectory() + NSUUID().UUIDString
+        FileSystem.SYSTEM.createDirectories(dir.toPath())
+        try {
+            val file = "$dir/empty.txt"
+            FileSystem.SYSTEM.write(file.toPath()) { writeUtf8("") }
+            val sources = IosSources(null, null, "$dir/local", "$dir/images")
+            val error = runCatching { sources.importLocal(file, "empty.txt") }.exceptionOrNull()
+            assertEquals(localized("文本文件是空的"), error?.message)
+        } finally { FileSystem.SYSTEM.deleteRecursively(dir.toPath()) }
+    }
+
+    @Test
     fun importedArchiveAndLegacyTextReadThroughTheSourceScreens() = runBlocking {
         val dir = NSTemporaryDirectory() + NSUUID().UUIDString
         check(NSFileManager.defaultManager.createDirectoryAtPath(dir, true, null, null))

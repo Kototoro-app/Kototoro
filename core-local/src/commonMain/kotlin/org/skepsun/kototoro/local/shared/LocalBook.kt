@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.local.shared
 
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -42,12 +43,35 @@ data class LocalChapter(
     val textStart: Int = 0,
     val textEnd: Int = 0,
     val branch: String? = null,
+    /** Presentation metadata; [title] remains the stable source title used by stored records. */
+    val generatedTitle: LocalGeneratedTitle? = null,
 )
+
+@Serializable
+enum class LocalGeneratedTitleKind { PREFACE, PART, SECTION, CHAPTER }
+
+/** A generated title's type and ordinal, stored in the local chapter's existing source-data field. */
+@Serializable
+data class LocalGeneratedTitle(val kind: LocalGeneratedTitleKind, val ordinal: Int = 0) {
+    fun sourceData(): String = JSON.encodeToString(LocalTitleMetadata.serializer(), LocalTitleMetadata(this))
+
+    companion object {
+        private val JSON = Json { ignoreUnknownKeys = true }
+
+        fun fromSourceData(data: String?): LocalGeneratedTitle? = data?.let {
+            runCatching { JSON.decodeFromString(LocalTitleMetadata.serializer(), it).kototoroLocalTitle }.getOrNull()
+        }?.takeIf { it.kind == LocalGeneratedTitleKind.PREFACE || it.ordinal > 0 }
+    }
+}
+
+@Serializable
+private data class LocalTitleMetadata(val kototoroLocalTitle: LocalGeneratedTitle)
 
 /** Reads CBZ/ZIP, EPUB, TXT and video metadata; [decodeLegacyText] handles TXT files that are not UTF-8. */
 class LocalBookReader(
     private val fileSystem: FileSystem = localFileSystem,
     private val decodeLegacyText: (ByteArray) -> String? = { null },
+    private val localizeError: (String) -> String = { it },
 ) {
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 
@@ -61,7 +85,7 @@ class LocalBookReader(
             LocalFormat.EPUB -> readEpub(file, fallbackTitle, splitSections)
             LocalFormat.TXT -> readText(file, fallbackTitle)
             LocalFormat.VIDEO -> {
-                require((fileSystem.metadata(file).size ?: 0) > 0) { "视频文件是空的" }
+                require((fileSystem.metadata(file).size ?: 0) > 0) { localizeError("视频文件是空的") }
                 LocalBook(fallbackTitle, emptyList(), null, emptyList(), null,
                     listOf(LocalChapter(fallbackTitle, 1f)))
             }
@@ -75,7 +99,7 @@ class LocalBookReader(
 
     /** The chapter's XHTML body, with its pictures extracted next to the work and referenced as file URLs. */
     fun chapterContent(file: Path, part: LocalChapter, publishImage: (String, ByteArray) -> String): SourceChapterContent {
-        val document = part.document ?: throw IllegalArgumentException("章节不存在")
+        val document = part.document ?: throw IllegalArgumentException(localizeError("章节不存在"))
         val xhtml = entry(file, document).decodeToString()
         val whole = Regex("<body[^>]*>([\\s\\S]*)</body>", RegexOption.IGNORE_CASE)
             .find(xhtml)?.groupValues?.get(1) ?: xhtml
@@ -155,7 +179,7 @@ class LocalBookReader(
                 ))
             }
         }
-        require(chapters.isNotEmpty()) { "压缩包里没有图片" }
+        require(chapters.isNotEmpty()) { localizeError("压缩包里没有图片") }
         val coverEntry = index?.string("cover_entry")?.takeIf { it in files }
         return LocalBook(
             title = title,
@@ -188,11 +212,13 @@ class LocalBookReader(
                 else LocalFiles.baseName(entry).matches(regex)
             }
             if (pages.isEmpty()) return@mapNotNull null
+            val name = chapter.string("name")?.takeIf(String::isNotBlank)
             order to LocalChapter(
-                title = chapter.string("name")?.takeIf(String::isNotBlank) ?: "第 $order 章",
+                title = name ?: "第 $order 章",
                 number = chapter.float("number") ?: order.toFloat(),
                 pages = pages,
                 branch = branch,
+                generatedTitle = if (name == null) LocalGeneratedTitle(LocalGeneratedTitleKind.CHAPTER, order) else null,
             )
         }.sortedBy { it.first }.map { it.second }
     }
@@ -234,10 +260,11 @@ class LocalBookReader(
         withChapters: Boolean,
     ): LocalBook {
         fun read(entry: String): String? = runCatching { zip.read(("/$entry").toPath()) { readUtf8() } }.getOrNull()
-        val container = read("META-INF/container.xml") ?: throw IllegalArgumentException("EPUB 缺少 container.xml")
+        val container = read("META-INF/container.xml")
+            ?: throw IllegalArgumentException(localizeError("EPUB 缺少 container.xml"))
         val opfPath = LocalXml.tags(container, "rootfile").firstNotNullOfOrNull { it["full-path"] }
-            ?: throw IllegalArgumentException("EPUB 没有内容清单")
-        val opf = read(opfPath) ?: throw IllegalArgumentException("EPUB 内容清单无法读取")
+            ?: throw IllegalArgumentException(localizeError("EPUB 没有内容清单"))
+        val opf = read(opfPath) ?: throw IllegalArgumentException(localizeError("EPUB 内容清单无法读取"))
         val manifest = LocalXml.tags(opf, "item").mapNotNull { item ->
             val id = item["id"] ?: return@mapNotNull null
             val href = item["href"] ?: return@mapNotNull null
@@ -258,15 +285,17 @@ class LocalBookReader(
         if (!withChapters) return metadata
         val spine = LocalXml.tags(opf, "itemref").mapNotNull { manifest[it["idref"]] }
             .filter { it.mediaType.contains("html") || it.href.endsWith("html", ignoreCase = true) }
-        require(spine.isNotEmpty()) { "EPUB 没有正文" }
+        require(spine.isNotEmpty()) { localizeError("EPUB 没有正文") }
         val toc = tableOfContents(manifest.values, ::read)
         val chapters = mutableListOf<LocalChapter>()
         spine.forEach { item ->
             val entries = toc.filter { it.document == item.href }
             val sections = if (splitSections && entries.size > 1) sections(entries, read(item.href)) else emptyList()
             if (sections.size < 2) {
-                chapters += LocalChapter(entries.firstOrNull()?.title ?: "第 ${chapters.size + 1} 节",
-                    (chapters.size + 1).toFloat(), document = item.href)
+                val title = entries.firstOrNull()?.title
+                val ordinal = chapters.size + 1
+                chapters += LocalChapter(title ?: "第 $ordinal 节", ordinal.toFloat(), document = item.href,
+                    generatedTitle = if (title == null) LocalGeneratedTitle(LocalGeneratedTitleKind.SECTION, ordinal) else null)
                 return@forEach
             }
             sections.forEachIndexed { index, (title, anchor) ->
@@ -327,7 +356,7 @@ class LocalBookReader(
 
     private fun readText(file: Path, fallbackTitle: String): LocalBook {
         val text = text(file)
-        require(text.isNotBlank()) { "文本文件是空的" }
+        require(text.isNotBlank()) { localizeError("文本文件是空的") }
         return LocalBook(fallbackTitle, emptyList(), null, emptyList(), null, splitText(text))
     }
 
@@ -347,7 +376,8 @@ class LocalBookReader(
                 val chapters = mutableListOf<LocalChapter>()
                 val preface = text.substring(0, headings.first().range.first)
                 if (preface.isNotBlank() && preface.trim().length > 20) {
-                    chapters += LocalChapter("前言", 0f, textStart = 0, textEnd = headings.first().range.first)
+                    chapters += LocalChapter("前言", 0f, textStart = 0, textEnd = headings.first().range.first,
+                        generatedTitle = LocalGeneratedTitle(LocalGeneratedTitleKind.PREFACE))
                 }
                 headings.forEachIndexed { index, match ->
                     val end = headings.getOrNull(index + 1)?.range?.first ?: text.length
@@ -364,8 +394,9 @@ class LocalBookReader(
                     val lineEnd = text.indexOf('\n', end)
                     end = if (lineEnd == -1 || lineEnd - end > PART_LENGTH / 2) end else lineEnd + 1
                 }
-                chapters += LocalChapter("第 ${chapters.size + 1} 部分", (chapters.size + 1).toFloat(),
-                    textStart = start, textEnd = end)
+                val ordinal = chapters.size + 1
+                chapters += LocalChapter("第 $ordinal 部分", ordinal.toFloat(), textStart = start, textEnd = end,
+                    generatedTitle = LocalGeneratedTitle(LocalGeneratedTitleKind.PART, ordinal))
                 start = end
             }
             return chapters

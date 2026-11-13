@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Puts document-picker fixtures into the simulator's "On My iPhone" storage:
   * fixture_mihon.tachibk — a small Mihon backup (gzip + protobuf), for BackupFlowTests;
-  * fixture_comic.cbz / fixture_novel.txt — a two-page comic and a GB18030 novel, for LocalImportTests.
+  * fixture_comic.cbz / fixture_novel.txt / fixture_empty_localized.txt — local import fixtures.
+  * fixture_plain_english.txt / fixture_future_backup.zip — English localization regressions.
   * fixture_reader_long.cbz / fixture_reader_error.cbz — long-page restore and neighbour-failure regressions.
   * fixture_reader_chapters.cbz / fixture_reader_download.cbz — automatic chapter turns and offline repair.
   * fixture_reader_directory.cbz — scroll-to-panel handoff through a long chapter directory.
@@ -228,6 +229,13 @@ for storage in storages:
                                  png(720, heights[(page - 1) % len(heights)], (180 + page % 3 * 20, 40, 40)))
     with open(os.path.join(storage, "fixture_novel.txt"), "wb") as file:
         file.write(novel.encode("gb18030"))
+    with open(os.path.join(storage, "fixture_empty_localized.txt"), "w", encoding="utf-8"):
+        pass
+    with open(os.path.join(storage, "fixture_plain_english.txt"), "w", encoding="utf-8") as file:
+        file.write("An English novel without chapter headings.\n" * 20)
+    with zipfile.ZipFile(os.path.join(storage, "fixture_future_backup.zip"), "w") as archive:
+        archive.writestr("index", '[{"app_id":"org.skepsun.kototoro","app_version":1,'
+                         '"transport_generation":999,"semantic_schema_version":999,"created_at":1}]')
     pages = [text_page([(80, 120, ["Where are you going?", "Wait for me!"]), (300, 760, ["The train leaves", "at noon."])]),
              text_page([(120, 300, ["I found the key", "under the bridge."])])]
     try:

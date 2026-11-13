@@ -59,6 +59,7 @@ data class LocalItem(
  * Imported works as a [SourceRuntime] under Android's local source names, so browsing, details, the readers,
  * favourites and history treat them like any other source. Files live in `[root]/items/<id>/`; pictures handed to
  * the readers are written content-addressed to [imageDirectory] (`<sha256>.img`), as the other runtimes do.
+ * [localizeError] translates error keys; `%@` is a placeholder for a file or source name.
  */
 class LocalSourceRuntime(
     private val root: Path,
@@ -66,13 +67,17 @@ class LocalSourceRuntime(
     private val fileSystem: FileSystem = localFileSystem,
     decodeLegacyText: (ByteArray) -> String? = { null },
     private val now: () -> Long = { Clock.System.now().toEpochMilliseconds() },
+    private val localizeError: (String) -> String = { it },
 ) : SourceRuntime {
-    private val reader = LocalBookReader(fileSystem, decodeLegacyText)
+    private val reader = LocalBookReader(fileSystem, decodeLegacyText, localizeError)
     private val json = Json { ignoreUnknownKeys = true }
     private val mutex = Mutex()
     private val importMutex = Mutex()
     private val books = HashMap<Long, LocalBook>()
     private var cachedText: Pair<Long, String>? = null
+
+    private fun localizeError(key: String, argument: String): String =
+        ERROR_ARGUMENT.replace(localizeError(key)) { argument }
 
     override suspend fun getSources(): List<SourceRef> = listOf(MANGA, NOVEL, VIDEO)
 
@@ -111,18 +116,19 @@ class LocalSourceRuntime(
         val (item, index) = chapterOf(chapter.url)
         if (item.format == LocalFormat.VIDEO && item.episodes.isNotEmpty()) {
             val name = item.episodes.getOrNull(index)
-            require(name != null && chapter.source == VIDEO) { "视频章节无效" }
+            require(name != null && chapter.source == VIDEO) { localizeError("视频章节无效") }
             val path = episodeFile(item, index)
-            require(fileSystem.exists(path)) { "本地视频已被删除" }
+            require(fileSystem.exists(path)) { localizeError("本地视频已被删除") }
             return listOf(SourcePage(stableId(chapter.url), fileUrl(path), null, VIDEO))
         }
         if (item.format == LocalFormat.VIDEO) {
-            require(index == 0 && chapter.source == VIDEO) { "视频章节无效" }
+            require(index == 0 && chapter.source == VIDEO) { localizeError("视频章节无效") }
             val path = file(item)
-            require(fileSystem.exists(path)) { "本地视频已被删除" }
+            require(fileSystem.exists(path)) { localizeError("本地视频已被删除") }
             return listOf(SourcePage(stableId(chapter.url), fileUrl(path), null, VIDEO))
         }
-        val pages = book(item).chapters.getOrNull(index)?.pages ?: throw IllegalArgumentException("章节不存在")
+        val pages = book(item).chapters.getOrNull(index)?.pages
+            ?: throw IllegalArgumentException(localizeError("章节不存在"))
         return pages.map { entry ->
             val url = "$SCHEME${item.id}/$index/$entry"
             SourcePage(stableId(url), url, null, chapter.source)
@@ -134,7 +140,8 @@ class LocalSourceRuntime(
     override suspend fun getChapterContent(chapter: SourceChapter, nextChapterUrl: String?): SourceChapterContent =
         withContext(Dispatchers.IO) {
             val (item, index) = chapterOf(chapter.url)
-            val part = book(item).chapters.getOrNull(index) ?: throw IllegalArgumentException("章节不存在")
+            val part = book(item).chapters.getOrNull(index)
+                ?: throw IllegalArgumentException(localizeError("章节不存在"))
             when (item.format) {
                 LocalFormat.TXT -> SourceChapterContent(textHtml(text(item).substring(part.textStart, part.textEnd)))
                 LocalFormat.EPUB -> epubChapter(item, part)
@@ -144,7 +151,8 @@ class LocalSourceRuntime(
 
     override suspend fun fetchImage(page: SourcePage): SourceImageArtifact = withContext(Dispatchers.IO) {
         val rest = page.url.removePrefix(SCHEME)
-        val id = rest.substringBefore('/').toLongOrNull() ?: throw IllegalArgumentException("页面地址无效")
+        val id = rest.substringBefore('/').toLongOrNull()
+            ?: throw IllegalArgumentException(localizeError("页面地址无效"))
         val entry = rest.substringAfter('/').substringAfter('/')
         val stored = store(reader.entry(file(item(id)), entry))
         SourceImageArtifact(page.source, page.id, stored.first, stored.second, stored.third, LocalFiles.mimeType(entry))
@@ -166,12 +174,12 @@ class LocalSourceRuntime(
 
     private suspend fun importFile(source: Path, fileName: String): SourceContent {
         require(LocalFiles.extension(fileName) != "m3u8") {
-            "暂不支持导入本地 M3U8 播放列表，请选择完整视频文件"
+            localizeError("暂不支持导入本地 M3U8 播放列表，请选择完整视频文件")
         }
         val format = LocalFormat.of(fileName) ?: throw IllegalArgumentException(
-            "不支持的文件类型：$fileName（支持 CBZ/ZIP、EPUB、TXT 和视频文件）",
+            localizeError("不支持的文件类型：%@（支持 CBZ/ZIP、EPUB、TXT 和视频文件）", fileName),
         )
-        require(fileSystem.metadata(source).isRegularFile) { "请选择文件" }
+        require(fileSystem.metadata(source).isRegularFile) { localizeError("请选择文件") }
         val id = Random.nextLong(1, Long.MAX_VALUE)
         val directory = root / ITEMS / id.toString()
         fileSystem.createDirectories(directory)
@@ -211,7 +219,7 @@ class LocalSourceRuntime(
             val videos = files.filter { (path, name) ->
                 LocalFormat.of(name) == LocalFormat.VIDEO && fileSystem.metadata(path).isRegularFile
             }.sortedWith { a, b -> NaturalOrder.compare(a.second, b.second) }
-            require(videos.isNotEmpty()) { "文件夹里没有可导入的视频文件" }
+            require(videos.isNotEmpty()) { localizeError("文件夹里没有可导入的视频文件") }
             val id = Random.nextLong(1, Long.MAX_VALUE)
             val directory = root / ITEMS / id.toString()
             val episodes = directory / EPISODES
@@ -223,7 +231,7 @@ class LocalSourceRuntime(
                     val target = episodes / "$index.${LocalFiles.extension(name)}"
                     val input = HashingSource.sha256(fileSystem.source(path))
                     val written = input.use { fileSystem.sink(target).buffer().use { output -> output.writeAll(it) } }
-                    require(written > 0) { "视频文件是空的：$name" }
+                    require(written > 0) { localizeError("视频文件是空的：%@", name) }
                     size += written
                     identity.append(name).append(':').append(written).append(':').append(input.hash.hex()).append('\n')
                 }
@@ -272,7 +280,7 @@ class LocalSourceRuntime(
 
     private suspend fun item(id: Long): LocalItem = withContext(Dispatchers.IO) {
         val meta = root / ITEMS / id.toString() / META
-        if (!fileSystem.exists(meta)) throw IllegalArgumentException("本地作品已被删除")
+        if (!fileSystem.exists(meta)) throw IllegalArgumentException(localizeError("本地作品已被删除"))
         json.decodeFromString(LocalItem.serializer(), fileSystem.read(meta) { readUtf8() })
     }
 
@@ -304,8 +312,10 @@ class LocalSourceRuntime(
 
     private suspend fun chapterOf(url: String): Pair<LocalItem, Int> {
         val rest = url.removePrefix(SCHEME)
-        val id = rest.substringBefore('/').toLongOrNull() ?: throw IllegalArgumentException("章节地址无效")
-        val index = rest.substringAfter('/').substringBefore('/').toIntOrNull() ?: throw IllegalArgumentException("章节地址无效")
+        val id = rest.substringBefore('/').toLongOrNull()
+            ?: throw IllegalArgumentException(localizeError("章节地址无效"))
+        val index = rest.substringAfter('/').substringBefore('/').toIntOrNull()
+            ?: throw IllegalArgumentException(localizeError("章节地址无效"))
         return item(id) to index
     }
 
@@ -333,14 +343,14 @@ class LocalSourceRuntime(
             chapters = book?.chapters?.mapIndexed { index, chapter ->
                 val chapterUrl = "$url/$index"
                 SourceChapter(stableId(chapterUrl), chapter.title, chapter.number, 0, chapterUrl, null, item.importedAt,
-                    chapter.branch, source)
+                    chapter.branch, source, sourceData = chapter.generatedTitle?.sourceData())
             },
         )
     }
 
     /** Writes the bytes as `<sha256>.img` once; returns path, hash and size. */
     private fun store(bytes: ByteArray): Triple<String, String, Long> {
-        require(bytes.isNotEmpty()) { "图片是空的" }
+        require(bytes.isNotEmpty()) { localizeError("图片是空的") }
         val hash = bytes.toByteString().sha256().hex()
         val name = "$hash.img"
         fileSystem.createDirectories(imageDirectory)
@@ -371,10 +381,12 @@ class LocalSourceRuntime(
         MANGA.name -> MANGA
         NOVEL.name -> NOVEL
         VIDEO.name -> VIDEO
-        else -> throw IllegalArgumentException("未知的本地来源：$sourceName")
+        else -> throw IllegalArgumentException(localizeError("未知的本地来源：%@", sourceName))
     }
 
     companion object {
+        private val ERROR_ARGUMENT = Regex("%(?:1\\$)?@")
+
         /** The [LocalItem.chapterScheme] of new imports. */
         const val CHAPTER_SCHEME = 2
 

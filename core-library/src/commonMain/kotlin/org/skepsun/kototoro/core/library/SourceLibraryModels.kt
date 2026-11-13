@@ -17,6 +17,7 @@ data class SourceBookmark(
      * there; the bookmarks page saves chapters too and fills it, because its sections hold works that are not open.
      */
     val chapterTitle: String = "",
+    val chapterSourceData: String? = null,
 )
 
 data class SourceLibraryEntry(
@@ -45,7 +46,7 @@ data class SourceBookmarkGroup(
     val bookmarks: List<SourceBookmark>,
 )
 
-data class SourceLibraryChapter(val title: String, val number: Float)
+data class SourceLibraryChapter(val title: String, val number: Float, val sourceData: String? = null)
 
 data class SourceLibraryCategory(val id: Long, val title: String)
 

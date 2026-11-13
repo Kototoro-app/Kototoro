@@ -38,6 +38,8 @@ import org.skepsun.kototoro.bookmarks.domain.novelBookmarkChapterProgress
 import org.skepsun.kototoro.bookmarks.domain.resolveNovelBookmarkPosition
 import org.skepsun.kototoro.local.shared.LocalSourceRuntime
 import org.skepsun.kototoro.local.shared.LocalFormat
+import org.skepsun.kototoro.local.shared.LocalGeneratedTitle
+import org.skepsun.kototoro.local.shared.LocalGeneratedTitleKind
 import org.skepsun.kototoro.reader.novel.NovelDocumentBlock
 import org.skepsun.kototoro.reader.novel.NovelPageSegment
 import org.skepsun.kototoro.reader.novel.NovelParagraphStyle
@@ -563,9 +565,22 @@ private fun bookChapter(parent: SourceChapter, index: Int, count: Int, title: St
     ebookFormats = emptyList(),
 )
 
+/** Only titles explicitly marked as generated may be translated; source-supplied titles stay untouched. */
+internal fun localChapterTitle(source: String, title: String?, sourceData: String?): String? {
+    if (!LocalSourceRuntime.owns(source)) return title
+    val generated = LocalGeneratedTitle.fromSourceData(sourceData) ?: return title
+    return when (generated.kind) {
+        LocalGeneratedTitleKind.PREFACE -> localized("前言")
+        LocalGeneratedTitleKind.PART -> localized("第 %@ 部分", generated.ordinal)
+        LocalGeneratedTitleKind.SECTION -> localized("第 %@ 节", generated.ordinal)
+        LocalGeneratedTitleKind.CHAPTER -> localized("第 %@ 章", generated.ordinal)
+    }
+}
+
 class IosSourceChapter internal constructor(internal val value: SourceChapter) {
     val id: String get() = value.id.toString()
-    val title: String get() = value.title?.takeIf(String::isNotBlank) ?: localized("第 %@ 话", chapterNumber(value.number))
+    val title: String get() = localChapterTitle(value.source.name, value.title, value.sourceData)
+        ?.takeIf(String::isNotBlank) ?: localized("第 %@ 话", chapterNumber(value.number))
     val branch: String? get() = value.branch
     val number: Float get() = value.number
     val volume: Int get() = value.volume
@@ -622,7 +637,8 @@ class IosSources(
     }
     private val cms = videoSources?.let { store -> MacCmsSourceRuntime(store.http) { store.stored() } }
     private val local = if (localDirectory == null || imageDirectory == null) null else
-        LocalSourceRuntime(localDirectory.toPath(), imageDirectory.toPath(), decodeLegacyText = ::decodeLegacyText)
+        LocalSourceRuntime(localDirectory.toPath(), imageDirectory.toPath(), decodeLegacyText = ::decodeLegacyText,
+            localizeError = { localized(it) })
     internal val runtime = RoutedSourceRuntime(
         listOfNotNull(
             local?.let { RoutedSourceRuntime.Route(LocalSourceRuntime::owns, it) },

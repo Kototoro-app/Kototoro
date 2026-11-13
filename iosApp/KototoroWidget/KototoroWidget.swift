@@ -44,9 +44,12 @@ struct RecentProvider: TimelineProvider {
     }
 
     static let sample = [
-        WidgetWork(id: "sample.1", title: "葬送的芙莉莲", detail: "第 120 话", progress: 0.62, cover: nil),
-        WidgetWork(id: "sample.2", title: "三体", detail: "第 12 章", progress: 0.3, cover: nil),
-        WidgetWork(id: "sample.3", title: "间谍过家家", detail: "第 8 集", progress: 0.85, cover: nil),
+        WidgetWork(id: "sample.1", title: String(localized: "葬送的芙莉莲"),
+                   detail: String(localized: "第 120 话"), progress: 0.62, cover: nil),
+        WidgetWork(id: "sample.2", title: String(localized: "三体"),
+                   detail: String(localized: "第 12 章"), progress: 0.3, cover: nil),
+        WidgetWork(id: "sample.3", title: String(localized: "间谍过家家"),
+                   detail: String(localized: "第 8 集"), progress: 0.85, cover: nil),
     ]
 }
 

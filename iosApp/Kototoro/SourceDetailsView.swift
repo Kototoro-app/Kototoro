@@ -844,7 +844,8 @@ struct SourceDetailsView: View {
         Button { managingTracking = true } label: {
             HStack(spacing: 5) {
                 Image(systemName: "text.book.closed").font(.caption2)
-                Text(shown.metadataSiteTitle.map { "追踪 · \($0)" } ?? "追踪与资料").font(.caption.weight(.medium))
+                Text(shown.metadataSiteTitle.map { String(localized: "追踪 · \($0)") }
+                     ?? String(localized: "追踪与资料")).font(.caption.weight(.medium))
                 Image(systemName: "chevron.right").font(.caption2.weight(.bold)).imageScale(.small)
             }
             .padding(.horizontal, 9).padding(.vertical, 4)

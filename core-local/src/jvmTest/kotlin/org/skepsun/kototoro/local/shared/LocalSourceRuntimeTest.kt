@@ -218,8 +218,47 @@ class LocalSourceRuntimeTest {
         val text = (1..3000).joinToString("\n") { "第$it 行的内容" }
         val parts = LocalBookReader.splitText(text)
         assertTrue(parts.size > 1)
+        assertEquals("第 1 部分", parts.first().title)
+        assertEquals(LocalGeneratedTitle(LocalGeneratedTitleKind.PART, 1), parts.first().generatedTitle)
         assertEquals(text.length, parts.last().textEnd)
         parts.zipWithNext().forEach { (a, b) -> assertEquals(a.textEnd, b.textStart) }
+    }
+
+    @Test
+    fun generatedTitleMetadataKeepsTheSourceTitleAndChapterIdentity() = runTest {
+        val file = File(dir, "plain.txt").apply { writeText("A novel without chapter headings.") }.toOkioPath()
+        val runtime = runtime()
+        val work = runtime.import(file, "plain.txt")
+        val chapter = runtime.getDetails(work, SourceDetailsFetchMode.ALLOW_CACHE).chapters!!.single()
+        assertEquals("第 1 部分", chapter.title)
+        assertEquals(LocalGeneratedTitle(LocalGeneratedTitleKind.PART, 1), LocalGeneratedTitle.fromSourceData(chapter.sourceData))
+        val reopened = runtime().getDetails(work, SourceDetailsFetchMode.ALLOW_CACHE).chapters!!.single()
+        assertEquals(chapter.id, reopened.id)
+        assertEquals(chapter.url, reopened.url)
+        val authored = LocalBookReader.splitText("前言\nA foreword.\n第一章 正文\nA chapter.")
+        assertEquals("前言", authored.first().title)
+        assertNull(authored.first().generatedTitle)
+        assertNull(LocalGeneratedTitle.fromSourceData("{\"line\":\"高清\"}"))
+    }
+
+    @Test
+    fun emptyTextImportReportsTheLocalizedError() = runTest {
+        val file = File(dir, "empty.txt").apply { writeText("") }.toOkioPath()
+        val runtime = LocalSourceRuntime(File(dir, "store").toOkioPath(), File(dir, "images").toOkioPath(),
+            localizeError = { if (it == "文本文件是空的") "Text file is empty" else it })
+        val error = runCatching { runtime.import(file, "empty.txt") }.exceptionOrNull()
+        assertEquals("Text file is empty", error?.message)
+        val original = runCatching { runtime().import(file, "empty.txt") }.exceptionOrNull()
+        assertEquals("文本文件是空的", original?.message)
+    }
+
+    @Test
+    fun localizedImportErrorsPreserveTheFileName() = runTest {
+        val file = File(dir, "unsupported-%@.xyz").toOkioPath()
+        val runtime = LocalSourceRuntime(File(dir, "store").toOkioPath(), File(dir, "images").toOkioPath(),
+            localizeError = { "Unsupported file: %1\$@" })
+        val error = runCatching { runtime.import(file, "unsupported-%@.xyz") }.exceptionOrNull()
+        assertEquals("Unsupported file: unsupported-%@.xyz", error?.message)
     }
 
     @Test

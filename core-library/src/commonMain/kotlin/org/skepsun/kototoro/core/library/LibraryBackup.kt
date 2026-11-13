@@ -46,7 +46,10 @@ interface LibraryBackupOutput {
 }
 
 /** Library transport over shared backup DTOs and the existing v84 tables; merge never clears local tables. */
-class LibraryBackup(private val database: MangaDatabase) {
+class LibraryBackup(
+    private val database: MangaDatabase,
+    private val localizeError: (String) -> String = { it },
+) {
 
     suspend fun export(output: LibraryBackupOutput, appId: String, appVersion: Int, now: Long) {
         database.useWriterConnection { connection -> connection.immediateTransaction {
@@ -115,29 +118,29 @@ class LibraryBackup(private val database: MangaDatabase) {
             val dao = database.getFavouriteCategoriesDao()
             archive.rows(BackupSection.CATEGORIES, CategoryBackup.serializer()) { backup ->
                 val candidate = backup.toEntity()
-                require(backup.categoryId.toLong() !in categories) { "备份包含重复收藏分类" }
+                require(backup.categoryId.toLong() !in categories) { localizeError("备份包含重复收藏分类") }
                 val sameTitle = dao.findAll().firstOrNull { it.title == candidate.title }
                 val target = when {
                     sameTitle != null -> sameTitle.categoryId.toLong()
                     else -> dao.insert(candidate.copy(categoryId = 0, sortKey = dao.getNextSortKey()))
                 }
-                require(target in Int.MIN_VALUE.toLong()..Int.MAX_VALUE.toLong()) { "本地收藏分类编号超出范围" }
+                require(target in Int.MIN_VALUE.toLong()..Int.MAX_VALUE.toLong()) { localizeError("本地收藏分类编号超出范围") }
                 categories[backup.categoryId.toLong()] = target
                 restored++
             }
             archive.rows(BackupSection.CONTENTS, ContentBackup.serializer()) { saveContent(it); anchors += it.id; restored++ }
             suspend fun favourite(candidate: FavouriteEntity) {
                 val category = categories[candidate.categoryId]
-                    ?: throw IllegalArgumentException("备份收藏缺少对应分类")
-                require(candidate.mangaId in database.getMangaDao()) { "备份收藏缺少对应作品" }
+                    ?: throw IllegalArgumentException(localizeError("备份收藏缺少对应分类"))
+                require(candidate.mangaId in database.getMangaDao()) { localizeError("备份收藏缺少对应作品") }
                 val remote = candidate.copy(categoryId = category)
                 val local = database.getFavouritesDao().find(remote.mangaId, remote.categoryId)
                 if (local == null || remote.updatedAt >= local.updatedAt) database.getFavouritesDao().upsert(remote)
                 restored++
             }
             suspend fun history(row: HistoryEntity) {
-                require(row.mangaId in database.getMangaDao()) { "备份历史缺少对应作品" }
-                require(row.page >= 0 && row.chaptersCount >= 0) { "备份阅读进度无效" }
+                require(row.mangaId in database.getMangaDao()) { localizeError("备份历史缺少对应作品") }
+                require(row.page >= 0 && row.chaptersCount >= 0) { localizeError("备份阅读进度无效") }
                 // Android writers never validated the progress floats: overshoot (1.0000001), novel offsets and NaN or
                 // Infinity for a session whose percentage was never computed all leak into the file. Normalize instead
                 // of refusing the archive — a bad float is one unreadable row, not a broken library.
@@ -148,33 +151,33 @@ class LibraryBackup(private val database: MangaDatabase) {
                 restored++
             }
             archive.rows(BackupSection.FAVOURITES, FavouriteBackup.serializer()) {
-                require(it.mangaId == it.manga.id) { "备份收藏作品编号不一致" }
+                require(it.mangaId == it.manga.id) { localizeError("备份收藏作品编号不一致") }
                 saveContent(it.manga); favourite(it.toEntity())
             }
             archive.rows(BackupSection.HISTORY, HistoryBackup.serializer()) {
-                require(it.mangaId == it.manga.id) { "备份历史作品编号不一致" }
+                require(it.mangaId == it.manga.id) { localizeError("备份历史作品编号不一致") }
                 saveContent(it.manga); history(it.toEntity())
             }
             archive.rows(BackupSection.WORK_FAVOURITES, WorkFavouriteBackup.serializer()) {
                 // Old work state is projected onto its anchor, without restoring the removed entity graph.
                 val anchor = it.anchorMangaId
                 if (anchor != null && anchor in anchors) favourite(it.toFavouriteEntity(anchor))
-                else require(it.deletedAt != 0L) { "旧备份收藏缺少作品锚点" }
+                else require(it.deletedAt != 0L) { localizeError("旧备份收藏缺少作品锚点") }
             }
             archive.rows(BackupSection.WORK_HISTORY, WorkHistoryBackup.serializer()) {
                 if (it.anchorMangaId in anchors) history(it.toHistoryEntity())
-                else require(it.deletedAt != 0L) { "旧备份历史缺少作品锚点" }
+                else require(it.deletedAt != 0L) { localizeError("旧备份历史缺少作品锚点") }
             }
             archive.rows(BackupSection.BOOKMARKS, BookmarkBackup.serializer()) { backup ->
                 saveContent(backup.manga, backup.tags.ifEmpty { backup.manga.tags })
                 for (row in backup.bookmarks) {
                     currentCoroutineContext().ensureActive()
-                    require(row.mangaId == backup.manga.id) { "备份书签作品编号不一致" }
-                    require(row.page >= 0 && row.scroll >= 0) { "备份书签位置无效" }
+                    require(row.mangaId == backup.manga.id) { localizeError("备份书签作品编号不一致") }
+                    require(row.page >= 0 && row.scroll >= 0) { localizeError("备份书签位置无效") }
                     val remote = row.toEntity().let { it.copy(percent = normalizeBackupPercent(it.percent)) }
                     val local = database.getBookmarksDao().find(remote.mangaId, remote.pageId)
                     require(local == null || local.chapterId == remote.chapterId && local.page == remote.page) {
-                        "备份书签编号与本地页面冲突"
+                        localizeError("备份书签编号与本地页面冲突")
                     }
                     if (local == null || remote.createdAt >= local.createdAt) {
                         database.getBookmarksDao().upsert(listOf(remote))
@@ -183,8 +186,8 @@ class LibraryBackup(private val database: MangaDatabase) {
                 }
             }
             suspend fun statistic(remote: StatsEntity) {
-                require(remote.mangaId in database.getMangaDao()) { "备份阅读统计缺少对应作品" }
-                require(remote.duration >= 0 && remote.pages >= 0) { "备份阅读统计无效" }
+                require(remote.mangaId in database.getMangaDao()) { localizeError("备份阅读统计缺少对应作品") }
+                require(remote.duration >= 0 && remote.pages >= 0) { localizeError("备份阅读统计无效") }
                 val local = database.getStatsDao().find(remote.mangaId, remote.startedAt)
                 // Session counters have no update timestamp; merge maxima rather than add duplicate totals.
                 database.getStatsDao().upsert(remote.copy(duration = maxOf(remote.duration, local?.duration ?: 0),
@@ -203,13 +206,13 @@ class LibraryBackup(private val database: MangaDatabase) {
                 database.getSourcesDao().upsert(it.toEntity()); restored++
             }
             archive.rows(BackupSection.SOURCE_ORIGINS, SourceOriginBackup.serializer()) {
-                require(it.sourceKey.isNotBlank()) { "备份来源分组无效" }
+                require(it.sourceKey.isNotBlank()) { localizeError("备份来源分组无效") }
                 val local = database.getSourceOriginsDao().getByKey(it.sourceKey)
                 if (local == null || it.updatedAt >= local.updatedAt) database.getSourceOriginsDao().upsert(it.toEntity())
                 restored++
             }
             archive.rows(BackupSection.EXTENSION_REPOS, ExtensionRepoBackup.serializer()) {
-                require(it.baseUrl.isNotBlank()) { "备份扩展仓库地址无效" }
+                require(it.baseUrl.isNotBlank()) { localizeError("备份扩展仓库地址无效") }
                 database.getExternalExtensionRepoDao().upsert(it.toEntity()); restored++
             }
             // Rows of works the archive does not carry are skipped rather than failing the whole merge.
@@ -238,14 +241,14 @@ class LibraryBackup(private val database: MangaDatabase) {
         val local = database.getMangaDao().find(candidate.id)?.manga
         require(local == null || (local.source == candidate.source &&
             (local.url == candidate.url || (local.publicUrl.isNotBlank() && local.publicUrl == candidate.publicUrl)))) {
-            "备份作品编号与本地记录冲突：${candidate.id}"
+            ERROR_ARGUMENT.replace(localizeError("备份作品编号与本地记录冲突：%@")) { candidate.id.toString() }
         }
         val tags = tagBackups.map { it.toEntity() }
-        require(tags.map { it.id }.toSet().size == tags.size) { "备份包含重复标签编号" }
+        require(tags.map { it.id }.toSet().size == tags.size) { localizeError("备份包含重复标签编号") }
         val oldTags = database.getTagsDao().findByIds(tags.map { it.id }).associateBy { it.id }
         val stableTags = tags.map { tag ->
             val previous = oldTags[tag.id]
-            require(previous == null || (previous.source == tag.source && previous.key == tag.key)) { "备份标签编号冲突" }
+            require(previous == null || (previous.source == tag.source && previous.key == tag.key)) { localizeError("备份标签编号冲突") }
             tag.copy(isPinned = tag.isPinned || previous?.isPinned == true)
         }
         database.getTagsDao().upsert(stableTags)
@@ -255,26 +258,28 @@ class LibraryBackup(private val database: MangaDatabase) {
 
     companion object {
         private const val PERCENT_OVERSHOOT = 0.1f
+        private val ERROR_ARGUMENT = Regex("%(?:1\\$)?@")
 
         val supportedSections = setOf(BackupSection.CONTENTS, BackupSection.CATEGORIES, BackupSection.FAVOURITES,
             BackupSection.HISTORY, BackupSection.SOURCES, BackupSection.WORK_FAVOURITES, BackupSection.WORK_HISTORY,
             BackupSection.BOOKMARKS, BackupSection.STATS, BackupSection.WORK_STATS, BackupSection.SOURCE_ORIGINS,
             BackupSection.EXTENSION_REPOS, BackupSection.TRACKS, BackupSection.TRACK_LOGS)
 
-        fun requireSupported(index: BackupIndex) {
+        fun requireSupported(index: BackupIndex, localizeError: (String) -> String = { it }) {
             require(index.semanticSchemaVersion in 1..BackupIndex.CURRENT_SYNC_SCHEMA_VERSION &&
-                index.transportGeneration in 1..BackupIndex.WRITER_GENERATION_V3) { "备份版本尚不支持" }
+                index.transportGeneration in 1..BackupIndex.WRITER_GENERATION_V3) { localizeError("备份版本尚不支持") }
         }
 
         /** Reads every present section once, so a malformed row fails the preview rather than the merge. */
-        suspend fun count(input: LibraryBackupInput, present: Set<BackupSection>): Map<BackupSection, Int> {
+        suspend fun count(input: LibraryBackupInput, present: Set<BackupSection>,
+            localizeError: (String) -> String = { it }): Map<BackupSection, Int> {
             val counts = linkedMapOf<BackupSection, Int>()
             suspend fun <T> count(section: BackupSection, serializer: DeserializationStrategy<T>, size: (T) -> Int = { 1 }) {
                 if (section !in present) return
                 var count = 0L
                 input.rows(section, serializer) {
                     count += size(it)
-                    require(count <= Int.MAX_VALUE) { "备份记录数量超出范围" }
+                    require(count <= Int.MAX_VALUE) { localizeError("备份记录数量超出范围") }
                 }
                 counts[section] = count.toInt()
             }
@@ -292,7 +297,7 @@ class LibraryBackup(private val database: MangaDatabase) {
             count(BackupSection.EXTENSION_REPOS, ExtensionRepoBackup.serializer())
             count(BackupSection.TRACKS, TrackBackup.serializer())
             count(BackupSection.TRACK_LOGS, TrackLogBackup.serializer())
-            require(counts.isNotEmpty()) { "备份没有可恢复的图书馆数据或来源节" }
+            require(counts.isNotEmpty()) { localizeError("备份没有可恢复的图书馆数据或来源节") }
             return counts
         }
     }

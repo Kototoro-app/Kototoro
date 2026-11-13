@@ -11,6 +11,7 @@
 		C7B000000000000000000002 /* WidgetSnapshotStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7B000000000000000000004 /* WidgetSnapshotStore.swift */; };
 		C7B000000000000000000003 /* WidgetSnapshotStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7B000000000000000000005 /* WidgetSnapshotStoreTests.swift */; };
 		C0FFEE000000000000000024 /* KototoroWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE000000000000000023 /* KototoroWidget.swift */; };
+		C0FFEE000000000000000035 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = F70000000000000000000002 /* Localizable.xcstrings */; };
 		C0FFEE000000000000000034 /* KototoroWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = C0FFEE000000000000000028 /* KototoroWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
         CF2200000000000000000001 /* WebKitHttpRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF2200000000000000000004 /* WebKitHttpRequest.swift */; };
         CF2100000000000000000001 /* BrowserVerificationState.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF2100000000000000000004 /* BrowserVerificationState.swift */; };
@@ -638,6 +639,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C0FFEE000000000000000035 /* Localizable.xcstrings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

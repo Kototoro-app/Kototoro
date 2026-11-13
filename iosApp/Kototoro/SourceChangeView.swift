@@ -36,8 +36,8 @@ struct SourceChangeView: View {
     }
 
     private var summary: String {
-        if activeSources.isEmpty { return "未选择检索源" }
-        return "在 \(activeSources.count) 个来源中检索可替换的作品"
+        if activeSources.isEmpty { return String(localized: "未选择检索源") }
+        return String(localized: "在 \(activeSources.count) 个来源中检索可替换的作品")
     }
 
     var body: some View {

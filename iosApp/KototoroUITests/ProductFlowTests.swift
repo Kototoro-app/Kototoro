@@ -1,6 +1,173 @@
 import XCTest
 
 final class ProductFlowTests: XCTestCase {
+    @MainActor
+    func testEnglishRecordsAndDownloadsAreLocalized() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US", "-space.enabled", "NO"]
+        app.launch()
+        app.tabBars.buttons["Records"].tap()
+        let downloads = app.buttons["timeline.filter.downloads"]
+        XCTAssertTrue(downloads.waitForExistence(timeout: 30), app.debugDescription)
+        downloads.tap()
+        let queue = app.buttons["records.downloads.queue"]
+        XCTAssertTrue(queue.waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertTrue(queue.label.contains("Download queue"), queue.label)
+        XCTAssertTrue(queue.label.contains("Download tasks from all spaces"), queue.label)
+    }
+
+    @MainActor
+    func testChineseRecordsAndDownloadsRemainLocalized() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(zh-Hans)", "-AppleLocale", "zh_CN", "-space.enabled", "NO"]
+        app.launch()
+        app.tabBars.buttons["记录"].tap()
+        let downloads = app.buttons["timeline.filter.downloads"]
+        XCTAssertTrue(downloads.waitForExistence(timeout: 30), app.debugDescription)
+        downloads.tap()
+        let queue = app.buttons["records.downloads.queue"]
+        XCTAssertTrue(queue.waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertTrue(queue.label.contains("下载列表"), queue.label)
+        XCTAssertTrue(queue.label.contains("所有内容空间的下载任务"), queue.label)
+    }
+
+    @MainActor
+    func testEnglishSettingsPagesDoNotShowChineseInterfaceText() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US", "-space.enabled", "NO"]
+        app.launch()
+        app.tabBars.buttons["Settings"].tap()
+
+        func checkVisibleText(_ page: String) {
+            let visible = app.collectionViews.firstMatch.staticTexts.allElementsBoundByIndex.filter(\.isHittable)
+            XCTAssertFalse(visible.isEmpty, "No visible settings text on \(page)")
+            let labels = visible
+                .filter { $0.label.range(of: "[\u{3400}-\u{9FFF}]", options: .regularExpression) != nil }
+                .map(\.label)
+            XCTAssertTrue(labels.isEmpty, "\(page): \(labels)")
+        }
+
+        checkVisibleText("Settings")
+        for id in ["settings.reader", "settings.translation", "settings.details", "settings.privacy", "settings.general"] {
+            let entry = app.buttons[id]
+            for _ in 0..<6 where !entry.isHittable { app.swipeUp() }
+            XCTAssertTrue(entry.waitForExistence(timeout: 10), app.debugDescription)
+            entry.tap()
+            checkVisibleText(id)
+            app.navigationBars.buttons.element(boundBy: 0).tap()
+        }
+    }
+
+    @MainActor
+    func testEnglishEmptyTextImportError() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US", "-space.enabled", "NO",
+                               "-sources.hiddenKinds", "", "-sources.hiddenEcosystems", "", "-sources.newOnly", "NO"]
+        app.launch()
+        app.tabBars.buttons["Browse"].tap()
+        let field = app.searchFields.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 30), app.debugDescription)
+        field.tap()
+        field.typeText("Local novels")
+        let source = app.buttons["source.LOCAL_NOVEL"]
+        XCTAssertTrue(source.waitForExistence(timeout: 30), app.debugDescription)
+        source.tap()
+        app.buttons["browse.importLocal"].tap()
+        pickFixture(app, name: "fixture_empty_localized")
+        let alert = app.alerts.firstMatch
+        XCTAssertTrue(alert.waitForExistence(timeout: 20), app.debugDescription)
+        let message = alert.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "fixture_empty_localized.txt"))
+            .firstMatch
+        XCTAssertTrue(message.waitForExistence(timeout: 5), alert.debugDescription)
+        XCTAssertTrue(message.label.contains("fixture_empty_localized.txt: Text file is empty"), message.label)
+    }
+
+    @MainActor
+    private func pickFixture(_ app: XCUIApplication, name: String) {
+        let pickerTabs = app.tabBars["DOC.browsingModeTabBar"]
+        XCTAssertTrue(pickerTabs.waitForExistence(timeout: 20), app.debugDescription)
+        pickerTabs.buttons.matching(NSPredicate(format: "label IN %@", ["Browse", "浏览"])).firstMatch.tap()
+        let location = app.cells.matching(NSPredicate(format: "label CONTAINS %@ OR label CONTAINS %@ OR label CONTAINS %@",
+                                                      "On My iPhone", "我的iPhone", "我的 iPhone")).firstMatch
+        if location.waitForExistence(timeout: 5), location.isHittable { location.tap() }
+        let picker = app.collectionViews.firstMatch
+        let file = picker.cells.matching(NSPredicate(format: "label CONTAINS %@", name)).firstMatch
+        for _ in 0..<8 where !file.exists { picker.swipeUp() }
+        for _ in 0..<12 where !file.exists { picker.swipeDown() }
+        XCTAssertTrue(file.waitForExistence(timeout: 5), "Stage the picker fixtures first: \(app.debugDescription)")
+        for _ in 0..<6 where file.frame.midY < 185 || file.frame.midY > app.frame.maxY - 90 {
+            if file.frame.midY < 185 { picker.swipeDown() } else { picker.swipeUp() }
+        }
+        for cell in picker.cells.allElementsBoundByIndex where cell.isSelected && cell.label != file.label {
+            if cell.isHittable { cell.tap() }
+        }
+        var opened = false
+        for _ in 0..<3 where !opened {
+            if !file.isSelected { file.tap() }
+            let open = app.buttons.matching(NSPredicate(format: "label IN %@", ["Open", "打开"])).firstMatch
+            if open.waitForExistence(timeout: 3), open.isEnabled {
+                open.tap()
+                opened = true
+                break
+            }
+            if pickerTabs.waitForNonExistence(timeout: 2) {
+                opened = true
+                break
+            }
+        }
+        XCTAssertTrue(pickerTabs.waitForNonExistence(timeout: 15), app.debugDescription)
+    }
+
+    @MainActor
+    func testEnglishLocalNovelGeneratedChapterTitle() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US", "-space.enabled", "NO",
+                               "-sources.hiddenKinds", "", "-sources.hiddenEcosystems", "", "-sources.newOnly", "NO"]
+        app.launch()
+        app.tabBars.buttons["Browse"].tap()
+        let field = app.searchFields.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 30), app.debugDescription)
+        field.tap(); field.typeText("Local novels")
+        let source = app.buttons["source.LOCAL_NOVEL"]
+        XCTAssertTrue(source.waitForExistence(timeout: 30), app.debugDescription)
+        source.tap()
+        app.buttons["browse.importLocal"].tap()
+        pickFixture(app, name: "fixture_plain_english")
+        let item = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@",
+                                                    "source.content.", "fixture_plain_english")).firstMatch
+        XCTAssertTrue(item.waitForExistence(timeout: 30), app.debugDescription)
+        item.tap()
+        let chapter = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "chapter.")).firstMatch
+        for _ in 0..<6 where !chapter.exists { app.swipeUp() }
+        XCTAssertTrue(chapter.waitForExistence(timeout: 20), app.debugDescription)
+        let translated = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS %@", "Part 1"),
+                                                    object: chapter)
+        XCTAssertEqual(XCTWaiter.wait(for: [translated], timeout: 20), .completed, chapter.label)
+    }
+
+    @MainActor
+    func testEnglishUnsupportedBackupError() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US", "-space.enabled", "NO"]
+        app.launch()
+        app.tabBars.buttons["Settings"].tap()
+        let backup = app.buttons["settings.backup"]
+        for _ in 0..<6 where !backup.isHittable { app.swipeUp() }
+        XCTAssertTrue(backup.waitForExistence(timeout: 10), app.debugDescription)
+        backup.tap()
+        let restore = app.buttons["backup.import"]
+        XCTAssertTrue(restore.waitForExistence(timeout: 10), app.debugDescription)
+        restore.tap()
+        pickFixture(app, name: "fixture_future_backup")
+        let error = app.staticTexts["backup.error"]
+        XCTAssertTrue(error.waitForExistence(timeout: 20), app.debugDescription)
+        XCTAssertTrue(error.label.contains("This backup version is not supported"), error.label)
+    }
+
     /// Needs at least one favourite. Selection starts from a work's menu and borrows the top bar; the library's
     /// other tools sit in its more menu; a source's listing searches with the field under its title.
     @MainActor

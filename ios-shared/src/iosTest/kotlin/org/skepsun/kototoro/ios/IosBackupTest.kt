@@ -17,6 +17,30 @@ class IosBackupTest {
     private val page = SourcePage(9007199254740993, "mihon://image", null, source)
 
     @Test
+    fun duplicateCategoryRestoreUsesLocalizedErrorAndRollsBack() = runBlocking {
+        withDirectory { dir ->
+            val path = "$dir/duplicate.zip"
+            BackupZipWriter(path).use { zip ->
+                zip.begin("index")
+                zip.write("""[{"app_id":"org.skepsun.kototoro","app_version":1,"transport_generation":3,"semantic_schema_version":4,"created_at":1}]""".encodeToByteArray())
+                zip.end()
+                zip.begin("categories")
+                zip.write("""[{"category_id":1,"created_at":1,"sort_key":1,"title":"A","track":false},{"category_id":1,"created_at":1,"sort_key":1,"title":"B","track":false}]""".encodeToByteArray())
+                zip.end()
+                zip.finish()
+            }
+            val library = IosLibrary("$dir/library.db")
+            try {
+                library.addCategory("Existing")
+                val preview = library.previewBackup(path)
+                val error = assertFailsWith<IllegalArgumentException> { library.restoreBackup(preview) }
+                assertEquals(localized("备份包含重复收藏分类"), error.message)
+                assertEquals(listOf("Existing"), library.categories().map { it.title })
+            } finally { library.close() }
+        }
+    }
+
+    @Test
     fun exportedLibraryRestoresIntoAnotherDatabase() = runBlocking {
         withDirectory { dir ->
             val item = IosSourceContent(content)

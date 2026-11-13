@@ -106,7 +106,8 @@ class SourceLibrary(
                 SourceLibraryEntry(item, member.map { it.categoryId }.toSet(),
                     if (history) reading?.updatedAt ?: 0L else member.maxOfOrNull { it.updatedAt } ?: 0L,
                     reading?.updatedAt, reading?.percent,
-                    reading?.let { chapters[item.id to it.chapterId] }?.let { SourceLibraryChapter(it.title, it.number) },
+                    reading?.let { chapters[item.id to it.chapterId] }
+                        ?.let { SourceLibraryChapter(it.title, it.number, it.sourceData) },
                     item.id in nsfwIds, newChapters[item.id] ?: 0,
                     // A work can sit in several categories; Android's DAO reads MAX(pinned), i.e. any row may pin it.
                     isPinned = member.any { it.isPinned })
@@ -193,12 +194,15 @@ class SourceLibrary(
      */
     suspend fun bookmarkGroups(): List<SourceBookmarkGroup> {
         val rows = database.getBookmarksDao().observe().first()
-        val titles = database.getChaptersDao()
+        val chapters = database.getChaptersDao()
             .findByIds(rows.values.flatten().mapTo(HashSet()) { it.chapterId })
-            .associate { it.chapterId to it.title }
+            .associateBy { it.chapterId }
         return rows.map { (row, saved) ->
             SourceBookmarkGroup(content(row.manga, row.tags, withChapters = false),
-                saved.map { entity -> entity.desktopBookmark().copy(chapterTitle = titles[entity.chapterId].orEmpty()) })
+                saved.map { entity ->
+                    val chapter = chapters[entity.chapterId]
+                    entity.desktopBookmark().copy(chapterTitle = chapter?.title.orEmpty(), chapterSourceData = chapter?.sourceData)
+                })
         }
     }
 
@@ -240,7 +244,8 @@ class SourceLibrary(
                 val stored = dao.find(content.id, bookmark.pageId)
                 // A stale card must not delete a replacement bookmark at the same position. The chapter title is
                 // display data that `bookmarkGroups` fills in, not part of the stored bookmark.
-                require(stored?.desktopBookmark()?.copy(chapterTitle = bookmark.chapterTitle) == bookmark) {
+                require(stored?.desktopBookmark()?.copy(chapterTitle = bookmark.chapterTitle,
+                    chapterSourceData = bookmark.chapterSourceData) == bookmark) {
                     "Bookmark has changed or no longer exists"
                 }
                 dao.delete(requireNotNull(stored))

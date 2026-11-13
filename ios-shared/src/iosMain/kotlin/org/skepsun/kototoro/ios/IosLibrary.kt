@@ -428,12 +428,13 @@ class IosLibrary {
             content.chapterCount, progress, perPageMillis / 1000)
     }
 
-    suspend fun bookmarks(content: IosSourceContent): List<IosBookmark> = records.bookmarks(content.value.id).map(::IosBookmark)
+    suspend fun bookmarks(content: IosSourceContent): List<IosBookmark> =
+        records.bookmarks(content.value.id).map { IosBookmark(it, content.sourceName) }
 
     /** Every work with saved positions, in one read (Android's bookmarks shelf); works come back without chapters. */
     @Throws(Exception::class)
     suspend fun bookmarkGroups(): List<IosBookmarkGroup> = records.bookmarkGroups().map { group ->
-        IosBookmarkGroup(IosSourceContent(group.content), group.bookmarks.map(::IosBookmark))
+        IosBookmarkGroup(IosSourceContent(group.content), group.bookmarks.map { IosBookmark(it, group.content.source.name) })
     }
 
     @Throws(Exception::class)

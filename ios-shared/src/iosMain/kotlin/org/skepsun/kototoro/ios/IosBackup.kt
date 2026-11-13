@@ -52,7 +52,7 @@ class IosBackupPreview internal constructor(
 }
 
 internal class IosBackupService(private val library: IosLibrary) {
-    private val backup by lazy { LibraryBackup(library.database) }
+    private val backup by lazy { LibraryBackup(library.database, localizeError = { localized(it) }) }
 
     suspend fun preview(path: String): IosBackupPreview = withContext(Dispatchers.IO) {
         val zip = BackupZipReader.open(path)
@@ -62,10 +62,10 @@ internal class IosBackupService(private val library: IosLibrary) {
             zip.read(indexEntry).decodeToString())
         require(indices.size == 1) { localized("备份索引数量无效") }
         val index = indices.single()
-        LibraryBackup.requireSupported(index)
+        LibraryBackup.requireSupported(index, localizeError = { localized(it) })
         val sections = zip.entries.mapNotNull { BackupSection.of(it.name) }.toSet()
         val draft = IosBackupPreview(zip, path.substringAfterLast('/'), index.createdAt, index.appId, emptyList(), emptyList())
-        val counts = LibraryBackup.count(draft, sections)
+        val counts = LibraryBackup.count(draft, sections, localizeError = { localized(it) })
         IosBackupPreview(zip, draft.filename, index.createdAt, index.appId,
             counts.map { (section, count) -> IosBackupSectionCount(section.entryName, count) },
             zip.entries.map { it.name }.filter {

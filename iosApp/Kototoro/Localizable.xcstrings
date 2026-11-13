@@ -1,12 +1,32 @@
 {
   "sourceLanguage": "zh-Hans",
   "strings": {
+    " · 最快": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": " · Fastest"
+          }
+        }
+      }
+    },
     " · 来源缺失": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": " · Source missing"
+          }
+        }
+      }
+    },
+    " · 部分时间未知": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": " · Some times unknown"
           }
         }
       }
@@ -49,6 +69,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "%1$@ · Searching %2$@ (%3$lld/%4$lld)"
+          }
+        }
+      }
+    },
+    "%@ · 第 %lld 页": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ · Page %2$lld"
           }
         }
       }
@@ -143,6 +173,16 @@
         }
       }
     },
+    "%@，%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@, %2$@"
+          }
+        }
+      }
+    },
     "%@，已安装": {
       "localizations": {
         "en": {
@@ -159,6 +199,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "%1$@, page %2$d"
+          }
+        }
+      }
+    },
+    "%@：%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@: %2$@"
           }
         }
       }
@@ -186,6 +236,16 @@
         }
       }
     },
+    "%d 部收藏作品共有 %d 个新章节": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$d favorite works have %2$d new chapters"
+          }
+        }
+      }
+    },
     "%d/%d · 新章节：%d · 失败：%d · 跳过：%d": {
       "localizations": {
         "en": {
@@ -201,6 +261,16 @@
     },
     "%lld / %lld": {
       "shouldTranslate": false
+    },
+    "%lld / %lld 个来源": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld / %2$lld sources"
+          }
+        }
+      }
     },
     "%lld 个仓库暂时无法刷新": {
       "localizations": {
@@ -238,6 +308,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "%lld new chapters"
+          }
+        }
+      }
+    },
+    "%lld 个来源 · %lld 个优先 · %lld 个不推荐": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld sources · %2$lld preferred · %3$lld excluded"
           }
         }
       }
@@ -308,6 +388,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "%lld min"
+          }
+        }
+      }
+    },
+    "%lld 处": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld matches"
           }
         }
       }
@@ -464,6 +554,16 @@
         }
       }
     },
+    "12 小时": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "12 hours"
+          }
+        }
+      }
+    },
     "18+": {
       "shouldTranslate": false
     },
@@ -495,6 +595,16 @@
     },
     "512 MB": {
       "shouldTranslate": false
+    },
+    "6 小时": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "6 hours"
+          }
+        }
+      }
     },
     "API 地址": {
       "localizations": {
@@ -553,6 +663,50 @@
           "stringUnit": {
             "state": "translated",
             "value": "Bangumi connection settings"
+          }
+        }
+      }
+    },
+    "EPUB 内容清单无法读取": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not read the EPUB content manifest"
+          }
+        }
+      }
+    },
+    "EPUB 没有内容清单": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The EPUB has no content manifest"
+          }
+        }
+      }
+    },
+    "EPUB 没有正文": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The EPUB contains no readable content"
+          }
+        }
+      }
+    },
+    "EPUB 缺少 container.xml": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The EPUB is missing container.xml"
           }
         }
       }
@@ -669,6 +823,26 @@
         }
       }
     },
+    "JAR 解析器": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "JAR parser"
+          }
+        }
+      }
+    },
+    "Kototoro 已锁定": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kototoro is locked"
+          }
+        }
+      }
+    },
     "Mihon 漫画": {
       "localizations": {
         "en": {
@@ -757,12 +931,32 @@
         }
       }
     },
+    "“%@”是成人内容。无痕模式不会记录阅读历史、进度、统计，也不会同步到追踪网站。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“%@” is adult content. Incognito mode does not record history, progress, or statistics, or sync to tracking sites."
+          }
+        }
+      }
+    },
     "“%@”的值不被此来源接受。": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "This source doesn't accept the value of “%@”."
+          }
+        }
+      }
+    },
+    "“%@”：%@ 条记录，以合并方式恢复。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“%1$@”: %2$@ records, to be merged on restore."
           }
         }
       }
@@ -786,6 +980,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Install all %lld selected extensions"
+          }
+        }
+      }
+    },
+    "三体": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The Three-Body Problem"
+          }
+        }
+      }
+    },
+    "上一段": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Previous paragraph"
           }
         }
       }
@@ -816,6 +1030,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Vertical %lld"
+          }
+        }
+      }
+    },
+    "上次上传": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Last upload"
           }
         }
       }
@@ -856,6 +1080,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Next (%lld)"
+          }
+        }
+      }
+    },
+    "下一段": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Next paragraph"
           }
         }
       }
@@ -937,6 +1171,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Download all remaining chapters"
+          }
+        }
+      }
+    },
+    "下载列表": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Download queue"
           }
         }
       }
@@ -1041,12 +1285,52 @@
         }
       }
     },
+    "下载更新": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Download updates"
+          }
+        }
+      }
+    },
+    "下载更新失败": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Failed to download updates"
+          }
+        }
+      }
+    },
     "下载本章": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Download chapter"
+          }
+        }
+      }
+    },
+    "下载本集": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Download episode"
+          }
+        }
+      }
+    },
+    "下载概览": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Downloads overview"
           }
         }
       }
@@ -1122,6 +1406,26 @@
         }
       }
     },
+    "不再自动应用": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stop applying automatically"
+          }
+        }
+      }
+    },
+    "不再询问": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Don't ask again"
+          }
+        }
+      }
+    },
     "不分组": {
       "localizations": {
         "en": {
@@ -1164,6 +1468,17 @@
         }
       }
     },
+    "不支持的文件类型：%@（支持 CBZ/ZIP、EPUB、TXT 和视频文件）": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unsupported file type: %@ (supported: CBZ/ZIP, EPUB, TXT, and video files)"
+          }
+        }
+      }
+    },
     "不是重复": {
       "localizations": {
         "en": {
@@ -1190,6 +1505,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Off"
+          }
+        }
+      }
+    },
+    "不选即不限语言。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leave unselected to include all languages."
           }
         }
       }
@@ -1260,6 +1585,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Bookmarks"
+          }
+        }
+      }
+    },
+    "书签 %lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld bookmarks"
           }
         }
       }
@@ -1364,6 +1699,16 @@
         }
       }
     },
+    "云端保留 %@ 份": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keep %@ cloud backups"
+          }
+        }
+      }
+    },
     "云端同步格式不受支持，请更新应用后重试": {
       "extractionState": "manual",
       "localizations": {
@@ -1371,6 +1716,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "The cloud sync format isn't supported. Update the app and try again."
+          }
+        }
+      }
+    },
+    "云端备份": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cloud backups"
           }
         }
       }
@@ -1521,6 +1876,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Only new sources in this version"
+          }
+        }
+      }
+    },
+    "仅用于（书名或来源，逗号分隔）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Include only (book titles or sources, comma-separated)"
           }
         }
       }
@@ -1766,6 +2131,16 @@
         }
       }
     },
+    "以无痕模式阅读？": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Read in incognito mode?"
+          }
+        }
+      }
+    },
     "仿真": {
       "localizations": {
         "en": {
@@ -1826,6 +2201,16 @@
         }
       }
     },
+    "作品信息": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Work information"
+          }
+        }
+      }
+    },
     "作品库": {
       "localizations": {
         "en": {
@@ -1862,6 +2247,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Work updates"
+          }
+        }
+      }
+    },
+    "作品有更新": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Works have updates"
           }
         }
       }
@@ -1938,6 +2333,16 @@
         }
       }
     },
+    "作者 / 制作": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Author / production"
+          }
+        }
+      }
+    },
     "作者名称": {
       "localizations": {
         "en": {
@@ -1998,6 +2403,16 @@
         }
       }
     },
+    "使用 iOS 系统语音；在“设置 → 辅助功能 → 朗读内容 → 声音”中可下载更自然的增强语音。新设置从下一段开始生效。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uses iOS voices. Download enhanced voices in Settings → Accessibility → Read & Speak → Voices. Changes apply from the next paragraph."
+          }
+        }
+      }
+    },
     "使用与安卓相同的 Google 账号，双向合并收藏、分类、阅读进度、阅读统计和更新记录。首次同步会合并已有数据。后台定期同步的时机由系统决定，通常在设备空闲且联网时进行，间隔只是最短间隔。": {
       "localizations": {
         "en": {
@@ -2014,6 +2429,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "In use"
+          }
+        }
+      }
+    },
+    "使用最快的镜像": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use fastest mirror"
           }
         }
       }
@@ -2078,6 +2503,16 @@
         }
       }
     },
+    "例如：日漫": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "For example: Manga"
+          }
+        }
+      }
+    },
     "保存": {
       "localizations": {
         "en": {
@@ -2108,6 +2543,16 @@
         }
       }
     },
+    "保存当前筛选": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save current filters"
+          }
+        }
+      }
+    },
     "保存或分享 IPA": {
       "localizations": {
         "en": {
@@ -2124,6 +2569,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Saved filters"
+          }
+        }
+      }
+    },
+    "保存筛选": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save filters"
           }
         }
       }
@@ -2225,6 +2680,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Stop searching"
+          }
+        }
+      }
+    },
+    "停止朗读": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stop reading aloud"
           }
         }
       }
@@ -2449,12 +2914,42 @@
         }
       }
     },
+    "全部%@，%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All %1$@, %2$@"
+          }
+        }
+      }
+    },
+    "全部停用": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Disable all"
+          }
+        }
+      }
+    },
     "全部关闭": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Turn all off"
+          }
+        }
+      }
+    },
+    "全部内容": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All content"
           }
         }
       }
@@ -2499,6 +2994,16 @@
         }
       }
     },
+    "全部启用": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enable all"
+          }
+        }
+      }
+    },
     "全部已读": {
       "localizations": {
         "en": {
@@ -2529,6 +3034,16 @@
         }
       }
     },
+    "全部日期，共 %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All dates, %@ total"
+          }
+        }
+      }
+    },
     "全部更新": {
       "localizations": {
         "en": {
@@ -2545,6 +3060,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "All sources"
+          }
+        }
+      }
+    },
+    "全部来源类型": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All source types"
+          }
+        }
+      }
+    },
+    "全部状态": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All statuses"
           }
         }
       }
@@ -2579,6 +3114,16 @@
         }
       }
     },
+    "全部类型": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All content types"
+          }
+        }
+      }
+    },
     "全部语言": {
       "localizations": {
         "en": {
@@ -2609,12 +3154,32 @@
         }
       }
     },
+    "共 %lld 章": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld chapters"
+          }
+        }
+      }
+    },
     "共 %lld 部作品。只搜索勾选的来源；候选按名称相似度排序，需要逐部核对。": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "%lld works in total. Only checked sources are searched; candidates are sorted by title similarity and need to be reviewed one by one."
+          }
+        }
+      }
+    },
+    "共 %lld 集": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld episodes"
           }
         }
       }
@@ -2679,6 +3244,16 @@
         }
       }
     },
+    "关联后使用网站封面与简介；账号进度同步可在关联后单独开启。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Once linked, the site's cover and description are used. Account progress sync can be enabled separately."
+          }
+        }
+      }
+    },
     "关闭": {
       "localizations": {
         "en": {
@@ -2695,6 +3270,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "When off, a blurred cover is used as the page background."
+          }
+        }
+      }
+    },
+    "关闭后可从屏幕边缘滑动翻页，点按画面显示控件后使用返回按钮退出。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "When disabled, swipe from the edge to turn pages. Tap the screen to show controls and use the back button to exit."
+          }
+        }
+      }
+    },
+    "关闭应用锁": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Disable app lock"
           }
         }
       }
@@ -2745,6 +3340,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "There are more %@ in other content spaces."
+          }
+        }
+      }
+    },
+    "其他内容类型里还有下载记录。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Downloads exist for other content types."
+          }
+        }
+      }
+    },
+    "其他名称": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alternative titles"
           }
         }
       }
@@ -2850,6 +3465,16 @@
         }
       }
     },
+    "内容类型（至少一项）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Content types (select at least one)"
+          }
+        }
+      }
+    },
     "内容过滤": {
       "localizations": {
         "en": {
@@ -2880,12 +3505,52 @@
         }
       }
     },
+    "写下想法": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Write a thought"
+          }
+        }
+      }
+    },
+    "写下想法（可选）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add a thought (optional)"
+          }
+        }
+      }
+    },
+    "出版状态": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Publication status"
+          }
+        }
+      }
+    },
     "分享": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Share"
+          }
+        }
+      }
+    },
+    "分享页面": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Share page"
           }
         }
       }
@@ -3017,6 +3682,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Highlight"
+          }
+        }
+      }
+    },
+    "划线当前段": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Highlight paragraph"
           }
         }
       }
@@ -3271,6 +3946,16 @@
         }
       }
     },
+    "刷新列表": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Refresh list"
+          }
+        }
+      }
+    },
     "刷新剧集": {
       "localizations": {
         "en": {
@@ -3291,12 +3976,33 @@
         }
       }
     },
+    "刷新推荐": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Refresh recommendations"
+          }
+        }
+      }
+    },
     "刷新章节": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Refresh chapters"
+          }
+        }
+      }
+    },
+    "前言": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preface"
           }
         }
       }
@@ -3337,6 +4043,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Add to favourites"
+          }
+        }
+      }
+    },
+    "加入标签黑名单": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add to tag blacklist"
           }
         }
       }
@@ -3461,6 +4177,16 @@
         }
       }
     },
+    "匹配": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Match"
+          }
+        }
+      }
+    },
     "匹配方式": {
       "localizations": {
         "en": {
@@ -3577,6 +4303,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "History, Bookmarks & Downloads"
+          }
+        }
+      }
+    },
+    "压缩包里没有图片": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The archive contains no images"
           }
         }
       }
@@ -3822,6 +4559,16 @@
         }
       }
     },
+    "取消本段划线": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove highlight from paragraph"
+          }
+        }
+      }
+    },
     "取消置顶": {
       "localizations": {
         "en": {
@@ -3918,6 +4665,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Lower the similarity threshold to find titles written more differently."
+          }
+        }
+      }
+    },
+    "可切换日期范围或记录类型查看其他足迹。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Change the date range or record type to see other activity."
           }
         }
       }
@@ -4022,6 +4779,16 @@
         }
       }
     },
+    "可选来源（%lld）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Available sources (%lld)"
+          }
+        }
+      }
+    },
     "右下角显示书签浮动按钮": {
       "localizations": {
         "en": {
@@ -4088,6 +4855,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Merge duplicate chapters"
+          }
+        }
+      }
+    },
+    "同一组内满足任一项即可，不同组需同时满足。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Match any option within a group and all groups."
           }
         }
       }
@@ -4178,6 +4955,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Back 10 seconds"
+          }
+        }
+      }
+    },
+    "向上或向下轻扫以逐日查看": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Swipe up or down to browse by day"
+          }
+        }
+      }
+    },
+    "启用": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enabled"
           }
         }
       }
@@ -4292,6 +5089,17 @@
         }
       }
     },
+    "图片是空的": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Image is empty"
+          }
+        }
+      }
+    },
     "图片记录无效": {
       "localizations": {
         "en": {
@@ -4348,6 +5156,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Add extension repositories, or Apple CMS / TVBox video sites, in “Repositories & extensions”."
+          }
+        }
+      }
+    },
+    "在「筛选源」中至少选择一个来源后再搜索。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select at least one source in Filter sources before searching."
           }
         }
       }
@@ -4452,12 +5270,32 @@
         }
       }
     },
+    "在漫画、小说或视频播放器中下载章节与剧集。已保存文件可从“存储管理”查看。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Download chapters and episodes from the manga, novel, or video player. View saved files in Storage management."
+          }
+        }
+      }
+    },
     "在漫画或小说阅读器中下载章节。已保存文件可从“存储管理”查看。": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Download chapters from the manga or novel reader. Saved files can be viewed in “Storage”."
+          }
+        }
+      }
+    },
+    "在漫画阅读器里裁切页面，或在视频播放时记下时间点，都会保存在这里；书签也一并列出。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Page crops from the manga reader and notes on video timestamps are saved here, along with bookmarks."
           }
         }
       }
@@ -4512,6 +5350,16 @@
         }
       }
     },
+    "在这些地方隐藏成人作品": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hide adult works in these places"
+          }
+        }
+      }
+    },
     "均衡": {
       "localizations": {
         "en": {
@@ -4538,6 +5386,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Voice · %@"
+          }
+        }
+      }
+    },
+    "声音": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voice"
+          }
+        }
+      }
+    },
+    "备份": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Backup"
           }
         }
       }
@@ -4639,6 +5507,50 @@
         }
       }
     },
+    "备份书签位置无效": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The backup contains an invalid bookmark position"
+          }
+        }
+      }
+    },
+    "备份书签作品编号不一致": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A backup bookmark has an inconsistent work ID"
+          }
+        }
+      }
+    },
+    "备份书签编号与本地页面冲突": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A backup bookmark ID conflicts with a local page"
+          }
+        }
+      }
+    },
+    "备份作品编号与本地记录冲突：%@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A backup work ID conflicts with a local record: %@"
+          }
+        }
+      }
+    },
     "备份内容": {
       "localizations": {
         "en": {
@@ -4671,6 +5583,28 @@
         }
       }
     },
+    "备份包含重复收藏分类": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The backup contains duplicate favorite categories"
+          }
+        }
+      }
+    },
+    "备份包含重复标签编号": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The backup contains duplicate tag IDs"
+          }
+        }
+      }
+    },
     "备份单节超过 256 MiB 限制": {
       "extractionState": "manual",
       "localizations": {
@@ -4678,6 +5612,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "A backup section exceeds the 256 MiB limit"
+          }
+        }
+      }
+    },
+    "备份历史作品编号不一致": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A backup history entry has an inconsistent work ID"
+          }
+        }
+      }
+    },
+    "备份历史缺少对应作品": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A backup history entry is missing its work"
           }
         }
       }
@@ -4703,6 +5659,50 @@
         }
       }
     },
+    "备份扩展仓库地址无效": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The backup contains an invalid extension repository address"
+          }
+        }
+      }
+    },
+    "备份收藏作品编号不一致": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A backup favorite has an inconsistent work ID"
+          }
+        }
+      }
+    },
+    "备份收藏缺少对应作品": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A backup favorite is missing its work"
+          }
+        }
+      }
+    },
+    "备份收藏缺少对应分类": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A backup favorite is missing its category"
+          }
+        }
+      }
+    },
     "备份数据超过大小限制，未生成备份文件": {
       "extractionState": "manual",
       "localizations": {
@@ -4710,6 +5710,50 @@
           "stringUnit": {
             "state": "translated",
             "value": "The backup data exceeds the size limit; no backup file was created"
+          }
+        }
+      }
+    },
+    "备份来源分组无效": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The backup contains an invalid source group"
+          }
+        }
+      }
+    },
+    "备份标签编号冲突": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A backup tag ID conflicts with a local tag"
+          }
+        }
+      }
+    },
+    "备份没有可恢复的图书馆数据或来源节": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The backup has no restorable library data or source sections"
+          }
+        }
+      }
+    },
+    "备份版本尚不支持": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This backup version is not supported"
           }
         }
       }
@@ -4753,6 +5797,50 @@
           "stringUnit": {
             "state": "translated",
             "value": "The decompressed backup exceeds the 1 GiB limit"
+          }
+        }
+      }
+    },
+    "备份记录数量超出范围": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The backup contains too many records"
+          }
+        }
+      }
+    },
+    "备份阅读统计无效": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The backup contains invalid reading statistics"
+          }
+        }
+      }
+    },
+    "备份阅读统计缺少对应作品": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Backup reading statistics are missing their work"
+          }
+        }
+      }
+    },
+    "备份阅读进度无效": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The backup contains invalid reading progress"
           }
         }
       }
@@ -4927,6 +6015,16 @@
         }
       }
     },
+    "存为笔记": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save as note"
+          }
+        }
+      }
+    },
     "存储管理": {
       "localizations": {
         "en": {
@@ -5057,12 +6155,32 @@
         }
       }
     },
+    "完成作品": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Completed works"
+          }
+        }
+      }
+    },
     "完成排序": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Done reordering"
+          }
+        }
+      }
+    },
+    "完成章节": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Completed chapters"
           }
         }
       }
@@ -5117,12 +6235,32 @@
         }
       }
     },
+    "密码保存在钥匙串中。备份文件名与 Android、Windows 相同，可互相恢复。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The password is stored in Keychain. Backups use the same filenames as Android and Windows and can be restored across platforms."
+          }
+        }
+      }
+    },
     "对比度": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Contrast"
+          }
+        }
+      }
+    },
+    "导入": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import"
           }
         }
       }
@@ -5173,6 +6311,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Import result"
+          }
+        }
+      }
+    },
+    "导入视频文件夹": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import video folder"
+          }
+        }
+      }
+    },
+    "导出": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export"
           }
         }
       }
@@ -5307,6 +6465,26 @@
         }
       }
     },
+    "尝试其他关键词或清除筛选；新来源需先在浏览页启用。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Try another search or clear the filters. Enable new sources in Browse first."
+          }
+        }
+      }
+    },
+    "屏蔽“%@”": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Block “%@”"
+          }
+        }
+      }
+    },
     "展开": {
       "localizations": {
         "en": {
@@ -5323,6 +6501,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Expand recommendations"
+          }
+        }
+      }
+    },
+    "展开简介": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Expand description"
           }
         }
       }
@@ -5353,6 +6541,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Tap the left/right sides or top/bottom edges to turn pages and the middle to show or hide controls. Double-tap or pinch to zoom."
+          }
+        }
+      }
+    },
+    "左滑可重命名或删除；长按可设为打开来源时自动应用。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Swipe left to rename or delete; touch and hold to apply automatically when opening the source."
+          }
+        }
+      }
+    },
+    "已上传 %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uploaded %@"
           }
         }
       }
@@ -5437,6 +6645,16 @@
         }
       }
     },
+    "已保存的筛选": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saved filters"
+          }
+        }
+      }
+    },
     "已保存，返回后会重新读取作品资料。": {
       "localizations": {
         "en": {
@@ -5467,12 +6685,42 @@
         }
       }
     },
+    "已停用": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Disabled"
+          }
+        }
+      }
+    },
+    "已关联此作品": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Linked to this work"
+          }
+        }
+      }
+    },
     "已关联资料": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Info linked"
+          }
+        }
+      }
+    },
+    "已关闭": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Off"
           }
         }
       }
@@ -5503,6 +6751,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Added to the download queue: %lld chapters"
+          }
+        }
+      }
+    },
+    "已加入下载队列：%lld 集": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Added %lld episodes to the download queue"
           }
         }
       }
@@ -5607,6 +6865,16 @@
         }
       }
     },
+    "已存为笔记": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saved as a note"
+          }
+        }
+      }
+    },
     "已存在相同 ID 的来源": {
       "localizations": {
         "en": {
@@ -5707,6 +6975,26 @@
         }
       }
     },
+    "已导入 %lld 条规则": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Imported %lld rules"
+          }
+        }
+      }
+    },
+    "已导入“%@”，共 %lld 集": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Imported “%1$@” with %2$lld episodes"
+          }
+        }
+      }
+    },
     "已导入“%@”，可在“浏览 · 本地作品”中查看": {
       "localizations": {
         "en": {
@@ -5717,12 +7005,62 @@
         }
       }
     },
+    "已屏蔽": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Blocked"
+          }
+        }
+      }
+    },
+    "已应用": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Applied"
+          }
+        }
+      }
+    },
+    "已开启": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On"
+          }
+        }
+      }
+    },
     "已恢复内容源资料": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Source info restored"
+          }
+        }
+      }
+    },
+    "已按标签黑名单隐藏 %lld 部": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld works hidden by the tag blacklist"
+          }
+        }
+      }
+    },
+    "已排队": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Queued"
           }
         }
       }
@@ -5783,6 +7121,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Disconnected. Local and cloud data are both kept."
+          }
+        }
+      }
+    },
+    "已暂停 · %lld%%": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paused · %lld%%"
           }
         }
       }
@@ -5967,6 +7315,16 @@
         }
       }
     },
+    "已跳过无法播放的文件：": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skipped unplayable files:"
+          }
+        }
+      }
+    },
     "已跳过，不参与批量搜索与迁移": {
       "localizations": {
         "en": {
@@ -6003,6 +7361,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "%1$lld extensions selected · %2$lld sources, %3$lld works"
+          }
+        }
+      }
+    },
+    "已选 %lld 个来源；当前筛选 %lld 个。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld sources selected; %2$lld match the current filters."
           }
         }
       }
@@ -6127,6 +7495,16 @@
         }
       }
     },
+    "带有所选标签的作品不会出现在浏览、搜索、推荐和作品库中；来源中的同义标签会一并匹配。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Works with selected tags are hidden from Browse, search, recommendations, and the library. Equivalent source tags are also matched."
+          }
+        }
+      }
+    },
     "常用 User-Agent": {
       "localizations": {
         "en": {
@@ -6207,6 +7585,16 @@
         }
       }
     },
+    "开启应用锁": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enable app lock"
+          }
+        }
+      }
+    },
     "开启推荐": {
       "localizations": {
         "en": {
@@ -6257,6 +7645,26 @@
         }
       }
     },
+    "开始阅读后显示在这里": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your recent reading will appear here"
+          }
+        }
+      }
+    },
+    "当前仅支持漫画、小说与视频下载": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Only manga, novel, and video downloads are supported"
+          }
+        }
+      }
+    },
     "当前仅支持漫画与小说章节下载": {
       "extractionState": "manual",
       "localizations": {
@@ -6264,6 +7672,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Only manga and novel chapters can be downloaded for now"
+          }
+        }
+      }
+    },
+    "当前内容类型没有下载记录": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No downloads for this content type"
           }
         }
       }
@@ -6308,6 +7726,16 @@
         }
       }
     },
+    "当前空间": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Current space"
+          }
+        }
+      }
+    },
     "当前空间暂无推荐作品": {
       "localizations": {
         "en": {
@@ -6348,6 +7776,16 @@
         }
       }
     },
+    "当前：%@，切换内容空间": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Current: %@. Switch content space"
+          }
+        }
+      }
+    },
     "影视": {
       "localizations": {
         "en": {
@@ -6384,6 +7822,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Video type"
+          }
+        }
+      }
+    },
+    "待读": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unread"
+          }
+        }
+      }
+    },
+    "待读 %d 章": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d unread chapters"
           }
         }
       }
@@ -6478,6 +7936,26 @@
         }
       }
     },
+    "想法": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Thought"
+          }
+        }
+      }
+    },
+    "想法 %lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld thoughts"
+          }
+        }
+      }
+    },
     "想看": {
       "localizations": {
         "en": {
@@ -6518,12 +7996,32 @@
         }
       }
     },
+    "成人作品指成人分级或成人类型来源的作品。隐藏不会删除收藏、记录或笔记。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adult works are those rated adult or from adult sources. Hiding them does not delete favorites, records, or notes."
+          }
+        }
+      }
+    },
     "成人内容": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Adult content"
+          }
+        }
+      }
+    },
+    "成人内容无痕阅读": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Incognito for adult content"
           }
         }
       }
@@ -6584,6 +8082,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "To"
+          }
+        }
+      }
+    },
+    "所有内容空间的下载任务": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Download tasks from all spaces"
           }
         }
       }
@@ -6667,6 +8175,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Sync when the app opens"
+          }
+        }
+      }
+    },
+    "打开来源时自动应用": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apply automatically when opening source"
           }
         }
       }
@@ -6951,6 +8469,16 @@
         }
       }
     },
+    "找到可阅读或播放的作品": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Find a work to read or watch"
+          }
+        }
+      }
+    },
     "拖动调整浏览页中的来源顺序；分组时各组内保持这个顺序。": {
       "localizations": {
         "en": {
@@ -7017,6 +8545,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "By original source"
+          }
+        }
+      }
+    },
+    "按本地时区查看本周排期": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "View this week's schedule in your local time zone"
           }
         }
       }
@@ -7183,6 +8721,16 @@
         }
       }
     },
+    "排除（书名或来源，逗号分隔）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exclude (book titles or sources, comma-separated)"
+          }
+        }
+      }
+    },
     "控件": {
       "localizations": {
         "en": {
@@ -7229,6 +8777,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Recommendation sources"
+          }
+        }
+      }
+    },
+    "推荐状态": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recommendation status"
           }
         }
       }
@@ -7333,6 +8891,16 @@
         }
       }
     },
+    "搜索作品并关联": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search for a work to link"
+          }
+        }
+      }
+    },
     "搜索作品库": {
       "localizations": {
         "en": {
@@ -7389,6 +8957,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Search finished. Review the candidates one by one."
+          }
+        }
+      }
+    },
+    "搜索并选择作品": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search and select a work"
           }
         }
       }
@@ -7473,6 +9051,26 @@
         }
       }
     },
+    "搜索本章": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search chapter"
+          }
+        }
+      }
+    },
+    "搜索本章正文": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search chapter text"
+          }
+        }
+      }
+    },
     "搜索来源": {
       "localizations": {
         "en": {
@@ -7489,6 +9087,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Search sources, extensions or source IDs"
+          }
+        }
+      }
+    },
+    "搜索来源名称或标识": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search source name or ID"
           }
         }
       }
@@ -7529,6 +9137,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "Search chapters"
+          }
+        }
+      }
+    },
+    "搜索范围": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search scope"
+          }
+        }
+      }
+    },
+    "搜索记录": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search records"
+          }
+        }
+      }
+    },
+    "搜索语言": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search languages"
+          }
+        }
+      }
+    },
+    "摘录 %lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld highlights"
           }
         }
       }
@@ -7644,6 +9292,16 @@
         }
       }
     },
+    "收藏到分类（%lld）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add to categories (%lld)"
+          }
+        }
+      }
+    },
     "收藏和历史中的作品均能找到对应来源。": {
       "localizations": {
         "en": {
@@ -7700,6 +9358,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Collapse recommendations"
+          }
+        }
+      }
+    },
+    "收起简介": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Collapse description"
           }
         }
       }
@@ -7814,6 +9482,27 @@
         }
       }
     },
+    "文件中没有可导入的规则": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The file contains no rules to import"
+          }
+        }
+      }
+    },
+    "文件夹里没有可导入的视频文件": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The folder contains no videos to import"
+          }
+        }
+      }
+    },
     "文件正在使用，请等待阅读或下载请求结束后再清理。": {
       "localizations": {
         "en": {
@@ -7840,6 +9529,27 @@
           "stringUnit": {
             "state": "translated",
             "value": "Text"
+          }
+        }
+      }
+    },
+    "文本": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Text"
+          }
+        }
+      }
+    },
+    "文本文件是空的": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Text file is empty"
           }
         }
       }
@@ -7890,6 +9600,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "%d new chapters"
+          }
+        }
+      }
+    },
+    "新增章节": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New chapters"
           }
         }
       }
@@ -7985,6 +9705,16 @@
         }
       }
     },
+    "无法保存笔记": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not save the note"
+          }
+        }
+      }
+    },
     "无法写入备份文件": {
       "extractionState": "manual",
       "localizations": {
@@ -8025,6 +9755,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Couldn't start decompression"
+          }
+        }
+      }
+    },
+    "无法匹配更新章节，请在作品详情中选择章节下载。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not match the updated chapters. Select chapters to download on the work's details page."
+          }
+        }
+      }
+    },
+    "无法开启应用锁": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not enable app lock"
           }
         }
       }
@@ -8119,6 +9869,16 @@
         }
       }
     },
+    "无法识别正文语言": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not detect the language of the text."
+          }
+        }
+      }
+    },
     "无法识别的备份文件：支持 Kototoro/Kotatsu、Mihon/Tachiyomi、Aniyomi 和 Venera 备份": {
       "extractionState": "manual",
       "localizations": {
@@ -8151,6 +9911,16 @@
         }
       }
     },
+    "无法读取备份文件": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not read the backup file"
+          }
+        }
+      }
+    },
     "无法读取所选备份文件": {
       "extractionState": "manual",
       "localizations": {
@@ -8158,6 +9928,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Couldn't read the selected backup file"
+          }
+        }
+      }
+    },
+    "无法读取文件": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not read file"
+          }
+        }
+      }
+    },
+    "无法读取此 PDF（可能已加密或损坏）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not read this PDF; it may be encrypted or damaged."
           }
         }
       }
@@ -8188,6 +9978,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Incognito mode"
+          }
+        }
+      }
+    },
+    "无痕模式：不记录历史、进度与统计": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Incognito: history, progress, and statistics are not recorded"
           }
         }
       }
@@ -8248,6 +10048,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "Old paper"
+          }
+        }
+      }
+    },
+    "旧备份历史缺少作品锚点": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A history entry in the old backup is missing its associated work"
+          }
+        }
+      }
+    },
+    "旧备份收藏缺少作品锚点": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A favorite in the old backup is missing its associated work"
           }
         }
       }
@@ -8324,6 +10146,16 @@
         }
       }
     },
+    "显示原文": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show original"
+          }
+        }
+      }
+    },
     "显示成人内容": {
       "localizations": {
         "en": {
@@ -8374,6 +10206,17 @@
         }
       }
     },
+    "暂不支持导入本地 M3U8 播放列表，请选择完整视频文件": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Local M3U8 playlists are not supported. Select a complete video file."
+          }
+        }
+      }
+    },
     "暂停": {
       "localizations": {
         "en": {
@@ -8390,6 +10233,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Paused"
+          }
+        }
+      }
+    },
+    "暂无%@记录": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No %1$@ records yet"
           }
         }
       }
@@ -8585,6 +10438,16 @@
         }
       }
     },
+    "更新作品": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Updated works"
+          }
+        }
+      }
+    },
     "更新服务器返回了无效响应，请稍后重试。": {
       "localizations": {
         "en": {
@@ -8605,6 +10468,16 @@
         }
       }
     },
+    "更新概览": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Updates overview"
+          }
+        }
+      }
+    },
     "更新渠道": {
       "localizations": {
         "en": {
@@ -8615,12 +10488,32 @@
         }
       }
     },
+    "更新章节": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Updated chapters"
+          }
+        }
+      }
+    },
     "更新记录": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Update record"
+          }
+        }
+      }
+    },
+    "更新记录已不存在，请刷新记录页。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This update record no longer exists. Refresh the records page."
           }
         }
       }
@@ -8641,6 +10534,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Earlier"
+          }
+        }
+      }
+    },
+    "替换为": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Replace with"
+          }
+        }
+      }
+    },
+    "替换规则会在阅读小说时作用于正文：按顺序执行，可限定在某些书或来源上。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Replacement rules apply to novel text in order and can be limited to particular books or sources."
           }
         }
       }
@@ -8785,12 +10698,82 @@
         }
       }
     },
+    "最近阅读的作品与进度，轻点继续。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recently read works and progress. Tap to continue."
+          }
+        }
+      }
+    },
     "有匹配扩展可安装": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Matching extensions available"
+          }
+        }
+      }
+    },
+    "有新章节": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New chapters"
+          }
+        }
+      }
+    },
+    "有章节更新": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New chapters available"
+          }
+        }
+      }
+    },
+    "服务器": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server"
+          }
+        }
+      }
+    },
+    "服务器地址": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server address"
+          }
+        }
+      }
+    },
+    "朗读": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Read aloud"
+          }
+        }
+      }
+    },
+    "未下载": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not downloaded"
           }
         }
       }
@@ -8855,12 +10838,43 @@
         }
       }
     },
+    "未查看更新": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unseen updates"
+          }
+        }
+      }
+    },
     "未添加": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Not added"
+          }
+        }
+      }
+    },
+    "未知": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unknown"
+          }
+        }
+      }
+    },
+    "未知的本地来源：%@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unknown local source: %@"
           }
         }
       }
@@ -8935,6 +10949,16 @@
         }
       }
     },
+    "未选择检索源": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No search sources selected"
+          }
+        }
+      }
+    },
     "本周": {
       "localizations": {
         "en": {
@@ -8971,6 +10995,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Local works"
+          }
+        }
+      }
+    },
+    "本地作品已被删除": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The local work has been deleted"
           }
         }
       }
@@ -9027,6 +11062,17 @@
         }
       }
     },
+    "本地收藏分类编号超出范围": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The local favorite category ID is out of range"
+          }
+        }
+      }
+    },
     "本地漫画": {
       "extractionState": "manual",
       "localizations": {
@@ -9049,12 +11095,33 @@
         }
       }
     },
+    "本地视频已被删除": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The local video has been deleted"
+          }
+        }
+      }
+    },
     "本月人气": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Popular this month"
+          }
+        }
+      }
+    },
+    "本期概览": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Period overview"
           }
         }
       }
@@ -9109,6 +11176,16 @@
         }
       }
     },
+    "本章进度 %lld%%": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chapter progress: %lld%%"
+          }
+        }
+      }
+    },
     "本轮同步不安装扩展、不同步应用设置或本地媒体文件；云端已有的安卓源配置和扩展数据会保留。": {
       "localizations": {
         "en": {
@@ -9125,6 +11202,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Round finished: %@"
+          }
+        }
+      }
+    },
+    "本集已下载": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Episode downloaded"
+          }
+        }
+      }
+    },
+    "本集进度 %lld%%": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Episode progress: %lld%%"
           }
         }
       }
@@ -9220,6 +11317,36 @@
         }
       }
     },
+    "来源更新于 %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Updated by source on %@"
+          }
+        }
+      }
+    },
+    "来源更新时间": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Source update time"
+          }
+        }
+      }
+    },
+    "来源更新时间未知": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Source update time unknown"
+          }
+        }
+      }
+    },
     "来源没有返回章节，仅显示已下载的章节": {
       "localizations": {
         "en": {
@@ -9270,6 +11397,16 @@
         }
       }
     },
+    "来源类型（留空不限）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Source types (leave empty for all)"
+          }
+        }
+      }
+    },
     "来源设置": {
       "localizations": {
         "en": {
@@ -9297,6 +11434,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Source details"
+          }
+        }
+      }
+    },
+    "来源语言": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Source language"
           }
         }
       }
@@ -9360,6 +11507,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Soft"
+          }
+        }
+      }
+    },
+    "查找": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Find"
           }
         }
       }
@@ -9644,6 +11801,26 @@
         }
       }
     },
+    "正则": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Regex"
+          }
+        }
+      }
+    },
+    "正则表达式": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Regular expression"
+          }
+        }
+      }
+    },
     "正在上传备份": {
       "localizations": {
         "en": {
@@ -9670,6 +11847,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Downloading %@…"
+          }
+        }
+      }
+    },
+    "正在下载 %lld%%": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Downloading %lld%%"
           }
         }
       }
@@ -9720,6 +11907,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Refreshing repositories…"
+          }
+        }
+      }
+    },
+    "正在加入队列": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adding to queue"
           }
         }
       }
@@ -10054,12 +12251,32 @@
         }
       }
     },
+    "正在翻译 %lld/%lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Translating %1$lld/%2$lld"
+          }
+        }
+      }
+    },
     "正在自动通过验证…": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Passing verification automatically…"
+          }
+        }
+      }
+    },
+    "正在读取下载队列…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loading download queue…"
           }
         }
       }
@@ -10244,12 +12461,42 @@
         }
       }
     },
+    "正常阅读": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Read normally"
+          }
+        }
+      }
+    },
     "正式版": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Release"
+          }
+        }
+      }
+    },
+    "正文": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Body text"
+          }
+        }
+      }
+    },
+    "正文已是目标语言，无需翻译": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The text is already in the target language."
           }
         }
       }
@@ -10282,6 +12529,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "No works in this section"
+          }
+        }
+      }
+    },
+    "此剧集没有可下载的地址": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No download URL is available for this episode"
           }
         }
       }
@@ -10448,12 +12705,32 @@
         }
       }
     },
+    "每周": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Weekly"
+          }
+        }
+      }
+    },
     "每天": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Daily"
+          }
+        }
+      }
+    },
+    "每日播出 · 剧集": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Daily airings · Series"
           }
         }
       }
@@ -10468,12 +12745,42 @@
         }
       }
     },
+    "每日活动": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Daily activity"
+          }
+        }
+      }
+    },
+    "每次询问": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ask every time"
+          }
+        }
+      }
+    },
     "每组都会合并到选中的那一部。其余条目会移出收藏和历史，已下载的内容和书签会保留。": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Each group merges into its selected entry. The other entries leave the library and history; downloads and bookmarks are kept."
+          }
+        }
+      }
+    },
+    "每页尝试 %lld 次": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld attempts per page"
           }
         }
       }
@@ -10488,12 +12795,52 @@
         }
       }
     },
+    "汇总查看漫画、小说与视频": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Browse manga, novels, and videos together"
+          }
+        }
+      }
+    },
+    "没有其他可用来源。先在扩展管理安装或启用同类型来源。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No other sources are available. Install or enable sources of the same type in extension management first."
+          }
+        }
+      }
+    },
     "没有内容": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Nothing here"
+          }
+        }
+      }
+    },
+    "没有划线或页面笔记": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No highlights or page notes"
+          }
+        }
+      }
+    },
+    "没有匹配的来源": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No matching sources"
           }
         }
       }
@@ -10548,6 +12895,16 @@
         }
       }
     },
+    "没有找到": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No results"
+          }
+        }
+      }
+    },
     "没有找到可用的苹果 CMS 站点": {
       "extractionState": "manual",
       "localizations": {
@@ -10565,6 +12922,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "No results found."
+          }
+        }
+      }
+    },
+    "没有替换规则": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No replacement rules"
           }
         }
       }
@@ -10609,6 +12976,36 @@
         }
       }
     },
+    "测试连接": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Test connection"
+          }
+        }
+      }
+    },
+    "测速": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Test speed"
+          }
+        }
+      }
+    },
+    "测速中…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Testing…"
+          }
+        }
+      }
+    },
     "浏览": {
       "localizations": {
         "en": {
@@ -10635,6 +13032,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Browse, Library and Records share the space selector at the top right."
+          }
+        }
+      }
+    },
+    "浏览、作品库与记录共用导航栏中的空间选择。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Browse, Library, and Records share the space selected in the navigation bar."
           }
         }
       }
@@ -10685,6 +13092,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Browse chapter pages"
+          }
+        }
+      }
+    },
+    "浏览来源与作品库": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Browse sources and library"
           }
         }
       }
@@ -10899,6 +13316,36 @@
         }
       }
     },
+    "添加空间": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add space"
+          }
+        }
+      }
+    },
+    "添加规则": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add rule"
+          }
+        }
+      }
+    },
+    "添加规则，或导入 Legado 格式的规则文件。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add a rule or import a Legado rule file."
+          }
+        }
+      }
+    },
     "添加链接会自动识别类型；直接输入地址时，请选择对应的仓库类型。": {
       "localizations": {
         "en": {
@@ -10929,12 +13376,32 @@
         }
       }
     },
+    "清空": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear"
+          }
+        }
+      }
+    },
     "清空已选": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Clear selection"
+          }
+        }
+      }
+    },
+    "清空标签黑名单？": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear tag blacklist?"
           }
         }
       }
@@ -11219,6 +13686,26 @@
         }
       }
     },
+    "点开作品可查看介绍，通过全局搜索或作品库选择对应作品，再使用网站资料或开启进度追踪。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open a work to view its description. Find the matching work using global search or the library, then use site metadata or enable progress tracking."
+          }
+        }
+      }
+    },
+    "点选一份备份查看内容并合并恢复。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select a backup to review and merge its contents."
+          }
+        }
+      }
+    },
     "点选要保留的那一部。合并会把收藏分类、笔记、统计和追踪并入保留的作品，并保留读得最远的进度。": {
       "localizations": {
         "en": {
@@ -11295,6 +13782,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ecosystem"
+          }
+        }
+      }
+    },
+    "用于下载扩展安装包。仓库索引地址保持直连，以免相对路径解析到镜像站。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Used to download extension packages. Repository indexes connect directly so relative paths do not resolve to the mirror."
           }
         }
       }
@@ -11480,6 +13977,16 @@
         }
       }
     },
+    "直连（默认）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Direct (default)"
+          }
+        }
+      }
+    },
     "相似度阈值": {
       "localizations": {
         "en": {
@@ -11620,6 +14127,16 @@
         }
       }
     },
+    "离线": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Offline"
+          }
+        }
+      }
+    },
     "离线文件信息无法读取，原文件已保留。": {
       "localizations": {
         "en": {
@@ -11741,6 +14258,16 @@
         }
       }
     },
+    "立即上传": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Upload now"
+          }
+        }
+      }
+    },
     "立即同步": {
       "localizations": {
         "en": {
@@ -11803,12 +14330,33 @@
         }
       }
     },
+    "章": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "chapters"
+          }
+        }
+      }
+    },
     "章节": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Chapters"
+          }
+        }
+      }
+    },
+    "章节不存在": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chapter does not exist"
           }
         }
       }
@@ -11833,6 +14381,17 @@
         }
       }
     },
+    "章节地址无效": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invalid chapter address"
+          }
+        }
+      }
+    },
     "章节已失效": {
       "localizations": {
         "en": {
@@ -11849,6 +14408,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Chapters are matched by volume, chapter number or position and may be off. Original offline files and bookmarks stay with the original work. An existing target work merges categories and keeps the newer progress."
+          }
+        }
+      }
+    },
+    "章节标题": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chapter title"
           }
         }
       }
@@ -11873,6 +14442,26 @@
         }
       }
     },
+    "笔记": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Notes"
+          }
+        }
+      }
+    },
+    "笔记与书签": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Notes & bookmarks"
+          }
+        }
+      }
+    },
     "第 %@ 章": {
       "extractionState": "manual",
       "localizations": {
@@ -11884,6 +14473,17 @@
         }
       }
     },
+    "第 %@ 节": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Section %@"
+          }
+        }
+      }
+    },
     "第 %@ 话": {
       "extractionState": "manual",
       "localizations": {
@@ -11891,6 +14491,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Chapter %@"
+          }
+        }
+      }
+    },
+    "第 %@ 部分": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Part %@"
           }
         }
       }
@@ -11935,6 +14546,16 @@
         }
       }
     },
+    "第 %lld 章": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chapter %lld"
+          }
+        }
+      }
+    },
     "第 %lld 页": {
       "localizations": {
         "en": {
@@ -11951,6 +14572,36 @@
           "stringUnit": {
             "state": "translated",
             "value": "Page %1$lld, zoom %2$lld%%, offset %3$lld, window %4$lld pages"
+          }
+        }
+      }
+    },
+    "第 12 章": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chapter 12"
+          }
+        }
+      }
+    },
+    "第 120 话": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chapter 120"
+          }
+        }
+      }
+    },
+    "第 8 集": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Episode 8"
           }
         }
       }
@@ -12025,6 +14676,16 @@
         }
       }
     },
+    "筛选源（%lld）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Filter sources (%lld)"
+          }
+        }
+      }
+    },
     "筛选语言，当前": {
       "localizations": {
         "en": {
@@ -12065,6 +14726,36 @@
         }
       }
     },
+    "管理所有空间中已启用的在线来源。搜索与筛选不会改变已选偏好，返回后点击“保存”生效。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Manage online sources enabled across all spaces. Search and filters do not change your selections. Return and tap Save to apply."
+          }
+        }
+      }
+    },
+    "管理推荐来源": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Manage recommendation sources"
+          }
+        }
+      }
+    },
+    "管理自定义空间": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Manage custom spaces"
+          }
+        }
+      }
+    },
     "管理追踪进度": {
       "localizations": {
         "en": {
@@ -12091,6 +14782,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "The system player can't read this video. Use a supported codec (for example an H.264 MP4/MOV file)."
+          }
+        }
+      }
+    },
+    "系统翻译不支持这一语言组合": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "System translation does not support this language pair."
           }
         }
       }
@@ -12265,6 +14966,26 @@
         }
       }
     },
+    "编辑": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edit"
+          }
+        }
+      }
+    },
+    "编辑想法": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edit thought"
+          }
+        }
+      }
+    },
     "编辑批注": {
       "localizations": {
         "en": {
@@ -12281,6 +15002,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Edit favourite categories"
+          }
+        }
+      }
+    },
+    "编辑空间": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edit space"
+          }
+        }
+      }
+    },
+    "编辑规则": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edit rule"
           }
         }
       }
@@ -12457,6 +15198,36 @@
         }
       }
     },
+    "翻译失败：%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Translation failed: %@"
+          }
+        }
+      }
+    },
+    "翻译本章": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Translate chapter"
+          }
+        }
+      }
+    },
+    "翻译页面": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Translate page"
+          }
+        }
+      }
+    },
     "翻页效果": {
       "localizations": {
         "en": {
@@ -12483,6 +15254,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Automatic double page (landscape or wide window)"
+          }
+        }
+      }
+    },
+    "自动备份": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatic backup"
           }
         }
       }
@@ -12547,6 +15328,16 @@
         }
       }
     },
+    "自动（按正文语言）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatic (text language)"
+          }
+        }
+      }
+    },
     "自定义": {
       "localizations": {
         "en": {
@@ -12563,6 +15354,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "Custom %@"
+          }
+        }
+      }
+    },
+    "自定义空间": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Custom spaces"
+          }
+        }
+      }
+    },
+    "自定义空间按内容类型、来源语言与来源类型划定范围（各项之间为“且”，同一项内为“或”，留空不限），与 Android 共用同一份数据。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Custom spaces filter by content type, source language, and source type. Each group must match; within a group, any option matches. Leave empty for no restriction. Spaces share data with Android."
+          }
+        }
+      }
+    },
+    "至少 %lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "At least %lld"
+          }
+        }
+      }
+    },
+    "至少选择一个来源。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select at least one source."
           }
         }
       }
@@ -12623,6 +15454,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Apple CMS (JSON/XML) endpoints and type 0/1 sites from TVBox configurations; no extension runtime needed."
+          }
+        }
+      }
+    },
+    "范围": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scope"
+          }
+        }
+      }
+    },
+    "葬送的芙莉莲": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Frieren: Beyond Journey's End"
           }
         }
       }
@@ -12707,12 +15558,55 @@
         }
       }
     },
+    "规则无效": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invalid rule"
+          }
+        }
+      }
+    },
     "视频": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Video"
+          }
+        }
+      }
+    },
+    "视频文件是空的": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Video file is empty"
+          }
+        }
+      }
+    },
+    "视频文件是空的：%@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Video file is empty: %@"
+          }
+        }
+      }
+    },
+    "视频章节无效": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invalid video episode"
           }
         }
       }
@@ -12747,6 +15641,26 @@
         }
       }
     },
+    "解锁": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unlock"
+          }
+        }
+      }
+    },
+    "解锁 Kototoro": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unlock Kototoro"
+          }
+        }
+      }
+    },
     "解除 %@ 关联": {
       "localizations": {
         "en": {
@@ -12757,12 +15671,52 @@
         }
       }
     },
+    "记下这一刻": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Note this moment"
+          }
+        }
+      }
+    },
     "记录": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Records"
+          }
+        }
+      }
+    },
+    "记录类型": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Record type"
+          }
+        }
+      }
+    },
+    "记录详情": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Record details"
+          }
+        }
+      }
+    },
+    "记笔记": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add note"
           }
         }
       }
@@ -12857,6 +15811,16 @@
         }
       }
     },
+    "试着放开内容类型或来源类型。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Try broadening the content type or source type filters."
+          }
+        }
+      }
+    },
     "试试其他关键词，或调整语言与生态筛选。": {
       "localizations": {
         "en": {
@@ -12929,6 +15893,16 @@
         }
       }
     },
+    "详情页中属于内容提示类的标签以醒目颜色显示。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Highlight content advisory tags on the details page."
+          }
+        }
+      }
+    },
     "详细列表": {
       "localizations": {
         "en": {
@@ -12959,6 +15933,16 @@
         }
       }
     },
+    "语速 %@×": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speech rate: %@×"
+          }
+        }
+      }
+    },
     "请允许访问应用在 Google Drive 中的数据后重新连接": {
       "localizations": {
         "en": {
@@ -12975,6 +15959,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Add and enable sources in Browse, or adjust your recommendation preferences."
+          }
+        }
+      }
+    },
+    "请先在系统设置中设置面容 ID、触控 ID 或设备密码。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set up Face ID, Touch ID, or a device passcode in system settings first."
+          }
+        }
+      }
+    },
+    "请先填写 WebDAV 服务器地址": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter the WebDAV server address first"
           }
         }
       }
@@ -13032,12 +16036,43 @@
         }
       }
     },
+    "请求间隔 %lld ms": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Request interval: %lld ms"
+          }
+        }
+      }
+    },
+    "请求间隔可减轻来源的访问压力；失败的页面按设定次数重试。下载在 iOS 上逐页进行，以控制扩展运行时的内存，因此没有线程数与同时下载作品数设置。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A request interval reduces load on the source. Failed pages are retried as configured. On iOS, pages download one at a time to limit extension memory use, so concurrency settings are unavailable."
+          }
+        }
+      }
+    },
     "请输入完整的 HTTPS 接口地址。": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Enter a full HTTPS endpoint URL."
+          }
+        }
+      }
+    },
+    "请选择文件": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select a file"
           }
         }
       }
@@ -13132,6 +16167,16 @@
         }
       }
     },
+    "超时": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Timed out"
+          }
+        }
+      }
+    },
     "跟随滚动": {
       "localizations": {
         "en": {
@@ -13148,6 +16193,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "System (%@)"
+          }
+        }
+      }
+    },
+    "跳过已完结作品": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skip completed works"
           }
         }
       }
@@ -13178,6 +16233,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Enter %@"
+          }
+        }
+      }
+    },
+    "输入示例文本": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter sample text"
+          }
+        }
+      }
+    },
+    "边缘滑动返回": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Swipe from edge to go back"
           }
         }
       }
@@ -13372,6 +16447,16 @@
         }
       }
     },
+    "还没有笔记": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No notes yet"
+          }
+        }
+      }
+    },
     "这个分类还没有作品": {
       "localizations": {
         "en": {
@@ -13402,6 +16487,26 @@
         }
       }
     },
+    "这部作品的书签可在详情页查看。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This work's bookmarks are available on its details page."
+          }
+        }
+      }
+    },
+    "进入推荐时先显示缓存，超过六小时或偏好、可用来源变化时重新生成。可在推荐页下拉刷新，或在浏览页推荐菜单中手动刷新；关闭后停止获取推荐。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cached recommendations appear first and refresh after six hours or when preferences or available sources change. Pull to refresh on the recommendations page or use the Browse menu. Turning this off stops fetching recommendations."
+          }
+        }
+      }
+    },
     "进度尚未同步。": {
       "localizations": {
         "en": {
@@ -13418,6 +16523,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Progress synced to "
+          }
+        }
+      }
+    },
+    "远程目录": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remote directory"
           }
         }
       }
@@ -13448,6 +16563,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Once connected, you can link entries in a work's details, sync reading or watching progress, and manage status and score."
+          }
+        }
+      }
+    },
+    "连接成功": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connected successfully"
           }
         }
       }
@@ -13634,6 +16759,16 @@
         }
       }
     },
+    "选择剧集": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select episode"
+          }
+        }
+      }
+    },
     "选择原来源，迁移它在全部收藏和历史中关联的作品；相同作品只处理一次。": {
       "localizations": {
         "en": {
@@ -13764,12 +16899,32 @@
         }
       }
     },
+    "速度与重试": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speed and retries"
+          }
+        }
+      }
+    },
     "邮箱或用户名": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Email or username"
+          }
+        }
+      }
+    },
+    "部作品": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "works"
           }
         }
       }
@@ -13810,6 +16965,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Rename category"
+          }
+        }
+      }
+    },
+    "重复章节标为已读": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mark duplicate chapters as read"
           }
         }
       }
@@ -13870,6 +17035,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Reconnect Google account"
+          }
+        }
+      }
+    },
+    "重新选择作品": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose another work"
           }
         }
       }
@@ -13944,6 +17119,16 @@
         }
       }
     },
+    "重试间隔 %@ 秒": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retry interval: %@ seconds"
+          }
+        }
+      }
+    },
     "重读 / 重看": {
       "localizations": {
         "en": {
@@ -13970,6 +17155,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Touch and hold to select text, then choose Highlight. Tap a highlight to select it and change its color, style or note, or delete it."
+          }
+        }
+      }
+    },
+    "间谍过家家": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SPY x FAMILY"
           }
         }
       }
@@ -14214,6 +17409,16 @@
         }
       }
     },
+    "隐藏成人来源（浏览与搜索）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hide adult sources (browse and search)"
+          }
+        }
+      }
+    },
     "雅致蓝": {
       "localizations": {
         "en": {
@@ -14335,6 +17540,17 @@
         }
       }
     },
+    "页面地址无效": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invalid page address"
+          }
+        }
+      }
+    },
     "页面预加载": {
       "localizations": {
         "en": {
@@ -14361,6 +17577,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Top banner"
+          }
+        }
+      }
+    },
+    "预览": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preview"
           }
         }
       }
@@ -14425,6 +17651,16 @@
         }
       }
     },
+    "高亮敏感类别": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Highlight sensitive categories"
+          }
+        }
+      }
+    },
     "高分作品": {
       "localizations": {
         "en": {
@@ -14461,6 +17697,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Default"
+          }
+        }
+      }
+    },
+    "默认分组": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Default group"
+          }
+        }
+      }
+    },
+    "，%d 部已跳过": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": ", %d skipped"
           }
         }
       }
