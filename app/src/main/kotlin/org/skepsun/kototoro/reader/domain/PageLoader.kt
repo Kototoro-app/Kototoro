@@ -15,13 +15,16 @@ import coil3.request.ImageRequest
 import dagger.hilt.android.ActivityRetainedLifecycle
 import dagger.hilt.android.scopes.ActivityRetainedScoped
 import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.plus
 import kotlinx.coroutines.runInterruptible
@@ -115,6 +118,7 @@ class PageLoader @Inject constructor(
     @Volatile
     private var repository: ContentRepository? = null
     private val prefetchQueue = LinkedList<ContentPage>()
+    private val prefetchSequence = PrefetchSequence()
     private val counter = AtomicInteger(0)
     private var prefetchQueueLimit = settings.readerPrefetchLimit
     private val edgeDetector = EdgeDetector(context)
@@ -139,21 +143,39 @@ class PageLoader @Inject constructor(
     }
 
     @AnyThread
-    fun prefetch(pages: List<ReaderPage>) = loaderScope.launch {
-        prefetchLock.withLock {
-            for (page in pages.asReversed()) {
-                val contentPage = page.toContentPage()
-                if (synchronized(tasks) { tasks.containsKey(contentPage.taskKey()) }) {
-                    continue
+    fun prefetch(pages: List<ReaderPage>): Job {
+        val seq = prefetchSequence.next()
+        return loaderScope.launch {
+            prefetchLock.withLock {
+                if (!prefetchSequence.isLatest(seq)) {
+                    return@withLock
                 }
-                prefetchQueue.offerFirst(contentPage)
-                if (prefetchQueue.size > prefetchQueueLimit) {
-                    prefetchQueue.pollLast()
+                val keep = pages.mapTo(HashSet<Long>()) { it.toContentPage().taskKey() }
+                // loadPageAsync registers consumers under the same lock, so this check-and-cancel is atomic.
+                synchronized(tasks) {
+                    for (i in tasks.size() - 1 downTo 0) {
+                        val r = tasks.valueAt(i)
+                        if (r.isPrefetch && r.consumers.get() == 0 && !r.task.isCompleted && tasks.keyAt(i) !in keep) {
+                            r.task.cancel()
+                            tasks.removeAt(i)
+                        }
+                    }
+                }
+                prefetchQueue.clear()
+                for (page in pages.asReversed()) {
+                    val contentPage = page.toContentPage()
+                    if (synchronized(tasks) { tasks.containsKey(contentPage.taskKey()) }) {
+                        continue
+                    }
+                    prefetchQueue.offerFirst(contentPage)
+                    if (prefetchQueue.size > prefetchQueueLimit) {
+                        prefetchQueue.pollLast()
+                    }
                 }
             }
-        }
-        if (counter.get() == 0) {
-            onIdle()
+            if (prefetchSequence.isLatest(seq) && counter.get() == 0) {
+                onIdle()
+            }
         }
     }
 
@@ -323,6 +345,8 @@ class PageLoader @Inject constructor(
     }
 
     suspend fun invalidate(clearCache: Boolean) {
+        prefetchSequence.invalidate()
+        prefetchLock.withLock { prefetchQueue.clear() }
         synchronized(tasks) {
             tasks.clear()
         }
@@ -383,21 +407,20 @@ class PageLoader @Inject constructor(
     ): PageTaskRecord {
         val progress = MutableStateFlow(PROGRESS_UNDEFINED)
         val ticket = downloadPermits.ticket(priority)
+        counter.incrementAndGet()
         val deferred = loaderScope.async {
-            counter.incrementAndGet()
-            try {
-                loadPageImpl(
-                    page = page,
-                    progress = progress,
-                    isPrefetch = isPrefetch,
-                    skipCache = skipCache,
-                    pageUrlOverride = pageUrlOverride,
-                    ticket = ticket,
-                )
-            } finally {
-                if (counter.decrementAndGet() == 0) {
-                    onIdle()
-                }
+            loadPageImpl(
+                page = page,
+                progress = progress,
+                isPrefetch = isPrefetch,
+                skipCache = skipCache,
+                pageUrlOverride = pageUrlOverride,
+                ticket = ticket,
+            )
+        }
+        deferred.invokeOnCompletion {
+            if (counter.decrementAndGet() == 0) {
+                onIdle()
             }
         }
         return PageTaskRecord(
@@ -479,7 +502,11 @@ class PageLoader @Inject constructor(
         skipCache: Boolean,
         pageUrlOverride: String?,
         ticket: PriorityPermitPool.Ticket,
-    ): Uri = downloadPermits.withPermit(ticket) {
+    ): Uri {
+        if (isPrefetch) {
+            downloadSlowdownDispatcher.delay(page.source)
+        }
+        return downloadPermits.withPermit(ticket) {
             val pageUrl = pageUrlOverride ?: getPageUrl(page)
             check(pageUrl.isNotBlank()) { "Cannot obtain full image url for $page" }
             val uri = pageUrl.toUri()
@@ -525,10 +552,7 @@ class PageLoader @Inject constructor(
                         cache.set(pageUrl, bytes.inputStream().source(), contentType.toMimeTypeOrNull()).toUri()
                     }
 
-                    else -> {
-                        if (isPrefetch) {
-                            downloadSlowdownDispatcher.delay(page.source)
-                        }
+                    else -> coroutineScope {
                         val repo = getRepository(page.source)
                         val response = repo.fetchPageResponse(pageUrl, page)
                             ?: run {
@@ -540,26 +564,40 @@ class PageLoader @Inject constructor(
                             "JsPageResponse",
                             "resp code=${response.code} protocol=${response.protocol} redirected=${response.priorResponse != null} reqUrl=${response.request.url} prior=${response.priorResponse?.code} server=${response.header("server")} cf-ray=${response.header("cf-ray")} cf-mitigated=${response.header("cf-mitigated")}"
                         )
-                        response.ensureSuccess().use { resp ->
-                            val body = resp.requireBody()
-                            val contentType = body.contentType()
-                            if (
-                                contentType?.type.equals("text", ignoreCase = true) &&
-                                contentType?.subtype.equals("html", ignoreCase = true)
-                            ) {
-                                throw IOException(
-                                    "Expected an image but received $contentType from ${resp.request.url}",
-                                )
+                        // Runs on the IO pool so closing the response is not starved by Default threads blocked in the body read.
+                        val watcher = launch(Dispatchers.IO, start = CoroutineStart.UNDISPATCHED) {
+                            try {
+                                awaitCancellation()
+                            } finally {
+                                runCatching { response.close() }
                             }
-                            body.withProgress(progress).use {
-                                cache.set(pageUrl, it.source(), it.contentType()?.toMimeType())
-                            }
-                        }.toUri()
+                        }
+                        try {
+                            response.ensureSuccess().use { resp ->
+                                val body = resp.requireBody()
+                                val contentType = body.contentType()
+                                if (
+                                    contentType?.type.equals("text", ignoreCase = true) &&
+                                    contentType?.subtype.equals("html", ignoreCase = true)
+                                ) {
+                                    throw IOException(
+                                        "Expected an image but received $contentType from ${resp.request.url}",
+                                    )
+                                }
+                                body.withProgress(progress).use {
+                                    it.source().timeout().timeout(PAGE_READ_TIMEOUT_SEC, java.util.concurrent.TimeUnit.SECONDS)
+                                    cache.set(pageUrl, it.source(), it.contentType()?.toMimeType())
+                                }
+                            }.toUri()
+                        } finally {
+                            watcher.cancel()
+                        }
                     }
                 }
             }
             sourceUri
         }
+    }
 
     private fun isLowRam(): Boolean {
         return context.ramAvailable <= FileSize.MEGABYTES.convert(PREFETCH_MIN_RAM_MB, FileSize.BYTES)
@@ -621,6 +659,7 @@ class PageLoader @Inject constructor(
         private const val LOAD_PRIORITY_RETRY = 2
         private const val PREFETCH_LIMIT_DEFAULT = 6
         private const val PREFETCH_MIN_RAM_MB = 80L
+        private const val PAGE_READ_TIMEOUT_SEC = 20L
 
         fun createPageRequest(pageUrl: String, page: ContentPage): Request {
             val builder = Request.Builder()
