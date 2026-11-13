@@ -200,9 +200,12 @@ fun VideoEpisodePreviewSection(
             )
         } else if (!longTitles) {
             BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                val hasLongerPreviewTitles = preview.any { it.title.length >= 4 } || preview.any { it.isCurrent }
                 val columns = when {
-                    maxWidth < 520.dp -> 4
-                    else -> (maxWidth / 96.dp).toInt().coerceIn(4, 6)
+                    maxWidth < 360.dp -> 3
+                    maxWidth < 460.dp -> if (hasLongerPreviewTitles) 3 else 4
+                    maxWidth < 640.dp -> (maxWidth / 92.dp).toInt().coerceIn(4, 6)
+                    else -> (maxWidth / 84.dp).toInt().coerceIn(6, 8)
                 }
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     preview.chunked(columns).forEach { rowItems ->
@@ -249,19 +252,19 @@ private fun EpisodeGridChip(
     modifier: Modifier = Modifier,
 ) {
     val shape = RoundedCornerShape(10.dp)
-    val containerColor = if (episode.isCurrent) {
-        MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
-    } else {
-        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+    val containerColor = when {
+        episode.isCurrent -> MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
+        episode.isWatched -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+        else -> MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.85f)
     }
-    val borderColor = if (episode.isCurrent) {
-        MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
-    } else {
-        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.30f)
+    val borderColor = when {
+        episode.isCurrent -> MaterialTheme.colorScheme.primary.copy(alpha = 0.65f)
+        episode.isWatched -> MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.20f)
+        else -> MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
     }
     val contentColor = when {
         episode.isCurrent -> MaterialTheme.colorScheme.primary
-        episode.isWatched -> MaterialTheme.colorScheme.onSurfaceVariant
+        episode.isWatched -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
         else -> MaterialTheme.colorScheme.onSurface
     }
     Surface(
@@ -269,7 +272,7 @@ private fun EpisodeGridChip(
             .heightIn(min = 44.dp)
             .clip(shape)
             .tvFocusable(shape = shape, addFocusTarget = false)
-            .clickable(onClick = onClick)
+            .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onClick)
             .testTag("video-episode-chip:${episode.id}"),
         shape = shape,
         color = containerColor,
@@ -278,7 +281,7 @@ private fun EpisodeGridChip(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 10.dp),
+                .padding(horizontal = 6.dp, vertical = 10.dp),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -316,19 +319,25 @@ private fun EpisodePreviewListRow(
         episode.isWatched -> MaterialTheme.colorScheme.onSurfaceVariant
         else -> MaterialTheme.colorScheme.onSurface
     }
-    Row(
+    Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = if (episode.isCurrent) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else androidx.compose.ui.graphics.Color.Transparent,
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 48.dp)
             .clip(RoundedCornerShape(10.dp))
             .tvFocusable(shape = RoundedCornerShape(10.dp), addFocusTarget = false)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 8.dp, vertical = 10.dp)
-            .alpha(if (episode.isWatched && !episode.isCurrent) 0.72f else 1f)
+            .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onClick)
             .testTag("video-episode-row:${episode.id}"),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp)
+                .padding(horizontal = 10.dp, vertical = 10.dp)
+                .alpha(if (episode.isWatched && !episode.isCurrent) 0.70f else 1f),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
         if (episode.isCurrent) {
             Icon(
                 imageVector = ReaderPanelIcons.Play,
@@ -358,4 +367,5 @@ private fun EpisodePreviewListRow(
             }
         }
     }
+}
 }

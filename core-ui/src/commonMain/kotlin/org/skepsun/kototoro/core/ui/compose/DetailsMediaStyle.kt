@@ -16,15 +16,25 @@ enum class DetailsMediaStyle {
 fun parseDetailsMediaStyleOrNull(raw: String?): DetailsMediaStyle? =
     DetailsMediaStyle.entries.firstOrNull { it.name == raw }
 
-/** Resolves [DetailsMediaStyle] from a `ContentType` enum name, optionally overridden by user preference. */
-fun resolveDetailsMediaStyle(
-    contentTypeName: String?,
-    overrideStyle: DetailsMediaStyle? = null,
-): DetailsMediaStyle = overrideStyle ?: when (contentTypeName) {
+/** Resolves the underlying media family for the given content type name. */
+fun resolveMediaFamily(contentTypeName: String?): DetailsMediaStyle = when (contentTypeName) {
     "VIDEO", "HENTAI_VIDEO" -> DetailsMediaStyle.VIDEO
     "NOVEL", "HENTAI_NOVEL" -> DetailsMediaStyle.NOVEL
     else -> DetailsMediaStyle.MANGA
 }
+
+/** Resolves the dedicated presentation style tailored specifically for this media family. */
+fun resolveDedicatedDetailsMediaStyle(contentTypeName: String?): DetailsMediaStyle =
+    resolveMediaFamily(contentTypeName)
+
+/**
+ * Resolves [DetailsMediaStyle] for a content type, defaulting to the original classic style ([DetailsMediaStyle.MANGA])
+ * unless overridden by user preference.
+ */
+fun resolveDetailsMediaStyle(
+    contentTypeName: String?,
+    overrideStyle: DetailsMediaStyle? = null,
+): DetailsMediaStyle = overrideStyle ?: DetailsMediaStyle.MANGA
 
 /** Shared layout & visual weighting policy derived from [DetailsMediaStyle]. */
 @Immutable
@@ -44,7 +54,7 @@ fun detailsMediaStylePolicy(
     contentTypeName: String?,
     styleOverride: DetailsMediaStyle? = null,
 ): DetailsMediaStylePolicy {
-    val actualKind = resolveDetailsMediaStyle(contentTypeName, null)
+    val actualKind = resolveMediaFamily(contentTypeName)
     val style = resolveDetailsMediaStyle(contentTypeName, styleOverride)
     return detailsMediaStylePolicy(style).copy(
         showPagesTab = actualKind == DetailsMediaStyle.MANGA,

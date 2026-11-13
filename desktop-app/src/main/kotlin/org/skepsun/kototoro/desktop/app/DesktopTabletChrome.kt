@@ -416,6 +416,13 @@ internal fun DesktopTabletDetails(controller: DesktopController, state: DesktopA
                 }
             }
         }
+        val availableTabs = remember(mediaStylePolicy.showBookmarksTab) {
+            if (mediaStylePolicy.showBookmarksTab) DesktopDetailsTab.entries
+            else listOf(DesktopDetailsTab.CHAPTERS)
+        }
+        var tab by remember(content.id, availableTabs) { mutableStateOf(DesktopDetailsTab.CHAPTERS) }
+        val activeTab = if (tab in availableTabs) tab else DesktopDetailsTab.CHAPTERS
+        val bookmarks = remember(state.bookmarks, content.id) { state.bookmarks.count { it.contentId == content.id } }
         val metadata: @Composable (Modifier) -> Unit = { modifier ->
             Column(modifier.then(if (expanded) Modifier.verticalScroll(rememberScrollState()) else Modifier)
                 .padding(20.dp),
@@ -508,7 +515,9 @@ internal fun DesktopTabletDetails(controller: DesktopController, state: DesktopA
                     }
                     NovelHeroHeaderContent(
                         title = content.title,
-                        authorText = content.authors.firstOrNull { it.isNotBlank() }.orEmpty(),
+                        authorText = content.authors.filter { it.isNotBlank() }.joinToString(" · ").ifBlank {
+                            content.authors.firstOrNull().orEmpty()
+                        },
                         alternateTitlesText = content.altTitles.firstOrNull { it.isNotBlank() }.orEmpty(),
                         bookMetadataLine = novelMetadataLine,
                         coverSlot = {
@@ -649,7 +658,7 @@ internal fun DesktopTabletDetails(controller: DesktopController, state: DesktopA
                     NovelCatalogEntryRow(
                         title = AndroidStrings["details_view_catalog"],
                         subtitle = if (chapterCount > 0) desktopText("details.chapters", chapterCount) else null,
-                        onClick = {},
+                        onClick = { tab = DesktopDetailsTab.CHAPTERS },
                     )
                 }
                 DesktopDetailsInfo(content, enabled = !state.busy, warnings = state.sourceSettings,
@@ -657,13 +666,6 @@ internal fun DesktopTabletDetails(controller: DesktopController, state: DesktopA
                 DesktopDetailsRelated(controller, state)
             }
         }
-        val availableTabs = remember(mediaStylePolicy.showBookmarksTab) {
-            if (mediaStylePolicy.showBookmarksTab) DesktopDetailsTab.entries
-            else listOf(DesktopDetailsTab.CHAPTERS)
-        }
-        var tab by remember(content.id, availableTabs) { mutableStateOf(DesktopDetailsTab.CHAPTERS) }
-        val activeTab = if (tab in availableTabs) tab else DesktopDetailsTab.CHAPTERS
-        val bookmarks = remember(state.bookmarks, content.id) { state.bookmarks.count { it.contentId == content.id } }
         val tabs: @Composable (Modifier) -> Unit = { tabsModifier ->
             if (availableTabs.size > 1) {
                 Row(tabsModifier, horizontalArrangement = Arrangement.spacedBy(8.dp)) {

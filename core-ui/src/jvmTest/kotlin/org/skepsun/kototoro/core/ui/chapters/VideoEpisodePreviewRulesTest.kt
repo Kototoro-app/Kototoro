@@ -6,7 +6,9 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.skepsun.kototoro.core.ui.compose.DetailsMediaStyle
 import org.skepsun.kototoro.core.ui.compose.detailsMediaStylePolicy
+import org.skepsun.kototoro.core.ui.compose.resolveDedicatedDetailsMediaStyle
 import org.skepsun.kototoro.core.ui.compose.resolveDetailsMediaStyle
+import org.skepsun.kototoro.core.ui.compose.resolveMediaFamily
 
 class VideoEpisodePreviewRulesTest {
 
@@ -40,27 +42,52 @@ class VideoEpisodePreviewRulesTest {
 
     @Test
     fun `details media style policies differentiate manga novel and video`() {
-        assertEquals(DetailsMediaStyle.VIDEO, resolveDetailsMediaStyle("VIDEO"))
-        assertEquals(DetailsMediaStyle.VIDEO, resolveDetailsMediaStyle("HENTAI_VIDEO"))
-        assertEquals(DetailsMediaStyle.NOVEL, resolveDetailsMediaStyle("NOVEL"))
-        assertEquals(DetailsMediaStyle.NOVEL, resolveDetailsMediaStyle("HENTAI_NOVEL"))
+        // Media families correctly map content types to their dedicated content kinds.
+        assertEquals(DetailsMediaStyle.VIDEO, resolveMediaFamily("VIDEO"))
+        assertEquals(DetailsMediaStyle.VIDEO, resolveMediaFamily("HENTAI_VIDEO"))
+        assertEquals(DetailsMediaStyle.NOVEL, resolveMediaFamily("NOVEL"))
+        assertEquals(DetailsMediaStyle.NOVEL, resolveMediaFamily("HENTAI_NOVEL"))
+        assertEquals(DetailsMediaStyle.MANGA, resolveMediaFamily("MANGA"))
+        assertEquals(DetailsMediaStyle.MANGA, resolveMediaFamily(null))
+
+        assertEquals(DetailsMediaStyle.VIDEO, resolveDedicatedDetailsMediaStyle("VIDEO"))
+        assertEquals(DetailsMediaStyle.NOVEL, resolveDedicatedDetailsMediaStyle("NOVEL"))
+
+        // Default details style for all three content types defaults to the original classic style (MANGA).
+        assertEquals(DetailsMediaStyle.MANGA, resolveDetailsMediaStyle("VIDEO"))
+        assertEquals(DetailsMediaStyle.MANGA, resolveDetailsMediaStyle("HENTAI_VIDEO"))
+        assertEquals(DetailsMediaStyle.MANGA, resolveDetailsMediaStyle("NOVEL"))
+        assertEquals(DetailsMediaStyle.MANGA, resolveDetailsMediaStyle("HENTAI_NOVEL"))
         assertEquals(DetailsMediaStyle.MANGA, resolveDetailsMediaStyle("MANGA"))
         assertEquals(DetailsMediaStyle.MANGA, resolveDetailsMediaStyle(null))
 
-        val video = detailsMediaStylePolicy("VIDEO")
+        // Default policy for video uses classic MANGA style but preserves video domain semantics (no pages tab).
+        val defaultVideo = detailsMediaStylePolicy("VIDEO")
+        assertEquals(DetailsMediaStyle.MANGA, defaultVideo.style)
+        assertFalse(defaultVideo.useVideoHeroBackdrop)
+        assertFalse(defaultVideo.showPagesTab)
+        assertTrue(defaultVideo.showBookmarksTab)
+
+        // Explicit VIDEO style activates cinema hero backdrop and centered header.
+        val video = detailsMediaStylePolicy("VIDEO", DetailsMediaStyle.VIDEO)
+        assertEquals(DetailsMediaStyle.VIDEO, video.style)
         assertTrue(video.useVideoHeroBackdrop)
         assertTrue(video.useCenteredHeroHeader)
         assertTrue(video.useInlineEpisodePreview)
         assertFalse(video.showPagesTab)
         assertTrue(video.showBookmarksTab)
 
-        val novel = detailsMediaStylePolicy("NOVEL")
+        // Explicit NOVEL style activates book editorial layout.
+        val novel = detailsMediaStylePolicy("NOVEL", DetailsMediaStyle.NOVEL)
+        assertEquals(DetailsMediaStyle.NOVEL, novel.style)
         assertFalse(novel.useVideoHeroBackdrop)
         assertFalse(novel.showPagesTab)
         assertTrue(novel.showBookmarksTab)
         assertEquals(4, novel.synopsisCollapsedMaxLines)
 
-        val manga = detailsMediaStylePolicy("MANGA")
+        // Classic MANGA style on manga shows pages tab.
+        val manga = detailsMediaStylePolicy("MANGA", DetailsMediaStyle.MANGA)
+        assertEquals(DetailsMediaStyle.MANGA, manga.style)
         assertTrue(manga.showPagesTab)
         assertTrue(manga.showBookmarksTab)
         assertEquals(3, manga.synopsisCollapsedMaxLines)

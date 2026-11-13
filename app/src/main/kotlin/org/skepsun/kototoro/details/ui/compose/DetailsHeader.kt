@@ -544,11 +544,17 @@ fun DetailsHeader(
                     chapterProgressLabel.takeIf { it != "-" },
                 ).joinToString(" · ")
             }
+            val novelAuthorsText = remember(content?.authors, primaryAuthor) {
+                val authorList = content?.authors.orEmpty().filter { it.isNotBlank() }
+                if (authorList.isNotEmpty()) authorList.joinToString(", ")
+                else primaryAuthor.orEmpty()
+            }
             NovelHeroHeaderContent(
                 title = titleForDisplay,
-                authorText = primaryAuthor.orEmpty(),
+                authorText = novelAuthorsText,
                 alternateTitlesText = alternateTitlesText,
                 bookMetadataLine = novelMetadataLine,
+                titleColor = if (panoramaEnabled) immersiveTitleColor else MaterialTheme.colorScheme.onSurface,
                 secondaryTextColor = if (panoramaEnabled) {
                     immersiveTitleColor.copy(alpha = 0.78f)
                 } else {
@@ -1056,12 +1062,14 @@ fun DetailsHeader(
         }
 
         if (mediaStylePolicy.style == DetailsMediaStyle.NOVEL && !renderCinemaHero) {
+            val contentChapters = content?.chapters
             NovelCatalogEntryRow(
                 title = stringResource(R.string.details_view_catalog),
-                subtitle = if (historyInfo.totalChapters > 0) {
-                    stringResource(R.string.novel_chapters_count, historyInfo.totalChapters)
-                } else {
-                    chapterProgressLabel.takeIf { it != "-" }
+                subtitle = when {
+                    historyInfo.totalChapters > 0 -> stringResource(R.string.novel_chapters_count, historyInfo.totalChapters)
+                    contentChapters != null && contentChapters.isNotEmpty() -> stringResource(R.string.novel_chapters_count, contentChapters.size)
+                    chapterProgressLabel != "-" -> chapterProgressLabel
+                    else -> null
                 },
                 onClick = onOpenChapters,
                 trailingIcon = {

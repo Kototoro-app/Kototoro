@@ -24,20 +24,24 @@ object CoverDominantColor {
 
     private val cache = LinkedHashMap<String, Color>(CACHE_LIMIT, 0.75f)
 
-    fun cached(key: String): Color? = cache[key]
+    fun cached(key: String): Color? = synchronized(cache) { cache[key] }
 
     fun putCached(key: String, color: Color) {
         if (key.isBlank()) return
-        cache.remove(key)
-        cache[key] = color
-        while (cache.size > CACHE_LIMIT) {
-            val eldest = cache.keys.firstOrNull() ?: break
-            cache.remove(eldest)
+        synchronized(cache) {
+            cache.remove(key)
+            cache[key] = color
+            while (cache.size > CACHE_LIMIT) {
+                val eldest = cache.keys.firstOrNull() ?: break
+                cache.remove(eldest)
+            }
         }
     }
 
     fun clearCache() {
-        cache.clear()
+        synchronized(cache) {
+            cache.clear()
+        }
     }
 
     /**

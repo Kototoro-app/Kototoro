@@ -69,6 +69,7 @@ fun VideoHeroHeaderContent(
     progressPercent: Float? = null,
     onCoverClick: (() -> Unit)? = null,
     onHeroBoundsChanged: ((topPx: Float, bottomPx: Float) -> Unit)? = null,
+    posterSlot: (@Composable () -> Unit)? = null,
     sourceChips: @Composable () -> Unit = {},
     primaryPlayAction: @Composable () -> Unit = {},
     quickActions: @Composable () -> Unit = {},
@@ -108,7 +109,10 @@ fun VideoHeroHeaderContent(
                             },
                         )
                         .testTag("video-hero-cover-tap"),
-                )
+                    contentAlignment = Alignment.Center,
+                ) {
+                    posterSlot?.invoke()
+                }
             }
 
             Column(
@@ -226,6 +230,8 @@ fun VideoHeroHeaderContent(
                         .weight(1f)
                         .height(4.dp)
                         .clip(RoundedCornerShape(999.dp)),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.16f),
                     strokeCap = StrokeCap.Round,
                 )
                 Text(

@@ -46,7 +46,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.ImageLoader
 import coil3.asDrawable
-import coil3.compose.AsyncImage
+import coil3.compose.AsyncImagePainter
+import coil3.compose.rememberAsyncImagePainter
 import coil3.memory.MemoryCache
 import coil3.request.ImageRequest
 import coil3.request.SuccessResult
@@ -163,32 +164,26 @@ internal fun VideoDetailsBackdrop(
             ?: snapshotKey?.let(HeroCoverSnapshotStore::get)
     }
     val placeholderPainter = rememberDrawablePainter(placeholderImage?.asDrawable(context.resources))
-    var hasResolvedArtwork by remember(model) { mutableStateOf(false) }
+    val artworkPainter = if (model != null) {
+        rememberAsyncImagePainter(
+            model = model,
+            imageLoader = imageLoader,
+            placeholder = placeholderPainter,
+            error = placeholderPainter,
+            onError = { onLoadError() },
+        )
+    } else {
+        placeholderPainter
+    }
 
     val artworkSlot: @Composable (Modifier) -> Unit = { artworkModifier ->
-        Box(modifier = artworkModifier) {
-            if (!hasResolvedArtwork && placeholderPainter != null) {
-                Image(
-                    painter = placeholderPainter,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
-            if (model != null) {
-                AsyncImage(
-                    model = model,
-                    imageLoader = imageLoader,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize(),
-                    onSuccess = { hasResolvedArtwork = true },
-                    onError = {
-                        hasResolvedArtwork = placeholderPainter == null
-                        onLoadError()
-                    },
-                )
-            }
+        if (artworkPainter != null) {
+            Image(
+                painter = artworkPainter,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = artworkModifier.fillMaxSize(),
+            )
         }
     }
 
@@ -263,6 +258,7 @@ internal fun VideoDetailsPlayButtonRow(
                     color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
                 )
             }
         }

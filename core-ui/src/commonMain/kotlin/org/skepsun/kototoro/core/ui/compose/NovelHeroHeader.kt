@@ -14,11 +14,15 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -31,11 +35,14 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
+import org.skepsun.kototoro.reader.ui.compose.design.ReaderPanelIcons
 
 /**
  * Wraps a novel's 2:3 book cover with a subtle left spine crease and page-edge shadow so it reads
@@ -48,35 +55,54 @@ fun NovelBookCoverFrame(
     coverContent: @Composable BoxScope.() -> Unit,
 ) {
     val shape = RoundedCornerShape(topStart = 4.dp, bottomStart = 4.dp, topEnd = 12.dp, bottomEnd = 12.dp)
-    Box(
+    val widthModifier = if (width != Dp.Unspecified && width > 0.dp) Modifier.width(width) else Modifier
+    Surface(
+        shape = shape,
+        color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f),
+        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+        shadowElevation = 12.dp,
         modifier = modifier
-            .width(width)
-            .aspectRatio(2f / 3f)
-            .shadow(
-                elevation = 14.dp,
-                shape = shape,
-                ambientColor = Color.Black.copy(alpha = 0.24f),
-                spotColor = Color.Black.copy(alpha = 0.30f),
-            )
-            .clip(shape),
+            .then(widthModifier)
+            .aspectRatio(2f / 3f),
     ) {
-        coverContent()
-        // Subtle left book-spine crease + highlight.
         Box(
             modifier = Modifier
-                .align(Alignment.CenterStart)
-                .fillMaxHeight()
-                .width(8.dp)
-                .background(
-                    Brush.horizontalGradient(
-                        colors = listOf(
-                            Color.Black.copy(alpha = 0.28f),
-                            Color.White.copy(alpha = 0.16f),
-                            Color.Transparent,
+                .fillMaxSize()
+                .clip(shape),
+        ) {
+            coverContent()
+            // Subtle left book-spine crease + highlight.
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .fillMaxHeight()
+                    .width(8.dp)
+                    .background(
+                        Brush.horizontalGradient(
+                            colors = listOf(
+                                Color.Black.copy(alpha = 0.28f),
+                                Color.White.copy(alpha = 0.16f),
+                                Color.Transparent,
+                            ),
                         ),
                     ),
-                ),
-        )
+            )
+            // Subtle right page-edge shadow.
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .fillMaxHeight()
+                    .width(3.dp)
+                    .background(
+                        Brush.horizontalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                Color.Black.copy(alpha = 0.10f),
+                            ),
+                        ),
+                    ),
+            )
+        }
     }
 }
 
@@ -92,10 +118,11 @@ fun NovelHeroHeaderContent(
     alternateTitlesText: String,
     bookMetadataLine: String,
     modifier: Modifier = Modifier,
+    titleColor: Color = MaterialTheme.colorScheme.onSurface,
     secondaryTextColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
     onAuthorClick: (() -> Unit)? = null,
     coverSlot: @Composable () -> Unit,
-    titleExtraSlot: @Composable () -> Unit = {},
+    titleExtraSlot: (@Composable () -> Unit)? = null,
     sourceChipsSlot: @Composable () -> Unit = {},
     quickActionsSlot: @Composable () -> Unit = {},
 ) {
@@ -112,7 +139,21 @@ fun NovelHeroHeaderContent(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            titleExtraSlot()
+            if (titleExtraSlot != null) {
+                titleExtraSlot()
+            } else if (title.isNotBlank()) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.headlineSmall.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        lineHeight = 28.sp,
+                    ),
+                    color = titleColor,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.testTag("novel-hero-title"),
+                )
+            }
 
             if (authorText.isNotBlank()) {
                 Text(
@@ -124,7 +165,7 @@ fun NovelHeroHeaderContent(
                     modifier = Modifier
                         .clip(RoundedCornerShape(6.dp))
                         .tvFocusable(shape = RoundedCornerShape(6.dp), enabled = onAuthorClick != null, addFocusTarget = false)
-                        .then(if (onAuthorClick != null) Modifier.clickable(onClick = onAuthorClick) else Modifier)
+                        .then(if (onAuthorClick != null) Modifier.clickable(role = Role.Button, onClick = onAuthorClick) else Modifier)
                         .padding(vertical = 1.dp)
                         .testTag("novel-hero-author"),
                 )
@@ -228,7 +269,7 @@ fun NovelMetricsStrip(
             .fillMaxWidth()
             .testTag("novel-metrics-strip"),
         shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.88f),
+        color = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.90f),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
     ) {
         Row(
@@ -246,13 +287,18 @@ fun NovelMetricsStrip(
                             .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
                     )
                 }
+                val onClick = item.onClick
                 Column(
                     modifier = Modifier
                         .weight(1f)
                         .clip(RoundedCornerShape(10.dp))
-                        .tvFocusable(shape = RoundedCornerShape(10.dp), enabled = item.onClick != null, addFocusTarget = false)
-                        .then(if (item.onClick != null) Modifier.clickable(onClick = item.onClick) else Modifier)
-                        .padding(horizontal = 4.dp, vertical = 2.dp),
+                        .tvFocusable(shape = RoundedCornerShape(10.dp), enabled = onClick != null, addFocusTarget = false)
+                        .then(
+                            if (onClick != null) {
+                                Modifier.clickable(role = Role.Button, onClick = onClick)
+                            } else Modifier,
+                        )
+                        .padding(horizontal = 4.dp, vertical = 4.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
@@ -266,7 +312,7 @@ fun NovelMetricsStrip(
                     Text(
                         text = item.value,
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onSurface,
+                        color = if (onClick != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -300,12 +346,13 @@ fun NovelCatalogEntryRow(
     Surface(
         modifier = modifier
             .fillMaxWidth()
+            .heightIn(min = 50.dp)
             .clip(RoundedCornerShape(16.dp))
             .tvFocusable(shape = RoundedCornerShape(16.dp), addFocusTarget = false)
-            .clickable(onClick = onClick)
+            .clickable(role = Role.Button, onClick = onClick)
             .testTag("novel-catalog-entry"),
         shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.88f),
+        color = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.90f),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
     ) {
         Row(
@@ -313,8 +360,14 @@ fun NovelCatalogEntryRow(
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            Icon(
+                imageVector = ReaderPanelIcons.BookPage,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(18.dp),
+            )
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),

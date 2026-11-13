@@ -747,13 +747,13 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
     var detailsStyleNovel: org.skepsun.kototoro.core.ui.compose.DetailsMediaStyle
         get() = org.skepsun.kototoro.core.ui.compose.parseDetailsMediaStyleOrNull(
             prefs.getString(KEY_DETAILS_STYLE_NOVEL, null),
-        ) ?: org.skepsun.kototoro.core.ui.compose.DetailsMediaStyle.NOVEL
+        ) ?: org.skepsun.kototoro.core.ui.compose.DetailsMediaStyle.MANGA
         set(value) = prefs.edit { putString(KEY_DETAILS_STYLE_NOVEL, value.name) }
 
     var detailsStyleVideo: org.skepsun.kototoro.core.ui.compose.DetailsMediaStyle
         get() = org.skepsun.kototoro.core.ui.compose.parseDetailsMediaStyleOrNull(
             prefs.getString(KEY_DETAILS_STYLE_VIDEO, null),
-        ) ?: org.skepsun.kototoro.core.ui.compose.DetailsMediaStyle.VIDEO
+        ) ?: org.skepsun.kototoro.core.ui.compose.DetailsMediaStyle.MANGA
         set(value) = prefs.edit { putString(KEY_DETAILS_STYLE_VIDEO, value.name) }
 
     fun detailsStyleForContentType(

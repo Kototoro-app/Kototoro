@@ -151,9 +151,25 @@ class SharedDetailsComponentsTest {
 
     @Test
     fun `details media style policies keep bookmarks tab enabled for video and differentiate novel`() {
-        val videoPolicy = detailsMediaStylePolicy("VIDEO")
-        val novelPolicy = detailsMediaStylePolicy("NOVEL")
-        val mangaPolicy = detailsMediaStylePolicy("MANGA")
+        val defaultVideoPolicy = detailsMediaStylePolicy("VIDEO")
+        val defaultNovelPolicy = detailsMediaStylePolicy("NOVEL")
+        val defaultMangaPolicy = detailsMediaStylePolicy("MANGA")
+
+        assertEquals(DetailsMediaStyle.MANGA, defaultVideoPolicy.style)
+        assertFalse(defaultVideoPolicy.showPagesTab)
+        assertTrue(defaultVideoPolicy.showBookmarksTab)
+
+        assertEquals(DetailsMediaStyle.MANGA, defaultNovelPolicy.style)
+        assertFalse(defaultNovelPolicy.showPagesTab)
+        assertTrue(defaultNovelPolicy.showBookmarksTab)
+
+        assertEquals(DetailsMediaStyle.MANGA, defaultMangaPolicy.style)
+        assertTrue(defaultMangaPolicy.showPagesTab)
+        assertTrue(defaultMangaPolicy.showBookmarksTab)
+
+        val videoPolicy = detailsMediaStylePolicy("VIDEO", DetailsMediaStyle.VIDEO)
+        val novelPolicy = detailsMediaStylePolicy("NOVEL", DetailsMediaStyle.NOVEL)
+        val mangaPolicy = detailsMediaStylePolicy("MANGA", DetailsMediaStyle.MANGA)
 
         assertEquals(DetailsMediaStyle.VIDEO, videoPolicy.style)
         assertTrue(videoPolicy.showBookmarksTab)
