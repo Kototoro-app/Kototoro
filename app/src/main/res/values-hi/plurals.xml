@@ -36,4 +36,32 @@
         <item quantity="one">%1$d मिनट</item>
         <item quantity="other">%1$d मिनट</item>
     </plurals>
+    <plurals name="feed_timeline_updates">
+        <item quantity="one">%1$d अपडेट</item>
+        <item quantity="other">%1$d अपडेट</item>
+    </plurals>
+    <plurals name="history_grouped_sources">
+        <item quantity="one">%1$d स्रोत</item>
+        <item quantity="other">%1$d स्रोत</item>
+    </plurals>
+    <plurals name="home_enabled_sources">
+        <item quantity="one">%1$d सक्षम स्रोत</item>
+        <item quantity="other">%1$d सक्षम स्रोत</item>
+    </plurals>
+    <plurals name="home_updates_new_chapters">
+        <item quantity="one">%1$d नया अध्याय</item>
+        <item quantity="other">%1$d नए अध्याय</item>
+    </plurals>
+    <plurals name="old_chapters_in_total">
+        <item quantity="one">कुल %1$d पुराना अध्याय</item>
+        <item quantity="other">कुल %1$d पुराने अध्याय</item>
+    </plurals>
+    <plurals name="tracker_failed_in_a_row">
+        <item quantity="one">लगातार %1$d बार विफल</item>
+        <item quantity="other">लगातार %1$d बार विफल</item>
+    </plurals>
+    <plurals name="tracker_failing_titles_summary">
+        <item quantity="one">%1$d शीर्षक लगातार %2$d या अधिक बार विफल हुआ</item>
+        <item quantity="other">%1$d शीर्षक लगातार %2$d या अधिक बार विफल हुए</item>
+    </plurals>
 </resources>

@@ -596,7 +596,7 @@
     <string name="import_content_type">内容类型</string>
     <string name="import_content_type_auto">自动识别</string>
     <string name="reader_info_pattern">第 %1$d/%2$d 章 第 %3$d/%4$d 页</string>
-    <string name="enabled_d_of_d" tools:ignore="PluralsCandidate">共 %2$d ，已启用 %1$d</string>
+    <string name="enabled_d_of_d">共 %2$d ，已启用 %1$d</string>
     <string name="size_s">大小：%s</string>
     <string name="confirm_exit">再按一次返回键退出</string>
     <string name="exit_confirmation_summary">按两次返回键退出应用</string>
@@ -655,7 +655,7 @@
     <string name="interface_style_material3_summary">保留 Android 原生的控件、间距和表面层级</string>
     <string name="interface_style_material3_expressive">md3 expressive</string>
     <string name="interface_style_material3_expressive_summary">更大的自适应控件、更强调的形状和更鲜明的字体层级</string>
-    <string name="interface_style_ios">ios (modern)</string>
+    <string name="interface_style_ios">iOS (现代)</string>
     <string name="interface_style_ios_summary">更圆润的控件、更克制的表面、Backdrop 玻璃和柔和菜单</string>
     <string name="appearance_style_override_note">当前 %1$s 风格下实际使用：%2$s</string>
     <string name="appearance_style_default_value">当前 %1$s 风格默认值：%2$s</string>
@@ -887,7 +887,8 @@
     <string name="eink_refresh_every">刷新间隔</string>
     <string name="eink_refresh_color">刷新颜色</string>
     <string name="milliseconds_value">%1$d 毫秒</string>
-    <plurals name="pages_value">
+        <plurals name="pages_value">
+        <item quantity="one">每页</item>
         <item quantity="other">每 %1$d 页</item>
     </plurals>
     <string name="zoom_in">放大</string>
@@ -1222,7 +1223,7 @@
     <string name="delete_read_chapters_prompt">将会删除所有储存在本地并被标记为已读的章节，可之后再重新下载，但已导入的章节将永久丢失</string>
     <string name="delete_read_chapters_auto">自动删除已读章节</string>
     <string name="runs_on_app_start">启动应用时开始删除</string>
-    <string name="migrate_confirmation">将会把历史记录和收藏中 "%2$s" 内容源的 "%1$s" 替换成 "%4$s" 内容源的 "%3$s"（若资源存在）</string>
+    <string name="migrate_confirmation">将会把历史记录和收藏中 \"%2$s\" 内容源的 \"%1$s\" 替换成 \"%4$s\" 内容源的 \"%3$s\"（若资源存在）</string>
     <string name="unread">阅读进度（升序）</string>
     <string name="order_oldest">最旧</string>
     <string name="long_ago_read">最近阅读（升序）</string>
@@ -1508,7 +1509,7 @@
     <string name="reader_navigation_inverted_summary">将音量键和硬件设备方向键的导航方向交换 (左/上/下/右)</string>
     <string name="error_corrupted_zip">损坏的 ZIP 文件 (%s)</string>
     <string name="discord_rpc">绑定 Discord 状态</string>
-    <string name="discord_token">Discord Token</string>
+    <string name="discord_token">Discord 令牌</string>
     <string name="discord_token_summary">使用 Discord 登录以启用富状态</string>
     <string name="discord_token_description">输入你的 Discord Token 或者点击 %s 打开内置浏览器获取 Token</string>
     <string name="discord_token_hint">在这里复制你的 Discord Token</string>
@@ -2111,7 +2112,7 @@
     <string name="home_sync_status_ready">WebDAV 备份已配置</string>
     <string name="home_sync_status_not_configured">未配置</string>
     <string name="home_sync_subtitle_ready">已就绪</string>
-    <string name="home_sync_subtitle_configure"></string>
+    <string name="home_sync_subtitle_configure">打开设置进行配置</string>
     <string name="home_sync_last_upload">上次上传 %1$s</string>
     <string name="home_resume_title">继续阅读</string>
     <string name="home_resume_empty_title">暂无可继续内容</string>
@@ -2413,7 +2414,7 @@
     <string name="reader_translation_task_stat_ocr">OCR: %1$sms</string>
     <string name="reader_translation_task_stat_trans">翻译: %1$sms</string>
     <string name="reader_translation_task_stat_render">渲染: %1$sms</string>
-    <string name="reader_translation_task_stat_pipe_strat">OCR Pipeline: %1$s</string>
+    <string name="reader_translation_task_stat_pipe_strat">OCR 管道：%1$s</string>
     <string name="reader_translation_task_stat_pipe_fb">Pipeline 回退: %1$s</string>
     <string name="reader_translation_task_stat_roi_box">ROI-first 检框数: %1$s</string>
     <string name="reader_translation_task_stat_ocr_eng">选中 OCR 引擎: %1$s</string>
@@ -2432,7 +2433,7 @@
     <string name="reader_translation_task_bench_dist_render">渲染</string>
     <string name="reader_translation_task_bench_dist_ocr_cache">OCR 缓存命中</string>
     <string name="reader_translation_task_bench_dist_render_cache">渲染缓存命中</string>
-    <string name="reader_translation_task_bench_dist_pipe">OCR Pipeline</string>
+    <string name="reader_translation_task_bench_dist_pipe">OCR 管道</string>
     <string name="reader_translation_task_bench_dist_pipe_fb">Pipeline 回退</string>
     <string name="reader_translation_task_bench_dist_roi_box">ROI-first 检框</string>
     <string name="reader_translation_task_bench_dist_ocr_sel">选中 OCR</string>
@@ -2514,7 +2515,7 @@
     <string name="webdav_auto_sync">自动备份到 WebDAV</string>
     <string name="webdav_auto_sync_summary">仅在非计量网络下自动上传整包备份到 WebDAV，每天最多一次。</string>
     <string name="webdav_sync_attention_title">同步注意事项</string>
-    <string name="webdav_legacy_restore_block_summary">此设备从旧版备份格式恢复。为避免覆盖较新的远端数据，已临时阻止自动 WebDAV 上传。请检查恢复的数据，然后使用"立即上传备份"建立新的数据基线。</string>
+    <string name="webdav_legacy_restore_block_summary">此设备从旧版备份格式恢复。为避免覆盖较新的远端数据，已临时阻止自动 WebDAV 上传。请检查恢复的数据，然后使用\"立即上传备份\"建立新的数据基线。</string>
     <string name="webdav_upload_now">立即上传备份</string>
     <string name="webdav_restore_now">恢复最新备份</string>
     <string name="webdav_restore_mode_title">选择恢复模式</string>
@@ -2871,9 +2872,9 @@
     <string name="favicons_cache_limit">网站图标缓存限制</string>
     <string name="favourites_group_adult">成人收藏</string>
     <string name="favourites_group_general">收藏</string>
-    <string name="favourites_hidden_adult_subtitle">在设置中关闭"隐藏成人内容"即可显示</string>
+    <string name="favourites_hidden_adult_subtitle">在设置中关闭\"隐藏成人内容\"即可显示</string>
     <string name="favourites_hidden_adult_title">成人收藏已隐藏</string>
-    <string name="filter_overwrite_confirm">名为 "%s" 的筛选器已存在，是否覆盖？</string>
+    <string name="filter_overwrite_confirm">名为 \"%s\" 的筛选器已存在，是否覆盖？</string>
     <string name="fraction_pattern">%1$d/%2$d</string>
     <string name="frequency_every_6_hours">每 6 小时</string>
     <string name="hide_empty_sources">隐藏空源</string>
@@ -3018,7 +3019,7 @@
     <string name="reader_super_resolution_noise_n1">无（-1）</string>
     <string name="reader_super_resolution_summary">使用 RealCUGAN 提升图像分辨率（可能显著增加电池和性能消耗）</string>
     <string name="reader_translation_api_custom_headers">自定义请求头（JSON）</string>
-    <string name="reader_translation_api_custom_headers_summary">以 JSON 格式添加自定义 HTTP 请求头（例如 {"Model": "gpt-4"}）</string>
+    <string name="reader_translation_api_custom_headers_summary">以 JSON 格式添加自定义 HTTP 请求头（例如 {\"Model\": \"gpt-4\"}）</string>
     <string name="reader_translation_onnx_super_resolution_models_title">超分辨率模型</string>
     <string name="reader_translation_pipeline_mode">管线模式</string>
     <string name="reader_translation_pipeline_mode_end_to_end_api">端到端 API（视觉 AI）</string>
@@ -3103,12 +3104,7 @@
     <string name="translation_prepared">翻译已准备</string>
     <string name="trust_and_add">信任并添加</string>
     <string name="trust_extension_repository">信任仓库指纹</string>
-    <string name="trust_extension_repository_message">仓库: %1$s
-网站: %2$s
-SHA-256 指纹:
-%3$s
-
-请在信任此仓库前与发布者核实该指纹。</string>
+    <string name="trust_extension_repository_message">仓库: %1$s\n网站: %2$s\nSHA-256 指纹:\n%3$s\n\n请在信任此仓库前与发布者核实该指纹。</string>
     <string name="tts_audio_cache">TTS 音频缓存</string>
     <string name="tts_audio_cache_limit">TTS 音频缓存限制</string>
     <string name="two_page_scroll_sensitivity">双页滚动灵敏度</string>
@@ -3131,9 +3127,7 @@ SHA-256 指纹:
     <string name="unified_sources_mark_as_nsfw">标记为NSFW</string>
     <string name="unified_sources_mark_as_sfw">标记为非NSFW</string>
     <string name="unified_sources_delete_selected_only_skipped_jars">选择中包含 JAR 源。为避免意外删除，已跳过其扩展包: %1$s</string>
-    <string name="unified_sources_delete_selected_with_skipped_jars">删除选中的 %1$d 个扩展包？
-
-已跳过 JAR 扩展包以避免意外删除: %2$s</string>
+    <string name="unified_sources_delete_selected_with_skipped_jars">删除选中的 %1$d 个扩展包？\n\n已跳过 JAR 扩展包以避免意外删除: %2$s</string>
     <string name="unified_sources_empty_response_body">响应内容为空</string>
     <string name="unified_sources_http_error">HTTP %1$d</string>
     <string name="unified_sources_imported_plugin">已导入插件: %1$s</string>
@@ -3173,11 +3167,7 @@ SHA-256 指纹:
     <string name="packages_missing_sources_add_repo">可以添加仓库来查找它们，例如：</string>
     <string name="uninstall">卸载</string>
     <string name="untrusted_extension">未信任</string>
-    <string name="untrusted_extension_message">%1$s（%2$s）已安装，但其签名与所选仓库指纹不匹配。
-
-仓库指纹: %3$s
-
-请先移除已安装的扩展包，再从该仓库重新安装。</string>
+    <string name="untrusted_extension_message">%1$s（%2$s）已安装，但其签名与所选仓库指纹不匹配。\n\n仓库指纹: %3$s\n\n请先移除已安装的扩展包，再从该仓库重新安装。</string>
     <string name="untrusted_section">未信任</string>
     <string name="update_all_extensions">全部更新</string>
     <string name="update_all_packages">全部更新</string>
@@ -3247,10 +3237,12 @@ SHA-256 指纹:
     <string name="migration_no_sources">收藏中无可迁移的源</string>
     <string name="content_type_filter">内容类型</string>
     <string name="source_type_filter">源类型</string>
-    <plurals name="source_count">
+        <plurals name="source_count">
+        <item quantity="one">%d个图源</item>
         <item quantity="other">%d 个源</item>
     </plurals>
-    <plurals name="sources_imported_successfully">
+        <plurals name="sources_imported_successfully">
+        <item quantity="one">成功导入 %d 个图源</item>
         <item quantity="other">成功导入 %d 个源</item>
     </plurals>
 
@@ -3838,7 +3830,8 @@ SHA-256 指纹:
     <string name="migration_candidates_title">候选</string>
     <string name="migration_search_hint">在目标来源中搜索</string>
     <string name="migration_sources_title">按来源换源</string>
-    <plurals name="migration_health_banner">
+        <plurals name="migration_health_banner">
+        <item quantity="one">%1$d个图源可能已失效，影响 %2$d部收藏</item>
         <item quantity="other">%1$d 个来源可能已失效，涉及 %2$d 部收藏</item>
     </plurals>
     <string name="migration_health_banner_disable">不再提示</string>
@@ -3854,11 +3847,13 @@ SHA-256 指纹:
     <string name="migration_health_suspicious">偶发失败</string>
     <string name="migration_health_suspicious_summary">最近的更新检查有失败，通常是本设备网络临时问题，源本身可能正常</string>
     <string name="migration_health_disabled">已停用</string>
-    <plurals name="migration_health_disabled_summary">
+        <plurals name="migration_health_disabled_summary">
+        <item quantity="one">%d部收藏 · 在图源中已关闭，但仍可打开并检查更新</item>
         <item quantity="other">%d 部收藏 · 已在来源管理中关闭，仍可阅读并检查更新</item>
     </plurals>
     <string name="migration_next">下一步</string>
-    <plurals name="migration_health_hint">
+        <plurals name="migration_health_hint">
+        <item quantity="one">%d个图源可能已失效</item>
         <item quantity="other">%d 个来源可能失效</item>
     </plurals>
     <string name="migration_no_available_sources">还没有启用这类来源</string>
@@ -3886,13 +3881,16 @@ SHA-256 指纹:
     <string name="library_duplicates_keep">保留</string>
     <string name="library_duplicates_chapters">%d 话</string>
     <string name="library_duplicates_merge_all_message">每组都会合并到高亮的那一本。其余条目会移出收藏和历史，已下载的内容会保留。</string>
-    <plurals name="library_duplicates_entries">
+        <plurals name="library_duplicates_entries">
+        <item quantity="one">%d个条目</item>
         <item quantity="other">%d 个条目</item>
     </plurals>
-    <plurals name="library_duplicates_merge_all">
+        <plurals name="library_duplicates_merge_all">
+        <item quantity="one">合并 %d 组</item>
         <item quantity="other">全部合并 %d 组</item>
     </plurals>
-    <plurals name="library_duplicates_merged">
+        <plurals name="library_duplicates_merged">
+        <item quantity="one">已合并 %d 组。无剩余重复项</item>
         <item quantity="other">已合并 %d 组，没有剩余的重复</item>
     </plurals>
     <string name="duplicate_read_percent">已读 %d%%</string>
@@ -4108,4 +4106,113 @@ SHA-256 指纹:
     <string name="details_view_catalog">查看目录</string>
     <string name="details_my_reading">我的阅读</string>
     <string name="details_not_started">未开始</string>
+    <string name="backup_orphan_review_title">备份需要处理</string>
+    <string name="backup_orphan_review_summary">发现 %1$d 条对应的作品已丢失的活动记录</string>
+    <string name="backup_orphan_notification_disabled">备份发现缺少所属作品的记录。请启用备份通知并重试以查看它们。</string>
+    <string name="backup_orphan_review_action">查看并继续</string>
+    <string name="backup_orphan_dialog_message">部分阅读数据指向了不再存在的作品。你可以将这些记录排除在本次备份之外以继续。你的本地数据不会被删除。</string>
+    <string name="backup_orphan_dialog_warning">仅此处列出的记录会被排除在本次备份之外。这可能会导致其进度、收藏或统计数据无法在其他设备上恢复。</string>
+    <string name="backup_orphan_discard_and_continue">排除这些记录并继续</string>
+    <string name="backup_orphan_unknown_work">未知作品</string>
+    <string name="backup_orphan_state_history">阅读进度</string>
+    <string name="backup_orphan_state_favourite">收藏</string>
+    <string name="backup_orphan_state_statistics">阅读统计</string>
+    <string name="backup_orphan_source">图源：%1$s</string>
+    <string name="backup_orphan_more_items">还有 %1$d 条记录未显示</string>
+    <string name="cache_limits_total_quota">总配额：%s</string>
+    <string name="cache_limits_quick_presets">快速预设</string>
+    <string name="cache_preset_compact">紧凑</string>
+    <string name="cache_preset_balanced">均衡</string>
+    <string name="cache_preset_performance">性能</string>
+    <string name="video_decoder_hardware_only">仅使用硬件</string>
+    <string name="video_decoder_hardware_preferred">优先硬件解码（推荐）</string>
+    <string name="video_decoder_software_preferred">优先软件解码</string>
+    <string name="reader_experimental_scene_engine">现代条漫渲染器 (ADR 0002)</string>
+    <string name="reader_experimental_scene_engine_summary">使用高性能 Scene 引擎，具备零 CLS 布局与分块渲染，带来流畅的条漫阅读体验</string>
+    <string name="reader_experimental_paged_scene_engine">现代分页/双页渲染器（实验性）</string>
+    <string name="reader_experimental_paged_scene_engine_summary">使用高性能分页 Scene 引擎，支持分块多级细节 (LOD) 渲染，适用于分页和双页模式</string>
+    <string name="reader_scene_renderer_webtoon">条漫 Scene 渲染器</string>
+    <string name="reader_scene_renderer_paged">分页 Scene 渲染器</string>
+    <string name="reader_translation_tools">翻译工具</string>
+    <string name="webtoon_volume_key_scroll_distance">音量键滚动距离</string>
+    <string name="webtoon_volume_key_scroll_distance_summary">条漫模式下每次按下音量键滚动的视口百分比</string>
+    <string name="details_remove_metadata_binding">移除元数据绑定</string>
+    <string name="google_drive_sync">Google Drive 同步</string>
+    <string name="sync_google_drive_enable">启用 Google Drive 同步</string>
+    <string name="sync_google_drive_enable_summary">使用 Google Drive 作为活跃的同步后端。开启后将禁用 WebDAV 同步操作，以避免混合远程快照。关闭此项时会保留您的 Google 登录状态。</string>
+    <string name="sync_backend_switch_google_drive_title">切换至 Google Drive 同步？</string>
+    <string name="sync_backend_switch_google_drive_confirm">当前已启用 WebDAV 备份。启用 Google Drive 同步将关闭 WebDAV 备份、自动备份和自动恢复，以防止应用混合两个远程快照。</string>
+    <string name="sync_backend_switch_webdav_title">切换至 WebDAV 备份？</string>
+    <string name="sync_backend_switch_webdav_confirm">当前已启用 Google Drive 同步。启用 WebDAV 备份将关闭 Google Drive 同步，但会保留您的 Google 登录状态。</string>
+    <string name="sync_sign_in">准备 Google Drive 同步</string>
+    <string name="sync_sign_in_summary">使用最低权限的 Drive appdata 访问权限来同步订阅和更新记录。Kototoro 无法访问您的 Drive 文件。</string>
+    <string name="google_drive_sync_unregistered_build_error">开发/nightly 构建版本不支持 Google Drive sync。请使用官方发布版本或 WebDAV 同步。</string>
+    <string name="sync_sign_out">退出登录</string>
+    <string name="sync_account">已登录</string>
+    <string name="sync_now">立即同步</string>
+    <string name="sync_syncing">正在同步…</string>
+    <string name="sync_last">上次同步：%s</string>
+    <string name="sync_never">尚未同步</string>
+    <string name="sync_delete_remote_data">清除远程同步数据</string>
+    <string name="sync_delete_remote_data_summary">删除当前的 Google Drive 同步快照。较旧的旧版快照不受影响。</string>
+    <string name="sync_delete_remote_data_confirm">删除当前的远程 Google Drive 同步快照吗？本地数据和较旧的旧版快照将保持不变。还原干净的备份后，请运行“立即同步”以上传最新的当前快照。</string>
+    <string name="sync_frequency">同步频率</string>
+    <string name="sync_wifi_only">仅在 Wi-Fi 下同步</string>
+    <string name="sync_on_start">启动应用时同步</string>
+    <string name="sync_on_start_summary">在应用启动时运行后台同步，并带有冷却时间以避免频繁请求 Drive。</string>
+    <string name="sync_freq_off">关闭</string>
+    <string name="sync_freq_6h">每 6 小时</string>
+    <string name="sync_freq_12h">每 12 小时</string>
+    <string name="sync_freq_daily">每天</string>
+    <string name="sync_freq_weekly">每周</string>
+    <string name="webdav_remote_backups_refresh">管理远程备份</string>
+    <string name="webdav_remote_backups_refresh_summary">列出 WebDAV 备份以便手动恢复或删除。</string>
+    <string name="webdav_remote_backups_inspect">检查远程备份</string>
+    <string name="webdav_remote_backups_inspect_summary">下载并验证每个远程备份是否可以安全恢复。</string>
+    <string name="webdav_remote_backups_clear">清除远程 WebDAV 备份</string>
+    <string name="webdav_remote_backups_clear_summary">删除已配置的 WebDAV 路径上的所有 Kototoro 备份文件。本地数据不受影响。</string>
+    <string name="webdav_remote_backups_clear_confirm">删除已配置的 WebDAV 路径上的所有 Kototoro 备份文件吗？本地数据将保持不变。</string>
+    <string name="webdav_remote_backups_loading">正在加载 WebDAV 备份…</string>
+    <string name="webdav_remote_backup_status_unknown">未检查</string>
+    <string name="webdav_remote_backup_status_restorable">可恢复</string>
+    <string name="webdav_remote_backup_status_unrestorable">无法安全恢复</string>
+    <string name="webdav_remote_backup_deleted">已删除远程 WebDAV 备份</string>
+    <string name="webdav_remote_backups_cleared">已清除远程 WebDAV 备份</string>
+    <string name="pref_panorama_top_opacity">顶部不透明度</string>
+    <string name="pref_panorama_top_opacity_summary">控制顶部封面的可见度；底部始终保持完全透明</string>
+    <string name="pref_panorama_transition_intensity">全景封面过渡范围</string>
+    <string name="pref_panorama_transition_intensity_summary">控制封面开始淡出的早晚；底部始终完全淡出</string>
+    <string name="panorama_settings_title">全景封面</string>
+    <string name="panorama_settings_effect">效果</string>
+    <string name="panorama_settings_behavior">行为</string>
+    <string name="panorama_settings_layout_mode">封面范围</string>
+    <string name="panorama_settings_style">封面效果</string>
+    <string name="panorama_settings_advanced">高级设置</string>
+    <string name="panorama_settings_restore_default">恢复平衡效果</string>
+    <string name="panorama_settings_entry_summary">%1$s · %2$s效果 · %3$s</string>
+    <string name="panorama_settings_disabled">已禁用</string>
+    <string name="panorama_preset_clear">清晰</string>
+    <string name="panorama_preset_balanced">平衡</string>
+    <string name="panorama_preset_soft">柔和</string>
+    <string name="panorama_preset_custom">自定义</string>
+    <string name="panorama_mode_full_screen">全屏</string>
+    <string name="panorama_mode_half_screen">半屏</string>
+    <string name="panorama_animation_on">动效开启</string>
+    <string name="panorama_animation_off">动效关闭</string>
+    <string name="panorama_animation_reduced_effects_summary">启用“减少视觉效果”时动效将暂停</string>
+    <string name="reader_settings_group_reading_mode">阅读模式</string>
+    <string name="reader_settings_group_zoom_scroll">缩放与滚动</string>
+    <string name="reader_settings_group_webtoon">条漫</string>
+    <string name="reader_settings_group_controls">控制</string>
+    <string name="reader_settings_group_display">显示与信息</string>
+    <string name="reader_settings_group_performance">性能与网络</string>
+    <string name="periodical_backup_group_schedule">备份计划</string>
+    <string name="network_group_proxy_mirrors">代理与镜像</string>
+    <string name="network_group_security">安全与过滤</string>
+    <string name="settings_section_reading_interface">阅读与界面</string>
+    <string name="settings_section_content_sources">内容与图源</string>
+    <string name="settings_section_accounts_data">账号与数据</string>
+    <string name="settings_section_system_services">系统与服务</string>
+    <string name="help_and_feedback">帮助与反馈</string>
+    <string name="about_group_support">支持</string>
 </resources>

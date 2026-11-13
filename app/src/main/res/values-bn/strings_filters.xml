@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_bar_filters">সার্চ বার ফিল্টার</string>
+    <string name="show_language_preset_filter">ভাষার প্রিসেট</string>
+    <string name="fixed_language_preset">নির্দিষ্ট ভাষার প্রিসেট</string>
+    <string name="show_content_type_filter">কন্টেন্টের ধরণ</string>
+    <string name="fixed_content_type">নির্দিষ্ট কন্টেন্ট ধরণ</string>
+    <string name="show_source_tag_filter">সোর্সের ধরণ</string>
+    <string name="fixed_source_tag">নির্দিষ্ট সোর্সের ধরণ</string>
+</resources>

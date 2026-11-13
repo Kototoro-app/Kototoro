@@ -36,4 +36,32 @@
         <item quantity="one">%1$d Stunde</item>
         <item quantity="other">%1$d Stunden</item>
     </plurals>
+    <plurals name="feed_timeline_updates">
+        <item quantity="one">%1$d Aktualisierung</item>
+        <item quantity="other">%1$d Aktualisierungen</item>
+    </plurals>
+    <plurals name="history_grouped_sources">
+        <item quantity="one">%1$d Quelle</item>
+        <item quantity="other">%1$d Quellen</item>
+    </plurals>
+    <plurals name="home_enabled_sources">
+        <item quantity="one">%1$d aktivierte Quelle</item>
+        <item quantity="other">%1$d aktivierte Quellen</item>
+    </plurals>
+    <plurals name="home_updates_new_chapters">
+        <item quantity="one">%1$d neues Kapitel</item>
+        <item quantity="other">%1$d neue Kapitel</item>
+    </plurals>
+    <plurals name="old_chapters_in_total">
+        <item quantity="one">%1$d altes Kapitel insgesamt</item>
+        <item quantity="other">%1$d alte Kapitel insgesamt</item>
+    </plurals>
+    <plurals name="tracker_failed_in_a_row">
+        <item quantity="one">%1$d Mal in Folge fehlgeschlagen</item>
+        <item quantity="other">%1$d Mal in Folge fehlgeschlagen</item>
+    </plurals>
+    <plurals name="tracker_failing_titles_summary">
+        <item quantity="one">%1$d Titel ist bei %2$d oder mehr Prüfungen in Folge fehlgeschlagen</item>
+        <item quantity="other">%1$d Titel sind bei %2$d oder mehr Prüfungen in Folge fehlgeschlagen</item>
+    </plurals>
 </resources>

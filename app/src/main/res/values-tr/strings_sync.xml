@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sync_remote_delete_incomplete">%1$d uzak dosya silinemedi. Yerel eşitleme durumu korundu; tekrar deneyin.</string>
+    <string name="google_drive_browser_failed">Google yetkilendirmesi için sistem tarayıcısı açılamadı.</string>
+    <string name="google_drive_stage_download">İndiriliyor</string>
+    <string name="google_drive_authorization_pending">Tarayıcınızda Google yetkilendirmesi bekleniyor…</string>
+    <string name="sync_settings_enabled_summary">Okuyucu, oynatıcı ve görünüm ayarları. Şifreler ve cihaz yolları asla eşitlenmez.</string>
+    <string name="google_drive_authorization_required">Google yetkilendirmesi eksik veya süresi dolmuş. Hesabınızı yeniden bağlayın.</string>
+    <string name="google_drive_credential_store_failed">Sistem kimlik bilgisi deposuna erişilemedi. Mevcut ve kilitli olmadığını kontrol edip tekrar deneyin.</string>
+    <string name="google_drive_settings_failed">Yerel senkronizasyon ayarları kaydedilemedi. Veri dizinini kontrol edin.</string>
+    <string name="google_drive_protocol_failed">Bulut anlık görüntüsü hasar görmüş veya desteklenmeyen bir biçim kullanıyor.</string>
+    <string name="google_drive_access_failed">Google Drive erişimi reddetti. İzinleri ve Drive API yapılandırmasını kontrol edin.</string>
+    <string name="google_drive_browser_rejected">Yetkilendirme reddedildi. Kototoro\'ya dönüp tekrar bağlanmayı deneyin.</string>
+    <string name="google_drive_stage_upload">Yükleniyor</string>
+    <string name="google_drive_desktop_scope">Kütüphanenizi, kategorilerinizi, okuma ilerlemenizi ve istatistiklerinizi senkronize eder.</string>
+    <string name="google_drive_client_configuration_failed">Google, OAuth istemci yapılandırmasını reddetti. İstemci türünü kontrol edin.</string>
+    <string name="google_drive_client_secret_required">Bu derlemede Google masaüstü OAuth istemci gizli anahtarı eksik.</string>
+    <string name="sync_settings_enabled_title">Ayarları eşitle</string>
+    <string name="sync_enable_required">Google Drive eşitlemesini açın.</string>
+    <string name="google_drive_authorization_canceled">Google yetkilendirmesi iptal edildi/zaman aşımı</string>
+    <string name="google_drive_conflict_failed">Diğer cihazlar güncelliyor. Sonra deneyin.</string>
+    <string name="google_drive_network_failed">Drive eşitlemesi başarısız. Bağlantıyı kontrol edin.</string>
+    <string name="google_drive_browser_complete">Tarayıcı döndü. Sonucu görmek için dönün.</string>
+    <string name="google_drive_stage_merge">Birleştirme</string>
+</resources>

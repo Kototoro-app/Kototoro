@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="source_presets">Préréglages</string>
+    <string name="create_preset">Nouv. prégl.</string>
+    <string name="edit_preset">Éditer prégl.</string>
+    <string name="preset_name">Nom prégl.</string>
+    <string name="preset_languages">Langues</string>
+    <string name="preset_sources">Sources</string>
+    <string name="preset_created">Prégl. créé</string>
+    <string name="preset_saved">Préfàssa sôvg</string>
+    <string name="preset_deleted">Prégl. supprimé</string>
+    <string name="preset_activated">Prégl. activé</string>
+    <string name="preset_deactivated">Prégl. désactivé</string>
+    <string name="no_presets">Pas de prégl.</string>
+    <string name="no_presets_text">Créez un prégl. pour basculer vite entre configs de sources</string>
+    <string name="manage_preset_sources">Gérer les sources</string>
+</resources>

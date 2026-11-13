@@ -24,4 +24,44 @@
         <item quantity="one">%1$d ڕۆژ لەمەوبەر</item>
         <item quantity="other">%1$d ڕۆژ لەمەوبەر</item>
     </plurals>
+    <plurals name="feed_timeline_updates">
+        <item quantity="one">%1$d نوێکاری</item>
+        <item quantity="other">%1$d نوێکاری</item>
+    </plurals>
+    <plurals name="history_grouped_sources">
+        <item quantity="one">%1$d سەرچاوە</item>
+        <item quantity="other">%1$d سەرچاوە</item>
+    </plurals>
+    <plurals name="home_enabled_sources">
+        <item quantity="one">%1$d سەرچاوەی چالاککراو</item>
+        <item quantity="other">%1$d سەرچاوەی چالاککراو</item>
+    </plurals>
+    <plurals name="home_updates_new_chapters">
+        <item quantity="one">%1$d بەشی نوێ</item>
+        <item quantity="other">%1$d بەشی نوێ</item>
+    </plurals>
+    <plurals name="hours">
+        <item quantity="one">%1$d کاتژمێر</item>
+        <item quantity="other">%1$d کاتژمێر</item>
+    </plurals>
+    <plurals name="minutes">
+        <item quantity="one">%1$d خولەک</item>
+        <item quantity="other">%1$d خولەک</item>
+    </plurals>
+    <plurals name="months_ago">
+        <item quantity="one">پێش %1$d مانگ</item>
+        <item quantity="other">پێش %1$d مانگ</item>
+    </plurals>
+    <plurals name="old_chapters_in_total">
+        <item quantity="one">بە گشتی %1$d بەشی کۆن</item>
+        <item quantity="other">بە گشتی %1$d بەشی کۆن</item>
+    </plurals>
+    <plurals name="tracker_failed_in_a_row">
+        <item quantity="one">%1$d جار لەسەر یەک سەرکەوتوو نەبوو</item>
+        <item quantity="other">%1$d جار لەسەر یەک سەرکەوتوو نەبوو</item>
+    </plurals>
+    <plurals name="tracker_failing_titles_summary">
+        <item quantity="one">%1$d ناونیشان %2$d جار یان زیاتر لەسەر یەک سەرکەوتوو نەبوو</item>
+        <item quantity="other">%1$d ناونیشان %2$d جار یان زیاتر لەسەر یەک سەرکەوتوو نەبوون</item>
+    </plurals>
 </resources>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="discover_category_all">Kaikki kategoriat</string>
+    <string name="discover_category_anime_rank">Anime</string>
+    <string name="discover_category_book_rank">Kirja</string>
+    <string name="discover_category_music_rank">Musiikki</string>
+    <string name="discover_category_game_rank">Peli</string>
+    <string name="discover_category_real_rank">Aito</string>
+    <string name="discover_category_calendar">Päiväaikataulu</string>
+</resources>

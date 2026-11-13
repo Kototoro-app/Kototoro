@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="video_subtitle_settings">إعدادات الترجمة</string>
+    <string name="video_subtitle_style">شكل الخط</string>
+    <string name="video_subtitle_font_size">حجم الخط</string>
+    <string name="video_subtitle_border_size">حجم الإطار</string>
+    <string name="video_subtitle_position">المكان (الهامش)</string>
+    <string name="video_subtitle_color_text">النص</string>
+    <string name="video_subtitle_color_border">الإطار</string>
+    <string name="video_subtitle_color_bg">الخلفية</string>
+    <string name="video_subtitle_layout">التصميم</string>
+    <string name="video_subtitle_colors">الألوان</string>
+    <string name="video_subtitle_align_left">شمال</string>
+    <string name="video_subtitle_align_center">في النص</string>
+    <string name="video_subtitle_align_right">يمين</string>
+    <string name="video_subtitle_color_alpha">الشفافية</string>
+    <string name="video_subtitle_color_red">أحمر</string>
+    <string name="video_subtitle_color_green">أخضر</string>
+    <string name="video_subtitle_color_blue">أزرق</string>
+    <string name="video_subtitle_background">الخلفية</string>
+    <string name="video_subtitle_background_style">شكل الخلفية</string>
+    <string name="video_subtitle_background_none">طافي</string>
+    <string name="video_subtitle_background_bar">عرض كامل</string>
+    <string name="video_subtitle_background_block">كتلة نصية</string>
+    <string name="video_subtitle_background_lines">لكل سطر</string>
+    <string name="video_subtitle_background_corner_radius">تدوير الحواف</string>
+    <string name="video_subtitle_background_padding_horizontal">الحشو الأفقي</string>
+    <string name="video_subtitle_background_padding_vertical">الحشو الرأسي</string>
+    <string name="video_subtitle_background_hint">الخلفية بتمشي مع نص الترجمة بدل ما تعمل شريط بعرض الشاشة كله.</string>
+    <string name="video_subtitle_font_family">الخط</string>
+    <string name="video_subtitle_font_sans">Sans</string>
+    <string name="video_subtitle_font_serif">Serif</string>
+    <string name="video_subtitle_font_monospace">Monospace</string>
+</resources>

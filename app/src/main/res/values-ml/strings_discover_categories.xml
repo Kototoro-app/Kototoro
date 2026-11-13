@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="discover_category_all">എല്ലാ വിഭാഗങ്ങളും</string>
+    <string name="discover_category_anime_rank">ആനിമേഷൻ</string>
+    <string name="discover_category_book_rank">പുസ്തകം</string>
+    <string name="discover_category_music_rank">സംഗീതം</string>
+    <string name="discover_category_game_rank">കളി</string>
+    <string name="discover_category_real_rank">റിയൽ</string>
+    <string name="discover_category_calendar">പ്രതിദിന ഷെഡ്യൂൾ</string>
+</resources>

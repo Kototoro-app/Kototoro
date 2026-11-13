@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="explore_tab_tracking_sites">Sledovací weby</string>
+    <string name="explore_tab_sources">Zdroje</string>
+</resources>

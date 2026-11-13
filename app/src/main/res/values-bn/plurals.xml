@@ -36,4 +36,32 @@
         <item quantity="one">%1$d ঘন্টা</item>
         <item quantity="other">%1$d টি ঘন্টা</item>
     </plurals>
+    <plurals name="feed_timeline_updates">
+        <item quantity="one">%1$dটি আপডেট</item>
+        <item quantity="other">%1$dটি আপডেট</item>
+    </plurals>
+    <plurals name="history_grouped_sources">
+        <item quantity="one">%1$dটি সোর্স</item>
+        <item quantity="other">%1$dটি সোর্স</item>
+    </plurals>
+    <plurals name="home_enabled_sources">
+        <item quantity="one">%1$dটি সোর্স চালু আছে</item>
+        <item quantity="other">%1$dটি সোর্স চালু আছে</item>
+    </plurals>
+    <plurals name="home_updates_new_chapters">
+        <item quantity="one">%1$dটি নতুন অধ্যায়</item>
+        <item quantity="other">%1$dটি নতুন অধ্যায়</item>
+    </plurals>
+    <plurals name="old_chapters_in_total">
+        <item quantity="one">মোট %1$dটি পুরোনো অধ্যায়</item>
+        <item quantity="other">মোট %1$dটি পুরোনো অধ্যায়</item>
+    </plurals>
+    <plurals name="tracker_failed_in_a_row">
+        <item quantity="one">পরপর %1$dবার ব্যর্থ হয়েছে</item>
+        <item quantity="other">পরপর %1$dবার ব্যর্থ হয়েছে</item>
+    </plurals>
+    <plurals name="tracker_failing_titles_summary">
+        <item quantity="one">%1$dটি টাইটেল পরপর %2$dবার বা তার বেশি চেক করতে ব্যর্থ হয়েছে</item>
+        <item quantity="other">%1$dটি টাইটেল পরপর %2$dবার বা তার বেশি চেক করতে ব্যর্থ হয়েছে</item>
+    </plurals>
 </resources>

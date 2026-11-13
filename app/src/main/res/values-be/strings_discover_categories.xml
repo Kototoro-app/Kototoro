@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="discover_category_all">Усе катэгорыі</string>
+    <string name="discover_category_anime_rank">Анімэ</string>
+    <string name="discover_category_book_rank">Кнігі</string>
+    <string name="discover_category_music_rank">Музыка</string>
+    <string name="discover_category_game_rank">Гульні</string>
+    <string name="discover_category_real_rank">Рэальнае</string>
+    <string name="discover_category_calendar">Расклад на дзень</string>
+</resources>

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="video_subtitle_settings">Ajustes de subtítulos</string>
+    <string name="video_subtitle_style">Tipografía</string>
+    <string name="video_subtitle_font_size">Tamaño</string>
+    <string name="video_subtitle_border_size">Borde</string>
+    <string name="video_subtitle_position">Posición (margen)</string>
+    <string name="video_subtitle_color_text">Texto</string>
+    <string name="video_subtitle_color_border">Borde</string>
+    <string name="video_subtitle_color_bg">Fondo</string>
+    <string name="video_subtitle_layout">Diseño</string>
+    <string name="video_subtitle_colors">Colores</string>
+    <string name="video_subtitle_align_left">Izquierda</string>
+    <string name="video_subtitle_align_center">Centro</string>
+    <string name="video_subtitle_align_right">Derecha</string>
+    <string name="video_subtitle_color_alpha">Alfa</string>
+    <string name="video_subtitle_color_red">Rojo</string>
+    <string name="video_subtitle_color_green">Verde</string>
+    <string name="video_subtitle_color_blue">Azul</string>
+    <string name="video_subtitle_background">Fondo</string>
+    <string name="video_subtitle_background_style">Estilo del fondo</string>
+    <string name="video_subtitle_background_none">No</string>
+    <string name="video_subtitle_background_bar">Completo</string>
+    <string name="video_subtitle_background_block">Bloque</string>
+    <string name="video_subtitle_background_lines">Por línea</string>
+    <string name="video_subtitle_background_corner_radius">Radio de esquina</string>
+    <string name="video_subtitle_background_padding_horizontal">Relleno horizontal</string>
+    <string name="video_subtitle_background_padding_vertical">Relleno vertical</string>
+    <string name="video_subtitle_background_hint">El fondo sigue al texto del subtítulo en lugar de ocupar toda la barra.</string>
+    <string name="video_subtitle_font_family">Fuente</string>
+    <string name="video_subtitle_font_sans">Palo seco</string>
+    <string name="video_subtitle_font_serif">Con serifa</string>
+    <string name="video_subtitle_font_monospace">Monoespacio</string>
+</resources>

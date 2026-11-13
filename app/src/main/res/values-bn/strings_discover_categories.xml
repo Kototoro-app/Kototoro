@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="discover_category_all">সকল ক্যাটাগরি</string>
+    <string name="discover_category_anime_rank">অ্যানিমে</string>
+    <string name="discover_category_book_rank">বই</string>
+    <string name="discover_category_music_rank">মিউজিক</string>
+    <string name="discover_category_game_rank">গেম</string>
+    <string name="discover_category_real_rank">রিয়েল</string>
+    <string name="discover_category_calendar">দৈনিক সময়সূচি</string>
+</resources>

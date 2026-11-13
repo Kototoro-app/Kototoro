@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sync_settings_enabled_title">زامن إعدادات التطبيق</string>
+    <string name="sync_settings_enabled_summary">إعدادات القارئ، المشغل والشكل. الباسوردات، التوكنات ومسارات الجهاز مبيحصلش لهم مزامنة أبداً.</string>
+    <string name="sync_remote_delete_incomplete">مقدرش يمسح %1$d ملفات بعيدة. حالة المزامنة المحلية اتفظت؛ جرب تاني.</string>
+    <string name="sync_enable_required">شغل مزامنة Google Drive الأول.</string>
+    <string name="google_drive_authorization_required">تفويض جوجل ناقص أو خلص. اربط حسابك تاني.</string>
+    <string name="google_drive_authorization_canceled">تفويض جوجل اتلغى أو الوقت خلص.</string>
+    <string name="google_drive_browser_failed">مش نافع نفتح متصفح السيستم عشان ترخيص Google.</string>
+    <string name="google_drive_credential_store_failed">مش نافع ندخل على مخزن بيانات الاعتماد في السيستم. اتأكد إنه شغال ومش مقفول، وجرب تاني.</string>
+    <string name="google_drive_settings_failed">مش نافع نسيف إعدادات المزامنة المحلية. اتأكد من داتا الديريكتوري وجرب تاني.</string>
+    <string name="google_drive_protocol_failed">نسخة السحاب باظت أو بتستخدم صيغة مش مدعومة. مفيش حاجة اترفعت.</string>
+    <string name="google_drive_conflict_failed">في أجهزة تانية بتحدث داتا السحاب. جرب تعمل مزامنة تاني كمان شوية.</string>
+    <string name="google_drive_network_failed">مزامنة Google Drive فشلت. اتأكد من اتصالك بالإنترنت وجرب تاني.</string>
+    <string name="google_drive_access_failed">Google Drive رفض الإذن. اتأكد من الصلاحيات اللي اتمدت وإعدادات Drive API.</string>
+    <string name="google_drive_browser_complete">استلمنا رد المتصفح. ارجع لـ Kototoro عشان تشوف نتيجة ربط الحساب.</string>
+    <string name="google_drive_browser_rejected">تم رفض طلب الترخيص ده. ارجع لـ Kototoro وجرب تربط تاني.</string>
+    <string name="google_drive_stage_download">بيتم التنزيل</string>
+    <string name="google_drive_stage_merge">بيتم الدمج</string>
+    <string name="google_drive_stage_upload">بيتم الرفع</string>
+    <string name="google_drive_desktop_scope">بيزامن مكتبتك، التصنيفات، تقدم القراءة، الإحصائيات وسجلات التحديث. الإعدادات والإضافات بتتحفظ في السحاب بس مش بتطبق على سطح المكتب دلوقتي. المزامنة التلقائية بتشتغل طول ما Kototoro مفتوح.</string>
+    <string name="google_drive_authorization_pending">في انتظار ترخيص Google في المتصفح بتاعك…</string>
+    <string name="google_drive_client_configuration_failed">Google رفضت إعدادات عميل OAuth. اتأكد من نوع عميل سطح المكتب، مشروع Google Cloud وإعدادات الموافقة.</string>
+    <string name="google_drive_client_secret_required">النسخة دي ناقصها سر عميل OAuth لسطح المكتب من Google. اضبطه واعمل إعادة بناء؛ تسجيل الدخول تاني مش هيصلح ده.</string>
+</resources>

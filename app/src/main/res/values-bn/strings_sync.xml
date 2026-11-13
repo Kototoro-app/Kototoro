@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sync_settings_enabled_title">অ্যাপ সেটিংস সিঙ্ক</string>
+    <string name="sync_settings_enabled_summary">রিডার, প্লেয়ার এবং উপস্থিতি সেটিংস। পাসওয়ার্ড, টোকেন এবং ডিভাইসের পাথ কখনো সিঙ্ক হয় না।</string>
+    <string name="sync_remote_delete_incomplete">%1$dটি দূরবর্তী ফাইল মোছা যায়নি। স্থানীয় সিঙ্ক অবস্থা রাখা হয়েছে; আবার চেষ্টা করুন।</string>
+    <string name="sync_enable_required">প্রথমে Google Drive সিঙ্ক চালু করুন।</string>
+    <string name="google_drive_authorization_required">Google অনুমোদন অসম্পূর্ণ অথবা মেয়াদোত্তীর্ণ। আপনার অ্যাকাউন্ট আবার যুক্ত করুন।</string>
+    <string name="google_drive_authorization_canceled">Google অনুমোদন বাতিল করা হয়েছে বা সময়সীমা শেষ হয়েছে।</string>
+    <string name="google_drive_browser_failed">গুগল অনুমোদনের জন্য সিস্টেম ব্রাউজার খোলা যায়নি।</string>
+    <string name="google_drive_credential_store_failed">সিস্টেম ক্রেডেনশিয়াল স্টোর অ্যাক্সেস করা যায়নি। এটি উপলব্ধ ও আনলক করা আছে কিনা তা পরীক্ষা করে আবার চেষ্টা করুন।</string>
+    <string name="google_drive_settings_failed">স্থানীয় সিঙ্ক সেটিংস সংরক্ষণ করা যায়নি। ডেটা ডিরেক্টরি পরীক্ষা করে আবার চেষ্টা করুন।</string>
+    <string name="google_drive_protocol_failed">ক্লাউড স্ন্যাপশট ক্ষতিগ্রস্ত অথবা একটি অসমর্থিত ফরম্যাট ব্যবহার করছে। কোনো কিছু আপলোড করা হয়নি।</string>
+    <string name="google_drive_conflict_failed">অন্য ডিভাইস ডেটা আপডেট করছে। পরে সিঙ্ক করুন।</string>
+    <string name="google_drive_network_failed">Google Drive সিঙ্ক ব্যর্থ হয়েছে। আপনার সংযোগ পরীক্ষা করে আবার চেষ্টা করুন।</string>
+    <string name="google_drive_access_failed">Google Drive অ্যাক্সেস অস্বীকৃত করেছে। প্রদত্ত অনুমতি এবং Drive API কনফিগারেশন পরীক্ষা করুন।</string>
+    <string name="google_drive_browser_complete">ব্রাউজার কলব্যাক প্রাপ্ত হয়েছে। অ্যাকাউন্টের সংযোগের ফলাফল দেখতে Kototoro-এ ফিরে যান।</string>
+    <string name="google_drive_browser_rejected">এই অনুমোদন কলব্যাকটি প্রত্যাখ্যাত হয়েছে। Kototoro-এ ফিরে যান এবং আবার সংযোগ করার চেষ্টা করুন।</string>
+    <string name="google_drive_stage_download">ডাউনলোড হচ্ছে</string>
+    <string name="google_drive_stage_merge">মাজিং হচ্ছে</string>
+    <string name="google_drive_stage_upload">আপলোড হচ্ছে</string>
+    <string name="google_drive_desktop_scope">আপনার লাইব্রেরি, ক্যাটাগরি, পড়ার অগ্রগতি, পরিসংখ্যান এবং আপডেট রেকর্ড সিঙ্ক করে। সেটিংস এবং এক্সটেনশন ক্লাউডে সংরক্ষিত থাকে কিন্তু ডেস্কটপে এখনও প্রয়োগ করা হয় না। Kototoro খোলা থাকাকালীন স্বয়ংক্রিয় সিঙ্ক চলে।</string>
+    <string name="google_drive_authorization_pending">আপনার ব্রাউজারে গুগল অনুমোদনের জন্য অপেক্ষা করা হচ্ছে…</string>
+    <string name="google_drive_client_configuration_failed">গুগল OAuth ক্লায়েন্ট কনফিগারেশন প্রত্যাখ্যান করেছে। ডেস্কটপ ক্লায়েন্ট টাইপ, Google Cloud প্রজেক্ট এবং কনসেন্ট সেটিংস পরীক্ষা করুন।</string>
+    <string name="google_drive_client_secret_required">এই বিল্ডে গুগল ডেস্কটপ OAuth ক্লায়েন্ট সিক্রেট অনুপস্থিত। এটি কনফিগার করে রিবাউন্ড করুন; আবার সাইন ইন করলে এটি ঠিক হবে না।</string>
+</resources>

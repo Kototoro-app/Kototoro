@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="discover_category_all">所有分類</string>
+    <string name="discover_category_anime_rank">動漫</string>
+    <string name="discover_category_book_rank">書籍</string>
+    <string name="discover_category_music_rank">音樂</string>
+    <string name="discover_category_game_rank">遊戲</string>
+    <string name="discover_category_real_rank">真人</string>
+    <string name="discover_category_calendar">每日行程</string>
+</resources>

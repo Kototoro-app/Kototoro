@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sync_settings_enabled_title">Сінхранізаваць налады</string>
+    <string name="sync_settings_enabled_summary">Налады чыталкі, плэера і знешняга выгляду. Паролі, токены і шляхі да прылад не сінхранізуюцца.</string>
+    <string name="sync_remote_delete_incomplete">Не ўдалося выдаліць %1$d файлаў. Стан захаваны; паспрабуйце зноў.</string>
+    <string name="sync_enable_required">Уключыце сінхранізацыю Google Drive.</string>
+    <string name="google_drive_authorization_required">Аўтарызацыя Google няпоўная або мінула. Падключыце свой уліковы запіс зноў.</string>
+    <string name="google_drive_authorization_canceled">Аўтарызацыя Google была скасаваная або мінуў час.</string>
+    <string name="google_drive_browser_failed">Не атрымалася адкрыць сістэмны браўзер для аўтарызацыі Google.</string>
+    <string name="google_drive_credential_store_failed">Памылка доступу да сховішча ўліковых даных. Праверце яго і паспрабуйце зноў.</string>
+    <string name="google_drive_settings_failed">Не атрымалася захаваць налады. Праверце каталог і паспрабуйце зноў.</string>
+    <string name="google_drive_protocol_failed">Воблачны здымак пашкоджаны або мае непадтрымліваны фармат. Нічога не было загружана.</string>
+    <string name="google_drive_conflict_failed">Іншыя прылады абнаўляюць воблачныя даныя. Паспрабуйце сінхранізаваць пазней.</string>
+    <string name="google_drive_network_failed">Памылка сінхранізацыі Google Drive. Праверце сетку.</string>
+    <string name="google_drive_access_failed">Google Drive адмовіў у доступе. Праверце дазволы і канфігурацыю Drive API.</string>
+    <string name="google_drive_browser_complete"> Атрыманы зваротны выклік браўзера. Вярніцеся ў Kototoro, каб праверыць вынік падключэння акаўнта.</string>
+    <string name="google_drive_browser_rejected">Гэты зваротны выклік аўтарызацыі быў адхілены. Вярніцеся ў Kototoro і паспрабуйце падключыцца зноў.</string>
+    <string name="google_drive_stage_download">Загрузка</string>
+    <string name="google_drive_stage_merge">Аб’яднанне</string>
+    <string name="google_drive_stage_upload">Выгрузка</string>
+    <string name="google_drive_desktop_scope">Сінхранізуе вашу бібліятэку, катэгорыі, прагрэс чытання, статыстыку і запісы абнаўленняў. Налады і пашырэнні захоўваюцца ў воблаку, але пакуль не прымяняюцца на ПК. Аўтаматычная сінхранізацыя працуе, пакуль Kototoro адкрыты.</string>
+    <string name="google_drive_authorization_pending">Чаканне аўтарызацыі Google у вашым браўзеры…</string>
+    <string name="google_drive_client_configuration_failed">Google адхіліў канфігурацыю кліента OAuth. Праверце тып кліента для ПК, праект Google Cloud і налады згоды.</string>
+    <string name="google_drive_client_secret_required">У гэтай зборцы няма сакрэту кліента настольнага OAuth Google. Наладзьце яго і перасобрайце; паўторны ўваход не дапаможа.</string>
+</resources>

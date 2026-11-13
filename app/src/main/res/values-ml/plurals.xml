@@ -8,4 +8,60 @@
         <item quantity="one">%1$d മിനിറ്റ്</item>
         <item quantity="other">%1$d മിനിറ്റ്</item>
     </plurals>
+    <plurals name="chapters">
+        <item quantity="one">%1$d അദ്ധ്യായം</item>
+        <item quantity="other">%1$d അദ്ധ്യായങ്ങൾ</item>
+    </plurals>
+    <plurals name="days_ago">
+        <item quantity="one">%1$d ദിവസം മുമ്പ്</item>
+        <item quantity="other">%1$d ദിവസം മുമ്പ്</item>
+    </plurals>
+    <plurals name="feed_timeline_updates">
+        <item quantity="one">%1$d അപ്ഡേറ്റ്</item>
+        <item quantity="other">%1$d അപ്ഡേറ്റുകൾ</item>
+    </plurals>
+    <plurals name="history_grouped_sources">
+        <item quantity="one">%1$d ഉറവിടം</item>
+        <item quantity="other">%1$d ഉറവിടങ്ങൾ</item>
+    </plurals>
+    <plurals name="home_enabled_sources">
+        <item quantity="one">%1$d പ്രവർത്തനസജ്ജമായ ഉറവിടം</item>
+        <item quantity="other">%1$d പ്രവർത്തനസജ്ജമായ ഉറവിടങ്ങൾ</item>
+    </plurals>
+    <plurals name="home_updates_new_chapters">
+        <item quantity="one">%1$d പുതിയ അദ്ധ്യായം</item>
+        <item quantity="other">%1$d പുതിയ അദ്ധ്യായങ്ങൾ</item>
+    </plurals>
+    <plurals name="hours">
+        <item quantity="one">%1$d മണിക്കൂർ</item>
+        <item quantity="other">%1$d മണിക്കൂർ</item>
+    </plurals>
+    <plurals name="hours_ago">
+        <item quantity="one">%1$d മണിക്കൂർ മുമ്പ്</item>
+        <item quantity="other">%1$d മണിക്കൂർ മുമ്പ്</item>
+    </plurals>
+    <plurals name="items">
+        <item quantity="one">%1$d ഇനം</item>
+        <item quantity="other">%1$d ഇനങ്ങൾ</item>
+    </plurals>
+    <plurals name="minutes_ago">
+        <item quantity="one">%1$d മിനിറ്റ് മുമ്പ്</item>
+        <item quantity="other">%1$d മിനിറ്റ് മുമ്പ്</item>
+    </plurals>
+    <plurals name="months_ago">
+        <item quantity="one">%1$d മാസം മുമ്പ്</item>
+        <item quantity="other">%1$d മാസം മുമ്പ്</item>
+    </plurals>
+    <plurals name="old_chapters_in_total">
+        <item quantity="one">ആകെ %1$d പഴയ അദ്ധ്യായം</item>
+        <item quantity="other">ആകെ %1$d പഴയ അദ്ധ്യായങ്ങൾ</item>
+    </plurals>
+    <plurals name="tracker_failed_in_a_row">
+        <item quantity="one">തുടർച്ചയായി %1$d തവണ പരാജയപ്പെട്ടു</item>
+        <item quantity="other">തുടർച്ചയായി %1$d തവണ പരാജയപ്പെട്ടു</item>
+    </plurals>
+    <plurals name="tracker_failing_titles_summary">
+        <item quantity="one">%1$d ശീർഷകം തുടർച്ചയായി %2$d തവണയോ അതിലധികമോ പരിശോധനകളിൽ പരാജയപ്പെട്ടു</item>
+        <item quantity="other">%1$d ശീർഷകങ്ങൾ തുടർച്ചയായി %2$d തവണയോ അതിലധികമോ പരിശോധനകളിൽ പരാജയപ്പെട്ടു</item>
+    </plurals>
 </resources>

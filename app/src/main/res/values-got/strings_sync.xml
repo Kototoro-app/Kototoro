@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sync_settings_enabled_title">Galeik app gastiglida</string>
+    <string name="sync_settings_enabled_summary">Lggiands, leiks jah siuns gastiglida. Runos, token jah stazos ni ainfra galeikant.</string>
+    <string name="sync_remote_delete_incomplete">Ni mahta fraqistjan %1$d faihra skrijan. Galiuh gaftassja fastada; aftra niujis.</string>
+    <string name="sync_enable_required">Anastiuh Google Drive galeik faurþis.</string>
+    <string name="google_drive_authorization_required">Google galeik ni fulls ist oþþe gaswiltida. Galukiþ qinains aftra.</string>
+    <string name="google_drive_authorization_canceled">Google galeik afsworþ oþþe hweil gaswiltida.</string>
+    <string name="google_drive_browser_failed">Ni mahta galukan sysgiuh browser faur Google galeik.</string>
+    <string name="google_drive_credential_store_failed">Ni mahta gaggan sysgiuh runastaþa. Saiw jabai ist jah andluks, þan aftra niujis.</string>
+    <string name="google_drive_settings_failed">Ni mahta gasokein galeik gastiglida. Saiw data stadi jah aftra niujis.</string>
+    <string name="google_drive_protocol_failed">Sa hlaiwata izi skadidds ist oþþe ni andnimoda sniwi. Niwaiht urraisida.</string>
+    <string name="google_drive_conflict_failed">Anþara tusa niujaidand himina gatamida. Gastoþei aftra gagga.</string>
+    <string name="google_drive_network_failed">Google Drive gagga usfullida ni. Atgagg gagga uns þata aftra.</string>
+    <string name="google_drive_access_failed">Google Drive faurabaida gagga. Atgagg fauragahda jah Drive API gadrausi.</string>
+    <string name="google_drive_browser_complete">Aftrawardja afandida. Kahr ins Kototoro du gasaikwan reik gagga.</string>
+    <string name="google_drive_browser_rejected">Þata afandida afswikaida. Kahr ins Kototoro jah gagga aftra.</string>
+    <string name="google_drive_stage_download">Afhlaþi</string>
+    <string name="google_drive_stage_merge">Gafuhdi</string>
+    <string name="google_drive_stage_upload">Ufhlaþi</string>
+    <string name="google_drive_desktop_scope">Gaggaizos bokari, flokos, raginassus, raida jah niujaidans. Gasatidins jah aukans sind in himina jah ni usfullida bi staiwn. Silbo gagga gaggand bi Kototoro opans.</string>
+    <string name="google_drive_authorization_pending">Beida Google afandida in þizei atgagg...</string>
+    <string name="google_drive_client_configuration_failed">Google afswikaida OAuth client gadrausi. Atgagg Desktop client, Google Cloud project jah gasatida.</string>
+    <string name="google_drive_client_secret_required">Þata gauns ni habaiþ Google desktop OAuth client secret. Gasatida jah aftra gauns; aftra inatgagg ni nasjiþ.</string>
+</resources>

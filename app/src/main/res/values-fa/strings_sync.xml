@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sync_settings_enabled_title">همگام‌سازی تنظیمات برنامه</string>
+    <string name="sync_settings_enabled_summary">تنظیمات خواننده، پخش‌کننده و ظاهر. کلمات عبور، توکن‌ها و مسیرهای دستگاه هرگز همگام‌سازی نمی‌شوند.</string>
+    <string name="sync_remote_delete_incomplete">حذف %1$d فایل راه دور انجام نشد. وضعیت همگام‌سازی محلی حفظ شد؛ دوباره تلاش کنید.</string>
+    <string name="sync_enable_required">ابتدا همگام‌سازی Google Drive را روشن کنید.</string>
+    <string name="google_drive_authorization_required">احراز هویت Google کامل نیست یا منقضی شده است. حساب خود را دوباره متصل کنید.</string>
+    <string name="google_drive_authorization_canceled">احراز هویت Google لغو شد یا به پایان رسید.</string>
+    <string name="google_drive_browser_failed">مرورگر سیستم برای احراز هویت گوگل باز نشد.</string>
+    <string name="google_drive_credential_store_failed">دسترسی به انبار اعتبارنامه‌های سیستم امکان‌پذیر نیست. بررسی کنید که در دسترس و باز باشد، سپس دوباره تلاش کنید.</string>
+    <string name="google_drive_settings_failed">Could not save settings. Check data dir and try again.</string>
+    <string name="google_drive_protocol_failed">تصویر لحظه‌ای ابری آسیب دیده یا از قالب پشتیبانی‌نشده‌ای استفاده می‌کند. چیزی بارگذاری نشد.</string>
+    <string name="google_drive_conflict_failed">Cloud data updating elsewhere. Try syncing later.</string>
+    <string name="google_drive_network_failed">Google Drive sync failed. Check connection.</string>
+    <string name="google_drive_access_failed">گوگل درایو دسترسی را رد کرد. مجوزهای اعطاشده و پیکربندی API درایو را بررسی کنید.</string>
+    <string name="google_drive_browser_complete">بازخورد مرورگر دریافت شد. برای بررسی نتیجه اتصال حساب به Kototoro بازگردید.</string>
+    <string name="google_drive_browser_rejected">این بازخورد احراز هویت رد شد. به Kototoro بازگردید و دوباره برای اتصال تلاش کنید.</string>
+    <string name="google_drive_stage_download">در حال بارگیری</string>
+    <string name="google_drive_stage_merge">در حال ادغام</string>
+    <string name="google_drive_stage_upload">Uploading</string>
+    <string name="google_drive_desktop_scope">کتابخانه، دسته‌بندی‌ها، پیشرفت مطالعه، آمار و سوابق به‌روزرسانی شما را همگام‌سازی می‌کند. تنظیمات و افزونه‌ها در ابر حفظ می‌شوند اما هنوز در دسکتاپ اعمال نمی‌شوند. همگام‌سازی خودکار در زمان باز بودن Kototoro اجرا می‌شود.</string>
+    <string name="google_drive_authorization_pending">در انتظار احراز هویت گوگل در مرورگر شما…</string>
+    <string name="google_drive_client_configuration_failed">گوگل پیکربندی کلاینت OAuth را رد کرد. نوع کلاینت دسکتاپ، پروژه Google Cloud و تنظیمات رضایت را بررسی کنید.</string>
+    <string name="google_drive_client_secret_required">این نسخه فاقد رمز کلاینت OAuth دسکتاپ گوگل است. آن را پیکربندی کرده و دوباره بسازید؛ ورود مجدد این مشکل را حل نمی‌کند.</string>
+</resources>

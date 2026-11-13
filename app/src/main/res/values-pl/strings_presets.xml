@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="source_presets">Presety źródeł</string>
+    <string name="create_preset">Nowy preset</string>
+    <string name="edit_preset">Edytuj preset</string>
+    <string name="preset_name">Nazwa presetu</string>
+    <string name="preset_languages">Języki</string>
+    <string name="preset_sources">Źródła</string>
+    <string name="preset_created">Utworzono preset</string>
+    <string name="preset_saved">Zapisano preset</string>
+    <string name="preset_deleted">Usunięto preset</string>
+    <string name="preset_activated">Aktywowano preset</string>
+    <string name="preset_deactivated">Dezaktywowano preset</string>
+    <string name="no_presets">Brak presetów</string>
+    <string name="no_presets_text">Utwórz preset, aby szybko przełączać się między konfiguracjami źródeł</string>
+    <string name="manage_preset_sources">Źródła</string>
+</resources>

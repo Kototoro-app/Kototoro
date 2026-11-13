@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_bar_filters">فیلترهای نوار جستجو</string>
+    <string name="show_language_preset_filter">پیش‌تنظیم زبان</string>
+    <string name="fixed_language_preset">پیش‌تنظیم زبان ثابت</string>
+    <string name="show_content_type_filter">نوع محتوا</string>
+    <string name="fixed_content_type">نوع محتوای ثابت</string>
+    <string name="show_source_tag_filter">نوع منبع</string>
+    <string name="fixed_source_tag">نوع منبع ثابت</string>
+</resources>

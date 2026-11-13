@@ -1,51 +1,67 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <plurals name="new_chapters">
+        <plurals name="new_chapters">
+        <item quantity="one">%1$d 個新章節</item>
         <item quantity="other">%1$d 個新章節</item>
     </plurals>
-    <plurals name="chapters">
+        <plurals name="chapters">
+        <item quantity="one">%1$d 章</item>
         <item quantity="other">%1$d 個章節</item>
     </plurals>
-    <plurals name="minutes_ago">
+        <plurals name="minutes_ago">
+        <item quantity="one">%1$d 分鐘前</item>
         <item quantity="other">%1$d 分鐘前</item>
     </plurals>
-    <plurals name="hours_ago">
+        <plurals name="hours_ago">
+        <item quantity="one">%1$d 小時前</item>
         <item quantity="other">%1$d 小時前</item>
     </plurals>
-    <plurals name="days_ago">
+        <plurals name="days_ago">
+        <item quantity="one">%1$d 天前</item>
         <item quantity="other">%1$d 天前</item>
     </plurals>
-    <plurals name="months_ago">
+        <plurals name="months_ago">
+        <item quantity="one">%1$d 個月前</item>
         <item quantity="other">%1$d 個月前</item>
     </plurals>
-    <plurals name="hours">
+        <plurals name="hours">
+        <item quantity="one">%1$d 小時</item>
         <item quantity="other">%1$d 小時</item>
     </plurals>
-    <plurals name="minutes">
+        <plurals name="minutes">
+        <item quantity="one">%1$d 分鐘</item>
         <item quantity="other">%1$d 分鐘</item>
     </plurals>
-    <plurals name="items">
+        <plurals name="items">
+        <item quantity="one">%1$d 個項目</item>
         <item quantity="other">%1$d 個項目</item>
     </plurals>
-    <plurals name="feed_timeline_updates">
+        <plurals name="feed_timeline_updates">
+        <item quantity="one">%1$d 個更新</item>
         <item quantity="other">%1$d 條更新</item>
     </plurals>
-    <plurals name="old_chapters_in_total">
+        <plurals name="old_chapters_in_total">
+        <item quantity="one">總共 %1$d 個舊章節</item>
         <item quantity="other">共 %1$d 箇舊章節</item>
     </plurals>
-    <plurals name="home_updates_new_chapters">
+        <plurals name="home_updates_new_chapters">
+        <item quantity="one">%1$d 個新章節</item>
         <item quantity="other">%1$d 個新章節</item>
     </plurals>
-    <plurals name="home_enabled_sources">
+        <plurals name="home_enabled_sources">
+        <item quantity="one">%1$d 個啟用的來源</item>
         <item quantity="other">已啟用 %1$d 個內容源</item>
     </plurals>
-    <plurals name="history_grouped_sources">
+        <plurals name="history_grouped_sources">
+        <item quantity="one">%1$d 個來源</item>
         <item quantity="other">%1$d 個來源</item>
     </plurals>
-    <plurals name="tracker_failing_titles_summary">
+        <plurals name="tracker_failing_titles_summary">
+        <item quantity="one">%1$d 個標題連續失敗 %2$d 次或以上檢查</item>
         <item quantity="other">%1$d 部作品連續檢查失敗 %2$d 次以上</item>
     </plurals>
-    <plurals name="tracker_failed_in_a_row">
+        <plurals name="tracker_failed_in_a_row">
+        <item quantity="one">連續失敗 %1$d 次</item>
         <item quantity="other">連續失敗 %1$d 次</item>
     </plurals>
 </resources>

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sync_settings_enabled_summary">Mga setting ng reader, player, at hitsura. Hindi nako-sync ang mga password, token, at path.</string>
+    <string name="sync_remote_delete_incomplete">Hindi mabura ang %1$d remote file. Nanatili ang lokal na sync; subukang muli.</string>
+    <string name="sync_enable_required">I-on muna ang Google Drive sync.</string>
+    <string name="google_drive_authorization_required">Hindi kumpleto o nag-expire ang awtorisasyon. Ikonekta muli.</string>
+    <string name="google_drive_authorization_canceled">Kinansela o nag-timeout ang awtorisasyon.</string>
+    <string name="google_drive_browser_failed">Hindi mabuksan ang browser ng sistema para sa awtorisasyon ng Google.</string>
+    <string name="google_drive_credential_store_failed">Hindi ma-access ang taguan ng kredensyal ng sistema. Suriin kung available at naka-unlock ito, pagkatapos ay subukan ulit.</string>
+    <string name="google_drive_protocol_failed">Sira o gumagamit ng hindi suportadong format ang cloud snapshot. Walang nai-upload.</string>
+    <string name="google_drive_browser_rejected">Tinanggihan ang callback ng awtorisasyong ito. Bumalik sa Kototoro at subukang kumonekta ulit.</string>
+    <string name="google_drive_stage_download">Dina-download</string>
+    <string name="google_drive_stage_merge">Pinagsasama</string>
+    <string name="google_drive_stage_upload">Ina-upload</string>
+    <string name="google_drive_authorization_pending">Naghihintay ng awtorisasyon ng Google sa iyong browser…</string>
+    <string name="google_drive_client_configuration_failed">Tinanggihan ng Google ang configuration ng OAuth client. Suriin ang uri ng desktop client, Google Cloud project, at mga setting ng pahintulot.</string>
+    <string name="google_drive_client_secret_required">Wala sa build na ito ang Google desktop OAuth client secret. I-configure ito at i-rebuild; hindi ito maaayos sa muling pag-sign in.</string>
+    <string name="sync_settings_enabled_title">I-sync ang setting</string>
+    <string name="google_drive_settings_failed">Hindi na-save ang mga lokal na setting. Suriin ang data directory at subukan ulit.</string>
+    <string name="google_drive_conflict_failed">Nag-a-update ang ibang device ng cloud data. Subukan i-sync ulit mamaya.</string>
+    <string name="google_drive_network_failed">Nabigo ang Google Drive sync. Suriin ang koneksyon at subukan ulit.</string>
+    <string name="google_drive_access_failed">Tinanggihan ng Google Drive ang access. Suriin ang mga pahintulot at Drive API.</string>
+    <string name="google_drive_browser_complete">Natanggap ang callback ng browser. Bumalik sa Kototoro para suriin ang account.</string>
+    <string name="google_drive_desktop_scope">Sine-sync ang library, kategorya, progreso, istatistika, at kasaysayan. Naka-save ang mga setting at extension sa cloud pero hindi pa nalalapat sa desktop. Tumatakbo ang auto-sync habang bukas ang Kototoro.</string>
+</resources>

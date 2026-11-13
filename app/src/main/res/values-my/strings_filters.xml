@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_bar_filters">စစ်ထုတ်မှုများ</string>
+    <string name="show_language_preset_filter">ဘာသာစကား</string>
+    <string name="fixed_language_preset">သတ်မှတ် ဘာသာစကား</string>
+    <string name="show_content_type_filter">အမျိုးအစား</string>
+    <string name="fixed_content_type">သတ်မှတ် အမျိုးအစား</string>
+    <string name="fixed_source_tag">သတ်မှတ် ရင်းမြစ်</string>
+    <string name="show_source_tag_filter">ရင်းမြစ် အမျိုးအစား</string>
+</resources>

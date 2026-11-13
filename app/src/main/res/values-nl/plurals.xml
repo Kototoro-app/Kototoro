@@ -32,4 +32,36 @@
         <item quantity="one">%1$d minuut</item>
         <item quantity="other">%1$d minuten</item>
     </plurals>
+    <plurals name="feed_timeline_updates">
+        <item quantity="one">%1$d update</item>
+        <item quantity="other">%1$d updates</item>
+    </plurals>
+    <plurals name="history_grouped_sources">
+        <item quantity="one">%1$d bron</item>
+        <item quantity="other">%1$d bronnen</item>
+    </plurals>
+    <plurals name="home_enabled_sources">
+        <item quantity="one">%1$d ingeschakelde bron</item>
+        <item quantity="other">%1$d ingeschakelde bronnen</item>
+    </plurals>
+    <plurals name="home_updates_new_chapters">
+        <item quantity="one">%1$d nieuw hoofdstuk</item>
+        <item quantity="other">%1$d nieuwe hoofdstukken</item>
+    </plurals>
+    <plurals name="items">
+        <item quantity="one">%1$d item</item>
+        <item quantity="other">%1$d items</item>
+    </plurals>
+    <plurals name="old_chapters_in_total">
+        <item quantity="one">Totaal %1$d oud hoofdstuk</item>
+        <item quantity="other">Totaal %1$d oude hoofdstukken</item>
+    </plurals>
+    <plurals name="tracker_failed_in_a_row">
+        <item quantity="one">%1$d keer achter elkaar mislukt</item>
+        <item quantity="other">%1$d keer achter elkaar mislukt</item>
+    </plurals>
+    <plurals name="tracker_failing_titles_summary">
+        <item quantity="one">%1$d titel is %2$d of meer keer achter elkaar mislukt</item>
+        <item quantity="other">%1$d titels zijn %2$d of meer keer achter elkaar mislukt</item>
+    </plurals>
 </resources>

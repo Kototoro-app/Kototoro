@@ -36,4 +36,32 @@
         <item quantity="one">%1$d minuutti</item>
         <item quantity="other">%1$d minuuttia</item>
     </plurals>
+    <plurals name="feed_timeline_updates">
+        <item quantity="one">%1$d päivitys</item>
+        <item quantity="other">%1$d päivitystä</item>
+    </plurals>
+    <plurals name="history_grouped_sources">
+        <item quantity="one">%1$d lähde</item>
+        <item quantity="other">%1$d lähdettä</item>
+    </plurals>
+    <plurals name="home_enabled_sources">
+        <item quantity="one">%1$d käytössä oleva lähde</item>
+        <item quantity="other">%1$d käytössä olevaa lähdettä</item>
+    </plurals>
+    <plurals name="home_updates_new_chapters">
+        <item quantity="one">%1$d uusi luku</item>
+        <item quantity="other">%1$d uutta lukua</item>
+    </plurals>
+    <plurals name="old_chapters_in_total">
+        <item quantity="one">Yhteensä %1$d vanha luku</item>
+        <item quantity="other">Yhteensä %1$d vanhaa lukua</item>
+    </plurals>
+    <plurals name="tracker_failed_in_a_row">
+        <item quantity="one">Epäonnistui %1$d kerran peräkkäin</item>
+        <item quantity="other">Epäonnistui %1$d kertaa peräkkäin</item>
+    </plurals>
+    <plurals name="tracker_failing_titles_summary">
+        <item quantity="one">%1$d nimike epäonnistui %2$d tarkistuksessa peräkkäin</item>
+        <item quantity="other">%1$d nimikettä epäonnistui %2$d tarkistuksessa peräkkäin</item>
+    </plurals>
 </resources>

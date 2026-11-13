@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sync_settings_enabled_title">এপ চেটিংছ ছিংক কৰক</string>
+    <string name="sync_settings_enabled_summary">ৰিডাৰ, প্লেয়াৰ আৰু দেখা পোৱাৰ ছেটিংছ। পাছৱৰ্ড, টকেন আৰু ডিভাইচ পথ কেতিয়াও ছিংক কৰা নহয়।</string>
+    <string name="sync_remote_delete_incomplete">%1$d টা দূৰৱৰ্তী ফাইল মচি পেলাব নোৱাৰিলে। স্থানীয় ছিংক অৱস্থা ৰখা হৈছিল; আকৌ চেষ্টা কৰক।</string>
+    <string name="sync_enable_required">প্ৰথমে Google Drive ছিংক অন কৰক।</string>
+    <string name="google_drive_authorization_required">Google প্ৰমাণীকৰণ সম্পূৰ্ণ হোৱা নাই বা মেয়াদ উকলি গৈছে। আপোনাৰ একাউণ্টটো আকৌ সংযোগ কৰক।</string>
+    <string name="google_drive_authorization_canceled">Google প্ৰমাণীকৰণ বাতিল কৰা হৈছিল বা সময় উকলি গৈছিল।</string>
+    <string name="google_drive_browser_failed">Google প্ৰমাণীকৰণৰ বাবে চিস্টেম ব্ৰাউজাৰ খুলিব পৰা নগল।</string>
+    <string name="google_drive_credential_store_failed">চিস্টেম ক্ৰেডেনচিয়েল ষ্ট’ৰ প্ৰৱেশ কৰিব পৰা নগল। ই উপলব্ধ আৰু আনলকড হৈ আছে নে নাই পৰীক্ষা কৰি আকৌ চেষ্টা কৰক।</string>
+    <string name="google_drive_settings_failed">স্থানীয় চিংক ছেটিংছ ছেভ কৰিব পৰা নগল। ডাটা ডিৰেক্টৰী পৰীক্ষা কৰি আকৌ চেষ্টা কৰক।</string>
+    <string name="google_drive_protocol_failed">ক্লাউড স্ন্যাপশ্বট ক্ষতিগ্ৰস্ত বা সমৰ্থন নকৰা ফৰমেটত আছে। একো আপলোড কৰা হোৱা নাই।</string>
+    <string name="google_drive_conflict_failed">অন্য ডিভাইচসমূহে ক্লাউড ডাটা আপডেট কৰি আছে। পিছত আকৌ চিংক কৰিবলৈ চেষ্টা কৰক।</string>
+    <string name="google_drive_network_failed">Google Drive চিংক ব্যৰ্থ হ\'ল। আপোনাৰ সংযোগ পৰীক্ষা কৰি আকৌ চেষ্টা কৰক।</string>
+    <string name="google_drive_access_failed">Google Drive এ প্ৰৱেশাধিকাৰ অস্বীকাৰ কৰিলে। প্ৰদান কৰা অনুমতি আৰু Drive API কনফিগাৰেচন পৰীক্ষা কৰক।</string>
+    <string name="google_drive_browser_complete">ব্ৰাউজাৰ কলবেক প্ৰাপ্ত হ\'ল। একাউণ্ট সংযোগৰ ফলাফল পৰীক্ষা কৰিবলৈ Kototoro লৈ উভতি যাওক।</string>
+    <string name="google_drive_browser_rejected">এই প্ৰমাণীকৰণ কলবেক নাকচ কৰা হৈছিল। Kototoro লৈ উভতি গৈ আকৌ সংযোগ কৰিবলৈ চেষ্টা কৰক।</string>
+    <string name="google_drive_stage_download">ডাউনলোড হৈ আছে</string>
+    <string name="google_drive_stage_merge">মাৰ্জ হৈ আছে</string>
+    <string name="google_drive_stage_upload">আপলোড হৈছে</string>
+    <string name="google_drive_desktop_scope">আপোনাৰ লাইব্ৰেৰী, শ্ৰেণী, পঢ়াৰ প্ৰগতি, পৰিসংখ্যা আৰু আপডেট ৰেকৰ্ড চিংক কৰে। চেটিংছ আৰু এক্সটেনশ্বন ক্লাউডত সংৰক্ষিত থাকে কিন্তু ডেস্কটপত এতিয়াও প্ৰয়োগ কৰা হোৱা নাই। Kototoro খোলা থকা অৱস্থাত স্বয়ংক্ৰিয় চিংক হয়।</string>
+    <string name="google_drive_authorization_pending">ব্ৰাউজাৰত Google প্ৰমাণীকৰণৰ বাবে অপেক্ষা কৰা হৈছে...</string>
+    <string name="google_drive_client_configuration_failed">Google এ OAuth ক্লায়েণ্ট কনফিগাৰেচন নাকচ কৰিলে। ডেস্কটপ ক্লায়েণ্ট প্ৰকাৰ, Google Cloud প্ৰজেক্ট আৰু সন্মতি ছেটিংছ পৰীক্ষা কৰক।</string>
+    <string name="google_drive_client_secret_required">এই বিল্ডটোত Google ডেস্কটপ OAuth ক্লায়েণ্ট ছিক্ৰেট নাই। ইয়াক কনফিগৰ কৰি পুনৰ বিল্ড কৰক; আকৌ ছাইন ইন কৰিলে এই সমস্যা সমাধান নহ\'ব।</string>
+</resources>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_bar_filters">តម្រងរបារស្វែងរក</string>
+    <string name="show_language_preset_filter">ភាសាដែលបានកំណត់</string>
+    <string name="fixed_language_preset">ភាសាដែលបានកំណត់ថេរ</string>
+    <string name="show_content_type_filter">ប្រភេទមាតិកា</string>
+    <string name="fixed_content_type">ប្រភេទមាតិកាថេរ</string>
+    <string name="show_source_tag_filter">ប្រភេទប្រភព</string>
+    <string name="fixed_source_tag">ប្រភេទប្រភពថេរ</string>
+</resources>

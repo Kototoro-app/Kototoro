@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sync_settings_enabled_title">සමමුහුර්තකරණය</string>
+    <string name="sync_settings_enabled_summary">කියවනය, වාදකය සහ පෙනුම සැකසුම්. මුරපද, ටෝකන සහ උපාංග මාර්ග කිසි විටෙකත් සමමුහුර්ත නොකෙරේ.</string>
+    <string name="sync_remote_delete_incomplete">දුරස්ථ ගොනු %1$dක් මකාගත නොහැකි විය. නැවත උත්සාහ කරන්න.</string>
+    <string name="sync_enable_required">Google Drive සමමුහුර්ත කරන්න.</string>
+    <string name="google_drive_authorization_required">Google අනුමැතිය අসম্পූර්ණයි හෝ කල් ඉකුත් වී ඇත. ඔබගේ ගිණුම නැවත සම්බන්ධ කරන්න.</string>
+    <string name="google_drive_authorization_canceled">Google අනුමැතිය අවලංගු කර ඇත හෝ කාලය අවසන් වී ඇත.</string>
+    <string name="google_drive_browser_failed">Google ප්‍රවේශය සඳහා පද්ධති බ්‍රව්සරය විවෘත කළ නොහැකි විය.</string>
+    <string name="google_drive_credential_store_failed">පද්ධති අක්තපත්‍ර ගබඩාව වෙත ප්‍රවේශ විය නොහැකි විය. එය තිබේද සහ අගුලු හැර තිබේදැයි පරීක්ෂා කර, නැවත උත්සාහ කරන්න.</string>
+    <string name="google_drive_settings_failed">සැකසුම් සුරැකිය නොහැකි විය. නැවත උත්සාහ කරන්න.</string>
+    <string name="google_drive_protocol_failed">වලාකුළු ස්නැප්ෂොට් එක හානි වී ඇත හෝ සහය නොදක්වන ආකෘතියක් භාවිතා කරයි. කිසිවක් උඩුගත කර නැත.</string>
+    <string name="google_drive_conflict_failed">වෙනත් උපාංග යාවත්කාලීන කරයි. පසුව උත්සාහ කරන්න.</string>
+    <string name="google_drive_network_failed">Google Drive අසාර්ථක විය. සම්බන්ධතාව පරීක්ෂා කරන්න.</string>
+    <string name="google_drive_access_failed">Google Drive ප්‍රවේශය ප්‍රතික්ෂේප කළේය. ලබා දී ඇති අවසර සහ Drive API වින්‍යාසය පරීක්ෂා කරන්න.</string>
+    <string name="google_drive_browser_complete">බ්‍රව්සර ප්‍රතිපෝෂණය ලැබුණි. ගිණුම් සම්බන්ධතා ප්‍රතිඵලය පරීක්ෂා කිරීමට Kototoro වෙත ආපසු යන්න.</string>
+    <string name="google_drive_browser_rejected">මෙම අවසර ප්‍රතිපෝෂණය ප්‍රතික්ෂේප කරන ලදී. Kototoro වෙත ආපසු ගොස් නැවත සම්බන්ධ වීමට උත්සාහ කරන්න.</string>
+    <string name="google_drive_stage_download">බාගත කරමින්</string>
+    <string name="google_drive_stage_merge">මුසු කරමින්</string>
+    <string name="google_drive_desktop_scope">ඔබේ පුස්තකාලය, ප්‍රවර්ග, කියවීමේ ප්‍රගතිය, සංඛ්‍යාලේඛන සහ යාවත්කාලීන වාර්තා සමමුහුර්ත කරයි. සැකසුම් සහ දිගු වලාකුළෙහි සංරක්ෂණය කර ඇතත් තවමත් ඩෙස්ක්ටොප් එකේ යෙදී නොමැත. Kototoro විවෘතව ඇති විට ස්වයංක්‍රීය සමමුහුර්තකරණය ක්‍රියාත්මක වේ.</string>
+    <string name="google_drive_authorization_pending">ඔබේ බ්‍රව්සරයේ Google අවසරය සඳහා অপেক্ষা කරමින් පවතී…</string>
+    <string name="google_drive_client_configuration_failed">Google විසින් OAuth සේවාදායක වින්‍යාසය ප්‍රතික්ෂේප කරන ලදී. ඩෙස්ක්ටොප් සේවාදායක වර්ගය, Google Cloud ව්‍යාපෘතිය සහ කැමැත්ත සැකසුම් පරීක්ෂා කරන්න.</string>
+    <string name="google_drive_client_secret_required">මෙම ගොඩනැගීමේ Google ඩෙස්ක්ටොප් OAuth සේවාදායක රහස මග හැරී ඇත. එය වින්‍යාස කර නැවත ගොඩනඟන්න; නැවත පුරනය වීමෙන් මෙය නිවැරදි නොවේ.</string>
+    <string name="google_drive_stage_upload">උඩුගත කරමින්</string>
+</resources>

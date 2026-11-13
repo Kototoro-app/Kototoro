@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_bar_filters">Sökfältsfilter</string>
+    <string name="show_language_preset_filter">Språkförinställn.</string>
+    <string name="fixed_language_preset">Fast språkförinställning</string>
+    <string name="show_content_type_filter">Innehållstyp</string>
+    <string name="fixed_content_type">Fast innehållstyp</string>
+    <string name="show_source_tag_filter">Källtyp</string>
+    <string name="fixed_source_tag">Fast källtyp</string>
+</resources>

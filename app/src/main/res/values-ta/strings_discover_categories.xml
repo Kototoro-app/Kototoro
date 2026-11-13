@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="discover_category_all">அனைத்து வகைகள்</string>
+    <string name="discover_category_anime_rank">அனிமே</string>
+    <string name="discover_category_book_rank">புத்தகம்</string>
+    <string name="discover_category_music_rank">இசை</string>
+    <string name="discover_category_game_rank">Game</string>
+    <string name="discover_category_real_rank">உண்மையான</string>
+    <string name="discover_category_calendar">தினசரி அட்டவணை</string>
+</resources>

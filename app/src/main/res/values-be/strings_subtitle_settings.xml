@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="video_subtitle_settings">Налады субцітраў</string>
+    <string name="video_subtitle_style">Шрыфт</string>
+    <string name="video_subtitle_font_size">Шрыфт</string>
+    <string name="video_subtitle_border_size">Памер мяжы</string>
+    <string name="video_subtitle_position">Пазіцыя (водступ)</string>
+    <string name="video_subtitle_color_text">Тэкст</string>
+    <string name="video_subtitle_color_border">Мяжа</string>
+    <string name="video_subtitle_color_bg">Фон</string>
+    <string name="video_subtitle_layout">Макет</string>
+    <string name="video_subtitle_colors">Колеры</string>
+    <string name="video_subtitle_align_left">Злева</string>
+    <string name="video_subtitle_align_center">Па цэнтры</string>
+    <string name="video_subtitle_align_right">Справа</string>
+    <string name="video_subtitle_color_alpha">Альфа</string>
+    <string name="video_subtitle_color_red">Чырвоны</string>
+    <string name="video_subtitle_color_green">Зялёны</string>
+    <string name="video_subtitle_color_blue">Сіні</string>
+    <string name="video_subtitle_background">Фон</string>
+    <string name="video_subtitle_background_style">Стыль фону</string>
+    <string name="video_subtitle_background_none">Выкл</string>
+    <string name="video_subtitle_background_block">Тэкст. блок</string>
+    <string name="video_subtitle_background_lines">Парадкова</string>
+    <string name="video_subtitle_background_corner_radius">Радыус кутоў</string>
+    <string name="video_subtitle_background_padding_horizontal">Гарызантальны водступ</string>
+    <string name="video_subtitle_background_padding_vertical">Вертыкальны водступ</string>
+    <string name="video_subtitle_background_hint">Фон ідзе за тэкстам субцітраў, а не стварае палосу на ўсю шырыню.</string>
+    <string name="video_subtitle_font_family">Шрыфт</string>
+    <string name="video_subtitle_font_sans">Санс</string>
+    <string name="video_subtitle_font_serif">Сэрыф</string>
+    <string name="video_subtitle_font_monospace">Манашырытны</string>
+    <string name="video_subtitle_background_bar">Уся шырыня</string>
+</resources>

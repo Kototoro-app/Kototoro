@@ -30,10 +30,38 @@
     </plurals>
     <plurals name="hours">
         <item quantity="one">%1$d сағат</item>
-        <item quantity="other">Нөл , екі, үш, төрт, бес, алты, жеті, сегіз, тоғыз, он</item>
+        <item quantity="other">%1$d сағат</item>
     </plurals>
     <plurals name="minutes">
         <item quantity="one">%1$d минут</item>
         <item quantity="other">%1$d минут</item>
+    </plurals>
+    <plurals name="feed_timeline_updates">
+        <item quantity="one">%1$d жаңарту</item>
+        <item quantity="other">%1$d жаңарту</item>
+    </plurals>
+    <plurals name="history_grouped_sources">
+        <item quantity="one">%1$d көз</item>
+        <item quantity="other">%1$d көз</item>
+    </plurals>
+    <plurals name="home_enabled_sources">
+        <item quantity="one">%1$d қосылған көз</item>
+        <item quantity="other">%1$d қосылған көз</item>
+    </plurals>
+    <plurals name="home_updates_new_chapters">
+        <item quantity="one">%1$d жаңа тарау</item>
+        <item quantity="other">%1$d жаңа тарау</item>
+    </plurals>
+    <plurals name="old_chapters_in_total">
+        <item quantity="one">Барлығы %1$d ескі тарау</item>
+        <item quantity="other">Барлығы %1$d ескі тарау</item>
+    </plurals>
+    <plurals name="tracker_failed_in_a_row">
+        <item quantity="one">Қатарынан %1$d рет сәтсіз аяқталды</item>
+        <item quantity="other">Қатарынан %1$d рет сәтсіз аяқталды</item>
+    </plurals>
+    <plurals name="tracker_failing_titles_summary">
+        <item quantity="one">%1$d атау қатарынан %2$d немесе одан көп тексеруден өтпеді</item>
+        <item quantity="other">%1$d атау қатарынан %2$d немесе одан көп тексеруден өтпеді</item>
     </plurals>
 </resources>

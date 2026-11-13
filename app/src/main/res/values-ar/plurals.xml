@@ -72,4 +72,32 @@
         <item quantity="many">%1$d ساعة</item>
         <item quantity="other">%1$d ساعة</item>
     </plurals>
+    <plurals name="feed_timeline_updates">
+        <item quantity="one">تحديث %1$d</item>
+        <item quantity="other">%1$d تحديثات</item>
+    </plurals>
+    <plurals name="history_grouped_sources">
+        <item quantity="one">مصدر %1$d</item>
+        <item quantity="other">%1$d مصادر</item>
+    </plurals>
+    <plurals name="home_enabled_sources">
+        <item quantity="one">مصدر مفعل %1$d</item>
+        <item quantity="other">%1$d مصادر مفعلة</item>
+    </plurals>
+    <plurals name="home_updates_new_chapters">
+        <item quantity="one">فصل جديد %1$d</item>
+        <item quantity="other">%1$d فصول جديدة</item>
+    </plurals>
+    <plurals name="old_chapters_in_total">
+        <item quantity="one">%1$d فصل قديم بالمجمل</item>
+        <item quantity="other">إجمالي %1$d فصلًا قديمًا</item>
+    </plurals>
+    <plurals name="tracker_failed_in_a_row">
+        <item quantity="one">فشل %1$d مرة على التوالي</item>
+        <item quantity="other">فشل %1$d مرات على التوالي</item>
+    </plurals>
+    <plurals name="tracker_failing_titles_summary">
+        <item quantity="one">فشل عنوان %1$d في اجتياز %2$d فحوصات أو أكثر على التوالي</item>
+        <item quantity="other">فشلت عناوين %1$d في اجتياز %2$d فحوصات أو أكثر على التوالي</item>
+    </plurals>
 </resources>

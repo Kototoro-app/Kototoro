@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sync_settings_enabled_summary">Postavke čitača, svirača i izgleda. Lozinke, tokeni i putanje uređaja se nikada ne sinkroniziraju.</string>
+    <string name="sync_remote_delete_incomplete">Brisanje %1$d udaljenih datoteka neuspjelo. Pokušaj ponovno.</string>
+    <string name="sync_enable_required">Prvo uklj. Google Drive sinkronizaciju.</string>
+    <string name="google_drive_authorization_required">Google autorizacija nije potpuna ili je istekla. Ponovno povežite svoj račun.</string>
+    <string name="google_drive_authorization_canceled">Google autorizacija je otkazana ili je isteknulo vrijeme.</string>
+    <string name="google_drive_browser_failed">Nije moguće otvoriti preglednik za Google autorizaciju.</string>
+    <string name="google_drive_credential_store_failed">Nije moguće pristupiti pohrani vjerodajnica. Provjerite je li dostupna i otključana pa pokušajte ponovno.</string>
+    <string name="google_drive_settings_failed">Spremanje lokalnih postavki sinkronizacije neuspjelo. Pokušajte ponovno.</string>
+    <string name="google_drive_protocol_failed">Oblasna snimka je oštećena ili koristi nepodržani format. Ništa nije učitano.</string>
+    <string name="google_drive_conflict_failed">Drugi uređaji ažuriraju oblak. Pokušajte kasnije.</string>
+    <string name="google_drive_network_failed">Google Drive neuspješan. Provjerite vezu.</string>
+    <string name="google_drive_access_failed">Google Drive je odbio pristup. Provjerite odobrena dopuštenja i konfiguraciju Drive API-ja.</string>
+    <string name="google_drive_browser_complete">Povratni poziv primljen. Vratite se u Kototoro za provjeru računa.</string>
+    <string name="google_drive_browser_rejected">Ovaj povratni poziv autorizacije je odbijen. Vratite se u Kototoro i pokušajte se ponovno povezati.</string>
+    <string name="google_drive_stage_download">Preuzimanje</string>
+    <string name="google_drive_stage_merge">Spajanje</string>
+    <string name="google_drive_stage_upload">Učitavanje</string>
+    <string name="google_drive_desktop_scope">Sinkronizira vašu biblioteku, kategorije, napredak čitanja, statistiku i zapise ažuriranja. Postavke i proširenja čuvaju se u oblaku, ali se još ne primjenjuju na stolnom računalu. Automatska sinkronizacija radi dok je Kototoro otvoren.</string>
+    <string name="google_drive_authorization_pending">Čeka se Google autorizacija u vašem pregledniku…</string>
+    <string name="google_drive_client_configuration_failed">Google je odbio OAuth konfiguraciju klijenta. Provjerite vrstu računalnog klijenta, Google Cloud projekt i postavke pristanka.</string>
+    <string name="google_drive_client_secret_required">Ovoj verziji nedostaje tajna Google OAuth klijenta za stolna računala. Konfigurirajte je i ponovno izgradite; ponovna prijava neće ovo riješiti.</string>
+    <string name="sync_settings_enabled_title">Sinkroniziraj post. aplik.</string>
+</resources>

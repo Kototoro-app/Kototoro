@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="source_presets">プリセット</string>
+    <string name="create_preset">បង្កើតプリセット</string>
+    <string name="edit_preset">កែប្រែプリセット</string>
+    <string name="preset_name">ឈ្មោះプリセット</string>
+    <string name="preset_languages">ភាសា</string>
+    <string name="preset_sources">ប្រភព</string>
+    <string name="preset_created">បានបង្កើតプリセット</string>
+    <string name="preset_saved">បានរក្សាទុក</string>
+    <string name="preset_deleted">បានលុបプリセット</string>
+    <string name="preset_activated">បានបើកプリセット</string>
+    <string name="preset_deactivated">បានបិទプリセット</string>
+    <string name="no_presets">មិនទាន់មានプリセットទេ</string>
+    <string name="no_presets_text">បង្កើតプリセットដើម្បីប្តូររវាងការកំណត់ប្រភពផ្សេងៗយ៉ាងលឿន</string>
+    <string name="manage_preset_sources">គ្រប់គ្រងប្រភព</string>
+</resources>

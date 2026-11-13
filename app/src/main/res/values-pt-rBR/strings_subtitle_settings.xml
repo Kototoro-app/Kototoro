@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="video_subtitle_settings">Config. de legendas</string>
+    <string name="video_subtitle_style">Tipografia</string>
+    <string name="video_subtitle_font_size">Font size</string>
+    <string name="video_subtitle_border_size">Tam. da borda</string>
+    <string name="video_subtitle_position">Posição (Margem)</string>
+    <string name="video_subtitle_color_text">Texto</string>
+    <string name="video_subtitle_color_border">Borda</string>
+    <string name="video_subtitle_color_bg">Fundo</string>
+    <string name="video_subtitle_layout">Layout</string>
+    <string name="video_subtitle_colors">Cores</string>
+    <string name="video_subtitle_align_left">Esquerda</string>
+    <string name="video_subtitle_align_center">Centro</string>
+    <string name="video_subtitle_align_right">Direita</string>
+    <string name="video_subtitle_color_alpha">Alfa</string>
+    <string name="video_subtitle_color_red">Vermelho</string>
+    <string name="video_subtitle_color_green">Verde</string>
+    <string name="video_subtitle_color_blue">Azul</string>
+    <string name="video_subtitle_background">Fundo</string>
+    <string name="video_subtitle_background_style">Estilo de fundo</string>
+    <string name="video_subtitle_background_none">Off</string>
+    <string name="video_subtitle_background_bar">Largura total</string>
+    <string name="video_subtitle_background_block">Bloco de texto</string>
+    <string name="video_subtitle_background_lines">Por linha</string>
+    <string name="video_subtitle_background_corner_radius">Raio da borda</string>
+    <string name="video_subtitle_background_padding_horizontal">Preenchimento horiz.</string>
+    <string name="video_subtitle_background_padding_vertical">Preenchimento vert.</string>
+    <string name="video_subtitle_background_hint">O fundo acompanha o texto da legenda em vez de formar uma barra de largura total.</string>
+    <string name="video_subtitle_font_family">Fonte</string>
+    <string name="video_subtitle_font_sans">Sans</string>
+    <string name="video_subtitle_font_serif">Serif</string>
+    <string name="video_subtitle_font_monospace">Monospace</string>
+</resources>

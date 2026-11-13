@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="source_presets">Προεπιλογές πηγών</string>
+    <string name="create_preset">Νέα προεπιλ.</string>
+    <string name="edit_preset">Επεξεργασία</string>
+    <string name="preset_name">Όνομα</string>
+    <string name="preset_languages">Γλώσσες</string>
+    <string name="preset_sources">Πηγές</string>
+    <string name="preset_created">Δημιουργήθηκε</string>
+    <string name="preset_saved">Αποθηκεύτηκε</string>
+    <string name="preset_deleted">Διαγράφηκε</string>
+    <string name="preset_activated">Ενεργοποιήθηκε</string>
+    <string name="preset_deactivated">Απενεργοποιήθηκε</string>
+    <string name="no_presets">Χωρίς προεπιλογές</string>
+    <string name="no_presets_text">Δημιουργήστε μια προεπιλογή για γρήγορη εναλλαγή μεταξύ διαφορετικών ρυθμίσεων πηγών</string>
+    <string name="manage_preset_sources">Διαχείριση πηγών</string>
+</resources>

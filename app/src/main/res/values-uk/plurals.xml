@@ -54,4 +54,32 @@
         <item quantity="many">%1$d хвилин</item>
         <item quantity="other">%1$d хвилин</item>
     </plurals>
+    <plurals name="feed_timeline_updates">
+        <item quantity="one">%1$d оновлення</item>
+        <item quantity="other">%1$d оновлення</item>
+    </plurals>
+    <plurals name="history_grouped_sources">
+        <item quantity="one">%1$d джерело</item>
+        <item quantity="other">%1$d джерел</item>
+    </plurals>
+    <plurals name="home_enabled_sources">
+        <item quantity="one">%1$d увімкнене джерело</item>
+        <item quantity="other">%1$d увімкнених джерел</item>
+    </plurals>
+    <plurals name="home_updates_new_chapters">
+        <item quantity="one">%1$d новий розділ</item>
+        <item quantity="other">%1$d нових розділів</item>
+    </plurals>
+    <plurals name="old_chapters_in_total">
+        <item quantity="one">Загалом %1$d старий розділ</item>
+        <item quantity="other">Загалом %1$d старих розділів</item>
+    </plurals>
+    <plurals name="tracker_failed_in_a_row">
+        <item quantity="one">Помилка %1$d раз поспіль</item>
+        <item quantity="other">Помилка %1$d разів поспіль</item>
+    </plurals>
+    <plurals name="tracker_failing_titles_summary">
+        <item quantity="one">%1$d назва не пройшла перевірку %2$d раз поспіль або більше</item>
+        <item quantity="other">%1$d назв не пройшли перевірку %2$d раз поспіль або більше</item>
+    </plurals>
 </resources>

@@ -45,4 +45,32 @@
         <item quantity="many">%1$d minuti</item>
         <item quantity="other">%1$d minuti</item>
     </plurals>
+    <plurals name="feed_timeline_updates">
+        <item quantity="one">%1$d aggiornamento</item>
+        <item quantity="other">%1$d aggiornamenti</item>
+    </plurals>
+    <plurals name="history_grouped_sources">
+        <item quantity="one">%1$d fonte</item>
+        <item quantity="other">%1$d fonti</item>
+    </plurals>
+    <plurals name="home_enabled_sources">
+        <item quantity="one">%1$d fonte abilitata</item>
+        <item quantity="other">%1$d fonti abilitate</item>
+    </plurals>
+    <plurals name="home_updates_new_chapters">
+        <item quantity="one">%1$d nuovo capitolo</item>
+        <item quantity="other">%1$d nuovi capitoli</item>
+    </plurals>
+    <plurals name="old_chapters_in_total">
+        <item quantity="one">%1$d capitolo vecchio in totale</item>
+        <item quantity="other">%1$d capitoli vecchi in totale</item>
+    </plurals>
+    <plurals name="tracker_failed_in_a_row">
+        <item quantity="one">Fallito %1$d volta consecutiva</item>
+        <item quantity="other">Fallito %1$d volte consecutive</item>
+    </plurals>
+    <plurals name="tracker_failing_titles_summary">
+        <item quantity="one">%1$d titolo non ha superato %2$d o più controlli consecutivi</item>
+        <item quantity="other">%1$d titoli non hanno superato %2$d o più controlli consecutivi</item>
+    </plurals>
 </resources>

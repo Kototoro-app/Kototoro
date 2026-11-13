@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_bar_filters">Filter bilah pencarian</string>
+    <string name="show_language_preset_filter">Prasetel bahasa</string>
+    <string name="fixed_language_preset">Prasetel bahasa tetap</string>
+    <string name="show_content_type_filter">Jenis konten</string>
+    <string name="fixed_content_type">Jenis konten tetap</string>
+    <string name="show_source_tag_filter">Jenis sumber</string>
+    <string name="fixed_source_tag">Jenis sumber tetap</string>
+</resources>

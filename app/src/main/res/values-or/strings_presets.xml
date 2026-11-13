@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="source_presets">ସ୍ରୋତ ପ୍ରିସେଟ୍</string>
+    <string name="create_preset">ନୂତନ ପ୍ରିସେଟ୍</string>
+    <string name="edit_preset">ପ୍ରିସେଟ୍ ଏଡିଟ୍ କରନ୍ତୁ</string>
+    <string name="preset_name">ପ୍ରିସେଟ୍ ନାମ</string>
+    <string name="preset_languages">ଭାଷାଗୁଡ଼ିକ</string>
+    <string name="preset_sources">ସ୍ରୋତଗୁଡ଼ିକ</string>
+    <string name="preset_created">ପ୍ରିସେଟ୍ ସୃଷ୍ଟି ହୋଇଛି</string>
+    <string name="preset_saved">ପ୍ରିସେଟ୍ ସଞ୍ଚୟ ହୋଇଛି</string>
+    <string name="preset_deleted">ପ୍ରିସେଟ୍ ଡିଲିଟ୍ ହୋଇଛି</string>
+    <string name="preset_activated">ପ୍ରିସେଟ୍ ସକ୍ରିୟ ହୋଇଛି</string>
+    <string name="preset_deactivated">ପ୍ରିସେଟ୍ ନିଷ୍କ୍ରିୟ ହୋଇଛି</string>
+    <string name="no_presets">ଏଯାଏଁ କୌଣସି ପ୍ରିସେଟ୍ ନାହିଁ</string>
+    <string name="no_presets_text">ବିଭିନ୍ନ ସ୍ରୋତ ବିନ୍ୟାସ ମଧ୍ୟରେ ଶୀଘ୍ରଡ଼ ପ୍ରବେଶ ପାଇଁ ଏକ ପ୍ରିସେଟ୍ ସୃଷ୍ଟି କରନ୍ତୁ</string>
+    <string name="manage_preset_sources">ସ୍ରୋତ ପରିଚଳନା</string>
+</resources>

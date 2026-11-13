@@ -1,51 +1,67 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <plurals name="items">
+        <plurals name="items">
+        <item quantity="one">%1$d项</item>
         <item quantity="other">%1$d 个项目</item>
     </plurals>
-    <plurals name="new_chapters">
+        <plurals name="new_chapters">
+        <item quantity="one">%1$d个新章节</item>
         <item quantity="other">%1$d 个新章节</item>
     </plurals>
-    <plurals name="feed_timeline_updates">
+        <plurals name="feed_timeline_updates">
+        <item quantity="one">%1$d条更新</item>
         <item quantity="other">%1$d 条更新</item>
     </plurals>
-    <plurals name="chapters">
+        <plurals name="chapters">
+        <item quantity="one">%1$d章</item>
         <item quantity="other">%1$d 个章节</item>
     </plurals>
-    <plurals name="minutes_ago">
+        <plurals name="minutes_ago">
+        <item quantity="one">%1$d分钟前</item>
         <item quantity="other">%1$d 分钟前</item>
     </plurals>
-    <plurals name="hours_ago">
+        <plurals name="hours_ago">
+        <item quantity="one">%1$d小时前</item>
         <item quantity="other">%1$d 小时前</item>
     </plurals>
-    <plurals name="days_ago">
+        <plurals name="days_ago">
+        <item quantity="one">%1$d天前</item>
         <item quantity="other">%1$d 天前</item>
     </plurals>
-    <plurals name="months_ago">
+        <plurals name="months_ago">
+        <item quantity="one">%1$d个月前</item>
         <item quantity="other">%1$d 个月前</item>
     </plurals>
-    <plurals name="hours">
+        <plurals name="hours">
+        <item quantity="one">%1$d小时</item>
         <item quantity="other">%1$d 个小时</item>
     </plurals>
-    <plurals name="minutes">
+        <plurals name="minutes">
+        <item quantity="one">%1$d分钟</item>
         <item quantity="other">%1$d 分钟</item>
     </plurals>
-    <plurals name="home_updates_new_chapters">
+        <plurals name="home_updates_new_chapters">
+        <item quantity="one">%1$d个新章节</item>
         <item quantity="other">%1$d 个新章节</item>
     </plurals>
-    <plurals name="home_enabled_sources">
+        <plurals name="home_enabled_sources">
+        <item quantity="one">%1$d个已启用的图源</item>
         <item quantity="other">已启用 %1$d 个内容源</item>
     </plurals>
-    <plurals name="history_grouped_sources">
+        <plurals name="history_grouped_sources">
+        <item quantity="one">%1$d个图源</item>
         <item quantity="other">%1$d 个来源</item>
     </plurals>
-    <plurals name="old_chapters_in_total">
+        <plurals name="old_chapters_in_total">
+        <item quantity="one">共计 %1$d 个旧章节</item>
         <item quantity="other">共 %1$d 个旧章节</item>
     </plurals>
-    <plurals name="tracker_failing_titles_summary">
+        <plurals name="tracker_failing_titles_summary">
+        <item quantity="one">%1$d部作品连续失败 %2$d 次或以上检查</item>
         <item quantity="other">%1$d 部作品连续检查失败 %2$d 次以上</item>
     </plurals>
-    <plurals name="tracker_failed_in_a_row">
+        <plurals name="tracker_failed_in_a_row">
+        <item quantity="one">已连续失败 %1$d 次</item>
         <item quantity="other">连续失败 %1$d 次</item>
     </plurals>
 </resources>

@@ -12,23 +12,27 @@
         <item quantity="many">%1$d новых частак</item>
         <item quantity="other">%1$d новых частак</item>
     </plurals>
-    <plurals name="chapters">
+        <plurals name="chapters">
         <item quantity="one">%1$d частка</item>
+        <item quantity="other">%1$d раздзелаў</item>
         <item quantity="few">%1$d часткi</item>
         <item quantity="many">%1$d частак</item>
     </plurals>
-    <plurals name="minutes_ago">
+        <plurals name="minutes_ago">
         <item quantity="one">%1$d хвіліну таму</item>
+        <item quantity="other">%1$d хвілін таму</item>
         <item quantity="few">%1$d хвіліны таму</item>
         <item quantity="many">%1$d хвілін таму</item>
     </plurals>
-    <plurals name="hours_ago">
+        <plurals name="hours_ago">
         <item quantity="one">%1$d гадзіну таму</item>
+        <item quantity="other">%1$d гадзін таму</item>
         <item quantity="few">%1$d гадзіны таму</item>
         <item quantity="many">%1$d гадзін таму</item>
     </plurals>
-    <plurals name="days_ago">
+        <plurals name="days_ago">
         <item quantity="one">%1$d дзень таму</item>
+        <item quantity="other">%1$d дзён таму</item>
         <item quantity="few">%1$d дні таму</item>
         <item quantity="many">%1$d дзён таму</item>
     </plurals>
@@ -49,5 +53,33 @@
         <item quantity="few">%1$dхвіліны</item>
         <item quantity="many">%1$dхвілін</item>
         <item quantity="other">%1$dхвілін</item>
+    </plurals>
+    <plurals name="feed_timeline_updates">
+        <item quantity="one">%1$d абнаўленне</item>
+        <item quantity="other">%1$d абнаўленняў</item>
+    </plurals>
+    <plurals name="history_grouped_sources">
+        <item quantity="one">%1$d крыніца</item>
+        <item quantity="other">%1$d крыніц</item>
+    </plurals>
+    <plurals name="home_enabled_sources">
+        <item quantity="one">%1$d уключаная крыніца</item>
+        <item quantity="other">%1$d уключаных крыніц</item>
+    </plurals>
+    <plurals name="home_updates_new_chapters">
+        <item quantity="one">%1$d новы раздзел</item>
+        <item quantity="other">%1$d новых раздзелаў</item>
+    </plurals>
+    <plurals name="old_chapters_in_total">
+        <item quantity="one">Усяго %1$d стары раздзел</item>
+        <item quantity="other">Усяго %1$d старых раздзелаў</item>
+    </plurals>
+    <plurals name="tracker_failed_in_a_row">
+        <item quantity="one">Памылка %1$d раз запар</item>
+        <item quantity="other">Памылак: %1$d запар</item>
+    </plurals>
+    <plurals name="tracker_failing_titles_summary">
+        <item quantity="one">%1$d назва не прайшла %2$d праверкі запар ці больш</item>
+        <item quantity="other">%1$d назваў не прайшло %2$d праверак запар ці больш</item>
     </plurals>
 </resources>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_bar_filters">Search filters</string>
+    <string name="show_language_preset_filter">Predefinição de idioma</string>
+    <string name="fixed_language_preset">Idioma predefinido fixo</string>
+    <string name="show_content_type_filter">Tipo de conteúdo</string>
+    <string name="fixed_content_type">Tipo de conteúdo fixo</string>
+    <string name="show_source_tag_filter">Tipo de fonte</string>
+    <string name="fixed_source_tag">Tipo de fonte fixo</string>
+</resources>

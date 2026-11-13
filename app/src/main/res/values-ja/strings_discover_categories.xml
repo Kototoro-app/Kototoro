@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="discover_category_all">すべてのカテゴリ</string>
+    <string name="discover_category_anime_rank">アニメ</string>
+    <string name="discover_category_book_rank">本</string>
+    <string name="discover_category_music_rank">音楽</string>
+    <string name="discover_category_game_rank">ゲーム</string>
+    <string name="discover_category_real_rank">実写</string>
+    <string name="discover_category_calendar">曜日別番組表</string>
+</resources>

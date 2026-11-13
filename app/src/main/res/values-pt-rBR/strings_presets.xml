@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="source_presets">Predefinições</string>
+    <string name="create_preset">Nova predef.</string>
+    <string name="edit_preset">Editar predef.</string>
+    <string name="preset_name">Nome da predefinição</string>
+    <string name="preset_languages">Idiomas</string>
+    <string name="preset_sources">Fontes</string>
+    <string name="preset_created">Predefinição criada</string>
+    <string name="preset_saved">Predefinição salva</string>
+    <string name="preset_deleted">Predefinição excluída</string>
+    <string name="preset_activated">Predefinição ativada</string>
+    <string name="preset_deactivated">Predef. desativada</string>
+    <string name="no_presets">No presets</string>
+    <string name="no_presets_text">Crie uma predefinição para alternar rapidamente entre configurações de fontes</string>
+    <string name="manage_preset_sources">Gerenciar fontes</string>
+</resources>

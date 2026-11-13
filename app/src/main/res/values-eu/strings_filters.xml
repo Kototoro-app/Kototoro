@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="show_content_type_filter">Eduki mota</string>
+    <string name="fixed_content_type">Eduki mota finkoa</string>
+    <string name="show_source_tag_filter">Iturri mota</string>
+    <string name="fixed_source_tag">Iturri mota finkoa</string>
+    <string name="search_bar_filters">Bilaketa iragazkiak</string>
+    <string name="show_language_preset_filter">Hizkuntza-aurrezar</string>
+    <string name="fixed_language_preset">Aurrezarpen finkoa</string>
+</resources>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_bar_filters">Filtres de la barra</string>
+    <string name="show_language_preset_filter">Idioma predefinit</string>
+    <string name="fixed_language_preset">Idioma predefinit fix</string>
+    <string name="show_content_type_filter">Tipus</string>
+    <string name="fixed_content_type">Tipus de contingut fix</string>
+    <string name="show_source_tag_filter">Tipus de font</string>
+    <string name="fixed_source_tag">Tipus de font fix</string>
+</resources>

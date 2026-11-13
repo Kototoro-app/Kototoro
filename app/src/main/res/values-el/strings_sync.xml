@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sync_settings_enabled_title">Συγχρονισμός ρυθμ.</string>
+    <string name="sync_settings_enabled_summary">Ρυθμίσεις ανάγνωσης, αναπαραγωγής και εμφάνισης. Κωδικοί, tokens και διαδρομές δεν συγχρονίζονται.</string>
+    <string name="sync_remote_delete_incomplete">Αδυναμία διαγραφής %1$d απομακρυσμένων αρχείων. Διατηρήθηκε η τοπική κατάσταση.</string>
+    <string name="sync_enable_required">Ενεργοποιήστε πρώτα τον συγχρονισμό.</string>
+    <string name="google_drive_authorization_required">Η εξουσιοδότηση Google είναι ελλιπής ή έληξε. Συνδέστε ξανά τον λογαριασμό σας.</string>
+    <string name="google_drive_authorization_canceled">Η εξουσιοδότηση Google ακυρώθηκε ή έληξε.</string>
+    <string name="google_drive_browser_failed">Αδυναμία εκκίνησης περιηγητή για εξουσιοδότηση Google.</string>
+    <string name="google_drive_credential_store_failed">Αδυναμία πρόσβασης στο χώρο αποθήκευσης διαπιστευτηρίων. Ελέγξτε ότι είναι διαθέσιμος και ξεκλείδωτος.</string>
+    <string name="google_drive_settings_failed">Αδυναμία αποθήκευσης τοπικών ρυθμίσεων συγχρονισμού. Ελέγξτε τον φάκελο δεδομένων.</string>
+    <string name="google_drive_protocol_failed">Το στιγμιότυπο cloud είναι κατεστραμμένο ή μη υποστηριζόμενο. Δεν έγινε μεταφόρτωση.</string>
+    <string name="google_drive_conflict_failed">Άλλες συσκευές ενημερώνουν δεδομένα cloud. Δοκιμάστε αργότερα.</string>
+    <string name="google_drive_network_failed">Ο συγχρονισμός Google Drive απέτυχε. Ελέγξτε τη σύνδεσή σας.</string>
+    <string name="google_drive_access_failed">Το Google Drive αρνήθηκε την πρόσβαση. Ελέγξτε τα δικαιώματα και το Drive API.</string>
+    <string name="google_drive_browser_complete">Λήψη επιστροφής. Επιστρέψτε στο Kototoro για έλεγχο της σύνδεσης.</string>
+    <string name="google_drive_browser_rejected">Αυτή η εξουσιοδότηση απορρίφθηκε. Επιστρέψτε στο Kototoro.</string>
+    <string name="google_drive_stage_download">Λήψη</string>
+    <string name="google_drive_stage_merge">Συγχώνευση</string>
+    <string name="google_drive_stage_upload">Μεταφόρτωση</string>
+    <string name="google_drive_desktop_scope">Συγχρονίζει τη βιβλιοθήκη, τις κατηγορίες, την πρόοδο, τα στατιστικά και το ιστορικό. Οι ρυθμίσεις και οι επεκτάσεις διατηρούνται στο cloud αλλά δεν εφαρμόζονται ακόμη σε υπολογιστή. Ο αυτόματος συγχρονισμός εκτελείται όσο το Kototoro είναι ανοιχτό.</string>
+    <string name="google_drive_authorization_pending">Αναμονή για εξουσιοδότηση Google στον browser...</string>
+    <string name="google_drive_client_configuration_failed">Η Google απέρριψε τη διαμόρφωση του πελάτη OAuth. Ελέγξτε τις ρυθμίσεις.</string>
+    <string name="google_drive_client_secret_required">Αυτή η έκδοση δεν έχει το client secret OAuth της Google. Διαμορφώστε το.</string>
+</resources>

@@ -45,4 +45,32 @@
         <item quantity="many">%1$d minutos</item>
         <item quantity="other">%1$d minutos</item>
     </plurals>
+    <plurals name="feed_timeline_updates">
+        <item quantity="one">%1$d atualização</item>
+        <item quantity="other">%1$d atualizações</item>
+    </plurals>
+    <plurals name="history_grouped_sources">
+        <item quantity="one">%1$d origem</item>
+        <item quantity="other">%1$d origens</item>
+    </plurals>
+    <plurals name="home_enabled_sources">
+        <item quantity="one">%1$d origem ativada</item>
+        <item quantity="other">%1$d origens ativadas</item>
+    </plurals>
+    <plurals name="home_updates_new_chapters">
+        <item quantity="one">%1$d capítulo novo</item>
+        <item quantity="other">%1$d capítulos novos</item>
+    </plurals>
+    <plurals name="old_chapters_in_total">
+        <item quantity="one">%1$d capítulo antigo no total</item>
+        <item quantity="other">%1$d capítulos antigos no total</item>
+    </plurals>
+    <plurals name="tracker_failed_in_a_row">
+        <item quantity="one">Falha em %1$d verificação seguida</item>
+        <item quantity="other">Falha em %1$d verificações seguidas</item>
+    </plurals>
+    <plurals name="tracker_failing_titles_summary">
+        <item quantity="one">%1$d título falhou em %2$d verificações seguidas</item>
+        <item quantity="other">%1$d títulos falharam em %2$d verificações seguidas</item>
+    </plurals>
 </resources>

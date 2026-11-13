@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_bar_filters">Otsinguriba filtrid</string>
+    <string name="show_language_preset_filter">Keele eelseadistus</string>
+    <string name="fixed_language_preset">Fikseeritud keel</string>
+    <string name="show_content_type_filter">Sisu tüüp</string>
+    <string name="fixed_content_type">Fikseeritud sisutüüp</string>
+    <string name="show_source_tag_filter">Allika tüüp</string>
+    <string name="fixed_source_tag">Fikseeritud allikas</string>
+</resources>

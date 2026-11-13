@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="source_presets">Preset sumber</string>
+    <string name="create_preset">Preset baru</string>
+    <string name="edit_preset">Edit prasetel</string>
+    <string name="preset_name">Nama preset</string>
+    <string name="preset_languages">Bahasa</string>
+    <string name="preset_sources">Sumber</string>
+    <string name="preset_created">Preset dibuat</string>
+    <string name="preset_saved">Preset disimpan</string>
+    <string name="preset_deleted">Preset dihapus</string>
+    <string name="preset_activated">Preset diaktifkan</string>
+    <string name="preset_deactivated">Preset dinonaktifkan</string>
+    <string name="no_presets">Belum ada preset</string>
+    <string name="no_presets_text">Buat preset untuk beralih cepat antara konfigurasi sumber yang berbeda</string>
+    <string name="manage_preset_sources">Kelola sumber</string>
+</resources>

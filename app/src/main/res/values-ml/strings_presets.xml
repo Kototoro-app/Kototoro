@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="source_presets">Presets</string>
+    <string name="create_preset">പുതിയ പ്രീസെറ്റ്</string>
+    <string name="edit_preset">പ്രീസെറ്റ് എഡിറ്റ് ചെയ്യുക</string>
+    <string name="preset_name">പ്രീസെറ്റിന്റെ പേര്</string>
+    <string name="preset_languages">ഭാഷകൾ</string>
+    <string name="preset_sources">സ്രോതസ്സുകൾ</string>
+    <string name="preset_created">Created</string>
+    <string name="preset_saved">സംരക്ഷിച്ചു</string>
+    <string name="preset_deleted">നീക്കം ചെയ്തു</string>
+    <string name="preset_activated">Activated</string>
+    <string name="preset_deactivated">നിർജ്ജീവമാക്കി</string>
+    <string name="no_presets">പ്രീസെറ്റുകൾ ഇല്ല</string>
+    <string name="no_presets_text">വിവിധ സോഴ്സ് കോൺഫിഗറേഷനുകൾക്കിടയിൽ വേഗത്തിൽ മാറാൻ ഒരു പ്രീസെറ്റ് സൃഷ്ടിക്കുക</string>
+    <string name="manage_preset_sources">സ്രോതസ്സുകൾ നിയന്ത്രിക്കുക</string>
+</resources>

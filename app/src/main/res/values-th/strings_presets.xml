@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="source_presets">พรีเซ็ตแหล่ง</string>
+    <string name="create_preset">พรีเซ็ตใหม่</string>
+    <string name="edit_preset">แก้ไขพรีเซ็ต</string>
+    <string name="preset_name">ชื่อพรีเซ็ต</string>
+    <string name="preset_languages">ภาษา</string>
+    <string name="preset_sources">แหล่งข้อมูล</string>
+    <string name="preset_created">สร้างพรีเซ็ตแล้ว</string>
+    <string name="preset_saved">บันทึกพรีเซ็ต</string>
+    <string name="preset_deleted">ลบพรีเซ็ตแล้ว</string>
+    <string name="preset_activated">เปิดใช้พรีเซ็ต</string>
+    <string name="preset_deactivated">ปิดใช้งานพรีเซ็ตแล้ว</string>
+    <string name="no_presets">ยังไม่มีพรีเซ็ต</string>
+    <string name="no_presets_text">สร้างพรีเซ็ตเพื่อสลับระหว่างการตั้งค่าแหล่งข้อมูลต่างๆ ได้อย่างรวดเร็ว</string>
+    <string name="manage_preset_sources">จัดการแหล่งข้อมูล</string>
+</resources>

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="source_presets">Brunna fana</string>
+    <string name="create_preset">Niujis fanis</string>
+    <string name="edit_preset">Ananiuj fanis</string>
+    <string name="preset_name">Namō waurda</string>
+    <string name="preset_languages">Razda</string>
+    <string name="preset_sources">Brunna</string>
+    <string name="preset_created">Waurda gatawida</string>
+    <string name="preset_saved">Gameli gataw.</string>
+    <string name="preset_deleted">Gameli fraq.</string>
+    <string name="preset_activated">Waurda gahaftida</string>
+    <string name="preset_deactivated">Waurda dishaftida</string>
+    <string name="no_presets">Ni nauh waurda</string>
+    <string name="no_presets_text">Gatawi waurd du haibam faura du swapjan</string>
+    <string name="manage_preset_sources">Stiura brunna</string>
+</resources>

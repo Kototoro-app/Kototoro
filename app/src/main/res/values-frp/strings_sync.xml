@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sync_settings_enabled_title">Sinchrini paramète</string>
+    <string name="sync_settings_enabled_summary">Liseu, djouweu eyet paramète di parpara. Les mots d passe, token eyet tchmins ni s sinchronèt pon.</string>
+    <string name="sync_remote_delete_incomplete">Portchi po chrôhe %1$d fitchîs å lon. Li stat sinchro local a stî wårdé; téltez.</string>
+    <string name="sync_enable_required">Activar sincronisacion Google Drive.</string>
+    <string name="google_drive_authorization_required">Li otorizaedje Google n\'est nén fwait ou li tins est passé. Téltez a nef.</string>
+    <string name="google_drive_authorization_canceled">Li otorizaedje Google a stî rwaitî ou li tins a passé.</string>
+    <string name="google_drive_browser_failed">Lo fô pas pu uvrir le fureteur du sistème por l’ôtorisacion Google.</string>
+    <string name="google_drive_credential_store_failed">Lo fô pas pu accèder u coffre de crèdences du sistème. Controlâ qu’il est disponiblo et dèsbloke, pués tornâ èprover.</string>
+    <string name="google_drive_settings_failed">Pôt pas sôvgi paramètros locâls. Controlâ lo dossiér.</string>
+    <string name="google_drive_protocol_failed">L’enârbe nûvèla est endomajâye ou empleye un fôrmat pas prês en compto. Ren at étâ tèlèchargiê.</string>
+    <string name="google_drive_conflict_failed">D\'ôtros aparèys fan nûvèla. Tornâ sincronisar.</string>
+    <string name="google_drive_access_failed">Google Drive at refusâ l’accès. Controlâ les pèrmissions balyês et la conficoracion de l’API Drive.</string>
+    <string name="google_drive_browser_complete">Rèponsa du fureteur reçua. Tornâ a Kototoro por controlar lo rèsultat de la conèssion du compto.</string>
+    <string name="google_drive_browser_rejected">Ceta rèponsa d’ôtorisacion at étâ refusâye. Tornâ a Kototoro et tornâ èprover de vos conèctar.</string>
+    <string name="google_drive_stage_download">Tèlèchargement</string>
+    <string name="google_drive_stage_merge">Fusion</string>
+    <string name="google_drive_authorization_pending">En atenta de l’ôtorisacion Google dens voutre fureteur…</string>
+    <string name="google_drive_client_configuration_failed">Google at refusâ la conficoracion du client OAuth. Controlâ lo typo de client burèu, lo projèt Google Cloud et los paramètros de consante.</string>
+    <string name="google_drive_network_failed">Èchèc de sincro Google Drive. Controlâd la conèxion et tornâs èprovar.</string>
+    <string name="google_drive_stage_upload">Chèrgament</string>
+    <string name="google_drive_desktop_scope">Sincronise voutra bibliotèca, catègories, progrèssion de liéta, statistiques et historico. Los règllâjos et èxtensions sont consèrvâs sur lo nivo mas pas aplicâs sur burô. La sincro ôtomatica torne quand Kototoro est uvèrt.</string>
+    <string name="google_drive_client_secret_required">Ceta vèrsion manque lo secret cliant OAuth Google burô. Configurâd-lo et rebâtisséd ; sè reconèctar resôldrat pas cen.</string>
+</resources>

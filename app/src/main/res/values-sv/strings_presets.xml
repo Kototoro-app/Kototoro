@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="source_presets">Källförinställn.</string>
+    <string name="create_preset">Ny förinst.</string>
+    <string name="edit_preset">Redigera</string>
+    <string name="preset_name">Förinst. namn</string>
+    <string name="preset_languages">Språk</string>
+    <string name="preset_sources">Källor</string>
+    <string name="preset_created">Skapad</string>
+    <string name="preset_saved">Sparad</string>
+    <string name="preset_deleted">Raderad</string>
+    <string name="preset_activated">Aktiverad</string>
+    <string name="preset_deactivated">Inaktiverad</string>
+    <string name="no_presets">Inga förinställn.</string>
+    <string name="no_presets_text">Skapa en förinställning för att snabbt växla mellan olika källkonfigurationer</string>
+    <string name="manage_preset_sources">Hantera källor</string>
+</resources>

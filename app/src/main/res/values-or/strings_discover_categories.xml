@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="discover_category_all">ସମସ୍ତ ବିଭାଗ</string>
+    <string name="discover_category_anime_rank">ଆନିମେ</string>
+    <string name="discover_category_book_rank">ବହି</string>
+    <string name="discover_category_music_rank">ସଙ୍ଗୀତ</string>
+    <string name="discover_category_game_rank">ଗେମ୍</string>
+    <string name="discover_category_real_rank">ବାସ୍ତବ</string>
+    <string name="discover_category_calendar"> ଦୈନନ୍ଦିନ ସୂଚୀ</string>
+</resources>

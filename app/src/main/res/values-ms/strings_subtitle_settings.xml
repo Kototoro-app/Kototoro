@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="video_subtitle_settings">Tetapan sarikata</string>
+    <string name="video_subtitle_style">Tipografi</string>
+    <string name="video_subtitle_font_size">Saiz Fon</string>
+    <string name="video_subtitle_border_size">Saiz Sempadan</string>
+    <string name="video_subtitle_position">Kedudukan (Margin)</string>
+    <string name="video_subtitle_color_text">Teks</string>
+    <string name="video_subtitle_color_border">Sempadan</string>
+    <string name="video_subtitle_layout">Susun atur</string>
+    <string name="video_subtitle_colors">Warna</string>
+    <string name="video_subtitle_align_left">Kiri</string>
+    <string name="video_subtitle_align_center">Tengah</string>
+    <string name="video_subtitle_align_right">Kanan</string>
+    <string name="video_subtitle_color_alpha">Alfa</string>
+    <string name="video_subtitle_color_red">Merah</string>
+    <string name="video_subtitle_color_green">Hijau</string>
+    <string name="video_subtitle_color_blue">Biru</string>
+    <string name="video_subtitle_background_style">Gaya latar belakang</string>
+    <string name="video_subtitle_background_none">Mati</string>
+    <string name="video_subtitle_background_bar">Lebar penuh</string>
+    <string name="video_subtitle_background_block">Blok teks</string>
+    <string name="video_subtitle_background_lines">Ikut baris</string>
+    <string name="video_subtitle_background_corner_radius">Jejari penjuru</string>
+    <string name="video_subtitle_background_padding_horizontal">Mampatan melintang</string>
+    <string name="video_subtitle_background_padding_vertical">Mampatan menegak</string>
+    <string name="video_subtitle_background_hint">Latar belakang mengikut teks sarikata dan bukannya membentuk bar lebar penuh.</string>
+    <string name="video_subtitle_font_family">Fon</string>
+    <string name="video_subtitle_font_sans">Sans</string>
+    <string name="video_subtitle_font_serif">Serif</string>
+    <string name="video_subtitle_font_monospace">Monospace</string>
+    <string name="video_subtitle_color_bg">Latar belakang</string>
+    <string name="video_subtitle_background">Latar belakang</string>
+</resources>

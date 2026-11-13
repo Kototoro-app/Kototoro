@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sync_settings_enabled_title">Beállítások szinkr.</string>
+    <string name="sync_settings_enabled_summary">Olvasó, lejátszó és megjelenés beállításai. A jelszavak, tokenek és eszközútvonalak nem szinkronizálódnak.</string>
+    <string name="sync_remote_delete_incomplete">Nem sikerült törölni %1$d fájlt. A helyi állapot megmaradt.</string>
+    <string name="sync_enable_required">Először kapcsold be a Google Drive-ot.</string>
+    <string name="google_drive_authorization_required">A Google-engedélyezés hiányos vagy lejárt. Csatlakoztasd újra a fiókod.</string>
+    <string name="google_drive_authorization_canceled">A Google-engedélyezés megszakadt vagy letelt az ideje.</string>
+    <string name="google_drive_browser_failed">Nem sikerült megnyitni a rendszerböngészőt a Google-hitelesítéshez.</string>
+    <string name="google_drive_credential_store_failed">Nem sikerült elérni a rendszer hitelesítőadat-tárolóját. Ellenőrizze, hogy elérhető és fel van-e oldva, majd próbálja újra.</string>
+    <string name="google_drive_settings_failed">Nem sikerült menteni a helyi szinkronizálási beállításokat. Ellenőrizze az adatkönyvtárat.</string>
+    <string name="google_drive_protocol_failed">A felhőpillanatkép sérült vagy nem támogatott formátumú. Semmi sem lett feltöltve.</string>
+    <string name="google_drive_conflict_failed">Más eszközök frissítik a felhőadatokat. Próbálja meg később újra.</string>
+    <string name="google_drive_network_failed">A Google Drive szinkronizálás sikertelen. Ellenőrizze a kapcsolatot.</string>
+    <string name="google_drive_access_failed">A Google Drive megtagadta a hozzáférést. Ellenőrizze az engedélyeket és az API-t.</string>
+    <string name="google_drive_browser_complete">Böngésző visszahívás érkezett. Térjen vissza a Kototoro alkalmazásba.</string>
+    <string name="google_drive_browser_rejected">A hitelesítési visszahívást elutasították. Térjen vissza, és próbálja újra.</string>
+    <string name="google_drive_stage_download">Letöltés</string>
+    <string name="google_drive_stage_merge">Egyesítés</string>
+    <string name="google_drive_stage_upload">Feltöltés</string>
+    <string name="google_drive_desktop_scope">Szinkronizálja a könyvtárat, kategóriákat, olvasási előzményeket, statisztikákat. A beállítások és bővítmények megmaradnak a felhőben, de asztali gépen még nem érvényesülnek. Az automatikus szinkronizálás a Kototoro futása alatt működik.</string>
+    <string name="google_drive_authorization_pending">Várakozás a Google-hitelesítésre a böngészőben…</string>
+    <string name="google_drive_client_configuration_failed">A Google elutasította az OAuth klienskonfigurációt. Ellenőrizze az asztali klienstípust, a projektet és a hozzájárulási beállításokat.</string>
+    <string name="google_drive_client_secret_required">Ebből a buildből hiányzik a Google asztali OAuth-kliens titka. Konfigurálja és fordítsa újra; az újbóli bejelentkezés nem oldja meg.</string>
+</resources>

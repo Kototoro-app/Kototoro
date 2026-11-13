@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="discover_category_all">전체 카테고리</string>
+    <string name="discover_category_anime_rank">애니메이션</string>
+    <string name="discover_category_book_rank">도서</string>
+    <string name="discover_category_music_rank">음악</string>
+    <string name="discover_category_game_rank">게임</string>
+    <string name="discover_category_real_rank">실사</string>
+    <string name="discover_category_calendar">요일별 편성표</string>
+</resources>

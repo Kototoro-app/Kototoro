@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sync_settings_enabled_title">செயலி அமைப்புகளை ஒத்திசை</string>
+    <string name="sync_settings_enabled_summary">படிப்பான், இயக்கி மற்றும் தோற்ற அமைப்புகள். கடவுச்சொற்கள், டோக்கன்கள் மற்றும் சாதனப் பாதைகள் ஒத்திசைக்கப்படாது.</string>
+    <string name="sync_remote_delete_incomplete">Could not delete %1$d remote files. Local sync kept; retry.</string>
+    <string name="sync_enable_required">Enable Google Drive sync first.</string>
+    <string name="google_drive_authorization_required">Google அங்கீகாரம் முழுமையடையவில்லை அல்லது காலாவதியானது. கணக்கை மீண்டும் இணைக்கவும்.</string>
+    <string name="google_drive_authorization_canceled">Google auth canceled or timed out.</string>
+    <string name="google_drive_browser_failed">Google அங்கீகாரத்திற்கான கணினி உலாவியைத் திறக்க முடியவில்லை.</string>
+    <string name="google_drive_credential_store_failed">நற்சான்றிதழ் சேமிப்பகத்தை அணுக முடியவில்லை. அது உள்ளதா எனச் சரிபார்த்து முயற்சிக்கவும்.</string>
+    <string name="google_drive_settings_failed">ஒத்திசைவு அமைப்புகளைச் சேமிக்க முடியவில்லை. தரவு அடைவைச் சரிபார்த்து முயற்சிக்கவும்.</string>
+    <string name="google_drive_protocol_failed">மேகக்கணி ஸ்னாப்ஷாட் சேதமடைந்துள்ளது அல்லது ஆதரிக்கப்படவில்லை. எதுவும் பதிவேற்றப்படவில்லை.</string>
+    <string name="google_drive_conflict_failed">மற்ற சாதனங்கள் தரவைப் புதுப்பிக்கின்றன. சிறிது நேரம் கழித்து முயற்சிக்கவும்.</string>
+    <string name="google_drive_network_failed">Google Drive ஒத்திசைவு தோல்வி. இணைப்பைச் சரிபார்த்து முயற்சிக்கவும்.</string>
+    <string name="google_drive_access_failed">Google Drive அணுகலை மறுத்தது. வழங்க린 அனுமதிகள் மற்றும் Drive API உள்ளமைவைச் சரிபார்க்கவும்.</string>
+    <string name="google_drive_browser_complete">உலாவி பின்னழைப்பு பெறப்பட்டது. கணக்கு இணைப்பு முடிவைச் சரிபார்க்க Kototoro-க்குத் திரும்பவும்.</string>
+    <string name="google_drive_browser_rejected">இந்த அங்கீகார பின்னழைப்பு நிராகரிக்கப்பட்டது. Kototoro-க்குத் திரும்பி மீண்டும் இணைக்க முயற்சிக்கவும்.</string>
+    <string name="google_drive_stage_download">பதிவிறக்கம்</string>
+    <string name="google_drive_stage_merge">இணைக்கிறது</string>
+    <string name="google_drive_stage_upload">பதிவேற்றம்</string>
+    <string name="google_drive_desktop_scope">நூலகம், வகைகள், வாசிப்பு முன்னேற்றம், புள்ளிவிவரங்கள் மற்றும் பதிவுகளை ஒத்திசைக்கிறது. அமைப்புகள் மேகக்கணியில் இருக்கும் ஆனால் டெஸ்க்டாப்பில் பயன்படாது. Kototoro திறந்திருக்கும் போது தானியங்கும்.</string>
+    <string name="google_drive_authorization_pending">உலாவியில் Google அங்கீகாரத்திற்காகக் காத்திருக்கிறது…</string>
+    <string name="google_drive_client_configuration_failed">OAuth வாடிக்கையாளர் உள்ளமைவை Google நிராகரித்தது. டெஸ்க்டாப வாடிக்கையாளர் வகை, Google Cloud திட்டம் மற்றும் ஒப்புதல் அமைப்புகளைச் சரிபார்க்கவும்.</string>
+    <string name="google_drive_client_secret_required">Google டெஸ்க்டாப் OAuth ரகசியம் இல்லை. இதை உள்ளமைத்து மீண்டும் உருவாக்கவும்; உள்நுழைவதால் சரியாகாது.</string>
+</resources>

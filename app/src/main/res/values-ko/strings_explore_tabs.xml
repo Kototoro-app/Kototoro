@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="explore_tab_tracking_sites">트래킹 사이트</string>
+    <string name="explore_tab_sources">소스</string>
+</resources>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_bar_filters">සෙවුම් තීරු පෙරහන්</string>
+    <string name="show_language_preset_filter">භාෂා පෙර සැකසුම</string>
+    <string name="fixed_language_preset">ස්ථාවර භාෂා පෙර සැකසුම</string>
+    <string name="show_content_type_filter">అන්තර්ගත වර්ගය</string>
+    <string name="fixed_content_type">ස්ථාවර අන්තර්ගත වර්ගය</string>
+    <string name="show_source_tag_filter">මූලාශ්‍ර වර්ගය</string>
+    <string name="fixed_source_tag">ස්ථාවර මූලාශ්‍ර වර්ගය</string>
+</resources>

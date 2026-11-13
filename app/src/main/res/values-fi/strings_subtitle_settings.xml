@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="video_subtitle_settings">Tekstitysten asetukset</string>
+    <string name="video_subtitle_style">Typografia</string>
+    <string name="video_subtitle_font_size">Fonttikoko</string>
+    <string name="video_subtitle_border_size">Reunan koko</string>
+    <string name="video_subtitle_position">Sijainti (marginaali)</string>
+    <string name="video_subtitle_color_text">Teksti</string>
+    <string name="video_subtitle_color_border">Reuna</string>
+    <string name="video_subtitle_color_bg">Tausta</string>
+    <string name="video_subtitle_layout">Asettelu</string>
+    <string name="video_subtitle_colors">Värit</string>
+    <string name="video_subtitle_align_left">Vasen</string>
+    <string name="video_subtitle_align_center">Keskitetty</string>
+    <string name="video_subtitle_align_right">Oikea</string>
+    <string name="video_subtitle_color_alpha">Alfa</string>
+    <string name="video_subtitle_color_red">Punainen</string>
+    <string name="video_subtitle_color_green">Vihreä</string>
+    <string name="video_subtitle_color_blue">Sininen</string>
+    <string name="video_subtitle_background">Tausta</string>
+    <string name="video_subtitle_background_style">Taustan tyyli</string>
+    <string name="video_subtitle_background_none">Pois</string>
+    <string name="video_subtitle_background_bar">Koko leveys</string>
+    <string name="video_subtitle_background_block">Tekstilohko</string>
+    <string name="video_subtitle_background_lines">Rivittäin</string>
+    <string name="video_subtitle_background_corner_radius">Kulman säde</string>
+    <string name="video_subtitle_background_padding_horizontal">Vaakasuora täyte</string>
+    <string name="video_subtitle_background_padding_vertical">Pystysuora täyte</string>
+    <string name="video_subtitle_background_hint">Tausta seuraa tekstitystä sen sijaan, että se muodostaisi täysleveän palkin.</string>
+    <string name="video_subtitle_font_family">Fontti</string>
+    <string name="video_subtitle_font_sans">Sans</string>
+    <string name="video_subtitle_font_serif">Serif</string>
+    <string name="video_subtitle_font_monospace">Monospace</string>
+</resources>

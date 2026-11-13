@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_bar_filters">Sokeins fana</string>
+    <string name="show_language_preset_filter">Ruzda fana</string>
+    <string name="fixed_language_preset">Gafasta ruzda fana</string>
+    <string name="show_content_type_filter">Haba kunjē</string>
+    <string name="fixed_content_type">Gafasta haba kunji</string>
+    <string name="show_source_tag_filter">Brunna kunji</string>
+    <string name="fixed_source_tag">Gafasta brunna kunji</string>
+</resources>

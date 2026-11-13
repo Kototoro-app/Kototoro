@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="video_subtitle_settings">ਉਪ-ਸਿਰਲੇਖ ਸੈਟਿੰਗਾਂ</string>
+    <string name="video_subtitle_style">ਟਾਈਪੋਗ੍ਰਾਫੀ</string>
+    <string name="video_subtitle_font_size">ਫੋਂਟ ਆਕਾਰ</string>
+    <string name="video_subtitle_border_size">ਕਿਨਾਰੇ ਦਾ ਆਕਾਰ</string>
+    <string name="video_subtitle_position">ਸਥਿਤੀ (ਹਾਸ਼ੀਆ)</string>
+    <string name="video_subtitle_color_text">ਟੈਕਸਟ</string>
+    <string name="video_subtitle_color_border">ਕਿਨਾਰਾ</string>
+    <string name="video_subtitle_color_bg">ਪਿਛੋਕੜ</string>
+    <string name="video_subtitle_layout">ਖਾਕਾ</string>
+    <string name="video_subtitle_colors">ਰੰਗ</string>
+    <string name="video_subtitle_align_left">ਖੱਬੇ</string>
+    <string name="video_subtitle_align_center">ਕੇਂਦਰ</string>
+    <string name="video_subtitle_align_right">ਸੱजे</string>
+    <string name="video_subtitle_color_alpha">ਅਲਫ਼ਾ</string>
+    <string name="video_subtitle_color_red">ਲਾਲ</string>
+    <string name="video_subtitle_color_green">ਹਰਾ</string>
+    <string name="video_subtitle_color_blue">ਨੀਲਾ</string>
+    <string name="video_subtitle_background">ਪਿਛੋਕੜ</string>
+    <string name="video_subtitle_background_style">ਪਿਛੋਕੜ ਸ਼ੈਲੀ</string>
+    <string name="video_subtitle_background_none">ਬੰਦ</string>
+    <string name="video_subtitle_background_bar">ਪੂਰੀ ਚੌੜਾਈ</string>
+    <string name="video_subtitle_background_block">ਟੈਕਸਟ ਬਲਾਕ</string>
+    <string name="video_subtitle_background_lines">ਪ੍ਰਤੀ ਲਾਈਨ</string>
+    <string name="video_subtitle_background_corner_radius">ਕੋਨੇ ਦਾ ਘੇਰਾ</string>
+    <string name="video_subtitle_background_padding_horizontal">ਲੇਟਵੀਂ ਪੈਡਿੰਗ</string>
+    <string name="video_subtitle_background_padding_vertical">ਖੜ੍ਹਵੀਂ ਪੈਡਿੰਗ</string>
+    <string name="video_subtitle_background_hint">ਪਿਛੋਕੜ ਪੂਰੀ ਚੌੜਾਈ ਵਾਲੀ ਪੱਟੀ ਦੀ ਬਜਾਏ ਉਪ-ਸਿਰਲੇਖ ਟੈਕਸਟ ਦੀ ਪਾਲਣਾ ਕਰਦਾ ਹੈ।</string>
+    <string name="video_subtitle_font_family">ਫੋਂਟ</string>
+    <string name="video_subtitle_font_sans">ਸੈਂਸ</string>
+    <string name="video_subtitle_font_serif">ਸੇਰਿਫ਼</string>
+    <string name="video_subtitle_font_monospace">ਮੋਨੋਸਪੇਸ</string>
+</resources>

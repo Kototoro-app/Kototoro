@@ -1,2 +1,67 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources></resources>
+<resources>
+    <plurals name="chapters">
+        <item quantity="one">%1$d chapitru</item>
+        <item quantity="other">%1$d chapitrüs</item>
+    </plurals>
+    <plurals name="days_ago">
+        <item quantity="one">Yn gä %1$d gä</item>
+        <item quantity="other">Yn gä %1$d gäs</item>
+    </plurals>
+    <plurals name="feed_timeline_updates">
+        <item quantity="one">%1$d mijaゾ</item>
+        <item quantity="other">%1$d mijazos</item>
+    </plurals>
+    <plurals name="history_grouped_sources">
+        <item quantity="one">%1$d source</item>
+        <item quantity="other">%1$d sources</item>
+    </plurals>
+    <plurals name="home_enabled_sources">
+        <item quantity="one">%1$d source activé</item>
+        <item quantity="other">%1$d sources activés</item>
+    </plurals>
+    <plurals name="home_updates_new_chapters">
+        <item quantity="one">%1$d chapitru nové</item>
+        <item quantity="other">%1$d chapitrüs nové</item>
+    </plurals>
+    <plurals name="hours">
+        <item quantity="one">%1$d ëra</item>
+        <item quantity="other">%1$d ëras</item>
+    </plurals>
+    <plurals name="hours_ago">
+        <item quantity="one">Yn gä %1$d ëra</item>
+        <item quantity="other">Yn gä %1$d ëras</item>
+    </plurals>
+    <plurals name="items">
+        <item quantity="one">%1$d lémant</item>
+        <item quantity="other">%1$d lémants</item>
+    </plurals>
+    <plurals name="minutes">
+        <item quantity="one">%1$d minuta</item>
+        <item quantity="other">%1$d minutas</item>
+    </plurals>
+    <plurals name="minutes_ago">
+        <item quantity="one">Yn gä %1$d minuta</item>
+        <item quantity="other">Yn gä %1$d minutas</item>
+    </plurals>
+    <plurals name="months_ago">
+        <item quantity="one">Yn gä %1$d mäs</item>
+        <item quantity="other">Yn gä %1$d mäses</item>
+    </plurals>
+    <plurals name="new_chapters">
+        <item quantity="one">%1$d chapitru nové</item>
+        <item quantity="other">%1$d chapitrüs nové</item>
+    </plurals>
+    <plurals name="old_chapters_in_total">
+        <item quantity="one">%1$d chapitru vylyë tuötu</item>
+        <item quantity="other">%1$d chapitrüs vylyës tuötu</item>
+    </plurals>
+    <plurals name="tracker_failed_in_a_row">
+        <item quantity="one">Raté %1$d fê à l\'suîte</item>
+        <item quantity="other">Raté %1$d fês à l\'suîte</item>
+    </plurals>
+    <plurals name="tracker_failing_titles_summary">
+        <item quantity="one">%1$d tître at raté %2$d vérifikasjons ou plu à l\'suîte</item>
+        <item quantity="other">%1$d tîtres ont raté %2$d vérifikasjons ou plu à l\'suîte</item>
+    </plurals>
+</resources>

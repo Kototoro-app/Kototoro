@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="video_subtitle_settings">Undertitle ordinances</string>
+    <string name="video_subtitle_style">Forme</string>
+    <string name="video_subtitle_font_size">Leter mak</string>
+    <string name="video_subtitle_border_size">Marge mak</string>
+    <string name="video_subtitle_position">Sted</string>
+    <string name="video_subtitle_color_text">Leter</string>
+    <string name="video_subtitle_color_border">Marge</string>
+    <string name="video_subtitle_color_bg">Bakground</string>
+    <string name="video_subtitle_layout">Aray</string>
+    <string name="video_subtitle_colors">Coloures</string>
+    <string name="video_subtitle_align_left">Left</string>
+    <string name="video_subtitle_align_center">Middel</string>
+    <string name="video_subtitle_align_right">Right</string>
+    <string name="video_subtitle_color_alpha">Alpha</string>
+    <string name="video_subtitle_color_red">Rude</string>
+    <string name="video_subtitle_color_green">Grene</string>
+    <string name="video_subtitle_color_blue">Blewe</string>
+    <string name="video_subtitle_background">Bakground</string>
+    <string name="video_subtitle_background_style">Bakground aray</string>
+    <string name="video_subtitle_background_none">Of</string>
+    <string name="video_subtitle_background_bar">Al bred</string>
+    <string name="video_subtitle_background_block">Leter blok</string>
+    <string name="video_subtitle_background_lines">Per lyne</string>
+    <string name="video_subtitle_background_corner_radius">Corner bowe</string>
+    <string name="video_subtitle_background_padding_horizontal">Over padding</string>
+    <string name="video_subtitle_background_padding_vertical">Down padding</string>
+    <string name="video_subtitle_background_hint">Dis bakground folweth undertitle leter in stede of al-bred bar.</string>
+    <string name="video_subtitle_font_family">Leter</string>
+    <string name="video_subtitle_font_sans">Sans</string>
+    <string name="video_subtitle_font_serif">Serif</string>
+    <string name="video_subtitle_font_monospace">Monospace</string>
+</resources>

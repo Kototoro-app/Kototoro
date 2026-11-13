@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="google_drive_authorization_required">Google baimena osatu gabe dago edo iraungi egin da. Konektatu kontua berriro.</string>
+    <string name="google_drive_authorization_canceled">Google baimena bertan behera utzi da edo iraungi egin da.</string>
+    <string name="google_drive_browser_failed">Ezin izan da arakatzailea ireki Google baimena emateko.</string>
+    <string name="google_drive_credential_store_failed">Ezin izan da sistemaren kredentzial-biltegira sartu. Egiaztatu erabilgarri eta desblokeatuta dagoela, eta saiatu berriro.</string>
+    <string name="google_drive_settings_failed">Ezin izan dira tokiko sinkronizazio-ezarpenak gordekatu. Egiaztatu datuen karpeta.</string>
+    <string name="google_drive_protocol_failed">Hodeiko argazkia hondatuta dago edo onartzen ez den formatua du. Ez da ezer igo.</string>
+    <string name="google_drive_network_failed">Google Drive sinkronizazioak huts egin du. Egiaztatu konexioa.</string>
+    <string name="google_drive_access_failed">Google Drive-k sarbidea ukatu du. Egiaztatu baimenak eta Drive APIaren konfigurazioa.</string>
+    <string name="google_drive_browser_complete">Arakatzailearen deia jaso da. Itzuli Kototoro aplikaziora kontuaren egoera egiaztatzeko.</string>
+    <string name="google_drive_browser_rejected">Baimen-eskaera honi ezetsi egin zaio. Itzuli Kototoro aplikaziora eta saiatu berriro.</string>
+    <string name="google_drive_stage_download">Deskargatzen</string>
+    <string name="google_drive_stage_merge">Bateratzen</string>
+    <string name="google_drive_stage_upload">Igotzen</string>
+    <string name="google_drive_authorization_pending">Google baimenaren zain arakatzailean...</string>
+    <string name="google_drive_client_configuration_failed">Google-k OAuth bezeroaren konfigurazioa baztertu du. Egiaztatu mahaigaineko bezero mota, Google Cloud proiektua eta baimen-ezarpenak.</string>
+    <string name="google_drive_client_secret_required">Build honetan Google mahaigaineko OAuth bezeroaren gako sekretua falta da. Konfiguratu eta berreraiki; berriro saioa hasteak ez du konponduko.</string>
+    <string name="sync_settings_enabled_summary">Irakurle, erreproduzitzaile eta itxura ezarpenak. Pasahitzak, tokenak eta bideak ez dira inoiz sinkronizatzen.</string>
+    <string name="sync_remote_delete_incomplete">Ezin %1$d fitxategi ezabatu. Tokiko egoera gorde da; saiatu berriro.</string>
+    <string name="sync_enable_required">Aktibatu Google Drive sinkronizazioa.</string>
+    <string name="google_drive_conflict_failed">Beste gailu batzuk datuak eguneratzen ari dira. Saiatu geroago.</string>
+    <string name="google_drive_desktop_scope">Liburutegia, kategoriak, aurrerapena eta estatistikak sinkronizatzen ditu. Ezarpenak eta luzapenak hodeian gordetzen dira, baina mahaigainean ez. Sinkronizazio automatikoa Kototoro irekita dagoenean dabil.</string>
+    <string name="sync_settings_enabled_title">Sinkronizatu ezarpenak</string>
+</resources>

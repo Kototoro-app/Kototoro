@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="source_presets">மூல முன்னமைவுகள்</string>
+    <string name="create_preset">புதிய முன்னமைவு</string>
+    <string name="edit_preset">முன்னமைவைத் திருத்து</string>
+    <string name="preset_name">முன்னமைவுப் பெயர்</string>
+    <string name="preset_languages">மொழிகள்</string>
+    <string name="preset_sources">மூலங்கள்</string>
+    <string name="preset_created">Created</string>
+    <string name="preset_saved">Saved</string>
+    <string name="preset_deleted">Deleted</string>
+    <string name="preset_activated">Activated</string>
+    <string name="preset_deactivated">Deactivated</string>
+    <string name="no_presets">No presets</string>
+    <string name="no_presets_text">வெவ்வேறு மூல உள்ளமைவுகளுக்கு இடையே விரைவாக மாற ஒரு முன்னமைவை உருவாக்கவும்</string>
+    <string name="manage_preset_sources">மூலங்களை நிர்வகி</string>
+</resources>

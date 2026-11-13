@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_bar_filters">Seche bar filters</string>
+    <string name="show_language_preset_filter">Language presette</string>
+    <string name="fixed_language_preset">Stedefast langage set</string>
+    <string name="show_content_type_filter">Matere-kynde</string>
+    <string name="fixed_content_type">Stedefast matere</string>
+    <string name="show_source_tag_filter">Welle-kynde</string>
+    <string name="fixed_source_tag">Stedefast welle type</string>
+</resources>

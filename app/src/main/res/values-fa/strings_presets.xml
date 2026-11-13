@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="source_presets">پیش‌فرض‌های منبع</string>
+    <string name="create_preset">پیش‌فرض جدید</string>
+    <string name="edit_preset">ویرایش پیش‌فرض</string>
+    <string name="preset_name">نام پیش‌فرض</string>
+    <string name="preset_languages">زبان‌ها</string>
+    <string name="preset_sources">منابع</string>
+    <string name="preset_created">پیش‌فرض ایجاد شد</string>
+    <string name="preset_deleted">پیش‌فرض حذف شد</string>
+    <string name="preset_activated">پیش‌فرض فعال شد</string>
+    <string name="preset_deactivated">پیش‌فرض غیرفعال شد</string>
+    <string name="no_presets">پیش‌فرضی نیست</string>
+    <string name="no_presets_text">برای جابه‌جایی سریع بین پیکربندی‌های مختلف منابع، یک پیش‌فرض بسازید</string>
+    <string name="manage_preset_sources">مدیریت منابع</string>
+    <string name="preset_saved">ذخیره پیش‌تنظیم</string>
+</resources>

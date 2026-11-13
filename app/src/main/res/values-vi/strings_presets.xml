@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="source_presets">Cấu hình nguồn</string>
+    <string name="create_preset">Cấu hình mới</string>
+    <string name="edit_preset">Sửa cấu hình</string>
+    <string name="preset_name">Tên cấu hình</string>
+    <string name="preset_languages">Ngôn ngữ</string>
+    <string name="preset_sources">Nguồn</string>
+    <string name="preset_created">Đã tạo cấu hình</string>
+    <string name="preset_saved">Đã lưu cấu hình</string>
+    <string name="preset_deleted">Đã xóa cấu hình</string>
+    <string name="preset_activated">Đã bật cấu hình</string>
+    <string name="preset_deactivated">Đã tắt cấu hình</string>
+    <string name="no_presets">Chưa có cấu hình</string>
+    <string name="no_presets_text">Tạo cấu hình để chuyển đổi nhanh giữa các thiết lập nguồn khác nhau</string>
+    <string name="manage_preset_sources">Quản lý nguồn</string>
+</resources>

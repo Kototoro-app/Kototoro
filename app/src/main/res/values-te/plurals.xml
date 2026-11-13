@@ -36,4 +36,32 @@
         <item quantity="one">%1$d నిమిషం</item>
         <item quantity="other">%1$d నిమిషాలు</item>
     </plurals>
+    <plurals name="feed_timeline_updates">
+        <item quantity="one">%1$d అప్‌డేట్</item>
+        <item quantity="other">%1$d అప్‌డేట్లు</item>
+    </plurals>
+    <plurals name="history_grouped_sources">
+        <item quantity="one">%1$d సోర్స్</item>
+        <item quantity="other">%1$d సోర్సులు</item>
+    </plurals>
+    <plurals name="home_enabled_sources">
+        <item quantity="one">%1$d ఎనేబుల్ చేసిన సోర్స్</item>
+        <item quantity="other">%1$d ఎనేబుల్ చేసిన సోర్సులు</item>
+    </plurals>
+    <plurals name="home_updates_new_chapters">
+        <item quantity="one">%1$d కొత్త చాప్టర్</item>
+        <item quantity="other">%1$d కొత్త చాప్టర్లు</item>
+    </plurals>
+    <plurals name="old_chapters_in_total">
+        <item quantity="one">మొత్తం %1$d పాత చాప్టర్</item>
+        <item quantity="other">మొత్తం %1$d పాత చాప్టర్లు</item>
+    </plurals>
+    <plurals name="tracker_failed_in_a_row">
+        <item quantity="one">వరుసగా %1$d సారి విఫలమైంది</item>
+        <item quantity="other">వరుసగా %1$d సార్లు విఫలమైంది</item>
+    </plurals>
+    <plurals name="tracker_failing_titles_summary">
+        <item quantity="one">%1$d టైటిల్ వరుసగా %2$d లేదా అంతకంటే ఎక్కువ తనిఖీలలో విఫలమైంది</item>
+        <item quantity="other">%1$d టైటిళ్లు వరుసగా %2$d లేదా అంతకంటే ఎక్కువ తనిఖీలలో విఫలమయ్యాయి</item>
+    </plurals>
 </resources>

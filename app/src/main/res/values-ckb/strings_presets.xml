@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="source_presets">پێشوەختەکانی سەرچاوە</string>
+    <string name="create_preset">پیشوەختی نوێ</string>
+    <string name="edit_preset">دەستکاری پێشوەختە</string>
+    <string name="preset_name">ناوی پیشوەخت</string>
+    <string name="preset_languages">زمانەکان</string>
+    <string name="preset_sources">سەرچاوەکان</string>
+    <string name="preset_created">پیشوەخت دروستکرا</string>
+    <string name="preset_saved">پاشەکەوت کرا</string>
+    <string name="preset_deleted">پیشوەخت سڕایەوە</string>
+    <string name="preset_activated">پیشوەخت چالاککرا</string>
+    <string name="preset_deactivated">پیشوەخت ناچالاککرا</string>
+    <string name="no_presets">هیچ پێشوەختەیەک نییە</string>
+    <string name="no_presets_text">پیشوەختێک دروستکە بۆ گۆڕینی خێرا لە نێوان ڕێکخستنە جیاوازەکانی سەرچاوە</string>
+    <string name="manage_preset_sources">بەڕێوەبردنی سەرچاوەکان</string>
+</resources>

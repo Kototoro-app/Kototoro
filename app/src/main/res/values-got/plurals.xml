@@ -16,4 +16,52 @@
         <item quantity="one">𐍆𐌰𐌿𐍂𐌰 𐌼𐌴𐌽𐍉𐌸 %1$d</item>
         <item quantity="other">𐍆𐌰𐌿𐍂𐌰 𐌼𐌴𐌽𐍉𐌸𐌿𐌼 %1$d</item>
     </plurals>
+    <plurals name="chapters">
+        <item quantity="one">%1$d kapituls</item>
+        <item quantity="other">%1$d kapitule</item>
+    </plurals>
+    <plurals name="feed_timeline_updates">
+        <item quantity="one">%1$d niujipana</item>
+        <item quantity="other">%1$d niujipano</item>
+    </plurals>
+    <plurals name="history_grouped_sources">
+        <item quantity="one">%1$d brunna</item>
+        <item quantity="other">%1$d brunne</item>
+    </plurals>
+    <plurals name="home_enabled_sources">
+        <item quantity="one">%1$d brunna</item>
+        <item quantity="other">%1$d brunne</item>
+    </plurals>
+    <plurals name="home_updates_new_chapters">
+        <item quantity="one">%1$d niw kapitula</item>
+        <item quantity="other">%1$d niw kapitula</item>
+    </plurals>
+    <plurals name="hours_ago">
+        <item quantity="one">%1$d hweil fairn</item>
+        <item quantity="other">%1$d hweile fairn</item>
+    </plurals>
+    <plurals name="items">
+        <item quantity="one">%1$d hlut</item>
+        <item quantity="other">%1$d hluta</item>
+    </plurals>
+    <plurals name="minutes_ago">
+        <item quantity="one">fairnu %1$d minuto</item>
+        <item quantity="other">fairnu %1$d minutos</item>
+    </plurals>
+    <plurals name="new_chapters">
+        <item quantity="one">%1$d niw kapitula</item>
+        <item quantity="other">%1$d niw kapitula</item>
+    </plurals>
+    <plurals name="old_chapters_in_total">
+        <item quantity="one">%1$d fairneis kapituls</item>
+        <item quantity="other">%1$d fairneize kapitule</item>
+    </plurals>
+    <plurals name="tracker_failed_in_a_row">
+        <item quantity="one">Usfalis %1$d sinþ</item>
+        <item quantity="other">Uslafti %1$d sinth</item>
+    </plurals>
+    <plurals name="tracker_failing_titles_summary">
+        <item quantity="one">%1$d titulus usfalis %2$d</item>
+        <item quantity="other">%1$d titulos usfalis %2$d</item>
+    </plurals>
 </resources>

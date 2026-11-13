@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="video_subtitle_settings">تنظیمات زیرنویس</string>
+    <string name="video_subtitle_style">قلم</string>
+    <string name="video_subtitle_font_size">اندازه قلم</string>
+    <string name="video_subtitle_border_size">اندازه حاشیه</string>
+    <string name="video_subtitle_position">موقعیت (حاشیه)</string>
+    <string name="video_subtitle_color_text">متن</string>
+    <string name="video_subtitle_color_border">حاشیه</string>
+    <string name="video_subtitle_color_bg">پس‌زمینه</string>
+    <string name="video_subtitle_layout">طیده‌بندی</string>
+    <string name="video_subtitle_colors">رنگ‌ها</string>
+    <string name="video_subtitle_align_left">چپ</string>
+    <string name="video_subtitle_align_center">وسط</string>
+    <string name="video_subtitle_align_right">راست</string>
+    <string name="video_subtitle_color_alpha">شفافیت</string>
+    <string name="video_subtitle_color_red">قرمز</string>
+    <string name="video_subtitle_color_green">سبز</string>
+    <string name="video_subtitle_color_blue">آبی</string>
+    <string name="video_subtitle_background">پس‌زمینه</string>
+    <string name="video_subtitle_background_style">سبک پس‌زمینه</string>
+    <string name="video_subtitle_background_none">خاموش</string>
+    <string name="video_subtitle_background_bar">تمام‌عرض</string>
+    <string name="video_subtitle_background_block">بلوک متن</string>
+    <string name="video_subtitle_background_lines">خط به خط</string>
+    <string name="video_subtitle_background_corner_radius">شعاع گوشه</string>
+    <string name="video_subtitle_background_padding_horizontal">فاصله افقی</string>
+    <string name="video_subtitle_background_padding_vertical">فاصله عمودی</string>
+    <string name="video_subtitle_background_hint">پس‌زمینه به‌جای ساخت نوار تمام‌عرض، متن زیرنویس را دنبال می‌کند.</string>
+    <string name="video_subtitle_font_family">فونت</string>
+    <string name="video_subtitle_font_sans">سانس</string>
+    <string name="video_subtitle_font_serif">سریف</string>
+    <string name="video_subtitle_font_monospace">تک‌فاصله</string>
+</resources>

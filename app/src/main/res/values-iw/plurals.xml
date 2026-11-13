@@ -45,4 +45,32 @@
         <item quantity="two">שתי דקות</item>
         <item quantity="other">%1$d דקות</item>
     </plurals>
+    <plurals name="feed_timeline_updates">
+        <item quantity="one">עדכון %1$d</item>
+        <item quantity="other">%1$d עדכונים</item>
+    </plurals>
+    <plurals name="history_grouped_sources">
+        <item quantity="one">מקור %1$d</item>
+        <item quantity="other">%1$d מקורות</item>
+    </plurals>
+    <plurals name="home_enabled_sources">
+        <item quantity="one">מקור פעיל %1$d</item>
+        <item quantity="other">%1$d מקורות פעילים</item>
+    </plurals>
+    <plurals name="home_updates_new_chapters">
+        <item quantity="one">פרק חדש %1$d</item>
+        <item quantity="other">%1$d פרקים חדשים</item>
+    </plurals>
+    <plurals name="old_chapters_in_total">
+        <item quantity="one">פרק ישן אחד מתוך %1$d</item>
+        <item quantity="other">%1$d פרקים ישנים בסך הכל</item>
+    </plurals>
+    <plurals name="tracker_failed_in_a_row">
+        <item quantity="one">נכשל פעם אחת ברציפות (%1$d)</item>
+        <item quantity="other">נכשל %1$d פעמים ברציפות</item>
+    </plurals>
+    <plurals name="tracker_failing_titles_summary">
+        <item quantity="one">כותר %1$d נכשל ב-%2$d בדיקות או יותר ברציפות</item>
+        <item quantity="other">%1$d כותרים נכשלו ב-%2$d בדיקות או יותר ברציפות</item>
+    </plurals>
 </resources>

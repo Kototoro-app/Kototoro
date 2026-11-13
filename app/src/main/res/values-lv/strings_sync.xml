@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sync_settings_enabled_title">Sinhronizēt iestat.</string>
+    <string name="sync_settings_enabled_summary">Lasītāja, atskaņotāja un izskata iestatījumi. Paroles, pilnvaras un ierīču ceļi netiek sinhronizēti.</string>
+    <string name="sync_remote_delete_incomplete">Nevarēja izdzēst %1$d attālo failu(-s). Vietējais stāvoklis saglabāts.</string>
+    <string name="sync_enable_required">Vispirms ieslēdziet Google Drive sync.</string>
+    <string name="google_drive_authorization_required">Google autorizācija ir nepilnīga vai beigusies. Pievienojiet kontu vēlreiz.</string>
+    <string name="google_drive_authorization_canceled">Google autorizācija tika atcelta vai tai beidzās laiks.</string>
+    <string name="google_drive_browser_failed">Nevarēja atvērt sistēmas pārlūku Google autorizācijai.</string>
+    <string name="google_drive_credential_store_failed">Nevarēja piekļūt sistēmas akreditācijas datu krātuvei. Pārbaudiet, vai tā ir pieejama un atbloķēta, un mēģiniet vēlreiz.</string>
+    <string name="google_drive_settings_failed">Nevar saglabāt iestatījumus. Pārbaudiet datu mapi un mēģiniet vēlreiz.</string>
+    <string name="google_drive_protocol_failed">Mākoņa momentuzņēmums ir bojāts vai izmanto neatbalstītu formātu. Nekas netika augšupielādēts.</string>
+    <string name="google_drive_conflict_failed">Citas ierīces atjaunina mākoņa datus. Mēģiniet sinhronizēt vēlāk.</string>
+    <string name="google_drive_network_failed">Google Drive sync kļūda. Pārbaudiet savienojumu.</string>
+    <string name="google_drive_access_failed">Google Drive liedza piekļuvi. Pārbaudiet piešķirtās atļaujas un Drive API konfigurāciju.</string>
+    <string name="google_drive_browser_complete">Atgriezieties Kototoro, lai pārbaudītu konta savienojumu.</string>
+    <string name="google_drive_browser_rejected">Autorizācija noraidīta. Atgriezieties Kototoro un mēģiniet vēlreiz.</string>
+    <string name="google_drive_stage_download">Lejupielādē</string>
+    <string name="google_drive_stage_merge">Apvieno</string>
+    <string name="google_drive_desktop_scope">Sinhronizē bibliotēku, kategorijas, lasīšanas progresu, statistiku un atjauninājumu ierakstus. Iestatījumi un paplašinājumi tiek saglabāti mākonī, bet galddatorā vēl netiek lietoti. Automātiskā sinhronizācija darbojas, kamēr Kototoro ir atvērts.</string>
+    <string name="google_drive_authorization_pending">Gaida Google autorizāciju pārlūkā...</string>
+    <string name="google_drive_client_configuration_failed">Google noraidīja OAuth klienta konfigurāciju. Pārbaudiet Desktop klienta veidu, Google Cloud projektu un piekrišanas iestatījumus.</string>
+    <string name="google_drive_client_secret_required">Šajā laidienā trūkst Google darbvirsmas OAuth klienta noslēpuma. Konfigurējiet to un pārbūvējiet; atkārtota pieteikšanās to nenovērsīs.</string>
+    <string name="google_drive_stage_upload">Augšupielādē</string>
+</resources>

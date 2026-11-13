@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="source_presets">Kildeforhåndsvalg</string>
+    <string name="create_preset">Nytt valg</string>
+    <string name="edit_preset">Endre valg</string>
+    <string name="preset_name">Navn</string>
+    <string name="preset_languages">Språk</string>
+    <string name="preset_sources">Kilder</string>
+    <string name="preset_created">Valg opprettet</string>
+    <string name="preset_saved">Valg lagret</string>
+    <string name="preset_deleted">Valg slettet</string>
+    <string name="preset_activated">Valg aktivert</string>
+    <string name="preset_deactivated">Valg deaktivert</string>
+    <string name="no_presets">Ingen valg</string>
+    <string name="no_presets_text">Opprett en forhåndsinnstilling for å raskt bytte mellom ulike kildekonfigurasjoner</string>
+    <string name="manage_preset_sources">Behandle kilder</string>
+</resources>

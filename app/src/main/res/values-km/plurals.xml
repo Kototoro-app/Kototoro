@@ -1,2 +1,67 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources></resources>
+<resources>
+    <plurals name="chapters">
+        <item quantity="one">%1$d ភាគ</item>
+        <item quantity="other">%1$d ភាគ</item>
+    </plurals>
+    <plurals name="days_ago">
+        <item quantity="one">%1$d ថ្ងៃមុន</item>
+        <item quantity="other">%1$d ថ្ងៃមុន</item>
+    </plurals>
+    <plurals name="feed_timeline_updates">
+        <item quantity="one">%1$d ធ្វើបច្ចុប្បន្នភាព</item>
+        <item quantity="other">%1$d ការធ្វើបច្ចុប្បន្នភាព</item>
+    </plurals>
+    <plurals name="history_grouped_sources">
+        <item quantity="one">%1$d ប្រភព</item>
+        <item quantity="other">%1$d ប្រភព</item>
+    </plurals>
+    <plurals name="home_enabled_sources">
+        <item quantity="one">%1$d ប្រភពបានបើក</item>
+        <item quantity="other">%1$d ប្រភពបានបើក</item>
+    </plurals>
+    <plurals name="home_updates_new_chapters">
+        <item quantity="one">%1$d ភាគថ្មី</item>
+        <item quantity="other">%1$d ភាគថ្មី</item>
+    </plurals>
+    <plurals name="hours">
+        <item quantity="one">%1$d ម៉ោង</item>
+        <item quantity="other">%1$d ម៉ោង</item>
+    </plurals>
+    <plurals name="hours_ago">
+        <item quantity="one">%1$d ម៉ោងមុន</item>
+        <item quantity="other">%1$d ម៉ោងមុន</item>
+    </plurals>
+    <plurals name="items">
+        <item quantity="one">%1$d មុខទំនិញ</item>
+        <item quantity="other">%1$d មុខទំនិញ</item>
+    </plurals>
+    <plurals name="minutes">
+        <item quantity="one">%1$d នាទី</item>
+        <item quantity="other">%1$d នាទី</item>
+    </plurals>
+    <plurals name="minutes_ago">
+        <item quantity="one">%1$d នាទីមុន</item>
+        <item quantity="other">%1$d នាទីមុន</item>
+    </plurals>
+    <plurals name="months_ago">
+        <item quantity="one">%1$d ខែមុន</item>
+        <item quantity="other">%1$d ខែមុន</item>
+    </plurals>
+    <plurals name="new_chapters">
+        <item quantity="one">%1$d ភាគថ្មី</item>
+        <item quantity="other">%1$d ភាគថ្មី</item>
+    </plurals>
+    <plurals name="old_chapters_in_total">
+        <item quantity="one">សរុប %1$d ភាគចាស់</item>
+        <item quantity="other">សរុប %1$d ភាគចាស់</item>
+    </plurals>
+    <plurals name="tracker_failed_in_a_row">
+        <item quantity="one">បានបរាជ័យ %1$d ដងជាប់ៗគ្នា</item>
+        <item quantity="other">បានបរាជ័យ %1$d ដងជាប់ៗគ្នា</item>
+    </plurals>
+    <plurals name="tracker_failing_titles_summary">
+        <item quantity="one">ចំណងជើង %1$d បានបរាជ័យក្នុងការពិនិត្យ %2$d ដង ឬច្រើនជាងនេះជាប់ៗគ្នា</item>
+        <item quantity="other">ចំណងជើង %1$d បានបរាជ័យក្នុងការពិនិត្យ %2$d ដង ឬច្រើនជាងនេះជាប់ៗគ្នា</item>
+    </plurals>
+</resources>

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sync_settings_enabled_title">Segerak tetapan apl</string>
+    <string name="sync_settings_enabled_summary">Tetapan pembaca, pemain dan rupa. Kata laluan, token dan laluan peranti tidak sekali-kali disegerakkan.</string>
+    <string name="sync_remote_delete_incomplete">Tidak dapat memadam %1$d fail jauh. Status segerak tempatan dikekalkan; cuba lagi.</string>
+    <string name="sync_enable_required">Hidupkan segerak Google Drive dahulu.</string>
+    <string name="google_drive_authorization_required">Pemberikuasa Google tidak lengkap atau telah tamat tempoh. Sambungkan akaun anda semula.</string>
+    <string name="google_drive_authorization_canceled">Pemberikuasa Google dibatalkan atau tamat masa.</string>
+    <string name="google_drive_browser_failed">Tidak dapat membuka pelayar sistem untuk kebenaran Google.</string>
+    <string name="google_drive_credential_store_failed">Tidak dapat mengakses stor kelayakan sistem. Semak sama ada ia tersedia dan tidak berkunci, kemudian cuba lagi.</string>
+    <string name="google_drive_settings_failed">Tidak dapat menyimpan tetapan penyegerakan tempatan. Semak direktori data dan cuba lagi.</string>
+    <string name="google_drive_protocol_failed">Capshot awan rosak atau menggunakan format yang tidak disokong. Tiada apa yang dimuat naik.</string>
+    <string name="google_drive_conflict_failed">Peranti lain sedang mengemas kini data awan. Cuba selaraskan semula nanti.</string>
+    <string name="google_drive_network_failed">Penyegerakan Google Drive gagal. Semak sambungan anda dan cuba lagi.</string>
+    <string name="google_drive_access_failed">Google Drive menafikan akses. Semak kebenaran yang diberikan dan konfigurasi API Drive.</string>
+    <string name="google_drive_browser_complete">Panggilan balik pelayar diterima. Kembali ke Kototoro untuk menyemak keputusan sambungan akaun.</string>
+    <string name="google_drive_browser_rejected">Panggilan balik kebenaran ini ditolak. Kembali ke Kototoro dan cuba sambung semula.</string>
+    <string name="google_drive_stage_download">Memuat turun</string>
+    <string name="google_drive_stage_merge">Menggabung</string>
+    <string name="google_drive_stage_upload">Memuat naik</string>
+    <string name="google_drive_desktop_scope">Menyelaraskan pustaka, kategori, kemajuan bacaan, statistik dan rekod kemas kini anda. Tetapan dan pelanjutan dikekalan dalam awan tetapi belum diguna pakai pada desktop. Penyegerakan automatik berjalan semasa Kototoro dibuka.</string>
+    <string name="google_drive_authorization_pending">Menunggu kebenaran Google dalam pelayar anda...</string>
+    <string name="google_drive_client_configuration_failed">Google menolak konfigurasi klien OAuth. Semak jenis klien Desktop, projek Google Cloud dan tetapan persetujuan.</string>
+    <string name="google_drive_client_secret_required">Binaan ini tiada rahsia klien OAuth desktop Google. Konfigurasikannya dan bina semula; log masuk semula tidak akan membetulkan ini.</string>
+</resources>

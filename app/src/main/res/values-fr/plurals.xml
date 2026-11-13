@@ -45,4 +45,32 @@
         <item quantity="many">%1$d minutes</item>
         <item quantity="other">%1$d minutes</item>
     </plurals>
+    <plurals name="feed_timeline_updates">
+        <item quantity="one">%1$d mise à jour</item>
+        <item quantity="other">%1$d mises à jour</item>
+    </plurals>
+    <plurals name="history_grouped_sources">
+        <item quantity="one">%1$d source</item>
+        <item quantity="other">%1$d sources</item>
+    </plurals>
+    <plurals name="home_enabled_sources">
+        <item quantity="one">%1$d source activée</item>
+        <item quantity="other">%1$d sources activées</item>
+    </plurals>
+    <plurals name="home_updates_new_chapters">
+        <item quantity="one">%1$d nouveau chapitre</item>
+        <item quantity="other">%1$d nouveaux chapitres</item>
+    </plurals>
+    <plurals name="old_chapters_in_total">
+        <item quantity="one">%1$d ancien chapitre au total</item>
+        <item quantity="other">%1$d anciens chapitres au total</item>
+    </plurals>
+    <plurals name="tracker_failed_in_a_row">
+        <item quantity="one">Échec %1$d fois d\'affilée</item>
+        <item quantity="other">Échec %1$d fois d\'affilée</item>
+    </plurals>
+    <plurals name="tracker_failing_titles_summary">
+        <item quantity="one">%1$d titre a échoué à %2$d vérifications ou plus d\'affilée</item>
+        <item quantity="other">%1$d titres ont échoué à %2$d vérifications ou plus d\'affilée</item>
+    </plurals>
 </resources>

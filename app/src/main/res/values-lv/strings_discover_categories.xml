@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="discover_category_all">Visas kategorijas</string>
+    <string name="discover_category_anime_rank">Anime</string>
+    <string name="discover_category_book_rank">Grāmata</string>
+    <string name="discover_category_music_rank">Mūzika</string>
+    <string name="discover_category_game_rank">Spēle</string>
+    <string name="discover_category_real_rank">Reāls</string>
+    <string name="discover_category_calendar">Dienas grafiks</string>
+</resources>

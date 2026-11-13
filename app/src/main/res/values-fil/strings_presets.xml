@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="preset_languages">Mga wika</string>
+    <string name="preset_created">Nagawa ang preset</string>
+    <string name="no_presets">Wala pang preset</string>
+    <string name="no_presets_text">Gumawa ng preset para mabilis na lumipat sa iba\'t ibang configuration ng pinagmulan</string>
+    <string name="manage_preset_sources">Pamahalaan</string>
+    <string name="source_presets">Mga preset</string>
+    <string name="create_preset">Bagong set</string>
+    <string name="edit_preset">I-edit ang preset</string>
+    <string name="preset_name">Pangalan</string>
+    <string name="preset_sources">Mga source</string>
+    <string name="preset_saved">Na-save</string>
+    <string name="preset_deleted">Tinanggal</string>
+    <string name="preset_activated">Na-activate</string>
+    <string name="preset_deactivated">Na-deactivate</string>
+</resources>

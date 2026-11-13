@@ -19,14 +19,12 @@
     <string name="source_groups_invalid_file">无效的分组文件</string>
     <string name="source_groups_file_too_large">分组文件过大（最大 2 MB）</string>
     <string name="source_groups_error_generic">错误：%1$s</string>
-    <string name="source_groups_meta">%1$d 个仓库 · %2$d 个扩展包 · %3$d 个源</string>
+    <string name="source_groups_meta">%1$d 个仓库 · %2$d 个扩展包 · %3$d 个来源（%4$d 个已启用）</string>
     <string name="source_groups_progress">第 %1$d / %2$d 步</string>
     <string name="source_groups_error_repo">无法添加仓库 %1$s</string>
     <string name="source_groups_error_package">无法安装扩展包 %1$s</string>
     <string name="source_groups_error_source">无法设置源 %1$s</string>
     <string name="source_groups_error_jar_priority">无法应用 JAR 优先级顺序</string>
-    <string name="source_groups_domain_skipped">未在此设备上安装的源未应用域名：%1$d 个</string>
-    <string name="source_groups_rolled_back">已回滚到应用前的状态。已添加的仓库和已安装的扩展包会保留。</string>
     <string name="source_groups_package_missing">在所属仓库中未找到扩展包 %1$s</string>
     <string name="source_groups_requires_installer">扩展包 %1$s 需要通过系统安装程序安装</string>
     <string name="source_groups_export_lost">导出目标已丢失，请重新导出。</string>
@@ -85,4 +83,20 @@
     <string name="extension_file_delete_failed">无法删除 %1$s。</string>
     <string name="extension_repo_update_failed">更新失败：%1$s</string>
     <string name="source_groups_confirm_domains">域名覆盖（%1$d 个来源）：</string>
+    <string name="source_groups_confirm_title">应用“%1$s”？</string>
+    <string name="source_groups_confirm_intro">此分组将向您的设备添加以下内容。</string>
+    <string name="source_groups_confirm_repos">要添加的仓库：</string>
+    <string name="source_groups_confirm_packages">要安装的插件：</string>
+    <string name="source_groups_confirm_more">+其余 %1$d 个</string>
+    <string name="source_groups_domain_skipped">未对该设备上未安装的 %1$d 个图源应用域名</string>
+    <string name="source_groups_rolled_back">已回滚至应用前状态。已添加的仓库和已安装的插件予以保留。</string>
+    <string name="source_test_copy_json">复制 JSON</string>
+    <string name="source_lock_action">锁定</string>
+    <string name="source_unlock_action">解除锁定</string>
+    <string name="edit_repository">编辑仓库</string>
+    <string name="source_groups_create_clean">创建纯净分组</string>
+    <string name="source_groups_error_apply_state">无法应用图源分组状态</string>
+    <string name="source_groups_delete_confirm">删除分组“%1$s”？</string>
+    <string name="source_groups_updated">分组已更新</string>
+    <string name="source_groups_newer_schema">此分组文件来自更新的版本，请更新应用。</string>
 </resources>

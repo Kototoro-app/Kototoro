@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sync_settings_enabled_title">Sync settings</string>
+    <string name="sync_settings_enabled_summary">Configurações de leitor, player e aparência. Senhas, tokens e caminhos nunca são sincronizados.</string>
+    <string name="sync_remote_delete_incomplete">Não foi possível excluir %1$d arquivo(s) remoto(s). O estado de sincronização local foi mantido; tente novamente.</string>
+    <string name="sync_enable_required">Ative a sincronização com o Google Drive primeiro.</string>
+    <string name="google_drive_authorization_required">A autorização do Google está incompleta ou expirou. Conecte sua conta novamente.</string>
+    <string name="google_drive_authorization_canceled">A autorização do Google foi cancelada ou expirou.</string>
+    <string name="google_drive_browser_failed">Não foi possível abrir o navegador do sistema para a autorização do Google.</string>
+    <string name="google_drive_credential_store_failed">Could not access credential store. Check that it is available and unlocked, then try again.</string>
+    <string name="google_drive_settings_failed">Could not save local settings. Check data directory and try again.</string>
+    <string name="google_drive_protocol_failed">O instantâneo na nuvem está danificado ou usa um formato não suportado. Nada foi enviado.</string>
+    <string name="google_drive_conflict_failed">Other devices are updating cloud data. Try syncing later.</string>
+    <string name="google_drive_network_failed">Google Drive sync failed. Check connection and try again.</string>
+    <string name="google_drive_access_failed">O Google Drive negou o acesso. Verifique as permissões concedidas e a configuração da API do Drive.</string>
+    <string name="google_drive_browser_complete">Retorno de chamada do navegador recebido. Retorne ao Kototoro para verificar o resultado da conexão.</string>
+    <string name="google_drive_browser_rejected">Esta autorização foi rejeitada. Retorne ao Kototoro e tente conectar novamente.</string>
+    <string name="google_drive_stage_download">Baixando</string>
+    <string name="google_drive_stage_merge">Mesclando</string>
+    <string name="google_drive_stage_upload">Enviando</string>
+    <string name="google_drive_desktop_scope">Syncs library, categories, reading progress and stats. Settings and extensions are saved to cloud but not applied on desktop yet. Auto-sync runs while Kototoro is open.</string>
+    <string name="google_drive_authorization_pending">Aguardando a autorização do Google no seu navegador…</string>
+    <string name="google_drive_client_configuration_failed">Google rejected OAuth config. Check Desktop client type, Google Cloud project and consent settings.</string>
+    <string name="google_drive_client_secret_required">Esta versão não possui o segredo do cliente OAuth para desktop do Google. Configure-o e recompile; entrar novamente não resolverá isso.</string>
+</resources>

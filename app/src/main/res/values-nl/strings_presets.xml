@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="source_presets">Bronpresets</string>
+    <string name="edit_preset">Bewerk profiel</string>
+    <string name="preset_name">Presetnaam</string>
+    <string name="preset_languages">Talen</string>
+    <string name="preset_sources">Bronnen</string>
+    <string name="preset_created">Preset aangemaakt</string>
+    <string name="preset_saved">Profiel opgesl.</string>
+    <string name="preset_deleted">Preset verwijderd</string>
+    <string name="preset_activated">Preset geactiveerd</string>
+    <string name="preset_deactivated">Preset gedeactiveerd</string>
+    <string name="no_presets">Nog geen presets</string>
+    <string name="no_presets_text">Maak een preset aan om snel te schakelen tussen verschillende bronconfiguraties</string>
+    <string name="manage_preset_sources">Bronnen beheren</string>
+    <string name="create_preset">Nieuwe preset</string>
+</resources>

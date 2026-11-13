@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="discover_category_all">Барлық санаттар</string>
+    <string name="discover_category_anime_rank">Аниме</string>
+    <string name="discover_category_book_rank">Кітап</string>
+    <string name="discover_category_music_rank">Музыка</string>
+    <string name="discover_category_game_rank">Ойын</string>
+    <string name="discover_category_real_rank">Реал</string>
+    <string name="discover_category_calendar">Күнделікті кесте</string>
+</resources>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_bar_filters">Фільтры пошуку</string>
+    <string name="show_language_preset_filter">Моўны прэсет</string>
+    <string name="fixed_language_preset">Фіксаваны моўны прэсет</string>
+    <string name="show_content_type_filter">Тып змесціва</string>
+    <string name="fixed_content_type">Фіксаваны тып змесціва</string>
+    <string name="show_source_tag_filter">Тып крыніцы</string>
+    <string name="fixed_source_tag">Фіксаваны тып крыніцы</string>
+</resources>

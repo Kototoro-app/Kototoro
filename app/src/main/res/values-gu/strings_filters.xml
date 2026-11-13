@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_bar_filters">શોધ પટ્ટી ફિલ્ટર્સ</string>
+    <string name="show_language_preset_filter">ભાષા પ્રીસેટ</string>
+    <string name="fixed_language_preset">નિશ્ચિત ભાષા પ્રીસેટ</string>
+    <string name="show_content_type_filter">સામગ્રી પ્રકાર</string>
+    <string name="fixed_content_type">નિશ્ચિત સામગ્રી પ્રકાર</string>
+    <string name="show_source_tag_filter">સ્ત્રોત પ્રકાર</string>
+    <string name="fixed_source_tag">નિશ્ચિત સ્ત્રોત પ્રકાર</string>
+</resources>

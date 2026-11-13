@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="source_presets">הגדרות מקורות</string>
+    <string name="create_preset">הגדרה חדשה</string>
+    <string name="edit_preset">עריכת הגדרה</string>
+    <string name="preset_name">שם ההגדרה</string>
+    <string name="preset_languages">שפות</string>
+    <string name="preset_sources">מקורות</string>
+    <string name="preset_created">ההגדרה נוצרה</string>
+    <string name="preset_saved">ההגדרה נשמרה</string>
+    <string name="preset_deleted">ההגדרה נמחקה</string>
+    <string name="preset_activated">ההגדרה הופעלה</string>
+    <string name="preset_deactivated">ההגדרה בוטלה</string>
+    <string name="no_presets">אין עדיין הגדרות</string>
+    <string name="no_presets_text">צור הגדרה כדי לעבור מהר בין תצורות מקורות שונות</string>
+    <string name="manage_preset_sources">ניהול מקורות</string>
+</resources>

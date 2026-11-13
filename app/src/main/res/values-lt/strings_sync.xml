@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sync_settings_enabled_title">Sinchron. nustatymai</string>
+    <string name="sync_settings_enabled_summary">Skaitytuvo, leistuvo ir išvaizdos nustatymai. Slaptažodžiai, raktai ir keliai nesinchronizuojami.</string>
+    <string name="sync_remote_delete_incomplete">Nepavyko ištrinti %1$d nuotolinių failų. Vietinė būsena išsaugota, bandykite dar kartą.</string>
+    <string name="sync_enable_required">Įjunkite Google Drive sinchronizavimą.</string>
+    <string name="google_drive_authorization_required">Google autorizacija neužbaigta arba pasibaigė. Prisijunkite iš naujo.</string>
+    <string name="google_drive_authorization_canceled">Google autorizacija atšaukta arba baigėsi laikas.</string>
+    <string name="google_drive_browser_failed">Nepavyko atidaryti sistemos naršyklės Google autorizavimui.</string>
+    <string name="google_drive_credential_store_failed">Nepavyko pasiekti sistemos slaptažodžių saugyklos. Patikrinkite, ar ji pasiekiama ir atrakinta, ir bandykite dar kartą.</string>
+    <string name="google_drive_settings_failed">Nepavyko išsaugoti vietinių sinchronizavimo nustatymų. Patikrinkite duomenų katalogą.</string>
+    <string name="google_drive_protocol_failed">Debesies momentinė kopija sugadinta arba naudojamas nepalaikomas formatas. Nėra nusiųsta.</string>
+    <string name="google_drive_conflict_failed">Kiti įrenginiai atnaujina debesis. Bandykite sinchronizuoti vėliau.</string>
+    <string name="google_drive_network_failed">Google Drive sinchronizavimas nepavyko. Patikrinkite ryšį ir bandykite vėl.</string>
+    <string name="google_drive_access_failed">Google Drive nesuteikė prieigos. Patikrinkite suteiktus leidimus ir Drive API.</string>
+    <string name="google_drive_browser_complete">Gautas naršyklės atsakymas. Grįžkite į Kototoro ir patikrinkite paskyros būseną.</string>
+    <string name="google_drive_browser_rejected">Šis autorizavimo pranešimas atmestas. Grįžkite į Kototoro ir bandykite vėl.</string>
+    <string name="google_drive_stage_download">Atsisiunčiama</string>
+    <string name="google_drive_stage_merge">Sujungiama</string>
+    <string name="google_drive_stage_upload">Įkeliama</string>
+    <string name="google_drive_desktop_scope">Sinchronizuoja jūsų biblioteką, kategorijas, skaitymo pažangą, statistiką ir atnaujinimų įrašus. Nustatymai ir plėtiniai saugomi debesyje, tačiau stalinčiame kompiuteryje dar netaikomi. Automatinis sinchronizavimas veikia, kol atidaryta Kototoro.</string>
+    <string name="google_drive_authorization_pending">Laukiama Google autorizacijos naršyklėje…</string>
+    <string name="google_drive_client_configuration_failed">Google atmetė OAuth kliento konfigūraciją. Patikrinkite kliento tipą, projektą ir sutikimo nustatymus.</string>
+    <string name="google_drive_client_secret_required">Šioje laidoje trūksta Google OAuth kliento slaptojo rakto. Sukonfigūruokite ir perstatykite programą.</string>
+</resources>

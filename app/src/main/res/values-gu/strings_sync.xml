@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sync_settings_enabled_title">એપ સેટિંગ્સ સિન્ક કરો</string>
+    <string name="sync_settings_enabled_summary">વાચક, પ્લેયર અને દેખાવ સેટિંગ્સ. પાસવર્ડ, ટોકન અને ઉપકરણ પાથ ક્યારેય સિન્ક થતા નથી.</string>
+    <string name="sync_remote_delete_incomplete">Could not delete %1$d file(s). Local sync state kept; try again.</string>
+    <string name="sync_enable_required">પહેલા Google Drive સિન્ક ચાલુ કરો.</string>
+    <string name="google_drive_authorization_required">Google સત્તાધિકરણ અધૂરું છે અથવા તેની મુદત સમાપ્ત થઈ ગઈ છે. તમારું એકાઉન્ટ ફરીથી કનેક્ટ કરો.</string>
+    <string name="google_drive_authorization_canceled">Google સત્તાધિકરણ રદ કરવામાં આવ્યું હતું અથવા સમયસીમા સમાપ્ત થઈ ગઈ છે.</string>
+    <string name="google_drive_browser_failed">Google સત્તાધિકરણ માટે સિસ્ટમ બ્રાઉઝર ખોલી શકાયું નથી.</string>
+    <string name="google_drive_credential_store_failed">સિસ્ટમ ઓળખપત્ર સંગ્રહને ઍક્સેસ કરી શકાયું નથી. તે ઉપલબ્ધ અને અનલૉક છે તેની ખાતરી કરો, પછી ફરી પ્રયાસ કરો.</string>
+    <string name="google_drive_settings_failed">સ્થાનિક સિન્ક સેટિંગ્સ સાચી રીતે સાચવી શકાઈ નથી. ડેટા ડિરેક્ટરી તપાસો અને ફરી પ્રયાસ કરો.</string>
+    <string name="google_drive_protocol_failed">ક્લાઉડ સ્નેપશોટ ક્ષતિગ્રસ્ત છે અથવા અસમર્થિત ફોર્મેટ વાપરે છે. કંઈપણ અપલોડ કરવામાં આવ્યું નથી.</string>
+    <string name="google_drive_conflict_failed">Cloud data updating elsewhere. Try syncing again later.</string>
+    <string name="google_drive_network_failed">Google Drive સિન્ક નિષ્ફળ ગયું. તમારું કનેક્શન તપાસો અને ફરી પ્રયાસ કરો.</string>
+    <string name="google_drive_access_failed">Google Drive એ ઍક્સેસ નકારી કાઢી. આપેલી પરવાનગીઓ અને Drive API ગોઠવણી તપાસો.</string>
+    <string name="google_drive_browser_complete">બ્રાઉઝર કોલબેક પ્રાપ્ત થયો. એકાઉન્ટ કનેક્શન પરિણામ તપાસવા માટે Kototoro પર પાછા ફરો.</string>
+    <string name="google_drive_browser_rejected">આ સત્તાધિકરણ કોલબેક અસ્વીકાર કરવામાં આવ્યો. Kototoro પર પાછા ફરો અને ફરી કનેક્ટ કરવાનો પ્રયાસ કરો.</string>
+    <string name="google_drive_stage_download">Downloading</string>
+    <string name="google_drive_stage_merge">Merging</string>
+    <string name="google_drive_stage_upload">Uploading</string>
+    <string name="google_drive_desktop_scope">તમારી લાઇব্রરી, શ્રેણીઓ, વાંચન પ્રગતિ, આંકડા અને અપડેટ રેકોર્ડ્સ સિન્ક કરે છે. સેટિંગ્સ અને એક્સ્ટેન્શન્સ ક્લાઉડમાં સુરક્ષિત રહે છે પરંતુ હજુ ડેસ્કટોપ પર લાગુ થતા નથી. Kototoro ખુલ્લું હોય ત્યારે આપમેળે સિન્ક થાય છે.</string>
+    <string name="google_drive_authorization_pending">તમારા બ્રાઉઝરમાં Google સત્તાધિકરણની રાહ જોઈ રહ્યા છીએ…</string>
+    <string name="google_drive_client_configuration_failed">Google એ OAuth ક્લાયન્ટ ગોઠવણી નકારી કાઢી છે. ડેસ્કટોપ ક્લાયન્ટ પ્રકાર, Google ક્લાઉડ પ્રોજેક્ટ અને સંમતિ સેટિંગ્સ તપાસો.</string>
+    <string name="google_drive_client_secret_required">આ બિલ્ડમાં Google ડેસ્કટોપ OAuth ક્લાયન્ટ સિક્રેટ ખૂટે છે. તેને ગોઠવો અને ફરીથી બનાવો; ફરીથી સઈન ઇન કરવાથી આ સુધરશે નહીં.</string>
+</resources>

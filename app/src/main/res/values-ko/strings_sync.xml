@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sync_settings_enabled_title">앱 설정 동기화</string>
+    <string name="sync_settings_enabled_summary">뷰어, 플레이어 및 외관 설정. 비밀번호, 토큰 및 기기 경로는 동기화되지 않습니다.</string>
+    <string name="sync_remote_delete_incomplete">원격 파일 %1$d개를 삭제하지 못했습니다. 로컬 동기화 상태가 유지되었습니다. 다시 시도하세요.</string>
+    <string name="sync_enable_required">먼저 Google Drive 동기화를 켜세요.</string>
+    <string name="google_drive_authorization_required">Google 인증이 완료되지 않았거나 만료되었습니다. 계정을 다시 연결하세요.</string>
+    <string name="google_drive_authorization_canceled">Google 인증이 취소되었거나 시간이 초과되었습니다.</string>
+    <string name="google_drive_browser_failed">Google 인증을 위해 시스템 브라우저를 열 수 없습니다.</string>
+    <string name="google_drive_credential_store_failed">시스템 자격 증명 저장소에 접근할 수 없습니다. 사용 가능하며 잠금 해제되어 있는지 확인한 후 다시 시도하세요.</string>
+    <string name="google_drive_settings_failed">로컬 동기화 설정을 저장할 수 없습니다. 데이터 디렉터리를 확인하고 다시 시도하세요.</string>
+    <string name="google_drive_protocol_failed">클라우드 스냅샷이 손상되었거나 지원되지 않는 형식입니다. 업로드된 항목이 없습니다.</string>
+    <string name="google_drive_conflict_failed">다른 기기에서 클라우드 데이터를 업데이트하고 있습니다. 나중에 다시 동기화해 보세요.</string>
+    <string name="google_drive_network_failed">Google Drive 동기화에 실패했습니다. 연결 상태를 확인하고 다시 시도하세요.</string>
+    <string name="google_drive_access_failed">Google Drive에서 접근이 거부되었습니다. 부여된 권한 및 Drive API 구성을 확인하세요.</string>
+    <string name="google_drive_browser_complete">브라우저 콜백을 수신했습니다. Kototoro로 돌아가 계정 연결 결과를 확인하세요.</string>
+    <string name="google_drive_browser_rejected">이 인증 콜백이 거부되었습니다. Kototoro로 돌아가서 다시 연결해 보세요.</string>
+    <string name="google_drive_stage_download">다운로드 중</string>
+    <string name="google_drive_stage_merge">병합 중</string>
+    <string name="google_drive_stage_upload">업로드 중</string>
+    <string name="google_drive_desktop_scope">라이브러리, 카테고리, 읽기 진행 상황, 통계 및 업데이트 기록을 동기화합니다. 설정과 확장 프로그램은 클라우드에 보존되지만 데스크톱에는 아직 적용되지 않습니다. 자동 동기화는 Kototoro가 열려 있는 동안 실행됩니다.</string>
+    <string name="google_drive_authorization_pending">브라우저에서 Google 인증을 기다리는 중…</string>
+    <string name="google_drive_client_configuration_failed">Google이 OAuth 클라이언트 구성을 거부했습니다. 데스크톱 클라이언트 유형, Google Cloud 프로젝트 및 동의 설정을 확인하세요.</string>
+    <string name="google_drive_client_secret_required">이빌드에는 Google 데스크톱 OAuth 클라이언트 시크릿이 없습니다. 구성 후 다시 빌드하세요. 다시 로그인해도 해결되지 않습니다.</string>
+</resources>

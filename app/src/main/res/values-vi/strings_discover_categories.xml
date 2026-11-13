@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="discover_category_all">Tất cả danh mục</string>
+    <string name="discover_category_anime_rank">Anime</string>
+    <string name="discover_category_book_rank">Sách</string>
+    <string name="discover_category_music_rank">Nhạc</string>
+    <string name="discover_category_game_rank">Trò chơi</string>
+    <string name="discover_category_real_rank">Thật</string>
+    <string name="discover_category_calendar">Lịch phát sóng</string>
+</resources>

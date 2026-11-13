@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sync_settings_enabled_title">ធ្វើសមកាលកម្មការកំណត់</string>
+    <string name="sync_settings_enabled_summary">ការកំណត់កម្មវិធីអាន កម្មវិធីចាក់ និងរូបរាង។ ពាក្យសម្ងាត់ តូខែន និងផ្លូវឧបករណ៍មិនត្រូវបានធ្វើសមកាលកម្មទេ។</string>
+    <string name="sync_remote_delete_incomplete">មិនអាចលុបឯកសារ %1$d។ បានរក្សាទុកការធ្វើសមកាលកម្ម ព្យាយាមម្តងទៀត។</string>
+    <string name="sync_enable_required">សូមបើក Google Drive ធ្វើសមកាលកម្មជាមុន។</string>
+    <string name="google_drive_authorization_required">ការអនុញ្ញាតរបស់ Google មិនពេញលេញ ឬបានផុតកំណត់ហើយ។ សូមតភ្ជាប់គណនីរបស់អ្នកម្តងទៀត។</string>
+    <string name="google_drive_authorization_canceled">ការអនុញ្ញាតរបស់ Google ត្រូវបានលុបចោល ឬអស់ពេល។</string>
+    <string name="google_drive_browser_failed">មិនអាចបើកកម្មវិធីរុករកប្រព័ន្ធសម្រាប់ការអនុញ្ញាតរបស់ Google បានទេ។</string>
+    <string name="google_drive_credential_store_failed">មិនអាចចូលប្រើទดុកាលសម្ងាត់ប្រព័ន្ធទេ។ សូមពិនិត្យមើលថាវាបើកប្រើបាន និងមិនបានចាក់សោ រួចព្យាយាមម្ដងទៀត។</string>
+    <string name="google_drive_settings_failed">មិនអាចរក្សាទុកការកំណត់។ ពិនិត្យថតទិន្នន័យ ហើយព្យាយាមម្តងទៀត។</string>
+    <string name="google_drive_protocol_failed">រូបភាពថតចម្លងពពកខូចខាត ឬប្រើទម្រង់ដែលមិនគាំទ្រ។ គ្មានអ្វីត្រូវបានផ្ទុកឡើងទេ។</string>
+    <string name="google_drive_conflict_failed">ឧបករណ៍ផ្សេងកំពុងធ្វើបច្ចុប្បន្នភាពទិន្នន័យ។ ព្យាយាមម្តងទៀតពេលក្រោយ។</string>
+    <string name="google_drive_network_failed">Google Drive ខុស។ ពិនិត្យការតភ្ជាប់ ហើយព្យាយាមម្តងទៀត។</string>
+    <string name="google_drive_access_failed">Google Drive បានបដិសេធការចូលប្រើ។ សូមពិនិត្យមើលការអនុញ្ញាតដែលបានផ្ដល់ និងការកំណត់រចនាសម្ព័ន្ធ Drive API។</string>
+    <string name="google_drive_browser_complete">បានទទួលការហៅត្រឡប់ពីកម្មវិធីរុករកហើយ។ សូមត្រឡប់ទៅ Kototoro វិញដើម្បីពិនិត្យមើលលទ្ធផលនៃការតភ្ជាប់គណនី។</string>
+    <string name="google_drive_browser_rejected">ការហៅត្រឡប់នៃការអនុញ្ញាតនេះត្រូវបានបដិសេធ។ សូមត្រឡប់ទៅ Kototoro វិញ ហើយព្យាយាមតភ្ជាប់ម្ដងទៀត។</string>
+    <string name="google_drive_stage_download">កំពុងទាញយក</string>
+    <string name="google_drive_stage_merge">កំពុងបញ្ចូល</string>
+    <string name="google_drive_stage_upload">កំពុងផ្ទុក</string>
+    <string name="google_drive_desktop_scope">ធ្វើសមកាលកម្មបណ្ណាល័យ ប្រភេទ វឌ្ឍនភាពនៃការអាន ស្ថិតិ និងកំណត់ត្រាធ្វើបច្ចុប្បន្នភាពរបស់អ្នក។ ការកំណត់ និងផ្នែកបន្ថែមត្រូវបានរក្សាទុកក្នុងពពក ប៉ុន្តែមិនទាន់អនុវត្តនៅលើកុំព្យូទ័រនៅឡើយទេ។ ការធ្វើសមកាលកម្មស្វ័យប្រវត្តិដំណើរការពេល Kototoro កំពុងបើក។</string>
+    <string name="google_drive_authorization_pending">រង់ចាំការអនុញ្ញាត Google ក្នុងកម្មវិធីរុករក...</string>
+    <string name="google_drive_client_configuration_failed">Google បានបដិសេធការកំណត់រចនាសម្ព័ន្ធអតិថិជន OAuth។ សូមពិនិត្យប្រភេទអតិថិជនកុំព្យូទ័រ គម្រោង Google Cloud និងការកំណត់ការយល់ព្រម។</string>
+    <string name="google_drive_client_secret_required">កំណែនេះបាត់បង់លេខសម្ងាត់អតិថិជន OAuth កុំព្យូទ័ររបស់ Google។ សូមកំណត់រចនាសម្ព័ន្ធវា និងបង្កើតឡើងវិញ ការចូលម្ដងទៀតមិនអាចដោះស្រាយបញ្ហានេះទេ។</string>
+</resources>

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="video_subtitle_settings">Mga subtitle</string>
+    <string name="video_subtitle_style">Tipograpiya</string>
+    <string name="video_subtitle_border_size">Laki ng Gilid</string>
+    <string name="video_subtitle_position">Posisyon (Margin)</string>
+    <string name="video_subtitle_color_text">Teksto</string>
+    <string name="video_subtitle_color_border">Gilid</string>
+    <string name="video_subtitle_color_bg">Background</string>
+    <string name="video_subtitle_layout">Layout</string>
+    <string name="video_subtitle_colors">Mga Kulay</string>
+    <string name="video_subtitle_align_left">Kaliwa</string>
+    <string name="video_subtitle_align_center">Gitna</string>
+    <string name="video_subtitle_align_right">Kanan</string>
+    <string name="video_subtitle_color_alpha">Alpha</string>
+    <string name="video_subtitle_color_red">Pula</string>
+    <string name="video_subtitle_color_green">Berde</string>
+    <string name="video_subtitle_color_blue">Asul</string>
+    <string name="video_subtitle_background">Background</string>
+    <string name="video_subtitle_background_style">Estilo ng BG</string>
+    <string name="video_subtitle_background_none">Off</string>
+    <string name="video_subtitle_background_bar">Buong lapad</string>
+    <string name="video_subtitle_background_corner_radius">Radius ng sulok</string>
+    <string name="video_subtitle_background_padding_horizontal">Pad na pahalang</string>
+    <string name="video_subtitle_background_padding_vertical">Pad na patayo</string>
+    <string name="video_subtitle_background_hint">Sumusunod ang background sa teksto sa halip na buong lapad na bar.</string>
+    <string name="video_subtitle_font_family">Font</string>
+    <string name="video_subtitle_font_sans">Sans</string>
+    <string name="video_subtitle_font_serif">Serif</string>
+    <string name="video_subtitle_font_monospace">Monospace</string>
+    <string name="video_subtitle_background_block">Bloke</string>
+    <string name="video_subtitle_background_lines">Per linya</string>
+    <string name="video_subtitle_font_size">Laki ng Font</string>
+</resources>

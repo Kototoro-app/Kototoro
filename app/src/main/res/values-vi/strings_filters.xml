@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_bar_filters">Bộ lọc thanh tìm kiếm</string>
+    <string name="show_language_preset_filter">Mẫu ngôn ngữ</string>
+    <string name="fixed_language_preset">Cố định cài đặt ngôn ngữ</string>
+    <string name="show_content_type_filter">Loại nội dung</string>
+    <string name="fixed_content_type">Cố định loại nội dung</string>
+    <string name="show_source_tag_filter">Loại nguồn</string>
+    <string name="fixed_source_tag">Cố định loại nguồn</string>
+</resources>

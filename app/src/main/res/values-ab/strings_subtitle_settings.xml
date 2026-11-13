@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="video_subtitle_settings">Субтитрқəа</string>
+    <string name="video_subtitle_style">Ашәага</string>
+    <string name="video_subtitle_font_size">Ашәага аҩыра</string>
+    <string name="video_subtitle_border_size">Амарҝьа</string>
+    <string name="video_subtitle_position">Аҭыԥ</string>
+    <string name="video_subtitle_color_text">Атекст</string>
+    <string name="video_subtitle_color_border">Амарҝьа</string>
+    <string name="video_subtitle_color_bg">Аҿыԥҟьа</string>
+    <string name="video_subtitle_layout">Ашаблон</string>
+    <string name="video_subtitle_colors">Аԥшшəақəа</string>
+    <string name="video_subtitle_align_left">Иахиаԥшын</string>
+    <string name="video_subtitle_align_center">Агәҭа</string>
+    <string name="video_subtitle_align_right">Иашьҭаԥшын</string>
+    <string name="video_subtitle_color_alpha">Алфа</string>
+    <string name="video_subtitle_color_red">Аҟаԥшь</string>
+    <string name="video_subtitle_color_green">Аҟıаԥшь</string>
+    <string name="video_subtitle_color_blue">Аџьаз</string>
+    <string name="video_subtitle_background">Аҿыԥҟьа</string>
+    <string name="video_subtitle_background_style">Аҿыԥҟьа ашаблон</string>
+    <string name="video_subtitle_background_none">Ыҟам</string>
+    <string name="video_subtitle_background_bar">Еиҩызшоу</string>
+    <string name="video_subtitle_background_block">Аблок</string>
+    <string name="video_subtitle_background_lines">Ацəаҳəақəа</string>
+    <string name="video_subtitle_background_corner_radius">Арыԥқəа</string>
+    <string name="video_subtitle_background_padding_horizontal">Ахышəа</string>
+    <string name="video_subtitle_background_padding_vertical">Ацəаҳəа</string>
+    <string name="video_subtitle_background_hint">Аҿыԥҟьа аҩыра</string>
+    <string name="video_subtitle_font_family">Ашәага</string>
+    <string name="video_subtitle_font_sans">Sans</string>
+    <string name="video_subtitle_font_serif">Serif</string>
+    <string name="video_subtitle_font_monospace">Иҷыдоу</string>
+</resources>

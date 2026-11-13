@@ -1,2 +1,67 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources></resources>
+<resources>
+    <plurals name="chapters">
+        <item quantity="one">%1$d capitol</item>
+        <item quantity="other">%1$d capitole</item>
+    </plurals>
+    <plurals name="days_ago">
+        <item quantity="one">acum %1$d zi</item>
+        <item quantity="other">acum %1$d zile</item>
+    </plurals>
+    <plurals name="feed_timeline_updates">
+        <item quantity="one">%1$d actualizare</item>
+        <item quantity="other">%1$d actualizări</item>
+    </plurals>
+    <plurals name="history_grouped_sources">
+        <item quantity="one">%1$d sursă</item>
+        <item quantity="other">%1$d surse</item>
+    </plurals>
+    <plurals name="home_enabled_sources">
+        <item quantity="one">%1$d sursă activată</item>
+        <item quantity="other">%1$d surse activate</item>
+    </plurals>
+    <plurals name="home_updates_new_chapters">
+        <item quantity="one">%1$d capitol nou</item>
+        <item quantity="other">%1$d capitole noi</item>
+    </plurals>
+    <plurals name="hours">
+        <item quantity="one">%1$d oră</item>
+        <item quantity="other">%1$d ore</item>
+    </plurals>
+    <plurals name="hours_ago">
+        <item quantity="one">acum %1$d oră</item>
+        <item quantity="other">acum %1$d ore</item>
+    </plurals>
+    <plurals name="items">
+        <item quantity="one">%1$d element</item>
+        <item quantity="other">%1$d elemente</item>
+    </plurals>
+    <plurals name="minutes">
+        <item quantity="one">%1$d minut</item>
+        <item quantity="other">%1$d minute</item>
+    </plurals>
+    <plurals name="minutes_ago">
+        <item quantity="one">acum %1$d minut</item>
+        <item quantity="other">acum %1$d minute</item>
+    </plurals>
+    <plurals name="months_ago">
+        <item quantity="one">acum %1$d lună</item>
+        <item quantity="other">acum %1$d luni</item>
+    </plurals>
+    <plurals name="new_chapters">
+        <item quantity="one">%1$d capitol nou</item>
+        <item quantity="other">%1$d capitole noi</item>
+    </plurals>
+    <plurals name="old_chapters_in_total">
+        <item quantity="one">%1$d capitol vechi în total</item>
+        <item quantity="other">%1$d capitole vechi în total</item>
+    </plurals>
+    <plurals name="tracker_failed_in_a_row">
+        <item quantity="one">Eșuat de %1$d dată la rând</item>
+        <item quantity="other">Eșuat de %1$d ori la rând</item>
+    </plurals>
+    <plurals name="tracker_failing_titles_summary">
+        <item quantity="one">%1$d titlu a eșuat la %2$d verificări la rând</item>
+        <item quantity="other">%1$d titluri au eșuat la %2$d verificări la rând</item>
+    </plurals>
+</resources>

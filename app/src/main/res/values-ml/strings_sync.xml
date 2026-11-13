@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sync_settings_enabled_title">ക്രമീകരണം സിങ്ക്</string>
+    <string name="sync_settings_enabled_summary">വായന, പ്ലെയർ, രൂപഭാവ ക്രമീകരണങ്ങൾ. പാസ്‌വേഡുകൾ സിങ്ക് ചെയ്യപ്പെടില്ല.</string>
+    <string name="sync_remote_delete_incomplete">%1$d ഫയലുകൾ നീക്കം ചെയ്യാനായില്ല. ലോക്കൽ സിങ്ക് നിലനിർത്തി.</string>
+    <string name="sync_enable_required">Google Drive സിങ്ക് ആദ്യം ഓണാക്കുക.</string>
+    <string name="google_drive_authorization_required">Google அங்கீகாரம் முழுமையடையவில்லை அல்லது காலாவதியானது. உங்கள் கணக்கை மீண்டும் இணைக்கவும்.</string>
+    <string name="google_drive_authorization_canceled">Google അനുമതി റദ്ദാക്കി അല്ലെങ്കിൽ സമയം കഴിഞ്ഞു.</string>
+    <string name="google_drive_browser_failed">Google അനുമതിക്കായി സിസ്റ്റം ബ്രൗസർ തുറക്കാനായില്ല.</string>
+    <string name="google_drive_credential_store_failed">സിസ്റ്റം ക്രെഡൻഷ്യൽ സ്റ്റോർ കിട്ടിയില്ല. തുറന്ന് ശ്രമിക്കുക.</string>
+    <string name="google_drive_settings_failed">ലോക്കൽ സിങ്ക് ക്രമീകരണം സേവ് ആയില്ല. ഡയറക്ടറി നോക്കുക.</string>
+    <string name="google_drive_protocol_failed">ക്ലൗഡ് സ്നാപ്പ്ഷോട്ട് കേടാണ്. ഒന്നും അപ്‌ലോഡ് ചെയ്തില്ല.</string>
+    <string name="google_drive_conflict_failed">മറ്റ് ഉപകരണങ്ങൾ അപ്ഡേറ്റ് ചെയ്യുന്നു. പിന്നീട് ശ്രമിക്കുക.</string>
+    <string name="google_drive_network_failed">Google Drive സിങ്ക് പരാജയപ്പെട്ടു. കണക്ഷൻ പരിശോധിച്ച് വീണ്ടും ശ്രമിക്കുക.</string>
+    <string name="google_drive_access_failed">Google Drive ആക്സസ് നിരസിച്ചു. നൽകിയ അനുമതികളും Drive API കോൺഫിഗറേഷനും പരിശോധിക്കുക.</string>
+    <string name="google_drive_browser_complete">ബ്രൗസർ കോൾബാക്ക് ലഭിച്ചു. അക്കൗണ്ട് കണക്ഷൻ ഫലം പരിശോധിക്കാൻ Kototoro-ലേക്ക് മടങ്ങുക.</string>
+    <string name="google_drive_browser_rejected">ഈ അംഗീകാര കോൾബാക്ക് നിരസിക്കപ്പെട്ടു. Kototoro-ലേക്ക് മടങ്ങി വീണ്ടും കണക്റ്റ് ചെയ്യാൻ ശ്രമിക്കുക.</string>
+    <string name="google_drive_stage_download">ഡൗൺലോഡ്</string>
+    <string name="google_drive_stage_upload">അപ്‌ലോഡ്</string>
+    <string name="google_drive_desktop_scope">നിങ്ങളുടെ ലൈബ്രറി, വിഭാഗങ്ങൾ, വായനാ പുരോഗതി, സ്ഥിതിവിവരക്കണക്കുകൾ എന്നിവ സിങ്ക് ചെയ്യുന്നു. ക്രമീകരണങ്ങളും എക്സ്റ്റൻഷനുകളും ക്ലൗഡിലുണ്ടെങ്കിലും ഡെസ്‌ക്‌ടോപ്പിൽ ബാധകമല്ല. ആപ്പ് തുറന്നിരിക്കുമ്പോൾ യാന്ത്രിക സിങ്ക് പ്രവർത്തിക്കും.</string>
+    <string name="google_drive_authorization_pending">ബ്രൗസറിൽ Google അനുമതിക്കായി കാത്തിരിക്കുന്നു...</string>
+    <string name="google_drive_client_configuration_failed">Google OAuth ക്라이언트 കോൺഫിഗറേഷൻ നിരസിച്ചു. ഡെസ്ക്ടോപ്പ് ക്라이언트 തരം, Google Cloud പ്രൊജക്റ്റ്, സമ്മത ക്രമീകരണങ്ങൾ എന്നിവ പരിശോധിക്കുക.</string>
+    <string name="google_drive_client_secret_required">ഈ ബിൽഡിൽ Google ഡെസ്‌ക്‌ടോപ്പ് OAuth ക്라이언트 സീക്രട്ട് ഇല്ല. ഇത് കോൺഫിഗർ ചെയ്ത് റീകോൺഫിഗർ ചെയ്യുക; വീണ്ടും സൈൻ ഇൻ ചെയ്താൽ ഇത് പരിഹരിക്കപ്പെടില്ല.</string>
+    <string name="google_drive_stage_merge">ലയിപ്പിക്കുന്നു</string>
+</resources>

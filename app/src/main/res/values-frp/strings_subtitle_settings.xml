@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="video_subtitle_settings">Paramète des dzo-tites</string>
+    <string name="video_subtitle_style">Tipografie</string>
+    <string name="video_subtitle_border_size">Grandu boird</string>
+    <string name="video_subtitle_position">Plaça (Madje)</string>
+    <string name="video_subtitle_color_text">Tecse</string>
+    <string name="video_subtitle_color_border">Boird</string>
+    <string name="video_subtitle_color_bg">Fond</string>
+    <string name="video_subtitle_layout">Mètowe</string>
+    <string name="video_subtitle_colors">Coleurs</string>
+    <string name="video_subtitle_align_left">Gåtche</string>
+    <string name="video_subtitle_align_center">Mitan</string>
+    <string name="video_subtitle_align_right">Droete</string>
+    <string name="video_subtitle_color_alpha">Alfa</string>
+    <string name="video_subtitle_color_red">Rôge</string>
+    <string name="video_subtitle_color_green">Vert</string>
+    <string name="video_subtitle_color_blue">Bleu</string>
+    <string name="video_subtitle_background">Fond</string>
+    <string name="video_subtitle_background_style">Stîle di fond</string>
+    <string name="video_subtitle_background_none">Pau</string>
+    <string name="video_subtitle_background_bar">Grôs largor</string>
+    <string name="video_subtitle_background_block">Blok tèxte</string>
+    <string name="video_subtitle_background_lines">Pa roye</string>
+    <string name="video_subtitle_background_corner_radius">Poyou rai</string>
+    <string name="video_subtitle_background_padding_horizontal">Rîlé coûtchî</string>
+    <string name="video_subtitle_background_padding_vertical">Rîlé astampé</string>
+    <string name="video_subtitle_background_hint">Li fond shût li tecse do dzo-tite å côp d\'aler on longu rîlé.</string>
+    <string name="video_subtitle_font_family">Police</string>
+    <string name="video_subtitle_font_sans">Sans</string>
+    <string name="video_subtitle_font_serif">Serif</string>
+    <string name="video_subtitle_font_monospace">Monospace</string>
+    <string name="video_subtitle_font_size">Talha tèxto</string>
+</resources>

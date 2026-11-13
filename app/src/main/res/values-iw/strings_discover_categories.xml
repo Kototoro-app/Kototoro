@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="discover_category_all">כל הקטגוריות</string>
+    <string name="discover_category_anime_rank">אנימה</string>
+    <string name="discover_category_book_rank">ספר</string>
+    <string name="discover_category_music_rank">מוזיקה</string>
+    <string name="discover_category_game_rank">משחק</string>
+    <string name="discover_category_real_rank">אמיתי</string>
+    <string name="discover_category_calendar">לוח זמנים יומי</string>
+</resources>

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="create_preset">Nouveau</string>
+    <string name="edit_preset">Modifier</string>
+    <string name="preset_name">Nom</string>
+    <string name="preset_languages">Langues</string>
+    <string name="preset_sources">Sources</string>
+    <string name="preset_created">Préréglage créé</string>
+    <string name="preset_saved">Enregistré</string>
+    <string name="preset_deleted">Supprimé</string>
+    <string name="preset_activated">Préréglage activé</string>
+    <string name="preset_deactivated">Préréglage désactivé</string>
+    <string name="no_presets">Aucun préréglage</string>
+    <string name="no_presets_text">Créez un préréglage pour basculer rapidement entre différentes configurations</string>
+    <string name="manage_preset_sources">Gérer les sources</string>
+    <string name="source_presets">Profils source</string>
+</resources>

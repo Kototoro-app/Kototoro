@@ -36,4 +36,32 @@
         <item quantity="one">%1$d minut</item>
         <item quantity="other">%1$d minuter</item>
     </plurals>
+    <plurals name="feed_timeline_updates">
+        <item quantity="one">%1$d uppdatering</item>
+        <item quantity="other">%1$d uppdateringar</item>
+    </plurals>
+    <plurals name="history_grouped_sources">
+        <item quantity="one">%1$d källa</item>
+        <item quantity="other">%1$d källor</item>
+    </plurals>
+    <plurals name="home_enabled_sources">
+        <item quantity="one">%1$d aktiverad källa</item>
+        <item quantity="other">%1$d aktiverade källor</item>
+    </plurals>
+    <plurals name="home_updates_new_chapters">
+        <item quantity="one">%1$d nytt kapitel</item>
+        <item quantity="other">%1$d nya kapitel</item>
+    </plurals>
+    <plurals name="old_chapters_in_total">
+        <item quantity="one">%1$d gammalt kapitel totalt</item>
+        <item quantity="other">%1$d gamla kapitel totalt</item>
+    </plurals>
+    <plurals name="tracker_failed_in_a_row">
+        <item quantity="one">Misslyckades %1$d gång i rad</item>
+        <item quantity="other">Misslyckades %1$d gånger i rad</item>
+    </plurals>
+    <plurals name="tracker_failing_titles_summary">
+        <item quantity="one">%1$d titel misslyckades med %2$d kontroller eller fler i rad</item>
+        <item quantity="other">%1$d titlar misslyckades med %2$d kontroller eller fler i rad</item>
+    </plurals>
 </resources>

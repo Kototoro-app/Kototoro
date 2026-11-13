@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sync_settings_enabled_title">Sincronizează set.</string>
+    <string name="sync_settings_enabled_summary">Setări cititor, player și aspect. Parolele, tokenurile și căile dispozitivului nu se sincronizează niciodată.</string>
+    <string name="sync_remote_delete_incomplete">Nu s-au putut șterge %1$d fișiere remote. S-a păstrat starea locală; încearcă din nou.</string>
+    <string name="sync_enable_required">Activează mai întâi sync. Google Drive.</string>
+    <string name="google_drive_authorization_required">Autorizarea Google este incompletă sau a expirat. Reconectează contul.</string>
+    <string name="google_drive_authorization_canceled">Autorizarea Google a fost anulată sau a expirat.</string>
+    <string name="google_drive_browser_failed">Nu s-a putut deschide browserul de sistem pentru autorizarea Google.</string>
+    <string name="google_drive_credential_store_failed">Nu s-a putut accesa magazinul de credențiale. Verifică dacă este disponibil și deblocat.</string>
+    <string name="google_drive_settings_failed">Nu s-au putut salva setările. Verifică directorul și încearcă din nou.</string>
+    <string name="google_drive_protocol_failed">Instantaneul e deteriorat sau folosește un format neacceptat. Nimic încărcat.</string>
+    <string name="google_drive_conflict_failed">Alte dispozitive actualizează datele din cloud. Încearcă din nou mai târziu.</string>
+    <string name="google_drive_network_failed">Sincronizarea Google Drive a eșuat. Verifică conexiunea.</string>
+    <string name="google_drive_access_failed">Google Drive a refuzat accesul. Verifică permisiunile acordate și configurația API.</string>
+    <string name="google_drive_browser_complete">Apel invers primit. Revino în Kototoro pentru a verifica rezultatul conexiunii.</string>
+    <string name="google_drive_browser_rejected">Acest apel invers de autorizare a fost respins. Revino în Kototoro și reconectează-te.</string>
+    <string name="google_drive_stage_download">Se descarcă</string>
+    <string name="google_drive_stage_merge">Se îmbină</string>
+    <string name="google_drive_stage_upload">Se încarcă</string>
+    <string name="google_drive_desktop_scope">Sincronizează biblioteca, categoriile, progresul, statisticile și istoricul. Setările și extensiile sunt salvate în cloud, dar nu se aplică încă pe desktop. Sincronizarea automată rulează când Kototoro este deschis.</string>
+    <string name="google_drive_authorization_pending">Se așteaptă autorizarea Google în browser…</string>
+    <string name="google_drive_client_configuration_failed">Google a respins configurația clientului OAuth. Verifică tipul clientului și setările proiectului.</string>
+    <string name="google_drive_client_secret_required">Această versiune nu are secretul clientului OAuth Google. Configurează-l și reconstruiește aplicația.</string>
+</resources>

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sync_settings_enabled_title">Sünkrooni seaded</string>
+    <string name="sync_settings_enabled_summary">Lugeja, pleieri ja välimuse seaded. Paroole, lubasid ja seadme teid ei sünkroonita kunagi.</string>
+    <string name="sync_remote_delete_incomplete">%1$d faili kustutamine ebaõnnestus. Kohalik olek säilis; proovi uuesti.</string>
+    <string name="sync_enable_required">Lülita Google Drive sünkr. enne sisse.</string>
+    <string name="google_drive_authorization_required">Google\'i autoriseerimine on puudulik või aegunud. Ühenda oma konto uuesti.</string>
+    <string name="google_drive_authorization_canceled">Google\'i autoriseerimine tühistati või aegus.</string>
+    <string name="google_drive_browser_failed">Veebilehitseja avaumine Google\'i autoriseerimiseks ebaõnnestus.</string>
+    <string name="google_drive_credential_store_failed">Süsteemi mandaatide hoidlale ei pääsenud ligi. Kontrolli, et see on saadaval ja lukust lahti, ning proovi uuesti.</string>
+    <string name="google_drive_settings_failed">Sätteid ei õnnestunud salvestada. Kontrolli kausta ja proovi uuesti.</string>
+    <string name="google_drive_protocol_failed">Pilvetõmmis on rikutud või kasutab toetamata vormingut. Midagi ei laaditud üles.</string>
+    <string name="google_drive_conflict_failed">Seadmed uuendavad pilveandmeid. Proovi hiljem uuesti.</string>
+    <string name="google_drive_network_failed">Google Drive sünkroonimine nurjus. Kontrolli ühendust.</string>
+    <string name="google_drive_access_failed">Google Drive keelas juurdepääsu. Kontrolli antud õigusi ja Drive API seadistust.</string>
+    <string name="google_drive_browser_complete">Veebilehitseja tagasikutse on käes. Konto ühendamise tulemuse kontrollimiseks naase Kototorosse.</string>
+    <string name="google_drive_browser_rejected">See autoriseerimise tagasikutse lükati tagasi. Naase Kototorosse ja proovi uuesti ühenduda.</string>
+    <string name="google_drive_stage_download">Allalaadimine</string>
+    <string name="google_drive_stage_merge">Ühendamine</string>
+    <string name="google_drive_stage_upload">Laadib</string>
+    <string name="google_drive_desktop_scope">Sünkroonib kogu, kategooriad, lugemisajalooga seonduva, statistika ja värskenduskirjed. Sätted ja laiendid säilitatakse pilves, kuid neid töölaual veel ei rakendata. Automaatne sünkroonimine toimub Kototoro avatud olemise ajal.</string>
+    <string name="google_drive_authorization_pending">Oodatakse veebilehitsejas Google\'i autoriseerimist…</string>
+    <string name="google_drive_client_configuration_failed">Google lükkas OAuthi kliendi konfigureeringu tagasi. Kontrolli töölauakliendi tüüpi, Google Cloudi projekti ja nõusolekusätteid.</string>
+    <string name="google_drive_client_secret_required">Sellel järgul puudub Google\'i töölaua OAuthi kliendi saladus. Konfigureeri see ja koosta uuesti; uuesti sisselogimine seda ei paranda.</string>
+</resources>

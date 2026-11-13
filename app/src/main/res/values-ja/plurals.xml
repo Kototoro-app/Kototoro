@@ -1,36 +1,67 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <plurals name="minutes_ago">
+        <plurals name="minutes_ago">
+        <item quantity="one">%1$d分前</item>
         <item quantity="other">%1$d 分前</item>
     </plurals>
-    <plurals name="items">
+        <plurals name="items">
+        <item quantity="one">%1$d件</item>
         <item quantity="other">%1$d 項目</item>
     </plurals>
-    <plurals name="hours_ago">
+        <plurals name="hours_ago">
+        <item quantity="one">%1$d時間前</item>
         <item quantity="other">%1$d 時間前</item>
     </plurals>
-    <plurals name="days_ago">
+        <plurals name="days_ago">
+        <item quantity="one">%1$d日前</item>
         <item quantity="other">%1$d 日前</item>
     </plurals>
-    <plurals name="chapters">
+        <plurals name="chapters">
+        <item quantity="one">%1$dチャプター</item>
         <item quantity="other">%1$d 章</item>
     </plurals>
-    <plurals name="new_chapters">
+        <plurals name="new_chapters">
+        <item quantity="one">%1$d件の新着チャプター</item>
         <item quantity="other">%1$d 件の新しい章</item>
     </plurals>
-    <plurals name="months_ago">
+        <plurals name="months_ago">
+        <item quantity="one">%1$dか月前</item>
         <item quantity="other">%1$d ヶ月前</item>
     </plurals>
-    <plurals name="hours">
+        <plurals name="hours">
+        <item quantity="one">%1$d時間</item>
         <item quantity="other">%1$d時間</item>
     </plurals>
-    <plurals name="minutes">
+        <plurals name="minutes">
+        <item quantity="one">%1$d分</item>
         <item quantity="other">%1$d分</item>
     </plurals>
-    <plurals name="tracker_failing_titles_summary">
+        <plurals name="tracker_failing_titles_summary">
+        <item quantity="one">%1$d件のタイトルが%2$d回連続でチェックに失敗しました</item>
         <item quantity="other">%1$d 件の作品が %2$d 回以上連続でチェックに失敗しています</item>
     </plurals>
-    <plurals name="tracker_failed_in_a_row">
+        <plurals name="tracker_failed_in_a_row">
+        <item quantity="one">%1$d回連続で失敗しました</item>
         <item quantity="other">%1$d 回連続で失敗</item>
+    </plurals>
+    <plurals name="feed_timeline_updates">
+        <item quantity="one">%1$d件の更新</item>
+        <item quantity="other">%1$d件の更新</item>
+    </plurals>
+    <plurals name="history_grouped_sources">
+        <item quantity="one">%1$d件のソース</item>
+        <item quantity="other">%1$d件のソース</item>
+    </plurals>
+    <plurals name="home_enabled_sources">
+        <item quantity="one">%1$d件の有効なソース</item>
+        <item quantity="other">%1$d件の有効なソース</item>
+    </plurals>
+    <plurals name="home_updates_new_chapters">
+        <item quantity="one">%1$d件の新着チャプター</item>
+        <item quantity="other">%1$d件の新着チャプター</item>
+    </plurals>
+    <plurals name="old_chapters_in_total">
+        <item quantity="one">合計%1$d件の古いチャプター</item>
+        <item quantity="other">合計%1$d件の古いチャプター</item>
     </plurals>
 </resources>

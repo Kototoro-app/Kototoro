@@ -28,4 +28,40 @@
         <item quantity="one">%1$d μήνας πριν</item>
         <item quantity="other">%1$d μήνες πριν</item>
     </plurals>
+    <plurals name="feed_timeline_updates">
+        <item quantity="one">%1$d ενημέρωση</item>
+        <item quantity="other">%1$d ενημερώσεις</item>
+    </plurals>
+    <plurals name="history_grouped_sources">
+        <item quantity="one">%1$d πηγή</item>
+        <item quantity="other">%1$d πηγές</item>
+    </plurals>
+    <plurals name="home_enabled_sources">
+        <item quantity="one">%1$d ενεργή πηγή</item>
+        <item quantity="other">%1$d ενεργές πηγές</item>
+    </plurals>
+    <plurals name="home_updates_new_chapters">
+        <item quantity="one">%1$d νέο κεφάλαιο</item>
+        <item quantity="other">%1$d νέα κεφάλαια</item>
+    </plurals>
+    <plurals name="hours">
+        <item quantity="one">%1$d ώρα</item>
+        <item quantity="other">%1$d ώρες</item>
+    </plurals>
+    <plurals name="minutes">
+        <item quantity="one">%1$d λεπτό</item>
+        <item quantity="other">%1$d λεπτά</item>
+    </plurals>
+    <plurals name="old_chapters_in_total">
+        <item quantity="one">Συνολικά %1$d παλιό κεφάλαιο</item>
+        <item quantity="other">Συνολικά %1$d παλιά κεφάλαια</item>
+    </plurals>
+    <plurals name="tracker_failed_in_a_row">
+        <item quantity="one">Αποτυχία %1$d φορά στη σειρά</item>
+        <item quantity="other">Αποτυχία %1$d φορές στη σειρά</item>
+    </plurals>
+    <plurals name="tracker_failing_titles_summary">
+        <item quantity="one">%1$d τίτλος απέτυχε σε %2$d ή περισσότερους διαδοχικούς ελέγχους</item>
+        <item quantity="other">%1$d τίτλοι απέτυχαν σε %2$d ή περισσότερους διαδοχικούς ελέγχους</item>
+    </plurals>
 </resources>

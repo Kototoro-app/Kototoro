@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_bar_filters">തിരയൽ ബാർ ഫിൽട്ടറുകൾ</string>
+    <string name="show_language_preset_filter">ഭാഷാ പ്രീസെറ്റ്</string>
+    <string name="fixed_language_preset">സ്ഥിരമായ ഭാഷാ പ്രീസെറ്റ്</string>
+    <string name="show_content_type_filter">ഉള്ളടക്ക തരം</string>
+    <string name="fixed_content_type">സ്ഥിരമായ ഉള്ളടക്ക തരം</string>
+    <string name="show_source_tag_filter">ഉറവിട തരം</string>
+    <string name="fixed_source_tag">സ്ഥിരമായ ഉറവിട തരം</string>
+</resources>

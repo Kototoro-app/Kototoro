@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="discover_category_all">ਸਾਰੀਆਂ ਸ਼੍ਰੇਣੀਆਂ</string>
+    <string name="discover_category_anime_rank">ਐਨੀਮੇ</string>
+    <string name="discover_category_book_rank">ਕਿਤਾਬ</string>
+    <string name="discover_category_music_rank">ਸੰਗੀਤ</string>
+    <string name="discover_category_game_rank">ਗੇਮ</string>
+    <string name="discover_category_real_rank">ਅਸਲ</string>
+    <string name="discover_category_calendar">ਰੋਜ਼ਾਨਾ ਸਮਾਂ-ਸੂਚੀ</string>
+</resources>

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="source_presets">Көз пресеттері</string>
+    <string name="create_preset">Жаңа пресет</string>
+    <string name="edit_preset">Пресетті өңдеу</string>
+    <string name="preset_name">Пресет атауы</string>
+    <string name="preset_languages">Тілдер</string>
+    <string name="preset_sources">Дереккөздер</string>
+    <string name="preset_created">Пресет құрылды</string>
+    <string name="preset_saved">Пресет сақталды</string>
+    <string name="preset_deleted">Пресет жойылды</string>
+    <string name="preset_activated">Пресет қосылды</string>
+    <string name="preset_deactivated">Пресет өшірілді</string>
+    <string name="no_presets">Пресеттер жоқ</string>
+    <string name="no_presets_text">Әртүрлі дереккөз конфигурациялары арасында жылдам ауысу үшін пресет жасаңыз</string>
+    <string name="manage_preset_sources">Көздерді басқару</string>
+</resources>

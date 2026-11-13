@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sync_settings_enabled_title">Synkroniser appinnst.</string>
+    <string name="sync_settings_enabled_summary">Lese-, spiller- og utseendeinnstillinger. Passord, poletter og enhetsbaner synkroniseres aldri.</string>
+    <string name="sync_remote_delete_incomplete">Kunne ikke slette %1$d eksterne filer. Lokal synk-tilstand ble beholdt, prøv igjen.</string>
+    <string name="sync_enable_required">Slå på Google Drive-synk først.</string>
+    <string name="google_drive_authorization_required">Google-autorisasjonen er ufullstendig eller utløpt. Koble til kontoen igjen.</string>
+    <string name="google_drive_authorization_canceled">Google-autorisasjonen ble avbrutt eller tidsavbrutt.</string>
+    <string name="google_drive_browser_failed">Kunne ikke åpne nettleseren for Google-autorisering.</string>
+    <string name="google_drive_credential_store_failed">Fikk ikke tilgang til systemets påloggingslager. Sjekk at det er tilgjengelig og låst opp, og prøv igjen.</string>
+    <string name="google_drive_settings_failed">Kunne ikke lagre lokale synkroniseringsinnstillinger. Sjekk datamappen og prøv igjen.</string>
+    <string name="google_drive_protocol_failed">Skybildekopien er skadet eller bruker et ustøttet format. Ingenting ble lastet opp.</string>
+    <string name="google_drive_conflict_failed">Andre enheter oppdaterer skydata. Prøv å synkronisere igjen senere.</string>
+    <string name="google_drive_network_failed">Google Drive-synkronisering mislyktes. Sjekk tilkoblingen og prøv igjen.</string>
+    <string name="google_drive_access_failed">Google Drive nektet tilgang. Sjekk de innvilgede tillatelsene og Drive API-konfigurasjonen.</string>
+    <string name="google_drive_browser_complete">Nettlesertilbakeringing mottatt. Gå tilbake til Kototoro for å sjekke kontotilkoblingen.</string>
+    <string name="google_drive_browser_rejected">Autoriseringstilbakeringingen ble avvist. Gå tilbake til Kototoro og prøv å koble til igjen.</string>
+    <string name="google_drive_stage_download">Laster ned</string>
+    <string name="google_drive_stage_merge">Slår sammen</string>
+    <string name="google_drive_stage_upload">Laster opp</string>
+    <string name="google_drive_desktop_scope">Synkroniserer bibliotek, kategorier, lesefremgang, statistikk og oppdateringslogg. Innstillinger og utvidelser bevares i skyen, men brukes ikke på datamaskin ennå. Automatisk synkronisering kjører mens Kototoro er åpen.</string>
+    <string name="google_drive_authorization_pending">Venter på Google-autorisering i nettleseren …</string>
+    <string name="google_drive_client_configuration_failed">Google avviste OAuth-klientkonfigurasjonen. Sjekk stasjonær klienttype, Google Cloud-prosjekt og samtykkeinnstillinger.</string>
+    <string name="google_drive_client_secret_required">Denne byggetypen mangler Google-klienthemmeligheten for skrivebord. Konfigurer den og bygg på nytt; ny pålogging løser ikke dette.</string>
+</resources>

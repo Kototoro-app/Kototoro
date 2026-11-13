@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="source_presets">సోర్స్ ప్రీసెట్లు</string>
+    <string name="preset_name">ప్రీసెట్ పేరు</string>
+    <string name="preset_languages">భాషలు</string>
+    <string name="preset_sources">సోర్సులు</string>
+    <string name="preset_created">ప్రీసెట్ తయారైంది</string>
+    <string name="preset_saved">ప్రీసెట్ సేవ్</string>
+    <string name="preset_deleted">ప్రీసెట్ తొలగింది</string>
+    <string name="preset_activated">ప్రీసెట్ యాక్టివ్</string>
+    <string name="preset_deactivated">ప్రీసెట్ ఆఫ్</string>
+    <string name="no_presets">ప్రీసెట్లు లేవు</string>
+    <string name="no_presets_text">వేర్వేరు సోర్స్ కాన్ఫిగరేషన్‌ల మధ్య త్వరగా మారడానికి ఒక ప్రీసెట్‌ను సృష్టించండి</string>
+    <string name="manage_preset_sources">సోర్సులు</string>
+    <string name="create_preset">కొత్త ప్రీసెట్</string>
+    <string name="edit_preset">ప్రీసెట్‌ను సవరించు</string>
+</resources>

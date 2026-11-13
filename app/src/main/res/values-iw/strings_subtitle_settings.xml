@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="video_subtitle_settings">הגדרות כתוביות</string>
+    <string name="video_subtitle_style">טיפוגרפיה</string>
+    <string name="video_subtitle_font_size">גודל גופן</string>
+    <string name="video_subtitle_border_size">גודל מסגרת</string>
+    <string name="video_subtitle_position">מיקום (שוליים)</string>
+    <string name="video_subtitle_color_text">טקסט</string>
+    <string name="video_subtitle_color_border">מסגרת</string>
+    <string name="video_subtitle_color_bg">רקע</string>
+    <string name="video_subtitle_layout">פריסה</string>
+    <string name="video_subtitle_colors">צבעים</string>
+    <string name="video_subtitle_align_left">שמאל</string>
+    <string name="video_subtitle_align_center">מרכז</string>
+    <string name="video_subtitle_align_right">ימין</string>
+    <string name="video_subtitle_color_alpha">שקיפות</string>
+    <string name="video_subtitle_color_red">אדום</string>
+    <string name="video_subtitle_color_green">ירוק</string>
+    <string name="video_subtitle_color_blue">כחול</string>
+    <string name="video_subtitle_background">רקע</string>
+    <string name="video_subtitle_background_style">סגנון רקע</string>
+    <string name="video_subtitle_background_none">כבוי</string>
+    <string name="video_subtitle_background_bar">רוחב מלא</string>
+    <string name="video_subtitle_background_block">בלוק טקסט</string>
+    <string name="video_subtitle_background_lines">לכל שורה</string>
+    <string name="video_subtitle_background_corner_radius">רדיוס פינות</string>
+    <string name="video_subtitle_background_padding_horizontal">ריפוד אופקי</string>
+    <string name="video_subtitle_background_padding_vertical">ריפוד אנכי</string>
+    <string name="video_subtitle_background_hint">הרקע עוקב אחר טקסט הכתוביות במקום ליצור פס ברוחב מלא.</string>
+    <string name="video_subtitle_font_family">גופן</string>
+    <string name="video_subtitle_font_sans">סן-סריף</string>
+    <string name="video_subtitle_font_serif">סריף</string>
+    <string name="video_subtitle_font_monospace">מונוספייס</string>
+</resources>

@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="chapters">
+        <item quantity="one">%1$d 章</item>
+        <item quantity="other">%1$d 章</item>
+    </plurals>
+    <plurals name="days_ago">
+        <item quantity="one">%1$d 天前</item>
+        <item quantity="other">%1$d 天前</item>
+    </plurals>
+    <plurals name="feed_timeline_updates">
+        <item quantity="one">%1$d 项更新</item>
+        <item quantity="other">%1$d 项更新</item>
+    </plurals>
+    <plurals name="history_grouped_sources">
+        <item quantity="one">%1$d 个图源</item>
+        <item quantity="other">%1$d 个图源</item>
+    </plurals>
+    <plurals name="home_enabled_sources">
+        <item quantity="one">%1$d 个已启用的图源</item>
+        <item quantity="other">%1$d 个已启用的图源</item>
+    </plurals>
+    <plurals name="home_updates_new_chapters">
+        <item quantity="one">%1$d 个新章节</item>
+        <item quantity="other">%1$d 个新章节</item>
+    </plurals>
+    <plurals name="hours">
+        <item quantity="one">%1$d 小时</item>
+        <item quantity="other">%1$d 小时</item>
+    </plurals>
+    <plurals name="hours_ago">
+        <item quantity="one">%1$d 小时前</item>
+        <item quantity="other">%1$d 小时前</item>
+    </plurals>
+    <plurals name="items">
+        <item quantity="one">%1$d 项</item>
+        <item quantity="other">%1$d 项</item>
+    </plurals>
+    <plurals name="minutes">
+        <item quantity="one">%1$d 分钟</item>
+        <item quantity="other">%1$d 分钟</item>
+    </plurals>
+    <plurals name="minutes_ago">
+        <item quantity="one">%1$d 分钟前</item>
+        <item quantity="other">%1$d 分钟前</item>
+    </plurals>
+    <plurals name="months_ago">
+        <item quantity="one">%1$d 个月前</item>
+        <item quantity="other">%1$d 个月前</item>
+    </plurals>
+    <plurals name="new_chapters">
+        <item quantity="one">%1$d 个新章节</item>
+        <item quantity="other">%1$d 个新章节</item>
+    </plurals>
+    <plurals name="old_chapters_in_total">
+        <item quantity="one">共 %1$d 个旧章节</item>
+        <item quantity="other">共 %1$d 个旧章节</item>
+    </plurals>
+    <plurals name="tracker_failed_in_a_row">
+        <item quantity="one">连续失败 %1$d 次</item>
+        <item quantity="other">连续失败 %1$d 次</item>
+    </plurals>
+    <plurals name="tracker_failing_titles_summary">
+        <item quantity="one">%1$d 个条目连续 %2$d 次或更多检查失败</item>
+        <item quantity="other">%1$d 个条目连续 %2$d 次或更多检查失败</item>
+    </plurals>
+</resources>

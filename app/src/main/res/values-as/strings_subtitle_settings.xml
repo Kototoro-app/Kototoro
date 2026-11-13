@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="video_subtitle_settings">উপশিৰোনাম سيটিংছ</string>
+    <string name="video_subtitle_style">টাইপগ্ৰাফী</string>
+    <string name="video_subtitle_font_size">ফন্টৰ আকাৰ</string>
+    <string name="video_subtitle_border_size">বৰ্ডাৰৰ আকাৰ</string>
+    <string name="video_subtitle_position">অৱস্থান (মাৰ্জিন)</string>
+    <string name="video_subtitle_color_text">পাঠ</string>
+    <string name="video_subtitle_color_border">বৰ্ডাৰ</string>
+    <string name="video_subtitle_color_bg">বেকগ্ৰাউণ্ড</string>
+    <string name="video_subtitle_layout">লেআউট</string>
+    <string name="video_subtitle_colors">ৰং</string>
+    <string name="video_subtitle_align_left">বাওঁ</string>
+    <string name="video_subtitle_align_center">কেন্দ্ৰ</string>
+    <string name="video_subtitle_align_right">সোঁ</string>
+    <string name="video_subtitle_color_alpha">আলফা</string>
+    <string name="video_subtitle_color_red">ঙা</string>
+    <string name="video_subtitle_color_green">সেউজীয়া</string>
+    <string name="video_subtitle_color_blue">নীলা</string>
+    <string name="video_subtitle_background">বেকগ্ৰাউণ্ড</string>
+    <string name="video_subtitle_background_style">বেকগ্ৰাউণ্ড শৈলী</string>
+    <string name="video_subtitle_background_none">বন্ধ</string>
+    <string name="video_subtitle_background_bar">সম্পূৰ্ণ বহল</string>
+    <string name="video_subtitle_background_block">টেক্সট ব্লক</string>
+    <string name="video_subtitle_background_lines">প্ৰতি শাৰী</string>
+    <string name="video_subtitle_background_corner_radius">ক’ৰ্ণাৰ ৰেডিয়াছ</string>
+    <string name="video_subtitle_background_padding_horizontal">অনুভূমিক পেডিং</string>
+    <string name="video_subtitle_background_padding_vertical">উলম্ব পেডিং</string>
+    <string name="video_subtitle_background_hint">বেকগ্ৰাউণ্ডখনে সম্পূৰ্ণ প্ৰস্থৰ বাৰ গঠন কৰাৰ সলনি চাবটাইটেল টেক্সট অনুসৰণ কৰে।</string>
+    <string name="video_subtitle_font_family">ফন্ট</string>
+    <string name="video_subtitle_font_sans">ছেন্স</string>
+    <string name="video_subtitle_font_serif">ছেৰিফ</string>
+    <string name="video_subtitle_font_monospace">মনোস্পেচ</string>
+</resources>

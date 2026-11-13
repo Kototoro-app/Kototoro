@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="create_preset">නව පෙරසිටුව</string>
+    <string name="edit_preset">පෙරසිටුවීම</string>
+    <string name="preset_name">පෙරසිටුවීමේ නම</string>
+    <string name="preset_languages">භාෂා</string>
+    <string name="preset_sources">మూලාధාර</string>
+    <string name="preset_created">පෙරසිටුව සාදන ලදී</string>
+    <string name="preset_deleted">මකන ලදී</string>
+    <string name="preset_activated">සක්‍රීය විය</string>
+    <string name="preset_deactivated">අක්‍රීය විය</string>
+    <string name="no_presets">පෙරසිටුවීම් නොමැත</string>
+    <string name="no_presets_text">විවිධ මූලාధාර වින්‍යාසයන් අතර ඉක්මනින් මාරු වීමට පෙරසිටුවීමක් සාදන්න</string>
+    <string name="manage_preset_sources">మూලාధාර කළමනාකරණය</string>
+    <string name="source_presets">මූලාශ්‍ර පෙරසැකසුම්</string>
+    <string name="preset_saved">පෙරසැකසුම සුරකින ලදී</string>
+</resources>

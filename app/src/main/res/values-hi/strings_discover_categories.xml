@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="discover_category_all">सभी श्रेणियाँ</string>
+    <string name="discover_category_anime_rank">एनीमे</string>
+    <string name="discover_category_book_rank">किताब</string>
+    <string name="discover_category_music_rank">संगीत</string>
+    <string name="discover_category_game_rank">गेम</string>
+    <string name="discover_category_real_rank">वास्तविक</string>
+    <string name="discover_category_calendar">दैनिक शेड्यूल</string>
+</resources>

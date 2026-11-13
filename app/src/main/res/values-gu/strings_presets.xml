@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="source_presets">સોર્સ પ્રીસેટ્સ</string>
+    <string name="create_preset">નવું પ્રીસેટ</string>
+    <string name="preset_name">પ્રીસેટ નામ</string>
+    <string name="preset_languages">ભાષાઓ</string>
+    <string name="preset_sources">સોર્સ</string>
+    <string name="preset_created">પ્રીસેટ બનાવાયું</string>
+    <string name="preset_activated">પ્રીસેટ સક્રિય થયું</string>
+    <string name="preset_deactivated">પ્રીસેટ નિષ્ક્રિય થયું</string>
+    <string name="no_presets_text">વિવિધ સોર્સ કન્ફિગરેશન્સ વચ્ચે ઝડપથી બદલવા માટે પ્રીસેટ બનાવો</string>
+    <string name="manage_preset_sources">સોર્સ મેનેજ કરો</string>
+    <string name="edit_preset">પ્રિસેટ સંપાદિત કરો</string>
+    <string name="preset_saved">Saved</string>
+    <string name="preset_deleted">Deleted</string>
+    <string name="no_presets">હજુ સુધી કોઈ પ્રિસેટ નથી</string>
+</resources>

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sync_settings_enabled_title">Synka inställningar</string>
+    <string name="sync_settings_enabled_summary">Inställningar för läsare, spelare och utseende. Lösenord, token och enhetssökvägar synkas aldrig.</string>
+    <string name="sync_remote_delete_incomplete">Kunde inte ta bort %1$d fjärrfiler. Lokalt synkläge behölls; försök igen.</string>
+    <string name="sync_enable_required">Slå på Google Drive-synk först.</string>
+    <string name="google_drive_authorization_required">Google-auktoriseringen är ofullständig eller har gått ut. Anslut ditt konto igen.</string>
+    <string name="google_drive_authorization_canceled">Google-auktoriseringen avbröts eller tog tid på sig.</string>
+    <string name="google_drive_browser_failed">Kunde inte öppna systemets webbläsare för Google-auktorisering.</string>
+    <string name="google_drive_credential_store_failed">Kunde inte komma åt systemets inloggningslagring. Kontrollera att den är tillgänglig och upplåst, och försök igen.</string>
+    <string name="google_drive_settings_failed">Kunde inte spara lokala synkinställningar. Kontrollera datakatalogen och försök igen.</string>
+    <string name="google_drive_protocol_failed">Molnbilden är skadad eller använder ett format som inte stöds. Inget laddades upp.</string>
+    <string name="google_drive_conflict_failed">Andra enheter uppdaterar molndata. Försök att synka igen senare.</string>
+    <string name="google_drive_network_failed">Google Drive-synk misslyckades. Kontrollera anslutningen och försök igen.</string>
+    <string name="google_drive_access_failed">Google Drive nekade åtkomst. Kontrollera beviljade behörigheter och Drive API-konfigurationen.</string>
+    <string name="google_drive_browser_complete">Webbläsaråteruppringning mottagen. Gå tillbaka till Kototoro för att kontrollera anslutningen.</string>
+    <string name="google_drive_browser_rejected">Denna auktoriseringsåteruppringning avvisades. Gå tillbaka till Kototoro och anslut igen.</string>
+    <string name="google_drive_stage_download">Laddar ner</string>
+    <string name="google_drive_stage_merge">Slår ihop</string>
+    <string name="google_drive_stage_upload">Laddar upp</string>
+    <string name="google_drive_desktop_scope">Synkar ditt bibliotek, kategorier, läsframsteg, statistik och uppdateringsloggar. Inställningar och tillägg sparas i molnet men tillämpas inte på datorn än. Automatisk synk körs medan Kototoro är öppet.</string>
+    <string name="google_drive_authorization_pending">Väntar på Google-auktorisering i din webbläsare…</string>
+    <string name="google_drive_client_configuration_failed">Google avvisade OAuth-klientkonfigurationen. Kontrollera klienttyp för dator, Google Cloud-projekt och samtyckesinställningar.</string>
+    <string name="google_drive_client_secret_required">Denna bygge saknar Googles OAuth-klienthemlighet för dator. Konfigurera den och bygg om; att logga in igen löser inte detta.</string>
+</resources>

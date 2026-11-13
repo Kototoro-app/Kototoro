@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="source_presets">Nupokupok piut</string>
+    <string name="create_preset">Piut bawu</string>
+    <string name="edit_preset">Enong piut</string>
+    <string name="preset_name">Ngaran piut</string>
+    <string name="preset_languages">Basa</string>
+    <string name="preset_sources">Nupok</string>
+    <string name="preset_created">Piut benget</string>
+    <string name="preset_saved">Piut disimpen</string>
+    <string name="preset_deleted">Piut dibusak</string>
+    <string name="preset_activated">Piut dihirupkeun</string>
+    <string name="preset_deactivated">Piut dipareuman</string>
+    <string name="no_presets">Teu acan aya piut</string>
+    <string name="no_presets_text">Jieun piut kanggo gancang gentos antawis konfigurasi nupok béda</string>
+    <string name="manage_preset_sources">Atur nupok</string>
+</resources>

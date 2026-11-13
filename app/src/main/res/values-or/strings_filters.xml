@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_bar_filters">ସର୍ଚ୍ଚ ବାର୍ ଫିଲ୍ଟର୍ସ</string>
+    <string name="show_language_preset_filter">ଭାଷା ପ୍ରିସେଟ୍</string>
+    <string name="fixed_language_preset">ସ୍ଥିର ଭାଷା ପ୍ରିସେଟ୍</string>
+    <string name="show_content_type_filter">विषୟବସ୍ତୁ ପ୍ରକାର</string>
+    <string name="fixed_content_type">ସ୍ଥିର ବିଷୟବସ୍ତୁ ପ୍ରକାର</string>
+    <string name="show_source_tag_filter">ଉତ୍ସ ପ୍ରକାର</string>
+    <string name="fixed_source_tag">ସ୍ଥିର ଉତ୍ସ ପ୍ରକାର</string>
+</resources>

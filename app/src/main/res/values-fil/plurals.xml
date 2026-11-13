@@ -13,7 +13,7 @@
         <item quantity="other">%1$d mga bagong kabanata</item>
     </plurals>
     <plurals name="chapters">
-        <item quantity="one">"%1$d  kabanata"</item>
+        <item quantity="one">%1$d kabanata</item>
         <item quantity="other">%1$d (na) kabanata</item>
     </plurals>
     <plurals name="hours_ago">
@@ -35,5 +35,33 @@
     <plurals name="minutes">
         <item quantity="one">%1$d minuto</item>
         <item quantity="other">%1$d (na) minuto</item>
+    </plurals>
+    <plurals name="feed_timeline_updates">
+        <item quantity="one">%1$d update</item>
+        <item quantity="other">%1$d update</item>
+    </plurals>
+    <plurals name="history_grouped_sources">
+        <item quantity="one">%1$d pinagmulan</item>
+        <item quantity="other">%1$d pinagmulan</item>
+    </plurals>
+    <plurals name="home_enabled_sources">
+        <item quantity="one">%1$d pinaganang pinagmulan</item>
+        <item quantity="other">%1$d pinaganang pinagmulan</item>
+    </plurals>
+    <plurals name="home_updates_new_chapters">
+        <item quantity="one">%1$d bagong kabanata</item>
+        <item quantity="other">%1$d bagong kabanata</item>
+    </plurals>
+    <plurals name="old_chapters_in_total">
+        <item quantity="one">May %1$d lumang kabanata sa kabuuan</item>
+        <item quantity="other">May %1$d lumang kabanata sa kabuuan</item>
+    </plurals>
+    <plurals name="tracker_failed_in_a_row">
+        <item quantity="one">Nabigo nang %1$d beses sunod-sunod</item>
+        <item quantity="other">Nabigo nang %1$d beses sunod-sunod</item>
+    </plurals>
+    <plurals name="tracker_failing_titles_summary">
+        <item quantity="one">%1$d pamagat ang nabigo sa %2$d o higit pang sunod-sunod na pagsusuri</item>
+        <item quantity="other">%1$d pamagat ang nabigo sa %2$d o higit pang sunod-sunod na pagsusuri</item>
     </plurals>
 </resources>

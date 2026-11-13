@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="video_subtitle_settings">Subtitru iestatījumi</string>
+    <string name="video_subtitle_style">Tipogrāfija</string>
+    <string name="video_subtitle_font_size">Fonta izm.</string>
+    <string name="video_subtitle_border_size">Malu izmērs</string>
+    <string name="video_subtitle_position">Pozīcija (atkāpe)</string>
+    <string name="video_subtitle_color_text">Teksts</string>
+    <string name="video_subtitle_color_border">Mala</string>
+    <string name="video_subtitle_color_bg">Fons</string>
+    <string name="video_subtitle_layout">Izkārtojums</string>
+    <string name="video_subtitle_colors">Krāsas</string>
+    <string name="video_subtitle_align_left">Pa kreisi</string>
+    <string name="video_subtitle_align_center">Centrā</string>
+    <string name="video_subtitle_align_right">Pa labi</string>
+    <string name="video_subtitle_color_alpha">Alfa</string>
+    <string name="video_subtitle_color_red">Sarkans</string>
+    <string name="video_subtitle_color_green">Zaļš</string>
+    <string name="video_subtitle_color_blue">Zils</string>
+    <string name="video_subtitle_background">Fons</string>
+    <string name="video_subtitle_background_style">Fona stils</string>
+    <string name="video_subtitle_background_none">Izslēgts</string>
+    <string name="video_subtitle_background_bar">Pilns plat.</string>
+    <string name="video_subtitle_background_block">Teksta bloks</string>
+    <string name="video_subtitle_background_lines">Rindkopai</string>
+    <string name="video_subtitle_background_corner_radius">Stūra rādiuss</string>
+    <string name="video_subtitle_background_padding_horizontal">Horizontālā atkāpe</string>
+    <string name="video_subtitle_background_padding_vertical">Vertikālā atkāpe</string>
+    <string name="video_subtitle_background_hint">Fons seko subtitru tekstam, nevis veido pilna platuma joslu.</string>
+    <string name="video_subtitle_font_family">Fonts</string>
+    <string name="video_subtitle_font_sans">Sans</string>
+    <string name="video_subtitle_font_serif">Serif</string>
+    <string name="video_subtitle_font_monospace">Monospace</string>
+</resources>

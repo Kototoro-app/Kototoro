@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="source_presets">Predlošci izvora</string>
+    <string name="edit_preset">Uredi predlož.</string>
+    <string name="preset_languages">Jezici</string>
+    <string name="preset_sources">Izvori</string>
+    <string name="preset_created">Predložak stvoren</string>
+    <string name="preset_activated">Predložak aktiviran</string>
+    <string name="preset_deactivated">Predložak deaktiviran</string>
+    <string name="no_presets">Nema predložaka</string>
+    <string name="no_presets_text">Stvori predložak za brzo prebacivanje između različitih konfiguracija izvora</string>
+    <string name="manage_preset_sources">Upravljaj izvor.</string>
+    <string name="create_preset">Novi predložak</string>
+    <string name="preset_name">Naziv predloška</string>
+    <string name="preset_saved">Predložak spremljen</string>
+    <string name="preset_deleted">Predložak izbrisan</string>
+</resources>

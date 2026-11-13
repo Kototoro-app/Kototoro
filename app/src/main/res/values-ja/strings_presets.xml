@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="source_presets">ソースプリセット</string>
+    <string name="create_preset">新規プリセット</string>
+    <string name="edit_preset">プリセットを編集</string>
+    <string name="preset_name">プリセット名</string>
+    <string name="preset_languages">言語</string>
+    <string name="preset_sources">ソース</string>
+    <string name="preset_created">プリセットを作成しました</string>
+    <string name="preset_saved">プリセットを保存しました</string>
+    <string name="preset_deleted">プリセットを削除しました</string>
+    <string name="preset_activated">プリセットを有効化しました</string>
+    <string name="preset_deactivated">プリセットを無効化しました</string>
+    <string name="no_presets">プリセットがありません</string>
+    <string name="no_presets_text">プリセットを作成すると、さまざまなソース構成をすばやく切り替えることができます</string>
+    <string name="manage_preset_sources">ソースを管理</string>
+</resources>

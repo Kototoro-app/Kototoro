@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_bar_filters">ตัวกรองแถบค้นหา</string>
+    <string name="show_language_preset_filter">ชุดภาษาสำเร็จรูป</string>
+    <string name="fixed_language_preset">ค่าตั้งล่วงหน้าภาษาคงที่</string>
+    <string name="show_content_type_filter">ประเภทเนื้อหา</string>
+    <string name="fixed_content_type">ประเภทเนื้อหาคงที่</string>
+    <string name="show_source_tag_filter">ประเภทแหล่ง</string>
+    <string name="fixed_source_tag">ประเภทแหล่งคงที่</string>
+</resources>

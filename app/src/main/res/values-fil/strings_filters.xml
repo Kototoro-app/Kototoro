@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="show_language_preset_filter">Preset ng wika</string>
+    <string name="fixed_language_preset">Nakapirming preset ng wika</string>
+    <string name="search_bar_filters">Mga filter sa search bar</string>
+    <string name="show_content_type_filter">Uri ng nilalaman</string>
+    <string name="fixed_content_type">Uri ng nilalaman</string>
+    <string name="show_source_tag_filter">Uri ng pinag.</string>
+    <string name="fixed_source_tag">Nakapirming pinag.</string>
+</resources>

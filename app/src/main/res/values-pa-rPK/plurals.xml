@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="chapters">
+        <item quantity="one">%1$d ਚੈਪਟਰ</item>
+        <item quantity="other">%1$d ਚੈਪਟਰ</item>
+    </plurals>
+    <plurals name="days_ago">
+        <item quantity="one">%1$d ਦਿਨ ਪਹਿਲਾਂ</item>
+        <item quantity="other">%1$d ਦਿਨ ਪਹਿਲਾਂ</item>
+    </plurals>
+    <plurals name="feed_timeline_updates">
+        <item quantity="one">%1$d ਅੱਪਡੇਟ</item>
+        <item quantity="other">%1$d ਅੱਪਡੇਟ</item>
+    </plurals>
+    <plurals name="history_grouped_sources">
+        <item quantity="one">%1$d ਸੋਰਸ</item>
+        <item quantity="other">%1$d ਸੋਰਸ</item>
+    </plurals>
+    <plurals name="home_enabled_sources">
+        <item quantity="one">%1$d ਸਮਰੱਥ ਸੋਰਸ</item>
+        <item quantity="other">%1$d ਸਮਰੱਥ ਸੋਰਸ</item>
+    </plurals>
+    <plurals name="home_updates_new_chapters">
+        <item quantity="one">%1$d ਨਵਾਂ ਚੈਪਟਰ</item>
+        <item quantity="other">%1$d ਨਵੇਂ ਚੈਪਟਰ</item>
+    </plurals>
+    <plurals name="hours">
+        <item quantity="one">%1$d ਘੰਟਾ</item>
+        <item quantity="other">%1$d ਘੰਟੇ</item>
+    </plurals>
+    <plurals name="hours_ago">
+        <item quantity="one">%1$d ਘੰਟਾ ਪਹਿਲਾਂ</item>
+        <item quantity="other">%1$d ਘੰਟੇ ਪਹਿਲਾਂ</item>
+    </plurals>
+    <plurals name="items">
+        <item quantity="one">%1$d ਆਈਟਮ</item>
+        <item quantity="other">%1$d ਆਈਟਮਾਂ</item>
+    </plurals>
+    <plurals name="minutes">
+        <item quantity="one">%1$d ਮਿੰਟ</item>
+        <item quantity="other">%1$d ਮਿੰਟ</item>
+    </plurals>
+    <plurals name="minutes_ago">
+        <item quantity="one">%1$d ਮਿੰਟ ਪਹਿਲਾਂ</item>
+        <item quantity="other">%1$d ਮਿੰਟ ਪਹਿਲਾਂ</item>
+    </plurals>
+    <plurals name="months_ago">
+        <item quantity="one">%1$d ਮਹੀਨਾ ਪਹਿਲਾਂ</item>
+        <item quantity="other">%1$d ਮਹੀਨੇ ਪਹਿਲਾਂ</item>
+    </plurals>
+    <plurals name="new_chapters">
+        <item quantity="one">%1$d ਨਵਾਂ ਚੈਪਟਰ</item>
+        <item quantity="other">%1$d ਨਵੇਂ ਚੈਪਟਰ</item>
+    </plurals>
+    <plurals name="old_chapters_in_total">
+        <item quantity="one">ਕੁੱਲ ਮਿਲਾ ਕੇ %1$d ਪੁਰਾਣਾ ਚੈਪਟਰ</item>
+        <item quantity="other">ਕੁੱਲ ਮਿਲਾ ਕੇ %1$d ਪੁਰਾਣੇ ਚੈਪਟਰ</item>
+    </plurals>
+    <plurals name="tracker_failed_in_a_row">
+        <item quantity="one">ਲਗਾਤਾਰ %1$d ਵਾਰ ਫੇਲ੍ਹ ਹੋਇਆ</item>
+        <item quantity="other">ਲਗਾਤਾਰ %1$d ਵਾਰ ਫੇਲ੍ਹ ਹੋਇਆ</item>
+    </plurals>
+    <plurals name="tracker_failing_titles_summary">
+        <item quantity="one">%1$d ਟਾਈਟਲ ਲਗਾਤਾਰ %2$d ਜਾਂ ਵੱਧ ਵਾਰ ਫੇਲ੍ਹ ਹੋਇਆ</item>
+        <item quantity="other">%1$d ਟਾਈਟਲ ਲਗਾਤਾਰ %2$d ਜਾਂ ਵੱਧ ਵਾਰ ਫੇਲ੍ਹ ਹੋਏ</item>
+    </plurals>
+</resources>

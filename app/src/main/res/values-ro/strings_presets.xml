@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="source_presets">Preseturi surse</string>
+    <string name="create_preset">Preset nou</string>
+    <string name="edit_preset">Editează set.</string>
+    <string name="preset_name">Nume preset</string>
+    <string name="preset_languages">Limbi</string>
+    <string name="preset_sources">Surse</string>
+    <string name="preset_created">Preset creat</string>
+    <string name="preset_saved">Preset salvat</string>
+    <string name="preset_deleted">Preset șters</string>
+    <string name="preset_activated">Preset activat</string>
+    <string name="preset_deactivated">Preset dezactivat</string>
+    <string name="no_presets">Niciun preset</string>
+    <string name="no_presets_text">Creează un preset pentru a comuta rapid între diferite configurații de surse</string>
+    <string name="manage_preset_sources">Gestionează surse</string>
+</resources>

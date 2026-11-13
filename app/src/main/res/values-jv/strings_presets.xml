@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="source_presets">Praset sumber</string>
+    <string name="create_preset">Praset anyar</string>
+    <string name="edit_preset">Sunting praset</string>
+    <string name="preset_name">Jeneng praset</string>
+    <string name="preset_languages">Basa</string>
+    <string name="preset_sources">Sumber</string>
+    <string name="preset_created">Praset dikoversi</string>
+    <string name="preset_saved">Praset disimpen</string>
+    <string name="preset_deleted">Praset dibusak</string>
+    <string name="preset_activated">Praset diaktifake</string>
+    <string name="preset_deactivated">Praset dipateni</string>
+    <string name="no_presets">Durung ana praset</string>
+    <string name="no_presets_text">Nggawe praset kanggo ngalih kanthi cepet ing antarane konfigurasi sumber sing béda</string>
+    <string name="manage_preset_sources">Kelola sumber</string>
+</resources>

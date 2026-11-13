@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="source_presets">Пресеты</string>
+    <string name="create_preset">Новый пресет</string>
+    <string name="edit_preset">Изм. пресет</string>
+    <string name="preset_name">Имя пресета</string>
+    <string name="preset_languages">Языки</string>
+    <string name="preset_sources">Источники</string>
+    <string name="preset_created">Пресет создан</string>
+    <string name="preset_saved">Пресет сохранен</string>
+    <string name="preset_deleted">Пресет удален</string>
+    <string name="preset_activated">Пресет активирован</string>
+    <string name="preset_deactivated">Пресет отключен</string>
+    <string name="no_presets">Нет пресетов</string>
+    <string name="no_presets_text">Создайте пресет для быстрого переключения между конфигурациями источников</string>
+    <string name="manage_preset_sources">Настр. источники</string>
+</resources>

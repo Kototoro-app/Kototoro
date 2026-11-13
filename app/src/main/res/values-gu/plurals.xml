@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="chapters">
+        <item quantity="one">%1$d પ્રકરણ</item>
+        <item quantity="other">%1$d પ્રકરણો</item>
+    </plurals>
+    <plurals name="days_ago">
+        <item quantity="one">%1$d દિવસ પહેલાં</item>
+        <item quantity="other">%1$d દિવસ પહેલાં</item>
+    </plurals>
+    <plurals name="feed_timeline_updates">
+        <item quantity="one">%1$d અપડેટ</item>
+        <item quantity="other">%1$d અપડેટ્સ</item>
+    </plurals>
+    <plurals name="history_grouped_sources">
+        <item quantity="one">%1$d સ્ત્રોત</item>
+        <item quantity="other">%1$d સ્ત્રોતો</item>
+    </plurals>
+    <plurals name="home_enabled_sources">
+        <item quantity="one">%1$d સક્રિય સ્ત્રોત</item>
+        <item quantity="other">%1$d સક્રિય સ્ત્રોતો</item>
+    </plurals>
+    <plurals name="home_updates_new_chapters">
+        <item quantity="one">%1$d નવો પ્રકરણ</item>
+        <item quantity="other">%1$d નવા પ્રકરણો</item>
+    </plurals>
+    <plurals name="hours">
+        <item quantity="one">%1$d કલાક</item>
+        <item quantity="other">%1$d કલાક</item>
+    </plurals>
+    <plurals name="hours_ago">
+        <item quantity="one">%1$d કલાક પહેલાં</item>
+        <item quantity="other">%1$d કલાક પહેલાં</item>
+    </plurals>
+    <plurals name="items">
+        <item quantity="one">%1$d આઇટમ</item>
+        <item quantity="other">%1$d આઇટમ્સ</item>
+    </plurals>
+    <plurals name="minutes">
+        <item quantity="one">%1$d મિનિટ</item>
+        <item quantity="other">%1$d મિનિટ</item>
+    </plurals>
+    <plurals name="minutes_ago">
+        <item quantity="one">%1$d મિનિટ પહેલાં</item>
+        <item quantity="other">%1$d મિનિટ પહેલાં</item>
+    </plurals>
+    <plurals name="months_ago">
+        <item quantity="one">%1$d મહિનો પહેલાં</item>
+        <item quantity="other">%1$d મહિના પહેલાં</item>
+    </plurals>
+    <plurals name="new_chapters">
+        <item quantity="one">%1$d નવો પ્રકરણ</item>
+        <item quantity="other">%1$d નવા પ્રકરણો</item>
+    </plurals>
+    <plurals name="old_chapters_in_total">
+        <item quantity="one">કુલ %1$d જૂનો પ્રકરણ</item>
+        <item quantity="other">કુલ %1$d જૂના પ્રકરણો</item>
+    </plurals>
+    <plurals name="tracker_failed_in_a_row">
+        <item quantity="one">સળંગ %1$d વખત નિષ્ફળ</item>
+        <item quantity="other">સળંગ %1$d વખત નિષ્ફળ</item>
+    </plurals>
+    <plurals name="tracker_failing_titles_summary">
+        <item quantity="one">%1$d શીર્ષક સળંગ %2$d કે વધુ ચકાસણીમાં નિષ્ફળ ગયું</item>
+        <item quantity="other">%1$d શીર્ષકો સળંગ %2$d કે વધુ ચકાસણીમાં નિષ્ફળ ગયા</item>
+    </plurals>
+</resources>

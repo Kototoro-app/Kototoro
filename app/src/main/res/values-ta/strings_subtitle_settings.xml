@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="video_subtitle_settings">Subtitle settings</string>
+    <string name="video_subtitle_style">Style</string>
+    <string name="video_subtitle_font_size">Font size</string>
+    <string name="video_subtitle_border_size">எல்லை அளவு</string>
+    <string name="video_subtitle_position">இடம் (ஓரவிளிம்பு)</string>
+    <string name="video_subtitle_color_text">உரை</string>
+    <string name="video_subtitle_color_border">எல்லை</string>
+    <string name="video_subtitle_color_bg">பின்னணி</string>
+    <string name="video_subtitle_layout">தளக்கோலம்</string>
+    <string name="video_subtitle_colors">நிறங்கள்</string>
+    <string name="video_subtitle_align_left">இடது</string>
+    <string name="video_subtitle_align_center">மையம்</string>
+    <string name="video_subtitle_align_right">வலது</string>
+    <string name="video_subtitle_color_alpha">ஆல்பா</string>
+    <string name="video_subtitle_color_red">சிகப்பு</string>
+    <string name="video_subtitle_color_green">பச்சை</string>
+    <string name="video_subtitle_color_blue">நீலம்</string>
+    <string name="video_subtitle_background">பின்னணி</string>
+    <string name="video_subtitle_background_style">பின்னணி பாணி</string>
+    <string name="video_subtitle_background_none">முடக்கு</string>
+    <string name="video_subtitle_background_bar">முழு அகலம்</string>
+    <string name="video_subtitle_background_block">உரை தொகுதி</string>
+    <string name="video_subtitle_background_lines">வரிவாரியாக</string>
+    <string name="video_subtitle_background_corner_radius">மூலை ஆரம்</string>
+    <string name="video_subtitle_background_padding_horizontal">கிடைமட்ட இடைவெளி</string>
+    <string name="video_subtitle_background_padding_vertical">செங்குத்து இடைவெளி</string>
+    <string name="video_subtitle_background_hint">முழு அகலப் பட்டையாக இல்லாமல் உரைக்கு ஏற்ப பின்னணி அமையும்.</string>
+    <string name="video_subtitle_font_family">எழுத்துரு</string>
+    <string name="video_subtitle_font_sans">சான்ஸ்</string>
+    <string name="video_subtitle_font_serif">செரிஃப்</string>
+    <string name="video_subtitle_font_monospace">மோனோஸ்பேஸ்</string>
+</resources>
