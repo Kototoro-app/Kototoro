@@ -3,6 +3,7 @@ package org.skepsun.kototoro.video.ui.compose
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.Canvas
@@ -28,6 +29,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -217,7 +219,7 @@ fun VideoPlayerTopControls(
             modifier = Modifier
                 .fillMaxWidth()
                 .statusBarsPadding()
-                .padding(horizontal = 12.dp, vertical = 8.dp)
+                .padding(horizontal = 8.dp, vertical = 4.dp)
                 .graphicsLayer { alpha = state.controlsAlpha },
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -226,7 +228,7 @@ fun VideoPlayerTopControls(
                 contentDescription = "Back",
                 onClick = { onAction(VideoPlayerAction.NavigateBack) },
             )
-            Column(modifier = Modifier.weight(1f).padding(horizontal = 8.dp)) {
+            Column(modifier = Modifier.weight(1f).padding(horizontal = 6.dp)) {
                 Text(
                     text = state.title,
                     style = MaterialTheme.typography.titleMedium,
@@ -246,7 +248,7 @@ fun VideoPlayerTopControls(
             if (state.supportsAspectRatio) PlayerTextButton(
                 text = state.aspectRatioLabel,
                 contentDescription = "${uiString("video_aspect_ratio")}, ${state.aspectRatioLabel}",
-                modifier = Modifier.widthIn(min = 48.dp, max = 96.dp),
+                modifier = Modifier.widthIn(min = 40.dp, max = 80.dp),
                 onClick = { onAction(VideoPlayerAction.CycleAspectRatio) },
             )
             PlayerIconButton(
@@ -325,9 +327,9 @@ fun VideoPlayerBottomControls(
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
-                .padding(horizontal = tokens.screenHorizontalPadding + 8.dp, vertical = 10.dp)
+                .padding(horizontal = tokens.screenHorizontalPadding, vertical = 8.dp)
                 .graphicsLayer { alpha = state.controlsAlpha },
-            verticalArrangement = Arrangement.spacedBy(2.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -344,31 +346,20 @@ fun VideoPlayerBottomControls(
                     onClick = { onAction(VideoPlayerAction.TogglePlayback) },
                     focusRequester = primaryFocusRequester,
                 )
-                // The seek bar and the times share one outlined box.
-                Row(
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(start = 6.dp)
-                        .height(PlayerButtonSize)
-                        .playerOutline()
-                        .padding(horizontal = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    PlayerSeekSlider(
-                        state = state,
-                        progress = progress,
-                        onAction = onAction,
-                        colors = sliderColors,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Text(
-                        text = formatPlaybackTime(state.positionMs),
-                        style = MaterialTheme.typography.labelMedium,
-                        modifier = Modifier.padding(start = 8.dp),
-                    )
-                    Text(text = "/", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(horizontal = 2.dp))
-                    Text(text = formatPlaybackTime(state.durationMs), style = MaterialTheme.typography.labelMedium)
-                }
+                PlayerSeekSlider(
+                    state = state,
+                    progress = progress,
+                    onAction = onAction,
+                    colors = sliderColors,
+                    modifier = Modifier.weight(1f).padding(start = 6.dp),
+                )
+                Text(
+                    text = formatPlaybackTime(state.positionMs),
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.padding(start = 8.dp),
+                )
+                Text(text = "/", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(horizontal = 2.dp))
+                Text(text = formatPlaybackTime(state.durationMs), style = MaterialTheme.typography.labelMedium)
             }
             BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
                 val expandedControls = maxWidth >= 600.dp * LocalDensity.current.fontScale
@@ -509,15 +500,9 @@ fun VideoPlayerBottomControls(
 }
 
 private val PlayerControlsForeground = Color.White
-
-/** The outline is 40 dp; the touch target around it stays 48 dp, so rows keep their spacing. */
-private val PlayerButtonSize = 40.dp
-private val PlayerTouchSize = 48.dp
-private val PlayerButtonShape = CircleShape
-
-/** A thin rounded outline around a control, so buttons read as buttons over any frame; nothing is filled. */
-private fun Modifier.playerOutline(shape: Shape = PlayerButtonShape): Modifier =
-    border(1.dp, PlayerControlsForeground.copy(alpha = 0.8f), shape)
+private val PlayerPillShape = CircleShape
+private val PlayerPillBackground = Color.Black.copy(alpha = 0.35f)
+private val PlayerPillBorder = Color.White.copy(alpha = 0.18f)
 
 @Composable
 private fun PlayerScrollHint(forward: Boolean, modifier: Modifier = Modifier) {
@@ -525,7 +510,7 @@ private fun PlayerScrollHint(forward: Boolean, modifier: Modifier = Modifier) {
     val shade = Color.Black.copy(alpha = 0.7f)
     Canvas(
         modifier.testTag(if (forward) "video-actions-scroll-forward" else "video-actions-scroll-back")
-            .width(16.dp).height(40.dp).background(
+            .width(16.dp).height(32.dp).background(
             Brush.horizontalGradient(if (pointsRight) listOf(Color.Transparent, shade) else listOf(shade, Color.Transparent)),
         ),
     ) {
@@ -559,7 +544,7 @@ private fun PlayerIconButton(
             .onFocusChanged { isFocused = it.isFocused }
             .then(
                 if (isFocused) {
-                    Modifier.border(2.dp, MaterialTheme.colorScheme.primary, PlayerButtonShape)
+                    Modifier.border(2.dp, MaterialTheme.colorScheme.primary, CircleShape)
                 } else {
                     Modifier
                 },
@@ -571,16 +556,13 @@ private fun PlayerIconButton(
         onClick = onClick,
         enabled = enabled,
         modifier = modifier
-            .padding(horizontal = 2.dp)
-            .size(PlayerTouchSize)
+            .size(if (isTvPresentation) 48.dp else 36.dp)
+            .alpha(if (enabled) 1f else 0.4f)
             .then(focusModifier)
-            .semantics { this.contentDescription = contentDescription }.tvIconButtonRing(),
-    ) {
-        Box(
-            modifier = Modifier.size(PlayerButtonSize).alpha(if (enabled) 1f else 0.5f).playerOutline(),
-            contentAlignment = Alignment.Center,
-        ) { icon() }
-    }
+            .semantics { this.contentDescription = contentDescription }
+            .tvIconButtonRing(),
+        content = icon,
+    )
 }
 
 @Composable
@@ -659,17 +641,15 @@ private fun PlayerChapterButton(
     val label = groupLabel?.takeIf(String::isNotBlank)
     val isTvPresentation = LocalUiPresentationConfig.current.isTv
     var isFocused by remember { mutableStateOf(false) }
-    val focusShape = RoundedCornerShape(10.dp)
     TvTextButton(
         onClick = onClick,
         modifier = modifier
-            .padding(horizontal = 2.dp)
-            .height(PlayerTouchSize)
+            .height(if (isTvPresentation) 40.dp else 32.dp)
             .widthIn(max = 120.dp)
             .onFocusChanged { isFocused = it.isFocused }
             .then(
                 if (isTvPresentation && isFocused) {
-                    Modifier.border(2.dp, MaterialTheme.colorScheme.primary, focusShape)
+                    Modifier.border(2.dp, MaterialTheme.colorScheme.primary, PlayerPillShape)
                 } else {
                     Modifier
                 },
@@ -677,28 +657,29 @@ private fun PlayerChapterButton(
             .semantics {
                 contentDescription = if (label == null) "Chapters" else "Chapters, $label"
             },
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
+        shape = PlayerPillShape,
+        colors = ButtonDefaults.textButtonColors(
+            containerColor = PlayerPillBackground,
+            contentColor = PlayerControlsForeground,
+        ),
+        border = BorderStroke(0.5.dp, PlayerPillBorder),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 0.dp),
     ) {
-        Row(
-            modifier = Modifier.height(PlayerButtonSize).playerOutline().padding(horizontal = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                imageVector = VideoPlayerIcons.GridView,
-                contentDescription = null,
-                tint = PlayerControlsForeground,
-                modifier = Modifier.size(20.dp),
+        Icon(
+            imageVector = VideoPlayerIcons.GridView,
+            contentDescription = null,
+            tint = PlayerControlsForeground,
+            modifier = Modifier.size(16.dp),
+        )
+        label?.let {
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                text = it,
+                color = PlayerControlsForeground,
+                style = MaterialTheme.typography.labelMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
-            label?.let {
-                Spacer(modifier = Modifier.width(5.dp))
-                Text(
-                    text = it,
-                    color = PlayerControlsForeground,
-                    style = MaterialTheme.typography.labelLarge,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
         }
     }
 }
@@ -723,12 +704,10 @@ private fun PlayerTextButton(
 ) {
     val isTvPresentation = LocalUiPresentationConfig.current.isTv
     var isFocused by remember { mutableStateOf(false) }
-    val focusShape = RoundedCornerShape(10.dp)
     TvTextButton(
         onClick = onClick,
         modifier = modifier
-            .padding(horizontal = 2.dp)
-            .height(PlayerTouchSize)
+            .height(if (isTvPresentation) 40.dp else 32.dp)
             .then(
                 if (contentDescription != null) Modifier.semantics { this.contentDescription = contentDescription }
                 else Modifier,
@@ -736,24 +715,25 @@ private fun PlayerTextButton(
             .onFocusChanged { isFocused = it.isFocused }
             .then(
                 if (isTvPresentation && isFocused) {
-                    Modifier.border(2.dp, MaterialTheme.colorScheme.primary, focusShape)
+                    Modifier.border(2.dp, MaterialTheme.colorScheme.primary, PlayerPillShape)
                 } else {
                     Modifier
                 },
             ),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
+        shape = PlayerPillShape,
+        colors = ButtonDefaults.textButtonColors(
+            containerColor = PlayerPillBackground,
+            contentColor = PlayerControlsForeground,
+        ),
+        border = BorderStroke(0.5.dp, PlayerPillBorder),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 0.dp),
     ) {
-        Box(
-            modifier = Modifier.height(PlayerButtonSize).playerOutline().padding(horizontal = 12.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                text = text,
-                color = PlayerControlsForeground,
-                style = MaterialTheme.typography.labelLarge,
-                maxLines = if (contentDescription != null) 1 else Int.MAX_VALUE,
-                overflow = if (contentDescription != null) TextOverflow.Ellipsis else TextOverflow.Clip,
-            )
-        }
+        Text(
+            text = text,
+            color = PlayerControlsForeground,
+            style = MaterialTheme.typography.labelMedium,
+            maxLines = if (contentDescription != null) 1 else Int.MAX_VALUE,
+            overflow = if (contentDescription != null) TextOverflow.Ellipsis else TextOverflow.Clip,
+        )
     }
 }
