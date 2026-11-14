@@ -24,6 +24,33 @@ import org.skepsun.kototoro.suggestions.data.SuggestionEntity
 class MangaDatabaseDaoSmokeTest {
 
     @Test
+    fun `unlinking and replacing trackers retain remote state without old local sync bindings`() = runBlocking {
+        val db = newDb()
+        try {
+            val dao = db.getScrobblingDao()
+            val old = org.skepsun.kototoro.scrobbling.common.data.ScrobblingEntity(
+                scrobbler = 1, id = 10, mangaId = 42, targetId = 100, status = "CURRENT",
+                chapter = 24, comment = "keep", rating = .8f, mediaType = "MANGA",
+            )
+            val replacement = old.copy(id = 11, targetId = 101, chapter = 7, rating = .9f)
+            dao.upsert(old)
+            dao.upsert(replacement)
+            dao.upsert(old.copy(mangaId = 0, chapter = 1))
+            dao.upsert(old.copy(scrobbler = 2))
+
+            dao.detachLocalBindings(1, 42, keepTargetId = 101)
+            assertEquals(listOf(replacement), dao.findByLocalMangaIds(1, listOf(42)))
+            assertEquals(old.copy(mangaId = 0), dao.findByLocalMangaIds(1, listOf(0)).single())
+            assertEquals(42, dao.findByLocalMangaIds(2, listOf(42)).single().mangaId)
+
+            dao.detachLocalBindings(1, 42)
+            assertTrue(dao.findByLocalMangaIds(1, listOf(42)).isEmpty())
+            assertEquals(setOf(old.copy(mangaId = 0), replacement.copy(mangaId = 0)),
+                dao.findByLocalMangaIds(1, listOf(0)).toSet())
+        } finally { db.close() }
+    }
+
+    @Test
     fun `query hints contain a title once when multiple sources suggest the same work`() = runBlocking {
         val db = newDb()
         try {

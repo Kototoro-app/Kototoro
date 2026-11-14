@@ -102,6 +102,12 @@ abstract class Scrobbler(
         return entity.toScrobblingInfo()
     }
 
+    suspend fun updateProgress(mangaId: Long, progress: Int) {
+        require(progress >= 0)
+        val entity = requireScrobblingEntity(mangaId)
+        repository.updateRate(entity.id, entity.mangaId, progress)
+    }
+
     abstract suspend fun updateScrobblingInfo(
         mangaId: Long,
         @FloatRange(from = 0.0, to = 1.0) rating: Float,

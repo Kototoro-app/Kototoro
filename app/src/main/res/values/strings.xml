@@ -2175,8 +2175,8 @@
     <string name="advanced_search">Advanced search</string>
     <string name="rating">Rating</string>
     <string name="source">Source</string>
-    <string name="details_metadata_source">Metadata Source</string>
-    <string name="details_entity_metadata">Metadata source</string>
+    <string name="details_metadata_source">Tracking and metadata</string>
+    <string name="details_entity_metadata">Tracking and metadata</string>
     <string name="details_entity_metadata_binding">Metadata binding</string>
     <string name="details_metadata_binding_unavailable">No metadata binding</string>
     <string name="details_reading_source">Reading Source</string>
@@ -4219,4 +4219,20 @@
     <string name="details_view_catalog">View catalog</string>
     <string name="details_my_reading">My reading</string>
     <string name="details_not_started">Not started</string>
+    <string name="details_tracking_metadata">Tracking and metadata</string>
+    <string name="details_tracking_metadata_hint">Link tracking sites here. Choose metadata separately.</string>
+    <string name="details_tracking_original">Original source</string>
+    <string name="details_tracking_unlinked">Not linked</string>
+    <string name="details_tracking_linked">Linked</string>
+    <string name="details_tracking_search_slot">Tap to find a title</string>
+    <string name="details_tracking_metadata_active">Using this metadata</string>
+    <string name="details_tracking_use_metadata">Use this title’s metadata</string>
+    <string name="details_tracking_community_score">Community: %1$s</string>
+    <string name="details_tracking_progress">Chapter / episode</string>
+    <string name="details_tracking_personal_score">My score · 0–10</string>
+    <string name="details_tracking_replace">Change linked title</string>
+    <string name="details_tracking_unlink">Unlink</string>
+    <string name="details_tracking_link">Link</string>
+    <string name="details_tracking_link_hint">Link this title again to enable progress sync.</string>
+    <string name="details_tracking_unlink_hint">Disconnect this title locally. Your entry on the tracking website will be kept.</string>
 </resources>

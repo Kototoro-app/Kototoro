@@ -23,34 +23,28 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.boundsInRoot
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import org.skepsun.kototoro.core.ui.compose.TrackingMetadataContent
+import org.skepsun.kototoro.core.ui.compose.TrackingMetadataSlot
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.getTitle
 import org.skepsun.kototoro.core.model.titleResId
@@ -58,8 +52,6 @@ import org.skepsun.kototoro.core.model.ContentSourceInfo
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
-import org.skepsun.kototoro.main.ui.compose.GlassDropdownMenu
-import org.skepsun.kototoro.main.ui.compose.CompactDropdownMenuItem
 import org.skepsun.kototoro.explore.data.SourcePreset
 import org.skepsun.kototoro.details.ui.model.DetailsSourceOption
 import org.skepsun.kototoro.details.ui.model.DetailsSourceDisplayStrings
@@ -71,9 +63,9 @@ import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingStatus
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
 import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteItem
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MetadataSourceSheet(
+    initialServiceId: Int?,
     currentOptions: List<DetailsSourceOption>,
     selectedOption: DetailsSourceOption?,
     searchServices: List<ScrobblerService>,
@@ -86,218 +78,126 @@ fun MetadataSourceSheet(
     unavailableText: String,
     linkedTrackingItems: List<LinkedTrackingItemUiModel> = emptyList(),
     scrobblingStatuses: Array<String>,
+    busy: Boolean,
     onDismissRequest: () -> Unit,
     onSelectOption: (DetailsSourceOption) -> Unit,
-    onRemoveOption: (DetailsSourceOption) -> Unit = {},
+    onRemoveOption: (DetailsSourceOption) -> Unit,
     onSearchQueryChange: (String) -> Unit,
-    onSearch: () -> Unit,
+    onSearch: (ScrobblerService) -> Unit,
     onBindResult: (TrackingSiteItem) -> Unit,
     onOpenResult: (TrackingSiteItem) -> Unit,
-    onOpenLinkedTracking: (LinkedTrackingItemUiModel) -> Unit = {},
-    onUpdateLinkedTrackingStatus: (LinkedTrackingItemUiModel, ScrobblingStatus) -> Unit = { _, _ -> },
+    onSaveTracking: (LinkedTrackingItemUiModel, Int, Float, ScrobblingStatus?) -> Unit,
 ) {
-    var pendingBindTarget by remember { mutableStateOf<TrackingSiteItem?>(null) }
-    val visibleSections = remember(searchServices, searchSections) {
-        if (searchSections.isNotEmpty()) {
-            searchSections
-        } else {
-            searchServices.map { service ->
-                org.skepsun.kototoro.details.ui.MetadataSearchSectionUiState(service = service)
-            }
-        }
+    var activeKey by rememberSaveable(initialServiceId) {
+        mutableStateOf(initialServiceId?.toString() ?: selectedOption?.trackingService?.id?.toString() ?: "original")
     }
-    val context = LocalContext.current
-    // The sheet's first focusable is its search field, so opening it with the D-pad would land on the
-    // text field and pull up the soft keyboard, which then owns every key. Start on the first option
-    // tile instead - that card is the reason the sheet was opened.
-    val isTvPresentation = LocalUiPresentationConfig.current.isTv
-    val initialFocusRequester = remember { FocusRequester() }
-    LaunchedEffect(isTvPresentation, currentOptions.size) {
-        if (!isTvPresentation || currentOptions.isEmpty()) return@LaunchedEffect
-        repeat(10) {
-            withFrameNanos { }
-            if (runCatching { initialFocusRequester.requestFocus() }.isSuccess) {
-                return@LaunchedEffect
-            }
-        }
-    }
-        DetailsSourceOverlayDialog(
-            onDismissRequest = onDismissRequest,
-        ) { panelDragModifier ->
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Column(
-                    modifier = panelDragModifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    Text(
-                        text = stringResource(R.string.details_entity_metadata),
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                    Text(
-                        text = stringResource(R.string.details_entity_metadata_sheet_hint),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                    if (currentOptions.isNotEmpty()) {
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        itemsIndexed(
-                            items = currentOptions,
-                            key = { index, option -> "${option.key}:$index" },
-                        ) { index, option ->
-                                val linked = option.trackingService?.let { svc ->
-                                    linkedTrackingItems.firstOrNull { it.service == svc && it.remoteId == option.remoteId }
-                                }
-                            var showMenu by remember(option.key) { mutableStateOf(false) }
-                            var menuAnchorBounds by remember(option.key) { mutableStateOf<Rect?>(null) }
-                            Box(
-                                modifier = Modifier.onGloballyPositioned { menuAnchorBounds = it.boundsInRoot() },
-                            ) {
-                                SourceOptionCard(
-                                    modifier = if (index == 0 && isTvPresentation) {
-                                        Modifier.focusRequester(initialFocusRequester)
-                                    } else {
-                                        Modifier
-                                    },
-                                    displayModel = option.resolveDisplayModel(
-                                        role = DetailsSourceRole.METADATA,
-                                        currentContent = currentContent,
-                                        linkedTrackingItem = linked,
-                                        strings = DetailsSourceDisplayStrings(
-                                            unavailableText = unavailableText,
-                                            metadataBindingLabel = stringResource(R.string.details_entity_metadata_binding),
-                                            readingSourceLabel = stringResource(R.string.details_reading_source),
-                                        ),
-                                        isSelected = option == selectedOption || option.isSelected,
-                                    ),
-                                    scrobblingStatuses = scrobblingStatuses,
-                                    onTrackingStatusClick = onUpdateLinkedTrackingStatus,
-                                    onClick = {
-                                        onDismissRequest()
-                                        onSelectOption(option)
-                                    },
-                                    onLongClick = {
-                                        if (option.trackingService != null && option.remoteId != null) {
-                                            showMenu = true
-                                        }
-                                    },
-                                )
-                                GlassDropdownMenu(
-                                    expanded = showMenu,
-                                    onDismissRequest = { showMenu = false },
-                                    // MetadataSourceSheet is rendered in its own Dialog window. The
-                                    // app-level root overlay would be behind that window and the
-                                    // menu would be occluded by the sheet's panel.
-                                    useRootOverlay = false,
-                                    anchorBounds = menuAnchorBounds,
-                                ) {
-                                    CompactDropdownMenuItem(
-                                        text = { Text(stringResource(R.string.details_remove_metadata_binding)) },
-                                        onClick = {
-                                            showMenu = false
-                                            onRemoveOption(option)
-                                        },
-                                    )
-                                }
-                            }
-                            }
-                        }
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
-                    }
-                    SourceSearchField(
-                        value = searchQuery,
-                        onValueChange = onSearchQueryChange,
-                        onSearch = onSearch,
-                    )
-                    searchServices
-                        .filter { it !in authorizedServices }
-                        .takeIf { it.isNotEmpty() }
-                        ?.let {
-                            Text(
-                                text = stringResource(R.string.details_metadata_source_login_hint),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface,
-                            )
-                        }
+    var searching by rememberSaveable { mutableStateOf(false) }
+    var pendingRemoveKey by remember { mutableStateOf<String?>(null) }
+    val original = currentOptions.firstOrNull { it.trackingService == null }
+    val services = (searchServices + currentOptions.mapNotNull { it.trackingService } +
+        linkedTrackingItems.map { it.service }).distinct()
+        .sortedBy { if (it in authorizedServices) 0 else 1 }
+    val optionsByKey = buildMap {
+        if (original != null) put("original", original)
+        services.forEach { service ->
+            val linked = linkedTrackingItems.firstOrNull { it.service == service }
+            val option = currentOptions.firstOrNull { it.trackingService == service &&
+                (linked == null || it.remoteId == linked.remoteId) }
+                ?: linked?.let {
+                    DetailsSourceOption(key = "${service.id}:${it.remoteId}", trackingService = service,
+                        remoteId = it.remoteId, title = it.title, coverUrl = it.coverUrl, url = it.url)
                 }
-                Box(
-                    modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f, fill = true),
-            ) {
-                when {
-                    visibleSections.isEmpty() -> {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.CenterStart,
-                        ) {
-                            Text(
-                                text = stringResource(R.string.nothing_found),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurface,
-                            )
-                        }
-                    }
-                    else -> {
-                        LazyColumn(
-                            modifier = Modifier.fillMaxSize(),
-                            verticalArrangement = Arrangement.spacedBy(16.dp),
-                        ) {
-                                itemsIndexed(
-                                    items = visibleSections,
-                                    key = { index, section -> "metadata_section:${section.service.id}:$index" },
-                                ) { _, section ->
-                                MetadataSearchSection(
-                                    section = section,
-                                    isAuthorized = section.service in authorizedServices,
-                                        hasSearched = hasSearched,
-                                        onItemClick = { item ->
-                                            onOpenResult(item)
-                                        },
-                                    onBindClick = { item -> pendingBindTarget = item },
-                                )
-                            }
-                        }
-                    }
-                }
-            }
+            if (option != null) put(service.id.toString(), option)
         }
     }
-    pendingBindTarget?.let { target ->
-        AlertDialog(
-            onDismissRequest = { pendingBindTarget = null },
-            title = { Text(stringResource(R.string.details_metadata_source)) },
-            text = {
-                Text(
-                    stringResource(
-                        R.string.migrate_confirmation,
-                        currentContent?.title.orEmpty(),
-                        currentContent?.source?.getTitle(context).orEmpty(),
-                        target.title,
-                        stringResource(target.service.titleResId),
-                    ),
-                )
+    val slots = buildList {
+        if (original != null) add(TrackingMetadataSlot(
+            key = "original", label = stringResource(R.string.details_tracking_original),
+            title = original.title ?: currentContent?.title ?: unavailableText,
+            usesMetadata = original.isSelected, isOriginal = true,
+        ))
+        services.forEach { service ->
+            val linked = linkedTrackingItems.firstOrNull { it.service == service }
+            val option = optionsByKey[service.id.toString()]
+            add(TrackingMetadataSlot(
+                key = service.id.toString(), label = stringResource(service.titleResId),
+                title = linked?.title ?: option?.title,
+                usesMetadata = option?.isSelected == true,
+                authorized = service in authorizedServices,
+                editable = linked?.hasScrobblingBinding == true && service in authorizedServices,
+                communityScore = linked?.communityScore?.let { "%.1f".format(it) },
+                status = linked?.status?.ordinal, rating = linked?.rating ?: 0f,
+                progress = linked?.progress ?: 0,
+            ))
+        }
+    }
+    val activeService = services.firstOrNull { it.id.toString() == activeKey }
+    fun search(service: ScrobblerService) {
+        searching = true
+        onSearch(service)
+    }
+    DetailsSourceOverlayDialog(
+        onDismissRequest = onDismissRequest,
+        heightFraction = when {
+            searching -> 0.88f
+            slots.firstOrNull { it.key == activeKey }?.editable == true -> 0.76f
+            else -> 0.52f
+        },
+        maxWidth = 640.dp,
+        floating = true,
+    ) { panelDragModifier ->
+        TrackingMetadataContent(
+            slots = slots, selectedKey = activeKey, statuses = scrobblingStatuses.toList(),
+            busy = busy, searching = searching && activeService != null,
+            onSelectSlot = { slot ->
+                activeKey = slot.key
+                searching = false
+                if (slot.title == null) services.firstOrNull { it.id.toString() == slot.key }?.let(::search)
             },
-            confirmButton = {
-                TvTextButton(
-                    onClick = {
-                        pendingBindTarget = null
-                        onDismissRequest()
-                        onBindResult(target)
-                    },
-                ) {
-                    Text(stringResource(R.string.migrate))
+            onUseMetadata = { slot -> optionsByKey[slot.key]?.let(onSelectOption) },
+            onSearch = { slot -> services.firstOrNull { it.id.toString() == slot.key }?.let(::search) },
+            onRemove = { pendingRemoveKey = it.key },
+            onSave = { slot, progress, rating, status ->
+                linkedTrackingItems.firstOrNull { it.service.id.toString() == slot.key }?.let {
+                    onSaveTracking(it, progress, rating, status?.let(ScrobblingStatus.entries::getOrNull))
                 }
+            },
+            modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp),
+            headerModifier = panelDragModifier,
+            searchContent = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    SourceSearchField(value = searchQuery, onValueChange = onSearchQueryChange,
+                        onSearch = { activeService?.let(::search) })
+                    val section = searchSections.firstOrNull { it.service == activeService }
+                    if (section != null) {
+                        MetadataSearchSection(
+                            section = section, isAuthorized = activeService in authorizedServices,
+                            hasSearched = hasSearched, onItemClick = onOpenResult,
+                            onBindClick = { item ->
+                                onBindResult(item)
+                                searching = false
+                            },
+                        )
+                    } else if (isLoading) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                    }
+                }
+            },
+        )
+    }
+    pendingRemoveKey?.let { key ->
+        AlertDialog(
+            onDismissRequest = { pendingRemoveKey = null },
+            title = { Text(stringResource(R.string.details_tracking_unlink)) },
+            text = { Text(stringResource(R.string.details_tracking_unlink_hint)) },
+            confirmButton = {
+                TvTextButton(onClick = {
+                    pendingRemoveKey = null
+                    optionsByKey[key]?.let(onRemoveOption)
+                }) { Text(stringResource(R.string.details_tracking_unlink)) }
             },
             dismissButton = {
-                TvTextButton(onClick = { pendingBindTarget = null }) {
-                    Text(stringResource(android.R.string.cancel))
-                }
+                TvTextButton(onClick = { pendingRemoveKey = null }) { Text(stringResource(android.R.string.cancel)) }
             },
         )
     }

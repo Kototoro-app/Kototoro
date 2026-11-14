@@ -288,6 +288,8 @@ private fun DetailsScreenContent(
     val initialInfoCardTopPx by detailsScreenState.initialInfoCardTopPx
     val initialInfoCardMidPx by detailsScreenState.initialInfoCardMidPx
     val interfaceStyleTokens = LocalInterfaceStyleTokens.current
+    var trackingPanelServiceId by rememberSaveable { mutableStateOf<Int?>(null) }
+    val trackingEditBusy by viewModel.trackingEditBusy.collectAsStateWithLifecycle()
     val detailsPrimaryUiState by viewModel.detailsPrimaryUiState.collectAsStateWithLifecycle()
     val localSize by viewModel.localSize.collectAsStateWithLifecycle()
     val readingRecordSnapshot by viewModel.readingRecordSnapshot.collectAsStateWithLifecycle()
@@ -453,11 +455,6 @@ private fun DetailsScreenContent(
     val landscapeLeftScrollState = rememberScrollState()
     LaunchedEffect(activeSpaceId) {
         viewModel.setSpaceContext(activeSpaceId)
-    }
-    LaunchedEffect(showMetadataSourceDialog) {
-        if (showMetadataSourceDialog && !metadataSearchHasSearched && !metadataSearchLoading) {
-            viewModel.searchMetadataBindings()
-        }
     }
     LaunchedEffect(showReadingSourceDialog, isWorkDetails) {
         if (showReadingSourceDialog && isWorkDetails && !readingSearchHasSearched && !readingSearchLoading) {
@@ -889,6 +886,18 @@ private fun DetailsScreenContent(
             return@handleDetailsAction
         }
         when (action) {
+            is DetailsAction.ManageTrackingBinding -> {
+                trackingPanelServiceId = action.service.id
+                detailsScreenState.setShowMetadataSourceDialog(true)
+            }
+            is DetailsAction.BindTrackingMatch -> {
+                trackingPanelServiceId = action.match.service.id
+                detailsScreenState.setShowMetadataSourceDialog(true)
+            }
+            is DetailsAction.RemoveTrackingMatch -> {
+                trackingPanelServiceId = action.match.service.id
+                detailsScreenState.setShowMetadataSourceDialog(true)
+            }
             DetailsAction.ToggleList -> {
                 openPaneTab(DETAILS_TAB_CHAPTERS)
             }
@@ -1498,7 +1507,10 @@ private fun DetailsScreenContent(
                                             }
                                         },
                                         onOpenMetadataSourceSheet = {
-                                            if (!isTemporaryReadOnly) detailsScreenState.setShowMetadataSourceDialog(true)
+                                            if (!isTemporaryReadOnly) {
+                                                trackingPanelServiceId = null
+                                                detailsScreenState.setShowMetadataSourceDialog(true)
+                                            }
                                         },
                                         onOpenReadingSourceSheet = {
                                             if (isWorkActionEnabled) detailsScreenState.setShowReadingSourceDialog(true)
@@ -1700,7 +1712,10 @@ private fun DetailsScreenContent(
                                     }
                                 },
                                 onOpenMetadataSourceSheet = {
-                                    if (!isTemporaryReadOnly) detailsScreenState.setShowMetadataSourceDialog(true)
+                                    if (!isTemporaryReadOnly) {
+                                        trackingPanelServiceId = null
+                                        detailsScreenState.setShowMetadataSourceDialog(true)
+                                    }
                                 },
                                 onOpenReadingSourceSheet = {
                                     if (isWorkActionEnabled) detailsScreenState.setShowReadingSourceDialog(true)
@@ -2053,6 +2068,7 @@ private fun DetailsScreenContent(
 
             if (showMetadataSourceDialog) {
                 MetadataSourceSheet(
+                    initialServiceId = trackingPanelServiceId,
                     currentOptions = metadataSourceOptions,
                     selectedOption = metadataSourceOptions.firstOrNull { it.isSelected },
                     searchServices = metadataSearchServices,
@@ -2076,21 +2092,16 @@ private fun DetailsScreenContent(
                     onSelectOption = viewModel::selectMetadataSource,
                     onRemoveOption = viewModel::removeMetadataSourceBinding,
                     onSearchQueryChange = viewModel::updateMetadataSearchQuery,
-                    onSearch = viewModel::searchMetadataBindings,
-                    onBindResult = viewModel::bindMetadataSource,
+                    busy = trackingEditBusy,
+                    onSearch = { service ->
+                        viewModel.setMetadataSearchService(service)
+                        viewModel.searchMetadataBindings()
+                    },
+                    onBindResult = viewModel::bindTrackingSource,
                     onOpenResult = { item ->
                         onActionClick(DetailsAction.OpenTrackingDetails(item.service, item.remoteId, item.url))
                     },
-                    onOpenLinkedTracking = { linked ->
-                        onActionClick(DetailsAction.OpenTrackingDetails(linked.service, linked.remoteId, linked.url))
-                    },
-                    onUpdateLinkedTrackingStatus = { linked, status ->
-                        viewModel.updateScrobbling(
-                            scrobblerServiceId = linked.service.id,
-                            rating = linked.rating ?: 0f,
-                            status = status,
-                        )
-                    },
+                    onSaveTracking = viewModel::saveTrackingProgress,
                 )
             }
 

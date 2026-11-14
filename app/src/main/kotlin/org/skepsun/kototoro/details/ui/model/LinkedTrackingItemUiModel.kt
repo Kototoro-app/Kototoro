@@ -14,4 +14,6 @@ data class LinkedTrackingItemUiModel(
     val rating: Float?,
     val hasScrobblingBinding: Boolean,
     val isPreferred: Boolean,
+    val communityScore: Float? = null,
+    val progress: Int = 0,
 )

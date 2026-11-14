@@ -1011,7 +1011,7 @@
     <string name="details_comments">評論</string>
     <string name="details_metadata_chapter_hint">元數據章節僅用於瀏覽信息和章節頁面，不會直接打開閱讀器或播放器。</string>
     <string name="details_metadata_chapters">元數據章節</string>
-    <string name="details_metadata_source">元數據源</string>
+    <string name="details_metadata_source">追蹤和中繼資料</string>
     <string name="details_metadata_source_label">元數據源: %1$s</string>
     <string name="details_metadata_source_login_hint">搜索和本地綁定無需登錄即可使用。登錄後可自動同步在線進度。</string>
     <string name="details_more_comments">更多</string>
@@ -3216,7 +3216,7 @@
     <string name="stats_duration_minutes">%1$d 分鐘</string>
     <string name="plugin_missing_host_classes">無法安裝 %1$s，因為它依賴 Kototoro 不支援的 %2$s 宿主類：\n%3$s</string>
     <string name="chapter_selection_hint_tv">使用章節行上的下載按鈕逐個選擇章節。</string>
-    <string name="details_entity_metadata">後設資料來源</string>
+    <string name="details_entity_metadata">追蹤和中繼資料</string>
     <string name="details_entity_metadata_binding">後設資料繫結</string>
     <string name="details_metadata_binding_unavailable">暫無後設資料繫結</string>
     <string name="details_remove_metadata_binding">移除後設資料繫結</string>
@@ -4147,4 +4147,20 @@
     <string name="details_view_catalog">查看目錄</string>
     <string name="details_my_reading">我的閱讀</string>
     <string name="details_not_started">未開始</string>
+    <string name="details_tracking_metadata">追蹤和中繼資料</string>
+    <string name="details_tracking_metadata_hint">在這裡關聯追蹤網站，中繼資料單獨選擇。</string>
+    <string name="details_tracking_original">原始內容來源</string>
+    <string name="details_tracking_unlinked">未關聯作品</string>
+    <string name="details_tracking_linked">已關聯</string>
+    <string name="details_tracking_search_slot">點擊搜尋作品</string>
+    <string name="details_tracking_metadata_active">正在使用此中繼資料</string>
+    <string name="details_tracking_use_metadata">使用此作品的中繼資料</string>
+    <string name="details_tracking_community_score">社群評分：%1$s</string>
+    <string name="details_tracking_progress">章節 / 集數</string>
+    <string name="details_tracking_personal_score">我的評分 · 0–10</string>
+    <string name="details_tracking_replace">更換關聯作品</string>
+    <string name="details_tracking_unlink">解除關聯</string>
+    <string name="details_tracking_link">關聯</string>
+    <string name="details_tracking_link_hint">重新關聯此作品，即可啟用進度同步。</string>
+    <string name="details_tracking_unlink_hint">解除本機關聯，保留追蹤網站上的收藏、評分和進度。</string>
 </resources>

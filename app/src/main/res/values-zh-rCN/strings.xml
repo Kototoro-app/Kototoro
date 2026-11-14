@@ -2767,8 +2767,8 @@
     <string name="details_character_voice_actors_more">CV: %1$s +%2$d</string>
     <string name="details_comments">评论</string>
     <string name="details_metadata_chapter_hint">元数据章节仅用于浏览信息和章节页面，不会直接打开阅读器或播放器。</string>
-    <string name="details_metadata_source">元数据源</string>
-    <string name="details_entity_metadata">元数据来源</string>
+    <string name="details_metadata_source">追踪和元数据</string>
+    <string name="details_entity_metadata">追踪和元数据</string>
     <string name="details_entity_metadata_binding">元数据绑定</string>
     <string name="details_metadata_binding_unavailable">暂无元数据绑定</string>
     <string name="details_metadata_source_label">元数据源: %1$s</string>
@@ -4185,4 +4185,20 @@
     <string name="settings_section_system_services">系统与服务</string>
     <string name="help_and_feedback">帮助与反馈</string>
     <string name="about_group_support">支持</string>
+    <string name="details_tracking_metadata">追踪和元数据</string>
+    <string name="details_tracking_metadata_hint">在这里关联追踪网站，元数据单独选择。</string>
+    <string name="details_tracking_original">原始内容源</string>
+    <string name="details_tracking_unlinked">未关联作品</string>
+    <string name="details_tracking_linked">已关联</string>
+    <string name="details_tracking_search_slot">点击搜索作品</string>
+    <string name="details_tracking_metadata_active">正在使用此元数据</string>
+    <string name="details_tracking_use_metadata">使用此作品的元数据</string>
+    <string name="details_tracking_community_score">社区评分：%1$s</string>
+    <string name="details_tracking_progress">章节 / 集数</string>
+    <string name="details_tracking_personal_score">我的评分 · 0–10</string>
+    <string name="details_tracking_replace">更换关联作品</string>
+    <string name="details_tracking_unlink">解除关联</string>
+    <string name="details_tracking_link">关联</string>
+    <string name="details_tracking_link_hint">重新关联此作品，即可启用进度同步。</string>
+    <string name="details_tracking_unlink_hint">解除本地关联，保留追踪网站上的收藏、评分和进度。</string>
 </resources>

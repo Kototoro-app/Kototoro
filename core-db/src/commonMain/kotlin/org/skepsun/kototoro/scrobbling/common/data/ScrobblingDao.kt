@@ -203,6 +203,17 @@ abstract class ScrobblingDao {
     @Upsert
     abstract suspend fun upsert(entity: ScrobblingEntity)
 
+    /** Keep the online library entry while disconnecting it from this reading source. */
+    @Transaction
+    open suspend fun detachLocalBindings(scrobbler: Int, mangaId: Long, keepTargetId: Long? = null) {
+        findByLocalMangaIds(scrobbler, listOf(mangaId))
+            .filter { it.targetId != keepTargetId }
+            .forEach { entity ->
+                upsert(entity.copy(mangaId = 0L))
+                delete(entity)
+            }
+    }
+
     @Query("DELETE FROM scrobblings WHERE scrobbler = :scrobbler AND manga_id = :mangaId")
     abstract suspend fun deleteByLocalManga(scrobbler: Int, mangaId: Long)
 
