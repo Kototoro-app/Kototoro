@@ -334,7 +334,11 @@ internal fun SettingsTopBarSurface(content: @Composable () -> Unit) {
             shape = RoundedRectangle(0.dp),
             componentRole = GlassComponentRole.TopBar,
         ) {
-            topBarContent()
+            // The chrome tint is tuned for floating pills. A full-width bar has a title that rows
+            // scroll directly under, so it gets a denser plate to keep the two from mixing.
+            Box(modifier = Modifier.background(settingsScreenBackgroundColor().copy(alpha = 0.62f))) {
+                topBarContent()
+            }
         }
     } else {
         Box(

@@ -198,7 +198,9 @@ fun GlassSurface(
         val base = if (isChromeRole) chromeBackdropTint(isDark) else colors.surfaceContainer
         base.artworkAwareContainerColor(artworkRole)
     } else if (isIosStyle) {
-        colors.surfaceContainer.copy(alpha = if (dialogSurface) 0.98f else 0.94f)
+        // Sheets, dialogs and popup menus have no backdrop blur here: any translucency only
+        // shows the page behind as ghost text over the panel's own content.
+        if (dialogSurface) colors.surfaceContainer else colors.surfaceContainer.copy(alpha = 0.94f)
     } else {
         colors.surfaceContainer
     }

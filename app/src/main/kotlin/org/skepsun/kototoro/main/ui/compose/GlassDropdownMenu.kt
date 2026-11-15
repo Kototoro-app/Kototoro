@@ -82,8 +82,10 @@ internal class RootGlassMenuHost {
 
 internal val LocalRootGlassMenuHost = staticCompositionLocalOf<RootGlassMenuHost?> { null }
 
-private const val DefaultMenuSurfaceAlpha = 0.42f
-private val DefaultMenuBlurRadius = 6.dp
+// A menu floats over arbitrary page content. A thin plate with a light blur leaves the text and
+// buttons behind it legible between the menu's own rows, so the defaults stay on the dense side.
+private const val DefaultMenuSurfaceAlpha = 0.62f
+private val DefaultMenuBlurRadius = 16.dp
 
 internal data class RootGlassMenuRequest(
     val id: Any,
