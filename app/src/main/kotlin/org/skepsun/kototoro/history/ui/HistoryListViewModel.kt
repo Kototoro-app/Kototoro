@@ -39,6 +39,8 @@ import org.skepsun.kototoro.core.util.ext.call
 import org.skepsun.kototoro.history.data.HistoryRepository
 import org.skepsun.kototoro.favourites.domain.FavouritesRepository
 import org.skepsun.kototoro.history.domain.HistoryListQuickFilter
+import org.skepsun.kototoro.history.domain.HistoryEmptyStateKind
+import org.skepsun.kototoro.history.domain.historyEmptyStateKind
 import org.skepsun.kototoro.history.domain.MarkAsReadUseCase
 import org.skepsun.kototoro.history.domain.model.ContentWithHistory
 import org.skepsun.kototoro.list.domain.ListFilterOption
@@ -189,6 +191,14 @@ class HistoryListViewModel @Inject constructor(
         .onEach(quickFilter::acceptSnapshot)
         .shareIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, replay = 1)
 
+    /**
+     * Whether the history snapshot holds anything at all, before filters narrow it. Feeds the empty
+     * state: "nothing matches your filters" is only true when there was history to hide.
+     */
+    private val hasAnyHistory: StateFlow<Boolean> = historySnapshot
+        .map { it.rows.isNotEmpty() }
+        .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, false)
+
     val headerQuickFilter: StateFlow<QuickFilter?> = combine(
         quickFilter.appliedOptions,
         // Re-emit when the quick-filter visibility toggle changes so the flatMapLatest
@@ -306,8 +316,9 @@ class HistoryListViewModel @Inject constructor(
         derivedRows,
         uiParams,
         settings.observeAsFlow(AppSettings.KEY_PROGRESS_INDICATORS) { progressIndicatorMode },
-    ) { rows, params, progressMode ->
-        buildStaticContent(rows, params, progressMode)
+        hasAnyHistory,
+    ) { rows, params, progressMode, hasAnyHistory ->
+        buildStaticContent(rows, params, progressMode, hasAnyHistory)
     }.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, listOf(LoadingState))
 
     /**
@@ -409,19 +420,16 @@ class HistoryListViewModel @Inject constructor(
         rows: List<org.skepsun.kototoro.history.domain.library.HistoryCardEntry>,
         params: HistoryUiParams,
         progressMode: org.skepsun.kototoro.core.prefs.ProgressIndicatorMode,
+        hasAnyHistory: Boolean,
     ): List<ListModel> {
         if (rows.isEmpty()) {
-            return if (params.filters.isEmpty() && params.groupTab == BrowseGroupTab.All &&
-                params.sourceTags.isEmpty() && params.query.isEmpty()
-            ) {
-                listOf(quickFilter.filterItem(params.filters), getEmptyState(hasFilters = false))
-                    .filterNotNull()
-            } else {
-                listOfNotNull(
-                    quickFilter.filterItem(params.filters),
-                    getEmptyState(hasFilters = true),
-                )
-            }
+            val isNarrowed = params.filters.isNotEmpty() || params.groupTab != BrowseGroupTab.All ||
+                params.sourceTags.isNotEmpty() || params.query.isNotEmpty()
+            val kind = historyEmptyStateKind(hasAnyHistory = hasAnyHistory, isNarrowed = isNarrowed)
+            return listOfNotNull(
+                quickFilter.filterItem(params.filters),
+                getEmptyState(kind),
+            )
         }
         val cards = historyCardMapper.map(
             rows,
@@ -494,7 +502,7 @@ class HistoryListViewModel @Inject constructor(
         ListSortOrder.MANUAL -> null
     }
 
-    private fun getEmptyState(hasFilters: Boolean) = if (hasFilters) {
+    private fun getEmptyState(kind: HistoryEmptyStateKind) = if (kind == HistoryEmptyStateKind.HIDDEN_BY_FILTERS) {
         EmptyState(
             icon = R.drawable.ic_empty_history,
             textPrimary = R.string.nothing_found,

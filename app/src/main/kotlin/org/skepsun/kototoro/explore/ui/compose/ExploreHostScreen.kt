@@ -41,8 +41,8 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
@@ -53,8 +53,8 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
@@ -64,29 +64,32 @@ import org.skepsun.kototoro.core.model.ContentSourceAvailability
 import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.core.model.unwrap
 import org.skepsun.kototoro.core.nav.AppRouter
+import org.skepsun.kototoro.core.parser.external.ExternalContentSource
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.compose.AppLayoutTokens
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarHorizontalPadding
 import org.skepsun.kototoro.core.ui.compose.KototoroPullToRefreshBox
+import org.skepsun.kototoro.core.ui.compose.ScrollToTopEffect
 import org.skepsun.kototoro.core.ui.compose.VerticalRailAnimatedVisibility
 import org.skepsun.kototoro.core.ui.compose.VerticalScrollbar
 import org.skepsun.kototoro.core.ui.compose.clearFailedContentSourceIcons
 import org.skepsun.kototoro.core.ui.compose.compactPosterRailCardStyle
 import org.skepsun.kototoro.core.ui.compose.contentCoverSharedKey
 import org.skepsun.kototoro.core.ui.compose.performSelectionHapticFeedback
-import org.skepsun.kototoro.core.ui.compose.ScrollToTopEffect
 import org.skepsun.kototoro.details.ui.model.DetailsOrigin
 import org.skepsun.kototoro.discover.ui.DiscoverViewModel
 import org.skepsun.kototoro.discover.ui.compose.discoverHeroHeight
 import org.skepsun.kototoro.discover.ui.model.DiscoverCarouselRow
+import org.skepsun.kototoro.explore.domain.shouldReserveBrowseHeroSpace
 import org.skepsun.kototoro.explore.ui.ExploreViewModel
+import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.explore.ui.model.ContentSourceItem
 import org.skepsun.kototoro.list.ui.model.ContentListModel
+import org.skepsun.kototoro.list.ui.model.EmptyHint
 import org.skepsun.kototoro.list.ui.model.ListModel
 import org.skepsun.kototoro.list.ui.model.LoadingState
-import org.skepsun.kototoro.core.parser.external.ExternalContentSource
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
 
 private const val BrowseLoadMoreBuffer = 4
@@ -119,18 +122,23 @@ internal data class SourceQuickAccessRows(
 private data class BrowseSourceItems(
     val sources: List<ContentSourceItem>,
     val isLoadingOnly: Boolean,
+    /** Why the section is empty, when it is; the page renders this instead of a blank area. */
+    val emptyHint: EmptyHint?,
 )
 
 private fun prepareBrowseSourceItems(items: List<ListModel>): BrowseSourceItems {
     val sources = ArrayList<ContentSourceItem>()
+    var emptyHint: EmptyHint? = null
     items.forEach { item ->
-        if (item is ContentSourceItem) {
-            sources += item
+        when (item) {
+            is ContentSourceItem -> sources += item
+            is EmptyHint -> if (emptyHint == null) emptyHint = item
         }
     }
     return BrowseSourceItems(
         sources = sources,
         isLoadingOnly = sources.isEmpty() && items.any { it is LoadingState },
+        emptyHint = emptyHint,
     )
 }
 
@@ -302,8 +310,15 @@ fun KototoroExploreHostRoute(
     val showcaseRows = if (shouldShowMoreTrackingRecommendations) browseDiscoverItems.showcaseRows else emptyList()
     val popularItems = if (shouldShowMoreTrackingRecommendations) browseDiscoverItems.popularItems else emptyList()
     val isSourcesLoadingOnly = browseSourceItems.isLoadingOnly
+    val sourcesEmptyHint = browseSourceItems.emptyHint
     val isDiscoverLoadingOnly = browseDiscoverItems.isLoadingOnly
-    val shouldShowBrowseHero = isBrowseTrackingRecommendationsEnabled
+    // Reserve the hero band only when it can paint something; an empty hero used to leave a dead
+    // band of empty space above the source list.
+    val shouldShowBrowseHero = shouldReserveBrowseHeroSpace(
+        trackingRecommendationsEnabled = isBrowseTrackingRecommendationsEnabled,
+        heroItemCount = heroItems.size,
+        isDiscoverLoading = isDiscoverLoading,
+    )
     val isBrowseContentReady = sources.isNotEmpty() ||
         heroItems.isNotEmpty() ||
         showcaseRows.isNotEmpty() ||
@@ -689,6 +704,23 @@ fun KototoroExploreHostRoute(
                                     end = sourceGridEndPadding,
                                     bottom = 36.dp,
                                 ),
+                        )
+                    }
+                } else if (sources.isEmpty() && sourcesEmptyHint != null) {
+                    // The source section is empty: say which kind of empty it is and give the next step,
+                    // instead of leaving a blank page under the Sources / Extension management tabs.
+                    item(key = "sources_empty_hint", contentType = "sources_empty_hint") {
+                        ExploreSourcesEmptyHint(
+                            hint = sourcesEmptyHint,
+                            onCreateShortcut = appRouter::openManageSources,
+                            onResetFilters = {
+                                exploreViewModel.setSelectedSourceTags(emptySet())
+                                exploreViewModel.setSelectedGroupTab(BrowseGroupTab.All)
+                            },
+                            modifier = Modifier.padding(
+                                start = sourceGridStartPadding,
+                                end = sourceGridEndPadding,
+                            ),
                         )
                     }
                 }

@@ -1,6 +1,8 @@
 package org.skepsun.kototoro.migration.ui.health
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -41,25 +43,64 @@ fun SourceHealthBanner(
     val enabled by appSettings.observeAsState(AppSettings.KEY_SOURCE_HEALTH_BANNER) { isSourceHealthBannerEnabled }
     LaunchedEffect(enabled) { if (enabled) viewModel.refresh() }
     AnimatedVisibility(visible = enabled && state.sourceCount > 0, modifier = modifier) {
-        Surface(
-            color = MaterialTheme.colorScheme.errorContainer,
-            shape = MaterialTheme.shapes.large,
-            tonalElevation = 6.dp,
-            shadowElevation = 6.dp,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        SourceHealthBannerContent(
+            message = pluralStringResource(
+                R.plurals.migration_health_hint,
+                state.sourceCount,
+                state.sourceCount,
+            ),
+            onMigrate = onOpen,
+            onDisable = viewModel::disable,
+            onDismiss = viewModel::dismiss,
+        )
+    }
+}
+
+/**
+ * Message first, actions underneath.
+ *
+ * The card used to be one `Row`: a `weight(1f)` message with "Migrate", "Don't show again" and the close button
+ * beside it. At 1.5× those three actions alone are wider than a phone row, so the weighted message was given
+ * whatever was left — about 30px — and "2 sources may be broken" was drawn as one letter per line, a card 2085px
+ * tall that covered the library (seen on the emulator; `favourites-broken-banner-before-1.5.png`). Stacking the
+ * message above the actions needs no measurement and holds at any font scale, unlike a narrower cap.
+ */
+@Composable
+fun SourceHealthBannerContent(
+    message: String,
+    onMigrate: () -> Unit,
+    onDisable: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.errorContainer,
+        shape = MaterialTheme.shapes.large,
+        tonalElevation = 6.dp,
+        shadowElevation = 6.dp,
+        modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 12.dp, bottom = 4.dp),
         ) {
-            Row(Modifier.padding(start = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    pluralStringResource(R.plurals.migration_health_hint, state.sourceCount, state.sourceCount),
-                    color = MaterialTheme.colorScheme.onErrorContainer,
-                    modifier = Modifier.weight(1f),
-                )
-                TvTextButton(onClick = onOpen) { Text(stringResource(R.string.migration_title)) }
-                TvTextButton(onClick = viewModel::disable) { Text(stringResource(R.string.migration_health_banner_disable)) }
+            Text(
+                text = message,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+                modifier = Modifier.padding(end = 12.dp),
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TvTextButton(onClick = onMigrate) { Text(stringResource(R.string.migration_title)) }
+                TvTextButton(onClick = onDisable) { Text(stringResource(R.string.migration_health_banner_disable)) }
                 IconButton(
-                    onClick = viewModel::dismiss,
+                    onClick = onDismiss,
                     modifier = Modifier.tvIconButtonRing(),
-                ) { Icon(Icons.Default.Close, contentDescription = null) }
+                ) {
+                    Icon(Icons.Default.Close, contentDescription = stringResource(R.string.close))
+                }
             }
         }
     }

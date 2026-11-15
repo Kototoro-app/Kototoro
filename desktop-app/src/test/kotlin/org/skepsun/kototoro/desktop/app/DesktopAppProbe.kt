@@ -191,6 +191,10 @@ object DesktopAppProbe {
                 DesktopDownloadsProbe.run(args)
                 return
             }
+            if (args[0] == "browse-empty") {
+                DesktopBrowseEmptyProbe.run(args)
+                return
+            }
             if (args[0].startsWith("filters")) {
                 DesktopFilterProbe.run(args)
                 return

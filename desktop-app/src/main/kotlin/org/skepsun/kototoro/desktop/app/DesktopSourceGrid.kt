@@ -19,9 +19,13 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import org.skepsun.kototoro.core.extensions.SourceEmptyHintKind
+import org.skepsun.kototoro.core.extensions.sourceEmptyHintKind
 import org.skepsun.kototoro.core.source.SourceListing
 import org.skepsun.kototoro.core.ui.source.TabletSourceTile
 import org.skepsun.kototoro.core.ui.source.SourceListRow
@@ -62,12 +66,23 @@ internal fun DesktopSourceGrid(controller: DesktopController, state: DesktopAppS
                 modifier = Modifier.testTag("source-grid-extensions")) { Text(desktopText("sourceGrid.extensions")) }
         }
         Text(desktopText("sourceGrid.sources", sources.size), fontWeight = FontWeight.SemiBold)
-        if (state.enabledSources.isEmpty()) {
-            Text(desktopText("sourceGrid.empty"), color = Muted)
-        }
     }
     }) { inner ->
         val padding = PaddingValues(top = inner.calculateTopPadding())
+        // Android's Explore empty states (§25): the header carries the count, so the body has to say *why* it is
+        // empty and offer the one next step for that reason — the shared rule decides which reason it is.
+        val emptyKind = sourceEmptyHintKind(
+            totalSourceCount = state.enabledSources.size,
+            visibleSourceCount = sources.size,
+            isLoading = false,
+        )
+        if (emptyKind != SourceEmptyHintKind.NONE) {
+            SourceGridEmptyState(emptyKind, enabled, topPadding = inner.calculateTopPadding(), resetFilters = {
+                query = ""
+                controller.exploreFilter(DesktopSourceFilter())
+            }, controller::showExtensions)
+            return@FloatingTopBarScaffold
+        }
         if (settings.grid) {
             LazyVerticalGrid(GridCells.Adaptive(metrics.minCardWidth),
                 modifier = Modifier.fillMaxSize().testTag("source-list"), contentPadding = padding,
@@ -102,6 +117,46 @@ internal fun DesktopSourceGrid(controller: DesktopController, state: DesktopAppS
                         DesktopSourceRow(controller, source, enabled, selected = false)
                     }
                 }
+            }
+        }
+    }
+}
+
+/**
+ * Why the source grid is empty, with the next step for that reason: no installable source sends the user to the
+ * extension manager, filters (or the search box) that hid everything offer to reset them. Both sentences name the
+ * reason, because "0 sources" over a blank area is what made this page look broken.
+ */
+@Composable
+private fun SourceGridEmptyState(
+    kind: SourceEmptyHintKind,
+    enabled: Boolean,
+    topPadding: Dp,
+    resetFilters: () -> Unit,
+    openExtensions: () -> Unit,
+) {
+    val filtered = kind == SourceEmptyHintKind.HIDDEN_BY_FILTERS
+    // The floating search bar overlaps the content area, so the panel centres inside what is left of it instead of
+    // starting at the very top (where its title would sit behind the bar).
+    Box(Modifier.fillMaxSize().padding(top = topPadding).testTag("source-grid-empty"),
+        contentAlignment = Alignment.Center) {
+        Column(Modifier.widthIn(max = 420.dp).padding(bottom = 32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(
+                desktopText(if (filtered) "sourceGrid.filteredTitle" else "sourceGrid.noSourcesTitle"),
+                fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = Ink,
+                modifier = Modifier.testTag("source-grid-empty-title"),
+            )
+            Text(
+                desktopText(if (filtered) "sourceGrid.filteredDetail" else "sourceGrid.empty"),
+                color = Muted, textAlign = TextAlign.Center,
+            )
+            Button(
+                onClick = { if (filtered) resetFilters() else openExtensions() },
+                enabled = enabled,
+                modifier = Modifier.testTag("source-grid-empty-action"),
+            ) {
+                Text(desktopText(if (filtered) "sourceGrid.filteredAction" else "sourceGrid.extensions"))
             }
         }
     }

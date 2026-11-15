@@ -323,7 +323,7 @@ private fun ConfigContent(
 
 /** One tappable card per content family: family label, stacked source icons and a summary. */
 @Composable
-private fun FamilySourcesCard(
+internal fun FamilySourcesCard(
     family: FamilySources,
     showFamilyLabel: Boolean,
     onClick: () -> Unit,
@@ -361,11 +361,22 @@ private fun FamilySourcesCard(
                     Spacer(Modifier.size(8.dp))
                 }
                 when {
-                    empty -> Text(
-                        stringResource(R.string.migration_no_available_sources),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.error,
-                    )
+                    // The action used to sit beside this sentence in the same row, so at large font
+                    // sizes the sentence was squeezed into a one-word column and the card grew taller
+                    // than the sheet. It goes under the sentence now; the whole card is the action.
+                    empty -> Column {
+                        Text(
+                            stringResource(R.string.migration_no_available_sources),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                        Spacer(Modifier.size(6.dp))
+                        Text(
+                            stringResource(R.string.manage_sources),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
                     family.selected.isEmpty() -> Text(
                         stringResource(R.string.migration_pick_source),
                         style = MaterialTheme.typography.bodyMedium,
@@ -388,14 +399,8 @@ private fun FamilySourcesCard(
                     }
                 }
             }
-            Spacer(Modifier.width(8.dp))
-            if (empty) {
-                Text(
-                    stringResource(R.string.manage_sources),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            } else {
+            if (!empty) {
+                Spacer(Modifier.width(8.dp))
                 Icon(
                     painterResource(R.drawable.ic_arrow_forward),
                     contentDescription = stringResource(R.string.migration_config_edit),

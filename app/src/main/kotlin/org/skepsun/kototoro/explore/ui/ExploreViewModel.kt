@@ -42,6 +42,8 @@ import org.skepsun.kototoro.explore.ui.model.ContentSourceItem
 import org.skepsun.kototoro.list.ui.model.EmptyHint
 import org.skepsun.kototoro.list.ui.model.ListHeader
 import org.skepsun.kototoro.list.ui.model.ListModel
+import org.skepsun.kototoro.core.extensions.SourceEmptyHintKind
+import org.skepsun.kototoro.core.extensions.sourceEmptyHintKind
 import org.skepsun.kototoro.list.ui.model.LoadingState
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentSource
@@ -346,20 +348,25 @@ class ExploreViewModel @Inject constructor(
                 filteredSources.mapTo(result) { ContentSourceItem(it, isGrid) }
             }
         } else {
-            result += if (sources.isNotEmpty()) {
-                // Sources exist but the active tab/tag/preset filter hides all of them.
-                EmptyHint(
+            // Two different stories share this branch, and they owe the user different next steps:
+            // an empty library has to send them to the extension manager, an over-filtered page has to
+            // offer to reset the filters. The page renders whichever kind it gets.
+            result += when (sourceEmptyHintKind(sources.size, filteredSources.size, isLoading = false)) {
+                SourceEmptyHintKind.HIDDEN_BY_FILTERS -> EmptyHint(
                     icon = R.drawable.ic_empty_common,
                     textPrimary = R.string.no_sources_found,
                     textSecondary = R.string.no_sources_found_desc,
-                    actionStringRes = R.string.catalog,
+                    actionStringRes = R.string.reset_filter,
+                    kind = SourceEmptyHintKind.HIDDEN_BY_FILTERS,
                 )
-            } else {
-                EmptyHint(
+
+                // NONE cannot happen here: the branch only runs when the visible list came back empty.
+                else -> EmptyHint(
                     icon = R.drawable.ic_empty_common,
                     textPrimary = emptySourceTitle(groupTab),
                     textSecondary = emptySourceSubtitle(groupTab),
-                    actionStringRes = R.string.catalog,
+                    actionStringRes = R.string.welcome_open_extension_management,
+                    kind = SourceEmptyHintKind.NO_SOURCES,
                 )
             }
         }
