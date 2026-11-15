@@ -393,7 +393,9 @@ internal fun UnifiedLockFilter.displayLabel(): String {
 internal fun UnifiedSourcesFilterState.otherFilterCount(): Int {
     return locationTypes.size +
         (if (enabledFilter == UnifiedEnabledFilter.ALL) 0 else 1) +
-        (if (availabilityFilter == UnifiedAvailabilityFilter.ALL) 0 else 1) +
+        // AVAILABLE is what a fresh or reset filter holds, so it is not a filter the user applied:
+        // counting it left a permanent "1" on the filter button that Reset could never clear.
+        (if (availabilityFilter == UnifiedAvailabilityFilter.AVAILABLE) 0 else 1) +
         (if (testAvailabilityFilter == UnifiedTestAvailabilityFilter.ALL) 0 else 1) +
         (if (nsfwFilter == UnifiedNsfwFilter.ALL) 0 else 1) +
         (if (lockFilter == UnifiedLockFilter.ALL) 0 else 1)
