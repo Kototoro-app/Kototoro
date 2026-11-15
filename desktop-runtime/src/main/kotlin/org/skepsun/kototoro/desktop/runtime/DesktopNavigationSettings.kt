@@ -48,6 +48,28 @@ enum class DesktopNavItem {
     }
 }
 
+/**
+ * Stored keys that do not carry this enum's spelling but still mean a destination here.
+ *
+ * The rail's vocabulary is its own (see [DesktopNavItem]) while the document is Android's, so a `nav_main` written
+ * with Android's names has to keep working: Android spells the shelf `FAVORITES`, calls the browse page `EXPLORE`, and
+ * calls the feed `FEED`. Without these aliases such a document would be read as "no known destinations" and the whole
+ * rail order would fall back to the default — the user's arrangement silently lost.
+ */
+private val desktopNavItemAliases: Map<String, DesktopNavItem> = mapOf(
+    "FAVORITES" to DesktopNavItem.FAVOURITES,
+    "EXPLORE" to DesktopNavItem.BROWSE,
+    "FEED" to DesktopNavItem.SUBSCRIPTIONS,
+)
+
+/**
+ * Android destinations this rail has no page for.
+ *
+ * They are skipped on purpose rather than by accident: a stored document may carry them, and the rest of it must still
+ * be honoured. Keeping the list here means the skip is a decision someone can find, not a `mapNotNull` side effect.
+ */
+private val desktopNavItemsWithoutPage: Set<String> = setOf("LOCAL", "DISCOVER")
+
 /** The default order, matching the rail Android's tablet shell ships and the Windows shell drew before this page. */
 val defaultDesktopNavItems = listOf(
     DesktopNavItem.HOME,
@@ -96,10 +118,22 @@ data class DesktopNavigationSettings(val items: List<DesktopNavItem> = defaultDe
             val raw = (values[KEY_MAIN] as? SourcePreferenceValue.Text)?.value
             val items = MainNavigationRules.parse(
                 raw = raw,
-                resolve = { key -> DesktopNavItem.entries.find { it.name.equals(key, ignoreCase = true) } },
+                resolve = ::resolveItem,
                 fallback = defaultDesktopNavItems,
             )
             return DesktopNavigationSettings(items)
+        }
+
+        /**
+         * Reads one stored key: this enum's own name first, then Android's spelling of the same page.
+         *
+         * Returns null for a destination with no page here and for anything unrecognised, which the shared rules then
+         * skip without touching the entries around it.
+         */
+        internal fun resolveItem(key: String): DesktopNavItem? {
+            val normalized = key.trim().uppercase()
+            if (normalized in desktopNavItemsWithoutPage) return null
+            return DesktopNavItem.entries.find { it.name == normalized } ?: desktopNavItemAliases[normalized]
         }
     }
 }

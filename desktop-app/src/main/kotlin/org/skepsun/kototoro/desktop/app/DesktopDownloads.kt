@@ -43,6 +43,29 @@ internal fun desktopDownloadUsage(records: List<SourceChapterDownload>) = Deskto
 )
 
 /**
+ * The downloads page's two lists: what still needs work and what is already saved.
+ *
+ * Android's downloads screen draws the queue and the saved chapters as separate things, and one flat list made the
+ * status the only way to tell them apart — a finished chapter sat between two waiting ones. [queue] therefore holds
+ * every status that still has something to do ([DesktopDownloadStatus.COMPLETE] excepted) and [completed] holds the
+ * finished ones; both keep the queue's own order, so nothing jumps around when a chapter finishes, and a finished
+ * chapter never reappears in the queue.
+ */
+internal data class DesktopDownloadSections(
+    val queue: List<DesktopDownloadState>,
+    val completed: List<DesktopDownloadState>,
+) {
+    /** Nothing saved and nothing running: the page shows its "download a chapter somewhere" hint instead. */
+    val isEmpty: Boolean get() = queue.isEmpty() && completed.isEmpty()
+}
+
+internal fun desktopDownloadSections(states: List<DesktopDownloadState>): DesktopDownloadSections =
+    DesktopDownloadSections(
+        queue = states.filter { it.status != DesktopDownloadStatus.COMPLETE },
+        completed = states.filter { it.status == DesktopDownloadStatus.COMPLETE },
+    )
+
+/**
  * Which rows a batch action applies to. Kept apart from the queue so the rule is testable without coroutines: a
  * running chapter cannot be resumed, a finished one is not retried, and a failed one is not paused.
  */

@@ -26,6 +26,9 @@ internal fun DesktopDownloadsPanel(controller: DesktopController, closing: Boole
     val autoCleanup by controller.autoCleanupDownloads.collectAsState()
     // One queue row per chapter, shaped the way Android draws it; the batch bar reads the same rows.
     val rows = remember(downloads, selection) { downloads.map { it to it.toQueueItem(selection) } }
+    // What still has work and what is already saved are two lists, not one status-coloured list.
+    val sections = remember(downloads) { desktopDownloadSections(downloads) }
+    val pairByKey = remember(rows) { rows.associateBy { it.first.key } }
     val batch = remember(rows) { downloadQueueBatchStateOf(rows.map { it.second }.filter { it.isSelected }) }
     val completedCount = downloads.count { it.status == DesktopDownloadStatus.COMPLETE }
     // A finished chapter publishes blobs after the page was opened; re-read the cache figures once the queue settles.
@@ -106,22 +109,54 @@ internal fun DesktopDownloadsPanel(controller: DesktopController, closing: Boole
             Text(desktopText("downloads.autoCleanup"))
         }
         DesktopImageCacheRow(controller, state.imageCache, !closing && !state.busy)
-        if (downloads.isEmpty()) Text(desktopText("downloads.empty"))
+        // An empty page still owes the user a way out: the hint says where chapters come from, the button goes there.
+        if (sections.isEmpty) {
+            Text(desktopText("downloads.empty"))
+            OutlinedButton({ controller.library() }, enabled = !closing,
+                modifier = Modifier.testTag("download-empty-browse")) { Text(desktopText("downloads.emptyAction")) }
+        }
             } }
-            items(rows, key = { it.first.key }) { (item, row) ->
-                val record = item.record
-                val active = item.status.isActive
-                DownloadQueueCard(
-                    item = row,
-                    actions = downloadRowActions(controller, item, closing, state.busy),
-                    leading = {
-                        Checkbox(checked = row.isSelected, onCheckedChange = { controller.toggleDownloadSelection(item.key) },
-                            enabled = !closing, modifier = Modifier.testTag("download-select:${item.key}"))
-                    },
-                )
+            if (sections.queue.isNotEmpty()) {
+                item(key = "section-queue") {
+                    Text(desktopText("downloads.sectionQueue", sections.queue.size),
+                        style = MaterialTheme.typography.titleSmall,
+                        modifier = Modifier.testTag("download-section-queue"))
+                }
+                items(sections.queue, key = { it.key }) { item ->
+                    downloadRow(item, pairByKey.getValue(item.key).second, controller, closing, state.busy)
+                }
+            }
+            if (sections.completed.isNotEmpty()) {
+                item(key = "section-completed") {
+                    Text(desktopText("downloads.sectionCompleted", sections.completed.size),
+                        style = MaterialTheme.typography.titleSmall,
+                        modifier = Modifier.testTag("download-section-completed"))
+                }
+                items(sections.completed, key = { it.key }) { item ->
+                    downloadRow(item, pairByKey.getValue(item.key).second, controller, closing, state.busy)
+                }
             }
         }
     }
+}
+
+/** One chapter row; the queue and the saved list draw the same card, only the section they sit in differs. */
+@Composable
+private fun downloadRow(
+    item: DesktopDownloadState,
+    row: DownloadQueueItemUiModel,
+    controller: DesktopController,
+    closing: Boolean,
+    busy: Boolean,
+) {
+    DownloadQueueCard(
+        item = row,
+        actions = downloadRowActions(controller, item, closing, busy),
+        leading = {
+            Checkbox(checked = row.isSelected, onCheckedChange = { controller.toggleDownloadSelection(item.key) },
+                enabled = !closing, modifier = Modifier.testTag("download-select:${item.key}"))
+        },
+    )
 }
 
 /** The row's buttons: what the desktop queue can do with this chapter right now, labelled by the desktop catalog. */

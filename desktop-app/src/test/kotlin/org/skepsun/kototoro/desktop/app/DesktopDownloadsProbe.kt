@@ -61,6 +61,15 @@ internal object DesktopDownloadsProbe {
                 waitUntil(timeoutMillis = 15_000) { controller.state.value.sources.size == 1 }
                 idle()
                 if (mode.endsWith("write")) {
+                    // An empty page must not be a dead end: it says what a download is and offers a way to start one.
+                    onNodeWithTag("nav:更多").performClick(); idle()
+                    onNodeWithTag("nav:下载").performClick(); idle()
+                    onNodeWithText(desktopText("downloads.empty")).assertExists()
+                    onNodeWithTag("download-empty-browse").performClick()
+                    waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.LIBRARY }
+                    idle()
+                    // Back to the page the probe starts on, so the source-bar step below still finds its tile.
+                    onNodeWithTag("nav:浏览").performClick(); idle()
                     onNodeWithTag("source:MIHON_9007199254740995").performClick()
                     waitUntil(timeoutMillis = 15_000) { !controller.state.value.busy && controller.state.value.items.size == 1 }
                     val content = controller.state.value.items.single()
@@ -130,9 +139,15 @@ internal object DesktopDownloadsProbe {
                     check(session.downloadStore.records.value.single().completedPages == 2)
                     check(runBlocking { session.library.progress(content.id) } == null)
                     snapshot("paused")
+                    // A paused chapter is queue work, not a saved chapter: the page keeps them in two lists.
+                    onNodeWithTag("download-section-queue").assertExists()
+                    onNodeWithTag("download-section-completed").assertDoesNotExist()
                     System.clearProperty("fixture.reader.delay.index")
                     onNodeWithTag("download-resume:$key").performClick()
                     status(DesktopDownloadStatus.COMPLETE)
+                    // …and the same chapter moves to the saved list once it finishes, leaving the queue empty.
+                    onNodeWithTag("download-section-completed").assertExists()
+                    onNodeWithTag("download-section-queue").assertDoesNotExist()
                     check(controller.downloads.state.value.single().record.completedPages == 5)
                     // Two pages, the authored failure twice (Android's default retry count allows two attempts), then
                     // the attempt the pause cancels and the three the resume fetches: 2 + 2 + 1 + 3.

@@ -224,7 +224,10 @@ private fun UpdatesRail(controller: DesktopController, works: List<HomeWork>) {
     val rim = rememberCoverRimBorderBrush(isIosStyle, isDark = MaterialTheme.colorScheme.background.luminance() < .5f)
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         HomeSectionHeader(desktopText("home.sectionUpdates"), works.size, painterResource("icons/ic_arrow_forward.svg"),
-            onMoreClick = { controller.subscriptions() }, titleModifier = Modifier.testTag("home-updates-more"))
+            // Android's `onHomeViewAllUpdatesClick` opens the updates destination, not the feed: the rail's summary and
+            // its complete view are the same thing, so "全部" lands on the page that lists every work with new
+            // chapters instead of the timeline that merely mentions them.
+            onMoreClick = { controller.showUpdates() }, titleModifier = Modifier.testTag("home-updates-more"))
         // Android's list-mode rail: a horizontally scrolling row of pages, each a column of rows, three pages across on
         // wide windows with the next one peeking in from the right edge.
         BoxWithConstraints(Modifier.fillMaxWidth()) {

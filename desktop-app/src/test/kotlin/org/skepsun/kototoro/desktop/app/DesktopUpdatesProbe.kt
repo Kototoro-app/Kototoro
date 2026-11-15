@@ -57,7 +57,19 @@ internal object DesktopUpdatesProbe {
                 runBlocking { controller.subscriptions().join() }
                 waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.FEED }
                 idle()
-                // The subscriptions page shows the same works in its carousel, and its "all" is the entry used here.
+                // The home rail's 全部 is the same destination: a summary and its complete view are one thing, so the
+                // rail must not land on the timeline that merely mentions the works (Android's
+                // `onHomeViewAllUpdatesClick` opens the updates destination too).
+                runBlocking { controller.home().join() }
+                waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.HOME }
+                idle()
+                onNodeWithTag("home-updates-more").performClick()
+                waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.UPDATED }
+                idle()
+                // The subscriptions page shows the same works in its carousel, and its "all" is the other entry.
+                runBlocking { controller.subscriptions().join() }
+                waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.FEED }
+                idle()
                 onNodeWithTag("feed-updated:${work.id}").assertExists()
                 onNodeWithTag("feed-updated-more").performClick()
                 waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.UPDATED }
