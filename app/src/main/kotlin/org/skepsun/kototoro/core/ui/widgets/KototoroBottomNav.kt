@@ -44,6 +44,8 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -1044,19 +1046,21 @@ private fun FloatingBottomNavRow(
                                 enter = expandHorizontally(expandFrom = Alignment.Start) + fadeIn(),
                                 exit = shrinkHorizontally(shrinkTowards = Alignment.Start) + fadeOut(),
                             ) {
-                                Text(
-                                    text = stringResource(item.title),
-                                    style = MaterialTheme.typography.labelMedium.copy(
-                                        fontSize = MaterialTheme.typography.labelMedium.fontSize * labelScale,
-                                    ),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier
-                                        .padding(start = if (hasNumberBadge) 20.dp else 8.dp)
-                                        .then(
-                                            labelMaxWidth?.let { Modifier.widthIn(max = it) } ?: Modifier,
+                                NavigationLabelFontScale {
+                                    Text(
+                                        text = stringResource(item.title),
+                                        style = MaterialTheme.typography.labelMedium.copy(
+                                            fontSize = MaterialTheme.typography.labelMedium.fontSize * labelScale,
                                         ),
-                                )
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier
+                                            .padding(start = if (hasNumberBadge) 20.dp else 8.dp)
+                                            .then(
+                                                labelMaxWidth?.let { Modifier.widthIn(max = it) } ?: Modifier,
+                                            ),
+                                    )
+                                }
                             }
                         }
                     }
@@ -1082,11 +1086,13 @@ private fun FloatingBottomNavRow(
                     }
                     if ((isSelected || labelsAlwaysVisible) && showSelectedLabels) {
                         Spacer(modifier = Modifier.height(0.dp))
-                        Text(
-                            text = stringResource(item.title),
-                            style = MaterialTheme.typography.labelSmall,
-                            maxLines = 1,
-                        )
+                        NavigationLabelFontScale {
+                            Text(
+                                text = stringResource(item.title),
+                                style = MaterialTheme.typography.labelSmall,
+                                maxLines = 1,
+                            )
+                        }
                     }
                 }
                 }
@@ -1583,5 +1589,26 @@ private fun navEnterAnimationResId(itemId: Int): Int? {
         R.id.nav_explore -> R.drawable.avd_explore_enter
         R.id.nav_favorites -> R.drawable.avd_favourites_enter
         else -> null
+    }
+}
+
+/**
+ * The bar has a fixed height and its tab labels are a single line, so at a 2x system font they were clipped to the top
+ * half of their glyphs. Labels follow the system font up to this cap, like the platform's own navigation bar; the rest
+ * of the screen keeps scaling.
+ */
+private const val NavigationLabelMaxFontScale = 1.3f
+
+internal fun navigationLabelFontScale(systemFontScale: Float): Float =
+    systemFontScale.coerceAtMost(NavigationLabelMaxFontScale)
+
+@Composable
+private fun NavigationLabelFontScale(content: @Composable () -> Unit) {
+    val density = LocalDensity.current
+    val capped = navigationLabelFontScale(density.fontScale)
+    if (capped == density.fontScale) {
+        content()
+    } else {
+        CompositionLocalProvider(LocalDensity provides Density(density.density, capped)) { content() }
     }
 }

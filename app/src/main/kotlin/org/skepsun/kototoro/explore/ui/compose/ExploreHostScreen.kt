@@ -202,19 +202,28 @@ private fun prepareBrowseDiscoverItems(items: List<ListModel>): BrowseDiscoverIt
     )
 }
 
+/**
+ * Columns of the source tile grid. [fontScale] is the system font scale: a tile's title is one line of text that grows
+ * with it while the tile stays a fixed number of dp wide, so at 1.5x four columns on a phone cut every name to
+ * "Constellar…". The width a tile needs grows with the font, and the preferred column count shrinks with it (never
+ * below two), the same idea as the home quick access grid.
+ */
 internal fun calculateSourceGridColumns(
     availableWidth: androidx.compose.ui.unit.Dp,
     metrics: SourceQuickAccessMetrics,
     browseListMode: ListMode,
+    fontScale: Float = 1f,
 ): Int {
     if (!browseListMode.isGrid) {
         return 1
     }
+    val scale = fontScale.coerceIn(1f, 2f)
     val spacing = metrics.gridSpacing
-    val rawColumns = ((availableWidth + spacing) / (metrics.minCardWidth + spacing))
+    val rawColumns = ((availableWidth + spacing) / (metrics.minCardWidth * scale + spacing))
         .toInt()
         .coerceAtLeast(1)
-    return rawColumns.coerceAtLeast(metrics.preferredColumns)
+    val preferred = (metrics.preferredColumns / scale).toInt().coerceAtLeast(2)
+    return rawColumns.coerceAtLeast(preferred)
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
@@ -369,11 +378,13 @@ fun KototoroExploreHostRoute(
     ) {
         configuration.screenWidthDp.dp - sourceGridStartPadding - sourceGridEndPadding
     }
-    val sourceColumns = remember(sourceContentWidth, sourceMetrics, browseListMode) {
+    val systemFontScale = LocalDensity.current.fontScale
+    val sourceColumns = remember(sourceContentWidth, sourceMetrics, browseListMode, systemFontScale) {
         calculateSourceGridColumns(
             availableWidth = sourceContentWidth,
             metrics = sourceMetrics,
             browseListMode = browseListMode,
+            fontScale = systemFontScale,
         )
     }
     val sourceCollapsedVisibleCount = remember(sourceColumns) { sourceColumns * 5 }

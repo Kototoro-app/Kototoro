@@ -337,3 +337,11 @@
 - **向导第 4 步**：排查步骤默认折叠（`wizard-advice-toggle`），`SetupWizardContentTest` 4 项 0 失败。真机前后截图 `build/device-reports/batch30/wizard-*.png`。
 
 不改：右上角把手是空间切换按钮，位置是用户设置（向导里可选），不算遮挡缺陷。
+
+## 第三十三批（2026-11-15）：大字号网格（真机）
+
+- **浏览页来源网格**：列数原先只看网格缩放偏好，不看系统字号，1.5× 下四列把来源名截成“Constella…”。
+  `calculateSourceGridColumns` 现按字号放大单卡所需宽度、并下调偏好列数（不低于 2）：1.0× 四列不变，1.5× 三列，2.0× 两列（真机截图 `font-1.5-*`、`font-2.0-*`；`SourceQuickAccessMetricsTest` 4 项 0 失败）。
+- **底部导航标签**：高度固定、单行，2.0× 下被裁掉上半。标签字号最多跟到 1.3×（`navigationLabelFontScale`，2 项测试），其余界面照常放大。
+- 收藏/历史海报网格 1.5×/2.0× 下仍为 3 列、标题两行省略，判定可接受，未改。
+- 桌面端不受影响（改动在 app 的 Android 浏览页与底栏）。字号已恢复为 1.0。

@@ -192,11 +192,13 @@ private fun SourcesQuickAccessSection(
         }
         BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
             var isExpanded by rememberSaveable(sources.size) { mutableStateOf(false) }
-            val columns = remember(maxWidth, metrics, browseListMode) {
+            val systemFontScale = androidx.compose.ui.platform.LocalDensity.current.fontScale
+            val columns = remember(maxWidth, metrics, browseListMode, systemFontScale) {
                 calculateSourceGridColumns(
                     availableWidth = maxWidth,
                     metrics = metrics,
                     browseListMode = browseListMode,
+                    fontScale = systemFontScale,
                 )
             }
             val collapsedRowCount = if (maxWidth < 520.dp) 5 else 4
