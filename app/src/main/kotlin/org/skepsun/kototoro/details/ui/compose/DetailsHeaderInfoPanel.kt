@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -173,8 +174,18 @@ internal fun DetailsSourceSummaryRow(
     val readingTitle = readingDisplayModel?.selectorTitle.orEmpty()
     val metadataFallback = stringResource(R.string.details_metadata_binding_unavailable)
     val readingFallback = stringResource(R.string.details_reading_source_unavailable)
+    val merged = sourceSummaryIsMerged(
+        metadataSourceName = metadataDisplayModel?.source?.name,
+        metadataIsTracker = metadataDisplayModel?.trackingService != null,
+        readingSourceName = readingDisplayModel?.source?.name,
+        readingIsTracker = readingDisplayModel?.trackingService != null,
+    )
     BoxWithConstraints(modifier = Modifier.wrapContentWidth()) {
-        val maxSegmentWidth = ((maxWidth - 1.dp) / 2f).coerceAtLeast(1.dp)
+        val maxSegmentWidth = if (merged) {
+            (maxWidth - MergedMetadataSegmentWidth - 1.dp).coerceAtLeast(1.dp)
+        } else {
+            ((maxWidth - 1.dp) / 2f).coerceAtLeast(1.dp)
+        }
         Surface(
             modifier = Modifier.widthIn(max = maxWidth),
             shape = RoundedCornerShape(999.dp),
@@ -185,21 +196,23 @@ internal fun DetailsSourceSummaryRow(
                 modifier = Modifier.wrapContentWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                SourceSummarySegment(
-                    label = metadataTitle,
-                    fallbackLabel = metadataFallback,
-                    displayModel = metadataDisplayModel,
-                    color = MaterialTheme.colorScheme.primary,
-                    onIconClick = onMetadataIconClick,
-                    onNameClick = onMetadataNameClick,
-                    modifier = Modifier.widthIn(max = maxSegmentWidth),
-                )
-                Box(
-                    modifier = Modifier
-                        .width(1.dp)
-                        .height(24.dp)
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.30f)),
-                )
+                if (!merged) {
+                    SourceSummarySegment(
+                        label = metadataTitle,
+                        fallbackLabel = metadataFallback,
+                        displayModel = metadataDisplayModel,
+                        color = MaterialTheme.colorScheme.primary,
+                        onIconClick = onMetadataIconClick,
+                        onNameClick = onMetadataNameClick,
+                        modifier = Modifier.widthIn(max = maxSegmentWidth),
+                    )
+                    Box(
+                        modifier = Modifier
+                            .width(1.dp)
+                            .height(24.dp)
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.30f)),
+                    )
+                }
                 SourceSummarySegment(
                     label = readingTitle,
                     fallbackLabel = readingFallback,
@@ -209,10 +222,38 @@ internal fun DetailsSourceSummaryRow(
                     onNameClick = onReadingNameClick,
                     modifier = Modifier.widthIn(max = maxSegmentWidth),
                 )
+                if (merged) {
+                    Box(
+                        modifier = Modifier
+                            .width(1.dp)
+                            .height(24.dp)
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.30f)),
+                    )
+                    // Same source twice reads as a mistake; the metadata half collapses to the one thing
+                    // it offers here, linking this title to a tracker or another metadata source.
+                    Box(
+                        modifier = Modifier
+                            .width(MergedMetadataSegmentWidth)
+                            .height(30.dp)
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f))
+                            .tvFocusable(shape = RoundedCornerShape(999.dp), addFocusTarget = false)
+                            .clickable(onClick = onMetadataNameClick),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Link,
+                            contentDescription = stringResource(R.string.details_metadata_source),
+                            tint = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.size(16.dp),
+                        )
+                    }
+                }
             }
         }
     }
 }
+
+private val MergedMetadataSegmentWidth = 34.dp
 
 /**
  * Padding between a TV source segment's outline and the pill that contains it.
