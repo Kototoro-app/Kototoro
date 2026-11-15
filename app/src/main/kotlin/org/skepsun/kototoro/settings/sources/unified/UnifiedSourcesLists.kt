@@ -84,6 +84,7 @@ import org.skepsun.kototoro.core.model.getSummary
 import org.skepsun.kototoro.core.model.ContentSourceAvailability
 import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
+import org.skepsun.kototoro.core.ui.compose.EmptyStatePanel
 import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
 import org.skepsun.kototoro.core.ui.compose.VerticalScrollbar
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
@@ -100,61 +101,6 @@ private object PackageIconMemoryCache {
 
     fun put(packageName: String, drawable: Drawable) {
         cache[packageName] = drawable
-    }
-}
-
-@Composable
-internal fun UnifiedEmptyState(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    title: String,
-    message: String,
-    modifier: Modifier = Modifier,
-    actionLabel: String? = null,
-    onAction: (() -> Unit)? = null,
-) {
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(vertical = 48.dp, horizontal = 24.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Surface(
-                modifier = Modifier.size(56.dp),
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        modifier = Modifier.size(28.dp),
-                        tint = MaterialTheme.colorScheme.primary,
-                    )
-                }
-            }
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
-                text = message,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-            )
-            if (actionLabel != null && onAction != null) {
-                Spacer(modifier = Modifier.height(4.dp))
-                FilledTonalButton(onClick = onAction) {
-                    Text(actionLabel)
-                }
-            }
-        }
     }
 }
 
@@ -346,7 +292,7 @@ internal fun UnifiedSourceList(
             }
             if (displayRows.isEmpty()) {
                 item(key = "sources_empty_state") {
-                    UnifiedEmptyState(
+                    EmptyStatePanel(
                         icon = Icons.Outlined.SearchOff,
                         title = stringResource(R.string.no_sources_found),
                         message = stringResource(R.string.no_sources_found_desc),
@@ -903,7 +849,7 @@ internal fun UnifiedRepositoryList(
                 }
             } else if (configured.isEmpty()) {
                 item(key = "repo_empty_state") {
-                    UnifiedEmptyState(
+                    EmptyStatePanel(
                         icon = Icons.Outlined.SearchOff,
                         title = stringResource(R.string.no_extension_repositories),
                         message = stringResource(R.string.no_sources_found_desc),
@@ -1141,7 +1087,7 @@ internal fun UnifiedPackageList(
             }
             if (packages.isEmpty() && recommendedPackages.isEmpty() && missingSourcesWithoutMatch.isEmpty()) {
                 item(key = "packages_empty_state") {
-                    UnifiedEmptyState(
+                    EmptyStatePanel(
                         icon = Icons.Outlined.SearchOff,
                         title = stringResource(R.string.no_packages_found),
                         message = stringResource(R.string.no_packages_found_desc),

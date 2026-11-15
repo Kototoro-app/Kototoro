@@ -46,6 +46,9 @@ import org.skepsun.kototoro.core.util.ext.getDisplayMessage
 import org.skepsun.kototoro.core.db.entity.JsonSourceEntity
 import org.skepsun.kototoro.core.db.entity.JsonSourceType
 import org.skepsun.kototoro.core.extensions.GlobalExtensionManager
+import org.skepsun.kototoro.core.extensions.SourceInputIntent
+import org.skepsun.kototoro.core.extensions.countSourceEntries
+import org.skepsun.kototoro.core.extensions.detectSourceInput
 import org.skepsun.kototoro.core.jsonsource.JsonSourceImportMetadata
 import org.skepsun.kototoro.core.jsonsource.JsonSourceManager
 import org.skepsun.kototoro.core.github.VersionId
@@ -763,14 +766,104 @@ class UnifiedSourcesViewModel @Inject constructor(
         }
     }
 
+    /**
+     * The daily add entry: one address, no kind question.
+     *
+     * [loadRepositoryText] fetches (or opens) the body, the shared rules say which format it is, and the screen then
+     * continues down the ordinary add path for that kind — same third-party notice, same install policy. An address
+     * whose body says nothing recognisable keeps the manual kind picker instead of a guess, because the wrong parser
+     * fails much later and much less clearly.
+     */
+    fun resolveSourceAddress(url: String, title: String? = null) {
+        launchLoadingJob(Dispatchers.IO) {
+            val cleanUrl = url.trim()
+            if (cleanUrl.isBlank()) return@launchLoadingJob
+            if (detectSourceInput(cleanUrl) == SourceInputIntent.EXTENSION_FILE) {
+                emitMessage(appContext.getString(R.string.unified_sources_address_is_file))
+                return@launchLoadingJob
+            }
+            // A protobuf index names its format by itself, and it is binary: reading it as text would only produce
+            // garbage for the sniffer to reject.
+            resolveSourceKindWithoutBody(cleanUrl)?.let { kind ->
+                _events.emit(UnifiedSourcesEvent.SourceAddressResolved(kind, cleanUrl, title))
+                return@launchLoadingJob
+            }
+            val body = runCatching { loadRepositoryText(cleanUrl) }
+                .getOrElse { error ->
+                    emitMessage(error.getDisplayMessage(appContext.resources))
+                    return@launchLoadingJob
+                }
+            val kind = resolveSourceKindForBody(body)
+            if (kind == null) {
+                emitMessage(appContext.getString(R.string.unified_sources_address_unrecognised))
+                _events.emit(UnifiedSourcesEvent.SourceAddressUnrecognised)
+            } else {
+                val names = previewSourceNames(kind, body, cleanUrl)
+                val count = if (names.isNotEmpty()) names.size else countSourceEntries(body)
+                _events.emit(
+                    UnifiedSourcesEvent.SourceAddressResolved(
+                        kind = kind,
+                        url = cleanUrl,
+                        title = title,
+                        previewCount = count,
+                        previewNames = names,
+                    ),
+                )
+            }
+        }
+    }
+
+    /**
+     * Names of what a body would import, read with the same inspectors the import itself uses, so the notice before
+     * the add cannot promise something different from what lands in the source list.
+     */
+    private suspend fun previewSourceNames(
+        kind: UnifiedSourceKind,
+        body: String,
+        url: String,
+    ): List<String> = when (kind) {
+        UnifiedSourceKind.LEGADO -> jsonSourceManager.inspectLegadoJson(body)
+            .getOrNull()
+            ?.map { it.bookSourceName }
+            ?.filter { it.isNotBlank() }
+            .orEmpty()
+        UnifiedSourceKind.TVBOX -> jsonSourceManager.inspectTvBoxJson(body, sourceLocator = url)
+            .getOrNull()
+            .orEmpty()
+        else -> emptyList()
+    }
+
     fun addRepositoryFromUrl(
         kind: UnifiedSourceKind,
         url: String,
         title: String? = null,
         enableImportedSources: Boolean = true,
+        /**
+         * `true` for adds that came from an address the app recognised itself: the user never picked the type, so a
+         * failure must offer to retry or to choose the type instead of ending on a message.
+         */
+        reportFailure: Boolean = false,
     ) {
         launchLoadingJob(Dispatchers.IO) {
-            addRepositoryFromUrlImpl(kind, url, title, enableImportedSources)
+            if (!reportFailure) {
+                addRepositoryFromUrlImpl(kind, url, title, enableImportedSources)
+                return@launchLoadingJob
+            }
+            try {
+                addRepositoryFromUrlImpl(kind, url, title, enableImportedSources)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                emitMessage(e.getDisplayMessage(appContext.resources))
+                _events.emit(
+                    UnifiedSourcesEvent.SourceAddFailed(
+                        kind = kind,
+                        url = url.trim(),
+                        title = title,
+                        message = e.getDisplayMessage(appContext.resources).toString(),
+                    ),
+                )
+            }
         }
     }
 
@@ -1749,7 +1842,26 @@ class UnifiedSourcesViewModel @Inject constructor(
                 ) {
                     settings.lnReaderRepoUrls = settings.lnReaderRepoUrls + sourceLocator
                 }
-                emitMessage(appContext.getString(R.string.unified_sources_imported_sources, count))
+                val repositoryId = sourceLocator
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let { repositoryIdForAction(kind, it) }
+                // A repository import ends in its own dialog offering to browse, so it must not also fire a toast.
+                if (count <= 0 || repositoryId == null) {
+                    emitMessage(appContext.getString(R.string.unified_sources_imported_sources, count))
+                }
+                if (count > 0 && repositoryId != null) {
+                    val importedIds = jsonSourceManager.observeAllJsonSources()
+                        .first()
+                        .filter { it.jsonRepositoryIdForAction() == repositoryId }
+                        .map { it.id }
+                    _events.emit(
+                        UnifiedSourcesEvent.SourceImportCompleted(
+                            kind = kind,
+                            sourceIds = importedIds,
+                            sourceCount = count,
+                        ),
+                    )
+                }
             }
             .onFailure { error -> emitMessage(error.getDisplayMessage(appContext.resources)) }
         return result.isSuccess

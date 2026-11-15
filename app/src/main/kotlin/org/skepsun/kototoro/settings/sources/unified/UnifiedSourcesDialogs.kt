@@ -130,6 +130,60 @@ internal fun UnifiedInstallChoiceDialog(
     )
 }
 
+/**
+ * One field for every daily add: paste an address, the body says what it is.
+ *
+ * The type sections stay one tap away ([onChooseKind]) for the addresses that genuinely look alike, so the nine-kind
+ * list is no longer the price of adding a source.
+ */
+@Composable
+internal fun UnifiedSourceAddressDialog(
+    onDismiss: () -> Unit,
+    onResolve: (String) -> Unit,
+    onChooseKind: () -> Unit,
+) {
+    var value by rememberSaveable { mutableStateOf("") }
+    val fieldExit = rememberTvFieldExit()
+    SettingsAlertDialog(
+        title = stringResource(R.string.add_repository),
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            SettingsDialogActionButton(
+                text = stringResource(R.string.unified_sources_recognise_and_add),
+                onClick = { onResolve(value) },
+                enabled = value.isNotBlank(),
+                modifier = fieldExit.targetModifier,
+            )
+        },
+        dismissButton = {
+            SettingsDialogActionButton(
+                text = stringResource(R.string.unified_sources_choose_kind_manually),
+                onClick = onChooseKind,
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = value,
+                    onValueChange = { value = it },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .then(fieldExit.fieldModifier),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { fieldExit.onDone() }),
+                    singleLine = true,
+                    label = { Text(stringResource(R.string.repository_url)) },
+                )
+                Text(
+                    text = stringResource(R.string.unified_sources_address_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+    )
+}
+
 @Composable
 internal fun UnifiedRepositoryUrlDialog(
     kind: UnifiedSourceKind,
@@ -301,6 +355,8 @@ internal fun UnifiedInlineRepositoryDialog(
 internal fun UnifiedDisclaimerDialog(
     onDismiss: () -> Unit,
     onConfirm: () -> Unit,
+    previewCount: Int = 0,
+    previewNames: List<String> = emptyList(),
 ) {
     SettingsAlertDialog(
         title = stringResource(R.string.add_repository),
@@ -317,7 +373,35 @@ internal fun UnifiedDisclaimerDialog(
                 onClick = onDismiss,
             )
         },
-        text = { Text(stringResource(R.string.welcome_plugins_disclaimer)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(stringResource(R.string.welcome_plugins_disclaimer))
+                if (previewCount > 0) {
+                    Text(
+                        text = stringResource(R.string.unified_sources_preview_count, previewCount),
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    if (previewNames.isNotEmpty()) {
+                        val shown = previewNames.take(5)
+                        val more = previewNames.size - shown.size
+                        Text(
+                            text = if (more > 0) {
+                                shown.joinToString("、") + " …+" + more
+                            } else {
+                                shown.joinToString("、")
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Text(
+                        text = stringResource(R.string.unified_sources_preview_note),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        },
     )
 }
 

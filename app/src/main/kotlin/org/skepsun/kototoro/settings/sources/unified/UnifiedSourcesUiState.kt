@@ -19,6 +19,40 @@ sealed interface UnifiedSourcesEvent {
     data class StartInstall(val intent: Intent) : UnifiedSourcesEvent
     data class StartUninstall(val intent: Intent) : UnifiedSourcesEvent
     data class PackageStateDetails(val item: UnifiedSourcePackageItem) : UnifiedSourcesEvent
+
+    /**
+     * A pasted address was recognised as [kind]; the screen continues down the same add path the manual choice uses,
+     * so the third-party notice and the install policy still apply.
+     */
+    data class SourceAddressResolved(
+        val kind: UnifiedSourceKind,
+        val url: String,
+        val title: String?,
+        /** Entries the body declares, so the notice can say what is about to be added. */
+        val previewCount: Int = 0,
+        val previewNames: List<String> = emptyList(),
+    ) : UnifiedSourcesEvent
+
+    /** The body named no known format, so the screen reopens the kind list rather than leaving the user to retry. */
+    data object SourceAddressUnrecognised : UnifiedSourcesEvent
+
+    /**
+     * Sources just landed in the list, so the screen can offer to browse them instead of ending the flow on a toast.
+     * The ids are the ones the source list itself uses, so the match cannot drift.
+     */
+    /** A recognised add failed, so the screen can retry it or fall back to picking the type by hand. */
+    data class SourceAddFailed(
+        val kind: UnifiedSourceKind,
+        val url: String,
+        val title: String?,
+        val message: String,
+    ) : UnifiedSourcesEvent
+
+    data class SourceImportCompleted(
+        val kind: UnifiedSourceKind,
+        val sourceIds: List<String>,
+        val sourceCount: Int,
+    ) : UnifiedSourcesEvent
 }
 
 data class UnifiedSourcesFilterState(

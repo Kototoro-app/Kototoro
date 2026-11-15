@@ -54,10 +54,14 @@ fun ExtensionManagementTabs(
         bringIntoViewRequesters.getOrNull(selectedTab)?.bringIntoView()
     }
 
+    // The strip is a horizontally scrollable row: a host slot narrower than the labels clips the trailing
+    // tab instead of pushing the host's trailing actions off screen (device check at 411dp / 1.0x and
+    // 1.5x font: the labels clip inside the capsule with a 23px gap to the action capsule).
     Surface(
         modifier = modifier
             .height(height)
-            .wrapContentWidth(),
+            .wrapContentWidth()
+            .testTag("extensions-tabs"),
         shape = RoundedCornerShape(height / 2),
         color = if (isIosStyle) {
             MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)

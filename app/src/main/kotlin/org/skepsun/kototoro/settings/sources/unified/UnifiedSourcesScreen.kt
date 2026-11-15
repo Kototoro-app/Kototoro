@@ -1,6 +1,9 @@
 package org.skepsun.kototoro.settings.sources.unified
 
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.material3.MaterialTheme
 import android.content.Intent
 import android.widget.Toast
 import androidx.compose.foundation.layout.PaddingValues
@@ -80,6 +83,9 @@ internal fun rememberUnifiedSourcesVisualStyle(): UnifiedSourcesVisualStyle {
 }
 
 private sealed interface UnifiedSourcesDialogState {
+    /** The daily entry: one address, and the body decides which kind it is. */
+    data object AddSourceAuto : UnifiedSourcesDialogState
+
     data object AddRepositoryKind : UnifiedSourcesDialogState
     data class AddRepositoryMode(
         val kind: UnifiedSourceKind,
@@ -91,6 +97,20 @@ private sealed interface UnifiedSourcesDialogState {
         val kind: UnifiedSourceKind,
         val prefillUrl: String? = null,
         val prefillTitle: String? = null,
+    ) : UnifiedSourcesDialogState
+
+    /** A recognised add failed: retry it, or choose the type by hand. */
+    data class AddFailed(
+        val kind: UnifiedSourceKind,
+        val url: String,
+        val title: String?,
+        val message: String,
+    ) : UnifiedSourcesDialogState
+
+    /** Import finished: the flow ends by offering to browse what was just added. */
+    data class ImportCompleted(
+        val sourceIds: List<String>,
+        val sourceCount: Int,
     ) : UnifiedSourcesDialogState
 
     data class InlineInput(
@@ -118,7 +138,12 @@ private sealed interface UnifiedSourcesDialogState {
         val importAction: UnifiedThirdPartyAction? = null,
     ) : UnifiedSourcesDialogState
     data class InstallError(val message: String) : UnifiedSourcesDialogState
-    data class ThirdPartyDisclaimer(val action: UnifiedThirdPartyAction) : UnifiedSourcesDialogState
+    data class ThirdPartyDisclaimer(
+        val action: UnifiedThirdPartyAction,
+        /** What the recognised address is about to add, so the notice is a preview and not just a warning. */
+        val previewCount: Int = 0,
+        val previewNames: List<String> = emptyList(),
+    ) : UnifiedSourcesDialogState
 }
 
 internal sealed interface UnifiedThirdPartyAction {
@@ -126,6 +151,8 @@ internal sealed interface UnifiedThirdPartyAction {
         val kind: UnifiedSourceKind,
         val url: String,
         val title: String? = null,
+        /** Set when the app recognised the type itself, so a failure offers a retry instead of a dead end. */
+        val fromRecognisedAddress: Boolean = false,
     ) : UnifiedThirdPartyAction
 
     data class AddInlineRepository(
@@ -170,7 +197,13 @@ fun UnifiedSourcesRoute(
     fun proceedThirdPartyAction(action: UnifiedThirdPartyAction, enableImportedSources: Boolean = true) {
         when (action) {
             is UnifiedThirdPartyAction.AddRepositoryUrl -> {
-                viewModel.addRepositoryFromUrl(action.kind, action.url, action.title, enableImportedSources)
+                viewModel.addRepositoryFromUrl(
+                    kind = action.kind,
+                    url = action.url,
+                    title = action.title,
+                    enableImportedSources = enableImportedSources,
+                    reportFailure = action.fromRecognisedAddress,
+                )
             }
             is UnifiedThirdPartyAction.AddInlineRepository -> {
                 viewModel.addRepositoryFromInline(action.kind, action.content, action.title, enableImportedSources)
@@ -208,6 +241,35 @@ fun UnifiedSourcesRoute(
                 is UnifiedSourcesEvent.StartUninstall -> onStartUninstall(event.intent)
                 is UnifiedSourcesEvent.PackageStateDetails -> {
                     activeDialog = UnifiedSourcesDialogState.PackageDetails(event.item)
+                }
+                is UnifiedSourcesEvent.SourceAddressResolved -> {
+                    activeDialog = UnifiedSourcesDialogState.ThirdPartyDisclaimer(
+                        action = UnifiedThirdPartyAction.AddRepositoryUrl(
+                            kind = event.kind,
+                            url = event.url,
+                            title = event.title,
+                            fromRecognisedAddress = true,
+                        ),
+                        previewCount = event.previewCount,
+                        previewNames = event.previewNames,
+                    )
+                }
+                is UnifiedSourcesEvent.SourceAddressUnrecognised -> {
+                    activeDialog = UnifiedSourcesDialogState.AddRepositoryKind
+                }
+                is UnifiedSourcesEvent.SourceAddFailed -> {
+                    activeDialog = UnifiedSourcesDialogState.AddFailed(
+                        kind = event.kind,
+                        url = event.url,
+                        title = event.title,
+                        message = event.message,
+                    )
+                }
+                is UnifiedSourcesEvent.SourceImportCompleted -> {
+                    activeDialog = UnifiedSourcesDialogState.ImportCompleted(
+                        sourceIds = event.sourceIds,
+                        sourceCount = event.sourceCount,
+                    )
                 }
             }
         }
@@ -328,7 +390,7 @@ fun UnifiedSourcesRoute(
                     prefillTitle = preset.name,
                 )
             } else {
-                UnifiedSourcesDialogState.AddRepositoryKind
+                UnifiedSourcesDialogState.AddSourceAuto
             }
         },
         onRefreshRepository = { item -> viewModel.refreshRepository(item.id) },
@@ -378,6 +440,15 @@ fun UnifiedSourcesRoute(
     }
 
     when (val dialog = activeDialog) {
+            UnifiedSourcesDialogState.AddSourceAuto -> UnifiedSourceAddressDialog(
+                onDismiss = { activeDialog = null },
+                onResolve = { address ->
+                    viewModel.resolveSourceAddress(address)
+                    activeDialog = null
+                },
+                onChooseKind = { activeDialog = UnifiedSourcesDialogState.AddRepositoryKind },
+            )
+
             UnifiedSourcesDialogState.AddRepositoryKind -> UnifiedSelectionDialog(
                 title = stringResource(R.string.add_repository),
             options = listOf(
@@ -449,7 +520,79 @@ fun UnifiedSourcesRoute(
             },
         )
 
+        is UnifiedSourcesDialogState.AddFailed -> SettingsAlertDialog(
+            title = stringResource(R.string.error),
+            onDismissRequest = { activeDialog = null },
+            confirmButton = {
+                SettingsDialogActionButton(
+                    text = stringResource(R.string.retry),
+                    onClick = {
+                        activeDialog = null
+                        viewModel.addRepositoryFromUrl(
+                            kind = dialog.kind,
+                            url = dialog.url,
+                            title = dialog.title,
+                            reportFailure = true,
+                        )
+                    },
+                )
+            },
+            dismissButton = {
+                SettingsDialogActionButton(
+                    text = stringResource(R.string.unified_sources_choose_kind_manually),
+                    onClick = { activeDialog = UnifiedSourcesDialogState.AddRepositoryKind },
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(dialog.message)
+                    Text(
+                        text = stringResource(R.string.unified_sources_add_failed_next_step),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            },
+        )
+
+        is UnifiedSourcesDialogState.ImportCompleted -> {
+            // The list can lag one frame behind the event, so the match happens when the dialog is built.
+            val ready = state as? UnifiedSourcesUiState.Ready
+            val added = ready?.allSources?.filter { it.id in dialog.sourceIds }.orEmpty()
+            SettingsAlertDialog(
+                title = stringResource(R.string.unified_sources_imported_sources, dialog.sourceCount),
+                onDismissRequest = { activeDialog = null },
+                confirmButton = {
+                    SettingsDialogActionButton(
+                        text = stringResource(R.string.unified_sources_browse_now),
+                        onClick = {
+                            activeDialog = null
+                            added.firstOrNull()?.let(onBrowseSource)
+                        },
+                        enabled = added.isNotEmpty(),
+                    )
+                },
+                dismissButton = {
+                    SettingsDialogActionButton(
+                        text = stringResource(R.string.close),
+                        onClick = { activeDialog = null },
+                    )
+                },
+                text = {
+                    Text(
+                        text = if (added.isEmpty()) {
+                            stringResource(R.string.unified_sources_imported_none_enabled)
+                        } else {
+                            added.joinToString("、") { it.title }
+                        },
+                    )
+                },
+            )
+        }
+
         is UnifiedSourcesDialogState.ThirdPartyDisclaimer -> UnifiedDisclaimerDialog(
+            previewCount = dialog.previewCount,
+            previewNames = dialog.previewNames,
             onDismiss = { activeDialog = null },
             onConfirm = {
                 val kind = dialog.action.installKindOrNull()
