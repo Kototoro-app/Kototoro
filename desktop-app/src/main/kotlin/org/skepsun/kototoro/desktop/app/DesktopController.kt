@@ -14,6 +14,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.datetime.TimeZone
+import org.skepsun.kototoro.core.appearance.VisualPreferenceKeys
+import org.skepsun.kototoro.core.appearance.VisualPresets
+import org.skepsun.kototoro.core.appearance.visualPresetApplication
 import org.skepsun.kototoro.core.library.LibraryContentStats
 import org.skepsun.kototoro.core.library.LibraryReadingStats
 import org.skepsun.kototoro.core.extensions.SourceNsfwOverrideSet
@@ -179,6 +182,13 @@ data class DesktopAppState(
         org.skepsun.kototoro.core.ui.compose.DetailsMediaStyle.MANGA,
     /** The saved interface language tag; null follows the system language. */
     val language: String? = null,
+    /**
+     * What a visual preset last replaced, so one press can be taken back. Only the keys that preset changed are here:
+     * undoing cannot roll back a preference the preset never touched, nor one changed after it.
+     */
+    val visualPresetUndo: Map<String, String>? = null,
+    /** The preset whose look is currently applied, for the appearance row's summary. */
+    val visualPreset: String? = null,
     val sources: List<SourceListing> = emptyList(),
     /** Sources the user turned off on the extensions page; Android keeps them installed but stops offering them. */
     val disabledSources: Set<String> = emptySet(),
@@ -734,6 +744,65 @@ class DesktopController(
             "interface_style" to SourcePreferenceValue.Text(value.name),
         )))) { desktopText("settings.interfaceStyleSaveFailed") }
         mutableState.update { it.copy(interfaceStyle = value) }
+    }
+
+    /**
+     * Applies one visual preset: it writes the same `theme`/`interface_style` keys the rows above write, and keeps the
+     * replaced values so [undoVisualPreset] can put them back. Nothing outside the visual allowlist is touched.
+     */
+    internal fun applyVisualPreset(presetId: String) = action {
+        val preset = VisualPresets.byId(presetId) ?: return@action
+        val current = mutableState.value
+        val application = visualPresetApplication(
+            preset,
+            mapOf(
+                VisualPreferenceKeys.THEME to current.appearance.name,
+                VisualPreferenceKeys.INTERFACE_STYLE to current.interfaceStyle.name,
+            ),
+        )
+        if (application.isEmpty) {
+            mutableState.update { it.copy(visualPreset = preset.id, message = desktopText("visualPreset.alreadyApplied")) }
+            return@action
+        }
+        val saved = appearancePreferences.edit(SourcePreferenceEdit(changes = application.changes.mapValues {
+            SourcePreferenceValue.Text(it.value)
+        }))
+        check(saved) { desktopText("settings.appearanceSaveFailed") }
+        mutableState.update { state ->
+            state.copy(
+                appearance = DesktopAppearance.entries.firstOrNull {
+                    it.name == application.changes[VisualPreferenceKeys.THEME]
+                } ?: state.appearance,
+                interfaceStyle = DesktopInterfaceStyle.entries.firstOrNull {
+                    it.name == application.changes[VisualPreferenceKeys.INTERFACE_STYLE]
+                } ?: state.interfaceStyle,
+                visualPreset = preset.id,
+                // A second preset replaces the undo entry: one press, one way back.
+                visualPresetUndo = application.undo.takeIf { it.isNotEmpty() },
+                message = desktopText("visualPreset.applied"),
+            )
+        }
+    }
+
+    /** Puts back the values the last preset replaced, and forgets it. */
+    internal fun undoVisualPreset() = action {
+        val undo = mutableState.value.visualPresetUndo ?: return@action
+        val saved = appearancePreferences.edit(SourcePreferenceEdit(changes = undo.mapValues {
+            SourcePreferenceValue.Text(it.value)
+        }))
+        check(saved) { desktopText("settings.appearanceSaveFailed") }
+        mutableState.update { state ->
+            state.copy(
+                appearance = DesktopAppearance.entries.firstOrNull { it.name == undo[VisualPreferenceKeys.THEME] }
+                    ?: state.appearance,
+                interfaceStyle = DesktopInterfaceStyle.entries.firstOrNull {
+                    it.name == undo[VisualPreferenceKeys.INTERFACE_STYLE]
+                } ?: state.interfaceStyle,
+                visualPreset = null,
+                visualPresetUndo = null,
+                message = desktopText("visualPreset.undone"),
+            )
+        }
     }
 
     internal fun detailsStyle(

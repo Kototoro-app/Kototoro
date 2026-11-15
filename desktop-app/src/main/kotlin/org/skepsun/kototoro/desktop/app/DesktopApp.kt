@@ -247,7 +247,9 @@ internal fun DesktopSourcePane(controller: DesktopController, state: DesktopAppS
         }, enabled = enabled, modifier = Modifier.fillMaxWidth()) { Text(desktopText("browse.importExtension")) }
         HorizontalDivider()
         Text(desktopText("browse.sources", sources.size), fontWeight = FontWeight.SemiBold)
-        DesktopSearchField(filter, { filter = it }, desktopText("browse.findSource"), modifier = Modifier.fillMaxWidth())
+        // On the rail card: the field contributes its outline, not a second tinted block inside the card.
+        DesktopSearchField(filter, { filter = it }, desktopText("browse.findSource"),
+            modifier = Modifier.fillMaxWidth(), onCard = true)
         DesktopSourceFilterControls(
             state.exploreFilter, state.enabledSources, controller::exploreFilter, enabled, "rail",
         )

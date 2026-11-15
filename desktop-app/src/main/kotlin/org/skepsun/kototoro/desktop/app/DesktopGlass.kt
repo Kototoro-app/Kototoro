@@ -31,3 +31,23 @@ internal fun DesktopControlSurface(modifier: Modifier, shape: Shape, content: @C
         }
     }
 }
+
+/**
+ * A control that already sits on a card: its tonal fill would add a third surface tone inside that card, so it keeps
+ * only the hairline. Used by the source rail, where the card already separates itself from the page.
+ */
+@Composable
+internal fun DesktopOutlinedControlSurface(modifier: Modifier, shape: Shape,
+    content: @Composable BoxScope.() -> Unit) {
+    val backdrop = org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop.current ?: LocalDesktopBackdrop.current
+    if (LocalDesktopInterfaceStyle.current == DesktopInterfaceStyle.IOS && backdrop != null) {
+        SharedLiquidGlassSurface(backdrop, emptyGlassTuningState(), GlassStyle(.82f, .24f, 0.dp, 4.dp), shape,
+            GlassComponentRole.PillControl, modifier = modifier, content = content)
+    } else {
+        Surface(modifier, shape = shape, color = androidx.compose.ui.graphics.Color.Transparent,
+            contentColor = MaterialTheme.colorScheme.onSurface,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = .38f))) {
+            Box(content = content)
+        }
+    }
+}

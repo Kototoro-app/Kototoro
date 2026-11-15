@@ -5,6 +5,7 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.skia.Image
+import org.skepsun.kototoro.core.appearance.VisualPresets
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -85,6 +86,20 @@ internal object DesktopAppearanceProbe {
                     onNodeWithTag("interface-style").performScrollTo().performClick(); idle()
                     onNodeWithTag("interface-style:IOS").performClick(); idle()
                     check(controller.state.value.interfaceStyle == DesktopInterfaceStyle.IOS)
+                    // A preset is one press for a coherent look, and one press to take it back: the undo restores both
+                    // keys it replaced and leaves the fine-grained rows exactly where the user had them.
+                    onNodeWithTag("visual-preset").performScrollTo().performClick(); idle()
+                    onNodeWithTag("visual-preset:${VisualPresets.MATERIAL_COMPACT}").performClick(); idle()
+                    check(controller.state.value.interfaceStyle == DesktopInterfaceStyle.MATERIAL)
+                    check(controller.state.value.appearance == DesktopAppearance.SYSTEM)
+                    check(System.getProperty("kototoro.preset.unused") == null)
+                    onNodeWithTag("visual-preset-undo").performScrollTo().assertExists()
+                    onNodeWithTag("visual-preset-undo").performClick(); idle()
+                    check(controller.state.value.interfaceStyle == DesktopInterfaceStyle.IOS)
+                    check(controller.state.value.appearance == DesktopAppearance.DARK)
+                    check(onAllNodesWithTag("visual-preset-undo").fetchSemanticsNodes().isEmpty()) {
+                        "The undo row must disappear once the preset has been taken back"
+                    }
                     onNodeWithTag("nav:浏览").performClick(); idle()
                     onNodeWithTag("source-query").assertExists()
                     snapshot("dark-glass-browse", dark = true)
