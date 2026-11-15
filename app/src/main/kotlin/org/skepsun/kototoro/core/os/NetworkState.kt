@@ -20,9 +20,8 @@ import org.skepsun.kototoro.core.util.MediatorStateFlow
  * - [isValidated]       — the default network actually reaches the internet
  *                         (INTERNET && VALIDATED).
  * - [allowAutomaticTraffic] — automatic traffic (Coil loads, background sync, auto-retry) is
- *                         enabled only when the default network is validated. On an invalid VPN
- *                         automatic traffic stops, while user-initiated attempts are NOT gated
- *                         here and keep running.
+ *                         enabled whenever a default network exists, validated or not; see
+ *                         [NetworkStateLogic] for why validation is no longer required.
  * - `value` / [isOnline] (Coil [ConnectivityChecker]) reflect [allowAutomaticTraffic].
  * - [isMetered] / [isDataSaverEnabled] / [isRestricted] are preserved as-is.
  */
@@ -59,11 +58,10 @@ class NetworkState(
             )
         }
 
-    /** 自动流量是否允许：有默认网络且已验证；无效 VPN 上自动流量停止。 */
+    /** 自动流量是否允许：存在默认网络即可，不再要求已验证。 */
     val allowAutomaticTraffic: Boolean
         get() = NetworkStateLogic.allowAutomaticTraffic(
             hasNetwork = hasNetwork,
-            isValidated = isValidated,
             offlineCheckDisabled = settings.isOfflineCheckDisabled,
         )
 

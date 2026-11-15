@@ -13,36 +13,14 @@ import org.junit.jupiter.api.Test
 class NetworkStateLogicTest {
 
     @Test
-    fun `an unvalidated vpn still has a network but blocks automatic traffic`() {
-        // hasNetwork = true (VPN is the default network) but not yet validated / reachable.
-        assertTrue(NetworkStateLogic.allowAutomaticTraffic(
-            hasNetwork = true,
-            isValidated = false,
-            offlineCheckDisabled = false,
-        ).not())
+    fun `an unvalidated network still allows automatic traffic`() {
+        // A working Wi-Fi whose router blocks the connectivity probe is never validated.
+        assertTrue(NetworkStateLogic.allowAutomaticTraffic(hasNetwork = true, offlineCheckDisabled = false))
     }
 
     @Test
-    fun `validated default network allows automatic traffic`() {
-        assertTrue(NetworkStateLogic.allowAutomaticTraffic(
-            hasNetwork = true,
-            isValidated = true,
-            offlineCheckDisabled = false,
-        ))
-    }
-
-    @Test
-    fun `no default network always blocks automatic traffic`() {
-        assertFalse(NetworkStateLogic.allowAutomaticTraffic(
-            hasNetwork = false,
-            isValidated = false,
-            offlineCheckDisabled = false,
-        ))
-        assertFalse(NetworkStateLogic.allowAutomaticTraffic(
-            hasNetwork = false,
-            isValidated = true,
-            offlineCheckDisabled = false,
-        ))
+    fun `no default network blocks automatic traffic`() {
+        assertFalse(NetworkStateLogic.allowAutomaticTraffic(hasNetwork = false, offlineCheckDisabled = false))
     }
 
     @Test
@@ -54,10 +32,6 @@ class NetworkStateLogicTest {
 
     @Test
     fun `offline check disabled always allows automatic traffic`() {
-        assertTrue(NetworkStateLogic.allowAutomaticTraffic(
-            hasNetwork = false,
-            isValidated = false,
-            offlineCheckDisabled = true,
-        ))
+        assertTrue(NetworkStateLogic.allowAutomaticTraffic(hasNetwork = false, offlineCheckDisabled = true))
     }
 }
