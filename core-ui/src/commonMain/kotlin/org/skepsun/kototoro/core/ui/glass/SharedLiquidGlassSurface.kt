@@ -65,7 +65,14 @@ fun SharedLiquidGlassSurface(
     // bars: they share the chrome tint below but are bucketed separately so their edge and
     // highlight treatment can evolve independently from real bars (bottom nav, reader
     // toolbars, settings top bar).
-    val surfaceAlpha = tuning.value(tuningScope, GlassTuningParam.SURFACE_ALPHA)
+    val tunedSurfaceAlpha = tuning.value(tuningScope, GlassTuningParam.SURFACE_ALPHA)
+    val surfaceAlpha = when (componentRole) {
+        GlassComponentRole.TopBar,
+        GlassComponentRole.BottomBar,
+        GlassComponentRole.PillControl,
+        -> chromeLegibleSurfaceAlpha(tunedSurfaceAlpha)
+        else -> tunedSurfaceAlpha
+    }
 
     val tint = when (componentRole) {
         GlassComponentRole.TopBar,
@@ -303,3 +310,17 @@ fun SharedLiquidGlassSurface(
         )
     }
 }
+
+/**
+ * Navigation chrome carries labels (tab names, the bottom bar, a page title) and sits over whatever
+ * scrolls beneath it - covers, headings, other labels. At the alpha the finish presets use for a
+ * glassy look those labels were hard to read over busy content, so chrome gets a fixed extra plate
+ * under its tuned tint. It is composed with the tuned value rather than clamping it, so the tuner's
+ * slider still moves the result across its whole range.
+ */
+internal fun chromeLegibleSurfaceAlpha(tunedAlpha: Float): Float {
+    val tuned = tunedAlpha.coerceIn(0f, 1f)
+    return 1f - (1f - tuned) * (1f - ChromeLegibilityPlateAlpha)
+}
+
+private const val ChromeLegibilityPlateAlpha = 0.35f
