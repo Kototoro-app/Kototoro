@@ -1,5 +1,9 @@
 package org.skepsun.kototoro.desktop.app
 
+import org.skepsun.kototoro.core.details.DetailsChapterRef
+import org.skepsun.kototoro.core.appearance.VisualPreferenceKeys
+import org.skepsun.kototoro.core.appearance.VisualPreset
+import org.skepsun.kototoro.core.appearance.VisualPresets
 import org.skepsun.kototoro.core.ui.compose.DetailsMediaStyle
 import org.skepsun.kototoro.core.ui.compose.ExpandableDescriptionText
 import org.skepsun.kototoro.core.ui.compose.NovelBookCoverFrame
@@ -216,6 +220,35 @@ internal fun DesktopMorePanel(controller: DesktopController, enabled: Boolean, o
         }
         SettingsSectionHeader(desktopText("more.appearance"))
         SettingsGroup {
+            // One press for a coherent look, above the fine-grained rows it writes: the dialog lists the exact theme
+            // and interface style each preset sets, and the row below takes it back.
+            SettingsValueRow(
+                desktopText("more.visualPreset"),
+                desktopText("more.visualPresetDetail"),
+                VisualPresets.byId(state.visualPreset)?.let { desktopText(it.titleKey) }
+                    ?: desktopText("visualPreset.none"),
+                enabled,
+                { dialog = DesktopMoreDialog.VISUAL_PRESET },
+                testTag = "visual-preset",
+            )
+            val undo = state.visualPresetUndo
+            if (undo != null) {
+                SettingsRowDivider()
+                SettingsValueRow(
+                    desktopText("visualPreset.undo"),
+                    desktopText(
+                        "visualPreset.undoDetail",
+                        undo[VisualPreferenceKeys.INTERFACE_STYLE]?.let { name ->
+                            DesktopInterfaceStyle.entries.firstOrNull { it.name == name }?.title
+                        } ?: "",
+                    ),
+                    null,
+                    enabled,
+                    { controller.undoVisualPreset() },
+                    testTag = "visual-preset-undo",
+                )
+            }
+            SettingsRowDivider()
             SettingsValueRow(desktopText("more.theme"), null, state.appearance.title, enabled,
                 { dialog = DesktopMoreDialog.THEME }, testTag = "appearance")
             SettingsRowDivider()
@@ -265,6 +298,18 @@ internal fun DesktopMorePanel(controller: DesktopController, enabled: Boolean, o
         }
     }
     when (dialog) {
+        DesktopMoreDialog.VISUAL_PRESET -> DesktopChoiceSettingsDialog(
+            title = desktopText("more.visualPreset"),
+            summary = desktopText("more.visualPresetDetail"),
+            bodyTag = "visual-preset-dialog",
+            optionTagPrefix = "visual-preset",
+            // The label carries the preview: what the preset sets is visible before anything is written.
+            options = VisualPresets.all.map { preset -> visualPresetLabel(preset) to preset.id },
+            selected = state.visualPreset,
+            enabled = enabled,
+            onPick = { id -> controller.applyVisualPreset(id); dialog = null },
+            onDismiss = { dialog = null },
+        )
         DesktopMoreDialog.THEME -> DesktopChoiceSettingsDialog(
             title = desktopText("more.theme"),
             summary = null,
@@ -346,12 +391,22 @@ internal fun DesktopMorePanel(controller: DesktopController, enabled: Boolean, o
 }
 
 private enum class DesktopMoreDialog {
+    VISUAL_PRESET,
     THEME,
     INTERFACE_STYLE,
     LANGUAGE,
     DETAILS_STYLE_MANGA,
     DETAILS_STYLE_NOVEL,
     DETAILS_STYLE_VIDEO,
+}
+
+/** "iOS · 分组 — 跟随系统 · iOS 风格": the preset's name plus the two values it writes, so the dialog previews it. */
+private fun visualPresetLabel(preset: VisualPreset): String {
+    val theme = DesktopAppearance.entries.firstOrNull { it.name == preset.values[VisualPreferenceKeys.THEME] }?.title.orEmpty()
+    val style = DesktopInterfaceStyle.entries.firstOrNull {
+        it.name == preset.values[VisualPreferenceKeys.INTERFACE_STYLE]
+    }?.title.orEmpty()
+    return "${desktopText(preset.titleKey)} — $theme · $style"
 }
 
 private fun detailsStyleLabel(style: DetailsMediaStyle): String = when (style) {
@@ -401,19 +456,9 @@ internal fun DesktopTabletDetails(controller: DesktopController, state: DesktopA
                 Text(content.title, style = if (expanded) MaterialTheme.typography.headlineLarge else MaterialTheme.typography.titleLarge)
                 Text(content.authors.joinToString(" · ").ifBlank { desktopText("details.authorsUnknown") }, color = Muted)
                 Text(sourceDisplayName, color = Accent, fontSize = 12.sp)
-                Button({ controller.read() }, enabled = !state.busy && !content.chapters.isNullOrEmpty(),
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("preview-read")) {
-                    Text(if (DesktopReaderKind.of(content) == DesktopReaderKind.VIDEO) desktopText("details.startWatching") else desktopText("details.startReading"))
-                }
-                OutlinedButton({ controller.toggleFavourite() }, enabled = !state.busy,
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("preview-favourite")) {
-                    Text(if (state.isFavourite) desktopText("details.unfavourite") else desktopText("details.favourite"))
-                }
-                // Android's dock item is present for every work and only hidden while the reader is already incognito.
-                if (!state.readerIncognito) {
-                    DesktopIncognitoReadingButton(!state.busy && !content.chapters.isNullOrEmpty(),
-                        { controller.readIncognito() }, Modifier.fillMaxWidth().heightIn(min = 48.dp))
-                }
+                // One prominent action that names the chapter it opens, then the secondary actions grouped by task.
+                DesktopDetailsPrimaryButton(controller, state, content)
+                DesktopDetailsSecondaryRow(controller, state, content, Modifier.fillMaxWidth())
             }
         }
         val availableTabs = remember(mediaStylePolicy.showBookmarksTab) {
@@ -476,33 +521,31 @@ internal fun DesktopTabletDetails(controller: DesktopController, state: DesktopA
                             }
                         },
                         primaryPlayAction = {
-                            Button(
-                                onClick = { controller.read() },
-                                enabled = !state.busy && allChapters.isNotEmpty(),
+                            DesktopDetailsPrimaryButton(
+                                controller = controller,
+                                state = state,
+                                content = content,
                                 shape = RoundedCornerShape(999.dp),
-                                modifier = Modifier
-                                    .widthIn(min = 200.dp, max = 360.dp)
-                                    .heightIn(min = 48.dp)
-                                    .testTag("preview-read"),
-                            ) {
-                                Text(desktopText("details.startWatching"))
-                            }
+                                fillWidth = false,
+                                modifier = Modifier.widthIn(min = 200.dp, max = 360.dp),
+                            )
                         },
                         quickActions = {
-                            OutlinedButton(
-                                onClick = { controller.toggleFavourite() },
-                                enabled = !state.busy,
-                                shape = RoundedCornerShape(999.dp),
-                                modifier = Modifier.heightIn(min = 42.dp).testTag("preview-favourite"),
-                            ) {
-                                Text(if (state.isFavourite) desktopText("details.unfavourite") else desktopText("details.favourite"))
-                            }
+                            // Task order: how this work gets read first, then whether it is kept.
                             if (!state.readerIncognito) {
                                 DesktopIncognitoReadingButton(
                                     !state.busy && allChapters.isNotEmpty(),
                                     { controller.readIncognito() },
                                     Modifier.heightIn(min = 42.dp),
                                 )
+                            }
+                            OutlinedButton(
+                                onClick = { controller.toggleFavourite() },
+                                enabled = !state.busy,
+                                shape = RoundedCornerShape(999.dp),
+                                modifier = Modifier.heightIn(min = 42.dp).testTag("preview-favourite"),
+                            ) {
+                                Text(desktopFavouriteLabel(state.isFavourite))
                             }
                         },
                     )
@@ -546,13 +589,20 @@ internal fun DesktopTabletDetails(controller: DesktopController, state: DesktopA
                             )
                         },
                         quickActionsSlot = {
-                            Button(
-                                onClick = { controller.read() },
-                                enabled = !state.busy && !content.chapters.isNullOrEmpty(),
+                            DesktopDetailsPrimaryButton(
+                                controller = controller,
+                                state = state,
+                                content = content,
                                 shape = RoundedCornerShape(999.dp),
-                                modifier = Modifier.heightIn(min = 42.dp).testTag("preview-read"),
-                            ) {
-                                Text(desktopText("details.read"))
+                                fillWidth = false,
+                                minHeight = 42.dp,
+                            )
+                            if (!state.readerIncognito) {
+                                DesktopIncognitoReadingButton(
+                                    !state.busy && !content.chapters.isNullOrEmpty(),
+                                    { controller.readIncognito() },
+                                    Modifier.heightIn(min = 42.dp),
+                                )
                             }
                             OutlinedButton(
                                 onClick = { controller.toggleFavourite() },
@@ -560,14 +610,7 @@ internal fun DesktopTabletDetails(controller: DesktopController, state: DesktopA
                                 shape = RoundedCornerShape(999.dp),
                                 modifier = Modifier.heightIn(min = 42.dp).testTag("preview-favourite"),
                             ) {
-                                Text(if (state.isFavourite) desktopText("details.unfavourite") else desktopText("details.favourite"))
-                            }
-                            if (!state.readerIncognito) {
-                                DesktopIncognitoReadingButton(
-                                    !state.busy && !content.chapters.isNullOrEmpty(),
-                                    { controller.readIncognito() },
-                                    Modifier.heightIn(min = 42.dp),
-                                )
+                                Text(desktopFavouriteLabel(state.isFavourite))
                             }
                         },
                     )

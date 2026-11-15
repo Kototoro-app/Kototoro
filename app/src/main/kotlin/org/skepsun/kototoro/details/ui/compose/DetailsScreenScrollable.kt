@@ -184,6 +184,9 @@ internal fun DetailsScrollableContent(
     content: org.skepsun.kototoro.parsers.model.Content?,
     isTemporaryReadOnly: Boolean,
     isWorkDetails: Boolean,
+    /** Inline source-health warning (message + Migrate), null when the source is fine. */
+    sourceHealthNotice: String? = null,
+    onMigrateSource: () -> Unit = {},
     scrollState: androidx.compose.foundation.ScrollState,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
@@ -239,6 +242,15 @@ internal fun DetailsScrollableContent(
         }
         if (isTemporaryReadOnly || !isWorkDetails) {
             TemporaryDetailsReadOnlyNotice(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = outerHorizontalPadding, vertical = 8.dp),
+            )
+        }
+        if (sourceHealthNotice != null) {
+            DetailsSourceHealthNotice(
+                message = sourceHealthNotice,
+                onMigrate = onMigrateSource,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = outerHorizontalPadding, vertical = 8.dp),

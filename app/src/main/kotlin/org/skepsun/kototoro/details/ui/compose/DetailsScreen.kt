@@ -131,6 +131,10 @@ import org.skepsun.kototoro.core.nav.ReaderIntent
 import org.skepsun.kototoro.core.util.ext.findActivity
 import org.skepsun.kototoro.reader.ui.ReaderNavigationCallback
 import org.skepsun.kototoro.core.exceptions.resolve.SnackbarErrorObserver
+import org.skepsun.kototoro.core.exceptions.UnsupportedSourceException
+import org.skepsun.kototoro.details.domain.DetailsSourceNoticeKind
+import org.skepsun.kototoro.details.domain.detailsOwnsSourceError
+import org.skepsun.kototoro.details.domain.detailsSourceNoticeKind
 import org.skepsun.kototoro.core.util.ext.isHttpUrl
 import org.skepsun.kototoro.core.util.ext.mangaExtra
 import org.skepsun.kototoro.core.util.ext.observeEvent
@@ -567,28 +571,29 @@ private fun DetailsScreenContent(
         val current = content ?: return@LaunchedEffect
         if (isFavourite) duplicateViewModel.loadHealth(current)
     }
-    val healthLabel = when (sourceHealth) {
-        org.skepsun.kototoro.migration.domain.SourceHealthStatus.UNINSTALLED -> stringResource(R.string.migration_health_uninstalled)
-        org.skepsun.kototoro.migration.domain.SourceHealthStatus.BROKEN -> stringResource(R.string.migration_health_broken)
-        org.skepsun.kototoro.migration.domain.SourceHealthStatus.FAILING -> stringResource(R.string.migration_health_failing)
+    val healthKind = when (sourceHealth) {
+        org.skepsun.kototoro.migration.domain.SourceHealthStatus.UNINSTALLED -> DetailsSourceNoticeKind.UNINSTALLED
+        org.skepsun.kototoro.migration.domain.SourceHealthStatus.BROKEN -> DetailsSourceNoticeKind.BROKEN
+        org.skepsun.kototoro.migration.domain.SourceHealthStatus.FAILING -> DetailsSourceNoticeKind.FAILING
         // A disabled or merely suspicious source still works; the entry being open proves it, so no migrate prompt.
         org.skepsun.kototoro.migration.domain.SourceHealthStatus.SUSPICIOUS,
         org.skepsun.kototoro.migration.domain.SourceHealthStatus.DISABLED,
-        org.skepsun.kototoro.migration.domain.SourceHealthStatus.HEALTHY -> null
+        org.skepsun.kototoro.migration.domain.SourceHealthStatus.HEALTHY -> DetailsSourceNoticeKind.NONE
     }
-    val healthMessage = healthLabel?.let { stringResource(R.string.migration_health_details_warning, it) }
-    val migrateLabel = stringResource(R.string.migrate)
-    LaunchedEffect(healthMessage) {
-        val message = healthMessage ?: return@LaunchedEffect
-        val result = snackbarHostState.showSnackbar(
-            message = message,
-            actionLabel = migrateLabel,
-            withDismissAction = true,
-            duration = androidx.compose.material3.SnackbarDuration.Long,
-        )
-        if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) {
-            content?.let { appRouter.openMigration(longArrayOf(it.id)) }
-        }
+    // A load that failed because the source cannot serve content is the same news as the health
+    // warning, so it feeds the inline notice instead of a snackbar pinned over the "Read" dock.
+    var sourceUnavailable by remember(content?.id) { mutableStateOf(false) }
+    val noticeKind = detailsSourceNoticeKind(healthKind = healthKind, sourceUnavailable = sourceUnavailable)
+    val noticeLabel = when (noticeKind) {
+        DetailsSourceNoticeKind.UNINSTALLED -> stringResource(R.string.migration_health_uninstalled)
+        DetailsSourceNoticeKind.BROKEN -> stringResource(R.string.migration_health_broken)
+        DetailsSourceNoticeKind.FAILING -> stringResource(R.string.migration_health_failing)
+        DetailsSourceNoticeKind.NONE -> null
+    }
+    val noticeMessage = noticeLabel?.let { stringResource(R.string.migration_health_details_warning, it) }
+    val onMigrateSource: () -> Unit = {
+        content?.let { appRouter.openMigration(longArrayOf(it.id)) }
+        Unit
     }
     val toolbarGapPx = with(density) { 12.dp.toPx() }
 
@@ -608,7 +613,23 @@ private fun DetailsScreenContent(
         }
     }
     DisposableEffect(lifecycleOwner, rootView, viewModel) {
-        viewModel.onError.observeEvent(lifecycleOwner, SnackbarErrorObserver(rootView))
+        val errorObserver = SnackbarErrorObserver(rootView)
+        // The inline notice above already says the source is unusable, so the "this source is not
+        // supported" snackbar it triggers would be the same sentence twice -- and a floating one.
+        viewModel.onError.observeEvent(
+            lifecycleOwner,
+            object : kotlinx.coroutines.flow.FlowCollector<Throwable> {
+                override suspend fun emit(value: Throwable) {
+                    val isUnsupportedSource = value is UnsupportedSourceException
+                    if (isUnsupportedSource) {
+                        sourceUnavailable = true
+                    }
+                    if (!detailsOwnsSourceError(isUnsupportedSource)) {
+                        errorObserver.emit(value)
+                    }
+                }
+            },
+        )
         viewModel.onActionDone.observeEvent(lifecycleOwner, ReversibleActionObserver(rootView))
         viewModel.onDownloadStarted.observeEvent(lifecycleOwner, DownloadStartedObserver(rootView))
         val sourceBindingsObserver = LifecycleEventObserver { _, event ->
@@ -1480,6 +1501,8 @@ private fun DetailsScreenContent(
                                         content = content,
                                         isTemporaryReadOnly = isTemporaryReadOnly,
                                         isWorkDetails = isWorkDetails,
+                                        sourceHealthNotice = noticeMessage,
+                                        onMigrateSource = onMigrateSource,
                                         sharedElementKey = sharedElementKey,
                                         pendingTagSearch = { detailsScreenState.setPendingTagSearch(it) },
                                         pendingAuthorSearch = { author, source ->
@@ -1685,6 +1708,8 @@ private fun DetailsScreenContent(
                                 content = content,
                                 isTemporaryReadOnly = isTemporaryReadOnly,
                                 isWorkDetails = isWorkDetails,
+                                sourceHealthNotice = noticeMessage,
+                                onMigrateSource = onMigrateSource,
                                 sharedElementKey = sharedElementKey,
                                 pendingTagSearch = { detailsScreenState.setPendingTagSearch(it) },
                                 pendingAuthorSearch = { author, source ->
