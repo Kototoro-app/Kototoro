@@ -117,6 +117,7 @@ fun UnifiedSourcesScreen(
     onAddRecommendedRepository: (UnifiedRecommendedRepository) -> Unit,
     onPullRefresh: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    onResetFilters: () -> Unit = {},
     pagerState: PagerState = rememberPagerState(pageCount = { UNIFIED_SOURCES_TAB_COUNT }),
     tabReselectTrigger: Pair<Int, Long>? = null,
 ) {
@@ -254,6 +255,9 @@ fun UnifiedSourcesScreen(
                                     selectedSourceIds = activeSelectedSourceIds,
                                     onSourceSelectionChange = onSourceSelectionChange,
                                     onSourcePinnedChange = onSourcePinnedChange,
+                                    hasAnySources = state.allSources.isNotEmpty(),
+                                    onAddSource = { onAddRepository(null) },
+                                    onResetFilters = onResetFilters,
                                 )
                                 UNIFIED_SOURCES_TAB_REPOSITORIES -> UnifiedRepositoryList(
                                     modifier = pageModifier,

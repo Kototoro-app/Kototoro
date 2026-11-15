@@ -36,6 +36,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.SearchOff
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
@@ -117,6 +118,10 @@ internal fun UnifiedSourceList(
     selectedSourceIds: Set<String>,
     onSourceSelectionChange: (Set<String>) -> Unit,
     onSourcePinnedChange: (String, Boolean) -> Unit,
+    // False when nothing is installed at all, as opposed to everything being filtered away.
+    hasAnySources: Boolean = true,
+    onAddSource: () -> Unit = {},
+    onResetFilters: () -> Unit = {},
 ) {
     val expressive = LocalMaterialExpressiveComponentsEnabled.current
     val horizontalPadding = if (expressive) 8.dp else 0.dp
@@ -153,7 +158,9 @@ internal fun UnifiedSourceList(
                 bottom = 4.dp,
             ),
         ) {
-            item(key = "source_actions") {
+            // Bulk actions over an empty catalogue are a row of dead buttons above the one thing the
+            // user can do, which is to add a source.
+            if (hasAnySources) item(key = "source_actions") {
                 LazyRow(
                     modifier = Modifier
                         .fillMaxWidth().keepHorizontalSwipes()
@@ -292,11 +299,25 @@ internal fun UnifiedSourceList(
             }
             if (displayRows.isEmpty()) {
                 item(key = "sources_empty_state") {
-                    EmptyStatePanel(
-                        icon = Icons.Outlined.SearchOff,
-                        title = stringResource(R.string.no_sources_found),
-                        message = stringResource(R.string.no_sources_found_desc),
-                    )
+                    if (hasAnySources) {
+                        EmptyStatePanel(
+                            icon = Icons.Outlined.SearchOff,
+                            title = stringResource(R.string.no_sources_found),
+                            message = stringResource(R.string.no_sources_found_desc),
+                            actionLabel = stringResource(R.string.reset_filter),
+                            onAction = onResetFilters,
+                        )
+                    } else {
+                        // Nothing is installed: "adjust your filters" would send the user looking
+                        // for a filter that is not the problem.
+                        EmptyStatePanel(
+                            icon = Icons.Outlined.Extension,
+                            title = stringResource(R.string.no_manga_sources),
+                            message = stringResource(R.string.unified_sources_empty_none_desc),
+                            actionLabel = stringResource(R.string.add_source),
+                            onAction = onAddSource,
+                        )
+                    }
                 }
             }
         }

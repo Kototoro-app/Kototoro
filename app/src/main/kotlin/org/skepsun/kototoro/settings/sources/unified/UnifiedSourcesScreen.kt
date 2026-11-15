@@ -382,6 +382,10 @@ fun UnifiedSourcesRoute(
         onSourcePinnedChange = viewModel::setSourcePinned,
         onBrowseSource = onBrowseSource,
         onOpenSourceSettings = onOpenSourceSettings,
+        onResetFilters = {
+            viewModel.clearFilters()
+            viewModel.clearLanguages()
+        },
         onAddRepository = { preset ->
             activeDialog = if (preset != null) {
                 UnifiedSourcesDialogState.UrlInput(

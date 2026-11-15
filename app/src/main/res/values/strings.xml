@@ -2863,6 +2863,7 @@
     <string name="configured_repositories">Configured repositories</string>
     <string name="preset_repositories">Recommended &amp; preset repositories</string>
     <string name="no_sources_found">No sources found</string>
+    <string name="unified_sources_empty_none_desc">Add a repository link or import an extension file to get your first source</string>
     <string name="no_sources_found_desc">Try adjusting your filters or search query</string>
     <string name="no_packages_found">No packages found</string>
     <string name="no_packages_found_desc">Try adjusting your filters or add more repositories</string>

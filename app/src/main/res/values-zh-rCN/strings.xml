@@ -569,6 +569,7 @@
     <string name="no_manga_sources">暂无内容源</string>
     <string name="no_novel_sources">暂无小说源</string>
     <string name="no_video_sources">暂无视频源</string>
+    <string name="unified_sources_empty_none_desc">添加仓库链接或导入扩展文件，即可获得第一个内容源</string>
     <string name="no_manga_sources_text">启用任意内容源即可在线阅读作品</string>
     <string name="no_novel_sources_text">启用小说源即可在线浏览小说</string>
     <string name="no_video_sources_text">启用视频源即可在线浏览视频</string>
