@@ -19,7 +19,10 @@ class HistoryListQuickFilter @Inject constructor(
     private val snapshotOptions = CompletableDeferred<List<ListFilterOption>>()
 
     init {
-        setFilterOption(ListFilterOption.Downloaded, !networkState.value)
+        // Only with no network at all. A connected but unvalidated network (a router that blocks the
+        // connectivity probe, a broken VPN) still reaches most sources, and hiding the whole history
+        // behind "On device" there reads as the history being gone.
+        setFilterOption(ListFilterOption.Downloaded, !networkState.hasNetwork)
     }
 
     /** Supplies the first already-loaded history snapshot to the lazy chip builder. */

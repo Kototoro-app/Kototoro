@@ -99,8 +99,9 @@ class FavouritesContainerViewModel @Inject constructor(
         }
         // Offline means "only what is on the device": the Downloaded quick filter follows
         // the connectivity state once per favourites page (it used to be applied by every
-        // per-category child view model, i.e. once per tab).
-        globalFavoritesState.setFilterOption(ListFilterOption.Downloaded, !networkState.value)
+        // per-category child view model, i.e. once per tab). "Offline" is no network at all: an
+        // unvalidated one must not empty the library, see HistoryListQuickFilter.
+        globalFavoritesState.setFilterOption(ListFilterOption.Downloaded, !networkState.hasNetwork)
     }
 
     data class FavoritesHostUiState(
