@@ -200,6 +200,8 @@ import org.skepsun.kototoro.video.ui.compose.VideoSeekFeedbackState
 import org.skepsun.kototoro.video.ui.compose.VideoActionDialog
 import org.skepsun.kototoro.video.ui.compose.VideoActionDialogItem
 import org.skepsun.kototoro.video.ui.compose.VideoActionDialogState
+import org.skepsun.kototoro.video.ui.compose.VideoPlayerMoreSection
+import org.skepsun.kototoro.video.ui.compose.orderVideoPlayerMoreItems
 import org.skepsun.kototoro.video.ui.compose.VideoSubtitleSettingsDialog
 import org.skepsun.kototoro.video.ui.compose.VideoSubtitleSettingsDialogState
 import org.skepsun.kototoro.video.ui.compose.VideoChapterDialog
@@ -2991,14 +2993,24 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         if (anchorBounds != IntRect.Zero) {
             lastMoreAnchorBounds = anchorBounds
         }
+        // Ordered by section: the diagnostic entry is last even though it is declared in the middle of the list, so the
+        // menu never puts a codec dump between "save to library" and "settings".
         actionDialogState = VideoActionDialogState(
             title = getString(R.string.options),
-            items = listOfNotNull(
+            items = orderVideoPlayerMoreItems(listOfNotNull(
                 VideoActionDialogItem(
                     title = getString(R.string.video_quality),
                     iconRes = R.drawable.ic_settings,
                     onClick = { onComposePlayerAction(VideoPlayerAction.OpenQuality(lastMoreAnchorBounds)) },
                 ).takeIf { availableVideos.isNotEmpty() },
+                // The row drops the speed label at the narrowest tier, and the note button below it, so both controls
+                // have to stay reachable from this menu.
+                VideoActionDialogItem(
+                    title = getString(R.string.video_playback_speed),
+                    subtitle = composeControlState.playbackSpeedLabel,
+                    iconRes = R.drawable.ic_timelapse,
+                    onClick = { onComposePlayerAction(VideoPlayerAction.OpenPlaybackSpeed(lastMoreAnchorBounds)) },
+                ),
                 VideoActionDialogItem(
                     title = getString(R.string.video_mark_intro),
                     iconRes = R.drawable.ic_fast_forward,
@@ -3052,6 +3064,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                 VideoActionDialogItem(
                     title = getString(R.string.video_detail),
                     iconRes = R.drawable.ic_info_outline,
+                    section = VideoPlayerMoreSection.DIAGNOSTICS,
                     onClick = ::openVideoDetails,
                 ),
                 VideoActionDialogItem(
@@ -3064,7 +3077,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                         )
                     },
                 ),
-            ),
+            )) { it.section },
             anchorBounds = lastMoreAnchorBounds,
             columns = 2,
         )

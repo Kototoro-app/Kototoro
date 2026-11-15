@@ -69,6 +69,7 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.SemanticsPropertyKey
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
@@ -298,6 +299,7 @@ fun VideoPlayerBottomControls(
     var speedAnchorBounds by remember { mutableStateOf(IntRect.Zero) }
     var qualityAnchorBounds by remember { mutableStateOf(IntRect.Zero) }
     val actionsScrollState = rememberScrollState()
+    var moreAnchorBounds by remember { mutableStateOf(IntRect.Zero) }
     val progress = if (state.durationMs > 0L) {
         state.positionMs.toFloat() / state.durationMs.toFloat()
     } else {
@@ -362,10 +364,37 @@ fun VideoPlayerBottomControls(
                 Text(text = formatPlaybackTime(state.durationMs), style = MaterialTheme.typography.labelMedium)
             }
             BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-                val expandedControls = maxWidth >= 600.dp * LocalDensity.current.fontScale
+                // The tier is the shared, tested rule (see VideoPlayerActionLayout): the row never needs a sideways
+                // drag to reach play/previous/next/episodes/speed/fullscreen, whatever the window or font scale is.
+                val fontScale = LocalDensity.current.fontScale
+                val actionLayout = remember(maxWidth, fontScale) {
+                    videoPlayerActionLayout(
+                        availableWidth = maxWidth.value,
+                        fontScale = fontScale,
+                        supports = buildSet {
+                            add(VideoPlayerActionSlot.PREVIOUS_CHAPTER)
+                            add(VideoPlayerActionSlot.NEXT_CHAPTER)
+                            add(VideoPlayerActionSlot.CHAPTERS)
+                            add(VideoPlayerActionSlot.PLAYBACK_SPEED)
+                            add(VideoPlayerActionSlot.FULLSCREEN)
+                            if (state.qualityLabel != null) add(VideoPlayerActionSlot.QUALITY)
+                            if (state.supportsNotes) add(VideoPlayerActionSlot.NOTES)
+                            if (state.supportsIntroOutroMarkers) {
+                                add(VideoPlayerActionSlot.INTRO_MARKER)
+                                add(VideoPlayerActionSlot.OUTRO_MARKER)
+                            }
+                            if (state.supportsScreenLock) add(VideoPlayerActionSlot.SCREEN_LOCK)
+                        },
+                    )
+                }
+                val expandedControls = actionLayout.tier == VideoPlayerControlsTier.EXPANDED
+                // A narrow row gives up the speed label's place first; it keeps working from the row's tail, which is
+                // where the low-frequency actions already live.
+                val speedInline = actionLayout.showsInline(VideoPlayerActionSlot.PLAYBACK_SPEED)
                 @Composable
                 fun ExtraActions() {
-                    state.qualityLabel?.let { label ->
+                    val qualityInline = actionLayout.showsInline(VideoPlayerActionSlot.QUALITY)
+                    state.qualityLabel?.takeIf { qualityInline }?.let { label ->
                         PlayerTextButton(
                             text = label,
                             onClick = { onAction(VideoPlayerAction.OpenQuality(qualityAnchorBounds)) },
@@ -374,7 +403,7 @@ fun VideoPlayerBottomControls(
                             },
                         )
                     }
-                    if (state.supportsNotes) PlayerIconButton(
+                    if (state.supportsNotes && actionLayout.showsInline(VideoPlayerActionSlot.NOTES)) PlayerIconButton(
                         icon = {
                             Icon(
                                 imageVector = ReaderPanelIcons.Comment,
@@ -389,10 +418,12 @@ fun VideoPlayerBottomControls(
                 }
                 @Composable
                 fun MarkerActions() {
-                    if (state.supportsIntroOutroMarkers) {
+                    if (state.supportsIntroOutroMarkers && actionLayout.showsInline(VideoPlayerActionSlot.INTRO_MARKER)) {
                         PlayerTextButton(uiString("video_mark_intro")) {
                             onAction(VideoPlayerAction.ToggleIntroMarker)
                         }
+                    }
+                    if (state.supportsIntroOutroMarkers && actionLayout.showsInline(VideoPlayerActionSlot.OUTRO_MARKER)) {
                         PlayerTextButton(uiString("video_mark_outro")) {
                             onAction(VideoPlayerAction.ToggleOutroMarker)
                         }
@@ -401,6 +432,7 @@ fun VideoPlayerBottomControls(
                 Row(
                     modifier = Modifier
                         .testTag("video-actions")
+                        .semantics { this[VideoPlayerActionsTierKey] = actionLayout.tier }
                         .mouseDragScroll(actionsScrollState, Orientation.Horizontal)
                         .horizontalScroll(actionsScrollState)
                         .widthIn(min = maxWidth),
@@ -438,25 +470,30 @@ fun VideoPlayerBottomControls(
                             },
                         )
                     }
-                    if (expandedControls) ExtraActions()
-                    PlayerTextButton(
-                        text = state.playbackSpeedLabel,
-                        onClick = { onAction(VideoPlayerAction.OpenPlaybackSpeed(speedAnchorBounds)) },
-                        modifier = Modifier.onGloballyPositioned {
-                            speedAnchorBounds = it.boundsInWindowIntRect()
-                        },
-                    )
-                    if (expandedControls) {
-                        trailingActions()
-                        MarkerActions()
+                    // Only the slots this tier keeps inline are drawn. That is what makes "no sideways drag" real: the
+                    // row's width follows the tested rule instead of however many extras a host declares, and every
+                    // dropped slot is one tap away in the overflow menu below.
+                    ExtraActions()
+                    if (speedInline) {
+                        PlayerTextButton(
+                            text = state.playbackSpeedLabel,
+                            onClick = { onAction(VideoPlayerAction.OpenPlaybackSpeed(speedAnchorBounds)) },
+                            modifier = Modifier.onGloballyPositioned {
+                                speedAnchorBounds = it.boundsInWindowIntRect()
+                            },
+                        )
                     }
-                    if (state.supportsScreenLock) PlayerIconButton(
-                        icon = {
-                            Icon(VideoPlayerIcons.Lock, contentDescription = null, modifier = Modifier.size(18.dp))
-                        },
-                        contentDescription = "Lock controls",
-                        onClick = { onAction(VideoPlayerAction.ToggleScreenLock) },
-                    )
+                    trailingActions()
+                    MarkerActions()
+                    if (state.supportsScreenLock && actionLayout.showsInline(VideoPlayerActionSlot.SCREEN_LOCK)) {
+                        PlayerIconButton(
+                            icon = {
+                                Icon(VideoPlayerIcons.Lock, contentDescription = null, modifier = Modifier.size(18.dp))
+                            },
+                            contentDescription = "Lock controls",
+                            onClick = { onAction(VideoPlayerAction.ToggleScreenLock) },
+                        )
+                    }
                     if (state.showsRotation) PlayerIconButton(
                         icon = {
                             Icon(
@@ -476,11 +513,17 @@ fun VideoPlayerBottomControls(
                         onClick = { onAction(VideoPlayerAction.ToggleFullscreen) },
                         modifier = Modifier.testTag("video-fullscreen"),
                     )
-                    if (!expandedControls) {
-                        trailingActions()
-                        ExtraActions()
-                        MarkerActions()
-                    }
+                    // A host without an overflow menu is expected to widen its own row instead; it gets no dead button.
+                    if (state.supportsMore && actionLayout.overflow.isNotEmpty()) PlayerIconButton(
+                        icon = { Icon(VideoPlayerIcons.MoreVert, contentDescription = null) },
+                        contentDescription = uiString("options"),
+                        onClick = { onAction(VideoPlayerAction.OpenMore(moreAnchorBounds)) },
+                        modifier = Modifier
+                            .testTag("video-actions-overflow")
+                            .onGloballyPositioned {
+                                moreAnchorBounds = it.boundsInWindowIntRect()
+                            },
+                    )
                 }
                 if (actionsScrollState.canScrollBackward) {
                     PlayerScrollHint(

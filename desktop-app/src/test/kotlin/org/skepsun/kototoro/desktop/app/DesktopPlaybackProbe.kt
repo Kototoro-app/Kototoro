@@ -3,6 +3,7 @@ package org.skepsun.kototoro.desktop.app
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performSemanticsAction
@@ -35,6 +36,12 @@ internal object DesktopPlaybackProbe {
                 idle()
 
                 onNodeWithTag("playback-setting-background").assertExists()
+                // The decoder and the two opacity sliders live in the collapsed "more playback settings" group:
+                // closed, they are not on screen at all, which is the point of folding them away.
+                onNodeWithTag("playback-setting-decoder").assertDoesNotExist()
+                onNodeWithTag("playback-controls-alpha").assertDoesNotExist()
+                onNodeWithText(AndroidStrings["playback_more_settings"]).performScrollTo().performClick()
+                idle()
                 onNodeWithTag("playback-setting-decoder").assertExists()
                 onNodeWithTag("playback-controls-alpha").performScrollTo().assertExists()
                 onNodeWithTag("playback-gradient-alpha").performScrollTo().assertExists()

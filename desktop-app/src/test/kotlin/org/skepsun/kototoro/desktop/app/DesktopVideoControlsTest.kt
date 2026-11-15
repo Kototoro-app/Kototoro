@@ -13,9 +13,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.focus.FocusDirection
-import androidx.compose.ui.focus.FocusManager
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.graphics.asSkiaBitmap
 import androidx.compose.ui.test.*
@@ -25,8 +22,10 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.skepsun.kototoro.video.ui.compose.VideoPlayerAction
+import org.skepsun.kototoro.video.ui.compose.VideoPlayerActionsTierKey
 import org.skepsun.kototoro.video.ui.compose.VideoPlayerBottomControls
 import org.skepsun.kototoro.video.ui.compose.VideoPlayerControlState
+import org.skepsun.kototoro.video.ui.compose.VideoPlayerControlsTier
 import org.skepsun.kototoro.video.ui.compose.VideoPlayerTopControls
 import org.skepsun.kototoro.core.prefs.UiPresentationMode
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
@@ -110,9 +109,16 @@ class DesktopVideoControlsTest {
             onAllNodesWithText("4:3").assertCountEquals(2)
         }
 
+    /**
+     * At 320dp the row is the NARROW tier, and the tier is enforced: only the slots it keeps inline are drawn, so the
+     * row fits its window and no control has to be dragged out from the side. The speed label and the quality label move
+     * to the overflow menu, which sits at the row's end and is therefore always on screen.
+     *
+     * See [org.skepsun.kototoro.video.ui.compose.videoPlayerActionLayout].
+     */
     @OptIn(ExperimentalTestApi::class)
     @Test
-    fun `compact player actions scroll while playback and common actions stay accessible`() =
+    fun `narrow player draws only the inline slots and offers the rest behind the overflow`() =
         runDesktopComposeUiTest(320, 240) {
             val actions = mutableListOf<VideoPlayerAction>()
             var interactionStarts = 0
@@ -126,52 +132,42 @@ class DesktopVideoControlsTest {
                             canSeek = true,
                             durationMs = 120_000,
                             qualityLabel = "1080p",
+                            supportsNotes = true,
                         ),
                         onAction = { actions += it },
                         onInteractionStart = { interactionStarts++ },
                         onInteractionEnd = { interactionEnds++ },
+                        modifier = Modifier.fillMaxSize(),
                     )
                 }
             }
+            onNodeWithTag("video-actions")
+                .assert(SemanticsMatcher.expectValue(VideoPlayerActionsTierKey, VideoPlayerControlsTier.NARROW))
+            // Everything the narrow tier keeps inline is on screen without touching the row.
             onNodeWithContentDescription("Play").assertIsDisplayed()
             onNodeWithContentDescription("Previous chapter").assertIsDisplayed()
             onNodeWithContentDescription("Next chapter").assertIsDisplayed()
-            onNodeWithText("1.00x").assertIsDisplayed()
+            onNodeWithContentDescription("Chapters").assertIsDisplayed()
             onNodeWithContentDescription("Lock controls").assertIsDisplayed()
-            onNodeWithContentDescription("video_add_note").assertIsNotDisplayed()
-            onNodeWithTag("video-actions-scroll-forward").assertExists()
+            onNodeWithContentDescription("rotate_screen").assertIsDisplayed()
+            onNodeWithTag("video-actions-overflow").assertIsDisplayed()
+            // What the tier moved to the overflow is not drawn in the row at all — that is what keeps the row inside
+            // the window instead of ending past the right edge.
+            onNodeWithText("1.00x").assertDoesNotExist()
+            onNodeWithText("1080p").assertDoesNotExist()
+            onNodeWithContentDescription("video_add_note").assertDoesNotExist()
+            onNodeWithTag("video-actions-scroll-forward").assertDoesNotExist()
             val reports = Files.createDirectories(Path.of("build/reports/desktop-smoke"))
             Image.makeFromBitmap(onRoot().captureToImage().asSkiaBitmap()).use { image ->
-                image.encodeToData()?.use { Files.write(reports.resolve("video-actions-before-scroll.png"), it.bytes) }
+                image.encodeToData()?.use { Files.write(reports.resolve("video-actions-narrow.png"), it.bytes) }
             }
-
-            scrollActionsTo(forward = true) { onNodeWithContentDescription("video_add_note") }
-            onNodeWithContentDescription("Play").assertIsDisplayed()
-            onNodeWithContentDescription("video_add_note").assertIsDisplayed().performClick()
-            scrollActionsTo(forward = true) { onNodeWithText("video_mark_outro") }
-            onNodeWithText("video_mark_outro").assertIsDisplayed()
-            onNodeWithTag("video-actions-scroll-back").assertExists()
-            Image.makeFromBitmap(onRoot().captureToImage().asSkiaBitmap()).use { image ->
-                image.encodeToData()?.use { Files.write(reports.resolve("video-actions-after-scroll.png"), it.bytes) }
-            }
-            assertEquals(VideoPlayerAction.AddNote, actions.last())
+            // The controls that stayed in the row still work by touch, without any drag first.
+            onNodeWithContentDescription("Previous chapter").performClick()
+            assertEquals(VideoPlayerAction.PreviousChapter, actions.last())
+            onNodeWithTag("video-actions-overflow").performClick()
+            assertTrue(actions.last() is VideoPlayerAction.OpenMore)
             assertTrue(actions.none { it is VideoPlayerAction.SeekTo })
             assertTrue(interactionStarts > 0 && interactionEnds > 0)
-
-            scrollActionsTo(forward = false) { onNodeWithContentDescription("Previous chapter") }
-            onNodeWithContentDescription("Previous chapter").assertIsDisplayed().performClick()
-            assertEquals(VideoPlayerAction.PreviousChapter, actions.last())
-
-            val actionCount = actions.size
-            onNodeWithTag("video-actions").performMouseInput {
-                moveTo(center)
-                press()
-                repeat(8) { advanceEventTime(16); moveBy(Offset(-25f, 0f)) }
-                release()
-            }
-            waitForIdle()
-            onNodeWithContentDescription("video_add_note").assertIsDisplayed()
-            assertEquals(actionCount, actions.size)
         }
 
     @OptIn(ExperimentalTestApi::class)
@@ -182,6 +178,7 @@ class DesktopVideoControlsTest {
                 VideoPlayerBottomControls(
                     state = VideoPlayerControlState(qualityLabel = "1080p"),
                     onAction = {},
+                    modifier = Modifier.fillMaxSize(),
                 )
             }
         }
@@ -193,39 +190,55 @@ class DesktopVideoControlsTest {
         onNodeWithTag("video-actions-scroll-back").assertDoesNotExist()
     }
 
+    /**
+     * A remote has no pointer, so an action it can reach must be focusable where it is drawn: in the wide tier the note
+     * button is drawn in the row, and focusing it must not need a scroll first.
+     */
     @OptIn(ExperimentalTestApi::class)
     @Test
-    fun `tv focus brings a clipped player action into view`() = runDesktopComposeUiTest(320, 240) {
-        lateinit var focusManager: FocusManager
+    fun `tv focus reaches the note button in the row without clipping`() = runDesktopComposeUiTest(1280, 240) {
         setContent {
             CompositionLocalProvider(
                 LocalUiPresentationConfig provides UiPresentationConfig(UiPresentationMode.TV, UiPresentationMode.TV),
             ) {
                 MaterialTheme {
-                    focusManager = LocalFocusManager.current
                     VideoPlayerBottomControls(
                         state = VideoPlayerControlState(hasPreviousChapter = true, hasNextChapter = true),
                         onAction = {},
+                        modifier = Modifier.fillMaxSize(),
                     )
                 }
             }
         }
-        onNodeWithContentDescription("Previous chapter").performSemanticsAction(SemanticsActions.RequestFocus)
-        repeat(6) { runOnIdle { focusManager.moveFocus(FocusDirection.Right) } }
+        onNodeWithContentDescription("video_add_note").performSemanticsAction(SemanticsActions.RequestFocus)
         waitForIdle()
         onNodeWithContentDescription("video_add_note").assertIsDisplayed().assertIsFocused()
-        onNodeWithTag("video-actions-scroll-back").assertExists()
+        onNodeWithTag("video-actions-scroll-back").assertDoesNotExist()
     }
 
-    /** Half-width swipes until [target] is on screen; the buttons' widths decide how many that takes. */
+    /**
+     * At the narrowest width the tail of the row is off screen; focusing the overflow button has to bring it into view,
+     * otherwise the low-frequency actions would be unreachable from a remote.
+     */
     @OptIn(ExperimentalTestApi::class)
-    private fun ComposeUiTest.scrollActionsTo(forward: Boolean, target: () -> SemanticsNodeInteraction) {
-        repeat(12) {
-            if (runCatching { target().assertIsDisplayed() }.isSuccess) return
-            onNodeWithTag("video-actions").performTouchInput {
-                if (forward) swipeLeft(startX = right, endX = centerX) else swipeRight(startX = left, endX = centerX)
+    @Test
+    fun `tv focus pulls the overflow button into view at the narrowest width`() = runDesktopComposeUiTest(320, 240) {
+        setContent {
+            CompositionLocalProvider(
+                LocalUiPresentationConfig provides UiPresentationConfig(UiPresentationMode.TV, UiPresentationMode.TV),
+            ) {
+                MaterialTheme {
+                    VideoPlayerBottomControls(
+                        state = VideoPlayerControlState(hasPreviousChapter = true, hasNextChapter = true),
+                        onAction = {},
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
             }
-            waitForIdle()
         }
+        onNodeWithTag("video-actions-overflow").assertExists()
+            .performSemanticsAction(SemanticsActions.RequestFocus)
+        waitForIdle()
+        onNodeWithTag("video-actions-overflow").assertIsDisplayed().assertIsFocused()
     }
 }

@@ -30,6 +30,8 @@ import org.junit.Test
 import org.junit.Rule
 import org.junit.runner.RunWith
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.text.AndroidUiStrings
+import org.skepsun.kototoro.core.ui.text.LocalUiStrings
 import org.skepsun.kototoro.core.dev.IdleProbeActivity
 
 /** Uses real layout/accessibility bounds, including clipping by scroll containers. */
@@ -76,7 +78,12 @@ class VideoPlayerControlsLayoutTest {
                 val density = minOf(metrics.density, metrics.widthPixels.toFloat() / widthDp)
                 activity.setContent {
                     MaterialTheme {
-                        CompositionLocalProvider(LocalDensity provides Density(density, fontScale)) {
+                        // The row reads its labels through the shared UiStrings catalog; without the Android provider it
+                        // falls back to the raw resource names ("rotate_screen"), which no user ever sees.
+                        CompositionLocalProvider(
+                            LocalUiStrings provides AndroidUiStrings(activity),
+                            LocalDensity provides Density(density, fontScale),
+                        ) {
                             Box(Modifier.width(widthDp.dp).background(Color.Black)) {
                                 VideoPlayerBottomControls(
                                     state = VideoPlayerControlState(
@@ -108,31 +115,56 @@ class VideoPlayerControlsLayoutTest {
                 }
                 val bounds = Rect()
                 node?.getBoundsInScreen(bounds)
+                if (node == null || bounds.width() < 20) {
+                    android.util.Log.i(
+                        "PlayerControlsLayout",
+                        "missing [$description] at ${widthDp}dp / font $fontScale; tree: " +
+                            describeTree(instrumentation.uiAutomation.rootInActiveWindow),
+                    )
+                }
                 assertTrue("$description is clipped at ${widthDp}dp / font $fontScale: $bounds", bounds.width() >= 20)
                 assertTrue("$description must accept clicks", node!!.performAction(AccessibilityNodeInfo.ACTION_CLICK))
                 instrumentation.waitForIdleSync()
                 assertTrue("$description must invoke its original action", actions.contains(action))
             }
-            listOf("Chapters", "1.00x").forEach { description ->
+            listOf("Chapters").forEach { description ->
                 var node = findNode(instrumentation.uiAutomation.rootInActiveWindow, description)
                 while (node != null && !node.isClickable) node = node.parent
                 assertTrue("$description must be accessible", node != null)
                 assertTrue(node!!.performAction(AccessibilityNodeInfo.ACTION_CLICK))
                 instrumentation.waitForIdleSync()
                 assertTrue("$description must dispatch its action", actions.any {
-                    when (description) {
-                        "Chapters" -> it is VideoPlayerAction.OpenChapterSelection
-                        else -> it is VideoPlayerAction.OpenPlaybackSpeed
-                    }
+                    it is VideoPlayerAction.OpenChapterSelection
                 })
             }
-            assertNull(
-                "The bottom toolbar must not duplicate the top options menu",
-                findNode(instrumentation.uiAutomation.rootInActiveWindow, context.getString(R.string.options)),
-            )
+            // Above the narrow tier the speed label is drawn in the row; at the narrow tier the row gives its place up
+            // and the same control comes from the overflow menu, which must therefore be reachable in the row.
+            val effectiveWidth = widthDp / fontScale
+            val overflowLabel = context.getString(R.string.options)
+            if (effectiveWidth >= 380f) {
+                var node = findNode(instrumentation.uiAutomation.rootInActiveWindow, "1.00x")
+                while (node != null && !node.isClickable) node = node.parent
+                assertTrue("1.00x must be accessible at ${widthDp}dp / font $fontScale", node != null)
+                assertTrue(node!!.performAction(AccessibilityNodeInfo.ACTION_CLICK))
+                instrumentation.waitForIdleSync()
+                assertTrue(actions.any { it is VideoPlayerAction.OpenPlaybackSpeed })
+                assertNull(
+                    "The bottom toolbar has nothing behind it, so it must not duplicate the top options menu",
+                    findNode(instrumentation.uiAutomation.rootInActiveWindow, overflowLabel),
+                )
+            } else {
+                var node = findNode(instrumentation.uiAutomation.rootInActiveWindow, overflowLabel)
+                while (node != null && !node.isClickable) node = node.parent
+                assertTrue("The overflow must be accessible at ${widthDp}dp / font $fontScale", node != null)
+                assertTrue(node!!.performAction(AccessibilityNodeInfo.ACTION_CLICK))
+                instrumentation.waitForIdleSync()
+                assertTrue(actions.any { it is VideoPlayerAction.OpenMore })
+            }
             // Wait for the system launch transition before capturing the composed toolbar.
             SystemClock.sleep(600)
             instrumentation.uiAutomation.takeScreenshot()?.let { bitmap ->
+                // Kept in the app cache: `adb shell run-as <applicationId> cat cache/<name>` still reaches it while the
+                // app is installed, which is how these shots were reviewed on a device.
                 try {
                     File(context.cacheDir, "video-toolbar-$widthDp-$fontScale.png").outputStream().use {
                         bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
@@ -143,6 +175,18 @@ class VideoPlayerControlsLayoutTest {
             }
         } finally {
             instrumentation.runOnMainSync { fixture.finish() }
+        }
+    }
+
+    private fun describeTree(node: AccessibilityNodeInfo?, depth: Int = 0): String {
+        if (node == null) return ""
+        val label = node.contentDescription?.toString() ?: node.text?.toString()
+        val bounds = Rect()
+        node.getBoundsInScreen(bounds)
+        val line = "${"  ".repeat(depth)}${node.className} [$label] $bounds\n"
+        return buildString {
+            append(line)
+            for (index in 0 until node.childCount) append(describeTree(node.getChild(index), depth + 1))
         }
     }
 
@@ -157,4 +201,5 @@ class VideoPlayerControlsLayoutTest {
         }
         return null
     }
+
 }

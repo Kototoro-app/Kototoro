@@ -56,6 +56,11 @@ internal data class VideoActionDialogItem(
     val leadingText: String? = null,
     @DrawableRes val iconRes: Int? = null,
     val checked: Boolean? = null,
+    /**
+     * Where the entry sorts in the overflow menu; the technical dump declares [VideoPlayerMoreSection.DIAGNOSTICS] so it
+     * lands after the everyday actions instead of between them.
+     */
+    val section: VideoPlayerMoreSection = VideoPlayerMoreSection.FREQUENT,
     val onClick: () -> Unit,
 )
 

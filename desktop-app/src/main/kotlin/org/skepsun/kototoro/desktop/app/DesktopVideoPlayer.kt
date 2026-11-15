@@ -49,6 +49,7 @@ import org.skepsun.kototoro.desktop.player.MpvLocator
 import org.skepsun.kototoro.desktop.player.MpvShaderLibrary
 import org.skepsun.kototoro.desktop.player.MpvPlayer
 import org.skepsun.kototoro.desktop.player.MpvState
+import org.skepsun.kototoro.video.ui.compose.VideoPlayerMoreSection
 import org.skepsun.kototoro.video.ui.compose.VideoSeekFeedback
 import org.skepsun.kototoro.video.ui.compose.VideoPlayerAction
 import org.skepsun.kototoro.video.ui.compose.VideoPlayerBottomControls
@@ -291,6 +292,9 @@ private fun PlayerContent(controller: DesktopController, state: DesktopAppState,
     }
     // The seeking bubble of Android's player; a fixed jump seeks and reports itself, a longer one replaces the last.
     var seekFeedback by remember { mutableStateOf<VideoSeekFeedbackState?>(null) }
+    // The playback-info dialog's rows; null while it is closed. Filled from mpv when it is opened, because mpv only
+    // knows the codec of the file it has actually loaded.
+    var diagnostics by remember { mutableStateOf<List<Pair<String, String>>?>(null) }
     var seekFeedbackJob by remember { mutableStateOf<Job?>(null) }
     val jump: (Double) -> Unit = { offset ->
         desktopSeekFeedback(mpv.position, mpv.duration, offset)?.let { feedback ->
@@ -403,7 +407,7 @@ private fun PlayerContent(controller: DesktopController, state: DesktopAppState,
         hasPreviousChapter = enabled && hasPrevious, hasNextChapter = enabled && hasNext,
         playbackSpeedLabel = "${trimSpeed(mpv.speed)}x",
         qualityLabel = video.label(video.selected).takeIf { video.streams.size > 1 },
-        supportsNotes = false, supportsIntroOutroMarkers = false, supportsScreenLock = false, supportsMore = false,
+        supportsNotes = false, supportsIntroOutroMarkers = false, supportsScreenLock = false, supportsMore = true,
         supportsAspectRatio = false,
         showsRotation = false, isFullscreen = fullscreen,
         controlsAlpha = state.videoSettings.controlsOpacity.coerceAtLeast(.2f),
@@ -427,6 +431,7 @@ private fun PlayerContent(controller: DesktopController, state: DesktopAppState,
                 is VideoPlayerAction.OpenAudioTracks -> if (mpv.audio.size > 1) open(PlayerMenu.AUDIO, action.anchorBounds)
                 is VideoPlayerAction.OpenPlaybackSpeed -> open(PlayerMenu.SPEED, action.anchorBounds)
                 is VideoPlayerAction.OpenQuality -> open(PlayerMenu.QUALITY, action.anchorBounds)
+                is VideoPlayerAction.OpenMore -> open(PlayerMenu.MORE, action.anchorBounds)
                 VideoPlayerAction.ToggleFullscreen -> toggleFullscreen()
                 else -> Unit
             }
@@ -482,6 +487,69 @@ private fun PlayerContent(controller: DesktopController, state: DesktopAppState,
         when (kind) {
             PlayerMenu.ENHANCEMENT -> EnhancementMenuWindow(canvas, anchor, state.videoEnhancement,
                 { controller.setVideoEnhancement(it) }, close)
+            PlayerMenu.MORE -> {
+                // The control row loses its trailing buttons once the window is narrow; this menu is how those
+                // functions stay reachable instead of being dropped.
+                val capabilities = DesktopPlayerMoreCapabilities(
+                    streamCount = video.streams.size,
+                    audioTrackCount = mpv.audio.size,
+                    subtitleTrackCount = mpv.subtitles.size,
+                )
+                val items = desktopPlayerMoreItems(capabilities)
+                PlayerMenuWindow(canvas, anchor, 240.dp,
+                    (items.size * PlayerMenuRowHeight.value + 12).coerceAtMost(420f).dp, close) {
+                    LazyColumn(Modifier.fillMaxSize()) {
+                        itemsIndexed(items) { index, item ->
+                            // The diagnostics section starts below a hairline, so reading it is a decision rather than
+                            // something that happens because it sat in the same grid as the everyday actions.
+                            if (index > 0 && desktopPlayerMoreSection(item) == VideoPlayerMoreSection.DIAGNOSTICS &&
+                                desktopPlayerMoreSection(items[index - 1]) != VideoPlayerMoreSection.DIAGNOSTICS
+                            ) {
+                                HorizontalDivider(Modifier.padding(horizontal = 12.dp),
+                                    color = PlayerText.copy(alpha = .18f))
+                            }
+                            PlayerMenuRow(desktopPlayerMoreLabel(item), false, desktopPlayerMoreTag(item)) {
+                                close()
+                                when (item) {
+                                    DesktopPlayerMoreItem.ENHANCEMENT ->
+                                        menu = PlayerMenu.ENHANCEMENT to anchor
+                                    DesktopPlayerMoreItem.QUALITY ->
+                                        if (video.streams.size > 1) menu = PlayerMenu.QUALITY to anchor
+                                    // The row gives up the speed label before anything else, so the same control has to
+                                    // be reachable from here once the window is narrow.
+                                    DesktopPlayerMoreItem.SPEED -> menu = PlayerMenu.SPEED to anchor
+                                    DesktopPlayerMoreItem.AUDIO ->
+                                        if (mpv.audio.size > 1) menu = PlayerMenu.AUDIO to anchor
+                                    DesktopPlayerMoreItem.SUBTITLES ->
+                                        if (mpv.subtitles.isNotEmpty()) menu = PlayerMenu.SUBTITLES to anchor
+                                    DesktopPlayerMoreItem.PLAYBACK_INFO -> {
+                                        // Show the rows straight away with dashes, then fill them from mpv: the window
+                                        // is a menu and would otherwise appear empty for a frame.
+                                        diagnostics = desktopPlayerDiagnosticsRows(emptyMap())
+                                        menu = PlayerMenu.DIAGNOSTICS to anchor
+                                        control { player ->
+                                            diagnostics = desktopPlayerDiagnosticsRows(
+                                                DiagnosticsProperties
+                                                    .mapNotNull { name -> player.property(name)?.let { name to it } }
+                                                    .toMap(),
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            PlayerMenu.DIAGNOSTICS -> {
+                val rows = diagnostics ?: desktopPlayerDiagnosticsRows(emptyMap())
+                PlayerMenuWindow(canvas, anchor, 300.dp,
+                    (rows.size * PlayerMenuRowHeight.value + 12).coerceAtMost(360f).dp, close) {
+                    LazyColumn(Modifier.fillMaxSize()) {
+                        rows.forEach { (label, value) -> item { PlayerMenuInfoRow(label, value) } }
+                    }
+                }
+            }
             else -> {
                 val entries = when (kind) {
                     PlayerMenu.QUALITY -> video.streams.indices.map { video.label(it) to (it == video.selected) }
@@ -542,7 +610,7 @@ private fun EpisodeList(controller: DesktopController, state: DesktopAppState, v
 /** The player's menus, each opened from its button at an anchor on screen. */
 private enum class PlayerMenu(val tag: String) {
     QUALITY("video-quality"), SPEED("video-speed"), SUBTITLES("video-subtitles"), AUDIO("video-audio"),
-    ENHANCEMENT("video-enhancement"),
+    ENHANCEMENT("video-enhancement"), MORE("video-more"), DIAGNOSTICS("video-diagnostics"),
 }
 
 /** An icon button of the desktop's own controls, drawn like the shared player buttons. */
@@ -604,6 +672,28 @@ private fun EnhancementMenuWindow(host: java.awt.Component, anchor: Rect, enhanc
 private fun PlayerButton(label: String, enabled: Boolean, tag: String? = null, onClick: () -> Unit) {
     TextButton(onClick, enabled = enabled, modifier = if (tag != null) Modifier.testTag(tag) else Modifier) {
         Text(label, color = if (enabled) PlayerText else PlayerMuted)
+    }
+}
+
+/** The mpv properties the playback-info dialog reads, in the order the rows appear. */
+private val DiagnosticsProperties = listOf(
+    "hwdec-current",
+    "vo",
+    "video-codec",
+    "audio-codec-name",
+    "width",
+    "height",
+    "container-fps",
+    "mpv-version",
+)
+
+/** A read-only row of the playback-info window: the same shape as a menu row, with no click target. */
+@Composable
+private fun PlayerMenuInfoRow(label: String, value: String) {
+    Row(Modifier.fillMaxWidth().heightIn(min = PlayerMenuRowHeight).padding(horizontal = 16.dp)
+        .testTag("player-diagnostics-row"), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, color = PlayerMuted, fontSize = 13.sp, modifier = Modifier.weight(1f))
+        Text(value, color = PlayerText, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
