@@ -22,7 +22,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -323,15 +328,28 @@ fun WizardDonePage(
                 onClick = onRestoreBackup,
             )
         }
+        // The troubleshooting steps matter only once a source misbehaves. Printed in full they were
+        // the longest thing on a page whose message is "you are done", so they open on request.
+        var adviceExpanded by remember { mutableStateOf(false) }
         WizardSectionCard(
             title = uiString("welcome_done_advice_title"),
             summary = uiString("welcome_done_advice_summary"),
+            actions = {
+                TextButton(
+                    onClick = { adviceExpanded = !adviceExpanded },
+                    modifier = Modifier.testTag("wizard-advice-toggle"),
+                ) {
+                    Text(uiString(if (adviceExpanded) "show_less" else "show_more"))
+                }
+            },
         ) {
-            Text(
-                text = uiString("welcome_done_advice_body"),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            if (adviceExpanded) {
+                Text(
+                    text = uiString("welcome_done_advice_body"),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }

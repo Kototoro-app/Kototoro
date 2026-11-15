@@ -1097,9 +1097,9 @@
     <string name="interface_style">Interface style</string>
     <string name="interface_style_material3">md3 (legacy)</string>
     <string name="interface_style_material3_summary">Android-native controls, spacing, and surfaces</string>
-    <string name="interface_style_material3_expressive">md3 expressive</string>
+    <string name="interface_style_material3_expressive">Material 3 Expressive</string>
     <string name="interface_style_material3_expressive_summary">Larger adaptive controls, emphasized shapes, and bolder type hierarchy</string>
-    <string name="interface_style_ios">ios (modern)</string>
+    <string name="interface_style_ios">iOS (modern)</string>
     <string name="interface_style_ios_summary">Rounder controls, quieter surfaces, Backdrop glass, and softer menus</string>
     <string name="appearance_style_override_note">Effective in the current %1$s style: %2$s</string>
     <string name="appearance_style_default_value">Current %1$s style default: %2$s</string>

@@ -249,7 +249,9 @@ fun SettingsValueRow(
                     Text(
                         text = value,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        // A current value is information, not an action: it takes the same muted colour as the
+                        // values other settings rows print under their title, and the chevron carries "tap me".
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (enabled) 1f else .6f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.widthIn(max = valueColumnCap),

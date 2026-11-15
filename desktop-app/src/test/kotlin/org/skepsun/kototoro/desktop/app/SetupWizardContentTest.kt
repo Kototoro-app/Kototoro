@@ -128,6 +128,9 @@ class SetupWizardContentTest {
             onNodeWithText(AndroidStrings["welcome_done_body_finished"]).assertExists()
             // The advice card is the last thing Android's wizard says.
             onNodeWithText(AndroidStrings["welcome_done_advice_title"]).assertExists()
+            // Its steps stay folded until asked for.
+            onNodeWithText(AndroidStrings["welcome_done_advice_body"]).assertDoesNotExist()
+            onNodeWithTag("wizard-advice-toggle").performScrollTo().performClick()
             onNodeWithText(AndroidStrings["welcome_done_advice_body"]).assertExists()
             onNodeWithTag("wizard-open-extensions").performScrollTo().performClick()
             assertEquals("extensions", opened)

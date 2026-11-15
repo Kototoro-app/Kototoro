@@ -654,7 +654,7 @@
     <string name="interface_style">界面风格</string>
     <string name="interface_style_material3">md3 (legacy)</string>
     <string name="interface_style_material3_summary">保留 Android 原生的控件、间距和表面层级</string>
-    <string name="interface_style_material3_expressive">md3 expressive</string>
+    <string name="interface_style_material3_expressive">Material 3 Expressive</string>
     <string name="interface_style_material3_expressive_summary">更大的自适应控件、更强调的形状和更鲜明的字体层级</string>
     <string name="interface_style_ios">iOS (现代)</string>
     <string name="interface_style_ios_summary">更圆润的控件、更克制的表面、Backdrop 玻璃和柔和菜单</string>
@@ -2298,7 +2298,7 @@
     <string name="welcome_appearance_title">自定义界面</string>
     <string name="welcome_appearance_summary">选择视觉风格、导航转场与详情页全景行为，稍后可在外观设置中更改。</string>
     <string name="welcome_glass_preset_title">玻璃质感</string>
-    <string name="welcome_glass_preset_summary">选择 ios 风格下的玻璃质感预设。默认是折射，稍后可在外观设置中微调。</string>
+    <string name="welcome_glass_preset_summary">选择 iOS 风格下的玻璃质感预设。默认是折射，稍后可在外观设置中微调。</string>
     <string name="welcome_install_mode_title">APK 安装方式</string>
     <string name="welcome_install_mode_summary">适用于 Mihon、Aniyomi、IReader、Tsundoku 扩展包。</string>
     <string name="welcome_install_mode_sideload">侧载安装（内置管理，推荐）</string>

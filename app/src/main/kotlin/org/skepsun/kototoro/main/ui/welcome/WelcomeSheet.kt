@@ -58,6 +58,8 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -786,13 +788,30 @@ private fun WelcomeAppearanceStep(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                // Nine unexplained finish names are a lot to weigh on a first run. The default, the
+                // current choice and two contrasting ones are offered; the rest sit behind "More"
+                // and all of them stay in Appearance settings.
+                var showAllPresets by rememberSaveable { mutableStateOf(false) }
+                val visiblePresets = if (showAllPresets) {
+                    GlassPreset.entries
+                } else {
+                    GlassPreset.entries.filter { it in WizardFeaturedGlassPresets || it == glassPreset }
+                }
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    GlassPreset.entries.forEach { preset ->
+                    visiblePresets.forEach { preset ->
                         WizardFilterChip(
                             selected = preset == glassPreset,
                             enabled = true,
                             onClick = { onGlassPresetChange(preset) },
                             label = { Text(stringResource(preset.titleRes)) },
+                        )
+                    }
+                    if (!showAllPresets) {
+                        WizardFilterChip(
+                            selected = false,
+                            enabled = true,
+                            onClick = { showAllPresets = true },
+                            label = { Text(stringResource(R.string.more)) },
                         )
                     }
                 }
@@ -847,6 +866,8 @@ private fun WelcomeSwitchRow(
         Switch(checked = checked, enabled = enabled, onCheckedChange = null)
     }
 }
+
+private val WizardFeaturedGlassPresets = setOf(GlassPreset.REFRACTION, GlassPreset.CLEAN, GlassPreset.CONTROL_CENTER)
 
 private fun SpaceSwitcherPosition.labelResId(): Int = when (this) {
     SpaceSwitcherPosition.TOP_RIGHT -> R.string.space_switcher_position_top_right
