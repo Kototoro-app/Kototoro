@@ -380,7 +380,8 @@
     <string name="data_restored">恢复完成</string>
     <string name="clear_feed">清除订阅记录</string>
     <string name="text_clear_updates_feed_prompt">确定永久清除所有订阅更新记录？</string>
-    <string name="check_for_new_chapters">章节检查更新</string>
+    <string name="check_for_new_chapters">更新提醒</string>
+    <string name="check_for_new_chapters_alias">章节检查更新</string>
     <string name="checking_for_updates">正在检查更新…</string>
     <string name="favourites_updates_found">发现 %1$d 部作品的新章节（共 %2$d 章）</string>
     <string name="favourites_no_updates">暂无新章节</string>
@@ -669,7 +670,7 @@
     <string name="theme_name_sakura">Sakura</string>
     <string name="services">服务</string>
     <string name="users">用户</string>
-    <string name="tracking_accounts">追踪账号</string>
+    <string name="tracking_accounts">站点账号与进度同步</string>
     <string name="not_signed_in">未登录</string>
     <string name="statistics_pending_short">统计待接入</string>
     <string name="anime_count_short">动画 %1$d</string>
@@ -953,6 +954,18 @@
     <string name="lock_screen_rotation">锁定屏幕方向</string>
     <string name="default_tab">漫画详情页默认界面</string>
     <string name="grayscale">灰度</string>
+    <string name="reader_options_scope_note">调整立即生效。阅读模式与章节顺序按作品记忆，其余选项保存为默认设置；颜色滤镜还可以另存到这部作品。</string>
+    <string name="reader_settings_scope_summary">这里保存的是新阅读会话的默认体验；在阅读器里做的调整会写回这里，按作品记忆的部分除外。</string>
+<string name="unified_sources_recognise_and_add">识别并添加</string>
+    <string name="unified_sources_choose_kind_manually">手动选择类型</string>
+    <string name="unified_sources_address_hint">仓库索引、TVBox/CMS 或 Legado 链接均可，格式按地址和内容自动识别；本地文件请从文件选择器导入。</string>
+<string name="unified_sources_address_is_file">这是一个扩展文件而不是来源地址，请改用文件导入。</string>
+    <string name="unified_sources_preview_count">将添加 %1$d 个来源。</string>
+    <string name="unified_sources_preview_note">添加后即可直接浏览；启用或禁用随时在本页调整。</string>
+    <string name="unified_sources_browse_now">立即浏览</string>
+    <string name="unified_sources_imported_none_enabled">来源已导入但尚未启用，请先在本页启用再浏览。</string>
+    <string name="unified_sources_add_failed_next_step">可以重试；如果这个地址其实不是识别出的类型，也可以手动选择。</string>
+    <string name="unified_sources_address_unrecognised">无法识别这个地址的来源类型，请手动选择。</string>
     <string name="globally">全局</string>
     <string name="this_manga">此漫画</string>
     <string name="color_correction_apply_text">这些设置可以全局应用，也可以只应用于当前漫画。即使全局应用，也不会覆盖单独的设置。</string>
@@ -1138,7 +1151,7 @@
     <string name="default_webtoon_zoom_out">条漫默认缩小值</string>
     <string name="reader_fullscreen_summary">将系统状态栏与通知栏隐藏</string>
     <string name="suggestions_unavailable_text">漫画推荐功能已禁用</string>
-    <string name="check_for_new_chapters_disabled">章节检查更新功能已禁用</string>
+    <string name="check_for_new_chapters_disabled">更新提醒功能已禁用</string>
     <string name="reading_time_estimation">在漫画详情页显示估计阅读时间</string>
     <string name="reading_time_estimation_summary">估计阅读时间可能会不准确</string>
     <string name="show_labels_in_navbar">显示底部导航栏标签</string>
@@ -1261,7 +1274,7 @@
     <string name="ignore_ssl_errors_summary">连接在线图源时若SSL证书出现问题，可关闭SSL证书认证，关闭后对安全性有所影响，需要重启应用来更改设置。</string>
     <string name="disable_nsfw_notifications">禁用成人内容相关通知</string>
     <string name="disable_nsfw_notifications_summary">不接收成人漫画的更新通知</string>
-    <string name="tracker_debug_info">章节检查更新日志</string>
+    <string name="tracker_debug_info">更新提醒日志</string>
     <string name="tracker_failing_titles">持续检查失败的作品</string>
     <string name="tracker_next_check">下次检查 %s</string>
     <string name="tracker_debug_info_summary">记录漫画后台更新时的调试日志</string>
@@ -4201,4 +4214,18 @@
     <string name="details_tracking_link">关联</string>
     <string name="details_tracking_link_hint">重新关联此作品，即可启用进度同步。</string>
     <string name="details_tracking_unlink_hint">解除本地关联，保留追踪网站上的收藏、评分和进度。</string>
+    <string name="display_options_live_summary">修改立即生效；额外信息也会应用到其他列表。</string>
+    <string name="display_options_shared_size_summary">封面大小也会应用到其他列表。</string>
+    <string name="display_options_library_summary">修改立即生效，应用于书架与历史列表。</string>
+    <string name="welcome_start_summary">选择获取第一部作品的方式，也可以直接进入应用。</string>
+    <string name="welcome_start_sources">添加来源</string>
+    <string name="welcome_start_local">导入本地文件</string>
+    <string name="welcome_start_browse">先进入应用</string>
+    <string name="welcome_start_later">外观和权限可以稍后在设置中调整。内容来源需要自行添加。</string>
+    <string name="welcome_continue_setup">继续设置</string>
+    <string name="appearance_background_tuning">背景微调</string>
+    <string name="appearance_interface_advanced_summary">背景微调、界面控件与交互行为</string>
+    <string name="appearance_background_tuning_unavailable">先在「外观 → 背景样式」启用作品背景，再调整透明度、遮罩和模糊。</string>
+    <string name="playback_more_settings">更多播放设置</string>
+    <string name="playback_more_settings_summary">解码兼容性与控件外观</string>
 </resources>

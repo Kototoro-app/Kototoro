@@ -400,7 +400,8 @@
     <string name="cookies_saved">Cookies saved</string>
     <string name="clear_feed">Clear feed</string>
     <string name="text_clear_updates_feed_prompt">Clear all update history permanently?</string>
-    <string name="check_for_new_chapters">Check for new chapters</string>
+    <string name="check_for_new_chapters">New chapter alerts</string>
+    <string name="check_for_new_chapters_alias">Check for new chapters</string>
     <string name="checking_for_updates">Checking for updates…</string>
     <string name="favourites_updates_found">Found new chapters in %1$d works (%2$d total)</string>
     <string name="favourites_no_updates">No new chapters found</string>
@@ -1119,7 +1120,7 @@
     <string name="sync_not_supported">Sync is not supported for this service</string>
     <string name="services">Services</string>
     <string name="users">Users</string>
-    <string name="tracking_accounts">Tracking accounts</string>
+    <string name="tracking_accounts">Site accounts and progress sync</string>
     <string name="not_signed_in">Not signed in</string>
     <string name="statistics_pending_short">Statistics pending</string>
     <string name="anime_count_short">Anime %1$d</string>
@@ -1860,6 +1861,18 @@
     <string name="download_partial">Partially completed</string>
     <string name="skip">Skip</string>
     <string name="grayscale">Grayscale</string>
+    <string name="reader_options_scope_note">Changes apply right away. Reading mode and chapter order are remembered per title; the other options are saved as your default, and the colour filter can also be saved for this title.</string>
+    <string name="reader_settings_scope_summary">These rows are the default experience for new reading sessions. Adjustments made in the reader are written back here, except the parts remembered per title.</string>
+<string name="unified_sources_recognise_and_add">Recognise and add</string>
+    <string name="unified_sources_choose_kind_manually">Choose a type</string>
+    <string name="unified_sources_address_hint">Repository index, TVBox/CMS or Legado link — the format is read from the address and its content. For a local file, import it from the file picker.</string>
+<string name="unified_sources_address_is_file">This is an extension file, not a source address — import it from the file picker instead.</string>
+    <string name="unified_sources_preview_count">This will add %1$d sources.</string>
+    <string name="unified_sources_preview_note">They are added as sources you can browse right away; enable or disable each one later on this page.</string>
+    <string name="unified_sources_browse_now">Browse now</string>
+    <string name="unified_sources_imported_none_enabled">The sources were imported but are not enabled yet — enable them on this page, then browse.</string>
+    <string name="unified_sources_add_failed_next_step">You can retry, or pick the type yourself if the address is not what it looked like.</string>
+    <string name="unified_sources_address_unrecognised">Could not tell what kind of source this address is. Choose a type manually.</string>
     <string name="globally">Globally</string>
     <string name="this_manga">This manga</string>
     <string name="color_correction_apply_text">These settings can be applied globally or only to the current manga. If applied globally, individual settings will not be overridden.</string>
@@ -1921,7 +1934,7 @@
     <string name="reading_time_estimation">Show estimated reading time</string>
     <string name="reading_time_estimation_summary">The time estimation value may be inaccurate</string>
     <string name="suggestions_unavailable_text">Suggestions feature is disabled</string>
-    <string name="check_for_new_chapters_disabled">Checking for new chapters is disabled</string>
+    <string name="check_for_new_chapters_disabled">New chapter alerts are disabled</string>
     <string name="show_labels_in_navbar">Show labels in navigation bar</string>
     <string name="pref_nav_labels_always_visible">Always show navigation labels</string>
     <string name="pref_nav_labels_always_visible_summary">Show the label on every navigation item instead of only the selected one</string>
@@ -2050,10 +2063,10 @@
     <string name="disable_connectivity_check_summary">Skip the connectivity check in case you have issues with it (e.g. going offline mode even though the network is connected)</string>
     <string name="disable_nsfw_notifications">Disable NSFW notifications</string>
     <string name="disable_nsfw_notifications_summary">Do not show notifications about NSFW manga updates</string>
-    <string name="tracker_debug_info">Checking for new chapters log</string>
+    <string name="tracker_debug_info">New chapter alerts log</string>
     <string name="tracker_failing_titles">Titles that keep failing</string>
     <string name="tracker_next_check">Next check %s</string>
-    <string name="tracker_debug_info_summary">Debug information about background checks for new chapters</string>
+    <string name="tracker_debug_info_summary">Debug information about new chapter alerts checked in the background</string>
     <!-- In plural, used for filter -->
     <string name="_new">New</string>
     <string name="all_languages">All languages</string>
@@ -4235,4 +4248,18 @@
     <string name="details_tracking_link">Link</string>
     <string name="details_tracking_link_hint">Link this title again to enable progress sync.</string>
     <string name="details_tracking_unlink_hint">Disconnect this title locally. Your entry on the tracking website will be kept.</string>
+    <string name="display_options_live_summary">Changes apply immediately. Extra information also applies to other lists.</string>
+    <string name="display_options_shared_size_summary">Cover size also applies to other lists.</string>
+    <string name="display_options_library_summary">Changes apply immediately to library and history lists.</string>
+    <string name="welcome_start_summary">Choose how to get your first book or video. You can start without configuring the app.</string>
+    <string name="welcome_start_sources">Add sources</string>
+    <string name="welcome_start_local">Import local files</string>
+    <string name="welcome_start_browse">Enter the app</string>
+    <string name="welcome_start_later">Appearance and permissions can be configured later in Settings. Sources must be added by you.</string>
+    <string name="welcome_continue_setup">Continue setup</string>
+    <string name="appearance_background_tuning">Background fine-tuning</string>
+    <string name="appearance_interface_advanced_summary">Background fine-tuning, interface controls and behavior</string>
+    <string name="appearance_background_tuning_unavailable">Choose an artwork background in Appearance → Background style to adjust opacity, overlay and blur.</string>
+    <string name="playback_more_settings">More playback settings</string>
+    <string name="playback_more_settings_summary">Decoder compatibility and control appearance</string>
 </resources>
