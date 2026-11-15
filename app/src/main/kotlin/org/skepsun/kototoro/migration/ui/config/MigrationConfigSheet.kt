@@ -15,6 +15,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -166,7 +169,12 @@ private fun ConfigContent(
     ) {
         SheetDragHandle(Modifier.align(Alignment.CenterHorizontally))
         Text(
-            stringResource(R.string.migration_config_title, state.count),
+            // "Migrate 1 entries" reads as a bug; a single work needs no count.
+            if (state.count == 1) {
+                stringResource(R.string.migrate)
+            } else {
+                stringResource(R.string.migration_config_title, state.count)
+            },
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.SemiBold,
         )
@@ -207,22 +215,17 @@ private fun ConfigContent(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            MigrationDataFlag.entries.forEach { flag ->
-                val locked = flag == MigrationDataFlag.CATEGORIES
+            // Categories always move with the work, so they are not offered as a choice: the note
+            // under the chips says so once instead of a locked chip repeating it.
+            MigrationDataFlag.entries.filter { it != MigrationDataFlag.CATEGORIES }.forEach { flag ->
                 val selected = flag in state.flags
                 FilterChip(
                     selected = selected,
-                    onClick = { if (!locked) viewModel.toggleFlag(flag) },
+                    onClick = { viewModel.toggleFlag(flag) },
                     label = { Text(stringResource(flag.titleRes())) },
                     leadingIcon = {
                         Icon(
-                            painter = painterResource(
-                                when {
-                                    locked -> R.drawable.ic_lock
-                                    selected -> R.drawable.ic_check
-                                    else -> flag.iconRes()
-                                },
-                            ),
+                            painter = painterResource(if (selected) R.drawable.ic_check else flag.iconRes()),
                             contentDescription = null,
                             modifier = Modifier.size(18.dp),
                         )
@@ -233,20 +236,24 @@ private fun ConfigContent(
         }
         Text(
             stringResource(R.string.migration_config_categories_locked),
-            style = MaterialTheme.typography.labelSmall,
+            style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 2.dp),
         )
 
         SectionLabel(stringResource(R.string.migration_config_match))
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        // Both cards take the height of the taller one, so a wrapped title does not leave them ragged.
+        Row(
+            modifier = Modifier.height(IntrinsicSize.Min),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
             MatchModeCard(
                 iconRes = R.drawable.ic_bolt,
                 title = stringResource(R.string.migration_match_first_hit),
                 description = stringResource(R.string.migration_match_first_hit_desc),
                 selected = state.matchMode == MatchMode.FIRST_HIT,
                 onClick = { viewModel.setMatchMode(MatchMode.FIRST_HIT) },
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).fillMaxHeight(),
             )
             MatchModeCard(
                 iconRes = R.drawable.ic_book_page,
@@ -254,7 +261,7 @@ private fun ConfigContent(
                 description = stringResource(R.string.migration_match_most_chapters_desc),
                 selected = state.matchMode == MatchMode.MOST_CHAPTERS,
                 onClick = { viewModel.setMatchMode(MatchMode.MOST_CHAPTERS) },
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).fillMaxHeight(),
             )
         }
 
@@ -368,7 +375,9 @@ internal fun FamilySourcesCard(
                         Text(
                             stringResource(R.string.migration_no_available_sources),
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.error,
+                            // Nothing went wrong, there is just nothing installed yet: the link
+                            // below is the next step, so the sentence stays neutral.
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Spacer(Modifier.size(6.dp))
                         Text(
@@ -454,12 +463,13 @@ private fun MatchModeCard(
         modifier = modifier,
     ) {
         Column(Modifier.padding(12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            // Top-aligned: beside a title that wraps to two lines a centred icon floats between them.
+            Row(verticalAlignment = Alignment.Top) {
                 Icon(
-                    painterResource(if (selected) R.drawable.ic_check else iconRes),
+                    painterResource(iconRes),
                     contentDescription = null,
                     tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(18.dp),
+                    modifier = Modifier.padding(top = 1.dp).size(18.dp),
                 )
                 Spacer(Modifier.width(6.dp))
                 Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
@@ -478,9 +488,9 @@ private fun MatchModeCard(
 private fun SectionLabel(text: String) {
     Text(
         text,
-        style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(top = 18.dp, bottom = 8.dp),
+        style = MaterialTheme.typography.titleSmall,
+        fontWeight = FontWeight.SemiBold,
+        modifier = Modifier.padding(top = 20.dp, bottom = 8.dp),
     )
 }
 
