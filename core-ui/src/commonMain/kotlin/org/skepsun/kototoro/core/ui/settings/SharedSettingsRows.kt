@@ -16,6 +16,8 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
+import androidx.compose.ui.graphics.Color
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -65,7 +67,9 @@ fun SettingsSectionHeader(text: String, modifier: Modifier = Modifier) {
     Text(
         text = text,
         style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.primary,
+        // Same colour as `SettingsPreferenceGroup`'s title: pages built from the shared rows used
+        // to show accent-coloured labels next to grey ones on the same screen.
+        color = org.skepsun.kototoro.settings.compose.settingsSectionLabelColor(),
         modifier = modifier.fillMaxWidth().padding(start = 4.dp, end = 4.dp, top = 8.dp, bottom = 6.dp),
     )
 }
@@ -309,6 +313,19 @@ fun SettingsSliderRow(
                 valueRange = valueRange.first.toFloat()..valueRange.last.toFloat(),
                 steps = steps,
                 enabled = enabled,
+                // Tick marks help while there are few enough to count. Past that they merge into
+                // a dotted line that reads as noise, so the track is drawn plain; the snapping
+                // itself is unchanged.
+                colors = if (steps > MAX_VISIBLE_SLIDER_TICKS) {
+                    SliderDefaults.colors(
+                        activeTickColor = Color.Transparent,
+                        inactiveTickColor = Color.Transparent,
+                        disabledActiveTickColor = Color.Transparent,
+                        disabledInactiveTickColor = Color.Transparent,
+                    )
+                } else {
+                    SliderDefaults.colors()
+                },
                 modifier = if (testTag != null) Modifier.testTag(testTag) else Modifier,
             )
         }
@@ -446,3 +463,5 @@ private fun SettingsRowText(
         }
     }
 }
+
+private const val MAX_VISIBLE_SLIDER_TICKS = 10

@@ -134,7 +134,9 @@ fun DownloadsSettingsScreen(
                     }
                     item {
                         SettingsInfoPreference(
-                            title = stringResource(R.string.downloads),
+                            // Titled after what the note is about; "Downloads" again, on the
+                            // Downloads page under a "Downloads" header, said nothing.
+                            title = stringResource(R.string.download_slowdown),
                             summary = stringResource(R.string.downloads_settings_info),
                             iconRes = R.drawable.ic_info_outline,
                         )

@@ -388,7 +388,9 @@ fun KototoroTopBar(
                         },
                     )
                     CompactDropdownMenuItem(
-                        text = { CompactDropdownMenuText(stringResource(R.string.manage_sources)) },
+                        // Named after the page it opens. It used to read "Manage content sources",
+                        // the same words as the extension manager entry right above it.
+                        text = { CompactDropdownMenuText(stringResource(R.string.source_preferences)) },
                         leadingIcon = {
                             Icon(
                                 painter = painterResource(R.drawable.ic_manga_source),

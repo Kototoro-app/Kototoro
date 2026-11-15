@@ -764,12 +764,9 @@ internal fun BrowseTopLevelRouteContent(
                             }
                         }
                     },
-                    KototoroTopBarMenuAction(
-                        org.skepsun.kototoro.R.string.manage_sources,
-                        org.skepsun.kototoro.R.drawable.ic_manga_source,
-                    ) {
-                        appRouter.openManageSources()
-                    },
+                    // No "manage sources" action here: the menu's own "Extension management" entry
+                    // already opens that page, and a second row with another name for it only made
+                    // the menu longer.
                     KototoroTopBarMenuAction(
                         if (isEmptySourcesHidden) {
                             org.skepsun.kototoro.R.string.show_empty_sources
