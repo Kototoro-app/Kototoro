@@ -360,6 +360,11 @@ fun ReaderOptionsDetailTabs(
     settingsDescription: String,
     onOpenSettings: (() -> Unit)?,
     dragModifier: Modifier,
+    /**
+     * One line saying what the panel's adjustments change: which of them are remembered per title and which are
+     * written back as the default experience. Blank on hosts that have no such split.
+     */
+    scopeNote: String = "",
 ) {
     val pagerState = rememberPagerState(pageCount = { tabs.size })
     val scope = rememberCoroutineScope()
@@ -424,6 +429,17 @@ fun ReaderOptionsDetailTabs(
                 .weight(1f),
         ) { page ->
             tabs[page].content()
+        }
+        if (scopeNote.isNotBlank()) {
+            Text(
+                text = scopeNote,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("reader-options-scope-note")
+                    .padding(start = 16.dp, end = 16.dp, top = 2.dp, bottom = 8.dp),
+            )
         }
     }
 }

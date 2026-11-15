@@ -129,6 +129,7 @@ internal fun ComposeReaderOptionsPanel(
                 settingsDescription = stringResource(R.string.settings),
                 onOpenSettings = { callbacks.onDismiss(); callbacks.onOpenSettings() },
                 dragModifier = dragModifier,
+                scopeNote = stringResource(R.string.reader_options_scope_note),
             )
         },
     )

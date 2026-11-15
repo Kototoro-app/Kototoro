@@ -146,6 +146,7 @@ internal fun DesktopReaderOptionsPanel(
                 settingsDescription = strings.settings,
                 onOpenSettings = onOpenSettings,
                 dragModifier = dragModifier,
+                scopeNote = AndroidStrings["reader_options_scope_note"],
             )
         },
     )
