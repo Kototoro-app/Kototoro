@@ -22,6 +22,6 @@ class DesktopLibraryDisplayTest {
         // Movie grids are not offered here; an out-of-range size is clamped to the slider's range.
         val stored = mapOf(DesktopLibraryDisplay.KEY_LIST_MODE to SourcePreferenceValue.Text("MOVIE_GRID"),
             DesktopLibraryDisplay.KEY_GRID_SIZE to SourcePreferenceValue.Integer(400))
-        assertEquals(DesktopLibraryDisplay(ListMode.COMPACT_GRID, 150), DesktopLibraryDisplay.from(stored))
+        assertEquals(DesktopLibraryDisplay(ListMode.COMPACT_GRID, 200), DesktopLibraryDisplay.from(stored))
     }
 }

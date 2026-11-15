@@ -1242,6 +1242,10 @@ class AppRouter(
         composeActivity.showComposeModal(key = WELCOME_MODAL_KEY) {
             WelcomeRoute(
                 onDismissRequest = { composeActivity.dismissComposeModal(WELCOME_MODAL_KEY) },
+                onImportLocal = {
+                    composeActivity.dismissComposeModal(WELCOME_MODAL_KEY)
+                    showImportDialog()
+                },
                 onRestoreBackup = { uri ->
                     composeActivity.dismissComposeModal(WELCOME_MODAL_KEY)
                     showBackupRestoreDialog(uri)

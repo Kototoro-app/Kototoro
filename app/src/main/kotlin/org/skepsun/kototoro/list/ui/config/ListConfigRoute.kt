@@ -74,6 +74,9 @@ fun ListConfigRoute(
             section == ListConfigSection.HomeHistory ||
             section == ListConfigSection.HomeUpdates ||
             section == ListConfigSection.HomeRecommendations,
+        gridSizeIsSectionLocal = section == ListConfigSection.HomeHistory ||
+            section == ListConfigSection.HomeUpdates ||
+            section == ListConfigSection.HomeRecommendations,
         gridSize = pendingGridSize,
         onGridSizeChange = {
             pendingGridSize = it

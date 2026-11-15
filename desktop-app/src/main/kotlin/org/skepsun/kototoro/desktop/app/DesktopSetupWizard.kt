@@ -26,30 +26,14 @@ import org.skepsun.kototoro.core.ui.settings.SettingsRowDivider
 import org.skepsun.kototoro.core.ui.settings.SettingsValueRow
 import org.skepsun.kototoro.core.ui.text.uiString
 import org.skepsun.kototoro.core.ui.wizard.WizardDonePage
-import org.skepsun.kototoro.core.ui.wizard.WizardIntroPage
+import org.skepsun.kototoro.core.ui.wizard.WizardStartPage
 import org.skepsun.kototoro.core.ui.wizard.WizardPageHeader
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderPanelIcons
 
 /**
- * Android's setup wizard, which Windows only had as a missing row at the bottom of 来源设置. Android's flow is four
- * pager pages — intro, permissions, appearance, done — so it arrives here as the three pages a desktop host can honour:
- *
- * - the intro page and the done page are `core-ui`'s shared `WizardIntroPage`/`WizardDonePage`, which is Android's own
- *   page bodies (the `welcome_intro_*`/`welcome_done_*` strings, the concept cards, the disclaimer, the two jumps), so
- *   the phone and the desktop read the same page instead of two translations of it;
- * - the appearance page keeps Android's `interface_style` idea and adds the two settings Windows has instead
- *   (主题/语言), each opening the same choice dialog 更多 uses, because a desktop wizard that could only pick a
- *   style would leave the two most visible settings untouched. Android's `WelcomeAppearanceStep` also carries the
- *   navigation-transition and details-panorama switches, which only the phone draws, so that page stays host-side;
- * - Android's permissions page is dropped: Windows grants nothing at runtime, and every row on that page
- *   (notifications, install-packages, battery optimisation) is an Android-only capability.
- *
- * Android's spaces page is dropped too — Windows has one library and no spaces — and the wizard does **not** open by
- * itself on a fresh data root the way Android's first start does: a Windows probe (and a user who just wants to look
- * around) must not land inside a modal flow, so it stays a manual entry from 来源设置.
- *
- * The step counter the pages used to print above themselves now comes from the shared header, so the three pages read
- * "Step N of M" exactly like the phone's `WizardPageHeader`.
+ * Shares the content-first welcome page with Android. Desktop supplies source and backup navigation;
+ * appearance remains optional and Android-only local import and permissions are not offered here.
+ * This screen remains a manual entry from source settings.
  */
 @Composable
 internal fun DesktopSetupWizard(controller: DesktopController, state: DesktopAppState) {
@@ -62,7 +46,14 @@ internal fun DesktopSetupWizard(controller: DesktopController, state: DesktopApp
     ) {
         OutlinedButton({ controller.showSourceSettings() }, enabled = active) { Text(desktopText("common.back")) }
         when (step) {
-            WizardStep.INTRO -> WizardIntroPage(step = step.ordinal + 1, totalSteps = WizardStep.entries.size)
+            WizardStep.INTRO -> WizardStartPage(
+                step = 1,
+                totalSteps = WizardStep.entries.size,
+                onAddSources = { controller.showExtensions() },
+                onRestoreBackup = { controller.showBackups() },
+                onStart = { controller.library(false) },
+                enabled = active,
+            )
             WizardStep.APPEARANCE -> WizardAppearance(state, active) { dialog = it }
             WizardStep.DONE -> WizardDonePage(
                 step = step.ordinal + 1,
@@ -90,10 +81,19 @@ internal fun DesktopSetupWizard(controller: DesktopController, state: DesktopApp
                     if (step == WizardStep.DONE) controller.showSourceSettings() else step = step.next()
                 },
                 enabled = active,
+                colors = if (step == WizardStep.INTRO) {
+                    androidx.compose.material3.ButtonDefaults.filledTonalButtonColors()
+                } else {
+                    androidx.compose.material3.ButtonDefaults.buttonColors()
+                },
                 modifier = Modifier.testTag("wizard-next"),
             ) {
                 // Android swaps its "next" label for "done" on the last page.
-                Text(AndroidStrings[if (step == WizardStep.DONE) "done" else "next"])
+                Text(AndroidStrings[when (step) {
+                    WizardStep.INTRO -> "welcome_continue_setup"
+                    WizardStep.DONE -> "done"
+                    else -> "next"
+                }])
             }
         }
     }

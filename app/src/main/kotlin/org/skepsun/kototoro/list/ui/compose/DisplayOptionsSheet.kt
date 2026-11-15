@@ -81,6 +81,7 @@ fun DisplayOptionsSheet(
     // Off for surfaces whose grid does not span the window (search's wide
     // split layout would make a window-width estimate visibly wrong).
     supportsGridColumnsHint: Boolean = true,
+    gridSizeIsSectionLocal: Boolean = false,
     sortOrders: List<ListSortOrder> = emptyList(),
     selectedSortOrder: ListSortOrder? = null,
     onSortOrderSelected: (ListSortOrder) -> Unit = {},
@@ -164,17 +165,10 @@ fun DisplayOptionsSheet(
                         )
                         // The extra-info toggle rides on the title row instead of taking a line of its own;
                         // the cards behind the sheet show what it does.
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
+                        DisplayOptionsHeader(
+                            title = stringResource(R.string.display_options),
+                            summary = stringResource(R.string.display_options_live_summary),
                         ) {
-                            Text(
-                                text = stringResource(R.string.display_options),
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.weight(1f),
-                            )
                             if (supportsSourceHealthToggle) {
                                 FilterChip(
                                     selected = showSourceHealth,
@@ -231,6 +225,14 @@ fun DisplayOptionsSheet(
                                     listMode = currentListMode,
                                     gridSize = gridSize,
                                 ),
+                            )
+                        }
+
+                        if (supportsGridSizeSlider && !gridSizeIsSectionLocal) {
+                            Text(
+                                text = stringResource(R.string.display_options_shared_size_summary),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
 

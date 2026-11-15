@@ -40,6 +40,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -75,6 +76,32 @@ fun homeBalancedGridColumns(itemCount: Int, maxColumns: Int): Int {
     if (itemCount <= 0) return 1
     val rows = ceil(itemCount / limit.toDouble()).toInt()
     return ceil(itemCount / rows.toDouble()).toInt().coerceIn(1, limit)
+}
+
+/**
+ * The width a quick access tile needs before its label starts breaking mid-word.
+ *
+ * A tile's label is `labelSmall` text, so growing the system font grows the room the label needs while the tile keeps
+ * its size: at 1.5x the same phone fits three tiles per row instead of five, and "Favorites" stops rendering as
+ * "Favorite / s". Only the label is text here, so scaling the whole tile would waste height; scaling the *threshold*
+ * changes nothing but the column count.
+ */
+fun homeQuickActionTileWidth(preferred: Dp, fontScale: Float): Dp =
+    preferred * fontScale.coerceIn(1f, 3f)
+
+/**
+ * Row sizes for [itemCount] quick access tiles at most [maxColumns] wide, spread evenly.
+ *
+ * 10 tiles on three columns become 3, 3, 2, 2 rather than 3, 3, 3 and a lone straggler: the last row of a grid is the
+ * one place where an uneven split is visible, and a 1-of-3 row reads as a mistake.
+ */
+fun homeQuickActionRows(itemCount: Int, maxColumns: Int): List<Int> {
+    if (itemCount <= 0) return emptyList()
+    val limit = maxColumns.coerceAtLeast(1)
+    val rows = ceil(itemCount / limit.toDouble()).toInt().coerceAtLeast(1)
+    val base = itemCount / rows
+    val extra = itemCount % rows
+    return List(rows) { index -> base + if (index < extra) 1 else 0 }.filter { it > 0 }
 }
 
 /**
@@ -320,15 +347,22 @@ fun HomeQuickActionsGrid(
         Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface)
         BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-            val maxColumns = ((maxWidth + spacing) / (preferredTileWidth + spacing)).toInt().coerceAtLeast(2)
-            val columns = homeBalancedGridColumns(actions.size, maxColumns)
+            // The tile keeps its size while its label grows with the system font, so the column count follows the font
+            // scale instead: large text gets fewer, wider tiles rather than labels broken mid-word.
+            val tileWidth = homeQuickActionTileWidth(preferredTileWidth, LocalDensity.current.fontScale)
+            val maxColumns = ((maxWidth + spacing) / (tileWidth + spacing)).toInt().coerceAtLeast(2)
+            val rows = homeQuickActionRows(actions.size, maxColumns)
+            val columns = rows.maxOrNull() ?: 1
             Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(spacing)) {
-                actions.withIndex().chunked(columns).forEach { row ->
+                var nextIndex = 0
+                rows.forEach { rowSize ->
                     Row(
                         modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
                         horizontalArrangement = Arrangement.spacedBy(spacing),
                     ) {
-                        row.forEach { (index, action) ->
+                        repeat(rowSize) {
+                            val index = nextIndex++
+                            val action = actions[index]
                             val shape = RoundedCornerShape(if (expressive) 20.dp else 16.dp)
                             val colors = homeQuickActionColors(action.enabled, index, expressive, isIosStyle)
                             container(Modifier.weight(1f).fillMaxHeight().heightIn(min = tileHeight), shape, index) {
@@ -354,7 +388,7 @@ fun HomeQuickActionsGrid(
                                 }
                             }
                         }
-                        repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
+                        repeat(columns - rowSize) { Spacer(Modifier.weight(1f)) }
                     }
                 }
             }

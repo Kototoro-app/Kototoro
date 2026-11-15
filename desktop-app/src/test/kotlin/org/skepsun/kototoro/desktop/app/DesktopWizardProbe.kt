@@ -88,7 +88,7 @@ internal object DesktopWizardProbe {
                 expectStep(1)
                 onNodeWithTag("wizard-back").assertIsNotEnabled()
                 onNodeWithText(AndroidStrings["welcome_intro_app_title"]).assertExists()
-                onNodeWithText(AndroidStrings["welcome_intro_disclaimer"]).assertExists()
+                onNodeWithText(AndroidStrings["welcome_start_summary"]).assertExists()
                 snapshot("intro")
                 next()
                 expectStep(2)

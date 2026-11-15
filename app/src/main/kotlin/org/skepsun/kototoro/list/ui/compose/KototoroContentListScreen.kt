@@ -768,6 +768,7 @@ fun QuickFilterSection(
     onQuickFilterOptionClick: (ListFilterOption) -> Unit,
     leadingContent: (@Composable () -> Unit)? = null,
     modifier: Modifier = Modifier,
+    appliedOnly: Boolean = false,
 ) {
     val context = LocalContext.current
     val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
@@ -785,9 +786,15 @@ fun QuickFilterSection(
     // Applied chips lead the rail, ahead of the group dropdowns: an applied filter that
     // sat off-screen (e.g. Downloaded, applied automatically while offline) left the page
     // looking empty with no visible reason.
-    val railEntries: List<Any> = remember(quickFilter.items, quickFilter.groups) {
-        val (checked, unchecked) = quickFilter.items.partition { chip -> chip.isChecked }
-        checked + quickFilter.groups + unchecked
+    val railEntries: List<Any> = remember(quickFilter.items, quickFilter.groups, appliedOnly) {
+        if (appliedOnly) {
+            // The full pickers remain in the filter panel. Surface every selected item here, including
+            // selections inside a group, so the reason for a narrowed or empty shelf stays visible.
+            (quickFilter.items + quickFilter.groups.flatMap { it.items }).filter { it.isChecked }
+        } else {
+            val (checked, unchecked) = quickFilter.items.partition { chip -> chip.isChecked }
+            checked + quickFilter.groups + unchecked
+        }
     }
     // Applying a quick filter re-queries the list, and the rail is rebuilt from the new model: the
     // focus node under the pressed chip no longer exists, so Compose drops the focus to the nearest

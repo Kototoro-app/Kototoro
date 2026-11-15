@@ -100,19 +100,15 @@ import org.skepsun.kototoro.core.ui.glass.GlassTuningController
 import org.skepsun.kototoro.core.ui.glass.rememberGlassTuning
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.core.ui.wizard.WizardDonePage
-import org.skepsun.kototoro.core.ui.wizard.WizardIntroPage
+import org.skepsun.kototoro.core.ui.wizard.WizardStartPage
 import org.skepsun.kototoro.core.ui.wizard.WizardPageHeader
 import org.skepsun.kototoro.core.ui.wizard.WizardSectionCard
 import org.skepsun.kototoro.core.util.ext.tryLaunch
 import org.skepsun.kototoro.settings.compose.glass.GlassPreset
 
 /**
- * The setup wizard.
- *
- * Since the wizard no longer imports repositories or batch-installs extensions, it is a short
- * four-page walkthrough: intro → permissions → appearance/spaces → done. Kototoro never ships or
- * curates third-party repositories (see [org.skepsun.kototoro.settings.sources.unified.UnifiedRecommendedRepositories]),
- * so users add their own sources explicitly afterwards in Settings › Content sources.
+ * Content-first welcome page. Sources, local import and backup restore are available immediately;
+ * permissions and appearance remain an optional walkthrough behind Continue setup.
  */
 private const val WIZARD_PAGE_INTRO = 0
 private const val WIZARD_PAGE_PERMISSIONS = 1
@@ -127,6 +123,7 @@ private val WIZARD_CONTENT_MAX_WIDTH = 680.dp
 internal fun WelcomeRoute(
     onDismissRequest: () -> Unit,
     onRestoreBackup: (Uri) -> Unit,
+    onImportLocal: () -> Unit,
     onOpenDocumentUnsupported: () -> Unit = {},
     onOpenExtensionManagement: () -> Unit = {},
     viewModel: WelcomeViewModel = hiltViewModel(),
@@ -149,6 +146,7 @@ internal fun WelcomeRoute(
                     }
                 },
                 onOpenExtensionManagement = onOpenExtensionManagement,
+                onImportLocal = onImportLocal,
                 onDone = onDismissRequest,
             )
         }
@@ -160,6 +158,7 @@ internal fun WelcomeRoute(
 private fun WelcomeContent(
     viewModel: WelcomeViewModel,
     onRestoreBackup: () -> Unit,
+    onImportLocal: () -> Unit,
     onOpenExtensionManagement: () -> Unit = {},
     onDone: () -> Unit,
 ) {
@@ -214,7 +213,14 @@ private fun WelcomeContent(
                 verticalArrangement = Arrangement.spacedBy(20.dp),
             ) {
                 when (page) {
-                    WIZARD_PAGE_INTRO -> WelcomeIntroStep()
+                    WIZARD_PAGE_INTRO -> WizardStartPage(
+                        step = 1,
+                        totalSteps = WIZARD_PAGE_COUNT,
+                        onAddSources = onOpenExtensionManagement,
+                        onRestoreBackup = onRestoreBackup,
+                        onImportLocal = onImportLocal,
+                        onStart = onDone,
+                    )
 
                     WIZARD_PAGE_PERMISSIONS -> WelcomePermissionsStep()
 
@@ -446,9 +452,10 @@ private fun WizardPrimaryButton(
             onClick = onDone,
         )
         else -> WizardPrimaryAction(
-            label = stringResource(R.string.next),
+            label = stringResource(if (page == WIZARD_PAGE_INTRO) R.string.welcome_continue_setup else R.string.next),
             iconVector = Icons.AutoMirrored.Filled.ArrowForward,
             enabled = true,
+            tonal = page == WIZARD_PAGE_INTRO,
             onClick = onNext,
         )
     }
@@ -536,12 +543,6 @@ private fun WizardPrimaryButtonContent(
         Spacer(Modifier.width(8.dp))
         Icon(iconPainter, contentDescription = null, modifier = Modifier.size(18.dp))
     }
-}
-
-@Composable
-private fun WelcomeIntroStep() {
-    // The page itself is shared with the desktop host: the same resource names, header and cards.
-    WizardIntroPage(step = WIZARD_PAGE_INTRO + 1, totalSteps = WIZARD_PAGE_COUNT)
 }
 
 @Composable

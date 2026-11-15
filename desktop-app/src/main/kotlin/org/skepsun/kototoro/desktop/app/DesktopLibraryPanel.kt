@@ -408,7 +408,10 @@ private fun LibraryDisplayOptions(display: DesktopLibraryDisplay, enabled: Boole
                         event.key == androidx.compose.ui.input.key.Key.Escape).also { if (it) open = false }
                 },
                 verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(AndroidStrings["display_options"], style = MaterialTheme.typography.titleMedium)
+                org.skepsun.kototoro.list.ui.compose.DisplayOptionsHeader(
+                    title = AndroidStrings["display_options"],
+                    summary = AndroidStrings["display_options_library_summary"],
+                )
                 Text(AndroidStrings["list_mode"], style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 val labels = remember { AndroidStrings.array("list_modes") }

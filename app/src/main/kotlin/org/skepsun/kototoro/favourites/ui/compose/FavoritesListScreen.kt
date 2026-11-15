@@ -34,6 +34,7 @@ import org.skepsun.kototoro.list.ui.model.ContentListModel
 import org.skepsun.kototoro.details.ui.model.DetailsOrigin
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.search.ui.compose.LibrarySearchBanner
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 
 @Composable
 fun KototoroFavoritesListScreen(
@@ -59,6 +60,7 @@ fun KototoroFavoritesListScreen(
     // The state holder is the favourites container, handed in as a per-category slice:
     // there is no page-level ViewModel and no space binding to do here (Phase 6).
     val quickFilter by listHost.topQuickFilter.collectAsStateWithLifecycle()
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
     val shelf by listHost.shelf.collectAsStateWithLifecycle()
     val gridScale by listHost.gridScale.collectAsStateWithLifecycle()
     val listMode by listHost.listMode.collectAsStateWithLifecycle()
@@ -104,6 +106,7 @@ fun KototoroFavoritesListScreen(
                         quickFilter = quickFilter!!,
                         onQuickFilterOptionClick = listHost::toggleFilterOption,
                         leadingContent = sortControl,
+                        appliedOnly = !isTvPresentation,
                     )
                 } else if (sortControl != null) {
                     Row(

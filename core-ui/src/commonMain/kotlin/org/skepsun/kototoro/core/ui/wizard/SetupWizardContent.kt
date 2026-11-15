@@ -178,6 +178,42 @@ fun WizardSectionCard(
     }
 }
 
+/** Content-first entry; platform hosts supply only the actions they can actually perform. */
+@Composable
+fun WizardStartPage(
+    step: Int,
+    totalSteps: Int,
+    onAddSources: () -> Unit,
+    onRestoreBackup: () -> Unit,
+    onStart: () -> Unit,
+    modifier: Modifier = Modifier,
+    onImportLocal: (() -> Unit)? = null,
+    enabled: Boolean = true,
+) {
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        WizardPageHeader(
+            step = step,
+            totalSteps = totalSteps,
+            title = uiString("welcome_intro_app_title"),
+            summary = uiString("welcome_start_summary"),
+            iconVector = ReaderPanelIcons.Welcome,
+            prominent = true,
+        )
+        WizardJumpButton(uiString("welcome_start_sources"), ReaderPanelIcons.Web,
+            "wizard-open-extensions", onAddSources, enabled)
+        onImportLocal?.let { importLocal ->
+            WizardJumpButton(uiString("welcome_start_local"), ReaderPanelIcons.Import,
+                "wizard-import-local", importLocal, enabled)
+        }
+        WizardJumpButton(uiString("restore_backup"), ReaderPanelIcons.BackupRestore,
+            "wizard-restore-backup", onRestoreBackup, enabled)
+        WizardJumpButton(uiString("welcome_start_browse"), ReaderPanelIcons.ArrowForward,
+            "wizard-start", onStart, enabled)
+        Text(uiString("welcome_start_later"), style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
 /**
  * Android's `WelcomeIntroStep`: what a repository, an extension and a source are, then the disclaimer Android shows in
  * its error container. Nothing here is platform-specific, so the phone and a desktop host read the same page.
@@ -301,9 +337,12 @@ fun WizardDonePage(
 }
 
 @Composable
-private fun WizardJumpButton(text: String, icon: ImageVector, tag: String, onClick: () -> Unit) {
+private fun WizardJumpButton(
+    text: String, icon: ImageVector, tag: String, onClick: () -> Unit, enabled: Boolean = true,
+) {
     FilledTonalButton(
         onClick = onClick,
+        enabled = enabled,
         modifier = Modifier
             .fillMaxWidth()
             .testTag(tag)
