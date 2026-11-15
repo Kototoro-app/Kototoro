@@ -32,6 +32,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -293,11 +294,15 @@ fun KototoroFavoritesHostRoute(
         )
     }
 
+    // The broken-sources card floats over the bottom of the list. Its height joins the list's bottom
+    // padding so the last row can scroll clear of it instead of staying hidden underneath.
+    var healthBannerHeightPx by remember { mutableIntStateOf(0) }
+    val healthBannerHeight = with(androidx.compose.ui.platform.LocalDensity.current) { healthBannerHeightPx.toDp() }
     val innerPadding = PaddingValues(
         start = contentPadding.calculateStartPadding(LocalLayoutDirection.current),
         end = contentPadding.calculateEndPadding(LocalLayoutDirection.current),
         top = contentPadding.calculateTopPadding(),
-        bottom = contentPadding.calculateBottomPadding(),
+        bottom = contentPadding.calculateBottomPadding() + healthBannerHeight,
     )
 
     LaunchedEffect(uiState.isLoading, favoritesTopBarOverrideState) {
@@ -396,7 +401,8 @@ fun KototoroFavoritesHostRoute(
             onOpen = appRouter::openMigrationSources,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = contentPadding.calculateBottomPadding()),
+                .padding(bottom = contentPadding.calculateBottomPadding())
+                .onSizeChanged { healthBannerHeightPx = it.height },
         )
         }
     }
