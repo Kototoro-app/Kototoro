@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.core.ui.text.uiString
+import org.skepsun.kototoro.settings.compose.SettingsCollapsiblePreferenceGroup
 
 /**
  * The playback settings page shared by Android's `PlaybackSettingsScreen` and desktop's
@@ -101,11 +102,6 @@ fun PlaybackSettingsContent(
                 backgroundOptions.firstOrNull { it.value == state.background }?.label, enabled,
                 { dialog = PlaybackDialog.BACKGROUND }, testTag = "playback-setting-background",
                 leadingIcon = icons.background)
-            SettingsRowDivider()
-            SettingsValueRow(uiString("video_decoder_mode"), null,
-                decoderOptions.firstOrNull { it.value == state.decoderMode }?.label, enabled,
-                { dialog = PlaybackDialog.DECODER }, testTag = "playback-setting-decoder",
-                leadingIcon = icons.decoderMode)
             if (orientation != null) {
                 SettingsRowDivider()
                 SettingsValueRow(orientation.title, null,
@@ -118,16 +114,30 @@ fun PlaybackSettingsContent(
                 SettingsValueRow(aiSettings.title, aiSettings.summary, null, enabled, aiSettings.onClick,
                     testTag = "playback-ai-settings", leadingIcon = icons.aiSettings)
             }
-            SettingsRowDivider()
-            SettingsSliderRow(uiString("video_controls_alpha"), null, state.controlsAlpha,
-                PlaybackSettingsRanges.controlsAlpha, { "$it%" }, enabled,
-                { onControlsAlphaChange(it) }, testTag = "playback-controls-alpha",
-                leadingIcon = icons.controlsAlpha)
-            SettingsRowDivider()
-            SettingsSliderRow(uiString("video_gradient_alpha"), null, state.gradientAlpha,
-                PlaybackSettingsRanges.gradientAlpha, { "$it%" }, enabled,
-                { onGradientAlphaChange(it) }, testTag = "playback-gradient-alpha",
-                leadingIcon = icons.gradientAlpha)
+        }
+        SettingsCollapsiblePreferenceGroup(
+            title = uiString("playback_more_settings"),
+            summary = uiString("playback_more_settings_summary"),
+            enabled = enabled,
+        ) {
+            item("video_decoder_mode") {
+                SettingsValueRow(uiString("video_decoder_mode"), null,
+                    decoderOptions.firstOrNull { it.value == state.decoderMode }?.label, enabled,
+                    { dialog = PlaybackDialog.DECODER }, testTag = "playback-setting-decoder",
+                    leadingIcon = icons.decoderMode)
+            }
+            item("video_controls_alpha") {
+                SettingsSliderRow(uiString("video_controls_alpha"), null, state.controlsAlpha,
+                    PlaybackSettingsRanges.controlsAlpha, { "$it%" }, enabled,
+                    { onControlsAlphaChange(it) }, testTag = "playback-controls-alpha",
+                    leadingIcon = icons.controlsAlpha)
+            }
+            item("video_gradient_alpha") {
+                SettingsSliderRow(uiString("video_gradient_alpha"), null, state.gradientAlpha,
+                    PlaybackSettingsRanges.gradientAlpha, { "$it%" }, enabled,
+                    { onGradientAlphaChange(it) }, testTag = "playback-gradient-alpha",
+                    leadingIcon = icons.gradientAlpha)
+            }
         }
     }
     when (dialog) {

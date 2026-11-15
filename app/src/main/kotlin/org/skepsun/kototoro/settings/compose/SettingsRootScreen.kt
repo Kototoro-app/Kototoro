@@ -296,11 +296,13 @@ private fun SettingsSearchResultRow(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
+            // The title is the row's identity, so it gets a second line at large font scales: at 1.5x a
+            // single line turned "Source preferences & content filters" into "Source preferences & con…".
             Text(
                 text = item.title.toString(),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
@@ -363,11 +365,12 @@ private fun SettingsRootRow(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
+            // Same rule as the search-result row above: two lines at large font scales, one line otherwise.
             Text(
                 text = item.title,
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(

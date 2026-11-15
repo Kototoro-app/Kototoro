@@ -3,6 +3,7 @@ package org.skepsun.kototoro.core.ui.settings
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -29,7 +30,9 @@ import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.CompositionLocalProvider
@@ -141,12 +144,13 @@ private fun SettingsRowLabel(
     leadingIcon: Painter?,
     tone: SettingsIconTone,
     modifier: Modifier = Modifier,
+    stackedValue: String? = null,
 ) {
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
         if (leadingIcon != null) {
             SettingsLeadingIcon(imageVector = SettingsMaterialIcons.Settings, icon = leadingIcon, tone = tone)
         }
-        SettingsRowText(title, summary, Modifier.weight(1f))
+        SettingsRowText(title, summary, Modifier.weight(1f), stackedValue)
     }
 }
 
@@ -190,6 +194,9 @@ fun SettingsSwitchRow(
     }
 }
 
+/** Share of the row the value column may take while it sits beside the title; the title keeps the rest. */
+private const val SettingsValueColumnShare = 0.4f
+
 /**
  * Row whose control lives in a dialog or runs an action: the current value sits in front of a chevron on the right.
  * Android's choice, multi-choice, text and action preferences all share this layout.
@@ -209,31 +216,47 @@ fun SettingsValueRow(
     leadingIcon: Painter? = null,
 ) {
     SettingsRowTile {
-        Row(
-            modifier = modifier
-                .fillMaxWidth()
-                .then(if (testTag != null) Modifier.testTag(testTag) else Modifier)
-                .clickable(enabled = enabled, onClick = onClick)
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            SettingsRowLabel(title, summary, leadingIcon, SettingsIconTone.PRIMARY, Modifier.weight(1f))
-            if (!value.isNullOrBlank()) {
-                Text(
-                    text = value,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.widthIn(max = 260.dp),
+        BoxWithConstraints {
+            // The value sits beside the title only while it fits in the value column; a long option label moves
+            // under the title instead of squeezing it. At 1.5x on a 411dp phone the old flat 260dp cap ate the
+            // whole row and the decoder row read "Prefer hardware (reco..." with no "Decoder" label at all.
+            val valueColumnCap = maxWidth * SettingsValueColumnShare
+            val valueStyle = MaterialTheme.typography.bodyMedium
+            val textMeasurer = rememberTextMeasurer()
+            val density = LocalDensity.current
+            val valueFitsBesideTitle = !value.isNullOrBlank() && remember(value, valueStyle, valueColumnCap, density) {
+                textMeasurer.measure(value, valueStyle).size.width <= with(density) { valueColumnCap.roundToPx() }
+            }
+            val stackValue = !value.isNullOrBlank() && !valueFitsBesideTitle
+            Row(
+                modifier = modifier
+                    .fillMaxWidth()
+                    .then(if (testTag != null) Modifier.testTag(testTag) else Modifier)
+                    .clickable(enabled = enabled, onClick = onClick)
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                SettingsRowLabel(
+                    title, summary, leadingIcon, SettingsIconTone.PRIMARY, Modifier.weight(1f),
+                    stackedValue = value.takeIf { stackValue },
+                )
+                if (!value.isNullOrBlank() && !stackValue) {
+                    Text(
+                        text = value,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.widthIn(max = valueColumnCap),
+                    )
+                }
+                Icon(
+                    imageVector = SettingsMaterialIcons.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = settingsChevronColor().copy(alpha = if (enabled) 1f else .4f),
                 )
             }
-            Icon(
-                imageVector = SettingsMaterialIcons.KeyboardArrowRight,
-                contentDescription = null,
-                tint = settingsChevronColor().copy(alpha = if (enabled) 1f else .4f),
-            )
         }
     }
 }
@@ -392,7 +415,12 @@ fun SettingsActionRow(
 }
 
 @Composable
-private fun SettingsRowText(title: String, summary: String?, modifier: Modifier = Modifier) {
+private fun SettingsRowText(
+    title: String,
+    summary: String?,
+    modifier: Modifier = Modifier,
+    stackedValue: String? = null,
+) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Text(
             text = title,
@@ -407,6 +435,13 @@ private fun SettingsRowText(title: String, summary: String?, modifier: Modifier 
                 text = summary,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (!stackedValue.isNullOrBlank()) {
+            Text(
+                text = stackedValue,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary,
             )
         }
     }

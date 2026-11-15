@@ -27,7 +27,7 @@ class SettingsSearchViewModel @Inject constructor(
         if (q == null) {
             emptyList()
         } else {
-            allSettings.filter { it.title.contains(q, ignoreCase = true) }
+            allSettings.searchSettings(q)
         }
     }.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Lazily, emptyList())
 
@@ -61,7 +61,7 @@ class SettingsSearchViewModel @Inject constructor(
     }
 
     fun navigateToPreference(item: SettingsItem) {
-        discardSearch()
+        // The query survives so the back gesture lands on the same result list instead of an empty root page.
         onNavigateToPreference.call(item)
     }
 }

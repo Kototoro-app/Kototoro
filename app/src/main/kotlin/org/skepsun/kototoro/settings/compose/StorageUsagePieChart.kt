@@ -34,7 +34,6 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -387,18 +386,13 @@ private fun StorageUsageDonutChart(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             } else {
+                // Only the figure: the card's own group title already says "Storage usage", and the
+                // summary bar directly below repeats the same label with the same number.
                 Text(
                     text = FileSize.BYTES.format(context, totalAppBytes),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = stringResource(R.string.storage_usage),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )

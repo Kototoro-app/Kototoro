@@ -2,6 +2,7 @@ package org.skepsun.kototoro.settings.search
 
 import android.content.Context
 import io.kotest.matchers.collections.shouldContainExactly
+import io.kotest.matchers.collections.shouldNotBeEmpty
 import io.kotest.matchers.shouldBe
 import io.mockk.every
 import io.mockk.mockk
@@ -14,6 +15,15 @@ class SettingsSearchHelperTest {
 		every { getString(any()) } answers { "string-${firstArg<Int>()}" }
 	}
 
+    @Test
+    fun `reader compatibility settings remain searchable when their group is collapsed`() {
+        val settings = SettingsSearchHelper(context).inflatePreferences().associateBy { it.key }
+        listOf("reader_threads", "avif_animation_memory_limit_mb", "avif_animation_downsampling",
+            "reader_experimental_scene_engine", "reader_experimental_paged_scene_engine").forEach { key ->
+            settings.getValue(key).destination shouldBe SettingsDestination.ReaderSettings
+        }
+    }
+
 	@Test
 	fun `appearance search index matches visible settings`() {
 		val expectedSettings = listOf(
@@ -22,6 +32,9 @@ class SettingsSearchHelperTest {
 			"theme" to R.string.appearance_mode,
 			"background_style" to R.string.background_style,
 			"amoled_theme" to R.string.black_dark_theme,
+			"app_font_preset" to R.string.pref_app_font_preset,
+			"app_locale" to R.string.language,
+			"background_artwork_source" to R.string.background_artwork_source,
 		)
 
 		val settings = SettingsSearchHelper(context).inflatePreferences()
@@ -41,7 +54,12 @@ class SettingsSearchHelperTest {
 		settings.getValue("description_collapse").destination shouldBe
 			SettingsDestination.AppearanceDetailsSettings
 		settings.getValue("home_hero_mode").destination shouldBe SettingsDestination.AppearanceHomeSettings
-		settings.getValue("app_font_preset").destination shouldBe SettingsDestination.AppearanceInterfaceSettings
+		settings.getValue("app_font_preset").destination shouldBe SettingsDestination.AppearanceSettings
+        settings.getValue("app_locale").destination shouldBe SettingsDestination.AppearanceSettings
+        listOf("background_artwork_opacity", "background_artwork_overlay_strength", "background_artwork_blur")
+            .forEach { key ->
+                settings.getValue(key).destination shouldBe SettingsDestination.AppearanceInterfaceSettings
+            }
 		settings.getValue("badges_top_left").destination shouldBe SettingsDestination.AppearanceBadgesSettings
 		settings.getValue("show_language_preset_filter").destination shouldBe
 			SettingsDestination.AppearanceSearchFiltersSettings
@@ -154,5 +172,24 @@ class SettingsSearchHelperTest {
 			listOf("string-${R.string.users}", "string-${R.string.spaces}"),
 			listOf("string-${R.string.users}", "string-${R.string.spaces}"),
 		)
+	}
+
+	@Test
+	fun `renamed update reminders are still found by their old name`() {
+		val index = SettingsSearchHelper(context).inflatePreferences()
+
+		val hits = index.searchSettings("string-${R.string.check_for_new_chapters_alias}")
+
+		hits.shouldNotBeEmpty()
+		hits.forEach { it.destination shouldBe SettingsDestination.TrackerSettings }
+	}
+
+	@Test
+	fun `panorama advanced rows are indexed for their collapsed group`() {
+		val settings = SettingsSearchHelper(context).inflatePreferences().associateBy { it.key }
+
+		listOf("panorama_blur", "panorama_top_opacity", "panorama_transition_intensity").forEach { key ->
+			settings.getValue(key).destination shouldBe SettingsDestination.PanoramaSettings
+		}
 	}
 }

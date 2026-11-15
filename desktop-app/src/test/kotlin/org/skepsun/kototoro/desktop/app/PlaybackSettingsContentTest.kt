@@ -1,11 +1,18 @@
 package org.skepsun.kototoro.desktop.app
 
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.test.assertIsDisplayed
+import org.skepsun.kototoro.core.ui.settings.LocalSettingsSearchTarget
+import org.skepsun.kototoro.core.ui.settings.SettingsSearchTarget
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -29,6 +36,37 @@ class PlaybackSettingsContentTest {
         PreferenceChoice("HARDWARE_PREFERRED", "Hardware preferred"),
         PreferenceChoice("SOFTWARE_PREFERRED", "Software preferred"),
     )
+
+    @Test
+    fun `search reveals advanced rows and a repeated search reopens the group without changing values`() =
+        runDesktopComposeUiTest(width = 390, height = 640) {
+            var target by mutableStateOf<SettingsSearchTarget?>(null)
+            var writes = 0
+            setContent {
+                DesktopTheme {
+                    CompositionLocalProvider(LocalSettingsSearchTarget provides target) {
+                        PlaybackSettingsContent(
+                            state = PlaybackSettingsUiState("DEFAULT", "HARDWARE_PREFERRED", 90, 70),
+                            backgroundOptions = backgrounds,
+                            decoderOptions = decoders,
+                            onBackgroundChange = { writes++ }, onDecoderChange = { writes++ },
+                            onControlsAlphaChange = { writes++ }, onGradientAlphaChange = { writes++ },
+                            contentPadding = PaddingValues(top = 500.dp),
+                        )
+                    }
+                }
+            }
+            onNodeWithTag("playback-setting-decoder").assertDoesNotExist()
+            runOnIdle { target = SettingsSearchTarget("video_decoder_mode", 1) }
+            onNodeWithTag("playback-setting-decoder").assertIsDisplayed()
+            onNodeWithText(AndroidStrings["playback_more_settings"]).performScrollTo().performClick()
+            onNodeWithTag("playback-setting-decoder").assertDoesNotExist()
+            runOnIdle { target = SettingsSearchTarget("video_decoder_mode", 2) }
+            onNodeWithTag("playback-setting-decoder").assertIsDisplayed()
+            runOnIdle { target = SettingsSearchTarget("video_gradient_alpha", 3) }
+            onNodeWithTag("playback-gradient-alpha").assertIsDisplayed()
+            runOnIdle { assertEquals(0, writes) }
+        }
 
     @Test
     fun `choice rows write host keys and the optional AI row stays host supplied`() =
@@ -55,6 +93,7 @@ class PlaybackSettingsContentTest {
             onNodeWithTag("playback-background-dialog").assertDoesNotExist()
             runOnIdle { assertEquals("WHITE", state.background) }
 
+            onNodeWithText(AndroidStrings["playback_more_settings"]).performScrollTo().performClick()
             onNodeWithTag("playback-setting-decoder").performClick()
             onNodeWithTag("playback-decoder-option:SOFTWARE_PREFERRED").performClick()
             runOnIdle { assertEquals("SOFTWARE_PREFERRED", state.decoderMode) }
@@ -91,6 +130,7 @@ class PlaybackSettingsContentTest {
                 }
             }
             onNodeWithTag("playback-ai-settings").assertDoesNotExist()
+            onNodeWithText(AndroidStrings["playback_more_settings"]).performScrollTo().performClick()
             onNodeWithTag("playback-controls-alpha").performScrollTo()
                 .performSemanticsAction(SemanticsActions.SetProgress) { it(10f) }
             runOnIdle { assertEquals(30, state.controlsAlpha) }

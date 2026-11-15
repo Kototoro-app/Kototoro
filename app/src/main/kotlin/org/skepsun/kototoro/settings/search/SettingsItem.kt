@@ -8,6 +8,8 @@ data class SettingsItem(
     val title: CharSequence,
     val breadcrumbs: List<String>,
     val destination: SettingsDestination,
+    /** Wording this preference used before it was renamed; searched but never displayed. */
+    val aliases: List<String> = emptyList(),
 ) : ListModel {
 
     override fun areItemsTheSame(other: ListModel): Boolean {

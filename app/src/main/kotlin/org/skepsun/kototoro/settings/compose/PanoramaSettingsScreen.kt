@@ -122,7 +122,7 @@ fun PanoramaSettingsScreen(
                     title = stringResource(R.string.panorama_settings_advanced),
                     initiallyExpanded = false,
                 ) {
-                    item {
+                    item("panorama_blur") {
                         SettingsSliderPreference(
                             title = stringResource(R.string.pref_panorama_blur),
                             iconRes = R.drawable.ic_eye_off,
@@ -134,7 +134,7 @@ fun PanoramaSettingsScreen(
                             onValueChange = onBlurChange,
                         )
                     }
-                    item {
+                    item("panorama_top_opacity") {
                         SettingsSliderPreference(
                             title = stringResource(R.string.pref_panorama_top_opacity),
                             iconRes = R.drawable.ic_eye,
@@ -147,7 +147,7 @@ fun PanoramaSettingsScreen(
                             onValueChange = onTopOpacityChange,
                         )
                     }
-                    item {
+                    item("panorama_transition_intensity") {
                         SettingsSliderPreference(
                             title = stringResource(R.string.pref_panorama_transition_intensity),
                             iconRes = R.drawable.ic_timelapse,

@@ -8,10 +8,12 @@ import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderPanelIcons
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -23,6 +25,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -38,6 +41,8 @@ import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabl
 import org.skepsun.kototoro.core.ui.theme.ArtworkSurfaceRole
 import org.skepsun.kototoro.core.ui.theme.artworkAwareContainerColor
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
+import org.skepsun.kototoro.core.ui.settings.LocalSettingsSearchTarget
+import org.skepsun.kototoro.core.ui.settings.revealSettingsSearchTarget
 
 enum class SettingsGroupItemPosition {
     SINGLE,
@@ -59,9 +64,17 @@ fun resolveSettingsGroupItemPosition(index: Int, total: Int): SettingsGroupItemP
 
 class SettingsItemGroupScope internal constructor() {
     internal val items = mutableListOf<@Composable () -> Unit>()
+    internal val searchKeys = mutableSetOf<String>()
 
     fun item(content: @Composable () -> Unit) {
         items += content
+    }
+
+    fun item(searchKey: String, content: @Composable () -> Unit) {
+        searchKeys += searchKey
+        items += {
+            Box(Modifier.fillMaxWidth().revealSettingsSearchTarget(searchKey)) { content() }
+        }
     }
 }
 
@@ -194,6 +207,13 @@ fun SettingsCollapsiblePreferenceGroup(
     val scope = SettingsItemGroupScope()
     scope.content()
     var expanded by rememberSaveable { mutableStateOf(initiallyExpanded) }
+    val searchTarget = LocalSettingsSearchTarget.current
+    // A search jump is a navigation, not a toggle: the group must be at its final height on the first
+    // frame, otherwise the reveal scroll below targets a row that is still expanding.
+    val openedBySearch = searchTarget != null && searchTarget.key in scope.searchKeys
+    LaunchedEffect(searchTarget) {
+        if (openedBySearch) expanded = true
+    }
 
     val tokens = LocalInterfaceStyleTokens.current
     val isIosStyle = LocalIsIosInterfaceStyle.current
@@ -254,7 +274,7 @@ fun SettingsCollapsiblePreferenceGroup(
             }
             AnimatedVisibility(
                 visible = expanded,
-                enter = expandVertically(),
+                enter = if (openedBySearch) EnterTransition.None else expandVertically(),
                 exit = shrinkVertically(),
             ) {
                 Column(modifier = Modifier.fillMaxWidth()) {

@@ -43,6 +43,9 @@ class SettingsSearchHelper @Inject constructor(
             "theme" to R.string.appearance_mode,
             "background_style" to R.string.background_style,
             "amoled_theme" to R.string.black_dark_theme,
+            "app_font_preset" to R.string.pref_app_font_preset,
+            "app_locale" to R.string.language,
+            "background_artwork_source" to R.string.background_artwork_source,
         ), SettingsDestination.AppearanceSettings)
         addAppearanceItems(listOf(
             "list_mode_2" to R.string.list_mode,
@@ -75,9 +78,10 @@ class SettingsSearchHelper @Inject constructor(
             "dynamic_shortcuts" to R.string.history_shortcuts,
         ), SettingsDestination.AppearanceHomeSettings, R.string.appearance_group_home)
         addAppearanceItems(listOf(
-            "app_font_preset" to R.string.pref_app_font_preset,
+            "background_artwork_opacity" to R.string.background_artwork_opacity,
+            "background_artwork_overlay_strength" to R.string.background_artwork_overlay_strength,
+            "background_artwork_blur" to R.string.background_artwork_blur,
             "tablet_ui_mode" to R.string.tablet_ui_mode,
-            "app_locale" to R.string.language,
             "loading_circle_style" to R.string.pref_loading_circle_style,
             "popup_radius" to R.string.pref_popup_radius,
             "shared_element_transitions" to R.string.shared_element_transitions,
@@ -395,6 +399,10 @@ class SettingsSearchHelper @Inject constructor(
             "pages_save_manga_title_length" to R.string.page_save_manga_title_length,
             "pages_preload" to R.string.preload_pages,
             "reader_threads" to R.string.reader_threads,
+            "avif_animation_memory_limit_mb" to R.string.avif_animation_memory_limit,
+            "avif_animation_downsampling" to R.string.avif_animation_downsampling,
+            "reader_experimental_scene_engine" to R.string.reader_experimental_scene_engine,
+            "reader_experimental_paged_scene_engine" to R.string.reader_experimental_paged_scene_engine,
             "reader_prefetch_limit" to R.string.prefetch_limit,
             "eink_mode" to R.string.eink_mode,
             "eink_refresh" to R.string.eink_refresh,
@@ -612,6 +620,8 @@ class SettingsSearchHelper @Inject constructor(
         }
 
         val trackerBreadcrumbs = listOf(context.getString(R.string.check_for_new_chapters))
+        // "章节检查更新" was this page's name before it became 更新提醒; the old wording still finds its rows.
+        val trackerAliases = listOf(context.getString(R.string.check_for_new_chapters_alias))
         val trackerKeys = listOf(
             "tracker_enabled" to R.string.check_new_chapters_title,
             "tracker_wifi" to R.string.only_using_wifi,
@@ -630,6 +640,7 @@ class SettingsSearchHelper @Inject constructor(
                     title = context.getString(titleRes),
                     breadcrumbs = trackerBreadcrumbs,
                     destination = SettingsDestination.TrackerSettings,
+                    aliases = trackerAliases,
                 ),
             )
         }

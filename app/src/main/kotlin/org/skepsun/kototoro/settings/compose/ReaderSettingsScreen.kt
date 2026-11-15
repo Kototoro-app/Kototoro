@@ -16,6 +16,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -63,6 +64,7 @@ import org.skepsun.kototoro.reader.novel.compose.NovelReadingModeOptions
 import org.skepsun.kototoro.reader.novel.compose.NovelReaderValueOption
 import org.skepsun.kototoro.reader.novel.compose.NovelTypographyControls
 import kotlinx.coroutines.launch
+import org.skepsun.kototoro.core.ui.settings.LocalSettingsSearchTarget
 
 private const val READER_SETTINGS_COMMON_PAGE = 0
 private const val READER_SETTINGS_MANGA_PAGE = 1
@@ -147,6 +149,10 @@ fun ReaderSettingsScreen(
         pageCount = { READER_SETTINGS_PAGE_COUNT },
     )
     val coroutineScope = rememberCoroutineScope()
+    val searchTarget = LocalSettingsSearchTarget.current
+    LaunchedEffect(searchTarget) {
+        searchTarget?.let { target -> pagerState.scrollToPage(readerSettingsPageForKey(target.key)) }
+    }
     val pageLabels = listOf(
         stringResource(R.string.reader_settings_common_tab),
         stringResource(R.string.manga),
@@ -175,6 +181,14 @@ fun ReaderSettingsScreen(
                     )
                 }
             }
+            Text(
+                text = stringResource(R.string.reader_settings_scope_summary),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = SettingsContentHorizontalPadding, vertical = 8.dp),
+            )
             HorizontalPager(
                 state = pagerState,
                 modifier = Modifier.fillMaxWidth().weight(1f),
@@ -972,7 +986,7 @@ private fun ReaderMangaSettingsPage(
             .padding(top = 20.dp),
         initiallyExpanded = false,
     ) {
-        item {
+        item("avif_animation_memory_limit_mb") {
             val memoryLimit = settings.observeAsState(AppSettings.KEY_AVIF_ANIMATION_MEMORY_LIMIT) {
                 avifAnimationMemoryLimitMb
             }.value
@@ -992,7 +1006,7 @@ private fun ReaderMangaSettingsPage(
                 onValueChange = { settings.avifAnimationMemoryLimitMb = it },
             )
         }
-        item {
+        item("avif_animation_downsampling") {
             SettingsSwitchPreference(
                 title = stringResource(R.string.avif_animation_downsampling),
                 summary = stringResource(R.string.avif_animation_downsampling_summary),
@@ -1013,7 +1027,7 @@ private fun ReaderMangaSettingsPage(
                 onClick = settings::resetAvifAnimationPolicy,
             )
         }
-        item {
+        item("reader_optimize") {
             SettingsSwitchPreference(
                 title = stringResource(R.string.reader_optimize),
                 summary = stringResource(R.string.reader_optimize_summary),
@@ -1024,7 +1038,7 @@ private fun ReaderMangaSettingsPage(
                 onCheckedChange = { settings.prefs.edit { putBoolean(AppSettings.KEY_READER_OPTIMIZE, it) } },
             )
         }
-        item {
+        item("reader_reduce_page_preloading") {
             ReaderPreloadSettingsRow(
                 reduced = settings.observeAsState(AppSettings.KEY_READER_REDUCE_PRELOAD) {
                     prefs.getBoolean(AppSettings.KEY_READER_REDUCE_PRELOAD, false)
@@ -1033,7 +1047,7 @@ private fun ReaderMangaSettingsPage(
                 icon = painterResource(R.drawable.ic_off_small),
             )
         }
-        item {
+        item("reader_experimental_scene_engine") {
             SettingsSwitchPreference(
                 title = stringResource(R.string.reader_experimental_scene_engine),
                 summary = stringResource(R.string.reader_experimental_scene_engine_summary),
@@ -1046,7 +1060,7 @@ private fun ReaderMangaSettingsPage(
                 },
             )
         }
-        item {
+        item("reader_experimental_paged_scene_engine") {
             SettingsSwitchPreference(
                 title = stringResource(R.string.reader_experimental_paged_scene_engine),
                 summary = stringResource(R.string.reader_experimental_paged_scene_engine_summary),
@@ -1059,7 +1073,7 @@ private fun ReaderMangaSettingsPage(
                 },
             )
         }
-        item {
+        item("pages_preload") {
             SettingsChoicePreference(
                 title = stringResource(R.string.preload_pages),
                 iconRes = R.drawable.ic_download,
@@ -1072,7 +1086,7 @@ private fun ReaderMangaSettingsPage(
                 onValueChange = { settings.prefs.edit { putString(AppSettings.KEY_PAGES_PRELOAD, it) } },
             )
         }
-        item {
+        item("reader_threads") {
             SettingsSliderPreference(
                 title = stringResource(R.string.reader_threads),
                 summary = stringResource(R.string.reader_threads_summary),
@@ -1084,7 +1098,7 @@ private fun ReaderMangaSettingsPage(
                 onValueChange = { settings.prefs.edit { putInt(AppSettings.KEY_READER_THREADS, it) } },
             )
         }
-        item {
+        item("reader_prefetch_limit") {
             SettingsSliderPreference(
                 title = stringResource(R.string.prefetch_limit),
                 summary = stringResource(R.string.prefetch_limit_summary),
