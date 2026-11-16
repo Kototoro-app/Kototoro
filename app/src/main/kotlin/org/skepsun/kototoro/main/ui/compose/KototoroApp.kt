@@ -834,6 +834,15 @@ fun KototoroApp(
             }
         }
     }
+    // The entering phase normally ends while details is open. When it has not (the hero protection never
+    // reported its end) the route is back on a main page with "hide the chrome for entering details" still
+    // true, and no later state change would ever show the top bar again.
+    LaunchedEffect(isImmersiveRoute) {
+        if (!isImmersiveRoute && heroTransitionPhase == HeroTransitionPhase.EnteringDetails) {
+            chromeState.setHeroTransitionPhase(HeroTransitionPhase.Idle)
+            chromeState.setDetailsChromeTransitionPending(false)
+        }
+    }
     val heroTransitionInProgress by produceState(
         initialValue = false,
         isDetailsChromeTransitionPending,
