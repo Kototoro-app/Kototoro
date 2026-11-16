@@ -6,6 +6,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -51,6 +52,7 @@ internal val Muted: Color @Composable get() = MaterialTheme.colorScheme.onSurfac
 internal val Warn: Color @Composable get() = if (LocalDesktopDark.current) Color(0xFFFFB74D) else Color(0xFFE65100)
 
 /** Shared Android colour scheme, typography and shapes, so desktop screens and core-ui components agree. */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun DesktopTheme(appearance: DesktopAppearance = DesktopAppearance.SYSTEM,
     interfaceStyle: DesktopInterfaceStyle = DesktopInterfaceStyle.MATERIAL, content: @Composable () -> Unit) {
@@ -75,7 +77,7 @@ internal fun DesktopTheme(appearance: DesktopAppearance = DesktopAppearance.SYST
     val tokens = if (interfaceStyle == DesktopInterfaceStyle.IOS) InterfaceStyleTokens.Ios
         else InterfaceStyleTokens.Material3Expressive
     val shapes = kototoroShapes(tokens)
-    MaterialTheme(colorScheme = colorScheme, typography = typography, shapes = shapes) {
+    val body: @Composable () -> Unit = {
         CompositionLocalProvider(LocalContentColor provides colorScheme.onSurface,
             LocalDesktopDark provides dark,
             LocalDesktopInterfaceStyle provides interfaceStyle, LocalInterfaceStyleTokens provides tokens,
@@ -86,6 +88,13 @@ internal fun DesktopTheme(appearance: DesktopAppearance = DesktopAppearance.SYST
                 (interfaceStyle == DesktopInterfaceStyle.MATERIAL),
             // Android's own catalog for the screens both hosts share (see DesktopUiStrings).
             LocalUiStrings provides DesktopUiStrings, content = content)
+    }
+    // Android's root: the Expressive style renders through the Expressive theme and its springier motion scheme.
+    if (interfaceStyle == DesktopInterfaceStyle.MATERIAL) {
+        MaterialExpressiveTheme(colorScheme = colorScheme, motionScheme = remember { MotionScheme.expressive() },
+            shapes = shapes, typography = typography, content = body)
+    } else {
+        MaterialTheme(colorScheme = colorScheme, typography = typography, shapes = shapes, content = body)
     }
 }
 
