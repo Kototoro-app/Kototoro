@@ -1,5 +1,7 @@
 package org.skepsun.kototoro.core.ui.compose
 
+import org.skepsun.kototoro.core.ui.chips.choicePillPosition
+import org.skepsun.kototoro.core.ui.chips.CompactChoicePill
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -12,7 +14,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -182,9 +183,9 @@ private fun TrackingProgressEditor(
     val changed = parsedProgress != slot.progress || parsedRating != slot.rating * 10f || status != slot.status
     LazyRow(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
         items(statuses.size) { index ->
-            org.skepsun.kototoro.core.ui.chips.CompactChoicePill(selected = status == index, onClick = { status = index }, enabled = !busy,
+            CompactChoicePill(selected = status == index, onClick = { status = index }, enabled = !busy,
                 label = statuses[index],
-                position = org.skepsun.kototoro.core.ui.chips.choicePillPosition(index, statuses.size))
+                position = choicePillPosition(index, statuses.size))
         }
     }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

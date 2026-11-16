@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.core.ui.compose
 
+import org.skepsun.kototoro.core.ui.chips.CompactChoicePill
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,7 +15,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
@@ -190,7 +190,7 @@ fun CompactFilterChip(
     icon: (@Composable () -> Unit)? = null,
     enabled: Boolean = true,
 ) {
-    org.skepsun.kototoro.core.ui.chips.CompactChoicePill(
+    CompactChoicePill(
         selected = selected,
         onClick = onClick,
         label = label,
@@ -215,7 +215,7 @@ fun FilterFacetChip(
     trailingIcon: (@Composable () -> Unit)? = null,
     enabled: Boolean = true,
 ) {
-    org.skepsun.kototoro.core.ui.chips.CompactChoicePill(
+    CompactChoicePill(
         selected = selected,
         onClick = onClick,
         label = label,

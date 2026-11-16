@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.desktop.app
 
+import org.skepsun.kototoro.core.ui.chips.CompactChoicePill
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -13,7 +14,6 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -211,12 +211,20 @@ private fun <T> SuggestionFilterRow(
     Text(title, fontSize = 12.sp, color = Muted, modifier = Modifier.padding(top = 10.dp))
     LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         item("all") {
-            org.skepsun.kototoro.core.ui.chips.CompactChoicePill(selected = selected.isEmpty(), onClick = onAll, label = { Text(allLabel) },
-                modifier = Modifier.testTag(allTag))
+            CompactChoicePill(
+                selected = selected.isEmpty(),
+                onClick = onAll,
+                label = { Text(allLabel) },
+                modifier = Modifier.testTag(allTag),
+            )
         }
         items(options) { option ->
-            org.skepsun.kototoro.core.ui.chips.CompactChoicePill(selected = option in selected, onClick = { onToggle(option) },
-                label = { Text(label(option)) }, modifier = Modifier.testTag("$optionTag:$option"))
+            CompactChoicePill(
+                selected = option in selected,
+                onClick = { onToggle(option) },
+                label = { Text(label(option)) },
+                modifier = Modifier.testTag("$optionTag:$option"),
+            )
         }
     }
 }

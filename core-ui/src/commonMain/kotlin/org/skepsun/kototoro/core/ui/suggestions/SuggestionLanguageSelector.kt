@@ -1,5 +1,7 @@
 package org.skepsun.kototoro.core.ui.suggestions
 
+import org.skepsun.kototoro.core.ui.chips.choicePillPosition
+import org.skepsun.kototoro.core.ui.chips.CompactChoicePill
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -7,7 +9,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -44,9 +45,9 @@ fun SuggestionLanguageSelector(
             color = MaterialTheme.colorScheme.onSurfaceVariant)
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
             SuggestionLanguage.entries.forEachIndexed { index, language ->
-                org.skepsun.kototoro.core.ui.chips.CompactChoicePill(selected == language, onClick = { onSelect(language) }, enabled = enabled,
+                CompactChoicePill(selected == language, onClick = { onSelect(language) }, enabled = enabled,
                     label = suggestionLanguageLabel(language),
-                    position = org.skepsun.kototoro.core.ui.chips.choicePillPosition(index, SuggestionLanguage.entries.size),
+                    position = choicePillPosition(index, SuggestionLanguage.entries.size),
                     modifier = Modifier.testTag("suggestion-language:${language.name}"))
             }
         }

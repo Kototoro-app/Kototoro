@@ -368,18 +368,18 @@ private fun <T> SuggestionSourceFilterRow(
     )
     LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         item(key = "all") {
-            FilterChip(
+            org.skepsun.kototoro.core.ui.chips.CompactChoicePill(
                 selected = selectedOptions.isEmpty(),
                 onClick = onAllClick,
-                label = { Text(allLabel) },
+                label = allLabel,
                 modifier = Modifier.tvChipRing(),
             )
         }
         items(options, key = optionKey) { option ->
-            FilterChip(
+            org.skepsun.kototoro.core.ui.chips.CompactChoicePill(
                 selected = option in selectedOptions,
                 onClick = { onOptionClick(option) },
-                label = { Text(optionLabel(option)) },
+                label = optionLabel(option),
                 modifier = Modifier.tvChipRing(),
             )
         }

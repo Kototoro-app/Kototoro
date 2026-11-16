@@ -1,5 +1,7 @@
 package org.skepsun.kototoro.core.ui.chapters
 
+import org.skepsun.kototoro.core.ui.chips.choicePillPosition
+import org.skepsun.kototoro.core.ui.chips.CompactChoicePill
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -14,7 +16,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -179,11 +180,11 @@ fun VideoEpisodePreviewSection(
                 horizontalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 lines.forEachIndexed { index, line ->
-                    org.skepsun.kototoro.core.ui.chips.CompactChoicePill(
+                    CompactChoicePill(
                         selected = line.isSelected,
                         onClick = { onSelectLine(line.branch) },
                         label = line.label,
-                        position = org.skepsun.kototoro.core.ui.chips.choicePillPosition(index, lines.size),
+                        position = choicePillPosition(index, lines.size),
                         modifier = Modifier
                             .tvFocusable(shape = RoundedCornerShape(999.dp), addFocusTarget = false)
                             .testTag("video-line:${line.label}"),

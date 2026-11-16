@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.list.ui.compose
 
+import org.skepsun.kototoro.core.ui.chips.CompactChoicePill
 import coil3.compose.AsyncImage
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
@@ -114,7 +115,6 @@ private const val TvInitialFocusAttempts = 20
 /** TV grid scale multiplier; [compactPosterCardStyle] clamps the result at 1.4x. */
 private const val TvGridScaleBoost = 1.4f
 private const val MaxGridScale = 1.4f
-private val QuickFilterChipHeight = 32.dp
 private val QuickFilterChipIconSize = 16.dp
 
 /** Ring shape for the quick-filter dropdown rows; M3 menu items are full-width rectangles. */
@@ -857,7 +857,7 @@ fun QuickFilterSection(
             }
             val chip = entry as ChipModel
             val option = chip.data as? ListFilterOption
-            org.skepsun.kototoro.core.ui.chips.CompactChoicePill(
+            CompactChoicePill(
                 selected = chip.isChecked,
                 onClick = { option?.let(applyQuickFilter) },
                 label = buildChipLabel(context, chip, entryPoint),
@@ -879,7 +879,7 @@ private fun QuickFilterGroupChip(
     val selectedItems = group.items.filter(ChipModel::isChecked)
     val isSelected = selectedItems.isNotEmpty()
     Box {
-        org.skepsun.kototoro.core.ui.chips.CompactChoicePill(
+        CompactChoicePill(
             selected = isSelected,
             onClick = { expanded = true },
             label = when (selectedItems.size) {

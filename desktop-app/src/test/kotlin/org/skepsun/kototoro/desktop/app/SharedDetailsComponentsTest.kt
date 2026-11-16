@@ -6,6 +6,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.graphics.asSkiaBitmap
+import java.nio.file.Files
+import java.nio.file.Path
+import org.jetbrains.skia.Image
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
@@ -35,6 +40,40 @@ import org.skepsun.kototoro.reader.ui.compose.design.ReaderPanelIcons
 
 @OptIn(ExperimentalTestApi::class)
 class SharedDetailsComponentsTest {
+    @Test
+    fun `detail tags retain actions and display-only tags expose no click`() =
+        runDesktopComposeUiTest(width = 420, height = 240) {
+            var picked: String? = null
+            val tags = listOf(
+                org.skepsun.kototoro.core.ui.compose.DetailsTagChip("mystery", "悬疑"),
+                org.skepsun.kototoro.core.ui.compose.DetailsTagChip("adventure", "冒险"),
+                org.skepsun.kototoro.core.ui.compose.DetailsTagChip("sensitive", "敏感题材", highlighted = true),
+            )
+            setContent {
+                DesktopTheme(DesktopAppearance.LIGHT) {
+                    Surface {
+                        Column(Modifier.padding(16.dp)) {
+                            Text("作品标签")
+                            org.skepsun.kototoro.core.ui.compose.DetailsTagChips(tags, onTagClick = { picked = it },
+                                chipModifier = { Modifier.testTag("action-tag:${it.key}") })
+                            Text("资料标签")
+                            org.skepsun.kototoro.core.ui.compose.DetailsTagChips(tags,
+                                chipModifier = { Modifier.testTag("display-tag:${it.key}") })
+                        }
+                    }
+                }
+            }
+            onNodeWithTag("action-tag:mystery").assertHasClickAction().performClick()
+            assertEquals("mystery", picked)
+            onNodeWithTag("display-tag:mystery").assertHasNoClickAction()
+            Image.makeFromBitmap(onRoot().captureToImage().asSkiaBitmap()).use { image ->
+                image.encodeToData()?.use { data ->
+                    Files.write(Files.createDirectories(Path.of("build/reports/desktop-smoke"))
+                        .resolve("shared-details-tags.png"), data.bytes)
+                }
+            }
+        }
+
     @Test
     fun `cinema supplementary facts omit status and alias already shown in hero`() =
         runDesktopComposeUiTest(width = 420, height = 800) {

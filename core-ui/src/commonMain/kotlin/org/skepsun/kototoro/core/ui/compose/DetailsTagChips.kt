@@ -10,8 +10,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SuggestionChip
-import androidx.compose.material3.SuggestionChipDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -81,7 +79,7 @@ fun <K> DetailsTagChips(
                         androidx.compose.foundation.layout.Box(Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) { label() }
                     }
                 } else {
-                    // The same chip without a click: M3's SuggestionChip always takes one.
+                    // Display-only tags expose no click or selection action.
                     Surface(
                         modifier = chipModifier(tag).heightIn(min = minimumSize),
                         shape = TagShape,

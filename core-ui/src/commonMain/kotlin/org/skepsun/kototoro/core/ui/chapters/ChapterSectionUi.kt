@@ -1,5 +1,8 @@
 package org.skepsun.kototoro.core.ui.chapters
 
+import org.skepsun.kototoro.core.ui.chips.ChoicePillPosition
+import org.skepsun.kototoro.core.ui.chips.choicePillPosition
+import org.skepsun.kototoro.core.ui.chips.CompactChoicePill
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.layout.Arrangement
@@ -11,7 +14,6 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -99,14 +101,14 @@ fun <T> ChapterFilterChips(
         horizontalArrangement = Arrangement.spacedBy(if (connected) 2.dp else 6.dp),
     ) {
         itemsIndexed(options, key = { _, option -> key(option) }) { index, option ->
-            org.skepsun.kototoro.core.ui.chips.CompactChoicePill(
+            CompactChoicePill(
                 selected = selected(option),
                 onClick = { onClick(option) },
                 enabled = enabled,
                 modifier = chipModifier(option),
                 label = label(option),
-                position = if (connected) org.skepsun.kototoro.core.ui.chips.choicePillPosition(index, options.size)
-                    else org.skepsun.kototoro.core.ui.chips.ChoicePillPosition.SINGLE,
+                position = if (connected) choicePillPosition(index, options.size)
+                    else ChoicePillPosition.SINGLE,
             )
         }
     }

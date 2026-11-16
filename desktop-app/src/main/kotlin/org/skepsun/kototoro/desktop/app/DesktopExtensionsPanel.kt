@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.desktop.app
 
+import org.skepsun.kototoro.core.ui.chips.CompactChoicePill
 import org.skepsun.kototoro.core.ui.buttons.Button
 import org.skepsun.kototoro.core.ui.buttons.TextButton
 import org.skepsun.kototoro.core.ui.extensions.ExtensionManagementTab
@@ -24,7 +25,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -111,10 +111,18 @@ internal fun DesktopExtensionsPanel(controller: DesktopController, closing: Bool
             1 -> DesktopExtensionRepositories(controller, state, importedRepositories, enabled, { adding = true })
             2 -> Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    org.skepsun.kototoro.core.ui.chips.CompactChoicePill(selected = !available,onClick = { available = false },label = { Text(desktopText("extensions.installed")) },
-                        modifier = Modifier.testTag("extensions-installed-tab"))
-                    org.skepsun.kototoro.core.ui.chips.CompactChoicePill(selected = available,onClick = { available = true },label = { Text(desktopText("extensions.available")) },
-                        modifier = Modifier.testTag("extensions-available-tab"))
+                    CompactChoicePill(
+                        selected = !available,
+                        onClick = { available = false },
+                        label = { Text(desktopText("extensions.installed")) },
+                        modifier = Modifier.testTag("extensions-installed-tab"),
+                    )
+                    CompactChoicePill(
+                        selected = available,
+                        onClick = { available = true },
+                        label = { Text(desktopText("extensions.available")) },
+                        modifier = Modifier.testTag("extensions-available-tab"),
+                    )
                     androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
                     TextButton({ controller.checkExtensionUpdates() }, enabled = enabled,
                         modifier = Modifier.testTag("extension-check-updates")) { Text(desktopText("extensions.checkUpdates")) }
@@ -174,13 +182,23 @@ private fun ExtensionCatalog(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             item(key = "all") {
-                org.skepsun.kototoro.core.ui.chips.CompactChoicePill(filter == null,onClick = { controller.selectExtensionCatalog(null) },label = { Text(AndroidStrings["all"]) },
-                    enabled = enabled, modifier = Modifier.testTag("extension-repository-filter:all"))
+                CompactChoicePill(
+                    selected = filter == null,
+                    onClick = { controller.selectExtensionCatalog(null) },
+                    label = { Text(AndroidStrings["all"]) },
+                    enabled = enabled,
+                    modifier = Modifier.testTag("extension-repository-filter:all"),
+                )
             }
             items(state.repositories, key = { it.indexUrl }) { repository ->
                 val selected = filter?.repository?.indexUrl == repository.indexUrl
-                org.skepsun.kototoro.core.ui.chips.CompactChoicePill(selected = selected,onClick = { controller.selectExtensionCatalog(if (selected) null else repository) },label = { Text(repository.name) }, enabled = enabled,
-                    modifier = Modifier.testTag("extension-repository-filter:${repository.indexUrl}"))
+                CompactChoicePill(
+                    selected = selected,
+                    onClick = { controller.selectExtensionCatalog(if (selected) null else repository) },
+                    label = { Text(repository.name) },
+                    enabled = enabled,
+                    modifier = Modifier.testTag("extension-repository-filter:${repository.indexUrl}"),
+                )
             }
         }
         SettingsGroup(Modifier.weight(1f)) {
@@ -446,9 +464,12 @@ private fun ManagedSources(
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             DesktopSourceEnabledFilter.entries.forEach { option ->
-                org.skepsun.kototoro.core.ui.chips.CompactChoicePill(selected = option == filter, onClick = { filter = option },
+                CompactChoicePill(
+                    selected = option == filter,
+                    onClick = { filter = option },
                     label = { Text(AndroidStrings[option.stringName()]) },
-                    modifier = Modifier.testTag("source-enabled-filter:${option.name}"))
+                    modifier = Modifier.testTag("source-enabled-filter:${option.name}"),
+                )
             }
             androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
             TextButton({ selected = toggleVisibleSourceSelection(selected, entries) },

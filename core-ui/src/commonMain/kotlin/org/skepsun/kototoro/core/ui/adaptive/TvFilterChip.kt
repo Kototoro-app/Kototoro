@@ -1,12 +1,12 @@
 package org.skepsun.kototoro.core.ui.adaptive
 
+import org.skepsun.kototoro.core.ui.chips.CompactChoicePill
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -18,17 +18,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 
-/**
- * A [FilterChip] a remote can actually see, for a chip row that is the only way to pick a value on TV.
- *
- * Material3's chip only paints a focus state layer, and from a sofa that reads as "nothing happened",
- * so the chip stops the remote without telling anyone where it went. The TV branch draws the same
- * pill by hand - thick enough to hit from three metres, with the shared focus ring - and the phone
- * branch still returns the stock chip, so screens that share this row keep their Material look.
- *
- * Use it where a chip row carries a real choice (a preset, a ratio, a mode). A chip that merely
- * labels something does not need it.
- */
+/** Compact choices on phones and desktop; TV keeps its large targets and visible remote-focus ring. */
 @Composable
 fun TvFilterChip(
     selected: Boolean,
@@ -38,7 +28,7 @@ fun TvFilterChip(
     enabled: Boolean = true,
 ) {
     if (!LocalUiPresentationConfig.current.isTv) {
-        org.skepsun.kototoro.core.ui.chips.CompactChoicePill(
+        CompactChoicePill(
             selected = selected,
             onClick = onClick,
             label = label,

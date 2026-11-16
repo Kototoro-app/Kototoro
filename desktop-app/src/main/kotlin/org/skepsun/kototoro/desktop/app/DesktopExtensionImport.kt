@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.desktop.app
 
+import org.skepsun.kototoro.core.ui.chips.CompactChoicePill
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -50,10 +51,20 @@ internal fun DesktopExtensionImportDialog(
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.testTag("extension-add-error")) }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    org.skepsun.kototoro.core.ui.chips.CompactChoicePill(selected = !sourceConfig,onClick = { sourceConfig = false },label = { Text(desktopText("extensions.repositoryType")) }, enabled = enabled,
-                        modifier = Modifier.testTag("extension-add-repository"))
-                    org.skepsun.kototoro.core.ui.chips.CompactChoicePill(selected = sourceConfig,onClick = { sourceConfig = true },label = { Text("TVBox / CMS / Legado") }, enabled = enabled,
-                        modifier = Modifier.testTag("extension-add-tvbox"))
+                    CompactChoicePill(
+                        selected = !sourceConfig,
+                        onClick = { sourceConfig = false },
+                        label = { Text(desktopText("extensions.repositoryType")) },
+                        enabled = enabled,
+                        modifier = Modifier.testTag("extension-add-repository"),
+                    )
+                    CompactChoicePill(
+                        selected = sourceConfig,
+                        onClick = { sourceConfig = true },
+                        label = { Text("TVBox / CMS / Legado") },
+                        enabled = enabled,
+                        modifier = Modifier.testTag("extension-add-tvbox"),
+                    )
                 }
                 val detectedHint = when (detected) {
                     SourceInputIntent.REPOSITORY_INDEX -> desktopText("extensions.detectedRepository")

@@ -5,6 +5,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asSkiaBitmap
+import org.jetbrains.skia.Image
+import java.nio.file.Files
+import java.nio.file.Path
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
@@ -86,6 +90,12 @@ class SharedFilterPanelTest {
             onNodeWithTag("chip:grid").assertIsSelected()
             onNodeWithTag("chip:list").assertIsNotSelected().performClick()
             onNodeWithTag("chip:list").assertIsSelected()
+            Image.makeFromBitmap(onRoot().captureToImage().asSkiaBitmap()).use { image ->
+                image.encodeToData()?.use { data ->
+                    Files.write(Files.createDirectories(Path.of("build/reports/desktop-smoke"))
+                        .resolve("shared-filter-panel.png"), data.bytes)
+                }
+            }
             onNodeWithTag("switch").performClick()
             onNodeWithTag("done").performClick()
             onNodeWithTag("reset").performClick()

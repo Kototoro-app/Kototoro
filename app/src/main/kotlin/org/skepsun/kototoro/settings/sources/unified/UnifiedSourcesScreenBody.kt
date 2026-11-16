@@ -646,42 +646,14 @@ internal fun CompactFilterChip(
     leadingIcon: (@Composable () -> Unit)? = null,
     trailingBadge: (@Composable () -> Unit)? = null,
 ) {
-    val style = rememberUnifiedSourcesVisualStyle()
-    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 32.dp) {
-        FilterChip(
-            selected = selected,
-            onClick = onClick,
-            modifier = modifier.defaultMinSize(minHeight = 32.dp).tvChipRing(style.chipShape),
-            shape = style.chipShape,
-            leadingIcon = leadingIcon,
-            trailingIcon = trailingBadge,
-            colors = FilterChipDefaults.filterChipColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                iconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                selectedLeadingIconColor = MaterialTheme.colorScheme.primary,
-            ),
-            border = FilterChipDefaults.filterChipBorder(
-                enabled = true,
-                selected = selected,
-                borderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
-                selectedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f),
-                borderWidth = 1.dp,
-                selectedBorderWidth = 1.dp,
-            ),
-            label = {
-                Text(
-                    text = text,
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            },
-        )
-    }
+    org.skepsun.kototoro.core.ui.chips.CompactChoicePill(
+        selected = selected,
+        onClick = onClick,
+        label = text,
+        modifier = modifier,
+        leadingIcon = leadingIcon,
+        trailingIcon = trailingBadge,
+    )
 }
 
 @Composable
