@@ -50,7 +50,14 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerEvent
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerInputEventHandler
+import androidx.compose.ui.input.pointer.SuspendingPointerInputModifierNode
+import androidx.compose.ui.node.DelegatingNode
+import androidx.compose.ui.node.ModifierNodeElement
+import androidx.compose.ui.node.PointerInputModifierNode
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -500,7 +507,7 @@ private fun Modifier.fastScrollbarPointerInput(
     onDragStart: () -> Unit,
     onDragStop: () -> Unit,
     onDragFraction: (fraction: Float) -> Unit,
-): Modifier = pointerInput(rootView, handleHeightPx) {
+): Modifier = this then SiblingSharedPointerInputElement(rootView, handleHeightPx) {
     awaitEachGesture {
         val down = awaitFirstDown(requireUnconsumed = false)
         if (!showScrollbar()) {
@@ -514,7 +521,11 @@ private fun Modifier.fastScrollbarPointerInput(
             if (!change.pressed) return@awaitEachGesture
             val delta = change.position - down.position
             if (abs(delta.x) > slop && abs(delta.x) >= abs(delta.y)) return@awaitEachGesture
-            if (abs(delta.y) > slop) break
+            if (abs(delta.y) > slop) {
+                // The content under the band sees this gesture too; claim it before its own drag starts.
+                change.consume()
+                break
+            }
         }
 
         rootView.parent?.requestDisallowInterceptTouchEvent(true)
@@ -543,6 +554,44 @@ private fun Modifier.fastScrollbarPointerInput(
             rootView.parent?.requestDisallowInterceptTouchEvent(false)
         }
     }
+}
+
+/**
+ * A pointer input that lets the content it overlaps see the same touches. The fast scroller's band is a
+ * sibling drawn over the list's right edge; as a plain `pointerInput` it kept every touch there to itself,
+ * so nothing under the last 36dp of the screen could be tapped even while no scrollbar was showing.
+ */
+private data class SiblingSharedPointerInputElement(
+    private val key1: Any?,
+    private val key2: Any?,
+    private val handler: PointerInputEventHandler,
+) : ModifierNodeElement<SiblingSharedPointerInputNode>() {
+    override fun create() = SiblingSharedPointerInputNode(handler)
+
+    override fun update(node: SiblingSharedPointerInputNode) = node.update(handler)
+
+    // The handler reads its inputs through state, like a keyed pointerInput block: only the keys restart it.
+    override fun equals(other: Any?): Boolean =
+        other is SiblingSharedPointerInputElement && key1 == other.key1 && key2 == other.key2
+
+    override fun hashCode(): Int = 31 * key1.hashCode() + key2.hashCode()
+}
+
+private class SiblingSharedPointerInputNode(
+    handler: PointerInputEventHandler,
+) : DelegatingNode(), PointerInputModifierNode {
+    private val input = delegate(SuspendingPointerInputModifierNode(handler))
+
+    fun update(handler: PointerInputEventHandler) {
+        input.pointerInputEventHandler = handler
+    }
+
+    override fun onPointerEvent(pointerEvent: PointerEvent, pass: PointerEventPass, bounds: IntSize) =
+        input.onPointerEvent(pointerEvent, pass, bounds)
+
+    override fun onCancelPointerInput() = input.onCancelPointerInput()
+
+    override fun sharePointerInputWithSiblings(): Boolean = true
 }
 
 internal class ItemHeightTracker(initialCapacity: Int = 128) {

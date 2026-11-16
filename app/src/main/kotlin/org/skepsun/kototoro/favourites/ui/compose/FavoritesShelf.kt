@@ -44,7 +44,7 @@ fun FavoritesShelf(
     sharedElementInstanceKey: String,
     onItemClick: (ContentGridModel, Rect?, String) -> Unit,
     modifier: Modifier = Modifier,
-    /** Drawn after the grid's heading, so a lone control does not take a row of its own. */
+    /** Drawn at the end of the grid's heading, so a lone control does not take a row of its own. */
     summaryTrailing: (@Composable () -> Unit)? = null,
 ) {
     if (state.items.isEmpty()) return
@@ -134,10 +134,8 @@ fun FavoritesShelf(
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false),
+                modifier = Modifier.weight(1f),
             )
-            // Right after the count, not at the row's end: the last 36dp of the screen belong to the
-            // fast scroller, which takes the touches there.
             summaryTrailing?.invoke()
         }
     }

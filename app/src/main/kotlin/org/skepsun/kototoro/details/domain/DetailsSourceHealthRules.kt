@@ -25,11 +25,23 @@ enum class DetailsSourceNoticeKind {
 fun detailsSourceNoticeKind(
     healthKind: DetailsSourceNoticeKind,
     sourceUnavailable: Boolean,
+    healthWarningsEnabled: Boolean = true,
 ): DetailsSourceNoticeKind = when {
-    healthKind != DetailsSourceNoticeKind.NONE -> healthKind
+    healthKind != DetailsSourceNoticeKind.NONE &&
+        (healthWarningsEnabled || !detailsSourceNoticeIsDismissible(healthKind)) -> healthKind
     sourceUnavailable -> DetailsSourceNoticeKind.UNINSTALLED
     else -> DetailsSourceNoticeKind.NONE
 }
+
+/**
+ * Whether "don't show again" applies to this notice.
+ *
+ * "Broken" and "failing" are guesses from failed updates, and they often only mean no proxy was set,
+ * so the user may silence them. "Not installed" is a fact, and the only explanation the page gives for
+ * a work it cannot load, so it always stays.
+ */
+fun detailsSourceNoticeIsDismissible(kind: DetailsSourceNoticeKind): Boolean =
+    kind == DetailsSourceNoticeKind.BROKEN || kind == DetailsSourceNoticeKind.FAILING
 
 /**
  * Whether this failure is the page's own state rather than a reportable error.

@@ -134,6 +134,7 @@ import org.skepsun.kototoro.core.exceptions.resolve.SnackbarErrorObserver
 import org.skepsun.kototoro.core.exceptions.UnsupportedSourceException
 import org.skepsun.kototoro.details.domain.DetailsSourceNoticeKind
 import org.skepsun.kototoro.details.domain.detailsOwnsSourceError
+import org.skepsun.kototoro.details.domain.detailsSourceNoticeIsDismissible
 import org.skepsun.kototoro.details.domain.detailsSourceNoticeKind
 import org.skepsun.kototoro.core.util.ext.isHttpUrl
 import org.skepsun.kototoro.core.util.ext.mangaExtra
@@ -583,7 +584,20 @@ private fun DetailsScreenContent(
     // A load that failed because the source cannot serve content is the same news as the health
     // warning, so it feeds the inline notice instead of a snackbar pinned over the "Read" dock.
     var sourceUnavailable by remember(content?.id) { mutableStateOf(false) }
-    val noticeKind = detailsSourceNoticeKind(healthKind = healthKind, sourceUnavailable = sourceUnavailable)
+    // The same switch as the favourites banner: one "don't show again" silences both guesses.
+    val sourceHealthWarningsEnabled by settings.observeAsState(AppSettings.KEY_SOURCE_HEALTH_BANNER) {
+        isSourceHealthBannerEnabled
+    }
+    val noticeKind = detailsSourceNoticeKind(
+        healthKind = healthKind,
+        sourceUnavailable = sourceUnavailable,
+        healthWarningsEnabled = sourceHealthWarningsEnabled,
+    )
+    val onDisableSourceNotice: (() -> Unit)? = if (detailsSourceNoticeIsDismissible(noticeKind)) {
+        { settings.isSourceHealthBannerEnabled = false }
+    } else {
+        null
+    }
     val noticeLabel = when (noticeKind) {
         DetailsSourceNoticeKind.UNINSTALLED -> stringResource(R.string.migration_health_uninstalled)
         DetailsSourceNoticeKind.BROKEN -> stringResource(R.string.migration_health_broken)
@@ -1503,6 +1517,7 @@ private fun DetailsScreenContent(
                                         isWorkDetails = isWorkDetails,
                                         sourceHealthNotice = noticeMessage,
                                         onMigrateSource = onMigrateSource,
+                                        onDisableSourceNotice = onDisableSourceNotice,
                                         sharedElementKey = sharedElementKey,
                                         pendingTagSearch = { detailsScreenState.setPendingTagSearch(it) },
                                         pendingAuthorSearch = { author, source ->
@@ -1710,6 +1725,7 @@ private fun DetailsScreenContent(
                                 isWorkDetails = isWorkDetails,
                                 sourceHealthNotice = noticeMessage,
                                 onMigrateSource = onMigrateSource,
+                                onDisableSourceNotice = onDisableSourceNotice,
                                 sharedElementKey = sharedElementKey,
                                 pendingTagSearch = { detailsScreenState.setPendingTagSearch(it) },
                                 pendingAuthorSearch = { author, source ->

@@ -33,6 +33,8 @@ internal fun DetailsSourceHealthNotice(
     message: String,
     onMigrate: () -> Unit,
     modifier: Modifier = Modifier,
+    /** "Don't show again"; null for a warning that states a fact rather than a guess. */
+    onDisable: (() -> Unit)? = null,
 ) {
     Surface(
         modifier = modifier,
@@ -59,11 +61,21 @@ internal fun DetailsSourceHealthNotice(
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
-            TextButton(
-                onClick = onMigrate,
+            Row(
                 modifier = Modifier.align(Alignment.End),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                Text(stringResource(R.string.migrate))
+                if (onDisable != null) {
+                    TextButton(onClick = onDisable) {
+                        Text(
+                            text = stringResource(R.string.migration_health_banner_disable),
+                            color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.72f),
+                        )
+                    }
+                }
+                TextButton(onClick = onMigrate) {
+                    Text(stringResource(R.string.migrate))
+                }
             }
         }
     }

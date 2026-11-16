@@ -47,4 +47,26 @@ class DetailsSourceHealthRulesTest {
     fun `other failures still reach the snackbar`() {
         assertFalse(detailsOwnsSourceError(isUnsupportedSourceError = false))
     }
+
+    @Test
+    fun `silenced health guesses disappear but a failed load still explains itself`() {
+        assertEquals(
+            DetailsSourceNoticeKind.NONE,
+            detailsSourceNoticeKind(DetailsSourceNoticeKind.FAILING, sourceUnavailable = false, healthWarningsEnabled = false),
+        )
+        assertEquals(
+            DetailsSourceNoticeKind.UNINSTALLED,
+            detailsSourceNoticeKind(DetailsSourceNoticeKind.BROKEN, sourceUnavailable = true, healthWarningsEnabled = false),
+        )
+    }
+
+    @Test
+    fun `a missing source cannot be silenced`() {
+        assertEquals(
+            DetailsSourceNoticeKind.UNINSTALLED,
+            detailsSourceNoticeKind(DetailsSourceNoticeKind.UNINSTALLED, sourceUnavailable = false, healthWarningsEnabled = false),
+        )
+        assertFalse(detailsSourceNoticeIsDismissible(DetailsSourceNoticeKind.UNINSTALLED))
+        assertTrue(detailsSourceNoticeIsDismissible(DetailsSourceNoticeKind.FAILING))
+    }
 }

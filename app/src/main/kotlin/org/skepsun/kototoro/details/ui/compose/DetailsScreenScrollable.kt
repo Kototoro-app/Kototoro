@@ -187,6 +187,8 @@ internal fun DetailsScrollableContent(
     /** Inline source-health warning (message + Migrate), null when the source is fine. */
     sourceHealthNotice: String? = null,
     onMigrateSource: () -> Unit = {},
+    /** "Don't show again" for the warning; null when this warning cannot be silenced. */
+    onDisableSourceNotice: (() -> Unit)? = null,
     scrollState: androidx.compose.foundation.ScrollState,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
@@ -251,6 +253,7 @@ internal fun DetailsScrollableContent(
             DetailsSourceHealthNotice(
                 message = sourceHealthNotice,
                 onMigrate = onMigrateSource,
+                onDisable = onDisableSourceNotice,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = outerHorizontalPadding, vertical = 8.dp),
