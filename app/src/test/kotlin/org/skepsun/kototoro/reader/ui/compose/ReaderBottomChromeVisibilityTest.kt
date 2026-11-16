@@ -64,4 +64,24 @@ class ReaderBottomChromeVisibilityTest {
 			),
 		)
 	}
+
+	@Test
+	fun `pinned floating controls outlive a hidden bottom chrome`() {
+		// issue #683: the column stays, the bar-shaped chrome still leaves with the tap.
+		assertEquals(
+			ReaderBottomChromeVisibility(
+				visible = true,
+				progressVisible = false,
+				chapterTitleVisible = false,
+				floatingControlsVisible = true,
+			),
+			resolveReaderBottomChromeVisibility(
+				controlsVisible = false,
+				progressAvailable = true,
+				chapterTitleAtBottom = true,
+				floatingControlsAvailable = true,
+				floatingControlsPinned = true,
+			),
+		)
+	}
 }

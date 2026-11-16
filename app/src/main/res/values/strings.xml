@@ -2262,6 +2262,8 @@
     <string name="reader_controls_in_bottom_bar">Reader controls in bottom bar</string>
     <string name="reader_floating_controls">Reader floating buttons</string>
     <string name="reader_floating_controls_summary">Select up to %1$d floating buttons</string>
+    <string name="reader_floating_controls_pinned">Keep floating buttons on screen</string>
+    <string name="reader_floating_controls_pinned_summary">The floating buttons stay while the reader hides its other controls; off, they appear after a tap on the page like the rest</string>
     <string name="reader_control_labels">Show floating button labels</string>
     <string name="reader_control_labels_summary">Show action names in floating buttons in the manga and novel readers</string>
     <string name="chapters_and_pages">Chapters and pages</string>

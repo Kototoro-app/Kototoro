@@ -843,6 +843,13 @@ class ReaderActivity :
         }.onEach { enabled ->
             composeReaderController.updateOptions { copy(chapterTitleAtBottom = enabled) }
         }.launchIn(lifecycleScope)
+        // Same reasoning for the pinned floating column (issue #683): the column is pure chrome
+        // outside the options sheet, so the setting has to reach it without opening the sheet.
+        settings.observeAsFlow(AppSettings.KEY_READER_FLOATING_CONTROLS_PINNED) {
+            isReaderFloatingControlsPinned
+        }.onEach { pinned ->
+            composeReaderController.updateOptions { copy(floatingControlsPinned = pinned) }
+        }.launchIn(lifecycleScope)
         viewModel.translationLayerState.onEach {
             currentTranslationLayerState = it
             updateTranslationToggleButton()
@@ -1208,6 +1215,7 @@ class ReaderActivity :
                 optimization = settings.isReaderOptimizationEnabled,
                 preloadReduction = settings.isReaderPreloadReductionEnabled,
                 chapterTitleAtBottom = settings.isReaderChapterTitleAtBottom,
+                floatingControlsPinned = settings.isReaderFloatingControlsPinned,
                 superResolution = settings.isReaderSuperResolutionEnabled,
                 background = settings.readerBackground,
                 colorFilter = viewModel.readerSettingsProducer.value.colorFilter,

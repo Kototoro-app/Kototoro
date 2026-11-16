@@ -8,6 +8,12 @@ internal fun resolveReaderBottomChromeVisibility(
     chapterTitleAtBottom: Boolean,
     floatingControlsAvailable: Boolean = false,
     floatingControlsAllowed: Boolean = true,
+    floatingControlsPinned: Boolean = false,
 ): ReaderBottomChromeVisibility = resolveReaderChromeVisibility(
-    controlsVisible, progressAvailable, chapterTitleAtBottom, floatingControlsAvailable, floatingControlsAllowed,
+    controlsVisible,
+    progressAvailable,
+    chapterTitleAtBottom,
+    floatingControlsAvailable,
+    floatingControlsAllowed,
+    floatingControlsPinned,
 )

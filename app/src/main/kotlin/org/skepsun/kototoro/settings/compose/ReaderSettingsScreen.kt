@@ -840,6 +840,19 @@ private fun ReaderMangaSettingsPage(
         }
         item {
             SettingsSwitchPreference(
+                title = stringResource(R.string.reader_floating_controls_pinned),
+                summary = stringResource(R.string.reader_floating_controls_pinned_summary),
+                iconRes = R.drawable.ic_pin,
+                checked = settings.observeAsState(AppSettings.KEY_READER_FLOATING_CONTROLS_PINNED) {
+                    isReaderFloatingControlsPinned
+                }.value,
+                onCheckedChange = {
+                    settings.prefs.edit { putBoolean(AppSettings.KEY_READER_FLOATING_CONTROLS_PINNED, it) }
+                },
+            )
+        }
+        item {
+            SettingsSwitchPreference(
                 title = stringResource(R.string.reader_control_ltr),
                 summary = stringResource(R.string.reader_control_ltr_summary),
                 iconRes = R.drawable.ic_reader_ltr,

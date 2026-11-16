@@ -2383,6 +2383,14 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         get() = prefs.getBoolean(KEY_READER_CHAPTER_TITLE_BOTTOM, false)
         set(value) = prefs.edit { putBoolean(KEY_READER_CHAPTER_TITLE_BOTTOM, value) }
 
+    /**
+     * 右侧那列悬浮按钮不跟着其他控件一起隐藏，而是一直留在屏幕上。
+     * 默认关（点一下屏幕才弹出）；想少点一次就打开这个（issue #683）。
+     */
+    var isReaderFloatingControlsPinned: Boolean
+        get() = prefs.getBoolean(KEY_READER_FLOATING_CONTROLS_PINNED, false)
+        set(value) = prefs.edit { putBoolean(KEY_READER_FLOATING_CONTROLS_PINNED, value) }
+
     var isReaderSuperResolutionEnabled: Boolean
         get() = prefs.getBoolean(KEY_READER_SUPER_RESOLUTION_ENABLED, false)
         set(value) = prefs.edit().putBoolean(KEY_READER_SUPER_RESOLUTION_ENABLED, value).apply()
@@ -3307,6 +3315,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_READER_BAR_CUTOUT_AVOIDANCE = "reader_bar_cutout_avoidance"
         const val KEY_READER_CHAPTER_TOAST = "reader_chapter_toast"
         const val KEY_READER_CHAPTER_TITLE_BOTTOM = "reader_chapter_title_bottom"
+        const val KEY_READER_FLOATING_CONTROLS_PINNED = "reader_floating_controls_pinned"
         const val KEY_READER_SUPER_RESOLUTION_ENABLED = "reader_super_resolution_enabled"
         const val KEY_READER_SUPER_RESOLUTION_ENGINE = "reader_super_resolution_engine"
         const val KEY_READER_SUPER_RESOLUTION_ANIME4K_MODE = "reader_super_resolution_anime4k_mode"

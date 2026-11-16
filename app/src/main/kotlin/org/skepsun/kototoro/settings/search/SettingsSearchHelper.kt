@@ -394,6 +394,7 @@ class SettingsSearchHelper @Inject constructor(
             "reader_bar_transparent" to R.string.reader_info_bar_transparent,
             "reader_chapter_toast" to R.string.reader_chapter_toast,
             "reader_chapter_title_bottom" to R.string.reader_chapter_title_at_bottom,
+            "reader_floating_controls_pinned" to R.string.reader_floating_controls_pinned,
             "reader_background" to R.string.background,
             "pages_numbers" to R.string.show_pages_numbers,
             "pages_save_manga_title_length" to R.string.page_save_manga_title_length,

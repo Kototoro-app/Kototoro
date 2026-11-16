@@ -126,6 +126,8 @@ data class ComposeReaderOptionsState(
     val optimization: Boolean = false,
     val preloadReduction: Boolean = false,
     val chapterTitleAtBottom: Boolean = false,
+    /** Keeps the floating column on screen while the rest of the chrome hides (issue #683). */
+    val floatingControlsPinned: Boolean = false,
     val superResolution: Boolean = false,
     val appearancePreviewOriginalUri: String? = null,
     val appearancePreviewProcessedUri: String? = null,

@@ -602,6 +602,7 @@ internal fun ComposeReaderActivityScaffold(
             progressAvailable = progressAvailable,
             chapterTitleAtBottom = chapterTitleAtBottom,
             floatingControlsAvailable = floatingControls.isNotEmpty(),
+            floatingControlsPinned = state.options.floatingControlsPinned,
         )
         val floatingControlExitOffset = with(LocalDensity.current) { 32.dp.roundToPx() }
         AnimatedVisibility(
@@ -613,7 +614,7 @@ internal fun ComposeReaderActivityScaffold(
             // 标题与进度条必须在同一个 AnimatedVisibility 中，避免两个独立
             // transition 在隐藏控件时出现不同步的残留帧。
             Box(modifier = Modifier.fillMaxWidth()) {
-                if (progressAvailable) {
+                if (bottomChromeVisibility.progressVisible) {
                     ReaderProgressDock(
                         isIosStyle = isIosStyle,
                         modifier = Modifier
@@ -628,7 +629,7 @@ internal fun ComposeReaderActivityScaffold(
                         )
                     }
                 }
-                if (chapterTitleAtBottom) {
+                if (bottomChromeVisibility.chapterTitleVisible) {
                     // 底部标题药丸跟右侧悬浮按钮共用同一组基准（同高、同底距），
                     // 否则它会和最近的那颗悬浮按钮错位（issue #509 的反馈）。
                     ReaderChapterTitleChip(
@@ -643,9 +644,10 @@ internal fun ComposeReaderActivityScaffold(
                             .padding(bottom = ReaderFloatingControlInset),
                     )
                 }
-                if (floatingControls.isNotEmpty()) {
+                if (bottomChromeVisibility.floatingControlsVisible) {
                     // 阅读控件整体隐藏时由外层 AnimatedVisibility 统一带走；章节面板
                     // 单独打开时仍保留悬浮列原有的水平退场，避免两类状态互相影响。
+                    // 常驻开关（issue #683）只放宽外层的“控件可见”条件，章节面板照旧让位。
                     AnimatedVisibility(
                         visible = !state.chaptersVisible,
                         enter = slideInHorizontally { it + floatingControlExitOffset }
