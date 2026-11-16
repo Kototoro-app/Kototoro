@@ -2,9 +2,11 @@ package org.skepsun.kototoro.settings.about
 
 import android.app.DownloadManager
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -30,6 +32,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.Button
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -44,21 +47,24 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
-import androidx.core.widget.TextViewCompat
-import io.noties.markwon.Markwon
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.github.AppUpdateSource
 import org.skepsun.kototoro.core.github.AppUpdateSourceProbe
@@ -67,8 +73,8 @@ import org.skepsun.kototoro.core.prefs.GitHubMirrorProbeResult
 import org.skepsun.kototoro.core.prefs.GitHubMirrorProbeState
 import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.adaptive.tvChipRing
+import org.skepsun.kototoro.core.ui.markdown.MarkdownText
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
-import org.skepsun.kototoro.core.ui.widgets.SelectableTextView
 import org.skepsun.kototoro.core.util.FileSize
 
 data class AppUpdateMirrorOption(
@@ -468,6 +474,14 @@ private fun MirrorSelector(
     onSelectFastestMirror: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // Folded by default: which mirror carries the download is a one-off decision, while the page is about the
+    // update itself. The header keeps naming the mirror that is in use, so the choice is never hidden.
+    var isExpanded by rememberSaveable { mutableStateOf(false) }
+    val isProbing = probeState is GitHubMirrorProbeState.Running
+    val chevronRotation by animateFloatAsState(
+        targetValue = if (isExpanded) 180f else 0f,
+        label = "mirror-chevron",
+    )
     ElevatedCard(
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.elevatedCardColors(
@@ -476,260 +490,269 @@ private fun MirrorSelector(
         elevation = CardDefaults.elevatedCardElevation(defaultElevation = 0.dp),
         modifier = modifier,
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .clickable(role = Role.Button) { isExpanded = !isExpanded }
+                    .tvChipRing(RoundedCornerShape(14.dp))
+                    .padding(vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f, fill = false),
+                Surface(
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
+                    modifier = Modifier.size(36.dp),
                 ) {
-                    Surface(
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
-                        modifier = Modifier.size(36.dp),
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                painter = painterResource(R.drawable.ic_code),
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(20.dp),
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Column {
-                        Text(
-                            text = stringResource(R.string.pref_github_mirror),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                        Text(
-                            text = when (probeState) {
-                                is GitHubMirrorProbeState.Running -> stringResource(
-                                    R.string.mirror_probe_running,
-                                    probeState.completed,
-                                    probeState.total,
-                                )
-                                is GitHubMirrorProbeState.Finished -> when {
-                                    probeState.total == 0 -> stringResource(R.string.mirror_probe_summary)
-                                    probeState.available == 0 -> stringResource(R.string.mirror_probe_none_available)
-                                    else -> stringResource(
-                                        R.string.mirror_probe_finished,
-                                        options.firstOrNull { it.id == probeState.fastestId }?.name
-                                            ?: probeState.fastestId.orEmpty(),
-                                        probeState.fastestMillis ?: 0L,
-                                        probeState.available,
-                                        probeState.total,
-                                    )
-                                }
-                                GitHubMirrorProbeState.Idle -> stringResource(R.string.mirror_probe_summary)
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                }
-
-                val isProbing = probeState is GitHubMirrorProbeState.Running
-                FilledTonalButton(
-                    onClick = if (isProbing) onCancelMirrorProbes else onProbeMirrors,
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                    modifier = Modifier.height(34.dp),
-                ) {
-                    if (isProbing) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(14.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = stringResource(R.string.mirror_probe_cancel),
-                            style = MaterialTheme.typography.labelMedium,
-                        )
-                    } else {
+                    Box(contentAlignment = Alignment.Center) {
                         Icon(
-                            painter = painterResource(R.drawable.ic_wifi),
+                            painter = painterResource(R.drawable.ic_code),
                             contentDescription = null,
-                            modifier = Modifier.size(14.dp),
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = stringResource(R.string.mirror_probe_short_action),
-                            style = MaterialTheme.typography.labelMedium,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp),
                         )
                     }
                 }
+                Spacer(modifier = Modifier.width(10.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.pref_github_mirror),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = if (isProbing) {
+                            stringResource(R.string.mirror_probe_running, probeState.completed, probeState.total)
+                        } else {
+                            mirrorSummary(options.firstOrNull { it.id == selectedId })
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                Icon(
+                    painter = painterResource(R.drawable.ic_expand_more),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .size(22.dp)
+                        .rotate(chevronRotation),
+                )
             }
 
-            val finishedState = probeState as? GitHubMirrorProbeState.Finished
-            val fastestOption = finishedState?.fastestId?.let { id -> options.firstOrNull { it.id == id } }
-            if (fastestOption != null && fastestOption.id != selectedId) {
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)),
-                    modifier = Modifier.fillMaxWidth(),
+            AnimatedVisibility(visible = isExpanded) {
+                Column(
+                    modifier = Modifier.padding(top = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.weight(1f),
+                        FilledTonalButton(
+                            onClick = if (isProbing) onCancelMirrorProbes else onProbeMirrors,
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                            modifier = Modifier.height(34.dp),
                         ) {
-                            Icon(
-                                painter = painterResource(R.drawable.ic_bolt),
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(16.dp),
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "${fastestOption.name} (${finishedState.fastestMillis ?: 0L} ms)",
-                                style = MaterialTheme.typography.bodySmall,
-                                fontWeight = FontWeight.Medium,
-                                color = MaterialTheme.colorScheme.onSurface,
-                            )
-                        }
-                        TvTextButton(
-                            onClick = onSelectFastestMirror,
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                            modifier = Modifier.height(28.dp),
-                        ) {
-                            Text(
-                                text = stringResource(R.string.mirror_probe_select_fastest),
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary,
-                            )
+                            if (isProbing) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(14.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = stringResource(R.string.mirror_probe_cancel),
+                                    style = MaterialTheme.typography.labelMedium,
+                                )
+                            } else {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_wifi),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(14.dp),
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = stringResource(R.string.mirror_probe_short_action),
+                                    style = MaterialTheme.typography.labelMedium,
+                                )
+                            }
                         }
                     }
-                }
-            }
 
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                options.forEach { option ->
-                    val isSelected = option.id == selectedId
-                    val probe = option.probeResult
-                    FilterChip(
-                        selected = isSelected,
-                        onClick = { onMirrorSelected(option.id) },
-                        shape = RoundedCornerShape(12.dp),
-                        border = FilterChipDefaults.filterChipBorder(
-                            enabled = true,
-                            selected = isSelected,
-                            borderColor = if (option.isFastest && !isSelected) {
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
-                            } else {
-                                MaterialTheme.colorScheme.outlineVariant
-                            },
-                            selectedBorderColor = MaterialTheme.colorScheme.primary,
-                            borderWidth = if (isSelected) 1.5.dp else 1.dp,
-                        ),
-                        colors = FilterChipDefaults.filterChipColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f),
-                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                            labelColor = MaterialTheme.colorScheme.onSurface,
-                            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                        ),
-                        label = {
+                    val finishedState = probeState as? GitHubMirrorProbeState.Finished
+                    val fastestOption = finishedState?.fastestId?.let { id -> options.firstOrNull { it.id == id } }
+                    if (fastestOption != null && fastestOption.id != selectedId) {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
                             Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
                             ) {
-                                if (option.isFastest) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.weight(1f),
+                                ) {
                                     Icon(
                                         painter = painterResource(R.drawable.ic_bolt),
                                         contentDescription = null,
                                         tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(13.dp),
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "${fastestOption.name} (${finishedState.fastestMillis ?: 0L} ms)",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.onSurface,
                                     )
                                 }
-                                Text(
-                                    text = option.name,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                                )
-                                if (probe != null) {
-                                    val isFast = (probe.latencyMillis ?: 0L) < 300L
-                                    val isMedium = (probe.latencyMillis ?: 0L) < 800L
-                                    val tagBg = when {
-                                        !probe.isAvailable -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f)
-                                        isFast -> MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-                                        isMedium -> MaterialTheme.colorScheme.tertiary.copy(alpha = 0.12f)
-                                        else -> MaterialTheme.colorScheme.surfaceVariant
-                                    }
-                                    val tagColor = when {
-                                        !probe.isAvailable -> MaterialTheme.colorScheme.error
-                                        isFast -> MaterialTheme.colorScheme.primary
-                                        isMedium -> MaterialTheme.colorScheme.tertiary
-                                        else -> MaterialTheme.colorScheme.onSurfaceVariant
-                                    }
-                                    Surface(
-                                        shape = RoundedCornerShape(6.dp),
-                                        color = tagBg,
-                                    ) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
-                                        ) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(5.dp)
-                                                    .clip(CircleShape)
-                                                    .background(tagColor),
-                                            )
-                                            Spacer(modifier = Modifier.width(3.dp))
-                                            Text(
-                                                text = if (probe.isAvailable) {
-                                                    "${probe.latencyMillis ?: "?"} ms"
-                                                } else {
-                                                    stringResource(R.string.mirror_probe_timeout)
-                                                },
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = tagColor,
-                                                fontWeight = FontWeight.Medium,
-                                            )
-                                        }
-                                    }
-                                } else if (probeState is GitHubMirrorProbeState.Running) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(10.dp),
-                                        strokeWidth = 1.5.dp,
+                                TvTextButton(
+                                    onClick = onSelectFastestMirror,
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                    modifier = Modifier.height(28.dp),
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.mirror_probe_select_fastest),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.primary,
                                     )
                                 }
                             }
-                        },
-                        modifier = Modifier.tvChipRing(RoundedCornerShape(12.dp)),
+                        }
+                    }
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        options.forEach { option ->
+                            val isSelected = option.id == selectedId
+                            val probe = option.probeResult
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = { onMirrorSelected(option.id) },
+                                shape = RoundedCornerShape(12.dp),
+                                border = FilterChipDefaults.filterChipBorder(
+                                    enabled = true,
+                                    selected = isSelected,
+                                    borderColor = if (option.isFastest && !isSelected) {
+                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
+                                    } else {
+                                        MaterialTheme.colorScheme.outlineVariant
+                                    },
+                                    selectedBorderColor = MaterialTheme.colorScheme.primary,
+                                    borderWidth = if (isSelected) 1.5.dp else 1.dp,
+                                ),
+                                colors = FilterChipDefaults.filterChipColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f),
+                                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                    labelColor = MaterialTheme.colorScheme.onSurface,
+                                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                ),
+                                label = {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    ) {
+                                        if (option.isFastest) {
+                                            Icon(
+                                                painter = painterResource(R.drawable.ic_bolt),
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(13.dp),
+                                            )
+                                        }
+                                        Text(
+                                            text = option.name,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                        )
+                                        if (probe != null) {
+                                            val isFast = (probe.latencyMillis ?: 0L) < 300L
+                                            val isMedium = (probe.latencyMillis ?: 0L) < 800L
+                                            val tagBg = when {
+                                                !probe.isAvailable -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f)
+                                                isFast -> MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                                                isMedium -> MaterialTheme.colorScheme.tertiary.copy(alpha = 0.12f)
+                                                else -> MaterialTheme.colorScheme.surfaceVariant
+                                            }
+                                            val tagColor = when {
+                                                !probe.isAvailable -> MaterialTheme.colorScheme.error
+                                                isFast -> MaterialTheme.colorScheme.primary
+                                                isMedium -> MaterialTheme.colorScheme.tertiary
+                                                else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                            }
+                                            Surface(
+                                                shape = RoundedCornerShape(6.dp),
+                                                color = tagBg,
+                                            ) {
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                                                ) {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .size(5.dp)
+                                                            .clip(CircleShape)
+                                                            .background(tagColor),
+                                                    )
+                                                    Spacer(modifier = Modifier.width(3.dp))
+                                                    Text(
+                                                        text = if (probe.isAvailable) {
+                                                            "${probe.latencyMillis ?: "?"} ms"
+                                                        } else {
+                                                            stringResource(R.string.mirror_probe_timeout)
+                                                        },
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = tagColor,
+                                                        fontWeight = FontWeight.Medium,
+                                                    )
+                                                }
+                                            }
+                                        } else if (probeState is GitHubMirrorProbeState.Running) {
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.size(10.dp),
+                                                strokeWidth = 1.5.dp,
+                                                color = MaterialTheme.colorScheme.primary,
+                                            )
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.tvChipRing(RoundedCornerShape(12.dp)),
+                            )
+                        }
+                    }
+                    Text(
+                        text = stringResource(R.string.pref_github_mirror_summary),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
-
-            Text(
-                text = stringResource(R.string.pref_github_mirror_summary),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
         }
+    }
+}
+
+/** The mirror in use plus the latency the last probe measured: all the folded header has to say. */
+private fun mirrorSummary(option: AppUpdateMirrorOption?): String {
+    val name = option?.name.orEmpty()
+    val latency = option?.probeResult?.takeIf { it.isAvailable }?.latencyMillis
+    return when {
+        name.isEmpty() -> ""
+        latency == null -> name
+        else -> "$name \u00B7 $latency ms"
     }
 }
 
@@ -799,7 +822,10 @@ private fun UpdateActionBar(
     }
 }
 
-/** Keeps Markwon's existing Markdown, links, and span handling while the page itself is Compose. */
+/**
+ * The release's own notes, rendered with the Markdown subset `core-ui` shares with the Windows changelog: source
+ * notes are written as Markdown (`## What's new`, bullets, links), and the raw text was unreadable.
+ */
 @Composable
 private fun UpdateDescription(
     version: AppVersion?,
@@ -807,42 +833,42 @@ private fun UpdateDescription(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val markwon = remember(context) { Markwon.create(context) }
-    val text = remember(version, context) {
-        version?.let {
-            buildString {
-                append(context.getString(R.string.new_version_s, it.name))
-                val downloadSize = it.apkSize
-                if (downloadSize > 0L) {
-                    appendLine()
-                    append(context.getString(R.string.size_s, FileSize.BYTES.format(context, downloadSize)))
-                }
-                appendLine()
-                appendLine()
-                append(it.description)
+    when {
+        version != null -> Column(modifier = modifier) {
+            Text(
+                text = stringResource(R.string.new_version_s, version.name),
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            if (version.apkSize > 0L) {
+                Text(
+                    text = stringResource(R.string.size_s, FileSize.BYTES.format(context, version.apkSize)),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            SelectionContainer {
+                MarkdownText(
+                    markdown = version.description,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
             }
         }
-    }
 
-    AndroidView(
-        factory = { viewContext ->
-            SelectableTextView(viewContext).apply {
-                TextViewCompat.setTextAppearance(
-                    this,
-                    com.google.android.material.R.style.TextAppearance_Material3_BodyMedium,
-                )
-                setTextIsSelectable(true)
-            }
-        },
-        modifier = modifier,
-        update = { textView ->
-            when {
-                text != null -> markwon.setMarkdown(textView, text)
-                isLoading -> textView.setText(R.string.loading_)
-                else -> textView.setText(R.string.no_update_available)
-            }
-        },
-    )
+        isLoading -> Text(
+            text = stringResource(R.string.loading_),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = modifier,
+        )
+
+        else -> Text(
+            text = stringResource(R.string.no_update_available),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = modifier,
+        )
+    }
 }
 
 @Preview(showBackground = true)
