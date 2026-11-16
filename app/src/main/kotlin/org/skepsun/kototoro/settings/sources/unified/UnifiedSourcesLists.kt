@@ -332,18 +332,6 @@ internal fun UnifiedSourceList(
     }
 }
 
-@Composable
-private fun UnifiedSourceIcon(
-    item: UnifiedSourceItem,
-    modifier: Modifier = Modifier,
-) {
-    ContentSourceIcon(
-        source = item.source,
-        modifier = modifier,
-        contentDescription = item.title,
-    )
-}
-
 /**
  * A display-level row for the unified sources list.
  *
@@ -635,15 +623,23 @@ private fun UnifiedSourceRow(
                 )
             }
         } else {
+            var showsArtwork by remember(item.source.name) { mutableStateOf(false) }
             Box(
                 modifier = Modifier
                     .size(36.dp)
-                    .background(groupColor ?: MaterialTheme.colorScheme.surfaceContainerHigh, style.iconShape),
+                    .then(
+                        if (showsArtwork) Modifier else Modifier.background(
+                            groupColor ?: MaterialTheme.colorScheme.surfaceContainerHigh,
+                            style.iconShape,
+                        ),
+                    ),
                 contentAlignment = Alignment.Center,
             ) {
-                UnifiedSourceIcon(
-                    item = item,
-                    modifier = Modifier.size(24.dp),
+                ContentSourceIcon(
+                    source = item.source,
+                    modifier = Modifier.size(if (showsArtwork) 36.dp else 24.dp),
+                    contentDescription = item.title,
+                    onArtworkChange = { showsArtwork = it },
                 )
             }
         }

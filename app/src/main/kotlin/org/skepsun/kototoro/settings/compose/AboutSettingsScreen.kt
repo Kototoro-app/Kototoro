@@ -207,11 +207,6 @@ private fun AboutBanner() {
                     style = MaterialTheme.typography.headlineSmall,
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
-                Text(
-                    text = stringResource(R.string.about_author),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
-                )
             }
         }
     }
