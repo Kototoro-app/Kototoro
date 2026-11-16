@@ -47,7 +47,7 @@ class IosSuggestionsTest {
                     availableStates = emptySet(), availableContentRating = emptySet(), availableContentTypes = emptySet(),
                     availableDemographics = emptySet(), availableLocales = emptySet()))
                 is SourceCall.ListContent -> {
-                    assertEquals("UPDATED", call.order)
+                    assertTrue(call.order in setOf("POPULARITY", "UPDATED"))
                     check(call.sourceName != adult.name) { "Adult source must not be queried" }
                     if (call.sourceName == broken.name) error("offline")
                     if (call.filter?.tags?.isNotEmpty() == true) {
@@ -73,6 +73,10 @@ class IosSuggestionsTest {
                 sourceData = "opaque")), true)
             assertEquals(24, library.suggestions.refresh(runtime, sources, settings, IosCancellation()))
             val cached = library.suggestions.items(sources, settings)
+            assertTrue(library.suggestions.items(sources, settings.copy(language = "ENGLISH", languageOnly = true)).isEmpty())
+            assertEquals(cached.size, library.suggestions.items(sources,
+                settings.copy(language = "CHINESE", languageOnly = true)).size)
+            assertTrue(library.suggestions.items(sources, settings.copy(excludedTags = "爱情")).isEmpty())
             assertEquals(12, cached.count { it.sourceName == manga.name })
             assertEquals(12, cached.count { it.sourceName == novels.name })
             assertTrue(cached.none { "Horror" in it.tags || it.contentRating == "ADULT" || it.title.isBlank() })

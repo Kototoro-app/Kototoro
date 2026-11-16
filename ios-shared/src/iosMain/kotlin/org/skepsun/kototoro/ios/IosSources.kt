@@ -453,6 +453,8 @@ class IosSourceContent internal constructor(
     internal val metadata: org.skepsun.kototoro.core.db.entity.TrackingSiteItemEntity? = null,
     /** Downloaded books listed by their own chapters: the download's chapter id → those chapters' titles. */
     private val books: Map<Long, List<String>> = emptyMap(),
+    val suggestionDirection: String = "TASTE",
+    val suggestionReason: String? = null,
 ) {
     private val display = value.withTrackingMetadata(metadata)
     val usesTrackingCover: Boolean get() = !metadata?.coverUrl.isNullOrBlank()

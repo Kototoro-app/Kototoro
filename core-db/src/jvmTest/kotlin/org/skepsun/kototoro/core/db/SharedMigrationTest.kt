@@ -5,6 +5,7 @@ import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import androidx.sqlite.execSQL
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.flow.first
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -15,6 +16,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import org.skepsun.kototoro.core.db.migrations.sharedDatabaseMigrations
+import org.skepsun.kototoro.suggestions.data.SuggestionEntity
 import org.skepsun.kototoro.tracker.data.TrackScheduleEntity
 import java.io.File
 
@@ -59,6 +61,20 @@ class SharedMigrationTest {
             db.getHistoryDao().upsert(history.copy(chapterId = 5L, furthestChapterId = 0L, updatedAt = 3))
             assertEquals(5L, db.getHistoryDao().find(MANGA_ID)!!.chapterId)
             assertEquals(HISTORY_CHAPTER_ID, db.getHistoryDao().find(MANGA_ID)!!.furthestChapterId)
+
+            // v89: a suggestion says why it is one; what was stored before says nothing.
+            val stored = db.getSuggestionDao().findAll().single()
+            assertEquals("", stored.direction)
+            assertEquals(null, stored.reason)
+            assertEquals(9L, stored.createdAt)
+            assertEquals(1, db.getSuggestionDao().observeAll(20, emptyList(), direction = "TASTE").first().size)
+            assertTrue(db.getSuggestionDao().observeAll(20, emptyList(), direction = "NEW").first().isEmpty())
+            db.getSuggestionDao().upsert(SuggestionEntity(MANGA_ID, 1f, 9L, "EXPLORE", "genre.horror"))
+            val replaced = db.getSuggestionDao().findAll().single()
+            assertEquals("EXPLORE", replaced.direction)
+            assertEquals("genre.horror", replaced.reason)
+            assertEquals(1, db.getSuggestionDao().observeAll(20, emptyList(), direction = "EXPLORE").first().size)
+            assertTrue(db.getSuggestionDao().observeAll(20, emptyList(), direction = "TASTE").first().isEmpty())
         } finally {
             db.close()
         }
@@ -91,6 +107,7 @@ class SharedMigrationTest {
                 "INSERT INTO history(manga_id, created_at, updated_at, chapter_id, page, scroll, percent, deleted_at, chapters) " +
                     "VALUES ($MANGA_ID, 1, 2, $HISTORY_CHAPTER_ID, 3, 0, 0.5, 0, 20)",
             )
+            connection.execSQL("INSERT INTO suggestions(manga_id, relevance, created_at) VALUES ($MANGA_ID, 0.5, 9)")
             connection.execSQL("PRAGMA user_version = 84")
         }
     }

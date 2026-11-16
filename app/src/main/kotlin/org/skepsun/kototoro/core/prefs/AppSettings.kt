@@ -2343,6 +2343,20 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         get() = prefs.getBoolean(KEY_SUGGESTIONS_NOTIFICATIONS, false)
 
     // Tag lists are parsed with the rule shared with the Windows settings (core-domain SuggestionRules).
+    var suggestionsLanguage: org.skepsun.kototoro.suggestions.domain.SuggestionLanguage
+        get() = org.skepsun.kototoro.suggestions.domain.SuggestionLanguage.of(
+            prefs.getString(org.skepsun.kototoro.suggestions.domain.SuggestionLanguage.PREFERENCE_KEY, null),
+        )
+        set(value) = prefs.edit {
+            putString(org.skepsun.kototoro.suggestions.domain.SuggestionLanguage.PREFERENCE_KEY, value.name)
+        }
+
+    var suggestionsLanguageOnly: Boolean
+        get() = prefs.getBoolean(org.skepsun.kototoro.suggestions.domain.SuggestionLanguage.ONLY_PREFERENCE_KEY, false)
+        set(value) = prefs.edit {
+            putBoolean(org.skepsun.kototoro.suggestions.domain.SuggestionLanguage.ONLY_PREFERENCE_KEY, value)
+        }
+
     val suggestionsTagsBlacklist: Set<String>
         get() = org.skepsun.kototoro.suggestions.domain.parseSuggestionTags(
             prefs.getString(KEY_SUGGESTIONS_EXCLUDE_TAGS, null),

@@ -69,9 +69,11 @@ class SuggestionsViewModel @Inject constructor(
     private val globalFavoritesState: org.skepsun.kototoro.favourites.domain.GlobalFavoritesState,
     private val librarySearchQueries: LibrarySearchQueries,
     spaceBrowseScope: SpaceBrowseScope,
+    @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
 ) : ContentListViewModel(settings, dataRepository, localStorageChanges), QuickFilterListener by quickFilter,
     SpaceBindableViewModel {
     private val spaceBinding = spaceBrowseScope.createBinding(viewModelScope + Dispatchers.Default)
+    private val reasonStrings = org.skepsun.kototoro.core.ui.text.AndroidUiStrings(context)
 
     override val isFilterBarVisible = MutableStateFlow(true)
 
@@ -105,14 +107,28 @@ class SuggestionsViewModel @Inject constructor(
 
     private val loadParams = quickFilter.appliedOptions.combineWithSettings()
 
+    val direction = MutableStateFlow<org.skepsun.kototoro.suggestions.domain.SuggestionDirection?>(null)
+
+    val language = settings.observeAsFlow(org.skepsun.kototoro.suggestions.domain.SuggestionLanguage.PREFERENCE_KEY) {
+        suggestionsLanguage
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), settings.suggestionsLanguage)
+
+    val languageOnly = settings.observeAsFlow(org.skepsun.kototoro.suggestions.domain.SuggestionLanguage.ONLY_PREFERENCE_KEY) {
+        suggestionsLanguageOnly
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), settings.suggestionsLanguageOnly)
+
+    fun selectDirection(value: org.skepsun.kototoro.suggestions.domain.SuggestionDirection?) {
+        direction.value = value
+    }
+
     /** Text typed in the overlay's "Suggestions" tab; narrows the loaded suggestions in memory. */
     val libraryQuery: StateFlow<String> = librarySearchQueries.query(LibrarySearchScope.SUGGESTIONS)
 
     fun clearLibraryQuery() = librarySearchQueries.clear(LibrarySearchScope.SUGGESTIONS)
 
     override val content = combine(
-        loadParams.flatMapLatest { filterOptions ->
-            repository.observeAll(200, filterOptions)
+        combine(loadParams, direction) { filters, direction -> filters to direction }.flatMapLatest { (filters, direction) ->
+            repository.observeAll(200, filters, direction = direction)
         },
         quickFilter.appliedOptions,
         observeListModeWithTriggers(),
@@ -125,6 +141,7 @@ class SuggestionsViewModel @Inject constructor(
                 else sourcePresetsRepository.observe(id)
             },
         libraryQuery,
+        repository.observeReasons(),
     ) { values: Array<Any?> ->
         val list = values[0] as List<Content>
         val libraryQuery = values[7] as String
@@ -133,6 +150,8 @@ class SuggestionsViewModel @Inject constructor(
         val groupTab = values[3] as BrowseGroupTab
         val sourceTags = values[4] as Set<SourceTag>
         val preset = values[6] as? SourcePreset
+        @Suppress("UNCHECKED_CAST")
+        val reasons = values[8] as Map<Long, Pair<org.skepsun.kototoro.suggestions.domain.SuggestionDirection, String?>>
         val filteredList = list.filter { manga ->
             val source = manga.source
             if (!preset.matches(source)) {
@@ -186,7 +205,18 @@ class SuggestionsViewModel @Inject constructor(
             quickFilter.filterItem(filters)?.let { resultList.add(it) }
             for (group in groupedList) {
                 val model = mangaListMapper.toListModel(group.representative, mode)
-                resultList += model.toGroupedListModel(group)
+                val reason = reasons[group.representative.id]?.let { (direction, key) ->
+                    org.skepsun.kototoro.core.ui.suggestions.suggestionReasonText(
+                        reasonStrings, direction, key,
+                        context.resources.configuration.locales[0].language,
+                    )
+                }
+                resultList += when (val grouped = model.toGroupedListModel(group)) {
+                    is ContentGridModel -> grouped.copy(recommendationReason = reason)
+                    is ContentCompactListModel -> grouped.copy(subtitle = reason ?: grouped.subtitle)
+                    is ContentDetailedListModel -> grouped.copy(subtitle = reason ?: grouped.subtitle)
+                    else -> grouped
+                }
             }
         }
         resultList as List<ListModel>
@@ -204,6 +234,9 @@ class SuggestionsViewModel @Inject constructor(
     override fun onRefresh() {
         updateSuggestions()
     }
+
+    val visibleCount = content.map { items -> items.count { it is org.skepsun.kototoro.list.ui.model.ContentListModel } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
     override fun onRetry() = Unit
 

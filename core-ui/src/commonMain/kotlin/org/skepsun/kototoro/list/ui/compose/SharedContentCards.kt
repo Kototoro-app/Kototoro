@@ -50,6 +50,7 @@ fun ContentPosterCard(
     cellContentPadding: PaddingValues = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
     focusModifier: Modifier = Modifier,
     coverModifier: Modifier = Modifier,
+    caption: String? = null,
     overlays: @Composable BoxScope.() -> Unit = {},
     progress: @Composable BoxScope.() -> Unit = {},
 ) {
@@ -81,6 +82,11 @@ fun ContentPosterCard(
                     lineHeight = 14.sp), color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1,
                     overflow = TextOverflow.Ellipsis, modifier = Modifier.fillMaxWidth().padding(top = 3.dp))
             }
+        }
+        if (!caption.isNullOrBlank()) {
+            Text(caption, style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.tertiary, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth().padding(top = 6.dp).testTag("content-reason:${model.id}"))
         }
     }
 }

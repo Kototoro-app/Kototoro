@@ -1224,6 +1224,10 @@ internal fun SuggestionsTopLevelRouteContent(
 ) {
     val viewModel = spaceBoundHiltViewModel<org.skepsun.kototoro.suggestions.ui.SuggestionsViewModel>("suggestions")
     val suggestionsLibraryQuery by viewModel.libraryQuery.collectAsStateWithLifecycle()
+    val suggestionDirection by viewModel.direction.collectAsStateWithLifecycle()
+    val suggestionCount by viewModel.visibleCount.collectAsStateWithLifecycle()
+    val suggestionLanguage by viewModel.language.collectAsStateWithLifecycle()
+    val suggestionLanguageOnly by viewModel.languageOnly.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var suggestionsContextualTopBarOverride by remember { mutableStateOf<TopBarOverrideState?>(null) }
     var suggestionsFilterRailOverride by remember { mutableStateOf<CompactFilterRailOverrideState?>(null) }
@@ -1246,7 +1250,9 @@ internal fun SuggestionsTopLevelRouteContent(
         }
     }
 
-    CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides animatedVisibilityScope) {
+    CompositionLocalProvider(
+        LocalNavAnimatedVisibilityScope provides animatedVisibilityScope,
+    ) {
         org.skepsun.kototoro.list.ui.compose.AppContentListRoute(
             viewModel = viewModel,
             contentPadding = contentPadding,
@@ -1260,15 +1266,15 @@ internal fun SuggestionsTopLevelRouteContent(
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                         )
                     }
-                    org.skepsun.kototoro.suggestions.ui.compose.SuggestionsHeaderCard(
-                        onRefresh = {
-                            viewModel.updateSuggestions()
-                            android.widget.Toast.makeText(
-                                context,
-                                org.skepsun.kototoro.R.string.suggestions_updating,
-                                android.widget.Toast.LENGTH_SHORT,
-                            ).show()
-                        },
+                    org.skepsun.kototoro.core.ui.suggestions.SuggestionsHeader(
+                        selected = suggestionDirection,
+                        language = suggestionLanguage,
+                        languageOnly = suggestionLanguageOnly,
+                        count = suggestionCount,
+                        onSelect = viewModel::selectDirection,
+                        onRefresh = viewModel::updateSuggestions,
+                        onSettings = appRouter::openSuggestionsSettings,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                     )
                 }
             },

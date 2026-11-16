@@ -25,4 +25,8 @@ class SuggestionEntity(
     @FloatRange(from = 0.0, to = 1.0)
     @ColumnInfo(name = "relevance") val relevance: Float,
     @ColumnInfo(name = "created_at") val createdAt: Long = kotlin.time.Clock.System.now().toEpochMilliseconds(),
+    /** Why it is suggested: the name of a `SuggestionDirection`, empty for rows stored before there were any. */
+    @ColumnInfo(name = "direction", defaultValue = "") val direction: String = "",
+    /** What it is suggested for, a tag key, when the direction has one. */
+    @ColumnInfo(name = "reason") val reason: String? = null,
 )

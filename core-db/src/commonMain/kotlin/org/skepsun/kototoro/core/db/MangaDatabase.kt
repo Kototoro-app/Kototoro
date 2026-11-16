@@ -77,7 +77,7 @@ import org.skepsun.kototoro.core.dictionary.DictionaryRuleDao
 import org.skepsun.kototoro.core.dictionary.TranslationDictionaryDao
 import org.skepsun.kototoro.core.dictionary.TranslationDictionaryEntity
 
-const val DATABASE_VERSION = 88
+const val DATABASE_VERSION = 89
 
 @Database(
     entities = [

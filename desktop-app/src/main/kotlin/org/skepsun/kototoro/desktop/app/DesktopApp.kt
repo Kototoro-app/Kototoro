@@ -567,6 +567,7 @@ internal fun ContentGrid(contents: List<SourceContent>, enabled: Boolean, covers
     /** Android's grid size, percent of the default card width (the shelves' display options). */
     gridSize: Int = 100,
     metaOf: (SourceContent) -> String = { it.authors.joinToString().ifBlank { it.source.name } },
+    captionOf: (SourceContent) -> String? = { null },
     /** Shared near-end loading requests one more batch per observed item count. */
     onReachEnd: (() -> Unit)? = null,
     /** Set when the source has no more batches: the footer then stops asking and the row below says so. */
@@ -625,6 +626,7 @@ internal fun ContentGrid(contents: List<SourceContent>, enabled: Boolean, covers
             // Android's compact grid lifts the bottom badges clear of the title on the scrim.
             val bottomLift = if (titleOverlay) (style.posterHeight.value * 0.28f).dp.coerceIn(32.dp, 44.dp) else 0.dp
             ContentPosterCard(ContentCardPresentation(content.id, content.title), style,
+                caption = captionOf(content),
                 rimBorderBrush = rimBorderBrush,
                 onClick = { if (selecting) onToggleSelection(content) else onOpen(content) },
                 onLongClick = { onToggleSelection(content) },

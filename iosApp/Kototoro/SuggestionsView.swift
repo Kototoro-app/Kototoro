@@ -12,6 +12,8 @@ struct SuggestionsView: View {
     @EnvironmentObject private var sources: SourcesModel
     @AppStorage("suggestions") private var enabled = false
     @AppStorage("suggestions_exclude_nsfw") private var excludeAdult = false
+    @AppStorage("suggestions_language") private var recommendationLanguage = "SYSTEM"
+    @AppStorage("suggestions_language_only") private var recommendationLanguageOnly = false
     @AppStorage("suggestions_preferred_tags") private var preferredTags = ""
     @AppStorage("suggestions_exclude_tags") private var excludedTags = ""
     @AppStorage("suggestions_preferred_sources") private var preferredSources = ""
@@ -30,6 +32,7 @@ struct SuggestionsView: View {
     @State private var favouriteRequest: FavouriteCategoryRequest?
     @State private var request: UUID?
     @State private var cancellation: IosCancellation?
+    @State private var direction = "ALL"
 
     private var candidates: [IosSource] {
         sources.sources.filter { $0.kind != "local" && sources.isEnabled($0) }
@@ -38,11 +41,14 @@ struct SuggestionsView: View {
         IosSuggestionSettings(excludeNsfw: !showAdult || excludeAdult, preferredTags: preferredTags,
                               excludedTags: excludedTags,
                               preferredSources: SourceFilterOption.decode(preferredSources).sorted(),
-                              excludedSources: SourceFilterOption.decode(excludedSources).sorted())
+                              excludedSources: SourceFilterOption.decode(excludedSources).sorted(),
+                              language: recommendationLanguage, languageOnly: recommendationLanguageOnly,
+                              systemLanguage: Locale.current.language.languageCode?.identifier ?? "en")
     }
     private var configuration: String {
         // JSON avoids collisions between user-entered tags and source identities; the timestamp is persistent.
-        let values = [String(!showAdult || excludeAdult), preferredTags, excludedTags, preferredSources, excludedSources]
+        let values = [String(!showAdult || excludeAdult), preferredTags, excludedTags, preferredSources, excludedSources,
+                      recommendationLanguage, String(recommendationLanguageOnly)]
             + candidates.map { "\($0.name)|\($0.contentType)" }.sorted()
         return String(decoding: (try? JSONEncoder().encode(values)) ?? Data(), as: UTF8.self)
     }
@@ -67,7 +73,10 @@ struct SuggestionsView: View {
     private var visible: [ContentItem] {
         // Resolving a page's type can scan the source catalog; do it once for the whole list.
         let kind = selectedKind
-        return items.filter { kind == nil || $0.mediaKind == kind }.map { ContentItem(content: $0) }
+        return items.filter {
+            (kind == nil || $0.mediaKind == kind) &&
+                (previewLimit != nil || direction == "ALL" || $0.suggestionDirection == direction)
+        }.map { ContentItem(content: $0) }
     }
 
     var body: some View {
@@ -157,6 +166,15 @@ struct SuggestionsView: View {
         let settings = self.settings
         return ScrollView {
             VStack(alignment: .leading, spacing: 18) {
+                ScrollView(.horizontal) {
+                    HStack {
+                        directionButton("ALL", title: "为你推荐")
+                        directionButton("TASTE", title: "常读题材")
+                        directionButton("POPULAR", title: "热门榜")
+                        directionButton("NEW", title: "新作与更新")
+                        directionButton("EXPLORE", title: "换换口味")
+                    }.padding(.horizontal)
+                }.scrollIndicators(.hidden)
                 if !spacesEnabled && ContentKindPicker.isShown(availableKinds) {
                     ContentKindPicker(selection: $pageKind, available: availableKinds).padding(.horizontal)
                 }
@@ -269,6 +287,14 @@ struct SuggestionsView: View {
             self.error = error.localizedDescription
         }
     }
+
+    private func directionButton(_ value: String, title: LocalizedStringKey) -> some View {
+        Button { direction = value } label: { Text(title) }
+            .buttonStyle(.bordered)
+            .tint(direction == value ? .accentColor : .secondary)
+            .accessibilityAddTraits(direction == value ? .isSelected : [])
+            .accessibilityIdentifier("suggestion-direction:\(value)")
+    }
 }
 
 /// Personal recommendations are featured artwork cards; website charts use the denser poster shelf below.
@@ -332,12 +358,16 @@ private struct SuggestionPreferencesView: View {
     @Environment(\.dismiss) private var dismiss
     @AppStorage("suggestions") private var enabled = false
     @AppStorage("suggestions_exclude_nsfw") private var excludeAdult = false
+    @AppStorage("suggestions_language") private var recommendationLanguage = "SYSTEM"
+    @AppStorage("suggestions_language_only") private var recommendationLanguageOnly = false
     @AppStorage("suggestions_preferred_tags") private var preferredTags = ""
     @AppStorage("suggestions_exclude_tags") private var excludedTags = ""
     @AppStorage("suggestions_preferred_sources") private var preferredSources = ""
     @AppStorage("suggestions_excluded_sources") private var excludedSources = ""
     @State private var draftEnabled = false
     @State private var draftExcludeAdult = false
+    @State private var draftLanguage = "SYSTEM"
+    @State private var draftLanguageOnly = false
     @State private var preferred = ""
     @State private var excluded = ""
     @State private var sourceChoices: [String: String] = [:]
@@ -359,6 +389,19 @@ private struct SuggestionPreferencesView: View {
                     Toggle("排除成人内容", isOn: $draftExcludeAdult)
                 } footer: {
                     Text("进入推荐时先显示缓存，超过六小时或偏好、可用来源变化时重新生成。可在推荐页下拉刷新，或在浏览页推荐菜单中手动刷新；关闭后停止获取推荐。")
+                }
+                Section {
+                    Picker("优先语言", selection: $draftLanguage) {
+                        Text("系统语言").tag("SYSTEM")
+                        Text("中文").tag("CHINESE")
+                        Text("英语").tag("ENGLISH")
+                        Text("日语").tag("JAPANESE")
+                        Text("不设优先").tag("ALL")
+                    }.accessibilityIdentifier("suggestions.language")
+                    Toggle("仅显示所选语言", isOn: $draftLanguageOnly).disabled(draftLanguage == "ALL")
+                        .accessibilityIdentifier("suggestions.languageOnly")
+                } header: { Text("推荐语言") } footer: {
+                    Text("默认混合推荐，优先系统语言；也可仅显示所选语言。按来源声明的语言判断。")
                 }
                 Section {
                     TextField("偏好标签", text: $preferred).accessibilityIdentifier("suggestions.preferredTags")
@@ -383,6 +426,8 @@ private struct SuggestionPreferencesView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("保存") {
                         enabled = draftEnabled; excludeAdult = draftExcludeAdult
+                        recommendationLanguage = draftLanguage
+                        recommendationLanguageOnly = draftLanguageOnly && draftLanguage != "ALL"
                         preferredTags = preferred; excludedTags = excluded
                         let preferred = Set(sourceChoices.filter { $0.value == "preferred" }.keys)
                         let excluded = Set(sourceChoices.filter { $0.value == "excluded" }.keys)
@@ -396,6 +441,7 @@ private struct SuggestionPreferencesView: View {
                 guard !initialized else { return }
                 initialized = true
                 draftEnabled = enabled; draftExcludeAdult = excludeAdult
+                draftLanguage = recommendationLanguage; draftLanguageOnly = recommendationLanguageOnly
                 preferred = preferredTags; excluded = excludedTags
                 for name in SourceFilterOption.decode(preferredSources) { sourceChoices[name] = "preferred" }
                 for name in SourceFilterOption.decode(excludedSources) { sourceChoices[name] = "excluded" }

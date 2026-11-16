@@ -77,6 +77,17 @@ internal fun DesktopRecommendations(controller: DesktopController, state: Deskto
         }
         SettingsSectionHeader(desktopText("settings.suggestionsTags"))
         SettingsGroup {
+            org.skepsun.kototoro.core.ui.suggestions.SuggestionLanguageSelector(
+                selected = settings.language,
+                only = settings.languageOnly,
+                onSelect = { controller.suggestionSettings(settings.copy(language = it,
+                    languageOnly = settings.languageOnly && it != org.skepsun.kototoro.suggestions.domain.SuggestionLanguage.ALL)) },
+                onOnlyChanged = { controller.suggestionSettings(settings.copy(languageOnly = it)) },
+                modifier = Modifier.padding(16.dp),
+                enabled = enabled,
+            )
+        }
+        SettingsGroup {
             SettingsValueRow(desktopText("settings.suggestionsExcludeTags"), desktopText("settings.tagSeparator"),
                 settings.tagBlacklist.showAsList(), enabled, { dialog = RecommendationDialog.EXCLUDED_TAGS },
                 testTag = "settings-suggestions-exclude-tags")

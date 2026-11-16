@@ -43,8 +43,11 @@ internal object DesktopSuggestionsProbe {
             // The worker scores candidates against the tags of recent history and favourites, so one favourite seeds it.
             val seed = runBlocking { session.sources.getList(sourceName, 0, null, null) }.firstOrNull()
             checkNotNull(seed) { "the fixture source returns a list" }
-            runBlocking { session.library.addFavourite(seed) }
-            runDesktopComposeUiTest(width = 1260, height = 850) {
+            runBlocking { session.library.addFavourite(seed.copy(
+                id = Long.MIN_VALUE + seed.id, title = "Already read seed", altTitles = emptySet(), url = seed.url + "/seed",
+            )) }
+            val width = System.getProperty("fixture.suggestions.width", "1260").toInt()
+            runDesktopComposeUiTest(width = width, height = 850) {
                 setContent { DesktopApp(controller) }
                 fun idle() {
                     waitUntil(timeoutMillis = 15_000) {
@@ -66,7 +69,8 @@ internal object DesktopSuggestionsProbe {
                     Image.makeFromBitmap(onRoot().captureToImage().asSkiaBitmap()).use { image ->
                         image.encodeToData()?.use {
                             Files.write(
-                                Files.createDirectories(Path.of(args[3])).resolve("${args[0]}-$label.png"),
+                                Files.createDirectories(Path.of(args[3])).resolve(
+                                    "${args[0]}-${if (width < 600) "phone-" else ""}$label.png"),
                                 it.bytes,
                             )
                         }
@@ -80,7 +84,18 @@ internal object DesktopSuggestionsProbe {
                 waitUntil(timeoutMillis = 30_000) { controller.state.value.suggestions.isNotEmpty() }
                 idle()
                 onNodeWithTag("home-recommendations").performScrollTo().assertExists()
-                val stored = controller.state.value.suggestions
+                var stored = controller.state.value.suggestions
+                // Changing the blacklist hides cached works immediately, without asking the source again.
+                val cached = stored.first()
+                runBlocking { session.library.save(cached.copy(tags = setOf(
+                    org.skepsun.kototoro.core.source.SourceTag("恋爱", "romance", cached.source),
+                ))) }
+                controller.suggestionSettings(controller.state.value.suggestionSettings.copy(tagBlacklist = setOf("Romance")))
+                runBlocking { controller.showSuggestions().join() }; idle()
+                onNodeWithTag("content:${cached.id}").assertDoesNotExist()
+                controller.suggestionSettings(controller.state.value.suggestionSettings.copy(tagBlacklist = emptySet()))
+                runBlocking { controller.home().join() }; idle()
+                stored = controller.state.value.suggestions
                 // Android's home rail opens the suggestions destination from its "all".
                 onNodeWithTag("home-recommendations-more").performScrollTo().performClick()
                 waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.SUGGESTIONS }
@@ -91,6 +106,17 @@ internal object DesktopSuggestionsProbe {
                 onNodeWithText(AndroidStrings["suggestions_header_title"]).assertExists()
                 onNodeWithTag("suggestions-refresh").assertExists()
                 snapshot("suggestions")
+                onNodeWithTag("content-reason:${stored.first().id}", useUnmergedTree = true).assertExists()
+                // Direction switches read the stored reasons and never regenerate the list.
+                onNodeWithTag("suggestion-direction:NEW").performScrollTo().performClick(); idle()
+                check(controller.state.value.suggestionDirection ==
+                    org.skepsun.kototoro.suggestions.domain.SuggestionDirection.NEW)
+                stored.take(6).filter {
+                    controller.state.value.suggestionReasons[it.id]?.first !=
+                        org.skepsun.kototoro.suggestions.domain.SuggestionDirection.NEW
+                }.forEach { onNodeWithTag("content:${it.id}").assertDoesNotExist() }
+                check(controller.state.value.suggestions == stored && !controller.state.value.suggestionsGenerating)
+                onNodeWithTag("suggestion-direction:ALL").performScrollTo().performClick(); idle()
                 check(controller.state.value.suggestions.size == stored.size) { "the page re-read the same rows" }
                 val first = stored.first()
                 onNodeWithTag("content:${first.id}").assertExists()

@@ -15,4 +15,11 @@ class DesktopSuggestionsPageTest {
 
     @Test
     fun suggestionsPage() = DesktopProbes.run("suggestions", directory.resolve("suggestions"), 180)
+
+    @Test
+    fun suggestionsPageNarrow() {
+        System.setProperty("fixture.suggestions.width", "420")
+        try { DesktopProbes.run("suggestions", directory.resolve("suggestions-narrow"), 180) }
+        finally { System.clearProperty("fixture.suggestions.width") }
+    }
 }

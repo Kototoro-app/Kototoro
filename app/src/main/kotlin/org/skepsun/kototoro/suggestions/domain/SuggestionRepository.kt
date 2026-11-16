@@ -2,6 +2,14 @@ package org.skepsun.kototoro.suggestions.domain
 
 import androidx.room.withTransaction
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.flow.first
+import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.model.getLocale
+import org.skepsun.kototoro.core.model.isNsfw
+import org.skepsun.kototoro.core.model.GlobalTagBlacklist
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.db.entity.toEntities
 import org.skepsun.kototoro.core.db.entity.toEntity
@@ -20,32 +28,38 @@ import javax.inject.Inject
 
 class SuggestionRepository @Inject constructor(
     private val db: MangaDatabase,
+    private val settings: AppSettings,
 ) {
 
     fun observeAll(): Flow<List<Content>> {
         return db.getSuggestionDao().observeAll().mapItems {
             it.toContent()
-        }
+        }.withCurrentPreferences()
     }
 
     fun observeAll(
         limit: Int,
         filterOptions: Set<ListFilterOption>,
         contentTypes: Collection<String>? = null,
+        direction: SuggestionDirection? = null,
     ): Flow<List<Content>> {
-        return db.getSuggestionDao().observeAll(limit, filterOptions.toCriteria(), contentTypes).mapItems {
+        return db.getSuggestionDao().observeAll(Int.MAX_VALUE, filterOptions.toCriteria(), contentTypes, direction?.name).mapItems {
             it.toContent()
-        }
+        }.withCurrentPreferences().map { it.take(limit) }
     }
 
     fun observeCount(): Flow<Int> {
-        return db.getSuggestionDao().observeCount()
+        return observeAll().map { it.size }
+    }
+
+    fun observeReasons(): Flow<Map<Long, Pair<SuggestionDirection, String?>>> = db.getSuggestionDao().observeAll().map { rows ->
+        rows.associate { it.suggestion.mangaId to (SuggestionDirection.of(it.suggestion.direction) to it.suggestion.reason) }
     }
 
     suspend fun getRandomList(limit: Int): List<Content> {
-        return db.getSuggestionDao().getRandom(limit).map {
+        return filter(db.getSuggestionDao().getRandom(limit).map {
             it.toContent()
-        }
+        })
     }
 
     suspend fun clear() {
@@ -53,36 +67,92 @@ class SuggestionRepository @Inject constructor(
     }
 
     suspend fun isEmpty(): Boolean {
-        return db.getSuggestionDao().count() == 0
+        return observeAll().first().isEmpty()
     }
 
     suspend fun getTopTags(limit: Int): List<ContentTag> {
-        return db.getSuggestionDao().getTopTags(limit)
-            .toContentTagsList()
+        return observeAll().first().flatMap { it.tags }.mostFrequent(limit)
     }
 
     suspend fun getTopSources(limit: Int): List<ContentSource> {
-        return db.getSuggestionDao().getTopSources(limit)
-            .toContentSources()
+        return observeAll().first().map { it.source }.mostFrequent(limit)
     }
 
+    /** When each stored suggestion was first put on the list it is still on. */
+    suspend fun getAges(): Map<Long, Long> =
+        db.getSuggestionDao().findAll().associate { it.mangaId to it.createdAt }
+
+    /**
+     * The library as evidence of taste: history most recently read first, then what was saved and never opened.
+     * Same rows as the shared `SourceLibrary.libraryWorks`.
+     */
+    suspend fun getLibraryWorks(historyLimit: Int): List<LibraryWork> {
+        val read = db.getHistoryDao().findRecent(historyLimit)
+        val saved = db.getFavouritesDao().findAllWithActiveCategory(0, Int.MAX_VALUE).distinctBy { it.manga.id }
+        val savedIds = saved.mapTo(HashSet(saved.size)) { it.manga.id }
+        val readIds = read.mapTo(HashSet(read.size)) { it.manga.id }
+        return read.map { row ->
+            LibraryWork(
+                titles = listOf(row.manga.title) + row.manga.altTitles?.split('\n').orEmpty(),
+                tags = row.tags.map { it.title },
+                isFavourite = row.manga.id in savedIds,
+                percent = row.history.percent.takeIf { it >= 0f },
+                chapters = row.history.chaptersCount,
+                lastReadAt = row.history.updatedAt,
+                id = row.manga.id,
+            )
+        } + saved.filterNot { it.manga.id in readIds }.map { row ->
+            LibraryWork(
+                titles = listOf(row.manga.title) + row.manga.altTitles?.split('\n').orEmpty(),
+                tags = row.tags.map { it.title },
+                isFavourite = true,
+                id = row.manga.id,
+            )
+        }
+    }
+
+    /** A suggestion already on the list keeps the time it was first put there, so one nobody opens can sink. */
     suspend fun replace(suggestions: Iterable<ContentSuggestion>) {
         db.withTransaction {
+            val ages = db.getSuggestionDao().findAll().associate { it.mangaId to it.createdAt }
             db.getSuggestionDao().deleteAll()
-            suggestions.forEach { (manga, relevance) ->
+            suggestions.forEach { suggestion ->
+                val manga = suggestion.manga
                 val tags = manga.tags.toEntities()
                 db.getTagsDao().upsert(tags)
                 db.getMangaDao().upsert(manga.toEntity(), tags)
                 db.getSuggestionDao().upsert(
                     SuggestionEntity(
                         mangaId = manga.id,
-                        relevance = relevance,
-                        createdAt = System.currentTimeMillis(),
+                        relevance = suggestion.relevance,
+                        createdAt = ages[manga.id] ?: System.currentTimeMillis(),
+                        direction = suggestion.direction.name,
+                        reason = suggestion.reason,
                     ),
                 )
             }
         }
     }
 
-    private fun SuggestionWithContent.toContent() = manga.toContent(emptySet(), null)
+    private fun Flow<List<Content>>.withCurrentPreferences(): Flow<List<Content>> = combine(
+        this,
+        settings.observeChanges().onStart { emit("") },
+    ) { items, _ -> filter(items) }
+
+    private fun filter(items: List<Content>): List<Content> {
+        val excluded = SuggestionTagBlacklist(settings.suggestionsTagsBlacklist, ::suggestionTagsMatch)
+        val global = GlobalTagBlacklist(settings.globalTagBlacklist)
+        return items.filter { item ->
+            (!settings.suggestionsLanguageOnly || settings.suggestionsLanguage.accepts(
+                item.source.getLocale()?.toLanguageTag(), java.util.Locale.getDefault().language,
+            )) &&
+                item.source.name !in settings.suggestionsExcludedSources &&
+                (!(settings.isSuggestionsExcludeNsfw || settings.isNsfwContentDisabled) || !item.isNsfw()) &&
+                !excluded.containsAny(item.tags.map { it.title }) && item !in global
+        }.sortedByDescending {
+            settings.suggestionsLanguage.accepts(it.source.getLocale()?.toLanguageTag(), java.util.Locale.getDefault().language)
+        }
+    }
+
+    private fun SuggestionWithContent.toContent() = manga.toContent(tags.toContentTagsList().toSet(), null)
 }

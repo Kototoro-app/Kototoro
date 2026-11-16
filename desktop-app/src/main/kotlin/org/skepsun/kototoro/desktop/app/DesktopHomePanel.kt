@@ -1,4 +1,5 @@
 package org.skepsun.kototoro.desktop.app
+import org.skepsun.kototoro.core.library.filter
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -84,8 +85,8 @@ internal fun DesktopHomePanel(controller: DesktopController, state: DesktopAppSt
             .filter { filter.accepts(ecosystems[it.content.source.name], it.content.source.contentType) }
             .filterNot { hidden(it.content) }
     }
-    val recommendations = remember(state.suggestions, filter, ecosystems, blacklist) {
-        state.suggestions
+    val recommendations = remember(state.suggestions, state.suggestionSettings, filter, ecosystems, blacklist) {
+        state.suggestionSettings.preferences().filter(state.suggestions)
             .filter { filter.accepts(ecosystems[it.source.name], it.source.contentType) }
             .filterNot(hidden)
             .map { HomeWork(it) }

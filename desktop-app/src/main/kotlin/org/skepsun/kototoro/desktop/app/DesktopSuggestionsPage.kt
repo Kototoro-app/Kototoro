@@ -2,6 +2,7 @@ package org.skepsun.kototoro.desktop.app
 
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -32,6 +33,7 @@ import org.skepsun.kototoro.core.ui.progress.LinearProgressIndicator
 import org.skepsun.kototoro.desktop.runtime.DesktopSuggestionFilter
 import org.skepsun.kototoro.desktop.runtime.desktopSuggestedContents
 import org.skepsun.kototoro.desktop.runtime.desktopSuggestionFilters
+import org.skepsun.kototoro.core.library.filter
 
 /**
  * Android's suggestions destination (`NavItem.SUGGESTIONS` → `SuggestionsTopLevelRouteContent`): the stored
@@ -48,43 +50,35 @@ import org.skepsun.kototoro.desktop.runtime.desktopSuggestionFilters
 @Composable
 internal fun DesktopSuggestionsPage(controller: DesktopController, state: DesktopAppState, enabled: Boolean) {
     val settings = state.suggestionSettings
-    val items = state.suggestions
+    val items = remember(state.suggestions, settings, state.sourceSettings.tagBlacklist) {
+        settings.preferences(state.sourceSettings.tagBlacklist).filter(state.suggestions)
+    }
     val chips = remember(items, settings.excludeNsfw) {
         desktopSuggestionFilters(items, includeAdultChips = !settings.excludeNsfw)
     }
     val filters = state.suggestionFilters
-    val visible = remember(items, filters) { desktopSuggestedContents(items, filters) }
+    val visible = remember(items, filters, state.suggestionDirection, state.suggestionReasons) {
+        desktopSuggestedContents(items, filters).filter {
+            state.suggestionDirection == null ||
+                (state.suggestionReasons[it.id]?.first ?: org.skepsun.kototoro.suggestions.domain.SuggestionDirection.TASTE) ==
+                state.suggestionDirection
+        }
+    }
     // The header card, notices and chips lead the grid, so they scroll beneath the floating bar with the works.
     val inset = LocalDesktopTopInset.current
     val header: @Composable () -> Unit = { Column(Modifier.fillMaxWidth().padding(bottom = 4.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        // Android's suggestions header card (same accent tile, wash and pills) instead of a bare title row.
-        PageSummaryHeader(
-            title = AndroidStrings["suggestions_header_title"],
-            subtitle = AndroidStrings["suggestions_header_subtitle"],
-            icon = painterResource("icons/ic_explore_normal.svg"),
-            accent = MaterialTheme.colorScheme.tertiary,
-            horizontalPadding = 0.dp,
-            modifier = Modifier.testTag("suggestions-summary"),
-        ) {
-            PageSummaryAction(
-                text = desktopText("settings.suggestions"),
-                icon = painterResource("icons/ic_settings.svg"),
-                accent = MaterialTheme.colorScheme.tertiary,
-                enabled = enabled,
-                onClick = { controller.showRecommendations() },
-                modifier = Modifier.testTag("suggestions-settings"),
-            )
-            PageSummaryAction(
-                text = AndroidStrings["suggestions_header_refresh"],
-                icon = painterResource("icons/ic_sync.svg"),
-                emphasized = true,
-                accent = MaterialTheme.colorScheme.tertiary,
-                enabled = enabled && settings.enabled && !state.suggestionsGenerating,
-                onClick = { controller.refreshSuggestions() },
-                modifier = Modifier.testTag("suggestions-refresh"),
-            )
-        }
+        org.skepsun.kototoro.core.ui.suggestions.SuggestionsHeader(
+            selected = state.suggestionDirection,
+            language = settings.language,
+            languageOnly = settings.languageOnly,
+            count = visible.size,
+            onSelect = controller::selectSuggestionDirection,
+            onRefresh = controller::refreshSuggestions,
+            onSettings = { controller.showRecommendations() },
+            enabled = enabled,
+            refreshing = state.suggestionsGenerating || !settings.enabled,
+        )
         if (!settings.enabled) {
             // Android's tab keeps leading to a page that asks for the feature instead of hiding the destination.
             SuggestionsNotice(
@@ -112,7 +106,8 @@ internal fun DesktopSuggestionsPage(controller: DesktopController, state: Deskto
                 onAction = { controller.refreshSuggestions() },
             )
         } else if (items.isNotEmpty()) {
-            if (chips.isNotEmpty()) SuggestionChips(chips, filters, enabled, controller::toggleSuggestionFilter)
+            if (chips.isNotEmpty()) SuggestionChips(chips, filters, enabled, controller::toggleSuggestionFilter,
+                sourceTitles = state.sources.associate { it.source.name to it.displayName })
         }
     } }
     Box(Modifier.fillMaxSize().testTag("suggestions-panel")) {
@@ -123,6 +118,20 @@ internal fun DesktopSuggestionsPage(controller: DesktopController, state: Deskto
                 covers = controller.session.covers,
                 onOpen = controller::details,
                 listMode = state.libraryDisplay.listMode,
+                captionOf = { item ->
+                    state.suggestionReasons[item.id]?.let { (direction, reason) ->
+                        org.skepsun.kototoro.core.ui.suggestions.suggestionReasonText(
+                            DesktopUiStrings, direction, reason, DesktopStrings.locale.language,
+                        )
+                    }
+                },
+                metaOf = { item ->
+                    state.suggestionReasons[item.id]?.let { (direction, reason) ->
+                        org.skepsun.kototoro.core.ui.suggestions.suggestionReasonText(
+                            DesktopUiStrings, direction, reason, DesktopStrings.locale.language,
+                        )
+                    } ?: item.source.name
+                },
                 contentPadding = PaddingValues(top = inset),
                 header = header,
             )
@@ -136,21 +145,22 @@ internal fun DesktopSuggestionsPage(controller: DesktopController, state: Deskto
 }
 
 /** Android's `ContentListQuickFilter` chips: several selected chips narrow together, a chip tapped again drops out. */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SuggestionChips(
     chips: List<DesktopSuggestionFilter>,
     selected: Set<DesktopSuggestionFilter>,
     enabled: Boolean,
     onToggle: (DesktopSuggestionFilter) -> Unit,
+    sourceTitles: Map<String, String>,
 ) {
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
         chips.forEach { chip ->
-            FilterChip(
+            org.skepsun.kototoro.core.ui.chips.CompactChoicePill(
                 selected = chip in selected,
                 onClick = { onToggle(chip) },
                 enabled = enabled,
-                label = { Text(chip.label()) },
+                label = if (chip is DesktopSuggestionFilter.Source) sourceTitles[chip.name] ?: chip.name else chip.label(),
                 modifier = Modifier.testTag("suggestion-chip:${chip.key()}"),
             )
         }

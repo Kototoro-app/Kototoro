@@ -27,7 +27,15 @@ data class DesktopSuggestionSettings(
     val includeDisabledSources: Boolean = false,
     /** Android's `KEY_SUGGESTIONS_NOTIFICATIONS`: one recommended work is announced after a run stores results. */
     val notifications: Boolean = false,
+    val language: org.skepsun.kototoro.suggestions.domain.SuggestionLanguage =
+        org.skepsun.kototoro.suggestions.domain.SuggestionLanguage.SYSTEM,
+    val languageOnly: Boolean = false,
 ) {
+    fun preferences(globalTagBlacklist: Set<String> = emptySet()) = SourceSuggestionPreferences(
+        excludeNsfw, tagBlacklist, tagWhitelist, preferredSources, excludedSources, language, globalTagBlacklist,
+        languageOnly, java.util.Locale.getDefault().language,
+    )
+
     fun toPreferences(): Map<String, SourcePreferenceValue?> = mapOf(
         KEY_ENABLED to SourcePreferenceValue.Toggle(enabled),
         KEY_EXCLUDE_NSFW to SourcePreferenceValue.Toggle(excludeNsfw),
@@ -38,6 +46,8 @@ data class DesktopSuggestionSettings(
         KEY_WIFI_ONLY to SourcePreferenceValue.Toggle(wifiOnly),
         KEY_DISABLED_SOURCES to SourcePreferenceValue.Toggle(includeDisabledSources),
         KEY_NOTIFICATIONS to SourcePreferenceValue.Toggle(notifications),
+        org.skepsun.kototoro.suggestions.domain.SuggestionLanguage.PREFERENCE_KEY to SourcePreferenceValue.Text(language.name),
+        org.skepsun.kototoro.suggestions.domain.SuggestionLanguage.ONLY_PREFERENCE_KEY to SourcePreferenceValue.Toggle(languageOnly),
     )
 
     companion object {
@@ -61,6 +71,11 @@ data class DesktopSuggestionSettings(
             wifiOnly = (values[KEY_WIFI_ONLY] as? SourcePreferenceValue.Toggle)?.value ?: false,
             includeDisabledSources = (values[KEY_DISABLED_SOURCES] as? SourcePreferenceValue.Toggle)?.value ?: false,
             notifications = (values[KEY_NOTIFICATIONS] as? SourcePreferenceValue.Toggle)?.value ?: false,
+            language = org.skepsun.kototoro.suggestions.domain.SuggestionLanguage.of(
+                (values[org.skepsun.kototoro.suggestions.domain.SuggestionLanguage.PREFERENCE_KEY] as? SourcePreferenceValue.Text)?.value,
+            ),
+            languageOnly = (values[org.skepsun.kototoro.suggestions.domain.SuggestionLanguage.ONLY_PREFERENCE_KEY]
+                as? SourcePreferenceValue.Toggle)?.value ?: false,
         )
     }
 }
@@ -95,16 +110,15 @@ data class DesktopTrackerSettings(
 }
 
 /**
- * Generates suggestions with Android's worker rules (core-domain SuggestionRules): seed tags from recent history and
- * favourites, one tag-filtered list per installed source, tag relevance and source-balanced ranking, stored in the
- * shared `suggestions` table.
+ * Generates suggestions with Android's worker rules (core-domain SuggestionRules): the reader's taste from history
+ * and favourites, one tag-filtered list per installed source, ranked by how well each candidate fits that taste and
+ * stored in the shared `suggestions` table.
  */
 class DesktopSuggestions(
     private val library: DesktopLibrary,
     private val runtime: SourceRuntime,
     private val now: () -> Long = System::currentTimeMillis,
     private val limits: SuggestionLimits = SuggestionLimits(),
-    private val shuffle: (MutableList<SourceContent>) -> Unit = { it.shuffle() },
     private val sourceOrder: (List<SourceListing>) -> List<SourceListing> = { it.shuffled() },
 ) {
     private val matcher: SuggestionTagMatcher = { a, b -> a.almostEquals(b, SUGGESTION_TAG_THRESHOLD) }
@@ -116,17 +130,18 @@ class DesktopSuggestions(
         sources: List<SourceListing>,
         settings: DesktopSuggestionSettings = DesktopSuggestionSettings(),
         nsfwOverrides: SourceNsfwOverrideSet = SourceNsfwOverrideSet(),
+        globalTagBlacklist: Set<String> = emptySet(),
     ): Int {
-        val seed = (library.history().take(limits.seedItems) + library.favourites().take(limits.seedItems))
-            .distinctBy { it.id }
+        val works = library.libraryWorks(limits.libraryHistory)
         val candidates = sourceOrder(sources.filterNot {
             it.source.name in settings.excludedSources || (settings.excludeNsfw && it.isNsfwSource(nsfwOverrides))
         })
-        if (seed.isEmpty() || candidates.isEmpty()) return 0
-        val result = SourceSuggestions(runtime, matcher, limits, shuffle).generate(seed, candidates.map { it.source },
-            SourceSuggestionPreferences(settings.excludeNsfw, settings.tagBlacklist, settings.tagWhitelist,
-                settings.preferredSources, settings.excludedSources))
-        return library.replaceSuggestions(result.items.map { it.item to it.relevance }, now())
+        if ((works.isEmpty() && settings.tagWhitelist.isEmpty()) || candidates.isEmpty()) return 0
+        val time = now()
+        val result = SourceSuggestions(runtime, matcher, limits).generate(works, candidates.map { it.source },
+            settings.preferences(globalTagBlacklist), time, library.suggestionAges())
+        check(result.successfulSources > 0) { "No recommendation source responded" }
+        return library.replaceSuggestions(result.items, time)
     }
 }
 

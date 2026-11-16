@@ -25,9 +25,15 @@ abstract class SuggestionDao : MangaQueryBuilder.ConditionCallback {
         limit: Int,
         filterOptions: Collection<ListFilterCriteria>,
         contentTypes: Collection<String>? = null,
+        direction: String? = null,
     ): Flow<List<SuggestionWithContent>> = observeAllImpl(
         MangaQueryBuilder("suggestions", this)
             .filters(filterOptions)
+            .let { builder ->
+                if (direction == null) builder else builder.where(
+                    if (direction == "TASTE") "direction IN ('', 'TASTE')" else "direction = ${sqlEscapeString(direction)}",
+                )
+            }
             .let { builder ->
                 if (contentTypes.isNullOrEmpty()) {
                     builder
@@ -56,6 +62,9 @@ abstract class SuggestionDao : MangaQueryBuilder.ConditionCallback {
 
     @Query("SELECT COUNT(*) FROM suggestions")
     abstract suspend fun count(): Int
+
+    @Query("SELECT * FROM suggestions")
+    abstract suspend fun findAll(): List<SuggestionEntity>
 
     @Query("SELECT COUNT(*) FROM suggestions")
     abstract fun observeCount(): Flow<Int>

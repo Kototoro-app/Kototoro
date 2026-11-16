@@ -19,13 +19,14 @@ data class ContentGridModel(
     override val isPinned: Boolean = false,
     override val metadataTrackingService: ScrobblerService? = null,
     override val scoreText: String? = null,
+    val recommendationReason: String? = null,
 ) : ContentListModel() {
 
     override fun getChangePayload(previousState: ListModel): Any? = when {
         previousState !is ContentGridModel || previousState.manga != manga -> null
 
         previousState.progress != progress -> PAYLOAD_PROGRESS_CHANGED
-        previousState.subtitle != subtitle ||
+        previousState.subtitle != subtitle || previousState.recommendationReason != recommendationReason ||
             previousState.isFavorite != isFavorite ||
             previousState.isSaved != isSaved ||
             previousState.metadataTrackingService != metadataTrackingService ||

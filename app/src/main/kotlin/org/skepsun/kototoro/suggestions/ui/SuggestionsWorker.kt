@@ -7,7 +7,6 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.provider.Settings
-import androidx.annotation.FloatRange
 import androidx.annotation.RequiresPermission
 import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationCompat
@@ -42,9 +41,7 @@ import kotlinx.coroutines.CancellationException
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.exceptions.CloudFlareException
 import org.skepsun.kototoro.core.exceptions.resolve.CaptchaHandler
-import org.skepsun.kototoro.core.model.distinctById
 import org.skepsun.kototoro.core.model.GlobalTagBlacklist
-import org.skepsun.kototoro.core.model.getContentType
 import org.skepsun.kototoro.core.model.getLocale
 import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.core.nav.AppRouter
@@ -52,7 +49,6 @@ import org.skepsun.kototoro.core.nav.ReaderIntent
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.util.LocaleComparator
-import org.skepsun.kototoro.core.util.ext.asArrayList
 import org.skepsun.kototoro.core.util.ext.awaitUniqueWorkInfoByName
 import org.skepsun.kototoro.core.util.ext.awaitWorkInfosByTag
 import org.skepsun.kototoro.core.util.ext.checkNotificationPermission
@@ -60,18 +56,14 @@ import org.skepsun.kototoro.core.util.ext.getQuantityStringSafe
 import org.skepsun.kototoro.core.util.ext.mangaSourceExtra
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
 import org.skepsun.kototoro.core.util.ext.sanitize
-import org.skepsun.kototoro.core.util.ext.takeMostFrequent
 import org.skepsun.kototoro.core.util.ext.toBitmapOrNull
 import org.skepsun.kototoro.core.util.ext.trySetForeground
 import org.skepsun.kototoro.explore.data.ContentSourcesRepository
-import org.skepsun.kototoro.favourites.domain.FavouritesRepository
-import org.skepsun.kototoro.history.data.HistoryRepository
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentListFilter
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.model.ContentTag
 import org.skepsun.kototoro.parsers.model.SortOrder
-import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.parsers.util.almostEquals
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
 import org.skepsun.kototoro.parsers.util.sizeOrZero
@@ -82,14 +74,15 @@ import org.skepsun.kototoro.suggestions.domain.TagsBlacklist
 import org.skepsun.kototoro.suggestions.domain.SuggestionTagMatcher
 import org.skepsun.kototoro.suggestions.domain.cleanSuggestionList
 import org.skepsun.kototoro.suggestions.domain.collectSourceResults
-import org.skepsun.kototoro.suggestions.domain.pickSuggestionSortOrder
-import org.skepsun.kototoro.suggestions.domain.pickSuggestionTag
+import org.skepsun.kototoro.suggestions.domain.SuggestionCandidate
+import org.skepsun.kototoro.suggestions.domain.SuggestionDirection
+import org.skepsun.kototoro.suggestions.domain.planQueries
 import org.skepsun.kototoro.suggestions.domain.rankSuggestions
-import org.skepsun.kototoro.suggestions.domain.suggestionRelevance
-import org.skepsun.kototoro.suggestions.domain.suggestionSeedTags
+import org.skepsun.kototoro.suggestions.domain.SuggestionLimits
+import org.skepsun.kototoro.suggestions.domain.SuggestionProfile
+import org.skepsun.kototoro.suggestions.domain.suggestionTagKeys
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
-import kotlin.math.pow
 import kotlin.random.Random
 import androidx.appcompat.R as appcompatR
 
@@ -99,8 +92,6 @@ class SuggestionsWorker @AssistedInject constructor(
     @Assisted params: WorkerParameters,
     private val coil: ImageLoader,
     private val suggestionRepository: SuggestionRepository,
-    private val historyRepository: HistoryRepository,
-    private val favouritesRepository: FavouritesRepository,
     private val appSettings: AppSettings,
     private val captchaHandler: CaptchaHandler,
     private val workManager: WorkManager,
@@ -117,6 +108,7 @@ class SuggestionsWorker @AssistedInject constructor(
             return Result.success()
         }
         val count = doWorkImpl()
+        if (count < 0) return Result.retry()
         val outputData = workDataOf(DATA_COUNT to count)
         return Result.success(outputData)
     }
@@ -183,41 +175,48 @@ class SuggestionsWorker @AssistedInject constructor(
     }
 
     private suspend fun doWorkImpl(): Int {
-        val seed = (
-            historyRepository.getList(0, 20) +
-                favouritesRepository.getLastContent(20)
-            ).distinctById()
+        val library = suggestionRepository.getLibraryWorks(SuggestionLimits().libraryHistory)
         val sources = getSources()
-        if (seed.isEmpty() || sources.isEmpty()) {
+        if ((library.isEmpty() && appSettings.suggestionsTagsWhitelist.isEmpty()) || sources.isEmpty()) {
             return 0
         }
         val tagsBlacklist = TagsBlacklist(appSettings.suggestionsTagsBlacklist, TAG_EQ_THRESHOLD)
         val globalTagBlacklist = GlobalTagBlacklist(appSettings.globalTagBlacklist)
-        // Seed tags, scoring and ranking are shared with the Windows host (core-domain SuggestionRules).
-        val tags = suggestionSeedTags(
-            whitelist = appSettings.suggestionsTagsWhitelist.toList(),
-            seedTagTitles = seed.flatMap { it.tags.map { x -> x.title } },
-        )
+        // The taste profile, scoring and ranking are shared with the other hosts (core-domain SuggestionRules).
+        val now = System.currentTimeMillis()
+        val profile = SuggestionProfile.of(library, now, appSettings.suggestionsTagsWhitelist)
+        val ages = suggestionRepository.getAges()
+        val answered = java.util.concurrent.atomic.AtomicInteger()
 
         val rawResults = collectSourceResults(
             sources = sources.filterNot {
                 it.isNsfw() && (appSettings.isSuggestionsExcludeNsfw || appSettings.isNsfwContentDisabled)
             },
-        ) { source -> getList(source, tags, tagsBlacklist) }
+        ) { source -> getList(source, tagsBlacklist, profile, now) { answered.incrementAndGet() } }
+        // Keep the last usable cache and retry when every source failed.
+        if (answered.get() == 0) return -1
         val suggestions = rankSuggestions(
-            items = rawResults.filterNot { it in globalTagBlacklist },
-            relevance = { manga -> suggestionRelevance(manga.tags.map { it.title }, tags, tagMatcher) },
+            candidates = rawResults.filterNot { it.item in globalTagBlacklist },
+            profile = profile,
             id = { it.id },
             source = { it.source.name },
+            titles = { listOf(it.title) + it.altTitles },
+            tags = { manga -> manga.tags.map { it.title } },
+            now = now,
+            firstSuggestedAt = { ages[it.id] },
             preferredSources = appSettings.suggestionsPreferredSources - appSettings.suggestionsExcludedSources,
-        ).map { ContentSuggestion(manga = it.item, relevance = it.relevance) }
+            languagePriority = {
+                appSettings.suggestionsLanguage.accepts(it.source.getLocale()?.toLanguageTag(), java.util.Locale.getDefault().language)
+            },
+        ).map { ContentSuggestion(it.item, it.relevance, it.direction, it.reason) }
         suggestionRepository.replace(suggestions)
         if (appSettings.isSuggestionsNotificationAvailable
             && applicationContext.checkNotificationPermission(MANGA_CHANNEL_ID)
+            && suggestions.isNotEmpty()
         ) {
             for (i in 0..3) {
                 try {
-                    val manga = suggestions[Random.nextInt(0, suggestions.size / 3)]
+                    val manga = suggestions[Random.nextInt((suggestions.size / 3).coerceAtLeast(1))]
                     val details = mangaRepositoryFactory.create(manga.manga.source)
                         .getDetails(manga.manga)
                     if (details.chapters.isNullOrEmpty()) {
@@ -257,58 +256,85 @@ class SuggestionsWorker @AssistedInject constructor(
             sourcesRepository.getEnabledSources().shuffled()
         }
         val excludedSources = appSettings.suggestionsExcludedSources
-        return sources.filterNot { it.name in excludedSources }
+        return sources.filterNot {
+            it.name in excludedSources || (appSettings.suggestionsLanguageOnly &&
+                !appSettings.suggestionsLanguage.accepts(it.getLocale()?.toLanguageTag(), java.util.Locale.getDefault().language))
+        }.sortedByDescending {
+            appSettings.suggestionsLanguage.accepts(it.getLocale()?.toLanguageTag(), java.util.Locale.getDefault().language)
+        }
     }
 
     private suspend fun getList(
         source: ContentSource,
-        tags: List<String>,
         blacklist: TagsBlacklist,
-    ): List<Content> = runCatchingCancellable {
+        profile: SuggestionProfile,
+        seed: Long,
+        onAnswered: () -> Unit,
+    ): List<SuggestionCandidate<Content>> = runCatchingCancellable {
         val repository = mangaRepositoryFactory.create(source)
-        val availableOrders = repository.sortOrders
-        val order = SortOrder.valueOf(pickSuggestionSortOrder(availableOrders.map { it.name }))
-        val availableTags = repository.getFilterOptions().availableTags
-        val tag = pickSuggestionTag(tags, availableTags, { it.title }, { it in blacklist }, tagMatcher)
-        val primaryFilter = ContentListFilter(tags = setOfNotNull(tag))
-        val fallbackFilter = when (source.getContentType()) {
-            ContentType.VIDEO, ContentType.HENTAI_VIDEO -> ContentListFilter.EMPTY
-            else -> ContentListFilter.EMPTY
-        }
-        val list = repository.getList(
-            offset = 0,
-            order = order,
-            filter = primaryFilter,
-        ).asArrayList().let { primaryResults ->
-            if (primaryResults.isNotEmpty() || primaryFilter == fallbackFilter) {
-                primaryResults
-            } else {
-                repository.getList(
-                    offset = 0,
-                    order = order,
-                    filter = fallbackFilter,
-                ).asArrayList()
-            }
-        }
-        val globalTagBlacklist = GlobalTagBlacklist(appSettings.globalTagBlacklist)
-        val excludeNsfw = appSettings.isSuggestionsExcludeNsfw
-        cleanSuggestionList(
-            items = list,
+        val queries = profile.planQueries(
+            sourceName = source.name,
+            seed = seed,
+            availableOrders = repository.sortOrders.map { it.name },
+            availableTags = runCatchingCancellable { repository.getFilterOptions().availableTags }
+                .getOrDefault(emptySet()),
             title = { it.title },
-            hasAddress = { it.url.isNotBlank() || it.publicUrl.isNotBlank() },
-            excluded = { manga ->
-                (excludeNsfw && manga.isNsfw()) ||
-                    (blacklist.isNotEmpty() && manga in blacklist) ||
-                    (!globalTagBlacklist.isEmpty && manga in globalTagBlacklist)
-            },
+            isBlacklisted = { it in blacklist },
+            matches = tagMatcher,
         )
-    }.onFailure { e ->
+        val globalTagBlacklist = GlobalTagBlacklist(appSettings.globalTagBlacklist)
+        val excludeNsfw = appSettings.isSuggestionsExcludeNsfw || appSettings.isNsfwContentDisabled
+        val limit = SuggestionLimits().maxSourceResults
+        fun Content.isKnown() = profile.knows(id, listOf(title) + altTitles)
+        queries.flatMap { query ->
+            val order = SortOrder.valueOf(query.order)
+            val filter = ContentListFilter(tags = setOfNotNull(query.tag))
+            // One list failing must not cost the source its other one
+            val first = runCatchingCancellable { repository.getList(offset = 0, order = order, filter = filter) }
+                .onSuccess { onAnswered() }
+                .onFailure { onSourceFailure(it) }
+                .getOrDefault(emptyList())
+            // A reader with a big library already has the top of any list: one page further when little is left.
+            val next = if (first.isNotEmpty() && first.count { !it.isKnown() } < limit / 2) {
+                val offset = if (repository.listPagingMode == ContentRepository.ListPagingMode.PAGE_INDEX) {
+                    1
+                } else first.size
+                runCatchingCancellable { repository.getList(offset = offset, order = order, filter = filter) }
+                    .getOrDefault(emptyList())
+            } else {
+                emptyList()
+            }
+            cleanSuggestionList(
+                items = (first + next)
+                    .mapIndexed { rank, manga -> SuggestionCandidate(manga, query.direction, query.reason, rank) }
+                    .filterNot { it.item.isKnown() },
+                title = { it.item.title },
+                hasAddress = { it.item.url.isNotBlank() || it.item.publicUrl.isNotBlank() },
+                excluded = { candidate ->
+                    val manga = candidate.item
+                    (excludeNsfw && manga.isNsfw()) ||
+                        (blacklist.isNotEmpty() && manga in blacklist) ||
+                        (!globalTagBlacklist.isEmpty && manga in globalTagBlacklist)
+                },
+                // Only what was asked for by taste is picked by taste; the other lists keep the source's order
+                fit = { candidate ->
+                    if (candidate.direction != SuggestionDirection.TASTE) {
+                        0.0
+                    } else {
+                        profile.affinity(suggestionTagKeys(candidate.item.tags.map { it.title }))
+                    }
+                },
+            )
+        }
+    }.onFailure { onSourceFailure(it) }.getOrDefault(emptyList())
+
+    private suspend fun onSourceFailure(e: Throwable) {
         if (e is CloudFlareException) {
             // 后台推荐抓取只记录 Cloudflare 状态，不自动拉起验证码处理界面。
             captchaHandler.handle(e, tryAutoResolve = false)
         }
         e.printStackTraceDebug()
-    }.getOrDefault(emptyList())
+    }
 
     @RequiresPermission(Manifest.permission.POST_NOTIFICATIONS)
     private suspend fun showNotification(manga: Content) {

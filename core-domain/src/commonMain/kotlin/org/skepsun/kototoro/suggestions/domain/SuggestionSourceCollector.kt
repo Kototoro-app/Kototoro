@@ -11,7 +11,8 @@ import kotlinx.coroutines.withTimeoutOrNull
 
 const val SUGGESTIONS_SOURCE_TIMEOUT_MS = 45_000L
 const val SUGGESTIONS_GLOBAL_TIMEOUT_MS = 5 * 60 * 1_000L
-const val SUGGESTIONS_MAX_RAW_RESULTS = 280
+/** Two lists a source, twenty of each: room for a dozen sources before later ones are cut off. */
+const val SUGGESTIONS_MAX_RAW_RESULTS = 480
 const val SUGGESTIONS_MAX_PARALLELISM = 3
 
 /**

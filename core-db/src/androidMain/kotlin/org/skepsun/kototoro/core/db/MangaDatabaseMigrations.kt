@@ -168,6 +168,7 @@ fun getDatabaseMigrations(context: Context): Array<Migration> = arrayOf(
     AndroidMigration85To86(),
     AndroidMigration86To87(),
     AndroidMigration87To88(),
+    AndroidMigration88To89(),
 )
 
 /** Android's framework driver calls the SupportSQLiteDatabase overload of the shared migration. */
@@ -193,5 +194,12 @@ private class AndroidMigration87To88 : org.skepsun.kototoro.core.db.migrations.M
     override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
         db.execSQL(ADD_COLUMN)
         db.execSQL(BACKFILL)
+    }
+}
+
+private class AndroidMigration88To89 : org.skepsun.kototoro.core.db.migrations.Migration88To89() {
+    override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+        db.execSQL(ADD_DIRECTION)
+        db.execSQL(ADD_REASON)
     }
 }

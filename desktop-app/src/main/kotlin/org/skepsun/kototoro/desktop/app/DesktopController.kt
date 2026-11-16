@@ -293,6 +293,8 @@ data class DesktopAppState(
         org.skepsun.kototoro.desktop.runtime.DesktopGitHubMirrorSettings(),
     /** Stored suggestions, most relevant first (Android's recommendations). */
     val suggestions: List<SourceContent> = emptyList(),
+    val suggestionReasons: Map<Long, Pair<org.skepsun.kototoro.suggestions.domain.SuggestionDirection, String?>> = emptyMap(),
+    val suggestionDirection: org.skepsun.kototoro.suggestions.domain.SuggestionDirection? = null,
     /** True while [DesktopController.refreshSuggestions] runs in the background; the window stays usable. */
     val suggestionsGenerating: Boolean = false,
     /**
@@ -1686,13 +1688,15 @@ class DesktopController(
         // unless "include disabled sources" asks for candidates from every installed source.
         val disabled = if (settings.includeDisabledSources) emptySet() else state.value.disabledSources
         val sources = session.sourceListings().filterNot { it.source.name in disabled }
-        val stored = session.suggestions.refresh(sources, settings, session.sourceNsfwOverrides())
+        val stored = session.suggestions.refresh(sources, settings, session.sourceNsfwOverrides(), state.value.sourceSettings.tagBlacklist)
         recordRun(LAST_SUGGESTIONS_RUN)
         val items = session.suggestions.suggestions()
         // A rebuild can stop offering a chip (a tag no longer in the list, both adult macros after the nsfw switch),
         // and Android recomputes its quick-filter options on every reload; drop what the new list cannot filter.
         val offered = desktopSuggestionFilters(items, includeAdultChips = !settings.excludeNsfw).toSet()
-        mutableState.update { it.copy(suggestions = items, suggestionFilters = it.suggestionFilters intersect offered) }
+        val reasons = session.library.suggestionReasons()
+        mutableState.update { it.copy(suggestions = items, suggestionReasons = reasons,
+            suggestionFilters = it.suggestionFilters intersect offered) }
         if (stored > 0) announceSuggestion(settings, items)
         return stored
     }
@@ -2556,8 +2560,12 @@ class DesktopController(
      */
     fun showSuggestions() = navigate {
         val items = session.suggestions.suggestions()
-        mutableState.update { it.copy(screen = DesktopScreen.SUGGESTIONS, suggestions = items) }
+        val reasons = session.library.suggestionReasons()
+        mutableState.update { it.copy(screen = DesktopScreen.SUGGESTIONS, suggestions = items, suggestionReasons = reasons) }
     }
+
+    internal fun selectSuggestionDirection(direction: org.skepsun.kototoro.suggestions.domain.SuggestionDirection?) =
+        mutableState.update { it.copy(suggestionDirection = direction) }
 
     /** Android's quick filter on the suggestions list: the same chip again drops it, several chips narrow together. */
     internal fun toggleSuggestionFilter(filter: DesktopSuggestionFilter) = mutableState.update {

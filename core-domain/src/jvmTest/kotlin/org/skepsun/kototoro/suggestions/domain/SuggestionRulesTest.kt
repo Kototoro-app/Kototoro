@@ -11,6 +11,20 @@ class SuggestionRulesTest {
 
 	private val exact: SuggestionTagMatcher = { a, b -> a.equals(b, ignoreCase = true) }
 
+    @Test
+    fun `excluded genres match translated aliases and canonical ids`() {
+        val translated = SuggestionTagBlacklist(setOf("Romance"), ::suggestionTagsMatch)
+        assertTrue(translated.containsTitle("恋爱"))
+        assertTrue(translated.containsAny(listOf("Action", "爱情")))
+        assertTrue(SuggestionTagBlacklist(setOf("genre.romance"), exact).containsTitle("恋爱"))
+        assertFalse(translated.containsTitle("Horror"))
+    }
+
+    @Test
+    fun `tag preferences accept Chinese punctuation and pasted lines`() {
+        assertEquals(setOf("恋爱", "恐怖", "悬疑"), parseSuggestionTags(" 恋爱，恐怖；\n悬疑 "))
+    }
+
 	@Test
 	fun `portable matching uses Android mean length and strict threshold`() {
 		assertTrue(suggestionTagsMatch("ACTION", "action"))
@@ -43,7 +57,8 @@ class SuggestionRulesTest {
 
 	@Test
 	fun `sources get the preferred order, a matching unblocked tag and a cleaned list`() {
-		assertEquals("UPDATED", pickSuggestionSortOrder(listOf("POPULARITY", "UPDATED")))
+		assertEquals("POPULARITY", pickSuggestionSortOrder(listOf("UPDATED", "POPULARITY")))
+		assertEquals("POPULARITY_MONTH", pickSuggestionSortOrder(listOf("POPULARITY", "POPULARITY_MONTH")))
 		assertEquals("ALPHABETICAL", pickSuggestionSortOrder(listOf("ALPHABETICAL")))
 		assertEquals("UPDATED", pickSuggestionSortOrder(emptyList()))
 		val blacklist = SuggestionTagBlacklist(setOf("Romance"), exact)
@@ -52,20 +67,13 @@ class SuggestionRulesTest {
 		assertNull(pickSuggestionTag(listOf("Horror"), listOf("Action"), { it }, { false }, exact))
 		assertTrue(blacklist.containsAny(listOf("Drama", "romance")))
 		assertFalse(SuggestionTagBlacklist(emptySet(), exact).containsAny(listOf("x")))
-		val cleaned = cleanSuggestionList((1..30).map { "t$it" } + listOf(" ", "bad"), { it }, { it != "t1" },
-			{ it == "bad" }, SuggestionLimits(maxSourceResults = 5), shuffle = {})
-		assertEquals(listOf("t2", "t3", "t4", "t5", "t6"), cleaned)
-	}
-
-	@Test
-	fun `ranking dedupes, balances preferred sources and re-encodes the rank`() {
-		data class Item(val id: Long, val source: String, val score: Float)
-		val items = listOf(Item(1, "a", .9f), Item(1, "a", .8f), Item(2, "a", .7f), Item(3, "a", .6f),
-			Item(4, "b", .5f), Item(5, "c", .4f))
-		val ranked = rankSuggestions(items, { it.score }, { it.id }, { it.source }, preferredSources = setOf("c"),
-			limits = SuggestionLimits(maxResults = 4, maxResultsPerSource = 2))
-		assertEquals(listOf(5L, 1L, 4L, 2L), ranked.map { it.item.id })
-		assertEquals(listOf(1f, .75f, .5f, .25f), ranked.map { it.relevance })
+		val items = (1..30).map { "t$it" } + listOf(" ", "bad")
+		val limits = SuggestionLimits(maxSourceResults = 5)
+		assertEquals(listOf("t2", "t3", "t4", "t5", "t6"), cleanSuggestionList(items, { it }, { it != "t1" }, { it == "bad" }, limits),
+			"the source's own order when nothing is known")
+		assertEquals(listOf("t30", "t20", "t2", "t3", "t4"), cleanSuggestionList(items, { it }, { it != "t1" }, { it == "bad" }, limits) {
+			if (it == "t30") 2.0 else if (it == "t20") 1.0 else 0.0
+		}, "the best fits survive the cap")
 	}
 
 	@Test

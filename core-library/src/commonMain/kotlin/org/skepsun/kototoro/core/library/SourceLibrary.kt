@@ -24,6 +24,9 @@ import org.skepsun.kototoro.tracker.domain.ChapterSnapshotResult
 import org.skepsun.kototoro.tracker.domain.recomputeLegacyUpdateCounter
 import org.skepsun.kototoro.history.data.HistoryEntity
 import org.skepsun.kototoro.migration.domain.MigrationChapter
+import org.skepsun.kototoro.suggestions.domain.LibraryWork
+import org.skepsun.kototoro.suggestions.domain.RankedSuggestion
+import org.skepsun.kototoro.suggestions.domain.SuggestionDirection
 import org.skepsun.kototoro.migration.domain.MigrationContentInput
 import org.skepsun.kototoro.migration.domain.MigrationDataFlag
 import org.skepsun.kototoro.migration.domain.MigrationMode
@@ -507,22 +510,63 @@ class SourceLibrary(
     suspend fun suggestions(limit: Int): List<SourceContent> = database.getSuggestionDao().getTopContent(limit)
         .map { content(it.manga, it.tags) }
 
+    /** When each stored suggestion was first put on the list it is still on. */
+    suspend fun suggestionAges(): Map<Long, Long> =
+        database.getSuggestionDao().findAll().associate { it.mangaId to it.createdAt }
+
+    /** Why each stored suggestion is one: its direction and, where it has one, the tag key it is suggested for. */
+    suspend fun suggestionReasons(): Map<Long, Pair<SuggestionDirection, String?>> =
+        database.getSuggestionDao().findAll().associate { it.mangaId to (SuggestionDirection.of(it.direction) to it.reason) }
+
+    /**
+     * The library as evidence of taste: history most recently read first, then what was saved and never opened.
+     * Reads progress and tags only, no chapters.
+     */
+    suspend fun libraryWorks(historyLimit: Int): List<LibraryWork> {
+        val read = database.getHistoryDao().findRecent(historyLimit)
+        val saved = database.getFavouritesDao().findAllWithActiveCategory(0, Int.MAX_VALUE).distinctBy { it.manga.id }
+        val savedIds = saved.mapTo(HashSet(saved.size)) { it.manga.id }
+        val readIds = read.mapTo(HashSet(read.size)) { it.manga.id }
+        return read.map { row ->
+            LibraryWork(
+                titles = listOf(row.manga.title) + row.manga.altTitles?.split('\n').orEmpty(),
+                tags = row.tags.map { it.title },
+                isFavourite = row.manga.id in savedIds,
+                percent = row.history.percent.takeIf { it >= 0f },
+                chapters = row.history.chaptersCount,
+                lastReadAt = row.history.updatedAt,
+                id = row.manga.id,
+            )
+        } + saved.filterNot { it.manga.id in readIds }.map { row ->
+            LibraryWork(
+                titles = listOf(row.manga.title) + row.manga.altTitles?.split('\n').orEmpty(),
+                tags = row.tags.map { it.title },
+                isFavourite = true,
+                id = row.manga.id,
+            )
+        }
+    }
+
     /**
      * Replaces the suggestions table in one transaction, as Android's SuggestionRepository.replace does.
-     * A work whose id collides with a different stored work is skipped instead of failing the batch.
+     * A work whose id collides with a different stored work is skipped instead of failing the batch. One that was
+     * already on the list keeps the time it was first put there, which is what lets a suggestion nobody opens sink.
      */
-    suspend fun replaceSuggestions(items: List<Pair<SourceContent, Float>>, createdAt: Long): Int =
+    suspend fun replaceSuggestions(items: List<RankedSuggestion<SourceContent>>, createdAt: Long): Int =
         database.useWriterConnection { connection ->
             connection.immediateTransaction {
                 val dao = database.getSuggestionDao()
+                val ages = dao.findAll().associate { it.mangaId to it.createdAt }
                 dao.deleteAll()
                 var stored = 0
-                for ((content, relevance) in items) {
+                for (item in items) {
+                    val content = item.item
                     val existing = database.getMangaDao().find(content.id)?.manga
                     if (existing != null && runCatching { requireSameIdentity(existing, content) }.isFailure) continue
                     // List results carry no description or chapters; a stored work keeps its richer row.
                     if (existing == null) saveInTransaction(content)
-                    dao.upsert(org.skepsun.kototoro.suggestions.data.SuggestionEntity(content.id, relevance, createdAt))
+                    dao.upsert(org.skepsun.kototoro.suggestions.data.SuggestionEntity(content.id, item.relevance,
+                        ages[content.id] ?: createdAt, item.direction.name, item.reason))
                     stored++
                 }
                 stored

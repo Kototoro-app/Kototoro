@@ -65,6 +65,12 @@ fun SuggestionsSettingsScreen(
     val notificationsEnabled by settings.observeAsState(AppSettings.KEY_SUGGESTIONS_NOTIFICATIONS) {
         isSuggestionsNotificationAvailable
     }
+    val language by settings.observeAsState(
+        org.skepsun.kototoro.suggestions.domain.SuggestionLanguage.PREFERENCE_KEY,
+    ) { suggestionsLanguage }
+    val languageOnly by settings.observeAsState(
+        org.skepsun.kototoro.suggestions.domain.SuggestionLanguage.ONLY_PREFERENCE_KEY,
+    ) { suggestionsLanguageOnly }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -123,6 +129,21 @@ fun SuggestionsSettingsScreen(
                         onCheckedChange = { checked ->
                             settings.prefs.edit().putBoolean(AppSettings.KEY_SUGGESTIONS_NOTIFICATIONS, checked).apply()
                         },
+                    )
+                }
+                item {
+                    org.skepsun.kototoro.core.ui.suggestions.SuggestionLanguageSelector(
+                        selected = language,
+                        only = languageOnly,
+                        onSelect = {
+                            settings.suggestionsLanguage = it
+                            if (it == org.skepsun.kototoro.suggestions.domain.SuggestionLanguage.ALL) {
+                                settings.suggestionsLanguageOnly = false
+                            }
+                        },
+                        onOnlyChanged = { settings.suggestionsLanguageOnly = it },
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                        enabled = isEnabled,
                     )
                 }
                 item {

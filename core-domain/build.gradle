@@ -54,4 +54,9 @@ kotlin {
 
 tasks.withType(Test).configureEach {
 	useJUnitPlatform()
+	// Scores the suggestion rules against a real library: -PsuggestionEvalBackup=/path/to/kototoro.bk.zip
+	if (project.hasProperty('suggestionEvalBackup')) {
+		systemProperty 'suggestionEvalBackup', project.property('suggestionEvalBackup')
+		testLogging.showStandardStreams = true
+	}
 }

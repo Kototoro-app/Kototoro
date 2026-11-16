@@ -318,6 +318,7 @@ fun KototoroContentCardGrid(
 
     ContentPosterCard(
         model = ContentCardPresentation(renderModel.id, renderModel.title, supportingText = metadataText),
+        caption = item.recommendationReason,
         onClick = { onClick(coverBounds.currentBounds()) },
         onLongClick = onLongClick,
         modifier = modifier,
