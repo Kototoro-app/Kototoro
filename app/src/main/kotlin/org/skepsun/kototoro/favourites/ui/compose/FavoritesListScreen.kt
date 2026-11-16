@@ -25,6 +25,7 @@ import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.favourites.ui.list.FavouritesListHost
 import org.skepsun.kototoro.list.ui.compose.AppContentListRoute
 import org.skepsun.kototoro.list.ui.compose.QuickFilterSection
+import org.skepsun.kototoro.list.ui.model.QuickFilter
 import org.skepsun.kototoro.list.ui.compose.SelectionAction
 import org.skepsun.kototoro.list.ui.compose.SortOrderControl
 import org.skepsun.kototoro.list.domain.ListSortOrder
@@ -101,7 +102,13 @@ fun KototoroFavoritesListScreen(
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                     )
                 }
-                if (quickFilter != null) {
+                // With nothing applied the rail is just the sort button. It then joins the grid's heading
+                // instead of holding an otherwise empty row above the shelf.
+                val sortInSummary = sortControl != null && !isTvPresentation && shelf.items.isNotEmpty() &&
+                    quickFilter?.hasAppliedOption() != true
+                if (sortInSummary) {
+                    // Drawn by the shelf below.
+                } else if (quickFilter != null) {
                     QuickFilterSection(
                         quickFilter = quickFilter!!,
                         onQuickFilterOptionClick = listHost::toggleFilterOption,
@@ -123,6 +130,7 @@ fun KototoroFavoritesListScreen(
                     gridScale = gridScale,
                     listMode = listMode,
                     sharedElementInstanceKey = shelfInstanceKey,
+                    summaryTrailing = sortControl.takeIf { sortInSummary },
                     onItemClick = { item, _, sharedKey ->
                         if (onNavigateToDetails != null) {
                             onNavigateToDetails(item.manga, sharedKey)
@@ -165,3 +173,6 @@ fun KototoroFavoritesListScreen(
         enableItemAnimations = false,
     )
 }
+
+private fun QuickFilter.hasAppliedOption(): Boolean =
+    items.any { it.isChecked } || groups.any { group -> group.items.any { it.isChecked } }
