@@ -75,7 +75,7 @@ fun buildSettingsRootSections(
                 iconRes = R.drawable.ic_download,
                 iosIconColor = SettingsRootIconColor.BLUE,
                 title = context.getString(R.string.downloads),
-                summary = context.summaryOf(R.string.manga_save_location, R.string.downloads_wifi_only),
+                summary = context.summaryOf(R.string.local_content_directories, R.string.download_over_cellular),
                 onClick = { onOpenDestination(SettingsDestination.DownloadsSettings) },
             ),
         ),

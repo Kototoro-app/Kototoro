@@ -41,6 +41,8 @@ class SettingsSearchViewModel @Inject constructor(
     val onNavigateToPreference = MutableEventFlow<SettingsItem>()
     val currentQuery: String
         get() = query.value.orEmpty()
+    val isSearching: Boolean
+        get() = query.value != null
 
     fun onQueryChanged(value: String) {
         if (query.value != null) {

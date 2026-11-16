@@ -601,6 +601,9 @@ class SettingsSearchHelper @Inject constructor(
         }
         val downloadsBreadcrumbs = listOf(context.getString(R.string.downloads))
         val downloadsKeys = listOf(
+            "local_content_directories" to R.string.local_content_directories,
+            "downloads_slowdown" to R.string.download_slowdown,
+            "pages_dir" to R.string.default_page_save_dir,
             "downloads_format" to R.string.preferred_download_format,
             "downloads_video_quality" to R.string.download_video_quality,
             "downloads_novel_images" to R.string.download_novel_images,
