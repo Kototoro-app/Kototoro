@@ -8,6 +8,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FloatingToolbarDefaults
+import androidx.compose.material3.HorizontalFloatingToolbar
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -21,6 +24,7 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.ui.buttons.IconButton
+import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 
 /**
  * The floating "clear / N selected / actions" pill the grids show while a multi-selection is
@@ -35,6 +39,7 @@ import org.skepsun.kototoro.core.ui.buttons.IconButton
  *
  * Placement (alignment, insets, slide-in animation) stays at the call site.
  */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun SelectionActionBar(
     selectedCount: Int,
@@ -43,6 +48,28 @@ fun SelectionActionBar(
     actions: @Composable RowScope.() -> Unit,
 ) {
     val isTvPresentation = LocalUiPresentationConfig.current.isTv
+    if (!isTvPresentation && LocalMaterialExpressiveComponentsEnabled.current) {
+        // Expressive: the official floating toolbar, which hugs its actions instead of spanning the screen.
+        HorizontalFloatingToolbar(
+            expanded = true,
+            colors = FloatingToolbarDefaults.vibrantFloatingToolbarColors(),
+            modifier = modifier,
+        ) {
+            SelectionBarIconButton(onClick = onClearSelection) {
+                Icon(
+                    imageVector = Icons.Filled.Close,
+                    contentDescription = stringResource(R.string.clear),
+                )
+            }
+            Text(
+                text = selectedCount.toString(),
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.align(Alignment.CenterVertically).padding(start = 4.dp, end = 12.dp),
+            )
+            actions()
+        }
+        return
+    }
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = if (isTvPresentation) {
