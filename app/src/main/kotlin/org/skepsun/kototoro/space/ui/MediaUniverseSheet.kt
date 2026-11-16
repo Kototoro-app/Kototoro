@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
@@ -31,6 +30,7 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.compose.KototoroSheetSurface
 import org.skepsun.kototoro.core.ui.compose.SheetDragHandle
 import org.skepsun.kototoro.core.ui.compose.rememberResolvedSourceTitle
+import org.skepsun.kototoro.core.ui.progress.CircularProgressIndicator
 import org.skepsun.kototoro.core.util.ext.mangaExtra
 import org.skepsun.kototoro.parsers.model.Content
 

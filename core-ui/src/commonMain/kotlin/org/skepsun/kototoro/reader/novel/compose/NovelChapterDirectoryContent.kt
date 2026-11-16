@@ -30,6 +30,7 @@ import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import org.skepsun.kototoro.core.ui.buttons.IconButton
+import org.skepsun.kototoro.core.ui.progress.CircularProgressIndicator
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderPanelIcons
 import org.skepsun.kototoro.reader.ui.compose.design.currentReaderPanelColors
 

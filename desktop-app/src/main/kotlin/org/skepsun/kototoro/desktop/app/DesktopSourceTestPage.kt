@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -26,6 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.core.ui.buttons.OutlinedButton
 import org.skepsun.kototoro.core.ui.buttons.TextButton
+import org.skepsun.kototoro.core.ui.progress.LinearProgressIndicator
 import org.skepsun.kototoro.core.ui.sourcetest.SourceTestProgressHeader
 import org.skepsun.kototoro.core.ui.sourcetest.SourceTestResultLine
 import org.skepsun.kototoro.core.ui.sourcetest.SourceTestResultRow

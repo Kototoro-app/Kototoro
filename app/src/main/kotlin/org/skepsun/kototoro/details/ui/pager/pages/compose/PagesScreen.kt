@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.progress.CircularProgressIndicator
 import org.skepsun.kototoro.core.util.ext.mangaSourceExtra
 import org.skepsun.kototoro.core.ui.compose.SelectionActionBar
 import org.skepsun.kototoro.core.ui.compose.SelectionBarIconButton

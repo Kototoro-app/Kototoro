@@ -46,6 +46,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.sp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.bookmarks.domain.Bookmark
+import org.skepsun.kototoro.core.ui.progress.CircularProgressIndicator
 import org.skepsun.kototoro.details.ui.compose.state.DetailsPaneState
 import org.skepsun.kototoro.details.ui.compose.state.rememberDetailsPaneNestedScrollConnection
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable

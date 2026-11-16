@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.discover.ui.details
 
+import org.skepsun.kototoro.core.ui.progress.CircularProgressIndicator
 import org.skepsun.kototoro.scrobbling.common.ui.scrobblerIconTint
 
 import androidx.compose.foundation.clickable
@@ -15,7 +16,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
 import com.kyant.shapes.RoundedRectangle
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme

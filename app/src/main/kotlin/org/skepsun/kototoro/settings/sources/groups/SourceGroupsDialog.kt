@@ -22,7 +22,6 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -46,6 +45,7 @@ import org.skepsun.kototoro.core.ui.buttons.Button
 import org.skepsun.kototoro.core.ui.buttons.FilledTonalButton
 import org.skepsun.kototoro.core.ui.buttons.IconButton
 import org.skepsun.kototoro.core.ui.buttons.OutlinedButton
+import org.skepsun.kototoro.core.ui.progress.LinearProgressIndicator
 import org.skepsun.kototoro.settings.compose.SettingsAlertDialog
 import org.skepsun.kototoro.settings.compose.SettingsDialogActionButton
 

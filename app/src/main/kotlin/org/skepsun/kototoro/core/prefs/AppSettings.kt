@@ -1571,12 +1571,12 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 
         companion object {
             fun fromValue(value: String?): LoadingCircleStyle =
-                entries.find { it.value == value } ?: THICK_STRAIGHT
+                entries.find { it.value == value } ?: THICK_WAVY
         }
     }
 
     var loadingCircleStyle: LoadingCircleStyle
-        get() = LoadingCircleStyle.fromValue(prefs.getString(KEY_LOADING_CIRCLE_STYLE, LoadingCircleStyle.THICK_STRAIGHT.value))
+        get() = LoadingCircleStyle.fromValue(prefs.getString(KEY_LOADING_CIRCLE_STYLE, LoadingCircleStyle.THICK_WAVY.value))
         set(value) = prefs.edit { putString(KEY_LOADING_CIRCLE_STYLE, value.value) }
 
     var railAnimationIntensityPercent: Int

@@ -19,7 +19,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -33,6 +32,7 @@ import org.skepsun.kototoro.core.ui.buttons.Button
 import org.skepsun.kototoro.core.ui.buttons.IconButton
 import org.skepsun.kototoro.core.ui.buttons.OutlinedButton
 import org.skepsun.kototoro.core.ui.compose.CompactContentCoverShape
+import org.skepsun.kototoro.core.ui.progress.LinearProgressIndicator
 import org.skepsun.kototoro.settings.compose.SettingsMaterialIcons
 
 /**

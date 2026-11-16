@@ -45,6 +45,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.android.awaitFrame
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 
 private const val IndicatorProgressMax = 10_000
 private const val PullRefreshResistance = 0.52f
@@ -310,7 +311,14 @@ private fun rememberLoadingIndicatorStyle(style: AppSettings.LoadingCircleStyle?
             lifecycleOwner.lifecycle.removeObserver(lifecycleObserver)
         }
     }
-    return resolvedStyle
+    // Waves are the Expressive treatment; the other interface styles keep the same weight without them.
+    return if (LocalMaterialExpressiveComponentsEnabled.current) resolvedStyle else resolvedStyle.straight()
+}
+
+private fun AppSettings.LoadingCircleStyle.straight(): AppSettings.LoadingCircleStyle = when (this) {
+    AppSettings.LoadingCircleStyle.THICK_WAVY -> AppSettings.LoadingCircleStyle.THICK_STRAIGHT
+    AppSettings.LoadingCircleStyle.THIN_WAVY -> AppSettings.LoadingCircleStyle.THIN_STRAIGHT
+    else -> this
 }
 
 private val AppSettings.LoadingCircleStyle.themeOverlayResId: Int

@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.res.painterResource
@@ -30,6 +29,7 @@ import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
 import org.skepsun.kototoro.core.source.ChapterArtworkCodec
 import org.skepsun.kototoro.core.ui.buttons.IconButton
+import org.skepsun.kototoro.core.ui.progress.CircularProgressIndicator
 import org.skepsun.kototoro.core.util.ext.mangaSourceExtra
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.ui.adaptive.tvHorizontalEdgeGuard

@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
@@ -30,6 +29,7 @@ import org.skepsun.kototoro.core.nav.router
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
 import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.buttons.IconButton
+import org.skepsun.kototoro.core.ui.progress.CircularProgressIndicator
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
 import org.skepsun.kototoro.core.util.ext.observeEvent
 import org.skepsun.kototoro.details.ui.pager.pages.compose.PagesScreen

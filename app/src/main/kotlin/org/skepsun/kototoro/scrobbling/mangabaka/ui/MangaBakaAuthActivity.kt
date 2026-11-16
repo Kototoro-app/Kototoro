@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -41,6 +40,7 @@ import org.skepsun.kototoro.core.ui.BaseComposeActivity
 import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import org.skepsun.kototoro.core.ui.buttons.Button
+import org.skepsun.kototoro.core.ui.progress.CircularProgressIndicator
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
 import org.skepsun.kototoro.scrobbling.common.ui.config.ScrobblerConfigActivity
 import org.skepsun.kototoro.scrobbling.mangabaka.data.MangaBakaRepository

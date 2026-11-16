@@ -32,7 +32,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
@@ -61,6 +60,7 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.adaptive.tvTabRing
 import org.skepsun.kototoro.core.ui.buttons.IconButton
+import org.skepsun.kototoro.core.ui.progress.LinearProgressIndicator
 import org.skepsun.kototoro.core.util.FileSize
 import org.skepsun.kototoro.local.data.LocalStorageRoot
 import org.skepsun.kototoro.local.data.StorageContentKind

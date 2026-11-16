@@ -34,7 +34,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
@@ -81,6 +80,7 @@ import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
 import org.skepsun.kototoro.core.ui.glass.rememberGlassPrefsOrFallback
 import org.skepsun.kototoro.core.ui.glass.rememberGlassSurfaceColors
+import org.skepsun.kototoro.core.ui.progress.CircularProgressIndicator
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.core.util.ext.mangaSourceExtra
 import org.skepsun.kototoro.core.util.ext.takeIfUsableImageUri

@@ -21,7 +21,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -45,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.rememberGlassSurfaceColors
+import org.skepsun.kototoro.core.ui.progress.LinearProgressIndicator
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.readingrecord.data.ReadingChapterAggregateEntity

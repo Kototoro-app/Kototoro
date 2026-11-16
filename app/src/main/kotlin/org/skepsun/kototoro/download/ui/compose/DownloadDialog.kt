@@ -23,7 +23,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.RadioButton
@@ -64,6 +63,7 @@ import org.skepsun.kototoro.core.ui.buttons.Button
 import org.skepsun.kototoro.core.ui.buttons.IconButton
 import org.skepsun.kototoro.core.ui.buttons.TextButton
 import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
+import org.skepsun.kototoro.core.ui.progress.LinearProgressIndicator
 import org.skepsun.kototoro.core.util.ext.findActivity
 import org.skepsun.kototoro.core.util.ext.joinToStringWithLimit
 import org.skepsun.kototoro.core.util.ext.makeSnackbar

@@ -6,7 +6,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -20,6 +19,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.core.ui.gestures.mouseDragScroll
 import kotlin.math.roundToInt
+import org.skepsun.kototoro.core.ui.progress.CircularProgressIndicator
 
 /** Android's chapter directory layout; hosts adapt models, focus, nested scroll and scrollbar rendering. */
 @Composable

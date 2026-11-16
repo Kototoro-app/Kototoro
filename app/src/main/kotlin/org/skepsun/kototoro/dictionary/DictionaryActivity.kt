@@ -19,7 +19,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.OpenInBrowser
 import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -53,6 +52,7 @@ import org.skepsun.kototoro.core.ui.BaseComposeActivity
 import org.skepsun.kototoro.core.ui.buttons.Button
 import org.skepsun.kototoro.core.ui.buttons.IconButton
 import org.skepsun.kototoro.core.ui.buttons.OutlinedButton
+import org.skepsun.kototoro.core.ui.progress.CircularProgressIndicator
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
 
 @AndroidEntryPoint

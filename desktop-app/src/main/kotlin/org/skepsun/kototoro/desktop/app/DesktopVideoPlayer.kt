@@ -46,6 +46,7 @@ import org.skepsun.kototoro.core.ui.buttons.Button
 import org.skepsun.kototoro.core.ui.buttons.IconButton
 import org.skepsun.kototoro.core.ui.buttons.OutlinedButton
 import org.skepsun.kototoro.core.ui.buttons.TextButton
+import org.skepsun.kototoro.core.ui.progress.CircularProgressIndicator
 import org.skepsun.kototoro.desktop.player.MpvEnhancement
 import org.skepsun.kototoro.desktop.player.MpvEnhancementMode
 import org.skepsun.kototoro.desktop.player.MpvInput

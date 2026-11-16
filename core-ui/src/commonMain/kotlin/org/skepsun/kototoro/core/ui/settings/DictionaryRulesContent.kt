@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import org.skepsun.kototoro.core.ui.buttons.IconButton
+import org.skepsun.kototoro.core.ui.progress.CircularProgressIndicator
 import org.skepsun.kototoro.core.ui.text.uiString
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderPanelIcons
 import org.skepsun.kototoro.settings.compose.SettingsDialogActionButton

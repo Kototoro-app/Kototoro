@@ -30,7 +30,6 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHostState
@@ -69,6 +68,7 @@ import org.skepsun.kototoro.core.ui.compose.KototoroSnackbarHost
 import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.core.ui.compose.ContentCoverShape
+import org.skepsun.kototoro.core.ui.progress.LinearProgressIndicator
 import org.skepsun.kototoro.core.ui.widgets.SelectableTextView
 import org.skepsun.kototoro.core.util.ext.sanitize
 import org.skepsun.kototoro.core.util.ext.takeIfUsableImageUri

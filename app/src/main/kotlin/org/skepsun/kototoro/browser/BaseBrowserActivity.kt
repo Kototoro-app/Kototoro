@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -28,6 +27,7 @@ import org.skepsun.kototoro.core.network.webview.adblock.AdBlock
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.parser.ParserContentRepository
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
+import org.skepsun.kototoro.core.ui.progress.LinearProgressIndicator
 import org.skepsun.kototoro.core.util.ext.configureForParser
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.util.nullIfEmpty

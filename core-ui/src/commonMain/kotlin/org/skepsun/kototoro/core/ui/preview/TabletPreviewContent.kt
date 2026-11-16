@@ -27,6 +27,7 @@ import org.skepsun.kototoro.core.ui.buttons.OutlinedButton
 import org.skepsun.kototoro.core.ui.buttons.TextButton
 import org.skepsun.kototoro.core.ui.chips.ChoiceChip
 import androidx.compose.foundation.horizontalScroll
+import org.skepsun.kototoro.core.ui.progress.LinearProgressIndicator
 
 /** Android's tablet preview, with image loading, localized values and actions supplied by each host. */
 @Composable

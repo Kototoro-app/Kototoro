@@ -19,7 +19,6 @@ import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
@@ -43,6 +42,7 @@ import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import org.skepsun.kototoro.core.ui.buttons.IconButton
 import org.skepsun.kototoro.core.ui.buttons.TextButton
+import org.skepsun.kototoro.core.ui.progress.CircularProgressIndicator
 
 /**
  * @param filterSummary names of the active filters, trailing the filter chip so the row says what is

@@ -15,7 +15,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -44,6 +43,7 @@ import kotlinx.coroutines.launch
 import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
+import org.skepsun.kototoro.core.ui.progress.LinearProgressIndicator
 import org.skepsun.kototoro.core.ui.sourcetest.SourceTestProgressHeader
 import org.skepsun.kototoro.core.ui.sourcetest.SourceTestResultLine
 import org.skepsun.kototoro.core.ui.sourcetest.SourceTestResultRow

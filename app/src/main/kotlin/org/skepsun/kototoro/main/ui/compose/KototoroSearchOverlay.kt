@@ -45,7 +45,6 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.HorizontalDivider
@@ -97,6 +96,7 @@ import org.skepsun.kototoro.core.jsonsource.SourceType
 import org.skepsun.kototoro.core.ui.buttons.FilledIconButton
 import org.skepsun.kototoro.core.ui.buttons.IconButton
 import org.skepsun.kototoro.core.ui.buttons.TextButton
+import org.skepsun.kototoro.core.ui.progress.CircularProgressIndicator
 import org.skepsun.kototoro.explore.data.SourcePreset
 import org.skepsun.kototoro.core.model.titleResId
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon

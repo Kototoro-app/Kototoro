@@ -31,9 +31,7 @@ import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -91,6 +89,8 @@ import org.skepsun.kototoro.core.ui.compose.performSelectionHapticFeedback
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
+import org.skepsun.kototoro.core.ui.progress.CircularProgressIndicator
+import org.skepsun.kototoro.core.ui.progress.LinearProgressIndicator
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
 import org.skepsun.kototoro.explore.data.SourcePreset
 import org.skepsun.kototoro.list.ui.compose.ContentCardUiPrefs

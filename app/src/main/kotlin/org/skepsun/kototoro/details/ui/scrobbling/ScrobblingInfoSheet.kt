@@ -3,7 +3,6 @@ package org.skepsun.kototoro.details.ui.scrobbling
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -24,6 +23,7 @@ import dagger.hilt.components.SingletonComponent
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.ui.compose.TvModalBottomSheet
+import org.skepsun.kototoro.core.ui.progress.CircularProgressIndicator
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.core.util.ext.findActivity
 import org.skepsun.kototoro.details.ui.DetailsViewModel

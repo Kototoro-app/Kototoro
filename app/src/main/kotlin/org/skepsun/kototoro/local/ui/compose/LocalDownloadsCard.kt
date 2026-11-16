@@ -35,6 +35,7 @@ import coil3.compose.AsyncImage
 import kotlinx.coroutines.flow.FlowCollector
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
+import org.skepsun.kototoro.core.ui.progress.LinearProgressIndicator
 import org.skepsun.kototoro.core.util.FileSize
 import org.skepsun.kototoro.core.util.ext.takeIfUsableImageUri
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage

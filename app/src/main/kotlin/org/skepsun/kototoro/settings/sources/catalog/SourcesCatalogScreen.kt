@@ -21,11 +21,9 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -56,6 +54,8 @@ import org.skepsun.kototoro.core.ui.buttons.IconButton
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
 import org.skepsun.kototoro.core.ui.compose.KototoroSnackbarHost
 import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
+import org.skepsun.kototoro.core.ui.progress.CircularProgressIndicator
+import org.skepsun.kototoro.core.ui.progress.LinearProgressIndicator
 import org.skepsun.kototoro.core.util.LocaleComparator
 import org.skepsun.kototoro.core.util.ext.getDisplayName
 import org.skepsun.kototoro.core.util.ext.toLocale

@@ -16,7 +16,6 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -38,6 +37,7 @@ import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.ui.adaptive.tvTextInputEnterAction
 import org.skepsun.kototoro.core.ui.buttons.TextButton
+import org.skepsun.kototoro.core.ui.progress.CircularProgressIndicator
 import org.skepsun.kototoro.core.ui.text.uiString
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderPanelIcons
 import org.skepsun.kototoro.settings.compose.LocalSettingsDialogRenderer

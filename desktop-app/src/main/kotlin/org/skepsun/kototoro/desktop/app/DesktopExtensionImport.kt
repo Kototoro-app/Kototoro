@@ -14,6 +14,7 @@ import javax.swing.filechooser.FileNameExtensionFilter
 import org.skepsun.kototoro.core.ui.buttons.Button
 import org.skepsun.kototoro.core.ui.buttons.OutlinedButton
 import org.skepsun.kototoro.core.ui.buttons.TextButton
+import org.skepsun.kototoro.core.ui.progress.LinearProgressIndicator
 
 /** One add flow, with format choices matching Android's repository kinds and local-file import. */
 @Composable

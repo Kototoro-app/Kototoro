@@ -36,7 +36,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.foundation.pager.PagerState
@@ -67,6 +66,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.titleResId
 import org.skepsun.kototoro.core.ui.compose.KototoroPullToRefreshBox
+import org.skepsun.kototoro.core.ui.progress.LinearProgressIndicator
 import org.skepsun.kototoro.settings.compose.SettingsContentHorizontalPadding
 import org.skepsun.kototoro.settings.compose.settingsContentTopInset
 import org.skepsun.kototoro.parsers.model.ContentType

@@ -21,7 +21,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -53,6 +52,7 @@ import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import org.skepsun.kototoro.core.ui.buttons.IconButton
+import org.skepsun.kototoro.core.ui.progress.CircularProgressIndicator
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

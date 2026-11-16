@@ -42,12 +42,10 @@ import androidx.compose.material3.AssistChip
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -89,6 +87,8 @@ import org.skepsun.kototoro.core.ui.compose.EmptyStatePanel
 import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
 import org.skepsun.kototoro.core.ui.compose.VerticalScrollbar
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
+import org.skepsun.kototoro.core.ui.progress.CircularProgressIndicator
+import org.skepsun.kototoro.core.ui.progress.LinearProgressIndicator
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.ireader.model.IReaderMangaSource
 import org.skepsun.kototoro.mihon.model.MihonMangaSource

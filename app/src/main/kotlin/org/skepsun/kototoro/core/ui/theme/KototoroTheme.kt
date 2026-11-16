@@ -29,6 +29,8 @@ import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.util.ext.getThemeColor
 import org.skepsun.kototoro.core.ui.BaseActivityEntryPoint
 import org.skepsun.kototoro.core.ui.compose.ContentSourceResolutionProvider
+import org.skepsun.kototoro.core.ui.progress.LocalProgressIndicatorStyle
+import org.skepsun.kototoro.core.ui.progress.ProgressIndicatorStyle
 import org.skepsun.kototoro.core.ui.text.rememberAndroidUiStrings
 import org.skepsun.kototoro.core.ui.text.LocalUiStrings
 
@@ -89,6 +91,9 @@ fun KototoroTheme(
     val selectedColorScheme by settings.observeAsState(AppSettings.KEY_COLOR_THEME) {
         colorScheme
     }
+    val loadingCircleStyle by settings.observeAsState(AppSettings.KEY_LOADING_CIRCLE_STYLE) {
+        loadingCircleStyle
+    }
     val effectiveAmoledTheme = darkTheme && isAmoledTheme
     val colorScheme = remember(
         context,
@@ -141,6 +146,7 @@ fun KototoroTheme(
 
     CompositionLocalProvider(
         LocalMaterialExpressiveComponentsEnabled provides expressiveComponents,
+        LocalProgressIndicatorStyle provides ProgressIndicatorStyle.valueOf(loadingCircleStyle.name),
         LocalUiStrings provides uiStrings,
         LocalInterfaceStyle provides effectiveInterfaceStyle,
         LocalInterfaceStyleTokens provides styleTokens,

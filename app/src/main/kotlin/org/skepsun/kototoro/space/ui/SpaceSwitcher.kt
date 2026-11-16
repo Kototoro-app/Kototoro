@@ -41,7 +41,6 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
@@ -107,6 +106,7 @@ import org.skepsun.kototoro.core.prefs.SpaceSwitcherPosition
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
+import org.skepsun.kototoro.core.ui.progress.CircularProgressIndicator
 import org.skepsun.kototoro.main.ui.compose.CompactDropdownMenuText
 import org.skepsun.kototoro.main.ui.compose.GlassDropdownMenu
 import org.skepsun.kototoro.main.ui.compose.LocalRootGlassMenuHost

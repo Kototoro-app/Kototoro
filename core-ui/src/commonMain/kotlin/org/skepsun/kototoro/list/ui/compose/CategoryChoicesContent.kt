@@ -16,6 +16,7 @@ import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
+import org.skepsun.kototoro.core.ui.progress.CircularProgressIndicator
 import org.skepsun.kototoro.core.ui.text.uiString
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderPanelIcons
 

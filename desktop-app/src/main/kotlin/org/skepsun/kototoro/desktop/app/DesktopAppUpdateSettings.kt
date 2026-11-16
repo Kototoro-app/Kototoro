@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.sp
 import org.skepsun.kototoro.core.ui.buttons.Button
 import org.skepsun.kototoro.core.ui.buttons.OutlinedButton
 import org.skepsun.kototoro.core.ui.markdown.MarkdownText
+import org.skepsun.kototoro.core.ui.progress.LinearProgressIndicator
 import org.skepsun.kototoro.desktop.runtime.DesktopUpdateChannel
 
 /**

@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.getValue
@@ -31,6 +30,7 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
 import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
+import org.skepsun.kototoro.core.ui.progress.CircularProgressIndicator
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
 import org.skepsun.kototoro.core.util.ext.getParcelableExtraCompat
 import org.skepsun.kototoro.core.util.ext.isHttpUrl
