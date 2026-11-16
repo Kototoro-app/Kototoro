@@ -196,41 +196,10 @@ internal fun DetailsSourceSummaryRow(
                 modifier = Modifier.wrapContentWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                if (!merged) {
-                    SourceSummarySegment(
-                        label = metadataTitle,
-                        fallbackLabel = metadataFallback,
-                        displayModel = metadataDisplayModel,
-                        color = MaterialTheme.colorScheme.primary,
-                        onIconClick = onMetadataIconClick,
-                        onNameClick = onMetadataNameClick,
-                        modifier = Modifier.widthIn(max = maxSegmentWidth),
-                    )
-                    Box(
-                        modifier = Modifier
-                            .width(1.dp)
-                            .height(24.dp)
-                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.30f)),
-                    )
-                }
-                SourceSummarySegment(
-                    label = readingTitle,
-                    fallbackLabel = readingFallback,
-                    displayModel = readingDisplayModel,
-                    color = MaterialTheme.colorScheme.tertiary,
-                    onIconClick = onReadingIconClick,
-                    onNameClick = onReadingNameClick,
-                    modifier = Modifier.widthIn(max = maxSegmentWidth),
-                )
                 if (merged) {
-                    Box(
-                        modifier = Modifier
-                            .width(1.dp)
-                            .height(24.dp)
-                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.30f)),
-                    )
                     // Same source twice reads as a mistake; the metadata half collapses to the one thing
-                    // it offers here, linking this title to a tracker or another metadata source.
+                    // it offers here, linking this title to a tracker or another metadata source. It keeps the
+                    // metadata segment's place on the left.
                     Box(
                         modifier = Modifier
                             .width(MergedMetadataSegmentWidth)
@@ -247,7 +216,32 @@ internal fun DetailsSourceSummaryRow(
                             modifier = Modifier.size(16.dp),
                         )
                     }
+                } else {
+                    SourceSummarySegment(
+                        label = metadataTitle,
+                        fallbackLabel = metadataFallback,
+                        displayModel = metadataDisplayModel,
+                        color = MaterialTheme.colorScheme.primary,
+                        onIconClick = onMetadataIconClick,
+                        onNameClick = onMetadataNameClick,
+                        modifier = Modifier.widthIn(max = maxSegmentWidth),
+                    )
                 }
+                Box(
+                    modifier = Modifier
+                        .width(1.dp)
+                        .height(24.dp)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.30f)),
+                )
+                SourceSummarySegment(
+                    label = readingTitle,
+                    fallbackLabel = readingFallback,
+                    displayModel = readingDisplayModel,
+                    color = MaterialTheme.colorScheme.tertiary,
+                    onIconClick = onReadingIconClick,
+                    onNameClick = onReadingNameClick,
+                    modifier = Modifier.widthIn(max = maxSegmentWidth),
+                )
             }
         }
     }
