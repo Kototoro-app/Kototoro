@@ -597,7 +597,6 @@ dependencies {
 	implementation libs.telephoto.subsampling
 	implementation libs.telephoto.zoomable.image.coil3
 	implementation libs.disk.lru.cache
-	implementation libs.markwon
 	implementation(libs.usagi.rpc) {
 		exclude group: 'org.json', module: 'json'
 	}

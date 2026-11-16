@@ -31,7 +31,7 @@ import org.skepsun.kototoro.desktop.runtime.DesktopUpdateRelease
  * Android's changelog screen (`settings/about/changelog/ChangelogScreen`) for the Windows host: this channel's
  * installable releases, newest first, each with its version, date and Markdown notes.
  *
- * Android joins every release into one Markdown string and renders it with Markwon; here each release is a card of its
+ * Android joins every release into one Markdown string; here each release is a card of its
  * own so a long history stays readable, and the shared [MarkdownText] renders the same subset of Markdown.
  */
 @Composable

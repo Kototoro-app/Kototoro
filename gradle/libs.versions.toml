@@ -45,7 +45,6 @@ ksp = "2.3.11"
 leakcanary = "3.0-alpha-8"
 lifecycle = "2.9.4"
 lifecycleNavigation3 = "2.10.0"
-markwon = "4.6.2"
 material = "1.14.0-alpha05"
 moshi = "1.15.2"
 nicehttp = "0.4.18"
@@ -208,7 +207,6 @@ leakcanary-android = { module = "com.squareup.leakcanary:leakcanary-android", ve
 lifecycle-process = { module = "androidx.lifecycle:lifecycle-process", version.ref = "lifecycle" }
 lifecycle-service = { module = "androidx.lifecycle:lifecycle-service", version.ref = "lifecycle" }
 lifecycle-viewmodel = { module = "androidx.lifecycle:lifecycle-viewmodel-ktx", version.ref = "lifecycle" }
-markwon = { module = "io.noties.markwon:core", version.ref = "markwon" }
 mihon-image-decoder = { module = "com.github.mihonapp:image-decoder", version.ref = "mihonImageDecoder" }
 material = { module = "com.google.android.material:material", version.ref = "material" }
 moshi-kotlin = { module = "com.squareup.moshi:moshi-kotlin", version.ref = "moshi" }

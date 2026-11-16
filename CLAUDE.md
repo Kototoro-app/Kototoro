@@ -497,7 +497,8 @@ Android 与桌面的 UI 按 CMP 共享呈现演进；Windows 与 macOS 始终共
   `app-update-changelog` 进新页“更新日志”（`DesktopScreen.CHANGELOG`，对齐 Android 的 `ChangelogScreen`）：
   本频道所有可安装版本按新→旧一张卡一版，带当前版本徽标、日期、包大小与各版说明，每次会话只拉一次、
   “重新加载”才重拉。Markdown 解析 `core-ui` 的 `parseMarkdownBlocks`/`parseMarkdownInline`、
-  渲染 `MarkdownText`/`markdownPlainText` 都在 `core/ui/markdown/`（纯共享、无新依赖，Android 仍用 Markwon）；
+  渲染 `MarkdownText`/`markdownPlainText` 都在 `core/ui/markdown/`（纯共享、无新依赖；Android 的更新页与
+  更新日志也用这一套，Markwon 依赖已移除，桌面与安卓画出的说明是同一份文本）；
   `desktop-runtime` 的 `DesktopAppUpdateClient.releases()` 与更新检查共用 `offerableFor(channel)`
   过滤（有包有下载地址、stable 不列预发布），所以说明列出的版本就是它真会装的版本，见计划 §163。
   同一张卡还有 Android 的 `allow_unstable_updates`（`app-update-unstable`）：稳定版可以让更新器改跟 nightly 仓库，
