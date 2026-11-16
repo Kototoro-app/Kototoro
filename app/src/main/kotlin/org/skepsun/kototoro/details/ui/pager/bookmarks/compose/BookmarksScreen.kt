@@ -51,6 +51,7 @@ import org.skepsun.kototoro.details.ui.compose.state.DetailsPaneState
 import org.skepsun.kototoro.details.ui.compose.state.rememberDetailsPaneNestedScrollConnection
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.bookmarks.ui.compose.BookmarkCard
+import org.skepsun.kototoro.core.ui.compose.keepAboveWindowBottom
 import org.skepsun.kototoro.core.ui.compose.SelectionActionBar
 import org.skepsun.kototoro.core.ui.compose.SelectionBarIconButton
 import org.skepsun.kototoro.core.ui.compose.performSelectionHapticFeedback
@@ -148,7 +149,7 @@ fun BookmarksScreen(
             visible = selectedItemIds.isNotEmpty(),
             enter = androidx.compose.animation.slideInVertically { it } + androidx.compose.animation.fadeIn(),
             exit = androidx.compose.animation.slideOutVertically { it } + androidx.compose.animation.fadeOut(),
-            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp),
+            modifier = Modifier.align(Alignment.BottomCenter).keepAboveWindowBottom().padding(bottom = 16.dp),
         ) {
             SelectionActionBar(
                 selectedCount = selectedItemIds.size,

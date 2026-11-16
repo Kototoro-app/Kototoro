@@ -16,8 +16,17 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
@@ -122,4 +131,16 @@ fun SelectionBarIconButton(
         modifier = modifier.tvFocusable(shape = RoundedCornerShape(12.dp), addFocusTarget = false),
         content = content,
     )
+}
+
+/**
+ * Keeps a bottom-aligned bar on screen while its host hangs below the window, as a partly opened sheet does: the
+ * host's bottom edge is off screen there, so the bar is lifted by however much of it would be cut off.
+ */
+fun Modifier.keepAboveWindowBottom(): Modifier = composed {
+    val windowHeight = LocalWindowInfo.current.containerSize.height
+    var overflow by remember { mutableFloatStateOf(0f) }
+    onGloballyPositioned { coordinates ->
+        overflow = (coordinates.positionInWindow().y + coordinates.size.height - windowHeight).coerceAtLeast(0f)
+    }.graphicsLayer { translationY = -overflow }
 }
