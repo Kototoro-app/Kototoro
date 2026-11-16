@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.settings.compose
 
+import org.skepsun.kototoro.core.ui.settings.SettingsSearchLazyReveal
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -111,6 +112,7 @@ fun BackupsSettingsScreen(
         var isRestoreLatestModeDialogVisible by rememberSaveable { mutableStateOf(false) }
         var isClearRemoteBackupsConfirmVisible by rememberSaveable { mutableStateOf(false) }
         var isEnableWebDavConfirmVisible by rememberSaveable { mutableStateOf(false) }
+        SettingsSearchLazyReveal(listState)
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxWidth(),

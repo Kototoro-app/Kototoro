@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.settings.compose
 
+import org.skepsun.kototoro.core.ui.settings.SettingsSearchLazyReveal
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
@@ -73,6 +74,7 @@ fun DownloadsSettingsScreen(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
     ) { innerPadding ->
         val listState = rememberSaveable(saver = LazyListState.Saver) { LazyListState(0, 0) }
+        SettingsSearchLazyReveal(listState)
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxWidth(),

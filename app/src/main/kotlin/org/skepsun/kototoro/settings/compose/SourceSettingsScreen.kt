@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.settings.compose
 
+import org.skepsun.kototoro.core.ui.settings.SettingsSearchLazyReveal
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
@@ -128,6 +129,7 @@ fun SourceSettingsScreen(
         val systemBarsBottom = WindowInsets.systemBars.asPaddingValues().calculateBottomPadding()
         val navigationBarsBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
         val bottomInset = max(systemBarsBottom, navigationBarsBottom)
+        SettingsSearchLazyReveal(listState)
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxWidth(),

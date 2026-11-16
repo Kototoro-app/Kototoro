@@ -2,6 +2,7 @@ package org.skepsun.kototoro.settings.compose
 
 import androidx.compose.material3.TextButton
 import androidx.compose.ui.unit.sp
+import org.skepsun.kototoro.core.ui.settings.revealSettingsSearchTitle
 import org.skepsun.kototoro.core.ui.settings.PreferenceDialogContent
 import org.skepsun.kototoro.core.ui.settings.PreferenceDialog
 import org.skepsun.kototoro.core.ui.settings.PreferenceChoice
@@ -228,7 +229,7 @@ fun SettingsActionPreference(
             .fillMaxWidth()
             .tvFocusable(enabled = enabled, shape = RoundedCornerShape(12.dp), addFocusTarget = false)
             .clickable(enabled = enabled, onClick = onClick)
-            .settingsPreferenceLayout(enabled),
+            .settingsPreferenceLayout(enabled, searchTitle = title),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         SettingsLeadingIcon(
@@ -284,7 +285,7 @@ fun SettingsSplitSwitchPreference(
 ) {
     Row(
         modifier = modifier
-            .settingsPreferenceLayout(enabled),
+            .settingsPreferenceLayout(enabled, searchTitle = title),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Row(
@@ -343,7 +344,7 @@ fun SettingsInfoPreference(
 ) {
     Row(
         modifier = modifier
-            .settingsPreferenceLayout(enabled = true),
+            .settingsPreferenceLayout(enabled = true, searchTitle = title),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         SettingsLeadingIcon(
@@ -402,7 +403,7 @@ fun SettingsSwitchPreference(
                         )
                 },
             )
-            .settingsPreferenceLayout(enabled),
+            .settingsPreferenceLayout(enabled, searchTitle = title),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         SettingsLeadingIcon(
@@ -508,7 +509,7 @@ fun <T> SettingsChoicePreference(
                         .clickable(enabled = enabled) { isDialogVisible = true }
                 },
             )
-            .settingsPreferenceLayout(enabled),
+            .settingsPreferenceLayout(enabled, searchTitle = title),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         SettingsLeadingIcon(
@@ -695,7 +696,7 @@ fun <T> SettingsMultiChoicePreference(
             .clickable(enabled = enabled) {
                 isDialogVisible = true
             }
-            .settingsPreferenceLayout(enabled),
+            .settingsPreferenceLayout(enabled, searchTitle = title),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         SettingsLeadingIcon(
@@ -778,7 +779,7 @@ fun SettingsSliderPreference(
 
     Column(
         modifier = Modifier
-            .settingsPreferenceLayout(enabled),
+            .settingsPreferenceLayout(enabled, searchTitle = title),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Row(
@@ -885,7 +886,7 @@ fun SettingsTextInputPreference(
 
     Column(
         modifier = Modifier
-            .settingsPreferenceLayout(enabled),
+            .settingsPreferenceLayout(enabled, searchTitle = title),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -961,7 +962,7 @@ fun SettingsDialogTextPreference(
                 pendingValue = value
                 isDialogVisible = true
             }
-            .settingsPreferenceLayout(enabled),
+            .settingsPreferenceLayout(enabled, searchTitle = title),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         SettingsLeadingIcon(
@@ -1150,7 +1151,7 @@ fun SettingsReorderPreference(
             .clickable(enabled = enabled) {
                 isDialogVisible = true
             }
-            .settingsPreferenceLayout(enabled),
+            .settingsPreferenceLayout(enabled, searchTitle = title),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         SettingsLeadingIcon(
@@ -1228,12 +1229,14 @@ fun SettingsGroupDivider(
 }
 
 @Composable
-fun Modifier.settingsPreferenceLayout(enabled: Boolean): Modifier {
+fun Modifier.settingsPreferenceLayout(enabled: Boolean, searchTitle: String? = null): Modifier {
     val isIosStyle = LocalIsIosInterfaceStyle.current
     val tokens = LocalInterfaceStyleTokens.current
+    // Every row built on this layout answers to a settings search for its own title.
+    val searchable = if (searchTitle == null) this else revealSettingsSearchTitle(searchTitle)
     // Legacy MATERIAL_3 was normalized to MATERIAL_3_EXPRESSIVE, so the branch below always
     // applies; keep the iOS vs Material split via tokens only.
-    return fillMaxWidth()
+    return searchable.fillMaxWidth()
         .alpha(if (enabled) 1f else 0.5f)
         .heightIn(min = if (isIosStyle) 56.dp else tokens.controlHeight)
         .padding(horizontal = 16.dp, vertical = if (isIosStyle) 8.dp else 10.dp)

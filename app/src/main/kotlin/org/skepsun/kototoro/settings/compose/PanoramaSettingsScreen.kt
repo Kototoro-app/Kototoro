@@ -1,5 +1,7 @@
 package org.skepsun.kototoro.settings.compose
 
+import org.skepsun.kototoro.core.ui.settings.SettingsSearchLazyReveal
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -50,7 +52,10 @@ fun PanoramaSettingsScreen(
     onReset: () -> Unit,
 ) {
     Surface(modifier = modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+        val listState = rememberLazyListState()
+        SettingsSearchLazyReveal(listState)
         LazyColumn(
+            state = listState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
                 start = SettingsContentHorizontalPadding,

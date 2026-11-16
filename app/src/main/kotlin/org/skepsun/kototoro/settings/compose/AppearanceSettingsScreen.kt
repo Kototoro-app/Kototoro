@@ -1,5 +1,7 @@
 package org.skepsun.kototoro.settings.compose
 
+import org.skepsun.kototoro.core.ui.settings.SettingsSearchLazyReveal
+import androidx.compose.foundation.lazy.rememberLazyListState
 import com.kyant.backdrop.isRenderEffectSupported
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
@@ -390,6 +392,7 @@ fun AppearanceSettingsScreen(
         color = MaterialTheme.colorScheme.background,
     ) {
         val listState = rememberSaveable(saver = LazyListState.Saver) { LazyListState(0, 0) }
+        SettingsSearchLazyReveal(listState)
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
@@ -1109,7 +1112,10 @@ private fun AppearanceImmersiveSettingsScreen(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background,
     ) {
+        val listState = rememberLazyListState()
+        SettingsSearchLazyReveal(listState)
         LazyColumn(
+            state = listState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
                 start = SettingsContentHorizontalPadding,
@@ -1188,7 +1194,10 @@ private fun AppearanceGlassSettingsScreen(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background,
     ) {
+        val listState = rememberLazyListState()
+        SettingsSearchLazyReveal(listState)
         LazyColumn(
+            state = listState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
                 start = SettingsContentHorizontalPadding,
@@ -1234,7 +1243,10 @@ private fun AppearanceSubpage(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background,
     ) {
+        val listState = rememberLazyListState()
+        SettingsSearchLazyReveal(listState)
         LazyColumn(
+            state = listState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
                 start = SettingsContentHorizontalPadding,

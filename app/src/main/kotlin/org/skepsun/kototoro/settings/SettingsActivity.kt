@@ -838,7 +838,7 @@ class SettingsActivity :
 
     private fun navigateToPreference(item: SettingsItem) {
         settingsSearchDestination = item.destination
-        settingsSearchTarget = SettingsSearchTarget(item.key, ++settingsSearchRequestId)
+        settingsSearchTarget = SettingsSearchTarget(item.key, ++settingsSearchRequestId, item.title.toString())
         keepSearchForDestination = item.destination
         val args = buildBundle(1) {
             putString(ARG_PREF_KEY, item.key)
