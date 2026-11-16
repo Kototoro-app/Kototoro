@@ -1431,6 +1431,8 @@
     <string name="reader_controls_in_bottom_bar">阅读器底部控制栏</string>
     <string name="reader_floating_controls">阅读器悬浮按钮</string>
     <string name="reader_floating_controls_summary">最多选择 %1$d 个悬浮按钮</string>
+    <string name="reader_floating_controls_pinned">悬浮按钮常驻</string>
+    <string name="reader_floating_controls_pinned_summary">阅读器隐藏其他控件时，悬浮按钮仍然留在屏幕上；关闭时和其他控件一样，点一下屏幕才出现</string>
     <string name="reader_control_labels">显示悬浮按钮名称</string>
     <string name="reader_control_labels_summary">在漫画和小说阅读器的悬浮按钮中显示操作名称</string>
     <string name="disable_captcha_notifications">禁用人机验证通知</string>
