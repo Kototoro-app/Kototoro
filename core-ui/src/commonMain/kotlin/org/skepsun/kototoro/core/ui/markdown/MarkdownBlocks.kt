@@ -3,8 +3,8 @@ package org.skepsun.kototoro.core.ui.markdown
 /**
  * One block of a Markdown document, as far as release notes and changelogs use them.
  *
- * Android renders those with Markwon; the shared hosts render this subset instead, so the text that reaches the
- * screen is the same on both. Anything outside the subset (tables, footnotes, raw HTML beyond a line break) is
+ * Every screen that shows them renders this subset - the Android changelog and update page included - so the text
+ * that reaches the screen is the same on every host. Anything outside the subset (tables, footnotes, raw HTML beyond a line break) is
  * kept as paragraph text rather than dropped, so a note never silently loses its content.
  */
 sealed interface MarkdownBlock {
@@ -313,4 +313,24 @@ private fun stripComments(markdown: String): String {
         index = if (end < 0) markdown.length else end + 3
     }
     return builder.toString()
+}
+
+/**
+ * [markdown] with every single line break marked as a hard break.
+ *
+ * A description is typed line by line ("**Year:** 2019\n**Status:** Ongoing"), and Markdown would turn those breaks
+ * into spaces; release notes, which [parseMarkdownBlocks] was written for, are prose and want that. Blank lines,
+ * fences, list markers and emphasis are untouched, so anything else parses exactly as before.
+ */
+fun markdownKeepingLineBreaks(markdown: String): String {
+    if (markdown.indexOf('\n') < 0 && markdown.indexOf('\r') < 0) return markdown
+    return markdown.replace("\r\n", "\n").replace('\r', '\n')
+        .split('\n')
+        .joinToString("\n") { line ->
+            when {
+                line.isBlank() -> line
+                line.endsWith("  ") || line.endsWith("\\") -> line
+                else -> "$line  "
+            }
+        }
 }

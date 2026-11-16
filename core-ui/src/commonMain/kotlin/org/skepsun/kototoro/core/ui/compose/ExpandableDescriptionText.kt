@@ -23,11 +23,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
+import org.skepsun.kototoro.core.ui.markdown.markdownAnnotatedString
 
 /**
  * The details description (Android's `DetailsHeader`): collapsed to [collapsedMaxLines] with the last lines fading
  * out, and a click on the text toggles the whole of it. Only text that actually overflows becomes clickable, so a
  * short description stays plain text.
+ *
+ * The text is Markdown, the way a source writes it (`**Year:**`, `[AniList](…)`, bullets); it is flattened into one
+ * annotated string so that the line limiting here keeps working, with links staying clickable.
  */
 @Composable
 fun ExpandableDescriptionText(
@@ -41,7 +45,10 @@ fun ExpandableDescriptionText(
     var canExpand by remember(text) { mutableStateOf(false) }
     val baseStyle = MaterialTheme.typography.bodyMedium
     Text(
-        text = text,
+        text = markdownAnnotatedString(
+            markdown = text,
+            style = if (lineHeight != TextUnit.Unspecified) baseStyle.copy(lineHeight = lineHeight) else baseStyle,
+        ),
         style = if (lineHeight != TextUnit.Unspecified) baseStyle.copy(lineHeight = lineHeight) else baseStyle,
         color = MaterialTheme.colorScheme.onSurface,
         modifier = modifier
