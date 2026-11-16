@@ -1,5 +1,18 @@
 package org.skepsun.kototoro.settings.compose
 
+import androidx.compose.ui.platform.LocalContext
+import com.kyant.backdrop.isRenderEffectSupported
+import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.ui.glass.rememberGlassPrefs
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import org.skepsun.kototoro.core.ui.compose.ImmersiveEdge
+import org.skepsun.kototoro.core.ui.compose.ImmersiveEdgeBlur
+import org.skepsun.kototoro.core.ui.compose.ImmersiveEdgeBlurTintScale
+import org.skepsun.kototoro.core.ui.compose.ImmersiveEdgeFeatherExtension
+import org.skepsun.kototoro.core.ui.compose.immersiveEdgeGradientColors
+import org.skepsun.kototoro.core.ui.glass.LocalGlassPrefs
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -328,17 +341,47 @@ internal fun SettingsTopBarSurface(content: @Composable () -> Unit) {
     val useGlassTopBar = LocalInterfaceStyle.current == InterfaceStyle.IOS &&
         !LocalUiPresentationConfig.current.isTv
     if (useGlassTopBar) {
-        GlassSurface(
-            modifier = Modifier.fillMaxWidth(),
-            style = GlassDefaults.topBarChromeStyle().copy(shadowElevation = 0.dp),
-            shape = RoundedRectangle(0.dp),
-            componentRole = GlassComponentRole.TopBar,
+        // The same feathered edge as the main shell: the page fades out under the floating controls
+        // instead of passing behind a full-width glass band with a hard lower border.
+        val backdrop = LocalLiquidGlassBackdrop.current
+        // Only the main shell provides the glass prefs; this activity reads the same settings itself.
+        val appContext = LocalContext.current.applicationContext
+        val glassPrefs = LocalGlassPrefs.current ?: rememberGlassPrefs(remember(appContext) { AppSettings(appContext) })
+        val blurRadius = if (backdrop != null && isRenderEffectSupported()) {
+            glassPrefs.edgeBlurRadiusDp.coerceAtLeast(0).dp
+        } else {
+            0.dp
+        }
+        val strength = glassPrefs.immersiveStrengthPercent.coerceIn(0, 100) / 100f
+        val tintScale = if (blurRadius > 0.dp) ImmersiveEdgeBlurTintScale else 1f
+        val tint = MaterialTheme.colorScheme.surface.copy(alpha = (0.72f + 0.26f * strength) * tintScale)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .drawBehind {
+                    // Past the bar's own bounds, so the fade ends inside the content, not on a line.
+                    val height = size.height + ImmersiveEdgeFeatherExtension.toPx()
+                    drawRect(
+                        brush = Brush.verticalGradient(
+                            colors = immersiveEdgeGradientColors(tint, ImmersiveEdge.TOP),
+                            startY = 0f,
+                            endY = height,
+                        ),
+                        size = Size(size.width, height),
+                    )
+                },
         ) {
-            // A full-width bar has a title that rows scroll directly under, so on top of the plate
-            // every chrome surface gets it takes a second one to keep the two from mixing.
-            Box(modifier = Modifier.background(settingsScreenBackgroundColor().copy(alpha = 0.40f))) {
-                topBarContent()
+            if (backdrop != null && blurRadius > 0.dp) {
+                // matchParentSize fixes the band to the bar; the height argument is then not consulted.
+                ImmersiveEdgeBlur(
+                    backdrop = backdrop,
+                    edge = ImmersiveEdge.TOP,
+                    height = 0.dp,
+                    radius = blurRadius,
+                    modifier = Modifier.matchParentSize(),
+                )
             }
+            topBarContent()
         }
     } else {
         Box(
