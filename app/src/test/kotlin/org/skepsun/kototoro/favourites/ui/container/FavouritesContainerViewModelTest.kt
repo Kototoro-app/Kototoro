@@ -126,7 +126,12 @@ class FavouritesContainerViewModelTest {
             mangaRepositoryFactory = mockk<ContentRepository.Factory>(relaxed = true),
             mangaDataRepository = mockk<ContentDataRepository>(relaxed = true),
             localStorageChanges = MutableSharedFlow<LocalContent?>(),
-            networkState = mockk<NetworkState> { every { value } returns true },
+            // The container seeds the Downloaded quick filter from `hasNetwork` once per page,
+            // so an online device must answer that too, not just `value`.
+            networkState = mockk<NetworkState> {
+                every { value } returns true
+                every { hasNetwork } returns true
+            },
             globalFavoritesState = globalFavoritesState,
             sourceGroupManager = mockk<SourceGroupManager>(relaxed = true),
             spaceBrowseScope = spaceBrowseScope,
