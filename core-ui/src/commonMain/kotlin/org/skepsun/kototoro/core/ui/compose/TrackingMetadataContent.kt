@@ -180,10 +180,11 @@ private fun TrackingProgressEditor(
     val parsedProgress = progress.toIntOrNull()?.takeIf { it >= 0 }
     val parsedRating = rating.toFloatOrNull()?.takeIf { it.isFinite() && it in 0f..10f }
     val changed = parsedProgress != slot.progress || parsedRating != slot.rating * 10f || status != slot.status
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
         items(statuses.size) { index ->
-            FilterChip(selected = status == index, onClick = { status = index }, enabled = !busy,
-                label = { Text(statuses[index]) })
+            org.skepsun.kototoro.core.ui.chips.CompactChoicePill(selected = status == index, onClick = { status = index }, enabled = !busy,
+                label = statuses[index],
+                position = org.skepsun.kototoro.core.ui.chips.choicePillPosition(index, statuses.size))
         }
     }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -73,7 +74,7 @@ fun ChapterBranchChips(
     ChapterFilterChips(options, key = { it.name ?: "\u0000" },
         label = { chapterBranchChipLabel(title(it.name), it.chaptersCount) },
         selected = { it.name == selected }, onClick = { onSelect(it.name) }, modifier = modifier,
-        enabled = enabled, chipModifier = chipModifier)
+        enabled = enabled, connected = true, chipModifier = chipModifier)
 }
 
 /** Android's chapter filter rail, with platform models and TV focus adapted by its callers. */
@@ -86,6 +87,7 @@ fun <T> ChapterFilterChips(
     onClick: (T) -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    connected: Boolean = false,
     chipModifier: @Composable (T) -> Modifier = { Modifier },
 ) {
     if (options.isEmpty()) return
@@ -94,15 +96,17 @@ fun <T> ChapterFilterChips(
         state = state,
         modifier = modifier.fillMaxWidth().mouseDragScroll(state, Orientation.Horizontal),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(if (connected) 2.dp else 6.dp),
     ) {
-        items(options, key = key) { option ->
-            FilterChip(
+        itemsIndexed(options, key = { _, option -> key(option) }) { index, option ->
+            org.skepsun.kototoro.core.ui.chips.CompactChoicePill(
                 selected = selected(option),
                 onClick = { onClick(option) },
                 enabled = enabled,
                 modifier = chipModifier(option),
-                label = { Text(label(option)) },
+                label = label(option),
+                position = if (connected) org.skepsun.kototoro.core.ui.chips.choicePillPosition(index, options.size)
+                    else org.skepsun.kototoro.core.ui.chips.ChoicePillPosition.SINGLE,
             )
         }
     }

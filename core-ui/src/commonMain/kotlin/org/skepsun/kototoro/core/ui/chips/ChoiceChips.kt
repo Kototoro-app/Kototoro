@@ -36,7 +36,7 @@ fun ChoiceChipFlow(
     )
 }
 
-/** One chip of [ChoiceChipFlow]: Android's 36dp height and label style, so a shared row looks the same on both hosts. */
+/** Existing option sets use the shared compact toggle treatment on both hosts. */
 @Composable
 fun ChoiceChip(
     selected: Boolean,
@@ -46,14 +46,12 @@ fun ChoiceChip(
     trailingIcon: (@Composable () -> Unit)? = null,
     label: @Composable () -> Unit,
 ) {
-    FilterChip(
+    CompactChoicePill(
         selected = selected,
         onClick = onClick,
-        modifier = modifier.heightIn(min = 36.dp),
+        modifier = modifier,
         enabled = enabled,
-        label = {
-            ProvideTextStyle(MaterialTheme.typography.labelLarge) { label() }
-        },
         trailingIcon = trailingIcon,
+        label = label,
     )
 }

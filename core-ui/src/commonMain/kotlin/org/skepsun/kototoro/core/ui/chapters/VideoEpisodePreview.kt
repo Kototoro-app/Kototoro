@@ -176,13 +176,14 @@ fun VideoEpisodePreviewSection(
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
             ) {
-                lines.forEach { line ->
-                    FilterChip(
+                lines.forEachIndexed { index, line ->
+                    org.skepsun.kototoro.core.ui.chips.CompactChoicePill(
                         selected = line.isSelected,
                         onClick = { onSelectLine(line.branch) },
-                        label = { Text(line.label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        label = line.label,
+                        position = org.skepsun.kototoro.core.ui.chips.choicePillPosition(index, lines.size),
                         modifier = Modifier
                             .tvFocusable(shape = RoundedCornerShape(999.dp), addFocusTarget = false)
                             .testTag("video-line:${line.label}"),

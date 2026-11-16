@@ -190,20 +190,15 @@ fun CompactFilterChip(
     icon: (@Composable () -> Unit)? = null,
     enabled: Boolean = true,
 ) {
-    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 28.dp) {
-        FilterChip(
-            selected = selected,
-            onClick = onClick,
-            enabled = enabled,
-            modifier = modifier
-                .heightIn(min = 28.dp)
-                .tvFocusable(enabled = enabled, shape = FilterControlRingShape, addFocusTarget = false),
-            leadingIcon = icon,
-            label = {
-                Text(text = label, style = MaterialTheme.typography.labelSmall)
-            },
-        )
-    }
+    org.skepsun.kototoro.core.ui.chips.CompactChoicePill(
+        selected = selected,
+        onClick = onClick,
+        label = label,
+        modifier = modifier,
+        enabled = enabled,
+        leadingIcon = icon,
+        dense = true,
+    )
 }
 
 /**
@@ -220,18 +215,15 @@ fun FilterFacetChip(
     trailingIcon: (@Composable () -> Unit)? = null,
     enabled: Boolean = true,
 ) {
-    FilterChip(
+    org.skepsun.kototoro.core.ui.chips.CompactChoicePill(
         selected = selected,
         onClick = onClick,
+        label = label,
+        modifier = modifier.fillMaxWidth(),
         enabled = enabled,
-        modifier = modifier
-            .fillMaxWidth()
-            .tvFocusable(enabled = enabled, shape = FilterControlRingShape, addFocusTarget = false),
         leadingIcon = leadingIcon,
         trailingIcon = trailingIcon,
-        label = {
-            Text(text = label, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        },
+        dense = true,
     )
 }
 

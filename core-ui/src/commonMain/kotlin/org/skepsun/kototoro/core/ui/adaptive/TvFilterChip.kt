@@ -38,10 +38,10 @@ fun TvFilterChip(
     enabled: Boolean = true,
 ) {
     if (!LocalUiPresentationConfig.current.isTv) {
-        FilterChip(
+        org.skepsun.kototoro.core.ui.chips.CompactChoicePill(
             selected = selected,
             onClick = onClick,
-            label = { Text(label) },
+            label = label,
             modifier = modifier,
             enabled = enabled,
         )

@@ -211,11 +211,11 @@ private fun <T> SuggestionFilterRow(
     Text(title, fontSize = 12.sp, color = Muted, modifier = Modifier.padding(top = 10.dp))
     LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         item("all") {
-            FilterChip(selected = selected.isEmpty(), onClick = onAll, label = { Text(allLabel) },
+            org.skepsun.kototoro.core.ui.chips.CompactChoicePill(selected = selected.isEmpty(), onClick = onAll, label = { Text(allLabel) },
                 modifier = Modifier.testTag(allTag))
         }
         items(options) { option ->
-            FilterChip(selected = option in selected, onClick = { onToggle(option) },
+            org.skepsun.kototoro.core.ui.chips.CompactChoicePill(selected = option in selected, onClick = { onToggle(option) },
                 label = { Text(label(option)) }, modifier = Modifier.testTag("$optionTag:$option"))
         }
     }
