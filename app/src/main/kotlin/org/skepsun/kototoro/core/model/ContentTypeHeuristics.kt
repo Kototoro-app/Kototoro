@@ -2,8 +2,17 @@ package org.skepsun.kototoro.core.model
 
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentChapter
+import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.model.ContentType
 import java.util.Locale
+
+/**
+ * Url-shape guessing is only trustworthy when the source does not state its own kind: local
+ * entries (legacy imports are still [LocalMangaSource]) and sources of unknown type. A remote
+ * parser that declares a concrete type stays authoritative, otherwise its plain site-relative
+ * routes (`/photos-index-aid-1.html`, `/video/123`) would be read as file names.
+ */
+private fun ContentSource.mayInferTypeFromUrl(): Boolean = isLocal || getContentType() == ContentType.OTHER
 
 private val videoExtensions = setOf(
     ".m3u8",
@@ -17,6 +26,18 @@ private val videoExtensions = setOf(
     ".wmv",
 )
 
+/**
+ * True when the url points at a media file rather than at a page. Such a url is stronger
+ * evidence than the declared type, because a gallery source can host images and videos alike.
+ */
+fun String?.looksLikeVideoFileUrl(): Boolean {
+    val normalized = this?.trim()?.lowercase(Locale.ROOT).orEmpty()
+    if (normalized.isBlank()) {
+        return false
+    }
+    return videoExtensions.any { normalized.endsWith(it) || normalized.contains("$it?") || normalized.contains("$it#") }
+}
+
 fun String?.looksLikeVideoUrl(): Boolean {
     val normalized = this?.trim()?.lowercase(Locale.ROOT).orEmpty()
     if (normalized.isBlank()) {
@@ -25,21 +46,29 @@ fun String?.looksLikeVideoUrl(): Boolean {
     if (normalized.contains("/video/")) {
         return true
     }
-    return videoExtensions.any { normalized.endsWith(it) || normalized.contains("$it?") || normalized.contains("$it#") }
+    return normalized.looksLikeVideoFileUrl()
 }
 
 fun ContentChapter.looksLikeVideoChapter(): Boolean {
-    if (source.getContentType().let { it == ContentType.VIDEO || it == ContentType.HENTAI_VIDEO }) {
+    val declaredType = source.getContentType()
+    if (declaredType == ContentType.VIDEO || declaredType == ContentType.HENTAI_VIDEO) {
         return true
     }
-    return url.looksLikeVideoUrl()
+    if (url.looksLikeVideoFileUrl()) {
+        return true
+    }
+    return source.mayInferTypeFromUrl() && url.looksLikeVideoUrl()
 }
 
 fun Content.looksLikeLocalVideoContent(): Boolean {
-    if (source.getContentType().let { it == ContentType.VIDEO || it == ContentType.HENTAI_VIDEO }) {
+    val declaredType = source.getContentType()
+    if (declaredType == ContentType.VIDEO || declaredType == ContentType.HENTAI_VIDEO) {
         return true
     }
-    if (url.looksLikeVideoUrl() || publicUrl.looksLikeVideoUrl()) {
+    if (url.looksLikeVideoFileUrl() || publicUrl.looksLikeVideoFileUrl()) {
+        return true
+    }
+    if (source.mayInferTypeFromUrl() && (url.looksLikeVideoUrl() || publicUrl.looksLikeVideoUrl())) {
         return true
     }
     return chapters?.any { it.looksLikeVideoChapter() } == true
@@ -73,15 +102,22 @@ fun String?.looksLikeNovelUrl(): Boolean {
 }
 
 fun ContentChapter.looksLikeNovelChapter(): Boolean {
-    if (source.getContentType().let { it == ContentType.NOVEL || it == ContentType.HENTAI_NOVEL }) {
+    val declaredType = source.getContentType()
+    if (declaredType == ContentType.NOVEL || declaredType == ContentType.HENTAI_NOVEL) {
         return true
     }
-    return url.looksLikeNovelUrl()
+    return source.mayInferTypeFromUrl() && url.looksLikeNovelUrl()
 }
 
 fun Content.looksLikeLocalNovelContent(): Boolean {
-    if (source.getContentType().let { it == ContentType.NOVEL || it == ContentType.HENTAI_NOVEL }) {
+    val declaredType = source.getContentType()
+    if (declaredType == ContentType.NOVEL || declaredType == ContentType.HENTAI_NOVEL) {
         return true
+    }
+    // Media file urls are handled by [looksLikeLocalVideoContent]; here the ".html" suffix of a
+    // parser route is not evidence at all, so a declared type always wins.
+    if (!source.mayInferTypeFromUrl()) {
+        return false
     }
     if (url.looksLikeNovelUrl() || publicUrl.looksLikeNovelUrl()) {
         return true
