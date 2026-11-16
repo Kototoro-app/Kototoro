@@ -8,6 +8,13 @@ import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderPanelIcons
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChanged
+import androidx.compose.runtime.remember
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
@@ -20,6 +27,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -112,6 +120,7 @@ fun SettingsPreferenceGroup(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun SettingsItemGroup(
     itemCount: Int,
@@ -148,15 +157,28 @@ fun SettingsItemGroup(
             modifier = modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(tokens.settingsItemGap),
         ) {
+            val pressMorph = LocalMaterialExpressiveComponentsEnabled.current
             repeat(itemCount) { index ->
+                // Expressive segmented lists round a segment out to the group's outer corner while it is pressed.
+                var pressed by remember { mutableStateOf(false) }
+                val innerCornerRadius by animateDpAsState(
+                    targetValue = if (pressed) {
+                        tokens.settingsGroupOuterCornerRadius
+                    } else {
+                        tokens.settingsGroupInnerCornerRadius
+                    },
+                    animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
+                    label = "settings_segment_press",
+                )
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .then(if (pressMorph) Modifier.observeRowPress { pressed = it } else Modifier)
                         .then(itemModifier(index)),
                     shape = settingsGroupItemShape(
                         position = resolveSettingsGroupItemPosition(index, itemCount),
                         outerCornerRadius = tokens.settingsGroupOuterCornerRadius,
-                        innerCornerRadius = tokens.settingsGroupInnerCornerRadius,
+                        innerCornerRadius = innerCornerRadius.coerceAtLeast(0.dp),
                     ),
                     color = containerColor,
                 ) {
@@ -164,6 +186,53 @@ fun SettingsItemGroup(
                 }
             }
         }
+    }
+}
+
+/** A press inside a scrolling list waits this long, so a scroll gesture does not flash every row it starts on. */
+private const val RowPressDelayMillis = 90L
+
+/** A tap shorter than the delay still shows the press for this long. */
+private const val RowTapPulseMillis = 90L
+
+/**
+ * Reports whether a control inside this row is being pressed, without taking part in the gesture: the row's own
+ * clickable/toggleable keeps the click, and a row with nothing to press never reports.
+ */
+private fun Modifier.observeRowPress(onPressedChange: (Boolean) -> Unit): Modifier = pointerInput(Unit) {
+    awaitEachGesture {
+        // Final pass: by now the row's control has consumed the down, and a scroll has consumed its moves.
+        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Final)
+        if (!down.isConsumed) return@awaitEachGesture
+        var pressed = false
+        var waited = 0L
+        var released = false
+        while (true) {
+            val event = if (pressed) {
+                awaitPointerEvent(PointerEventPass.Final)
+            } else {
+                withTimeoutOrNull((RowPressDelayMillis - waited).coerceAtLeast(1L)) {
+                    awaitPointerEvent(PointerEventPass.Final)
+                }
+            }
+            if (event == null) {
+                pressed = true
+                onPressedChange(true)
+                continue
+            }
+            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+            waited = change.uptimeMillis - down.uptimeMillis
+            if (!change.pressed) {
+                released = true
+                break
+            }
+            if (change.isConsumed && change.positionChanged()) break
+        }
+        if (!pressed && released) {
+            onPressedChange(true)
+            withTimeoutOrNull(RowTapPulseMillis) { while (true) awaitPointerEvent(PointerEventPass.Final) }
+        }
+        onPressedChange(false)
     }
 }
 
