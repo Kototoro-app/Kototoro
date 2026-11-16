@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshState
@@ -124,7 +125,7 @@ fun KototoroLinearProgressIndicator(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun KototoroPullToRefreshBox(
     isRefreshing: Boolean,
@@ -270,16 +271,26 @@ fun KototoroPullToRefreshBox(
         content()
 
         if (isRefreshing || displayedDistancePx > 0.5f) {
-            PullToRefreshDefaults.Indicator(
-                state = indicatorState,
-                isRefreshing = isRefreshing,
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .offset(
-                        y = indicatorTopInset.calculateTopPadding() +
-                            with(density) { (displayedDistancePx * indicatorOffsetFactor).toDp() },
-                    ),
-            )
+            val indicatorModifier = Modifier
+                .align(Alignment.TopCenter)
+                .offset(
+                    y = indicatorTopInset.calculateTopPadding() +
+                        with(density) { (displayedDistancePx * indicatorOffsetFactor).toDp() },
+                )
+            if (LocalMaterialExpressiveComponentsEnabled.current) {
+                // Expressive: the morphing loading indicator instead of the spinning arrow.
+                PullToRefreshDefaults.LoadingIndicator(
+                    state = indicatorState,
+                    isRefreshing = isRefreshing,
+                    modifier = indicatorModifier,
+                )
+            } else {
+                PullToRefreshDefaults.Indicator(
+                    state = indicatorState,
+                    isRefreshing = isRefreshing,
+                    modifier = indicatorModifier,
+                )
+            }
         }
     }
 }
