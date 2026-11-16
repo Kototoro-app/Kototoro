@@ -14,6 +14,7 @@ import okio.buffer
 import okio.openZip
 import org.jetbrains.annotations.Blocking
 import org.skepsun.kototoro.core.util.ext.toUnderlyingZipUri
+import org.skepsun.kototoro.core.util.zip.ZipEntryNames
 import java.io.Closeable
 import java.io.FileInputStream
 import java.io.FileNotFoundException
@@ -43,6 +44,11 @@ class ContentZipArchive private constructor(
     /** The archive's entries rooted at `/`, readable until this archive is closed. */
     val fileSystem: FileSystem by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         ChannelFileSystem().openZip(ARCHIVE_PATH)
+    }
+
+    /** The entry names the archive's author wrote; readers decode them as UTF-8 whatever the ZIP flag says (#682). */
+    val entryNames: ZipEntryNames by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        ZipEntryNames.read(channel)
     }
 
     override fun close() {

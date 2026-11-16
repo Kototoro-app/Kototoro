@@ -37,6 +37,7 @@ import org.skepsun.kototoro.core.util.ext.isFileUri
 import org.skepsun.kototoro.core.util.ext.isImage
 import org.skepsun.kototoro.core.util.ext.isRegularFile
 import org.skepsun.kototoro.core.util.ext.isZipUri
+import org.skepsun.kototoro.core.util.zip.ZipEntryNames
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
 import org.skepsun.kototoro.core.util.ext.toFileNameSafe
 import org.skepsun.kototoro.core.util.ext.isNetworkUri
@@ -340,6 +341,9 @@ class LocalContentParser {
                 else if (flatFiles.any { it.name.endsWith(".epub", true) || it.name.endsWith(".txt", true) }) inferedSource = org.skepsun.kototoro.core.model.LocalNovelSource
 
                 var detectedChapters: List<Pair<ContentChapter, String>>? = null
+                // A chapter of an archive root is one of its entries, and an entry name is only
+                // readable once its raw bytes are decoded (#682). Directories never need this.
+                val entryNames = lazy { readEntryNames() }
                 val shouldGenerateIndex = rootFile.isDirectory && rootFile.canWrite() && fileSystem == okio.FileSystem.SYSTEM
                 if (withDetails || shouldGenerateIndex) {
                     var detectedSource: org.skepsun.kototoro.parsers.model.ContentSource = org.skepsun.kototoro.core.model.LocalMangaSource
@@ -373,7 +377,8 @@ class LocalContentParser {
                         }.toString().removePrefix(okio.Path.DIRECTORY_SEPARATOR)
                         val chapter = ContentChapter(
                             id = "$i$s".longHashCode(),
-                            title = p.userFriendlyName().takeIf { it.isNotBlank() } ?: "1",
+                            title = entryNames.value.display(p.name)
+                                .userFriendlyName().takeIf { it.isNotBlank() } ?: "1",
                             number = 0f,
                             volume = 0,
                             source = detectedSource,
@@ -1053,7 +1058,17 @@ class LocalContentParser {
             e.printStackTraceDebug()
     }.getOrNull()
 
-    private fun Path.userFriendlyName(): String = name.substringBeforeLast('.')
+    /**
+     * The entry names the archive's author wrote. An archive behind SAF already holds the channel it
+     * was opened with, so only a plain file has to be read again.
+     */
+    private fun readEntryNames(): ZipEntryNames = when {
+        archive != null -> archive.entryNames
+        rootFile.isFile -> ZipEntryNames.read(rootFile)
+        else -> ZipEntryNames.EMPTY
+    }
+
+    private fun String.userFriendlyName(): String = substringBeforeLast('.')
         .replace('_', ' ')
         .toTitleCase()
 
