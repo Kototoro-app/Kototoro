@@ -10,6 +10,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import org.skepsun.kototoro.core.ui.buttons.Button
+import org.skepsun.kototoro.core.ui.buttons.TextButton
 import org.skepsun.kototoro.core.ui.extensions.ExtensionRepositoryCard
 import org.skepsun.kototoro.desktop.runtime.DesktopJsonSource
 import org.skepsun.kototoro.tvbox.TvBoxStoredConfig

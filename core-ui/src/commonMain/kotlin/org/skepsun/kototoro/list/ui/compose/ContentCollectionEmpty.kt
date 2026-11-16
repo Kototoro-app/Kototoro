@@ -6,6 +6,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import org.skepsun.kototoro.core.ui.buttons.Button
 
 /** Android's empty collection presentation, with host-resolved text, optional icon and recovery action. */
 @Composable

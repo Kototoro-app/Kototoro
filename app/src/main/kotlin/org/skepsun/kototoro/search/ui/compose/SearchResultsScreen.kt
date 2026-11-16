@@ -31,14 +31,11 @@ import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -83,6 +80,9 @@ import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
+import org.skepsun.kototoro.core.ui.buttons.Button
+import org.skepsun.kototoro.core.ui.buttons.FilledIconButton
+import org.skepsun.kototoro.core.ui.buttons.IconButton
 import org.skepsun.kototoro.core.ui.compose.CompactPosterCardStyle
 import org.skepsun.kototoro.core.ui.compose.HorizontalRailAnimatedVisibility
 import org.skepsun.kototoro.core.ui.compose.rememberHorizontalRailScrollIntensity
@@ -219,7 +219,7 @@ fun SearchResultsRoute(
                     if (matches.isEmpty()) item { Text(stringResource(R.string.nothing_found)) }
                     items(matches.size) { index ->
                         val match = matches[index]
-                        androidx.compose.material3.TextButton(onClick = {
+                        org.skepsun.kototoro.core.ui.buttons.TextButton(onClick = {
                             viewModel.dismissFavouriteCategories()
                             onOpenFavouriteCategory(match, viewModel.query)
                         }) {
@@ -229,7 +229,7 @@ fun SearchResultsRoute(
                 }
             },
             confirmButton = {
-                androidx.compose.material3.TextButton(onClick = viewModel::dismissFavouriteCategories) {
+                org.skepsun.kototoro.core.ui.buttons.TextButton(onClick = viewModel::dismissFavouriteCategories) {
                     Text(stringResource(android.R.string.cancel))
                 }
             },

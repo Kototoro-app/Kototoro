@@ -1,12 +1,12 @@
 package org.skepsun.kototoro.desktop.app
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import org.skepsun.kototoro.core.ui.buttons.OutlinedButton
 import org.skepsun.kototoro.core.ui.settings.ProxyMode
 import org.skepsun.kototoro.core.ui.settings.ProxySettingsContent
 import org.skepsun.kototoro.core.ui.settings.ProxySettingsUiState

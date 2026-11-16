@@ -41,7 +41,6 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
@@ -93,6 +92,7 @@ import androidx.compose.ui.zIndex
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.prefs.FavoritesTabsPosition
 import org.skepsun.kototoro.core.prefs.TopBarStyle
+import org.skepsun.kototoro.core.ui.buttons.IconButton
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import kotlinx.coroutines.delay
 import org.skepsun.kototoro.R

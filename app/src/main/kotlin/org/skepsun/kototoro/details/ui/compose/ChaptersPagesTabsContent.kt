@@ -649,7 +649,7 @@ private fun MetadataChapterDialog(
         },
         confirmButton = {
             if (chapter.url.isNotBlank()) {
-                androidx.compose.material3.TextButton(onClick = onOpenBrowser) {
+                org.skepsun.kototoro.core.ui.buttons.TextButton(onClick = onOpenBrowser) {
                     Icon(
                         painter = painterResource(R.drawable.ic_open_external),
                         contentDescription = null,
@@ -661,7 +661,7 @@ private fun MetadataChapterDialog(
             }
         },
         dismissButton = {
-            androidx.compose.material3.TextButton(onClick = onDismissRequest) {
+            org.skepsun.kototoro.core.ui.buttons.TextButton(onClick = onDismissRequest) {
                 Text(stringResource(android.R.string.cancel))
             }
         },

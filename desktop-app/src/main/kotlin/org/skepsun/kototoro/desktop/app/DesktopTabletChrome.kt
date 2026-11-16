@@ -4,6 +4,7 @@ import org.skepsun.kototoro.core.details.DetailsChapterRef
 import org.skepsun.kototoro.core.appearance.VisualPreferenceKeys
 import org.skepsun.kototoro.core.appearance.VisualPreset
 import org.skepsun.kototoro.core.appearance.VisualPresets
+import org.skepsun.kototoro.core.ui.buttons.OutlinedButton
 import org.skepsun.kototoro.core.ui.compose.DetailsMediaStyle
 import org.skepsun.kototoro.core.ui.compose.ExpandableDescriptionText
 import org.skepsun.kototoro.core.ui.compose.NovelBookCoverFrame

@@ -12,6 +12,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.core.source.SourceChapter
+import org.skepsun.kototoro.core.ui.buttons.IconButton
+import org.skepsun.kototoro.core.ui.buttons.TextButton
 import org.skepsun.kototoro.core.ui.chapters.*
 import org.skepsun.kototoro.reader.novel.compose.SharedNovelReaderSearchField
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderPanelIcons

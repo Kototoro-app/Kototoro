@@ -7,10 +7,10 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ButtonElevation
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Shape
+import org.skepsun.kototoro.core.ui.buttons.TextButton
 
 /**
  * A [TextButton] that shows an outline while a remote rests on it.

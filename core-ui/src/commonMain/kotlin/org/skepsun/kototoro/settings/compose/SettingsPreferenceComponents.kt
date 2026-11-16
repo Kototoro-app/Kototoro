@@ -1,7 +1,8 @@
 package org.skepsun.kototoro.settings.compose
 
-import androidx.compose.material3.TextButton
 import androidx.compose.ui.unit.sp
+import org.skepsun.kototoro.core.ui.buttons.IconButton
+import org.skepsun.kototoro.core.ui.buttons.TextButton
 import org.skepsun.kototoro.core.ui.settings.revealSettingsSearchTitle
 import org.skepsun.kototoro.core.ui.settings.PreferenceDialogContent
 import org.skepsun.kototoro.core.ui.settings.PreferenceDialog
@@ -41,7 +42,6 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton

@@ -13,7 +13,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -23,10 +22,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.core.library.LibraryContentStats
+import org.skepsun.kototoro.core.ui.buttons.Button as M3Button
+import org.skepsun.kototoro.core.ui.buttons.TextButton
 import org.skepsun.kototoro.core.ui.stats.ContentStatsBarChart
 import org.skepsun.kototoro.core.source.SourceContent
 import org.skepsun.kototoro.stats.domain.StatsContentKind
-import androidx.compose.material3.Button as M3Button
 
 /** Android's statistics sheet for one work: the picked work plus the snapshot its sheet loads. */
 data class DesktopContentStats(val content: SourceContent, val stats: LibraryContentStats)

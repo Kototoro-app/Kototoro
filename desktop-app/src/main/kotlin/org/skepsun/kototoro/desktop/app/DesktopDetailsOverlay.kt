@@ -8,7 +8,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -22,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.core.ui.adaptive.TabletLayoutClass
 import org.skepsun.kototoro.core.ui.adaptive.tabletLayoutClass
 import org.skepsun.kototoro.core.ui.adaptive.tabletPreviewCardWidth
+import org.skepsun.kototoro.core.ui.buttons.TextButton
 import org.skepsun.kototoro.core.ui.preview.TabletPreviewSurface
 
 /** Keep the owning list composed underneath details so its scroll and search draft survive dismissal. */

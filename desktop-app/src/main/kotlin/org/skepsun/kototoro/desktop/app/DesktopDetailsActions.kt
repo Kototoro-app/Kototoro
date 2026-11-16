@@ -2,7 +2,6 @@ package org.skepsun.kototoro.desktop.app
 
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -16,6 +15,7 @@ import org.skepsun.kototoro.core.details.DetailsPrimaryAction
 import org.skepsun.kototoro.core.details.DetailsPrimaryActionKind
 import org.skepsun.kototoro.core.source.SourceChapter
 import org.skepsun.kototoro.core.source.SourceContent
+import org.skepsun.kototoro.core.ui.buttons.Button
 import org.skepsun.kototoro.core.ui.compose.DetailsActionGroup
 import org.skepsun.kototoro.core.ui.compose.DetailsSecondaryAction
 import org.skepsun.kototoro.core.ui.chapters.chaptersOfBranch

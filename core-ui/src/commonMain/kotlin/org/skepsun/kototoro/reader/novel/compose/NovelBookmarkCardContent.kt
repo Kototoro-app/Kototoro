@@ -13,6 +13,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
+import org.skepsun.kototoro.core.ui.buttons.IconButton
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderPanelIcons
 
 /** Platform hosts supply normalized text and dates; the bookmark card has one layout on all readers. */

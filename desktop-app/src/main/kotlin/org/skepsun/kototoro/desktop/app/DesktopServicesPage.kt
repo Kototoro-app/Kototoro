@@ -3,13 +3,13 @@ package org.skepsun.kototoro.desktop.app
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import org.skepsun.kototoro.core.ui.buttons.OutlinedButton
 import org.skepsun.kototoro.core.ui.settings.ServicesSettingsContent
 import org.skepsun.kototoro.core.ui.settings.ServicesSettingsRowIcons
 import org.skepsun.kototoro.core.ui.settings.ServicesSettingsUiState

@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -20,6 +19,7 @@ import org.skepsun.kototoro.core.source.SourcePreferenceNode
 import org.skepsun.kototoro.core.source.SourcePreferenceValue
 import org.skepsun.kototoro.core.source.sourcePreferenceRowTitle
 import org.skepsun.kototoro.core.source.sourcePreferenceSections
+import org.skepsun.kototoro.core.ui.buttons.OutlinedButton
 import org.skepsun.kototoro.core.ui.settings.SourcePreferencesContent
 
 /**

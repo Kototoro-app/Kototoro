@@ -7,6 +7,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.core.dictionary.DictionaryRule
+import org.skepsun.kototoro.core.ui.buttons.OutlinedButton
 import org.skepsun.kototoro.core.ui.settings.DictionaryRuleEditorDialog
 import org.skepsun.kototoro.core.ui.settings.DictionaryRuleUiModel
 import org.skepsun.kototoro.core.ui.settings.DictionaryRulesContent

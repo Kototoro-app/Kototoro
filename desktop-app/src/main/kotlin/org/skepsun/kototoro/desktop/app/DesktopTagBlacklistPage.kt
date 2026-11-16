@@ -7,9 +7,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -24,6 +22,8 @@ import org.skepsun.kototoro.core.model.TagTaxonomy
 import org.skepsun.kototoro.core.model.TagTitleBlacklist
 import org.skepsun.kototoro.core.model.TaxonomyCategory
 import org.skepsun.kototoro.core.model.TaxonomyTag
+import org.skepsun.kototoro.core.ui.buttons.OutlinedButton
+import org.skepsun.kototoro.core.ui.buttons.TextButton
 import org.skepsun.kototoro.core.ui.settings.BlacklistTagUiModel
 import org.skepsun.kototoro.core.ui.settings.BlacklistedTagsContent
 import org.skepsun.kototoro.core.ui.settings.SettingsInfoRow

@@ -11,6 +11,9 @@ import org.skepsun.kototoro.core.extensions.detectSourceInput
 import java.nio.file.Path
 import javax.swing.JFileChooser
 import javax.swing.filechooser.FileNameExtensionFilter
+import org.skepsun.kototoro.core.ui.buttons.Button
+import org.skepsun.kototoro.core.ui.buttons.OutlinedButton
+import org.skepsun.kototoro.core.ui.buttons.TextButton
 
 /** One add flow, with format choices matching Android's repository kinds and local-file import. */
 @Composable

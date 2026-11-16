@@ -2,7 +2,6 @@ package org.skepsun.kototoro.desktop.app
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.width
-import androidx.compose.material3.Button
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -16,6 +15,7 @@ import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import org.skepsun.kototoro.core.source.SourceContent
 import org.skepsun.kototoro.core.source.SourceRef
+import org.skepsun.kototoro.core.ui.buttons.Button
 import org.skepsun.kototoro.core.ui.chapters.VideoEpisodePreviewItem
 import org.skepsun.kototoro.core.ui.chapters.VideoEpisodePreviewSection
 import org.skepsun.kototoro.core.ui.chapters.VideoLineOption

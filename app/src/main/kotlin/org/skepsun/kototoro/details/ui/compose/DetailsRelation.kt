@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.details.ui.compose
 
 
+import org.skepsun.kototoro.core.ui.buttons.IconButton
 import org.skepsun.kototoro.list.ui.compose.ContentRailSection
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -19,7 +20,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text

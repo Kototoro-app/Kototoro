@@ -23,9 +23,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.paging.LoadState
 import androidx.paging.compose.LazyPagingItems
 import androidx.compose.material3.AssistChip
-import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
+import org.skepsun.kototoro.core.ui.buttons.Button
 import org.skepsun.kototoro.core.ui.theme.popupMenuContainerColor
 import androidx.compose.material3.Surface
 import androidx.compose.material3.DropdownMenuItem

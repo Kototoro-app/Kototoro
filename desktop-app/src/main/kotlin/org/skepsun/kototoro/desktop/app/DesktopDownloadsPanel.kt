@@ -9,6 +9,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import org.skepsun.kototoro.core.ui.buttons.OutlinedButton
+import org.skepsun.kototoro.core.ui.buttons.TextButton
 import org.skepsun.kototoro.core.ui.downloads.DownloadQueueAction
 import org.skepsun.kototoro.core.ui.downloads.DownloadQueueCard
 import org.skepsun.kototoro.core.ui.downloads.DownloadQueueItemUiModel

@@ -16,6 +16,8 @@ import java.text.DateFormat
 import java.util.Locale
 import javax.swing.JFileChooser
 import javax.swing.filechooser.FileNameExtensionFilter
+import org.skepsun.kototoro.core.ui.buttons.Button
+import org.skepsun.kototoro.core.ui.buttons.OutlinedButton
 
 @Composable
 internal fun DesktopBackupsPanel(controller: DesktopController, closing: Boolean) {

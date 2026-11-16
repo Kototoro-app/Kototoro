@@ -11,7 +11,6 @@ import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.FileUpload
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Text
@@ -26,6 +25,7 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.dictionary.DictionaryRule
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
 import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
+import org.skepsun.kototoro.core.ui.buttons.IconButton
 import org.skepsun.kototoro.core.ui.settings.DictionaryRuleEditorDialog
 import org.skepsun.kototoro.core.ui.settings.DictionaryRuleUiModel
 import org.skepsun.kototoro.core.ui.settings.DictionaryRulesContent

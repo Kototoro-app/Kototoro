@@ -49,7 +49,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import com.kyant.shapes.Capsule
 import com.kyant.shapes.RoundedRectangle
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -115,6 +114,7 @@ import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
+import org.skepsun.kototoro.core.ui.buttons.IconButton
 import org.skepsun.kototoro.details.ui.compose.DETAILS_TAB_BOOKMARKS
 import org.skepsun.kototoro.details.ui.compose.DETAILS_TAB_CHAPTERS
 import org.skepsun.kototoro.details.ui.compose.DETAILS_TAB_PAGES

@@ -20,6 +20,7 @@ import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.rememberTvFieldExit
 import org.skepsun.kototoro.core.ui.adaptive.rememberTvTextFieldReadOnlyState
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
+import org.skepsun.kototoro.core.ui.buttons.TextButton
 import org.skepsun.kototoro.core.ui.text.uiString
 
 /** Hosts may keep their native dialog surface; the editor, draft and actions remain shared. */

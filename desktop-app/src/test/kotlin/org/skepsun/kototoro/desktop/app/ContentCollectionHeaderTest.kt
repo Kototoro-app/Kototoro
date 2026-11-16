@@ -1,7 +1,6 @@
 package org.skepsun.kototoro.desktop.app
 
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.ExperimentalTestApi
@@ -13,6 +12,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
+import org.skepsun.kototoro.core.ui.buttons.TextButton
 import org.skepsun.kototoro.list.ui.compose.ContentCollectionHeader
 
 /**

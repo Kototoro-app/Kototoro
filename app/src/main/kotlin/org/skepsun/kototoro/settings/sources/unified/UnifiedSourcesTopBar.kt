@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.settings.sources.unified
 
+import org.skepsun.kototoro.core.ui.buttons.IconButton
 import org.skepsun.kototoro.core.ui.extensions.ExtensionManagementTab
 
 import org.skepsun.kototoro.core.ui.extensions.ExtensionManagementTabs
@@ -33,7 +34,6 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.ui.draw.clip
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text

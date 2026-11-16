@@ -16,7 +16,6 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -36,6 +35,7 @@ import org.jetbrains.skia.Image
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import org.skepsun.kototoro.core.ui.adaptive.TabletLayoutClass
+import org.skepsun.kototoro.core.ui.buttons.Button
 import org.skepsun.kototoro.core.ui.home.*
 import java.nio.file.Files
 import java.nio.file.Path

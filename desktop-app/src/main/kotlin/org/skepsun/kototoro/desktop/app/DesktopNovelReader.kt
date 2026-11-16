@@ -32,6 +32,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.jetbrains.skia.Bitmap
+import org.skepsun.kototoro.core.ui.buttons.Button
+import org.skepsun.kototoro.core.ui.buttons.OutlinedButton
 import org.skepsun.kototoro.desktop.runtime.NovelBlock
 import org.skepsun.kototoro.reader.novel.compose.NovelReaderChromeActions
 import org.skepsun.kototoro.reader.novel.compose.NovelReaderChromeLayout

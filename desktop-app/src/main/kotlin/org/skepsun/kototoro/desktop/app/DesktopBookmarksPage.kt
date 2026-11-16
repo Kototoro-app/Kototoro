@@ -14,7 +14,6 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -24,6 +23,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.skepsun.kototoro.bookmarks.domain.parseNovelBookmarkPreview
+import org.skepsun.kototoro.core.ui.buttons.TextButton
 import org.skepsun.kototoro.list.ui.compose.ContentCollectionHeader
 import org.skepsun.kototoro.list.ui.compose.ContentSelectionToolbar
 import org.skepsun.kototoro.list.ui.compose.SelectionAction

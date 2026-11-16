@@ -28,6 +28,8 @@ import org.jetbrains.skia.Bitmap
 import org.skepsun.kototoro.bookmarks.domain.parseNovelBookmarkPreview
 import org.skepsun.kototoro.core.source.SourceChapter
 import org.skepsun.kototoro.core.source.SourceContent
+import org.skepsun.kototoro.core.ui.buttons.OutlinedButton
+import org.skepsun.kototoro.core.ui.buttons.TextButton
 import org.skepsun.kototoro.desktop.runtime.DesktopBookmark
 import org.skepsun.kototoro.desktop.runtime.isChapterBookmark
 import org.skepsun.kototoro.core.ui.compose.DetailsBookmarkCard

@@ -1,5 +1,7 @@
 package org.skepsun.kototoro.desktop.app
 
+import org.skepsun.kototoro.core.ui.buttons.Button
+import org.skepsun.kototoro.core.ui.buttons.TextButton
 import org.skepsun.kototoro.core.ui.extensions.ExtensionManagementTab
 
 import org.skepsun.kototoro.core.ui.extensions.ExtensionManagementTabs
@@ -21,13 +23,11 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -576,7 +576,7 @@ private fun ManagedSources(
                                 switchTag = "source-enabled:$name",
                             )
                             state.jsonSources.firstOrNull { it.id == name }?.let { source ->
-                                androidx.compose.material3.IconButton({ controller.removeJsonSource(source.id) },
+                                org.skepsun.kototoro.core.ui.buttons.IconButton({ controller.removeJsonSource(source.id) },
                                     enabled = enabled, modifier = Modifier.testTag("json-source-remove:${source.id}")) {
                                     androidx.compose.material3.Icon(
                                         org.skepsun.kototoro.reader.ui.compose.design.ReaderPanelIcons.Delete,

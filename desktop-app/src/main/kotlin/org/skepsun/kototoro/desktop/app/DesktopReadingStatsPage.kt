@@ -19,7 +19,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -36,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.core.library.LibraryReadingStats
 import org.skepsun.kototoro.core.library.LibraryReadingStatsWork
 import org.skepsun.kototoro.core.source.SourceContent
+import org.skepsun.kototoro.core.ui.buttons.OutlinedButton
 import org.skepsun.kototoro.stats.domain.ReadingDayStats
 import org.skepsun.kototoro.stats.domain.ReadingStatsPeriod
 import org.skepsun.kototoro.core.ui.stats.StatsActivityCard
@@ -326,7 +326,7 @@ private fun DesktopConfirmDialog(
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     OutlinedButton(onDismiss, modifier = Modifier.testTag(cancelTag)) { Text(cancelLabel) }
                     Spacer(Modifier.width(8.dp))
-                    androidx.compose.material3.Button(onConfirm, modifier = Modifier.testTag(confirmTag)) {
+                    org.skepsun.kototoro.core.ui.buttons.Button(onConfirm, modifier = Modifier.testTag(confirmTag)) {
                         Text(confirmLabel)
                     }
                 }
