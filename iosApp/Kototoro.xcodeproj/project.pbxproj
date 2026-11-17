@@ -598,7 +598,7 @@
 			};
 			buildConfigurationList = A00000000000000000000050 /* Build configuration list for PBXProject "Kototoro" */;
 			compatibilityVersion = "Xcode 14.0";
-			developmentRegion = "zh-Hans";
+			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				"zh-Hans",
