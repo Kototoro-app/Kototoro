@@ -7,8 +7,12 @@ import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import java.io.ByteArrayOutputStream
 import java.io.File
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.nio.charset.Charset
+import java.util.zip.CRC32
 
 class ZipEntryNamesTest {
 
@@ -61,6 +65,24 @@ class ZipEntryNamesTest {
 	}
 
 	@Test
+	fun `a mixed archive repairs the un-flagged names only`() {
+		val file = writeRawArchive(
+			"mixed.zip",
+			listOf(
+				RawEntry("01 春天/001.jpg".toByteArray(Charsets.UTF_8), utf8Flagged = true),
+				RawEntry("02 夏天/001.jpg".toByteArray(Charset.forName("GBK")), utf8Flagged = false),
+			),
+		)
+
+		val names = ZipEntryNames.read(file)
+
+		assertFalse(names.isEmpty)
+		assertEquals("02 夏天/001.jpg", names.display(lossy("02 夏天/001.jpg")))
+		assertEquals("01 春天/001.jpg", names.display("01 春天/001.jpg"))
+		assertEquals(lossy("02 夏天/001.jpg"), names.archive("02 夏天/001.jpg"))
+	}
+
+	@Test
 	fun `a name that is neither UTF-8 nor CJK falls back to the spec's own charset`() {
 		val file = writeArchive("cp437.zip", "IBM437", utf8Flag = false, entries = listOf("Café/001.jpg"))
 
@@ -79,6 +101,79 @@ class ZipEntryNamesTest {
 		val file = File(root, "notes.txt").apply { writeText("not a zip") }
 
 		assertTrue(ZipEntryNames.read(file).isEmpty)
+	}
+
+	/** One stored entry of a hand-built archive: the flag is per entry, so it cannot come from a stream setting. */
+	private class RawEntry(val nameBytes: ByteArray, val utf8Flagged: Boolean)
+
+	/**
+	 * Writes a stored, uncompressed archive entry by entry, because `ZipArchiveOutputStream` picks one
+	 * encoding for the whole stream and can therefore never produce a mixed-flag archive.
+	 */
+	private fun writeRawArchive(name: String, entries: List<RawEntry>): File {
+		val data = byteArrayOf(0x42)
+		val crc = CRC32().apply { update(data) }.value.toInt()
+		val body = ByteArrayOutputStream()
+		val central = ByteArrayOutputStream()
+		for (entry in entries) {
+			val flags = if (entry.utf8Flagged) UTF8_FLAG else 0
+			val offset = body.size()
+			body.write(
+				ByteBuffer.allocate(30 + entry.nameBytes.size).order(ByteOrder.LITTLE_ENDIAN).apply {
+					putInt(LOCAL_FILE_HEADER)
+					putShort(VERSION.toShort())
+					putShort(flags.toShort())
+					putShort(0) // method: stored
+					putShort(0) // time
+					putShort(0) // date
+					putInt(crc)
+					putInt(data.size)
+					putInt(data.size)
+					putShort(entry.nameBytes.size.toShort())
+					putShort(0) // extra field length
+					put(entry.nameBytes)
+				}.array(),
+			)
+			body.write(data)
+			central.write(
+				ByteBuffer.allocate(46 + entry.nameBytes.size).order(ByteOrder.LITTLE_ENDIAN).apply {
+					putInt(CENTRAL_FILE_HEADER)
+					putShort(VERSION.toShort())
+					putShort(VERSION.toShort())
+					putShort(flags.toShort())
+					putShort(0) // method: stored
+					putShort(0) // time
+					putShort(0) // date
+					putInt(crc)
+					putInt(data.size)
+					putInt(data.size)
+					putShort(entry.nameBytes.size.toShort())
+					putShort(0) // extra field length
+					putShort(0) // comment length
+					putShort(0) // disk number start
+					putShort(0) // internal attributes
+					putInt(0) // external attributes
+					putInt(offset)
+					put(entry.nameBytes)
+				}.array(),
+			)
+		}
+		val directory = central.toByteArray()
+		val directoryOffset = body.size()
+		body.write(directory)
+		body.write(
+			ByteBuffer.allocate(22).order(ByteOrder.LITTLE_ENDIAN).apply {
+				putInt(END_OF_CENTRAL_DIRECTORY)
+				putShort(0) // this disk
+				putShort(0) // disk with the central directory
+				putShort(entries.size.toShort())
+				putShort(entries.size.toShort())
+				putInt(directory.size)
+				putInt(directoryOffset)
+				putShort(0) // comment length
+			}.array(),
+		)
+		return File(root, name).apply { writeBytes(body.toByteArray()) }
 	}
 
 	private fun writeArchive(
@@ -105,6 +200,12 @@ class ZipEntryNamesTest {
 		String(name.toByteArray(charset), Charsets.UTF_8)
 
 	private companion object {
+		const val LOCAL_FILE_HEADER = 0x04034b50
+		const val CENTRAL_FILE_HEADER = 0x02014b50
+		const val END_OF_CENTRAL_DIRECTORY = 0x06054b50
+		const val VERSION = 20
+		const val UTF8_FLAG = 0x800
+
 		val GBK_ENTRIES = listOf(
 			"01 春天/",
 			"01 春天/001.jpg",
