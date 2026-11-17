@@ -13,17 +13,14 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.buttons.SingleChoiceButtonRow
 
 data class PanoramaSettingsUiState(
     val enabled: Boolean,
@@ -198,29 +195,21 @@ private fun PanoramaLayoutModePreference(
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurface,
         )
-        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-            modes.forEachIndexed { index, mode ->
-                SegmentedButton(
-                    modifier = Modifier.weight(1f),
-                    selected = selected == mode,
-                    onClick = { onSelected(mode) },
-                    enabled = enabled,
-                    shape = SegmentedButtonDefaults.itemShape(index = index, count = modes.size),
-                    label = {
-                        Text(
-                            text = stringResource(
-                                when (mode) {
-                                    PanoramaLayoutMode.FULL_SCREEN -> R.string.panorama_mode_full_screen
-                                    PanoramaLayoutMode.HALF_SCREEN -> R.string.panorama_mode_half_screen
-                                },
-                            ),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
+        SingleChoiceButtonRow(
+            options = modes,
+            selected = selected,
+            onSelected = onSelected,
+            label = { mode ->
+                stringResource(
+                    when (mode) {
+                        PanoramaLayoutMode.FULL_SCREEN -> R.string.panorama_mode_full_screen
+                        PanoramaLayoutMode.HALF_SCREEN -> R.string.panorama_mode_half_screen
                     },
                 )
-            }
-        }
+            },
+            modifier = Modifier.fillMaxWidth(),
+            enabled = enabled,
+        )
     }
 }
 
@@ -242,24 +231,14 @@ private fun PanoramaPresetPreference(
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurface,
         )
-        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-            presets.forEachIndexed { index, preset ->
-                SegmentedButton(
-                    modifier = Modifier.weight(1f),
-                    selected = selected == preset,
-                    onClick = { if (preset != PanoramaEffectPreset.CUSTOM) onSelected(preset) },
-                    enabled = enabled,
-                    shape = SegmentedButtonDefaults.itemShape(index = index, count = presets.size),
-                    label = {
-                        Text(
-                            text = panoramaPresetLabel(preset),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    },
-                )
-            }
-        }
+        SingleChoiceButtonRow(
+            options = presets,
+            selected = selected,
+            onSelected = { preset -> if (preset != PanoramaEffectPreset.CUSTOM) onSelected(preset) },
+            label = { preset -> panoramaPresetLabel(preset) },
+            modifier = Modifier.fillMaxWidth(),
+            enabled = enabled,
+        )
     }
 }
 

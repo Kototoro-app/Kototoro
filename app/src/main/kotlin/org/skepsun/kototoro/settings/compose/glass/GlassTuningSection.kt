@@ -65,11 +65,9 @@ import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.kyant.shapes.Capsule
 import com.kyant.shapes.RoundedRectangle
 import org.skepsun.kototoro.core.prefs.AppSettings
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import org.skepsun.kototoro.core.prefs.GlassBlurQuality
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.buttons.SingleChoiceButtonRow
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.adaptive.tvChipRing
 import org.skepsun.kototoro.core.ui.buttons.TextButton
@@ -301,29 +299,21 @@ internal fun GlassBlurQualityRow(
             )
         }
         val qualities = GlassBlurQuality.entries
-        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-            qualities.forEachIndexed { index, quality ->
-                SegmentedButton(
-                    modifier = Modifier.weight(1f),
-                    selected = selected == quality,
-                    onClick = { onSelected(quality) },
-                    shape = SegmentedButtonDefaults.itemShape(index = index, count = qualities.size),
-                    label = {
-                        Text(
-                            text = stringResource(
-                                when (quality) {
-                                    GlassBlurQuality.PERFORMANCE -> R.string.pref_glass_blur_quality_performance
-                                    GlassBlurQuality.BALANCED -> R.string.pref_glass_blur_quality_balanced
-                                    GlassBlurQuality.QUALITY -> R.string.pref_glass_blur_quality_quality
-                                },
-                            ),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
+        SingleChoiceButtonRow(
+            options = qualities,
+            selected = selected,
+            onSelected = onSelected,
+            label = { quality ->
+                stringResource(
+                    when (quality) {
+                        GlassBlurQuality.PERFORMANCE -> R.string.pref_glass_blur_quality_performance
+                        GlassBlurQuality.BALANCED -> R.string.pref_glass_blur_quality_balanced
+                        GlassBlurQuality.QUALITY -> R.string.pref_glass_blur_quality_quality
                     },
                 )
-            }
-        }
+            },
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
 
