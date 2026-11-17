@@ -1,0 +1,125 @@
+name: iOS Simulator Build
+
+# `ios-build.yml` packages an IPA on request and compiles its own JVM runtime, so no workflow builds the iOS
+# app while a pull request is open: a broken SwiftUI phase, an unbuildable Kotlin framework or a product that
+# lost its language tables all reach `devel` unnoticed. This job compiles the simulator app and checks the
+# language fallback of the result, which a successful compile does not show (issue #677 shipped like that).
+on:
+  pull_request:
+    paths:
+      - 'iosApp/**'
+      - 'ios-shared/**'
+      # The framework's tracking client config reads these OAuth entries.
+      - 'app/src/main/res/values/constants.xml'
+      - 'backdrop/**'
+      - 'cloudstream-shared/**'
+      - 'core-*/**'
+      - 'parser-api/**'
+      - 'reader-*/**'
+      - 'source-*/**'
+      - 'gradle/**'
+      - 'build.gradle'
+      - 'settings.gradle'
+      - 'gradle.properties'
+      - '.github/workflows/ios-pr-build.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ios-simulator-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    # The app deploys to iOS 26 and builds against the iOS 27 SDK, and the macOS 26 images stop at Xcode
+    # 26.6, so this uses the image the release workflow already builds on.
+    runs-on: xcode-27
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    env:
+      DERIVED_DATA: iosApp/build/DerivedData
+    steps:
+      - uses: actions/checkout@v5
+
+      # The "Embed Kotlin Framework" build phase finds Java through /usr/libexec/java_home and starts Gradle
+      # itself, so the setup-java toolchain has to be visible to that lookup; `ios-build.yml` does the same.
+      - name: Set up JDK 24
+        id: jdk
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '24'
+          cache: gradle
+
+      - name: Link the JDK where the Xcode build phase looks for it
+        env:
+          JDK_HOME: ${{ steps.jdk.outputs.path }}
+        run: |
+          set -euo pipefail
+          bundle="$(cd "$JDK_HOME/../.." && pwd)"
+          mkdir -p "$HOME/Library/Java/JavaVirtualMachines"
+          ln -sfn "$bundle" "$HOME/Library/Java/JavaVirtualMachines/kototoro-temurin-24.jdk"
+          echo "Xcode phases use: $(/usr/libexec/java_home -v '17+')"
+          test "$(cd "$(/usr/libexec/java_home -v 24)" && pwd -P)" = "$(cd "$JDK_HOME" && pwd -P)"
+          # The same limits the release build runs on: the Gradle inside xcodebuild reads this file too.
+          mkdir -p "$HOME/.gradle"
+          {
+            echo "org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g"
+            echo "kotlin.daemon.jvmargs=-Xmx2g"
+            echo "org.gradle.workers.max=3"
+            echo "org.gradle.java.installations.paths=$JDK_HOME"
+          } >> "$HOME/.gradle/gradle.properties"
+
+      # Kotlin/Native fetches its own toolchain and dependencies on first use; without this a pull request
+      # pays that download every time. The Kotlin version changes the toolchain, hence the key.
+      - name: Cache the Kotlin/Native toolchain
+        uses: actions/cache@v5
+        with:
+          path: ~/.konan
+          key: konan-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('gradle/libs.versions.toml') }}
+          restore-keys: konan-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Prepare the Android SDK platform
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.0" > /dev/null
+
+      - name: Build the simulator app
+        run: |
+          set -euo pipefail
+          xcodebuild -project iosApp/Kototoro.xcodeproj \
+            -scheme Kototoro \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$DERIVED_DATA" \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Verify the language fallback of the product
+        run: python3 iosApp/Scripts/verify-bundle-localizations.py "$DERIVED_DATA/Build/Products/Debug-iphonesimulator/Kototoro.app"
+
+      # Informational: the catalogue is the only place English text lives, so a key that carries Chinese
+      # without an English value is shown untranslated to every non-Chinese device.
+      - name: Report string catalogue coverage
+        if: always()
+        run: |
+          set -euo pipefail
+          python3 - "$GITHUB_STEP_SUMMARY" <<'PY'
+          import json
+          import sys
+
+          catalog = json.load(open('iosApp/Kototoro/Localizable.xcstrings', encoding='utf-8'))
+          strings = catalog['strings']
+          missing = [key for key, entry in strings.items() if 'en' not in entry.get('localizations', {})]
+          summary = [f'sourceLanguage `{catalog.get("sourceLanguage")}`, {len(strings)} keys, '
+                     f'{len(strings) - len(missing)} translated to English']
+          if missing:
+              listed = ', '.join(f'`{key}`' for key in missing[:12]) + ('…' if len(missing) > 12 else '')
+              summary.append(f'{len(missing)} keys have no English value: {listed}')
+          text = '\n'.join(f'- {line}' for line in summary)
+          with open(sys.argv[1], 'a', encoding='utf-8') as handle:
+              handle.write(f'### Localizable.xcstrings\n\n{text}\n')
+          untranslated_text = [key for key in missing if any('\u4e00' <= ch <= '\u9fff' for ch in key)]
+          if untranslated_text:
+              print(f'::warning::{len(untranslated_text)} catalogue key(s) carry Chinese text without an '
+                    f'English value, e.g. {untranslated_text[0]!r}')
+          PY
