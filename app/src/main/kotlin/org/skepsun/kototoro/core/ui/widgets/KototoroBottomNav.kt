@@ -208,7 +208,11 @@ fun KototoroBottomNav(
     }
     val systemBarsPadding = WindowInsets.systemBarsIgnoringVisibility.asPaddingValues()
     val statusBarTopPadding = WindowInsets.statusBarsIgnoringVisibility.asPaddingValues().calculateTopPadding()
-    val railBottomInset = systemBarsPadding.calculateBottomPadding()
+    // Height of the system navigation-bar inset. The docked bar paints its surface all the way
+    // down over this strip (the row used to consume it as outer padding, which left the strip
+    // transparent and let the page content show through below the bar).
+    val navigationBarsBottomInset = systemBarsPadding.calculateBottomPadding()
+    val railBottomInset = navigationBarsBottomInset
 
     val targetAlpha = 0.84f
 
@@ -407,7 +411,6 @@ fun KototoroBottomNav(
     } else {
         Row(
             modifier = navBarModifier
-                .windowInsetsPadding(WindowInsets.navigationBarsIgnoringVisibility)
                 .then(if (adjacentAction != null) Modifier.padding(end = 12.dp) else Modifier),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -422,13 +425,17 @@ fun KototoroBottomNav(
                     tonalElevation = 0.dp,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(currentExplicitHeight)
+                        .height(currentExplicitHeight + navigationBarsBottomInset)
                         .padding(
                             start = nonFloatingContentHorizontalPadding,
                             end = nonFloatingContentHorizontalPadding,
                             top = nonFloatingTopPadding,
                         ),
-                    windowInsets = WindowInsets(0),
+                    // The docked bar's glass surface reaches the screen bottom; the inset is
+                    // applied inside the NavigationBar so its items stay above the system
+                    // gesture/navigation area instead of the whole container being pushed up.
+                    windowInsets = WindowInsets.navigationBarsIgnoringVisibility
+                        .only(WindowInsetsSides.Bottom),
                 ) {
                     activeItems.forEach { item ->
                         val isSelected = navState.selectedItemId == item.id
