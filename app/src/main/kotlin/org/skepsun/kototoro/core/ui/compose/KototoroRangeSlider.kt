@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.RangeSlider
+import androidx.compose.material3.RangeSliderState
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderColors
 import androidx.compose.material3.SliderDefaults
@@ -59,13 +60,17 @@ fun KototoroRangeSlider(
     val backdrop = LocalLiquidGlassBackdrop.current
     val startInteractionSource = remember { MutableInteractionSource() }
     val endInteractionSource = remember { MutableInteractionSource() }
+    // Material 3 1.5 keeps the thumb/track slots only on the state overload.
+    val sliderState = remember(steps, valueRange) {
+        RangeSliderState(value.start, value.endInclusive, steps, valueRange)
+    }
+    sliderState.startValue = value.start
+    sliderState.endValue = value.endInclusive
     RangeSlider(
-        value = value,
+        state = sliderState,
         onValueChange = onValueChange,
         modifier = modifier,
         enabled = enabled,
-        valueRange = valueRange,
-        steps = steps,
         onValueChangeFinished = onValueChangeFinished,
         colors = colors,
         startThumbInteractionSource = startInteractionSource,

@@ -4,7 +4,7 @@ plugins {
     id 'com.android.kotlin.multiplatform.library'
     id 'org.jetbrains.kotlin.plugin.compose'
     id 'org.jetbrains.kotlin.plugin.serialization'
-    id 'org.jetbrains.compose' version '1.12.0'
+    id 'org.jetbrains.compose' version '1.13.0-beta02'
 }
 
 // Android's own vector drawables, generated into shared ImageVectors so both hosts draw the same reader-panel and
@@ -93,9 +93,8 @@ kotlin {
         // System back for shared sheets (the Windows host handles Esc itself).
         androidMain.dependencies {
             implementation "androidx.activity:activity-compose:${libs.versions.activity.get()}"
-            // Compile Android against the material3 the app ships (1.5.0-alpha26), not the alpha22 that the CMP
-            // artifact brings: alpha26 reordered Slider's parameters, and the alpha22 call landed on the kept
-            // overload, which dropped valueRange so every shared slider snapped to its minimum.
+            // Compile Android against the material3 the app ships (1.5.0-rc01), not the 1.5.0-beta02 that the CMP
+            // artifact brings, so shared code never binds to an overload the shipped library only keeps hidden.
             api libs.androidx.compose.material3.expressive
         }
         jvmTest.dependencies {

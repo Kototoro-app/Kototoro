@@ -149,7 +149,7 @@ fun GridSizeOption(
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun displayOptionToggleColors(): ToggleButtonColors = ToggleButtonDefaults.toggleButtonColors(
+fun displayOptionToggleColors(): ToggleButtonColors = ToggleButtonDefaults.colors(
     containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
     contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
 )

@@ -17,6 +17,7 @@ import androidx.compose.material3.RangeSlider
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderColors
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.SliderState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -59,13 +60,14 @@ fun KototoroSlider(
     val isIosStyle = LocalIsIosInterfaceStyle.current
     val backdrop = LocalLiquidGlassBackdrop.current
     val interactionSource = remember { MutableInteractionSource() }
+    // Material 3 1.5 keeps the thumb/track slots only on the state overload.
+    val sliderState = remember(steps, valueRange) { SliderState(value, steps, valueRange) }
+    sliderState.value = value
     Slider(
-        value = value,
+        state = sliderState,
         onValueChange = onValueChange,
         modifier = modifier,
         enabled = enabled,
-        valueRange = valueRange,
-        steps = steps,
         onValueChangeFinished = onValueChangeFinished,
         colors = colors,
         interactionSource = interactionSource,
