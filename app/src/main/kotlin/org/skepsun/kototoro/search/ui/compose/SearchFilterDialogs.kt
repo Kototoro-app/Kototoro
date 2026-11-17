@@ -61,14 +61,13 @@ import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.ui.model.titleRes
 
 import org.skepsun.kototoro.filter.ui.model.UiTagGroup
+import org.skepsun.kototoro.filter.ui.model.tagGroupNeedsExpand
+import org.skepsun.kototoro.filter.ui.model.tagGroupPreviewLimit
 import org.skepsun.kototoro.filter.data.PersistableFilter.Companion.MAX_TITLE_LENGTH
 import org.skepsun.kototoro.parsers.model.ContentTag
 import org.skepsun.kototoro.parsers.model.SortOrder
 import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import java.util.Locale
-
-private const val VISIBLE_TAG_LIMIT = 8
-private const val SEARCH_TAG_LIMIT = 16
 
 @Composable
 internal fun SaveFilterNameDialog(
@@ -347,7 +346,7 @@ internal fun TagGroupsSection(
     FilterSection(
         title = title,
         iconRes = R.drawable.ic_tag,
-        headerAction = singleGroup?.takeIf { it.tags.size > VISIBLE_TAG_LIMIT }?.let { group ->
+        headerAction = singleGroup?.takeIf { tagGroupNeedsExpand(it.tags.size) }?.let { group ->
             {
                 TagGroupDropdown(
                     group = group,
@@ -364,7 +363,7 @@ internal fun TagGroupsSection(
         Column(
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            if (visibleGroups.sumOf { it.tags.size } > VISIBLE_TAG_LIMIT) {
+            if (tagGroupNeedsExpand(visibleGroups.sumOf { it.tags.size })) {
                 val searchShape = RoundedCornerShape(12.dp)
                 Row(
                     modifier = Modifier
@@ -440,9 +439,9 @@ private fun TagGroupContent(
             .distinctBy { it.key }
             .filter { query.isBlank() || it.title.contains(query.trim(), ignoreCase = true) }
     }
-    val previewLimit = if (query.isBlank()) VISIBLE_TAG_LIMIT else SEARCH_TAG_LIMIT
+    val previewLimit = tagGroupPreviewLimit(total = group.tags.size, searching = query.isNotBlank())
     val visibleTags = remember(orderedTags, previewLimit) { orderedTags.take(previewLimit) }
-    val canExpand = group.tags.size > VISIBLE_TAG_LIMIT
+    val canExpand = tagGroupNeedsExpand(group.tags.size)
 
     Column(
         verticalArrangement = Arrangement.spacedBy(0.dp),
