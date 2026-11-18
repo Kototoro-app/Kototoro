@@ -7,14 +7,17 @@ Simplified-to-Traditional conversion; copying the key (or the en value) leaves
 Traditional-Chinese devices reading Simplified, i.e. no visible change at all.
 
 `generate` rewrites every zh-Hant value with OpenCC's s2twp profile, which
-converts to Traditional with Taiwan vocabulary (视频 -> 影片, 软件 -> 軟體).
-`zh-Hans` is the source language and is never written.
+converts to Traditional with Taiwan vocabulary (视频 -> 影片, 软件 -> 軟體),
+then applies the small OVERRIDES table for the few words s2twp gets unusual
+(类型 -> 類型 rather than 型別). `zh-Hans` is the source language and is never
+written.
 
 `check` fails when
 
 * a zh-Hant value still contains Simplified text: converting it with OpenCC
   `s2t` changes it, which also catches a value that just copies its key,
 * a zh-Hant value is empty or not marked `translated`,
+* a zh-Hant value contains a form that OVERRIDES replaces (e.g. 型別),
 * the format specifiers of a zh-Hant value differ from the English one,
 * a shipped catalog is missing a localization for zh-Hant,
 * the Xcode project no longer falls back to English (developmentRegion must be
@@ -47,7 +50,22 @@ PROJECT_FILE = REPO_ROOT / "iosApp" / "Kototoro.xcodeproj" / "project.pbxproj"
 LOCALE = "zh-Hant"
 # %@ %d %lld %1$@ %.1f %% and friends; the leading % is kept so the comparison
 # is order independent and format strings survive translation unchanged.
+# OpenCC's s2twp output is not always the wording Traditional-Chinese UI text
+# uses in practice: it prefers 型別/賬號 where 類型/帳號 is the common form. These
+# corrections are applied after the conversion so `generate` stays reproducible
+# and a rerun cannot drift; `check` rejects the pre-correction forms so a value
+# copied in by hand cannot reintroduce them.
+OVERRIDES = {
+    "型別": "類型",
+    "賬號": "帳號",
+}
 FORMAT_SPECIFIER = re.compile(r"%(?:\d+\$)?[-+ 0#]*\d*(?:\.\d+)?(?:hh|h|ll|l|q|z|t|j)?[@dDiuUxXoOfFeEgGcCsSpaA%]")
+
+
+def apply_overrides(value: str) -> str:
+    for source, target in OVERRIDES.items():
+        value = value.replace(source, target)
+    return value
 
 
 def load_opencc(profile: str):
@@ -113,7 +131,7 @@ def generate() -> int:
             if not localizations:
                 # Keys the app resolves at runtime carry no localizations at all.
                 continue
-            value = s2twp.convert(key)
+            value = apply_overrides(s2twp.convert(key))
             # Keep the existing key order inside localizations (Xcode sorts them).
             unit = localizations.get(LOCALE) or {}
             unit["stringUnit"] = {"state": "translated", "value": value}
@@ -158,6 +176,12 @@ def check() -> int:
                     f"{rel}: {key!r} zh-Hant value still contains Simplified text "
                     f"({value!r} converts to {traditional!r})"
                 )
+            for source, target in OVERRIDES.items():
+                if source in value:
+                    problems.append(
+                        f"{rel}: {key!r} zh-Hant value uses {source!r}, the catalog "
+                        f"wording is {target!r} (see OVERRIDES in this script)"
+                    )
             english = en_value(entry)
             if english is not None and specifiers(english) != specifiers(value):
                 problems.append(

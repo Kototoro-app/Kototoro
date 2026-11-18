@@ -1455,7 +1455,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "Google 授權已失效，開啟 Kototoro 重新連線賬號後繼續同步。"
+            "value": "Google 授權已失效，開啟 Kototoro 重新連線帳號後繼續同步。"
           }
         }
       }
@@ -1471,7 +1471,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "Google 授權已失效，請重新連線賬號"
+            "value": "Google 授權已失效，請重新連線帳號"
           }
         }
       }
@@ -1503,7 +1503,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "Google 賬號"
+            "value": "Google 帳號"
           }
         }
       }
@@ -2546,7 +2546,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "不支援的檔案型別：%@（支援 CBZ/ZIP、EPUB、TXT 和影片檔案）"
+            "value": "不支援的檔案類型：%@（支援 CBZ/ZIP、EPUB、TXT 和影片檔案）"
           }
         }
       }
@@ -3540,7 +3540,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "倉庫型別"
+            "value": "倉庫類型"
           }
         }
       }
@@ -3828,7 +3828,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "作品型別"
+            "value": "作品類型"
           }
         }
       }
@@ -3845,7 +3845,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "作品型別不匹配"
+            "value": "作品類型不匹配"
           }
         }
       }
@@ -3862,7 +3862,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "作品型別不匹配，請選擇相同型別的作品資料"
+            "value": "作品類型不匹配，請選擇相同類型的作品資料"
           }
         }
       }
@@ -3878,7 +3878,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "作品型別不同，請選擇相同型別的條目。"
+            "value": "作品類型不同，請選擇相同類型的條目。"
           }
         }
       }
@@ -4054,7 +4054,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "使用與安卓相同的 Google 賬號，雙向合併收藏、分類、閱讀進度、閱讀統計和更新記錄。首次同步會合並已有資料。後臺定期同步的時機由系統決定，通常在裝置空閒且聯網時進行，間隔只是最短間隔。"
+            "value": "使用與安卓相同的 Google 帳號，雙向合併收藏、分類、閱讀進度、閱讀統計和更新記錄。首次同步會合並已有資料。後臺定期同步的時機由系統決定，通常在裝置空閒且聯網時進行，間隔只是最短間隔。"
           }
         }
       }
@@ -4230,7 +4230,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "儲存後寫入 %@ 的賬號列表。%@"
+            "value": "儲存後寫入 %@ 的帳號列表。%@"
           }
         }
       }
@@ -5095,7 +5095,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "全部來源型別"
+            "value": "全部來源類型"
           }
         }
       }
@@ -5175,7 +5175,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "全部型別"
+            "value": "全部類型"
           }
         }
       }
@@ -5351,7 +5351,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "關聯作品資料無需登入；同步進度需要連線賬號。"
+            "value": "關聯作品資料無需登入；同步進度需要連線帳號。"
           }
         }
       }
@@ -5383,7 +5383,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "關聯後使用網站封面與簡介；賬號進度同步可在關聯後單獨開啟。"
+            "value": "關聯後使用網站封面與簡介；帳號進度同步可在關聯後單獨開啟。"
           }
         }
       }
@@ -5543,7 +5543,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "其他內容型別裡還有下載記錄。"
+            "value": "其他內容類型裡還有下載記錄。"
           }
         }
       }
@@ -5720,7 +5720,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "內容型別"
+            "value": "內容類型"
           }
         }
       }
@@ -5736,7 +5736,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "內容型別（至少一項）"
+            "value": "內容類型（至少一項）"
           }
         }
       }
@@ -6009,7 +6009,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "切換內容空間，或調整顯示選單中的來源型別。"
+            "value": "切換內容空間，或調整顯示選單中的來源類型。"
           }
         }
       }
@@ -7628,7 +7628,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "只切換作品檢索、榜單和公開資料。備用介面由第三方提供；賬號授權和進度同步始終使用 Bangumi 官方介面。"
+            "value": "只切換作品檢索、榜單和公開資料。備用介面由第三方提供；帳號授權和進度同步始終使用 Bangumi 官方介面。"
           }
         }
       }
@@ -7660,7 +7660,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "可切換日期範圍或記錄型別檢視其他足跡。"
+            "value": "可切換日期範圍或記錄類型檢視其他足跡。"
           }
         }
       }
@@ -7868,7 +7868,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "各頁面在頂部分別切換內容型別。"
+            "value": "各頁面在頂部分別切換內容類型。"
           }
         }
       }
@@ -11120,7 +11120,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "已啟用的同型別來源"
+            "value": "已啟用的同類型來源"
           }
         }
       }
@@ -12449,7 +12449,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "當前內容型別沒有下載記錄"
+            "value": "當前內容類型沒有下載記錄"
           }
         }
       }
@@ -12673,7 +12673,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "影視型別"
+            "value": "影視類型"
           }
         }
       }
@@ -12961,7 +12961,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "成人作品指成人分級或成人型別來源的作品。隱藏不會刪除收藏、記錄或筆記。"
+            "value": "成人作品指成人分級或成人類型來源的作品。隱藏不會刪除收藏、記錄或筆記。"
           }
         }
       }
@@ -13073,7 +13073,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "我的賬號"
+            "value": "我的帳號"
           }
         }
       }
@@ -13396,7 +13396,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "擴充套件同時宣告瞭多種型別，無法確定由哪個執行時載入"
+            "value": "擴充套件同時宣告瞭多種類型，無法確定由哪個執行時載入"
           }
         }
       }
@@ -13812,7 +13812,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "按內容型別"
+            "value": "按內容類型"
           }
         }
       }
@@ -13860,7 +13860,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "按來源型別"
+            "value": "按來源類型"
           }
         }
       }
@@ -13973,7 +13973,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "授權已過期，請重新連線賬號"
+            "value": "授權已過期，請重新連線帳號"
           }
         }
       }
@@ -13990,7 +13990,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "授權無效或已過期，請重新連線賬號"
+            "value": "授權無效或已過期，請重新連線帳號"
           }
         }
       }
@@ -15465,7 +15465,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "斷開 %@ 賬號？"
+            "value": "斷開 %@ 帳號？"
           }
         }
       }
@@ -15481,7 +15481,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "斷開賬號連線"
+            "value": "斷開帳號連線"
           }
         }
       }
@@ -16097,7 +16097,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "無法讀取賬號，請重新連線：%@"
+            "value": "無法讀取帳號，請重新連線：%@"
           }
         }
       }
@@ -16373,7 +16373,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "顯示全部型別"
+            "value": "顯示全部類型"
           }
         }
       }
@@ -18368,7 +18368,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "來源型別"
+            "value": "來源類型"
           }
         }
       }
@@ -18384,7 +18384,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "來源型別（留空不限）"
+            "value": "來源類型（留空不限）"
           }
         }
       }
@@ -19172,7 +19172,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "正在準備賬號，請稍後重試"
+            "value": "正在準備帳號，請稍後重試"
           }
         }
       }
@@ -20632,7 +20632,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "沒有其他可用來源。先在擴充套件管理安裝或啟用同型別來源。"
+            "value": "沒有其他可用來源。先在擴充套件管理安裝或啟用同類型來源。"
           }
         }
       }
@@ -20728,7 +20728,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "沒有可搜尋的同型別來源，請先安裝或啟用來源"
+            "value": "沒有可搜尋的同類型來源，請先安裝或啟用來源"
           }
         }
       }
@@ -21017,7 +21017,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "瀏覽公開作品資料無需登入。連線賬號後，在作品詳情中明確選擇要追蹤的條目。"
+            "value": "瀏覽公開作品資料無需登入。連線帳號後，在作品詳情中明確選擇要追蹤的條目。"
           }
         }
       }
@@ -21497,7 +21497,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "新增連結會自動識別型別；直接輸入地址時，請選擇對應的倉庫型別。"
+            "value": "新增連結會自動識別類型；直接輸入地址時，請選擇對應的倉庫類型。"
           }
         }
       }
@@ -23763,7 +23763,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "型別"
+            "value": "類型"
           }
         }
       }
@@ -24357,7 +24357,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "網站未接受當前資訊，請檢查賬號或追蹤內容後重試"
+            "value": "網站未接受當前資訊，請檢查帳號或追蹤內容後重試"
           }
         }
       }
@@ -24725,7 +24725,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "自定義空間按內容型別、來源語言與來源型別劃定範圍（各項之間為“且”，同一項內為“或”，留空不限），與 Android 共用同一份資料。"
+            "value": "自定義空間按內容類型、來源語言與來源類型劃定範圍（各項之間為“且”，同一項內為“或”，留空不限），與 Android 共用同一份資料。"
           }
         }
       }
@@ -25240,7 +25240,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "記錄型別"
+            "value": "記錄類型"
           }
         }
       }
@@ -25432,7 +25432,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "試著放開內容型別或來源型別。"
+            "value": "試著放開內容類型或來源類型。"
           }
         }
       }
@@ -25707,7 +25707,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "請先連線 %@ 賬號"
+            "value": "請先連線 %@ 帳號"
           }
         }
       }
@@ -25723,7 +25723,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "請先連線賬號"
+            "value": "請先連線帳號"
           }
         }
       }
@@ -25950,7 +25950,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "賬號"
+            "value": "帳號"
           }
         }
       }
@@ -25966,7 +25966,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "資料決定封面與介紹；點開已關聯網站管理賬號追蹤。"
+            "value": "資料決定封面與介紹；點開已關聯網站管理帳號追蹤。"
           }
         }
       }
@@ -26590,7 +26590,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "連線 %@ 賬號"
+            "value": "連線 %@ 帳號"
           }
         }
       }
@@ -26606,7 +26606,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "連線 Google 賬號"
+            "value": "連線 Google 帳號"
           }
         }
       }
@@ -26654,7 +26654,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "連線賬號以同步進度"
+            "value": "連線帳號以同步進度"
           }
         }
       }
@@ -26670,7 +26670,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "連線賬號後，在作品詳情開啟追蹤與進度同步。"
+            "value": "連線帳號後，在作品詳情開啟追蹤與進度同步。"
           }
         }
       }
@@ -26816,7 +26816,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "追蹤賬號"
+            "value": "追蹤帳號"
           }
         }
       }
@@ -27376,7 +27376,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "重新連線 Google 賬號"
+            "value": "重新連線 Google 帳號"
           }
         }
       }
