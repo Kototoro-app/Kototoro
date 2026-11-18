@@ -201,6 +201,7 @@ private fun formatStatsSummary(
             stats.animeMeanScore?.let { context.getString(R.string.mean_score_short, formatScore(it)) },
             stats.mangaMeanScore?.let { context.getString(R.string.mean_score_short, formatScore(it)) },
         )
+        ScrobblerService.TMDB,
         ScrobblerService.SIMKL -> listOfNotNull(
             stats.animeCount?.let { context.getString(R.string.anime_count_short, it) },
             stats.tvCount?.let { context.getString(R.string.tv_count_short, it) },
@@ -267,4 +268,5 @@ private val TRACKING_SERVICES = listOf(
     ScrobblerService.MANGAUPDATES,
     ScrobblerService.SIMKL,
     ScrobblerService.MANGABAKA,
+    ScrobblerService.TMDB,
 )

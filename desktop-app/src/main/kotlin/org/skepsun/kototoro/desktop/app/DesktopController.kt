@@ -12,6 +12,12 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
+import org.skepsun.kototoro.search.domain.AdvancedSearchParams
+import org.skepsun.kototoro.search.domain.SearchCandidate
+import org.skepsun.kototoro.search.domain.SearchHistoryRules
+import org.skepsun.kototoro.search.domain.SearchKind
+import org.skepsun.kototoro.search.domain.SearchRules
+import org.skepsun.kototoro.search.domain.searchSourcesInParallel
 import kotlinx.coroutines.sync.withLock
 import kotlinx.datetime.TimeZone
 import org.skepsun.kototoro.core.appearance.VisualPreferenceKeys
@@ -103,19 +109,54 @@ private const val IMAGE_SWEEP_INTERVAL_MILLIS = DesktopImageBudget.SWEEP_INTERVA
  */
 private const val READER_MODES = "reader_modes"
 
+/** Sources asked at once by the global search. */
+private const val GLOBAL_SEARCH_CONCURRENCY = 4
+
+/** The preference holding the earlier queries, one per line, newest first. */
+private const val SEARCH_HISTORY_KEY = "history"
+
 internal val DetailsOrigins = setOf(DesktopScreen.HOME, DesktopScreen.FEED, DesktopScreen.EXPLORE, DesktopScreen.LIBRARY,
-    DesktopScreen.HISTORY, DesktopScreen.BOOKMARKS, DesktopScreen.UPDATED, DesktopScreen.SUGGESTIONS)
+    DesktopScreen.HISTORY, DesktopScreen.BOOKMARKS, DesktopScreen.UPDATED, DesktopScreen.SUGGESTIONS, DesktopScreen.SEARCH)
 
 /** The JVM's display locale, matched against branch names as Android matches its locale list. */
 internal fun desktopChapterBranchLocales(): List<ChapterBranchLocale> =
     listOf(Locale.getDefault(Locale.Category.DISPLAY), Locale.getDefault()).distinct()
         .map { ChapterBranchLocale(it.getDisplayLanguage(it), it.getDisplayName(it)) }
 
+/**
+ * The state of the global search page. [results] keeps the order in which the sources answered; [history] and
+ * [favourites] are the works the user already has that match, shown before the sources' answers like Android's.
+ */
+data class DesktopGlobalSearch(
+    val query: String = "",
+    val kind: SearchKind = SearchKind.SIMPLE,
+    val advanced: AdvancedSearchParams = AdvancedSearchParams(),
+    val results: Map<String, List<SourceContent>> = emptyMap(),
+    val history: List<SourceContent> = emptyList(),
+    val favourites: List<SourceContent> = emptyList(),
+    val pending: Set<String> = emptySet(),
+    /** Sources that failed to answer, by name, with what they said; they can be retried together. */
+    val failed: Map<String, String> = emptyMap(),
+    /** The disabled sources have been asked too. */
+    val searchedDisabled: Boolean = false,
+    /** Which sources are asked: the same ecosystem / type / language chips as Browse. */
+    val filter: DesktopSourceFilter = DesktopSourceFilter(),
+    /** Earlier queries, newest first. */
+    val recent: List<String> = emptyList(),
+) {
+    /** Whether there is anything to search for with [kind]. */
+    val isActive: Boolean
+        get() = if (kind == SearchKind.ADVANCED) {
+            advanced.query.isNotBlank() || advanced.title.isNotBlank() || advanced.tags.isNotBlank() || advanced.author.isNotBlank()
+        } else query.isNotBlank()
+}
+
 enum class DesktopScreen {
     HOME, FEED, EXPLORE, LIBRARY, HISTORY, DETAILS, READER, NOVEL, VIDEO, PREFERENCES, BROWSER, DOWNLOADS, BACKUPS,
     RECOMMENDATIONS, EXTENSIONS, READER_SETTINGS, SOURCE_SETTINGS, TAG_BLACKLIST, READING_STATS, MORE, STORAGE,
     PLAYBACK_SETTINGS, PROXY_SETTINGS, CHANGELOG, CRASH_LOGS, REPLACE_RULES, DICTIONARY_RULES,
     DOWNLOAD_SETTINGS, NAV_CONFIG, DATA_CLEANUP, SERVICES, SETUP_WIZARD, SOURCE_TEST, EXTENSION_SETTINGS, BOOKMARKS, UPDATED, SUGGESTIONS,
+    SEARCH,
 }
 
 /**
@@ -275,6 +316,8 @@ data class DesktopAppState(
         org.skepsun.kototoro.desktop.runtime.DesktopServicesSettings(),
     val libraryDisplay: DesktopLibraryDisplay =
         DesktopLibraryDisplay(),
+    /** The history shelf's own display options. */
+    val historyDisplay: DesktopLibraryDisplay = DesktopLibraryDisplay(),
     /** Android's "show updated" feed menu item: whether the tracked-with-new-chapters block is drawn. */
     val feedDisplay: org.skepsun.kototoro.desktop.runtime.DesktopFeedDisplay =
         org.skepsun.kototoro.desktop.runtime.DesktopFeedDisplay(),
@@ -295,6 +338,8 @@ data class DesktopAppState(
     val suggestions: List<SourceContent> = emptyList(),
     val suggestionReasons: Map<Long, Pair<org.skepsun.kototoro.suggestions.domain.SuggestionDirection, String?>> = emptyMap(),
     val suggestionDirection: org.skepsun.kototoro.suggestions.domain.SuggestionDirection? = null,
+    /** Android's global search from the home page: the query, each source's answer and the sources still asked. */
+    val globalSearch: DesktopGlobalSearch = DesktopGlobalSearch(),
     /** True while [DesktopController.refreshSuggestions] runs in the background; the window stays usable. */
     val suggestionsGenerating: Boolean = false,
     /**
@@ -454,7 +499,10 @@ class DesktopController(
     /** Chapter keys the download page has selected; kept here so a batch survives leaving and reopening the page. */
     private val mutableDownloadSelection = MutableStateFlow<Set<String>>(emptySet())
     internal val downloadSelection = mutableDownloadSelection.asStateFlow()
-    private val backups = DesktopLibraryBackup(session.storage.database)
+    private val backups = DesktopLibraryBackup(session.storage.database,
+        DesktopExtensionBackupBridge(session, ::onExtensionsRestored))
+    /** What the last restore did to the installed extensions, for the message after it. */
+    @Volatile private var extensionRestore: ExtensionRestoreSummary? = null
     private val mutableBackupPreview = MutableStateFlow<DesktopBackupArchive?>(null)
     internal val backupPreview = mutableBackupPreview.asStateFlow()
     /** Android's in-app update flow: check the published releases, download, and swap the image on restart. */
@@ -484,6 +532,8 @@ class DesktopController(
     private var mirrorProbeJob: Job? = null
     /** The related-works request of the open details; a new details cancels the old one. */
     private var relatedJob: Job? = null
+    private var globalSearchJob: Job? = null
+    private val searchPreferences = session.storage.preferences.open("desktop_search")
 
     init {
         // The saved language applies before the first screen is composed; `--lang` outranks it for this run.
@@ -500,6 +550,7 @@ class DesktopController(
             libraryDisplay = DesktopLibraryDisplay.from(
                 libraryPreferences.snapshot(),
             ),
+            historyDisplay = DesktopLibraryDisplay.history(libraryPreferences.snapshot()),
             feedDisplay = org.skepsun.kototoro.desktop.runtime.DesktopFeedDisplay.from(
                 libraryPreferences.snapshot(),
             ),
@@ -1606,6 +1657,171 @@ class DesktopController(
     internal fun exploreFilter(filter: DesktopSourceFilter) {
         mutableState.update { it.copy(exploreFilter = filter) }
     }
+
+    fun showSearch() = navigate {
+        mutableState.update { it.copy(screen = DesktopScreen.SEARCH,
+            globalSearch = it.globalSearch.copy(recent = loadSearchHistory())) }
+    }
+
+    fun globalSearchFilter(filter: DesktopSourceFilter) {
+        mutableState.update { it.copy(globalSearch = it.globalSearch.copy(filter = filter)) }
+        runGlobalSearch()
+    }
+
+    fun globalSearchKind(kind: SearchKind) {
+        mutableState.update { it.copy(globalSearch = it.globalSearch.copy(kind = kind)) }
+        runGlobalSearch()
+    }
+
+    fun globalSearchAdvanced(advanced: AdvancedSearchParams) {
+        mutableState.update { it.copy(globalSearch = it.globalSearch.copy(advanced = advanced)) }
+        runGlobalSearch()
+    }
+
+    fun globalSearch(query: String) {
+        mutableState.update { it.copy(globalSearch = it.globalSearch.copy(query = query.trim())) }
+        runGlobalSearch()
+    }
+
+    /** Android's "search through disabled sources": the same search, asked of the sources that are switched off. */
+    fun searchDisabledSources() = runGlobalSearch(disabled = true)
+
+    /** Android's retry of the sources that failed; the answers already in stay. */
+    fun retryFailedSearch() = runGlobalSearch(only = state.value.globalSearch.failed.keys)
+
+    /** Called when a result is opened: that is the moment a query proved worth keeping. */
+    fun rememberSearch() {
+        val search = state.value.globalSearch
+        if (search.kind == SearchKind.ADVANCED || search.query.isBlank()) return
+        val recent = SearchHistoryRules.remember(search.recent, search.query)
+        mutableState.update { it.copy(globalSearch = it.globalSearch.copy(recent = recent)) }
+        saveSearchHistory(recent)
+    }
+
+    fun clearSearchHistory() {
+        mutableState.update { it.copy(globalSearch = it.globalSearch.copy(recent = emptyList())) }
+        saveSearchHistory(emptyList())
+    }
+
+    private fun loadSearchHistory(): List<String> =
+        (searchPreferences.snapshot()[SEARCH_HISTORY_KEY] as? SourcePreferenceValue.Text)?.value
+            ?.lines()?.filter { it.isNotBlank() }.orEmpty()
+
+    private fun saveSearchHistory(history: List<String>) {
+        searchPreferences.edit(SourcePreferenceEdit(changes = mapOf(
+            SEARCH_HISTORY_KEY to if (history.isEmpty()) null else SourcePreferenceValue.Text(history.joinToString("\n")))))
+    }
+
+    /** What each source can be asked, read once: the capability flags and tag lists do not change while it is open. */
+    private val searchCapabilities = java.util.concurrent.ConcurrentHashMap<String, SourceSearchCapabilities>()
+
+    private class SourceSearchCapabilities(
+        val supportsSearch: Boolean, val supportsAuthorSearch: Boolean, val tags: Set<SourceTag>)
+
+    private suspend fun capabilitiesOf(name: String, needTags: Boolean): SourceSearchCapabilities {
+        searchCapabilities[name]?.takeIf { !needTags || it.tags.isNotEmpty() }?.let { return it }
+        val descriptor = session.sources.describe(name)
+        val tags = if (needTags) relatedAttempt { session.sources.getFilterOptions(name) }?.let { options ->
+            options.availableTags + options.tagGroups.flatMap { it.tags }
+        }.orEmpty() else emptySet()
+        return SourceSearchCapabilities(descriptor.filterCapabilities.isSearchSupported,
+            descriptor.filterCapabilities.isAuthorSearchSupported, tags).also { searchCapabilities[name] = it }
+    }
+
+    /**
+     * Asks the sources the current search names, a few at a time, off the operation gate: a slow source only delays its
+     * own group. Android's rules (see [SearchRules]) decide what a source is asked and what of its answer is kept; the
+     * works the user already has come first. [only] repeats the search for those sources, [disabled] asks the switched
+     * off ones.
+     */
+    private fun runGlobalSearch(only: Set<String>? = null, disabled: Boolean = false) {
+        globalSearchJob?.cancel()
+        val current = state.value
+        val search = current.globalSearch
+        val settings = current.sourceSettings
+        val query = if (search.kind == SearchKind.ADVANCED) search.advanced.title.ifBlank { search.advanced.query } else search.query
+        val retrying = only != null
+        val pool = if (disabled) current.sources.filter { it.source.name in current.disabledSources } else current.enabledSources
+        val targets = if (!search.isActive) emptyList() else pool.filter {
+            (only == null || it.source.name in only) && search.filter.accepts(it) &&
+                !(settings.hidesNsfw(DesktopNsfwTarget.SOURCES) && it.isNsfwSource(current.sourceNsfwOverrides))
+        }
+        val keep = if (retrying || disabled) search else search.copy(results = emptyMap(), failed = emptyMap(),
+            history = emptyList(), favourites = emptyList(), searchedDisabled = false)
+        mutableState.update { it.copy(globalSearch = keep.copy(
+            pending = targets.mapTo(linkedSetOf()) { s -> s.source.name },
+            failed = if (retrying) keep.failed - only!! else keep.failed,
+            searchedDisabled = keep.searchedDisabled || disabled)) }
+        if (!search.isActive) return
+        val kind = search.kind
+        val advanced = search.advanced.takeIf { kind == SearchKind.ADVANCED }
+        val text = search.query
+        val blacklist = settings.tagBlacklistRules()
+        globalSearchJob = scope.launch {
+            if (!retrying && !disabled) loadLibraryMatches(kind, text, advanced, blacklist)
+            searchSourcesInParallel(
+                sources = targets,
+                parallelism = GLOBAL_SEARCH_CONCURRENCY,
+                search = { listing -> searchOneSource(listing, kind, text, advanced, blacklist) },
+                onResult = { listing, outcome ->
+                    mutableState.update { s ->
+                        val now = s.globalSearch
+                        if (now.query != search.query || now.kind != kind || now.advanced != search.advanced) s
+                        else s.copy(globalSearch = now.copy(
+                            results = if (outcome.works.isEmpty()) now.results
+                                else now.results + (listing.source.name to outcome.works),
+                            failed = outcome.error?.let { now.failed + (listing.source.name to it) } ?: now.failed,
+                            pending = now.pending - listing.source.name))
+                    }
+                },
+            )
+        }
+    }
+
+    private class SearchOutcome(val works: List<SourceContent>, val error: String? = null)
+
+    private suspend fun searchOneSource(listing: SourceListing, kind: SearchKind, text: String,
+        advanced: AdvancedSearchParams?, blacklist: org.skepsun.kototoro.core.model.TagBlacklist): SearchOutcome = try {
+        val capabilities = capabilitiesOf(listing.source.name, needTags = kind == SearchKind.TAG || kind == SearchKind.ADVANCED)
+        val plan = SearchRules.plan(kind, text, advanced, capabilities.supportsSearch, capabilities.supportsAuthorSearch,
+            capabilities.tags.map { it.title })
+        if (plan == null) SearchOutcome(emptyList()) else {
+            fun resolve(titles: Set<String>) = titles.mapNotNullTo(linkedSetOf()) { title ->
+                capabilities.tags.firstOrNull { it.title.equals(title, ignoreCase = true) }
+            }
+            val found = session.sources.getList(listing.source.name, 0, null, SourceFilter(query = plan.query,
+                author = plan.author, tags = resolve(plan.tags), tagsExclude = resolve(plan.tagsExclude)))
+            SearchOutcome(SearchRules.sortByRelevance(
+                found.filterNot { work -> work.tags.any { blacklist.containsTagTitle(it.title) } }
+                    .filter { SearchRules.accepts(it.asSearchCandidate(), kind, text, advanced) },
+                kind, text, advanced) { it.asSearchCandidate() })
+        }
+    } catch (error: CancellationException) {
+        throw error
+    } catch (error: Exception) {
+        SearchOutcome(emptyList(), error.message ?: error.javaClass.simpleName)
+    }
+
+    /** The works already in the history and the favourites that answer the search, before any source does. */
+    private suspend fun loadLibraryMatches(kind: SearchKind, text: String, advanced: AdvancedSearchParams?,
+        blacklist: org.skepsun.kototoro.core.model.TagBlacklist) {
+        fun matches(entries: List<org.skepsun.kototoro.core.library.SourceLibraryEntry>) = SearchRules.sortByRelevance(
+            entries.map { it.content }
+                .filterNot { work -> work.tags.any { blacklist.containsTagTitle(it.title) } }
+                .filter { SearchRules.matchesLibrary(it.asSearchCandidate(), kind, text, advanced) },
+            kind, text, advanced) { it.asSearchCandidate() }
+        val history = matches(session.library.snapshot(history = true, withChapters = false).entries)
+        val favourites = matches(session.library.snapshot(history = false, withChapters = false).entries)
+            .filterNot { favourite -> history.any { it.id == favourite.id } }
+        mutableState.update { s ->
+            val now = s.globalSearch
+            // The grid keys its cards by work, so a work the user has is shown once, in its library group.
+            if (now.query != text || now.kind != kind) s else s.copy(globalSearch = now.copy(history = history, favourites = favourites))
+        }
+    }
+
+    private fun SourceContent.asSearchCandidate() = SearchCandidate(
+        title = title, altTitle = altTitles.firstOrNull(), authors = authors, tags = tags.map { it.title })
 
     /** Android's home: hero, history and updates rows over the shared history/tracker tables. */
     fun home() = navigate {
@@ -2976,6 +3192,13 @@ class DesktopController(
         }
     }
     /** Android's display options: the shelves render either the poster grid or one work per row. */
+    internal fun historyDisplay(display: DesktopLibraryDisplay) {
+        mutableState.update { it.copy(historyDisplay = display) }
+        if (!libraryPreferences.edit(SourcePreferenceEdit(changes = display.toPreferences(DesktopDisplayPage.HISTORY)))) {
+            mutableState.update { it.copy(error = desktopText("library.displaySaveFailed")) }
+        }
+    }
+
     internal fun libraryDisplay(display: DesktopLibraryDisplay) {
         mutableState.update { it.copy(libraryDisplay = display) }
         if (!libraryPreferences.edit(SourcePreferenceEdit(changes = display.toPreferences()))) {
@@ -3005,9 +3228,21 @@ class DesktopController(
     internal fun restoreLibraryBackup(preview: DesktopBackupArchive) = action {
         require(mutableBackupPreview.value === preview) { desktopText("backups.expired") }
         mutableBackupPreview.value = null
+        extensionRestore = null
         val processed = preview.use { backups.restore(it) }
+        val extensions = extensionRestore
         mutableState.update { it.copy(items = emptyList(), content = null,
-            message = desktopText("backups.merged", processed)) }
+            message = desktopText("backups.merged", processed) + (extensions?.takeIf { it.installed > 0 || it.failed.isNotEmpty() }
+                ?.let { " " + desktopText("backups.extensionsRestored", it.installed, it.failed.size) } ?: "")) }
+    }
+
+    /** A restore installed packages or switched sources: what the extension pages and source lists show changed. */
+    private fun onExtensionsRestored(summary: ExtensionRestoreSummary) {
+        extensionRestore = summary
+        val descriptors = sourceDescriptors()
+        mutableState.update { it.copy(sources = descriptors, installedExtensions = installedVersions(),
+            repositories = session.repositories.saved(), installedEntries = session.installedEntries(),
+            disabledSources = session.disabledSources()) }
     }
 
     internal fun googleDriveSignIn() = scope.launch {

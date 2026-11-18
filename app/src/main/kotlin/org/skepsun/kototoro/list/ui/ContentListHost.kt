@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.list.ui
 
+import org.skepsun.kototoro.list.ui.ListDisplaySection
 import androidx.paging.PagingData
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
@@ -34,6 +35,9 @@ interface ContentListHost {
     val isLoading: StateFlow<Boolean>
 
     val listMode: StateFlow<ListMode>
+
+    /** The page whose own display options this list follows; null for lists on the general ones. */
+    val displaySection: ListDisplaySection? get() = null
 
     val gridScale: StateFlow<Float>
 

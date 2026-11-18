@@ -142,10 +142,11 @@ fun FeedScreen(
     val settings = remember(context.applicationContext) { AppSettings(context.applicationContext) }
     val carouselPrefs by settings.observeAsState(
         AppSettings.KEY_GRID_SIZE,
+        AppSettings.gridSizeKeyOf(org.skepsun.kototoro.list.ui.ListDisplaySection.FEED),
         AppSettings.KEY_BADGES_BOTTOM_RIGHT,
     ) {
         UpdatedContentCarouselPrefs(
-            gridScale = gridSize / 100f,
+            gridScale = gridSizeOf(org.skepsun.kototoro.list.ui.ListDisplaySection.FEED) / 100f,
             badgesBottomRight = badgesBottomRight,
         )
     }

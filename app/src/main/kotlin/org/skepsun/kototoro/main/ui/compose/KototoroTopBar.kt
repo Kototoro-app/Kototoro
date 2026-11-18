@@ -200,6 +200,7 @@ fun KototoroTopBar(
     onListModeSelected: (ListMode) -> Unit = {},
     supportsGridSizeSlider: Boolean = false,
     gridSize: Int = 100,
+    displaySection: org.skepsun.kototoro.list.ui.ListDisplaySection? = null,
     onGridSizeChange: (Int) -> Unit = {},
     isBrowseTrackingRecommendationsEnabled: Boolean? = null,
     onBrowseTrackingRecommendationsChange: ((Boolean) -> Unit)? = null,
@@ -762,6 +763,7 @@ fun KototoroTopBar(
                     onListModeSelected(it)
                 },
                 supportsGridSizeSlider = supportsGridSizeSlider,
+                section = displaySection,
                 gridSize = pendingGridSize,
                 onGridSizeChange = {
                     pendingGridSize = it

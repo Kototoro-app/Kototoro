@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.tracker.ui.updates
 
+import org.skepsun.kototoro.list.ui.ListDisplaySection
 import org.skepsun.kototoro.search.domain.LibrarySearchScope
 import org.skepsun.kototoro.search.domain.LibrarySearchQueries
 import android.content.Context
@@ -72,6 +73,8 @@ class UpdatesViewModel @Inject constructor(
     spaceBrowseScope: SpaceBrowseScope,
 ) : ContentListViewModel(settings, dataRepository, localStorageChanges), QuickFilterListener by quickFilter,
     SpaceBindableViewModel {
+
+    override fun displaySection() = ListDisplaySection.UPDATED
     private val spaceBinding = spaceBrowseScope.createBinding(viewModelScope + Dispatchers.Default)
 
     override val isFilterBarVisible = MutableStateFlow(true)

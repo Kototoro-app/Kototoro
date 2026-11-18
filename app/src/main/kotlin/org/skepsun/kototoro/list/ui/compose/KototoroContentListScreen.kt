@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.list.ui.compose
 
+import org.skepsun.kototoro.list.ui.ListDisplaySection
 import org.skepsun.kototoro.core.ui.chips.CompactChoicePill
 import coil3.compose.AsyncImage
 import androidx.compose.animation.AnimatedVisibility
@@ -160,6 +161,8 @@ fun KototoroContentListScreen(
     hasMoreItems: Boolean = true,
     loadMoreVisibleThreshold: Int = LoadMoreVisibleThreshold,
     gridScale: Float,
+    // The page this list belongs to; its extra-card-info switch is stored per page.
+    displaySection: ListDisplaySection? = null,
     selectedItemsIds: Set<Long>,
     onPrepareItemTransition: (ContentListModel, Rect?) -> Unit = { _, _ -> },
     onItemClick: (ContentListModel) -> Unit,
@@ -279,7 +282,7 @@ fun KototoroContentListScreen(
         AppSettings.KEY_BADGES_TOP_RIGHT,
         AppSettings.KEY_BADGES_BOTTOM_LEFT,
         AppSettings.KEY_BADGES_BOTTOM_RIGHT,
-        AppSettings.KEY_SHOW_EXTRA_INFO_ON_CARDS,
+        *AppSettings.extraInfoKeysOf(displaySection).toTypedArray(),
         AppSettings.KEY_CARD_PROGRESS_STYLE,
     ) {
         ContentListScreenPrefs(
@@ -289,7 +292,7 @@ fun KototoroContentListScreen(
                 badgesTopRight = badgesTopRight,
                 badgesBottomLeft = badgesBottomLeft,
                 badgesBottomRight = badgesBottomRight,
-                showExtraInfo = showExtraInfoOnCards,
+                showExtraInfo = showExtraInfoOf(displaySection),
                 cardProgressStyle = cardProgressStyle,
             ),
         )

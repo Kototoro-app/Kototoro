@@ -139,21 +139,20 @@ fun DiscoverScreen(
     val context = LocalContext.current
     val settings = remember(context.applicationContext) { AppSettings(context.applicationContext) }
     val screenPrefs by settings.observeAsState(
-        AppSettings.KEY_GRID_SIZE,
+        *(AppSettings.gridSizeKeysOf(org.skepsun.kototoro.list.ui.ListDisplaySection.BROWSE) + AppSettings.extraInfoKeysOf(org.skepsun.kototoro.list.ui.ListDisplaySection.BROWSE)).toTypedArray(),
         AppSettings.KEY_BADGES_TOP_LEFT,
         AppSettings.KEY_BADGES_TOP_RIGHT,
         AppSettings.KEY_BADGES_BOTTOM_LEFT,
         AppSettings.KEY_BADGES_BOTTOM_RIGHT,
-        AppSettings.KEY_SHOW_EXTRA_INFO_ON_CARDS,
         AppSettings.KEY_CARD_PROGRESS_STYLE,
     ) {
         DiscoverScreenPrefs(
-            gridScale = gridSize / 100f,
+            gridScale = gridSizeOf(org.skepsun.kototoro.list.ui.ListDisplaySection.BROWSE) / 100f,
             cardUiPrefs = ContentCardUiPrefs(
                 badgesTopLeft = badgesTopLeft,
                 badgesTopRight = badgesTopRight,
                 badgesBottomLeft = badgesBottomLeft,
-                showExtraInfo = showExtraInfoOnCards,
+                showExtraInfo = showExtraInfoOf(org.skepsun.kototoro.list.ui.ListDisplaySection.BROWSE),
                 badgesBottomRight = badgesBottomRight,
                 cardProgressStyle = cardProgressStyle,
             ),

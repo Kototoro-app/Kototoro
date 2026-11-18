@@ -253,6 +253,7 @@ class ScrobblerConfigViewModel @Inject constructor(
             ScrobblerConfigActivity.HOST_BANGUMI_AUTH -> ScrobblerService.BANGUMI
             ScrobblerConfigActivity.HOST_MANGAUPDATES_AUTH -> ScrobblerService.MANGAUPDATES
             ScrobblerConfigActivity.HOST_SIMKL_AUTH -> ScrobblerService.SIMKL
+            ScrobblerConfigActivity.HOST_TMDB_AUTH -> ScrobblerService.TMDB
             else -> error("Wrong scrobbler uri: $uri")
         }
     }

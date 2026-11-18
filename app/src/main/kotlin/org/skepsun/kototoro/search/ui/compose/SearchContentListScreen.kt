@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.search.ui.compose
 
 
+import org.skepsun.kototoro.list.ui.ListDisplaySection
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -324,7 +325,9 @@ fun AppSearchContentListRoute(
     val activity = context as? Activity
     val configuration = LocalConfiguration.current
     val settings = remember(context.applicationContext) { AppSettings(context.applicationContext) }
-    val gridSize = settings.observeAsState(AppSettings.KEY_GRID_SIZE) { gridSize }.value
+    val gridSize = settings.observeAsState(
+        *AppSettings.gridSizeKeysOf(ListDisplaySection.SEARCH).toTypedArray(),
+    ) { gridSizeOf(ListDisplaySection.SEARCH) }.value
     val gridScale = gridSize / 100f
     val tabletUiMode by settings.observeAsState(AppSettings.KEY_TABLET_UI_MODE) { tabletUiMode }
     val tabletListPreviewMode by settings.observeAsState(AppSettings.KEY_TABLET_LIST_PREVIEW_MODE) {
@@ -693,9 +696,9 @@ fun AppSearchContentListRoute(
                 },
                 onResetFilterClick = viewModel.filterCoordinator::reset,
                 onSettingsClick = { appRouter.openSourceSettings(viewModel.source) },
-                onListModeChange = { settings.listMode = it },
+                onListModeChange = { settings.setListModeOf(ListDisplaySection.SEARCH, it) },
                 onGridSizeChange = { size ->
-                    settings.gridSize = size.coerceIn(GridSizeRange)
+                    settings.setGridSizeOf(ListDisplaySection.SEARCH, size.coerceIn(GridSizeRange))
                 },
                 onClearActiveQuery = {
                     searchQuery = ""
@@ -725,6 +728,7 @@ fun AppSearchContentListRoute(
                         .then(liquidGlassSourceModifier),
                 ) {
                     KototoroContentListScreen(
+                        displaySection = ListDisplaySection.SEARCH,
                         items = contentItems,
                         gridScale = gridScale,
                         listMode = listMode,

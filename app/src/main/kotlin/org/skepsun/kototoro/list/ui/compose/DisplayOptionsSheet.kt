@@ -61,6 +61,7 @@ import org.skepsun.kototoro.core.ui.adaptive.tvSliderDpad
 import org.skepsun.kototoro.core.ui.adaptive.tvTakeInitialFocus
 import org.skepsun.kototoro.core.ui.compose.KototoroSlider
 import org.skepsun.kototoro.list.domain.ListSortOrder
+import org.skepsun.kototoro.list.ui.ListDisplaySection
 
 private const val DISPLAY_OPTIONS_SHEET_TAG = "DisplayOptionsSheet"
 
@@ -93,6 +94,8 @@ fun DisplayOptionsSheet(
     // (non-home sections don't page their rails).
     railRows: Int? = null,
     onRailRowsChange: ((Int) -> Unit)? = null,
+    // The page these options belong to; null edits the general ones. Extra card info is stored per page.
+    section: ListDisplaySection? = null,
     extraContent: (@Composable () -> Unit)? = null,
     onDismissRequest: () -> Unit,
 ) {
@@ -102,8 +105,8 @@ fun DisplayOptionsSheet(
         org.skepsun.kototoro.core.prefs.AppSettings(context.applicationContext)
     }
     val showExtraInfo by settings.observeAsState(
-        org.skepsun.kototoro.core.prefs.AppSettings.KEY_SHOW_EXTRA_INFO_ON_CARDS,
-    ) { showExtraInfoOnCards }
+        *AppSettings.extraInfoKeysOf(section).toTypedArray(),
+    ) { showExtraInfoOf(section) }
     val showSourceHealth by settings.observeAsState(
         org.skepsun.kototoro.core.prefs.AppSettings.KEY_SOURCE_HEALTH_BANNER,
     ) { isSourceHealthBannerEnabled }
@@ -185,7 +188,7 @@ fun DisplayOptionsSheet(
                             }
                             FilterChip(
                                 selected = showExtraInfo,
-                                onClick = { settings.showExtraInfoOnCards = !showExtraInfo },
+                                onClick = { settings.setShowExtraInfoOf(section, !showExtraInfo) },
                                 label = {
                                     Text(
                                         text = stringResource(R.string.show_extra_info_on_cards),
@@ -228,7 +231,7 @@ fun DisplayOptionsSheet(
                             )
                         }
 
-                        if (supportsGridSizeSlider && !gridSizeIsSectionLocal) {
+                        if (supportsGridSizeSlider && !gridSizeIsSectionLocal && section == null) {
                             Text(
                                 text = stringResource(R.string.display_options_shared_size_summary),
                                 style = MaterialTheme.typography.bodySmall,

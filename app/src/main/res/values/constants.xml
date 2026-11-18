@@ -24,6 +24,8 @@
 	<string name="bangumi_clientSecret" translatable="false">f48b29e0ee8a3aa155e68fda79ba5b5e</string>
 	<string name="simkl_clientId" translatable="false">24b0016374a5c2f6b54ef4049b5ae95bb05ab1fc967db3842e4be1c9dd0f8e7e</string>
 	<string name="simkl_clientSecret" translatable="false">2e84f311425a88f29890f81e122d6498b35a6c28c9241e0ade0dddbea5beeb8c</string>
+	<!-- TMDB v3 API key (themoviedb.org/settings/api). Empty until the project registers one; sign-in reports it. -->
+	<string name="tmdb_apiKey" translatable="false">c1f6a77ae29182a0df4d3323320ad5c8</string>
 	<string name="sync_authority_history" translatable="false">org.skepsun.kototoro.history</string>
 	<string name="sync_authority_favourites" translatable="false">org.skepsun.kototoro.favourites</string>
 	<string name="tg_backup_bot_name" translatable="false">kototoro_backup_bot</string>

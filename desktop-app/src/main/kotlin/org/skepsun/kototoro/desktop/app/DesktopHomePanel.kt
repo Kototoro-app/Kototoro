@@ -113,6 +113,9 @@ internal fun DesktopHomePanel(controller: DesktopController, state: DesktopAppSt
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 TopBarTitleBlock(desktopText("nav.home"))
                 Spacer(Modifier.weight(1f))
+                OutlinedButton({ controller.showSearch() }, enabled = enabled, modifier = Modifier.testTag("home-search")) {
+                    Text(desktopText("globalSearch.open"))
+                }
                 DesktopSourceFilterControls(filter, state.sources, controller::homeFilter, enabled, "home")
             }
         },

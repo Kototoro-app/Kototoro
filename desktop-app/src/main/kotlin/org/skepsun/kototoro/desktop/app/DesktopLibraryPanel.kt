@@ -106,6 +106,7 @@ internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAp
         // Android's floating shelf bar: the title or selection bar, the category tabs and the count float over the
         // grid, which scrolls beneath them.
         val inset = LocalDesktopTopInset.current
+        val display = if (history) state.historyDisplay else state.libraryDisplay
         FloatingTopBarScaffold(modifier = Modifier.fillMaxSize(), backdropColor = Canvas, scrimColor = Canvas, topBar = {
         Column(Modifier.fillMaxWidth().padding(top = inset, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             if (checkedIds.isNotEmpty()) DesktopLibrarySelectionBar(
@@ -136,7 +137,8 @@ internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAp
                         else desktopText("library.filterWithCount", selection.filterCount),
                         { drawer = !drawer }, active = selection.filterCount > 0,
                         modifier = Modifier.testTag("library-filters"))
-                    LibraryDisplayOptions(state.libraryDisplay, enabled, controller::libraryDisplay)
+                    LibraryDisplayOptions(display, enabled,
+                        if (history) controller::historyDisplay else controller::libraryDisplay)
                     var more by remember(history) { mutableStateOf(false) }
                     Box {
                         TopBarIconAction(painterResource("icons/ic_more_vert.svg"), desktopText("common.more"),
@@ -194,8 +196,8 @@ internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAp
                         pinnedOf = { pinned[it.id] == true },
                         selectedIds = checkedIds.takeIf { it.isNotEmpty() },
                         onToggleSelection = ::toggleSelection,
-                        listMode = state.libraryDisplay.listMode,
-                        gridSize = state.libraryDisplay.gridSize,
+                        listMode = display.listMode,
+                        gridSize = display.gridSize,
                         collectionState = collectionState,
                         contentPadding = PaddingValues(top = inner.calculateTopPadding()),
                         metaOf = { content ->
@@ -410,7 +412,7 @@ private fun LibraryDisplayOptions(display: DesktopLibraryDisplay, enabled: Boole
                 verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 org.skepsun.kototoro.list.ui.compose.DisplayOptionsHeader(
                     title = AndroidStrings["display_options"],
-                    summary = AndroidStrings["display_options_library_summary"],
+                    summary = AndroidStrings["display_options_live_summary"],
                 )
                 Text(AndroidStrings["list_mode"], style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)

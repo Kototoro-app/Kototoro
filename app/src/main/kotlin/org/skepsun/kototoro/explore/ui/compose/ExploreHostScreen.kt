@@ -269,6 +269,7 @@ fun KototoroExploreHostRoute(
     val settings = remember(context.applicationContext) { AppSettings(context.applicationContext) }
     val screenPrefs by settings.observeAsState(
         AppSettings.KEY_GRID_SIZE,
+        AppSettings.gridSizeKeyOf(org.skepsun.kototoro.list.ui.ListDisplaySection.BROWSE),
         AppSettings.KEY_SOURCES_GROUPED_BY_LANGUAGE,
         AppSettings.KEY_LIST_MODE_BROWSE,
         AppSettings.KEY_BROWSE_TRACKING_RECOMMENDATIONS,
@@ -276,7 +277,7 @@ fun KototoroExploreHostRoute(
         AppSettings.KEY_PANORAMA_BLUR,
     ) {
         ExploreScreenPrefs(
-            gridScale = gridSize / 100f,
+            gridScale = gridSizeOf(org.skepsun.kototoro.list.ui.ListDisplaySection.BROWSE) / 100f,
             isSourcesGroupedByLanguage = isSourcesGroupedByLanguage,
             browseListMode = browseListMode,
             isBrowseTrackingRecommendationsEnabled = isBrowseTrackingRecommendationsEnabled,

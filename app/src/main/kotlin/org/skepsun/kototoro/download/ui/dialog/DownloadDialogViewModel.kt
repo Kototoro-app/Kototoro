@@ -10,6 +10,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.getPreferredBranch
 import org.skepsun.kototoro.core.model.parcelable.ParcelableContent
@@ -38,6 +39,8 @@ import org.skepsun.kototoro.parsers.util.sizeOrZero
 import org.skepsun.kototoro.parsers.util.suspendlazy.suspendLazy
 import org.skepsun.kototoro.settings.storage.DirectoryModel
 import org.skepsun.kototoro.video.domain.resolveVideoCandidates
+import org.skepsun.kototoro.video.player.MeasuredVideoSize
+import org.skepsun.kototoro.video.player.VideoQualitySizeProber
 import javax.inject.Inject
 
 @HiltViewModel
@@ -50,6 +53,7 @@ class DownloadDialogViewModel @Inject constructor(
     private val mangaRepositoryFactory: ContentRepository.Factory,
     private val historyRepository: HistoryRepository,
     private val settings: AppSettings,
+    private val videoQualitySizeProber: VideoQualitySizeProber,
 ) : BaseViewModel() {
 
     private val initialManga = savedStateHandle.get<Array<ParcelableContent>>(AppRouter.KEY_MANGA)
@@ -80,6 +84,9 @@ class DownloadDialogViewModel @Inject constructor(
     )
     val isOptionsLoading = MutableStateFlow(true)
     val videoQualities = MutableStateFlow<List<String>?>(null)
+
+    /** Download sizes of the quality options, keyed by option title; filled in as they are measured. */
+    val videoQualitySizes = MutableStateFlow<Map<String, MeasuredVideoSize>>(emptyMap())
     val isVideoContent = MutableStateFlow(false)
     val isVideoQualitiesLoading = MutableStateFlow(false)
 
@@ -307,12 +314,17 @@ class DownloadDialogViewModel @Inject constructor(
         val repo = mangaRepositoryFactory.create(firstManga.source)
 
         runCatchingCancellable {
-            val qualities = repo.resolveVideoCandidates(firstChapter)
-                .map { it.title.trim() }
-                .filter { it.isNotEmpty() }
-                .distinct()
-            if (qualities.isNotEmpty()) {
-                videoQualities.value = qualities
+            val candidates = repo.resolveVideoCandidates(firstChapter)
+                .filter { it.title.trim().isNotEmpty() }
+                .distinctBy { it.title.trim() }
+            if (candidates.isNotEmpty()) {
+                videoQualities.value = candidates.map { it.title.trim() }
+                // The options are usable right away; sizes show up next to them as they are measured.
+                launchJob(Dispatchers.IO) {
+                    videoQualitySizeProber.measureEach(candidates) { title, size ->
+                        videoQualitySizes.update { it + (title to size) }
+                    }
+                }
             }
         }.onFailure {
             it.printStackTraceDebug()

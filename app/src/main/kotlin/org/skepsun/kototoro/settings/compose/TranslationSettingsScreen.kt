@@ -14,7 +14,6 @@ import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
-import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ReaderOcrMode
@@ -136,20 +135,18 @@ fun TranslationSettingsScreen(
                     )
                 }
 
-                if (BuildConfig.DEBUG) {
-                    item {
-                        SettingsSwitchPreference(
-                            title = stringResource(R.string.reader_translation_debug_logs),
-                            iconRes = R.drawable.ic_code,
-                            summary = stringResource(R.string.reader_translation_debug_logs_summary),
-                            checked = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_DEBUG_LOGS) {
-                                settings.isReaderTranslationDebugLogsEnabled
-                            }.value,
-                            onCheckedChange = {
-                                prefs.edit { putBoolean(AppSettings.KEY_READER_TRANSLATION_DEBUG_LOGS, it) }
-                            },
-                        )
-                    }
+                item {
+                    SettingsSwitchPreference(
+                        title = stringResource(R.string.reader_translation_debug_logs),
+                        iconRes = R.drawable.ic_code,
+                        summary = stringResource(R.string.reader_translation_debug_logs_summary),
+                        checked = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_DEBUG_LOGS) {
+                            settings.isReaderTranslationDebugLogsEnabled
+                        }.value,
+                        onCheckedChange = {
+                            prefs.edit { putBoolean(AppSettings.KEY_READER_TRANSLATION_DEBUG_LOGS, it) }
+                        },
+                    )
                 }
             }
         }

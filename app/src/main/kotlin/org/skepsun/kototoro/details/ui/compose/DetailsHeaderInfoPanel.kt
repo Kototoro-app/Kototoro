@@ -1079,6 +1079,7 @@ private fun supportedStatusesForService(service: ScrobblerService): List<Scrobbl
         ScrobblerService.KITSU,
         ScrobblerService.MANGAUPDATES,
         ScrobblerService.SIMKL,
+        ScrobblerService.TMDB,
         ScrobblerService.MANGABAKA,
         ScrobblerService.ANILIST,
         ScrobblerService.SHIKIMORI,

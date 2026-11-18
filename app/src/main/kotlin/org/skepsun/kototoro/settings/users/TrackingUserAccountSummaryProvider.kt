@@ -28,7 +28,7 @@ class TrackingUserAccountSummaryProvider @Inject constructor(
         if (entries.isEmpty()) return null
         return when (service) {
             ScrobblerService.MAL -> buildMalStats(entries)
-            ScrobblerService.SIMKL -> buildSimklStats(entries)
+            ScrobblerService.SIMKL, ScrobblerService.TMDB -> buildSimklStats(entries)
             else -> buildUnifiedStats(entries)
         }
     }

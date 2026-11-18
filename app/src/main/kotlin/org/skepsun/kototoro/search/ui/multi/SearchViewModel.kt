@@ -48,6 +48,7 @@ import org.skepsun.kototoro.search.domain.AdvancedSearchParams
 import org.skepsun.kototoro.search.domain.SearchKind
 import org.skepsun.kototoro.search.domain.SearchFilters
 import org.skepsun.kototoro.search.domain.SearchV2Helper
+import org.skepsun.kototoro.search.domain.searchSourcesInParallel
 import org.skepsun.kototoro.search.domain.matches
 import org.skepsun.kototoro.search.domain.searchContentKindsFromNames
 import org.skepsun.kototoro.search.domain.sourceTypesFromNames
@@ -306,17 +307,14 @@ class SearchViewModel @AssistedInject constructor(
     }
 
     private suspend fun searchSources(sources: List<ContentSource>, generation: Long) =
-        kotlinx.coroutines.coroutineScope {
-            val semaphore = Semaphore(MAX_PARALLELISM)
-            sources.map { source ->
-                launch {
-                    semaphore.withPermit {
-                        appendResult(searchSource(source), generation)
-                        updateSearchState(generation) { it.copy(completedSources = it.completedSources + 1) }
-                    }
-                }
-            }.joinAll()
-        }
+        searchSourcesInParallel(
+            sources = sources,
+            search = { source -> searchSource(source) },
+            onResult = { _, result ->
+                appendResult(result, generation)
+                updateSearchState(generation) { it.copy(completedSources = it.completedSources + 1) }
+            },
+        )
 
     private fun currentFilters(): SearchFilters =
         filters.value.copy(languagePresetId = appSettings.activeSourcePresetId).normalized()

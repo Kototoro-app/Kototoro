@@ -576,7 +576,20 @@ class DownloadWorker @AssistedInject constructor(
         val storedContent = checkNotNull(mangaDataRepository.findContentById(task.executionMangaId, withChapters = true)) {
             "Cannot load content ${task.executionMangaId}"
         }
-        val chapters = getChapters(storedContent, task).filter { isPreparationChapterEligible(it.value) }
+        var workContent = storedContent
+        var chapters = getChapters(storedContent, task).filter { isPreparationChapterEligible(it.value) }
+        if (chapters.isEmpty()) {
+            // The stored record of a source title keeps the source's own chapter links; once downloaded, the same
+            // chapters (same ids) live in the local copy, which is what has pages to translate.
+            val local = runCatchingCancellable { localContentRepository.getDetails(storedContent) }.getOrNull()
+            val localChapters = local?.let {
+                runCatching { getChapters(it, task) }.getOrNull()?.filter { chapter -> isPreparationChapterEligible(chapter.value) }
+            }.orEmpty()
+            if (localChapters.isNotEmpty()) {
+                workContent = checkNotNull(local)
+                chapters = localChapters
+            }
+        }
         check(chapters.isNotEmpty()) { "No downloaded chapter to translate for ${storedContent.title}" }
         val forceRetranslation = task.isRetranslation
         val languagePair = resolveChapterTranslationLanguagePair(
@@ -596,7 +609,7 @@ class DownloadWorker @AssistedInject constructor(
                         // "Translate again" must not hand back the paragraphs cached by the previous run.
                         novelTranslationProcessor.clearCache()
                     }
-                    translateNovelChapters(context, storedContent, task, chapters, languagePair)
+                    translateNovelChapters(context, workContent, task, chapters, languagePair)
                 }
 
                 else -> {

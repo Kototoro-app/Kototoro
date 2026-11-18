@@ -151,7 +151,8 @@ class ScrobblerConfigActivity : BaseComposeActivity() {
     private fun processIntent(intent: Intent) {
         extractPendingBindInfo(intent)
         if (intent.action == Intent.ACTION_VIEW) {
-            intent.data?.getQueryParameter("code")?.takeIf(String::isNotEmpty)?.let(viewModel::onAuthCodeReceived)
+            intent.data?.let { it.getQueryParameter("code") ?: it.getQueryParameter("request_token") }
+                ?.takeIf(String::isNotEmpty)?.let(viewModel::onAuthCodeReceived)
         }
         val info = pendingBindInfo
         if (info != null && !pendingBindHandled) {
@@ -295,5 +296,6 @@ class ScrobblerConfigActivity : BaseComposeActivity() {
         const val HOST_BANGUMI_AUTH = "bangumi-auth"
         const val HOST_MANGAUPDATES_AUTH = "mangaupdates-auth"
         const val HOST_SIMKL_AUTH = "simkl-auth"
+        const val HOST_TMDB_AUTH = "tmdb-auth"
     }
 }

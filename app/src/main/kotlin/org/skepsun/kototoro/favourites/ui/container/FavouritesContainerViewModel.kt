@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.favourites.ui.container
 
+import org.skepsun.kototoro.list.ui.ListDisplaySection
 import android.content.Context
 import kotlinx.coroutines.flow.first
 import androidx.room.withTransaction
@@ -123,8 +124,13 @@ class FavouritesContainerViewModel @Inject constructor(
         val favouriteCounts: Map<Long, Int> = emptyMap(),
     )
 
-    val listMode = settings.observeAsFlow(AppSettings.KEY_LIST_MODE) { this.listMode }
-        .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, settings.listMode)
+    val listMode = settings.observeAsFlow(AppSettings.listModeKeysOf(ListDisplaySection.FAVORITES)) {
+        listModeOf(ListDisplaySection.FAVORITES)
+    }.stateIn(
+        viewModelScope + Dispatchers.Default,
+        SharingStarted.Eagerly,
+        settings.listModeOf(ListDisplaySection.FAVORITES),
+    )
 
     val isQuickFilterEnabled = settings.observeAsFlow(AppSettings.KEY_QUICK_FILTER) { isQuickFilterEnabled }
         .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, settings.isQuickFilterEnabled)
@@ -311,8 +317,8 @@ class FavouritesContainerViewModel @Inject constructor(
 
     internal val gridScale = settings.observeAsStateFlow(
         scope = listScope,
-        key = AppSettings.KEY_GRID_SIZE,
-        valueProducer = { gridSize / 100f },
+        keys = AppSettings.gridSizeKeysOf(ListDisplaySection.FAVORITES),
+        valueProducer = { gridSizeOf(ListDisplaySection.FAVORITES) / 100f },
     )
 
     /** Toasts and host requests raised by list actions, collected by the shared route. */

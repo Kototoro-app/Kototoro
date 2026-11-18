@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.suggestions.ui
 
+import org.skepsun.kototoro.list.ui.ListDisplaySection
 import org.skepsun.kototoro.search.domain.LibrarySearchQueries
 import org.skepsun.kototoro.search.domain.LibrarySearchScope
 import org.skepsun.kototoro.search.domain.matchLibraryText
@@ -87,8 +88,15 @@ class SuggestionsViewModel @Inject constructor(
         .map { it < Int.MAX_VALUE }
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
-    override val listMode = settings.observeAsFlow(AppSettings.KEY_LIST_MODE) { this.listMode }
-        .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, settings.listMode)
+    override fun displaySection() = ListDisplaySection.SUGGESTIONS
+
+    override val listMode = settings.observeAsFlow(AppSettings.listModeKeysOf(ListDisplaySection.SUGGESTIONS)) {
+        listModeOf(ListDisplaySection.SUGGESTIONS)
+    }.stateIn(
+        viewModelScope + Dispatchers.Default,
+        SharingStarted.Eagerly,
+        settings.listModeOf(ListDisplaySection.SUGGESTIONS),
+    )
 
     override val currentGroupTab = globalFavoritesState.selectedGroupTab.scopedToSpace(
         spaceGroupTab = spaceBinding.groupTab,

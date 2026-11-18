@@ -171,6 +171,7 @@ fun DesktopApp(controller: DesktopController, closing: Boolean = false, fullscre
                             DesktopScreen.FEED -> DesktopFeedPanel(controller, listState, !closing)
                             DesktopScreen.UPDATED -> DesktopUpdatesPage(controller, state, !closing)
                             DesktopScreen.SUGGESTIONS -> DesktopSuggestionsPage(controller, state, !closing)
+                            DesktopScreen.SEARCH -> DesktopGlobalSearchPage(controller, listState, !closing)
                             DesktopScreen.EXPLORE -> Browse(controller, listState, !closing)
                             DesktopScreen.LIBRARY, DesktopScreen.HISTORY -> DesktopLibraryPanel(controller, listState, !closing,
                                 if (listState.screen == DesktopScreen.HISTORY) historyCollection else favouritesCollection)
@@ -284,7 +285,7 @@ private val ScrollUnderScreens = setOf(DesktopScreen.MORE, DesktopScreen.SERVICE
     DesktopScreen.REPLACE_RULES, DesktopScreen.SOURCE_TEST, DesktopScreen.EXTENSION_SETTINGS, DesktopScreen.SETUP_WIZARD, DesktopScreen.RECOMMENDATIONS,
     DesktopScreen.PREFERENCES, DesktopScreen.BACKUPS, DesktopScreen.UPDATED, DesktopScreen.SUGGESTIONS,
     DesktopScreen.BOOKMARKS, DesktopScreen.DOWNLOADS, DesktopScreen.CHANGELOG, DesktopScreen.CRASH_LOGS,
-    DesktopScreen.DICTIONARY_RULES, DesktopScreen.TAG_BLACKLIST)
+    DesktopScreen.DICTIONARY_RULES, DesktopScreen.TAG_BLACKLIST, DesktopScreen.SEARCH)
 
 /**
  * Where a page with its own floating bar starts that bar: below the window's notices, or at the page margin. The page
@@ -313,6 +314,7 @@ private fun Header(state: DesktopAppState, controller: DesktopController, enable
         DesktopScreen.FEED -> AndroidStrings["feed"]
         DesktopScreen.UPDATED -> AndroidStrings["updated"]
         DesktopScreen.SUGGESTIONS -> AndroidStrings["suggestions"]
+        DesktopScreen.SEARCH -> AndroidStrings["global_search"]
         DesktopScreen.EXPLORE -> state.selectedSource?.displayName ?: desktopText("screens.browseSource")
         DesktopScreen.LIBRARY -> desktopText("nav.favourites")
         DesktopScreen.HISTORY -> desktopText("screens.history")

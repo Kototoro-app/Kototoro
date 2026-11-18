@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.remotelist.ui
 
+import org.skepsun.kototoro.list.ui.ListDisplaySection
 import android.util.Log
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
@@ -85,6 +86,8 @@ open class RemoteListViewModel @Inject constructor(
     private val detailsLoadUseCase: DetailsLoadUseCase,
     @LocalStorageChanges localStorageChanges: SharedFlow<LocalContent?>,
 ) : ContentListViewModel(settings, mangaDataRepository, localStorageChanges), FilterCoordinator.Owner {
+
+    override fun displaySection() = ListDisplaySection.SEARCH
 
     private val initialSource = resolveInitialSource(savedStateHandle)
 

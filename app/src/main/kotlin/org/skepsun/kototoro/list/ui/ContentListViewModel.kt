@@ -177,15 +177,21 @@ abstract class ContentListViewModel(
     private val retainedPagingSnapshotStore = RetainedPagingSnapshotStore()
     override val hasMoreItems: StateFlow<Boolean> = flowOf(true)
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
-    override val listMode = settings.observeAsFlow(AppSettings.KEY_LIST_MODE) { listMode }
-        .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, settings.listMode)
+    /** The page whose own display options this list follows; null for lists on the general ones. */
+    protected open fun displaySection(): ListDisplaySection? = null
+
+    override val displaySection: ListDisplaySection? get() = displaySection()
+
+    override val listMode = settings.observeAsFlow(AppSettings.listModeKeysOf(displaySection())) {
+        listModeOf(displaySection())
+    }.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, settings.listModeOf(displaySection()))
     val onActionDone = MutableEventFlow<ReversibleAction>()
     override val onContentMessage = MutableEventFlow<String>()
     override val onContentActionHostRequest = MutableEventFlow<ContentActionHostRequest>()
     override val gridScale = settings.observeAsStateFlow(
         scope = viewModelScope + Dispatchers.Default,
-        key = AppSettings.KEY_GRID_SIZE,
-        valueProducer = { gridSize / 100f },
+        keys = AppSettings.gridSizeKeysOf(displaySection()),
+        valueProducer = { gridSizeOf(displaySection()) / 100f },
     )
 
     /**

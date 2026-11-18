@@ -541,6 +541,7 @@ fun AppContentListRoute(
     }
 
     KototoroContentListScreen(
+        displaySection = viewModel.displaySection,
         contentPadding = contentPadding,
         items = retainedPagingState.displayedItems,
         pagingItems = retainedPagingState.displayedPagingItems,
