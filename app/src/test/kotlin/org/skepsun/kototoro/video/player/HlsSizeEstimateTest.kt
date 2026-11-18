@@ -123,6 +123,32 @@ class HlsSizeEstimateTest {
     }
 
     @Test
+    fun `measure reads a long playlist to its end marker`() = runTest {
+        val body = buildString {
+            append("#EXTM3U\n#EXT-X-TARGETDURATION:6\n#EXT-X-PLAYLIST-TYPE:VOD\n")
+            repeat(1000) { append("#EXTINF:3,\n%07d.ts\n".format(it)) }
+            append("#EXT-X-ENDLIST\n")
+        }
+        val server = MockWebServer()
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = when {
+                request.path == "/index.m3u8" -> MockResponse().setBody(body)
+                request.path?.endsWith(".ts") == true -> MockResponse().setHeader("Content-Length", "300000")
+                else -> MockResponse().setResponseCode(404)
+            }
+        }
+        server.start()
+        try {
+            val size = VideoStreamSizeProbe(OkHttpClient()).measure(server.url("/index.m3u8").toString())
+
+            // 100 KB/s over 3000 s.
+            assertEquals(MeasuredVideoSize(bytes = 300_000_000L, isEstimated = true), size)
+        } finally {
+            server.close()
+        }
+    }
+
+    @Test
     fun `measure keeps the exact size for a progressive file`() = runTest {
         val server = MockWebServer()
         server.enqueue(MockResponse().setHeader("Content-Length", "1048576"))

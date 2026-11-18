@@ -79,9 +79,10 @@ internal class VideoStreamSizeProbe(
             val prefix = Buffer()
             source.peek().read(prefix, HLS_PREFIX_BYTES)
             if (!looksLikeHlsManifest(prefix.readUtf8())) return null
-            val body = Buffer()
-            source.read(body, HLS_PLAYLIST_LIMIT_BYTES)
-            return body.readUtf8()
+            // A single read() only drains one buffered chunk (~8 KB), which would cut a long playlist before
+            // its end marker and make it look like a live stream; request() buffers up to the limit or EOF.
+            source.request(HLS_PLAYLIST_LIMIT_BYTES)
+            return source.buffer.readUtf8()
         }
     }
 
