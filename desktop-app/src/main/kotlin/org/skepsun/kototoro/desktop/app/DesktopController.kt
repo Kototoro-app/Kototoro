@@ -12,7 +12,9 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
+import org.skepsun.kototoro.search.domain.AdvancedSearchParams
 import org.skepsun.kototoro.search.domain.SearchCandidate
+import org.skepsun.kototoro.search.domain.SearchHistoryRules
 import org.skepsun.kototoro.search.domain.SearchKind
 import org.skepsun.kototoro.search.domain.SearchRules
 import org.skepsun.kototoro.search.domain.searchSourcesInParallel
@@ -110,6 +112,9 @@ private const val READER_MODES = "reader_modes"
 /** Sources asked at once by the global search. */
 private const val GLOBAL_SEARCH_CONCURRENCY = 4
 
+/** The preference holding the earlier queries, one per line, newest first. */
+private const val SEARCH_HISTORY_KEY = "history"
+
 internal val DetailsOrigins = setOf(DesktopScreen.HOME, DesktopScreen.FEED, DesktopScreen.EXPLORE, DesktopScreen.LIBRARY,
     DesktopScreen.HISTORY, DesktopScreen.BOOKMARKS, DesktopScreen.UPDATED, DesktopScreen.SUGGESTIONS, DesktopScreen.SEARCH)
 
@@ -118,14 +123,33 @@ internal fun desktopChapterBranchLocales(): List<ChapterBranchLocale> =
     listOf(Locale.getDefault(Locale.Category.DISPLAY), Locale.getDefault()).distinct()
         .map { ChapterBranchLocale(it.getDisplayLanguage(it), it.getDisplayName(it)) }
 
-/** The state of the global search page; [results] keeps the order in which the sources answered. */
+/**
+ * The state of the global search page. [results] keeps the order in which the sources answered; [history] and
+ * [favourites] are the works the user already has that match, shown before the sources' answers like Android's.
+ */
 data class DesktopGlobalSearch(
     val query: String = "",
+    val kind: SearchKind = SearchKind.SIMPLE,
+    val advanced: AdvancedSearchParams = AdvancedSearchParams(),
     val results: Map<String, List<SourceContent>> = emptyMap(),
+    val history: List<SourceContent> = emptyList(),
+    val favourites: List<SourceContent> = emptyList(),
     val pending: Set<String> = emptySet(),
+    /** Sources that failed to answer, by name, with what they said; they can be retried together. */
+    val failed: Map<String, String> = emptyMap(),
+    /** The disabled sources have been asked too. */
+    val searchedDisabled: Boolean = false,
     /** Which sources are asked: the same ecosystem / type / language chips as Browse. */
     val filter: DesktopSourceFilter = DesktopSourceFilter(),
-)
+    /** Earlier queries, newest first. */
+    val recent: List<String> = emptyList(),
+) {
+    /** Whether there is anything to search for with [kind]. */
+    val isActive: Boolean
+        get() = if (kind == SearchKind.ADVANCED) {
+            advanced.query.isNotBlank() || advanced.title.isNotBlank() || advanced.tags.isNotBlank() || advanced.author.isNotBlank()
+        } else query.isNotBlank()
+}
 
 enum class DesktopScreen {
     HOME, FEED, EXPLORE, LIBRARY, HISTORY, DETAILS, READER, NOVEL, VIDEO, PREFERENCES, BROWSER, DOWNLOADS, BACKUPS,
@@ -509,6 +533,7 @@ class DesktopController(
     /** The related-works request of the open details; a new details cancels the old one. */
     private var relatedJob: Job? = null
     private var globalSearchJob: Job? = null
+    private val searchPreferences = session.storage.preferences.open("desktop_search")
 
     init {
         // The saved language applies before the first screen is composed; `--lang` outranks it for this run.
@@ -1633,57 +1658,165 @@ class DesktopController(
         mutableState.update { it.copy(exploreFilter = filter) }
     }
 
-    fun showSearch() = navigate { mutableState.update { it.copy(screen = DesktopScreen.SEARCH) } }
+    fun showSearch() = navigate {
+        mutableState.update { it.copy(screen = DesktopScreen.SEARCH,
+            globalSearch = it.globalSearch.copy(recent = loadSearchHistory())) }
+    }
 
-    /**
-     * Asks every enabled source for [query], a few at a time, off the operation gate: a slow source only delays its own
-     * group. A source that fails or has nothing simply adds no group.
-     */
     fun globalSearchFilter(filter: DesktopSourceFilter) {
         mutableState.update { it.copy(globalSearch = it.globalSearch.copy(filter = filter)) }
-        globalSearch(state.value.globalSearch.query)
+        runGlobalSearch()
+    }
+
+    fun globalSearchKind(kind: SearchKind) {
+        mutableState.update { it.copy(globalSearch = it.globalSearch.copy(kind = kind)) }
+        runGlobalSearch()
+    }
+
+    fun globalSearchAdvanced(advanced: AdvancedSearchParams) {
+        mutableState.update { it.copy(globalSearch = it.globalSearch.copy(advanced = advanced)) }
+        runGlobalSearch()
     }
 
     fun globalSearch(query: String) {
+        mutableState.update { it.copy(globalSearch = it.globalSearch.copy(query = query.trim())) }
+        runGlobalSearch()
+    }
+
+    /** Android's "search through disabled sources": the same search, asked of the sources that are switched off. */
+    fun searchDisabledSources() = runGlobalSearch(disabled = true)
+
+    /** Android's retry of the sources that failed; the answers already in stay. */
+    fun retryFailedSearch() = runGlobalSearch(only = state.value.globalSearch.failed.keys)
+
+    /** Called when a result is opened: that is the moment a query proved worth keeping. */
+    fun rememberSearch() {
+        val search = state.value.globalSearch
+        if (search.kind == SearchKind.ADVANCED || search.query.isBlank()) return
+        val recent = SearchHistoryRules.remember(search.recent, search.query)
+        mutableState.update { it.copy(globalSearch = it.globalSearch.copy(recent = recent)) }
+        saveSearchHistory(recent)
+    }
+
+    fun clearSearchHistory() {
+        mutableState.update { it.copy(globalSearch = it.globalSearch.copy(recent = emptyList())) }
+        saveSearchHistory(emptyList())
+    }
+
+    private fun loadSearchHistory(): List<String> =
+        (searchPreferences.snapshot()[SEARCH_HISTORY_KEY] as? SourcePreferenceValue.Text)?.value
+            ?.lines()?.filter { it.isNotBlank() }.orEmpty()
+
+    private fun saveSearchHistory(history: List<String>) {
+        searchPreferences.edit(SourcePreferenceEdit(changes = mapOf(
+            SEARCH_HISTORY_KEY to if (history.isEmpty()) null else SourcePreferenceValue.Text(history.joinToString("\n")))))
+    }
+
+    /** What each source can be asked, read once: the capability flags and tag lists do not change while it is open. */
+    private val searchCapabilities = java.util.concurrent.ConcurrentHashMap<String, SourceSearchCapabilities>()
+
+    private class SourceSearchCapabilities(
+        val supportsSearch: Boolean, val supportsAuthorSearch: Boolean, val tags: Set<SourceTag>)
+
+    private suspend fun capabilitiesOf(name: String, needTags: Boolean): SourceSearchCapabilities {
+        searchCapabilities[name]?.takeIf { !needTags || it.tags.isNotEmpty() }?.let { return it }
+        val descriptor = session.sources.describe(name)
+        val tags = if (needTags) relatedAttempt { session.sources.getFilterOptions(name) }?.let { options ->
+            options.availableTags + options.tagGroups.flatMap { it.tags }
+        }.orEmpty() else emptySet()
+        return SourceSearchCapabilities(descriptor.filterCapabilities.isSearchSupported,
+            descriptor.filterCapabilities.isAuthorSearchSupported, tags).also { searchCapabilities[name] = it }
+    }
+
+    /**
+     * Asks the sources the current search names, a few at a time, off the operation gate: a slow source only delays its
+     * own group. Android's rules (see [SearchRules]) decide what a source is asked and what of its answer is kept; the
+     * works the user already has come first. [only] repeats the search for those sources, [disabled] asks the switched
+     * off ones.
+     */
+    private fun runGlobalSearch(only: Set<String>? = null, disabled: Boolean = false) {
         globalSearchJob?.cancel()
-        val text = query.trim()
         val current = state.value
+        val search = current.globalSearch
         val settings = current.sourceSettings
-        val filter = current.globalSearch.filter
-        val targets = if (text.isEmpty()) emptyList() else current.enabledSources.filter {
-            filter.accepts(it) && !(settings.hidesNsfw(DesktopNsfwTarget.SOURCES) && it.isNsfwSource(current.sourceNsfwOverrides))
+        val query = if (search.kind == SearchKind.ADVANCED) search.advanced.title.ifBlank { search.advanced.query } else search.query
+        val retrying = only != null
+        val pool = if (disabled) current.sources.filter { it.source.name in current.disabledSources } else current.enabledSources
+        val targets = if (!search.isActive) emptyList() else pool.filter {
+            (only == null || it.source.name in only) && search.filter.accepts(it) &&
+                !(settings.hidesNsfw(DesktopNsfwTarget.SOURCES) && it.isNsfwSource(current.sourceNsfwOverrides))
         }
-        mutableState.update { it.copy(globalSearch = DesktopGlobalSearch(text,
-            pending = targets.mapTo(linkedSetOf()) { s -> s.source.name }, filter = filter)) }
-        if (targets.isEmpty()) return
-        val kind = SearchKind.SIMPLE
+        val keep = if (retrying || disabled) search else search.copy(results = emptyMap(), failed = emptyMap(),
+            history = emptyList(), favourites = emptyList(), searchedDisabled = false)
+        mutableState.update { it.copy(globalSearch = keep.copy(
+            pending = targets.mapTo(linkedSetOf()) { s -> s.source.name },
+            failed = if (retrying) keep.failed - only!! else keep.failed,
+            searchedDisabled = keep.searchedDisabled || disabled)) }
+        if (!search.isActive) return
+        val kind = search.kind
+        val advanced = search.advanced.takeIf { kind == SearchKind.ADVANCED }
+        val text = search.query
         val blacklist = settings.tagBlacklistRules()
         globalSearchJob = scope.launch {
+            if (!retrying && !disabled) loadLibraryMatches(kind, text, advanced, blacklist)
             searchSourcesInParallel(
                 sources = targets,
                 parallelism = GLOBAL_SEARCH_CONCURRENCY,
-                search = { listing ->
-                    // Android's SearchV2Helper rules: the plan names what the source is asked, then blacklisted works
-                    // go and the rest come most relevant first.
-                    val plan = SearchRules.plan(kind, text, null, supportsSearch = true, supportsAuthorSearch = false,
-                        knownTags = emptyList())
-                    val found = plan?.query?.let { query ->
-                        relatedAttempt { session.sources.getList(listing.source.name, 0, null, SourceFilter(query = query)) }
-                    }.orEmpty()
-                    SearchRules.sortByRelevance(
-                        found.filterNot { work -> work.tags.any { blacklist.containsTagTitle(it.title) } }
-                            .filter { SearchRules.accepts(it.asSearchCandidate(), kind, text, null) },
-                        kind, text, null) { it.asSearchCandidate() }
-                },
-                onResult = { listing, found ->
+                search = { listing -> searchOneSource(listing, kind, text, advanced, blacklist) },
+                onResult = { listing, outcome ->
                     mutableState.update { s ->
-                        val search = s.globalSearch
-                        if (search.query != text) s else s.copy(globalSearch = search.copy(
-                            results = if (found.isEmpty()) search.results else search.results + (listing.source.name to found),
-                            pending = search.pending - listing.source.name))
+                        val now = s.globalSearch
+                        if (now.query != search.query || now.kind != kind || now.advanced != search.advanced) s
+                        else s.copy(globalSearch = now.copy(
+                            results = if (outcome.works.isEmpty()) now.results
+                                else now.results + (listing.source.name to outcome.works),
+                            failed = outcome.error?.let { now.failed + (listing.source.name to it) } ?: now.failed,
+                            pending = now.pending - listing.source.name))
                     }
                 },
             )
+        }
+    }
+
+    private class SearchOutcome(val works: List<SourceContent>, val error: String? = null)
+
+    private suspend fun searchOneSource(listing: SourceListing, kind: SearchKind, text: String,
+        advanced: AdvancedSearchParams?, blacklist: org.skepsun.kototoro.core.model.TagBlacklist): SearchOutcome = try {
+        val capabilities = capabilitiesOf(listing.source.name, needTags = kind == SearchKind.TAG || kind == SearchKind.ADVANCED)
+        val plan = SearchRules.plan(kind, text, advanced, capabilities.supportsSearch, capabilities.supportsAuthorSearch,
+            capabilities.tags.map { it.title })
+        if (plan == null) SearchOutcome(emptyList()) else {
+            fun resolve(titles: Set<String>) = titles.mapNotNullTo(linkedSetOf()) { title ->
+                capabilities.tags.firstOrNull { it.title.equals(title, ignoreCase = true) }
+            }
+            val found = session.sources.getList(listing.source.name, 0, null, SourceFilter(query = plan.query,
+                author = plan.author, tags = resolve(plan.tags), tagsExclude = resolve(plan.tagsExclude)))
+            SearchOutcome(SearchRules.sortByRelevance(
+                found.filterNot { work -> work.tags.any { blacklist.containsTagTitle(it.title) } }
+                    .filter { SearchRules.accepts(it.asSearchCandidate(), kind, text, advanced) },
+                kind, text, advanced) { it.asSearchCandidate() })
+        }
+    } catch (error: CancellationException) {
+        throw error
+    } catch (error: Exception) {
+        SearchOutcome(emptyList(), error.message ?: error.javaClass.simpleName)
+    }
+
+    /** The works already in the history and the favourites that answer the search, before any source does. */
+    private suspend fun loadLibraryMatches(kind: SearchKind, text: String, advanced: AdvancedSearchParams?,
+        blacklist: org.skepsun.kototoro.core.model.TagBlacklist) {
+        fun matches(entries: List<org.skepsun.kototoro.core.library.SourceLibraryEntry>) = SearchRules.sortByRelevance(
+            entries.map { it.content }
+                .filterNot { work -> work.tags.any { blacklist.containsTagTitle(it.title) } }
+                .filter { SearchRules.matchesLibrary(it.asSearchCandidate(), kind, text, advanced) },
+            kind, text, advanced) { it.asSearchCandidate() }
+        val history = matches(session.library.snapshot(history = true, withChapters = false).entries)
+        val favourites = matches(session.library.snapshot(history = false, withChapters = false).entries)
+            .filterNot { favourite -> history.any { it.id == favourite.id } }
+        mutableState.update { s ->
+            val now = s.globalSearch
+            // The grid keys its cards by work, so a work the user has is shown once, in its library group.
+            if (now.query != text || now.kind != kind) s else s.copy(globalSearch = now.copy(history = history, favourites = favourites))
         }
     }
 

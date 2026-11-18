@@ -118,4 +118,40 @@ class SearchRulesTest {
         assertEquals(SearchContentKind.MANGA, searchContentKindOf("MANGA"))
         assertEquals(SearchContentKind.MANGA, searchContentKindOf(null))
     }
+
+    @Test
+    fun libraryWorksMatchByPlainText() {
+        val work = item("One Piece", alt = "ワンピース", authors = listOf("Eiichiro Oda"), tags = listOf("Action", "Adventure"))
+        assertTrue(SearchRules.matchesLibrary(work, SearchKind.SIMPLE, "piece", null))
+        assertTrue(SearchRules.matchesLibrary(work, SearchKind.TITLE, "ワン", null))
+        assertFalse(SearchRules.matchesLibrary(work, SearchKind.TITLE, "naruto", null))
+        assertTrue(SearchRules.matchesLibrary(work, SearchKind.AUTHOR, "oda", null))
+        assertFalse(SearchRules.matchesLibrary(item("x"), SearchKind.AUTHOR, "oda", null))
+        assertTrue(SearchRules.matchesLibrary(work, SearchKind.TAG, "action, -horror", null))
+        assertFalse(SearchRules.matchesLibrary(work, SearchKind.TAG, "", null))
+        assertTrue(SearchRules.matchesLibrary(work, SearchKind.ADVANCED, "", AdvancedSearchParams(title = "one", author = "oda", tags = "Adventure")))
+        assertFalse(SearchRules.matchesLibrary(work, SearchKind.ADVANCED, "", AdvancedSearchParams()))
+    }
+
+    @Test
+    fun searchHistoryKeepsNewestFirstWithoutRepeats() {
+        var history = emptyList<String>()
+        history = SearchHistoryRules.remember(history, "one piece")
+        history = SearchHistoryRules.remember(history, "naruto")
+        history = SearchHistoryRules.remember(history, "One Piece")
+        assertEquals(listOf("One Piece", "naruto"), history)
+        assertEquals(history, SearchHistoryRules.remember(history, " a "))
+        val long = (1..30).fold(emptyList<String>()) { acc, i -> SearchHistoryRules.remember(acc, "query $i") }
+        assertEquals(SearchHistoryRules.LIMIT, long.size)
+        assertEquals("query 30", long.first())
+    }
+
+    @Test
+    fun suggestionsCompleteTheTypedText() {
+        val history = listOf("one piece", "naruto", "piece of cake")
+        assertEquals(listOf("one piece", "piece of cake"), SearchHistoryRules.suggest(history, "piece"))
+        assertEquals(listOf("naruto"), SearchHistoryRules.suggest(history, "NARU"))
+        assertEquals(history, SearchHistoryRules.suggest(history, ""))
+        assertTrue(SearchHistoryRules.suggest(history, "naruto").isEmpty())
+    }
 }

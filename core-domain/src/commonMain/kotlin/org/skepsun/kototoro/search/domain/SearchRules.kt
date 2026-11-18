@@ -113,6 +113,33 @@ object SearchRules {
             }
         }
 
+    /**
+     * Whether a work the user already has (history, favourites, local) answers the search. This is a plain text match,
+     * unlike [accepts], which judges what a source returned for a query it already searched.
+     */
+    fun matchesLibrary(candidate: SearchCandidate, kind: SearchKind, query: String, advanced: AdvancedSearchParams?): Boolean {
+        fun titleHas(text: String) = candidate.title.contains(text, ignoreCase = true) ||
+            candidate.altTitle?.contains(text, ignoreCase = true) == true
+        return when (kind) {
+            SearchKind.SIMPLE, SearchKind.TITLE -> titleHas(query)
+            SearchKind.AUTHOR -> candidate.authors.containsIgnoreCase(query)
+            SearchKind.TAG -> {
+                val (include, exclude) = parseTagQuery(query)
+                (include.isNotEmpty() || exclude.isNotEmpty()) &&
+                    include.all { candidate.hasTag(it) } && exclude.none { candidate.hasTag(it) }
+            }
+            SearchKind.ADVANCED -> {
+                val title = advanced?.title?.ifEmpty { null } ?: advanced?.query?.ifEmpty { null }
+                val author = advanced?.author?.ifEmpty { null }
+                val (include, exclude) = parseTagQuery(advanced?.tags)
+                (title != null || author != null || include.isNotEmpty() || exclude.isNotEmpty()) &&
+                    (title == null || titleHas(title)) &&
+                    (author == null || candidate.authors.containsIgnoreCase(author)) &&
+                    include.all { candidate.hasTag(it) } && exclude.none { candidate.hasTag(it) }
+            }
+        }
+    }
+
     /** Higher is more relevant; sort the results by it, descending. */
     fun relevance(candidate: SearchCandidate, kind: SearchKind, query: String, advanced: AdvancedSearchParams?): Int =
         when (kind) {
@@ -194,4 +221,24 @@ suspend fun <S, R> searchSourcesInParallel(
     sources.map { source ->
         launch { gate.withPermit { onResult(source, search(source)) } }
     }.joinAll()
+}
+
+/** The queries a user searched for, newest first: what the search box offers again and completes from. */
+object SearchHistoryRules {
+
+    const val LIMIT = 20
+
+    /** [query] goes to the front; an earlier copy of it (ignoring case) and the oldest entries beyond [limit] drop out. */
+    fun remember(history: List<String>, query: String, limit: Int = LIMIT): List<String> {
+        val text = query.trim()
+        if (text.length < 2) return history
+        return (listOf(text) + history.filterNot { it.equals(text, ignoreCase = true) }).take(limit)
+    }
+
+    /** Earlier queries that contain what is typed, other than the typed text itself, newest first. */
+    fun suggest(history: List<String>, typed: String, limit: Int = 5): List<String> {
+        val text = typed.trim()
+        if (text.isEmpty()) return history.take(limit)
+        return history.filter { it.contains(text, ignoreCase = true) && !it.equals(text, ignoreCase = true) }.take(limit)
+    }
 }
