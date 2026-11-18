@@ -3195,6 +3195,28 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             showPlayerMessage(R.string.operation_not_supported)
             return
         }
+        val url = currentMediaUrl
+        val headers = currentMediaHeaders.orEmpty()
+        lifecycleScope.launch {
+            val size = url
+                ?.takeIf { it.isNotBlank() }
+                ?.let { withTimeoutOrNull(VIDEO_SIZE_PROBE_TIMEOUT_MS) { videoSizeProbe.probe(it, headers) } }
+                ?.takeIf { it > 0 }
+                ?.let(::formatVideoSize)
+                ?.takeIf { it.isNotEmpty() }
+            when {
+                size == null -> startChapterDownload(manga, chapterId)
+                else -> MaterialAlertDialogBuilder(this@VideoPlayerActivity)
+                    .setTitle(R.string.save_manga_video)
+                    .setMessage(getString(R.string.size_s, size))
+                    .setPositiveButton(R.string.confirm) { _, _ -> startChapterDownload(manga, chapterId) }
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show()
+            }
+        }
+    }
+
+    private fun startChapterDownload(manga: Content, chapterId: Long) {
         val task = DownloadTask(
             mangaId = manga.id,
             displayMangaId = manga.id,
