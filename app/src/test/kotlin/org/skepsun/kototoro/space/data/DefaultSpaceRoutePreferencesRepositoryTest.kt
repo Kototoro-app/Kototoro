@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test
 import org.skepsun.kototoro.space.domain.BuiltInSpaces
 import org.skepsun.kototoro.space.domain.MAIN_LIST_ROUTE_KEY
 import org.skepsun.kototoro.space.domain.SpaceListPreferences
+import org.skepsun.kototoro.space.domain.SpaceSectionDisplay
 
 class DefaultSpaceRoutePreferencesRepositoryTest {
 
@@ -35,6 +36,40 @@ class DefaultSpaceRoutePreferencesRepositoryTest {
 
 		repository.load(BuiltInSpaces.Manga, MAIN_LIST_ROUTE_KEY) shouldBe manga
 		repository.load(BuiltInSpaces.Novel, MAIN_LIST_ROUTE_KEY) shouldBe novel
+	}
+
+	@Test
+	fun `page display options are kept per space`() = runTest {
+		val manga = SpaceListPreferences(
+			listMode = "GRID",
+			gridSize = 100,
+			sections = mapOf(
+				"history" to SpaceSectionDisplay(listMode = "LIST", gridSize = 90, showExtraInfo = true),
+				"favorites" to SpaceSectionDisplay(listMode = "COMPACT_GRID", gridSize = 120),
+			),
+		)
+
+		repository.save(BuiltInSpaces.Manga, MAIN_LIST_ROUTE_KEY, manga)
+		repository.save(BuiltInSpaces.Novel, MAIN_LIST_ROUTE_KEY, SpaceListPreferences(listMode = "LIST", gridSize = 80))
+
+		repository.load(BuiltInSpaces.Manga, MAIN_LIST_ROUTE_KEY) shouldBe manga
+		repository.load(BuiltInSpaces.Novel, MAIN_LIST_ROUTE_KEY)?.sections shouldBe emptyMap()
+	}
+
+	@Test
+	fun `preferences saved before pages had their own options still load`() = runTest {
+		dao.upsert(
+			SpaceRoutePreferencesEntity(
+				spaceId = BuiltInSpaces.Manga.value,
+				routeKey = MAIN_LIST_ROUTE_KEY,
+				payload = """{"listMode":"GRID","gridSize":110}""",
+				schemaVersion = 1,
+				updatedAt = 1L,
+			),
+		)
+
+		repository.load(BuiltInSpaces.Manga, MAIN_LIST_ROUTE_KEY) shouldBe
+			SpaceListPreferences(listMode = "GRID", gridSize = 110)
 	}
 
 	@Test

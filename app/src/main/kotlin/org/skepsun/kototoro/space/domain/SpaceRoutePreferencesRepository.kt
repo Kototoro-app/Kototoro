@@ -12,6 +12,16 @@ data class SpaceListPreferences(
     val historySortOrder: String? = null,
     val favoritesSortOrder: String? = null,
     val sourceTags: Set<String> = emptySet(),
+    /** Display options of each page, keyed by `ListDisplaySection.id`; empty in preferences saved before they existed. */
+    val sections: Map<String, SpaceSectionDisplay> = emptyMap(),
+)
+
+/** One page's layout, grid size and extra card info switch inside a space. */
+@Serializable
+data class SpaceSectionDisplay(
+    val listMode: String,
+    val gridSize: Int,
+    val showExtraInfo: Boolean = false,
 )
 
 interface SpaceRoutePreferencesRepository {

@@ -18,7 +18,9 @@ import org.skepsun.kototoro.list.domain.ListSortOrder
 import org.skepsun.kototoro.space.domain.MAIN_LIST_ROUTE_KEY
 import org.skepsun.kototoro.space.domain.SpaceFeatureFlagsRepository
 import org.skepsun.kototoro.space.domain.SpaceId
+import org.skepsun.kototoro.list.ui.ListDisplaySection
 import org.skepsun.kototoro.space.domain.SpaceListPreferences
+import org.skepsun.kototoro.space.domain.SpaceSectionDisplay
 import org.skepsun.kototoro.space.domain.SpaceRepository
 import org.skepsun.kototoro.space.domain.SpaceRoutePreferencesRepository
 import java.util.concurrent.atomic.AtomicBoolean
@@ -34,6 +36,11 @@ class SpaceRoutePreferencesController @Inject constructor(
     private val settings: AppSettings,
     private val globalFavoritesState: GlobalFavoritesState,
 ) {
+    /** Every preference a page's own display options live in. */
+    private val sectionKeys: Array<String> = ListDisplaySection.entries.flatMap { section ->
+        AppSettings.listModeKeysOf(section) + AppSettings.gridSizeKeysOf(section) + AppSettings.extraInfoKeysOf(section)
+    }.toTypedArray()
+
     private val started = AtomicBoolean(false)
     private val mutex = Mutex()
     private val currentSpace = MutableStateFlow<SpaceId?>(null)
@@ -60,6 +67,7 @@ class SpaceRoutePreferencesController @Inject constructor(
                         AppSettings.KEY_GRID_SIZE,
                         AppSettings.KEY_HISTORY_ORDER,
                         AppSettings.KEY_FAVORITES_ORDER,
+                        *sectionKeys,
                     ).map { currentPreferences() },
                     globalFavoritesState.selectedSourceTags,
                     currentSpace,
@@ -105,6 +113,7 @@ class SpaceRoutePreferencesController @Inject constructor(
                 currentSpace.value = spaceId
                 settings.listMode = preferences.listMode.toListModeOr(defaults.listMode.toListModeOr(ListMode.GRID))
                 settings.gridSize = preferences.gridSize.coerceIn(GridSizeRange)
+                applySections(preferences)
                 settings.historySortOrder = preferences.historySortOrder.toSortOrderOr(ListSortOrder.LAST_READ)
                 settings.allFavoritesSortOrder = preferences.favoritesSortOrder.toSortOrderOr(ListSortOrder.NEWEST)
                 globalFavoritesState.setSelectedSourceTags(SourceTag.fromIds(preferences.sourceTags))
@@ -114,12 +123,34 @@ class SpaceRoutePreferencesController @Inject constructor(
         }
     }
 
+    /** Pages without a saved entry (a space stored before pages had their own options) follow the space's general values. */
+    private fun applySections(preferences: SpaceListPreferences) {
+        val general = SpaceSectionDisplay(
+            listMode = preferences.listMode,
+            gridSize = preferences.gridSize,
+            showExtraInfo = settings.showExtraInfoOnCards,
+        )
+        for (section in ListDisplaySection.entries) {
+            val display = preferences.sections[section.id] ?: general
+            settings.setListModeOf(section, display.listMode.toListModeOr(settings.listMode))
+            settings.setGridSizeOf(section, display.gridSize.coerceIn(GridSizeRange))
+            settings.setShowExtraInfoOf(section, display.showExtraInfo)
+        }
+    }
+
     private fun currentPreferences() = SpaceListPreferences(
         listMode = settings.listMode.name,
         gridSize = settings.gridSize,
         historySortOrder = settings.historySortOrder.name,
         favoritesSortOrder = settings.allFavoritesSortOrder.name,
         sourceTags = globalFavoritesState.selectedSourceTags.value.mapTo(linkedSetOf(), SourceTag::id),
+        sections = ListDisplaySection.entries.associate { section ->
+            section.id to SpaceSectionDisplay(
+                listMode = settings.listModeOf(section).name,
+                gridSize = settings.gridSizeOf(section),
+                showExtraInfo = settings.showExtraInfoOf(section),
+            )
+        },
     )
 
     private fun String.toListModeOr(fallback: ListMode): ListMode {
