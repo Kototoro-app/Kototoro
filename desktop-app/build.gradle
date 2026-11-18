@@ -779,9 +779,13 @@ tasks.matching { it.name == 'createDistributable' }.configureEach {
     }
 }
 
-tasks.withType(org.jetbrains.compose.desktop.application.tasks.AbstractJLinkTask).configureEach { link ->
-    // Compose 1.12.0 defaults to stripping commands. Keep the bundled JVM usable for local support/probes.
-    if (bundleDesktopRuntime) link.'getStripNativeCommands$compose'().set(false)
+// Compose strips the JDK commands by default, and since 1.13 it assigns that value after the task is created, so a
+// plain configureEach is overwritten. Set it once the plugin has finished configuring. Keep the bundled JVM usable
+// for local support/probes.
+afterEvaluate {
+    tasks.withType(org.jetbrains.compose.desktop.application.tasks.AbstractJLinkTask).configureEach { link ->
+        if (bundleDesktopRuntime) link.'getStripNativeCommands$compose'().set(false)
+    }
 }
 
 tasks.matching { it.name == 'prepareAppResources' }.configureEach {
