@@ -178,6 +178,15 @@ class DefaultTrackingSiteDiscoveryService @Inject constructor(
     }
 
     override fun getCapabilities(service: ScrobblerService): TrackingSiteCapabilities = when (service) {
+        ScrobblerService.TMDB -> TrackingSiteCapabilities(
+            supportsDiscovery = false,
+            supportsTrending = false,
+            supportsSearch = true,
+            supportsDetails = true,
+            supportsStatusSync = true,
+            supportsManualBinding = true,
+        )
+
         ScrobblerService.MANGABAKA -> TrackingSiteCapabilities(
             supportsDiscovery = false,
             supportsTrending = false,

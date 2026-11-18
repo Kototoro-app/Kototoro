@@ -216,6 +216,30 @@ object ScrobblingModule {
     ): SimklRepository = SimklRepository(context, okHttp, storage, database)
 
     @Provides
+    @Singleton
+    @ScrobblerType(ScrobblerService.TMDB)
+    fun provideTmdbStorage(
+        @ApplicationContext context: Context,
+    ): ScrobblerStorage = ScrobblerStorage(context, ScrobblerService.TMDB)
+
+    @Provides
+    @Singleton
+    @ScrobblerType(ScrobblerService.TMDB)
+    fun provideTmdbHttpClient(
+        @ApplicationContext context: Context,
+        @BaseHttpClient baseHttpClient: OkHttpClient,
+        @ScrobblerType(ScrobblerService.TMDB) storage: ScrobblerStorage,
+    ): OkHttpClient = baseHttpClient.newBuilder().apply {
+        addInterceptor(
+            org.skepsun.kototoro.scrobbling.tmdb.data.TmdbInterceptor(
+                storage = storage,
+                apiKey = context.getString(R.string.tmdb_apiKey),
+                appVersion = BuildConfig.VERSION_NAME,
+            ),
+        )
+    }.build()
+
+    @Provides
     @ElementsIntoSet
     fun provideScrobblers(
         shikimoriScrobbler: ShikimoriScrobbler,
@@ -226,6 +250,7 @@ object ScrobblingModule {
         mangaUpdatesScrobbler: org.skepsun.kototoro.scrobbling.mangaupdates.domain.MangaUpdatesScrobbler,
         simklScrobbler: SimklScrobbler,
         mangaBakaScrobbler: MangaBakaScrobbler,
+        tmdbScrobbler: org.skepsun.kototoro.scrobbling.tmdb.domain.TmdbScrobbler,
     ): Set<@JvmSuppressWildcards Scrobbler> = setOf(
         shikimoriScrobbler,
         aniListScrobbler,
@@ -235,6 +260,7 @@ object ScrobblingModule {
         mangaUpdatesScrobbler,
         simklScrobbler,
         mangaBakaScrobbler,
+        tmdbScrobbler,
     )
 
     @Provides

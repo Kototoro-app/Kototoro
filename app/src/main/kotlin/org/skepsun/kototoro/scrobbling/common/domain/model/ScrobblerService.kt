@@ -18,4 +18,5 @@ enum class ScrobblerService(
     MANGAUPDATES(6, R.string.mangaupdates, R.drawable.ic_mangaupdates),
     SIMKL(7, R.string.simkl, R.drawable.ic_simkl_brand),
     MANGABAKA(8, R.string.mangabaka, R.drawable.ic_mangabaka),
+    TMDB(9, R.string.tmdb, R.drawable.ic_tmdb_brand),
 }

@@ -1488,7 +1488,7 @@ class DetailsViewModel @Inject constructor(
             -> entityType == EntityType.PERSON || entityType == EntityType.CHARACTER
 
             ScrobblerService.MANGAUPDATES -> entityType == EntityType.PERSON
-            ScrobblerService.SIMKL, ScrobblerService.MANGABAKA -> false
+            ScrobblerService.SIMKL, ScrobblerService.MANGABAKA, ScrobblerService.TMDB -> false
         }
     }
 

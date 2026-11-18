@@ -1245,6 +1245,7 @@
     <string name="kitsu" translatable="false">Kitsu</string>
     <string name="mangaupdates" translatable="false">MangaUpdates</string>
     <string name="simkl" translatable="false">Simkl</string>
+    <string name="tmdb" translatable="false">TMDB</string>
     <string name="email_password_enter_hint">Enter your email and password to continue</string>
     <string name="username_password_enter_hint">Enter your username and password to continue</string>
     <string name="downloaded">Downloaded</string>

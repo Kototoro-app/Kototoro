@@ -361,6 +361,7 @@
 				<data android:host="bangumi-auth" />
 				<data android:host="mangaupdates-auth" />
 				<data android:host="simkl-auth" />
+				<data android:host="tmdb-auth" />
 			</intent-filter>
 
 		</activity>
