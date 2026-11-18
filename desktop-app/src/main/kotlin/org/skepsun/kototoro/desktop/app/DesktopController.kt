@@ -12,8 +12,10 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
+import org.skepsun.kototoro.search.domain.SearchCandidate
+import org.skepsun.kototoro.search.domain.SearchKind
+import org.skepsun.kototoro.search.domain.SearchRules
+import org.skepsun.kototoro.search.domain.searchSourcesInParallel
 import kotlinx.coroutines.sync.withLock
 import kotlinx.datetime.TimeZone
 import org.skepsun.kototoro.core.appearance.VisualPreferenceKeys
@@ -1654,23 +1656,39 @@ class DesktopController(
         mutableState.update { it.copy(globalSearch = DesktopGlobalSearch(text,
             pending = targets.mapTo(linkedSetOf()) { s -> s.source.name }, filter = filter)) }
         if (targets.isEmpty()) return
+        val kind = SearchKind.SIMPLE
+        val blacklist = settings.tagBlacklistRules()
         globalSearchJob = scope.launch {
-            val gate = Semaphore(GLOBAL_SEARCH_CONCURRENCY)
-            targets.map { listing ->
-                launch {
-                    val found = gate.withPermit {
-                        relatedAttempt { session.sources.getList(listing.source.name, 0, null, SourceFilter(query = text)) }
+            searchSourcesInParallel(
+                sources = targets,
+                parallelism = GLOBAL_SEARCH_CONCURRENCY,
+                search = { listing ->
+                    // Android's SearchV2Helper rules: the plan names what the source is asked, then blacklisted works
+                    // go and the rest come most relevant first.
+                    val plan = SearchRules.plan(kind, text, null, supportsSearch = true, supportsAuthorSearch = false,
+                        knownTags = emptyList())
+                    val found = plan?.query?.let { query ->
+                        relatedAttempt { session.sources.getList(listing.source.name, 0, null, SourceFilter(query = query)) }
                     }.orEmpty()
+                    SearchRules.sortByRelevance(
+                        found.filterNot { work -> work.tags.any { blacklist.containsTagTitle(it.title) } }
+                            .filter { SearchRules.accepts(it.asSearchCandidate(), kind, text, null) },
+                        kind, text, null) { it.asSearchCandidate() }
+                },
+                onResult = { listing, found ->
                     mutableState.update { s ->
                         val search = s.globalSearch
                         if (search.query != text) s else s.copy(globalSearch = search.copy(
                             results = if (found.isEmpty()) search.results else search.results + (listing.source.name to found),
                             pending = search.pending - listing.source.name))
                     }
-                }
-            }.joinAll()
+                },
+            )
         }
     }
+
+    private fun SourceContent.asSearchCandidate() = SearchCandidate(
+        title = title, altTitle = altTitles.firstOrNull(), authors = authors, tags = tags.map { it.title })
 
     /** Android's home: hero, history and updates rows over the shared history/tracker tables. */
     fun home() = navigate {
