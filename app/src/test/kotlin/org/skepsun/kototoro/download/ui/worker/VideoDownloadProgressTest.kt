@@ -98,4 +98,35 @@ class VideoDownloadProgressTest {
         assertNull(progress.totalBytes)
         assertFalse(progress.isTotalEstimated)
     }
+
+    @Test
+    fun `HLS prior estimate steadies the total while few segments are done`() {
+        // The first segment is twice the average size: the observed total alone would claim 2000.
+        val progress = DownloadByteProgress.forSegments(
+            downloadedBytes = 200,
+            completed = 1,
+            total = 10,
+            priorTotalBytes = 1000,
+        )
+
+        // 10% observed + 90% prior.
+        assertEquals(1100L, progress.totalBytes)
+        assertTrue(progress.isTotalEstimated)
+    }
+
+    @Test
+    fun `HLS prior estimate is shown before any segment completes`() {
+        val progress = DownloadByteProgress.forSegments(0, completed = 0, total = 10, priorTotalBytes = 1000)
+
+        assertEquals(1000L, progress.totalBytes)
+        assertTrue(progress.isTotalEstimated)
+    }
+
+    @Test
+    fun `HLS total becomes the exact size on completion whatever the prior was`() {
+        val progress = DownloadByteProgress.forSegments(700, completed = 10, total = 10, priorTotalBytes = 1000)
+
+        assertEquals(700L, progress.totalBytes)
+        assertFalse(progress.isTotalEstimated)
+    }
 }
