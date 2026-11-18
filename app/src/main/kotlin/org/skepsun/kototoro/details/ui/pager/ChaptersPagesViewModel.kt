@@ -2,6 +2,10 @@ package org.skepsun.kototoro.details.ui.pager
 
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import org.skepsun.kototoro.video.player.MeasuredVideoSize
+import org.skepsun.kototoro.video.player.VideoQualitySizeProber
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -82,6 +86,7 @@ abstract class ChaptersPagesViewModel(
     protected val mangaRepositoryFactory: ContentRepository.Factory,
     private val localStorageChanges: SharedFlow<LocalContent?>,
     private val chapterTranslationStore: ChapterTranslationStore,
+    private val videoQualitySizeProber: VideoQualitySizeProber,
 ) : BaseViewModel() {
 
     val mangaDetails = MutableStateFlow<ContentDetails?>(null)
@@ -92,6 +97,10 @@ abstract class ChaptersPagesViewModel(
 
     data class QualityProbeResult(val snapshot: Set<Long>, val qualities: List<String>)
     val onShowVideoQualityDialog = MutableEventFlow<QualityProbeResult>()
+
+    /** Sizes of the quality options of the open quality dialog, keyed by option title; filled in as they are measured. */
+    val videoQualitySizes = MutableStateFlow<Map<String, MeasuredVideoSize>>(emptyMap())
+    private var videoQualitySizeJob: Job? = null
 
     val onActionDone = MutableEventFlow<ReversibleAction>()
     val onDownloadStarted = MutableEventFlow<Unit>()
@@ -532,18 +541,22 @@ abstract class ChaptersPagesViewModel(
             val chapter = chapters.value.find { it.chapter.id == chapterId }?.chapter ?: return@launchJob
             val repo = mangaRepositoryFactory.create(manga.source)
 
-            val qualities = runCatchingCancellable {
+            val options = runCatchingCancellable {
                 repo.resolveVideoCandidates(chapter)
-                    .map { it.title.trim() }
-                    .filter { it.isNotEmpty() }
-                    .distinct()
-            }.getOrNull()
+                    .filter { it.title.trim().isNotEmpty() }
+                    .distinctBy { it.title.trim() }
+            }.getOrNull().orEmpty()
 
-            if (!qualities.isNullOrEmpty()) {
-                onShowVideoQualityDialog.call(QualityProbeResult(snapshot, qualities))
-            } else {
-                // Fallback to default flow without specific quality
-                onShowVideoQualityDialog.call(QualityProbeResult(snapshot, emptyList()))
+            videoQualitySizeJob?.cancel()
+            videoQualitySizes.value = emptyMap()
+            // An empty list falls back to the default flow without a specific quality.
+            onShowVideoQualityDialog.call(QualityProbeResult(snapshot, options.map { it.title.trim() }))
+            if (options.isNotEmpty()) {
+                videoQualitySizeJob = viewModelScope.launch(Dispatchers.IO) {
+                    videoQualitySizeProber.measureEach(options) { title, size ->
+                        videoQualitySizes.update { it + (title to size) }
+                    }
+                }
             }
         }
     }

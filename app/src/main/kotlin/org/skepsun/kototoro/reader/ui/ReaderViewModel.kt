@@ -131,6 +131,7 @@ class ReaderViewModel @Inject constructor(
     mangaRepositoryFactory: org.skepsun.kototoro.core.parser.ContentRepository.Factory,
     readerSettingsProducerFactory: ReaderSettings.Producer.Factory,
     chapterTranslationStore: org.skepsun.kototoro.reader.translate.data.ChapterTranslationStore,
+    videoQualitySizeProber: org.skepsun.kototoro.video.player.VideoQualitySizeProber,
 ) : ChaptersPagesViewModel(
     settings = settings,
     interactor = interactor,
@@ -141,6 +142,7 @@ class ReaderViewModel @Inject constructor(
     mangaRepositoryFactory = mangaRepositoryFactory,
     localStorageChanges = localStorageChanges,
     chapterTranslationStore = chapterTranslationStore,
+    videoQualitySizeProber = videoQualitySizeProber,
 ) {
     data class TranslationPageTaskSnapshot(
         val pageId: Long,

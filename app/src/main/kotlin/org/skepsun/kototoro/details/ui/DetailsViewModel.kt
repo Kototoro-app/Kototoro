@@ -380,6 +380,7 @@ class DetailsViewModel @Inject constructor(
     private val spaceBrowseScope: SpaceBrowseScope,
     private val categoryDisplayPreferences: FavouriteCategoryDisplayPreferences,
     chapterTranslationStore: org.skepsun.kototoro.reader.translate.data.ChapterTranslationStore,
+    videoQualitySizeProber: org.skepsun.kototoro.video.player.VideoQualitySizeProber,
 ) : ChaptersPagesViewModel(
     settings = settings,
     interactor = interactor,
@@ -390,6 +391,7 @@ class DetailsViewModel @Inject constructor(
     mangaRepositoryFactory = mangaRepositoryFactory,
     localStorageChanges = localStorageChanges,
     chapterTranslationStore = chapterTranslationStore,
+    videoQualitySizeProber = videoQualitySizeProber,
 ) {
 
     private val intent = ContentIntent(savedStateHandle)

@@ -7,6 +7,7 @@ import java.util.concurrent.TimeUnit
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import okio.Buffer
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
 import org.skepsun.kototoro.video.data.isTorrentLocator
 
@@ -34,10 +35,53 @@ internal class VideoStreamSizeProbe(
         localFileSize(target)?.let { return it }
         if (!isHttpUrl(target)) return null
         if (looksLikeAdaptiveManifest(target)) return null
-        return when (val head = runCatchingCancellable { headProbe(target, headers) }.getOrNull()) {
+        return resourceLength(target, headers)
+    }
+
+    /**
+     * Like [probe], but a finished HLS playlist is also sized by sampling a few of its segments.
+     * The result of that path is flagged as an estimate.
+     */
+    suspend fun measure(url: String, headers: Map<String, String> = emptyMap()): MeasuredVideoSize? {
+        probe(url, headers)?.let { return MeasuredVideoSize(it, isEstimated = false) }
+        val target = url.trim()
+        if (!isHttpUrl(target)) return null
+        val bytes = runCatchingCancellable { estimateHls(target, headers) }.getOrNull() ?: return null
+        return MeasuredVideoSize(bytes, isEstimated = true)
+    }
+
+    private suspend fun resourceLength(url: String, headers: Map<String, String>): Long? {
+        return when (val head = runCatchingCancellable { headProbe(url, headers) }.getOrNull()) {
             is HeadProbe.Length -> head.bytes
-            HeadProbe.Unknown -> runCatchingCancellable { rangeProbe(target, headers) }.getOrNull()
+            HeadProbe.Unknown -> runCatchingCancellable { rangeProbe(url, headers) }.getOrNull()
             HeadProbe.Adaptive, HeadProbe.Missing, null -> null
+        }
+    }
+
+    private suspend fun estimateHls(url: String, headers: Map<String, String>): Long? {
+        var playlistUrl = url
+        var text = fetchHlsText(playlistUrl, headers) ?: return null
+        if (text.contains("#EXT-X-STREAM-INF")) {
+            playlistUrl = selectHighestBandwidthVariant(playlistUrl, text) ?: return null
+            text = fetchHlsText(playlistUrl, headers) ?: return null
+        }
+        return estimateHlsBytes(parseHlsMediaPlaylist(playlistUrl, text)) { segment ->
+            resourceLength(segment.url, headers)
+        }
+    }
+
+    /** Reads a playlist body, giving up before the rest of the body when it does not start like one. */
+    private suspend fun fetchHlsText(url: String, headers: Map<String, String>): String? {
+        val request = requestBuilder(url, headers).get().build()
+        client.newCall(request).await().use { response ->
+            if (!response.isSuccessful) return null
+            val source = response.body.source()
+            val prefix = Buffer()
+            source.peek().read(prefix, HLS_PREFIX_BYTES)
+            if (!looksLikeHlsManifest(prefix.readUtf8())) return null
+            val body = Buffer()
+            source.read(body, HLS_PLAYLIST_LIMIT_BYTES)
+            return body.readUtf8()
         }
     }
 
@@ -92,6 +136,13 @@ internal class VideoStreamSizeProbe(
 }
 
 private const val DEFAULT_CALL_TIMEOUT_MS = 6_000L
+
+private const val HLS_PREFIX_BYTES = 16L
+
+private const val HLS_PLAYLIST_LIMIT_BYTES = 4L * 1024 * 1024
+
+/** A stream size; [isEstimated] is set when it was extrapolated rather than read from the server. */
+data class MeasuredVideoSize(val bytes: Long, val isEstimated: Boolean)
 
 private const val CONTENT_RANGE_PREFIX = "bytes"
 
