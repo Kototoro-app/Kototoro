@@ -69,12 +69,11 @@ class ZipEntryNames private constructor(
         }.getOrDefault(EMPTY)
 
         private fun fromArchive(zip: ZipFile): ZipEntryNames {
-            val entries = zip.entries.asSequence().toList()
-            if (entries.any { it.generalPurposeBit.usesUTF8ForNames() }) {
-                // The names are flagged as UTF-8, so every reader already shows them correctly.
-                return EMPTY
-            }
-            val components = entries.asSequence()
+            // The flag is per entry, not per archive: a repacked or appended archive can mix flagged
+            // UTF-8 names with un-flagged GBK ones, and repairing by archive would leave the latter
+            // mojibake (#693). Flagged entries are already readable, so only their neighbours need repair.
+            val components = zip.entries.asSequence()
+                .filterNot { it.generalPurposeBit.usesUTF8ForNames() }
                 .mapNotNull { it.rawName }
                 .flatMap { rawName -> splitComponents(rawName).asSequence() }
                 .filter { raw -> raw.any { (it.toInt() and 0x80) != 0 } }
