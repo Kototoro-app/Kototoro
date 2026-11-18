@@ -39,6 +39,7 @@ class DefaultTrackingSiteDiscoveryService @Inject constructor(
     private val mangaUpdatesRepository: MangaUpdatesRepository,
     private val shikimoriRepository: ShikimoriRepository,
     private val simklRepository: SimklRepository,
+    private val tmdbRepository: org.skepsun.kototoro.scrobbling.tmdb.data.TmdbRepository,
     private val cacheRepository: TrackingSiteCacheRepository,
 ) : TrackingSiteDiscoveryService {
 
@@ -131,6 +132,23 @@ class DefaultTrackingSiteDiscoveryService @Inject constructor(
         )
     }
 
+    private fun tmdbCategories(): List<TrackingSiteCategory> {
+        val labels = linkedMapOf(
+            "tmdb_trending_movies" to org.skepsun.kototoro.R.string.tmdb_category_trending_movies,
+            "tmdb_trending_tv" to org.skepsun.kototoro.R.string.tmdb_category_trending_tv,
+            "tmdb_popular_movies" to org.skepsun.kototoro.R.string.tmdb_category_popular_movies,
+            "tmdb_popular_tv" to org.skepsun.kototoro.R.string.tmdb_category_popular_tv,
+            "tmdb_top_rated_movies" to org.skepsun.kototoro.R.string.tmdb_category_top_rated_movies,
+            "tmdb_top_rated_tv" to org.skepsun.kototoro.R.string.tmdb_category_top_rated_tv,
+            "tmdb_now_playing" to org.skepsun.kototoro.R.string.tmdb_category_now_playing,
+            "tmdb_airing_today" to org.skepsun.kototoro.R.string.tmdb_category_airing_today,
+        )
+        val options = labels.map { (id, label) -> siblingCategorySortOption(id, label, id) }
+        return labels.map { (id, label) ->
+            TrackingSiteCategory(id, label, sortOptions = options, defaultSortOptionId = id)
+        }
+    }
+
     private fun simklAnimeCategoryOptions(): List<TrackingSiteSortOption> {
         return listOf(
             siblingCategorySortOption("simkl_anime_premieres", org.skepsun.kototoro.R.string.simkl_category_anime_premieres, "simkl_anime_premieres"),
@@ -179,12 +197,13 @@ class DefaultTrackingSiteDiscoveryService @Inject constructor(
 
     override fun getCapabilities(service: ScrobblerService): TrackingSiteCapabilities = when (service) {
         ScrobblerService.TMDB -> TrackingSiteCapabilities(
-            supportsDiscovery = false,
-            supportsTrending = false,
+            supportsDiscovery = true,
+            supportsTrending = true,
             supportsSearch = true,
             supportsDetails = true,
             supportsStatusSync = true,
             supportsManualBinding = true,
+            discoveryCategories = tmdbCategories(),
         )
 
         ScrobblerService.MANGABAKA -> TrackingSiteCapabilities(
@@ -547,6 +566,10 @@ class DefaultTrackingSiteDiscoveryService @Inject constructor(
         if (catalog.service == ScrobblerService.SIMKL) {
             return getSimklTrending(catalog)
         }
+        if (catalog.service == ScrobblerService.TMDB) {
+            return tmdbRepository.getDiscoveryItems(catalog.category ?: "tmdb_trending_movies", catalog.page)
+                .map { it.toTrackingListItem(ScrobblerService.TMDB) }
+        }
         if (catalog.service != ScrobblerService.BANGUMI) {
             return emptyList()
         }
@@ -602,6 +625,12 @@ class DefaultTrackingSiteDiscoveryService @Inject constructor(
             return (anime + manga)
                 .distinctBy { it.id }
                 .map { it.toTrackingListItem(ScrobblerService.MAL) }
+        }
+        if (catalog.service == ScrobblerService.TMDB) {
+            // Movies and shows only; TMDB pages hold 20 titles.
+            if (!searchAnime) return emptyList()
+            return tmdbRepository.findContent(query, catalog.page * 20)
+                .map { it.toTrackingListItem(ScrobblerService.TMDB) }
         }
         if (catalog.service == ScrobblerService.MANGABAKA) {
             if (!searchManga) return emptyList()

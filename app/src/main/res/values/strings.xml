@@ -1246,6 +1246,14 @@
     <string name="mangaupdates" translatable="false">MangaUpdates</string>
     <string name="simkl" translatable="false">Simkl</string>
     <string name="tmdb" translatable="false">TMDB</string>
+    <string name="tmdb_category_trending_movies">Trending Movies</string>
+    <string name="tmdb_category_trending_tv">Trending TV</string>
+    <string name="tmdb_category_popular_movies">Popular Movies</string>
+    <string name="tmdb_category_popular_tv">Popular TV</string>
+    <string name="tmdb_category_top_rated_movies">Top Rated Movies</string>
+    <string name="tmdb_category_top_rated_tv">Top Rated TV</string>
+    <string name="tmdb_category_now_playing">Now Playing</string>
+    <string name="tmdb_category_airing_today">Airing Today</string>
     <string name="email_password_enter_hint">Enter your email and password to continue</string>
     <string name="username_password_enter_hint">Enter your username and password to continue</string>
     <string name="downloaded">Downloaded</string>

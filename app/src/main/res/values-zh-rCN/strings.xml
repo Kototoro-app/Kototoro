@@ -4258,4 +4258,12 @@
     <string name="suggestion_reason_popular">来源热门</string>
     <string name="suggestion_reason_new">新作与近期更新</string>
     <string name="suggestion_reason_default">与你的阅读口味相近</string>
+    <string name="tmdb_category_trending_movies">热门电影</string>
+    <string name="tmdb_category_trending_tv">热门剧集</string>
+    <string name="tmdb_category_popular_movies">流行电影</string>
+    <string name="tmdb_category_popular_tv">流行剧集</string>
+    <string name="tmdb_category_top_rated_movies">高分电影</string>
+    <string name="tmdb_category_top_rated_tv">高分剧集</string>
+    <string name="tmdb_category_now_playing">正在上映</string>
+    <string name="tmdb_category_airing_today">今日播出</string>
 </resources>

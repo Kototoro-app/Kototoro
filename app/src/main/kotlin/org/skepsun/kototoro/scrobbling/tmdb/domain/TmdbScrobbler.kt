@@ -4,6 +4,7 @@ import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.scrobbling.common.domain.Scrobbler
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
+import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerUser
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingStatus
 import org.skepsun.kototoro.scrobbling.tmdb.data.TmdbRepository
 import javax.inject.Inject
@@ -43,4 +44,10 @@ class TmdbScrobbler @Inject constructor(
             comment = comment,
         )
     }
+
+    override suspend fun onAuthorized(user: ScrobblerUser) {
+        repository.syncLibraryFromRemote()
+    }
+
+    override suspend fun syncLibrary(): Int = repository.syncLibraryFromRemote()
 }
