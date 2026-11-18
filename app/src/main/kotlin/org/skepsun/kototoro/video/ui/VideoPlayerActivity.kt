@@ -231,6 +231,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         private const val CLOUDSTREAM_PLAYBACK_HEALTH_CHECK_DELAY_MS = 5_000L
         private const val CLOUDSTREAM_HLS_PROBE_TIMEOUT_MS = 10_000L
         private const val VIDEO_SIZE_PROBE_TIMEOUT_MS = 6_000L
+        private const val VIDEO_SIZE_MEASURE_TIMEOUT_MS = 10_000L
         private const val VIDEO_SIZE_PROBE_CONCURRENCY = 3
         private const val ENABLE_M3U8_PROXY_CACHE = false
         private const val TORRENT_VIDEO_MARKER = "kototoro:torrent"
@@ -300,6 +301,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     private val videoSizeCache = HashMap<String, Long>()
     private val probedVideoSizeUrls = HashSet<String>()
     private var videoSizeProbeJob: Job? = null
+    private var downloadSizeJob: Job? = null
     private var qualityDialogVideos: List<Video>? = null
     private var cloudstreamLinkJob: Job? = null
     private var cloudstreamFallbackJob: Job? = null
@@ -3197,13 +3199,13 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         }
         val url = currentMediaUrl
         val headers = currentMediaHeaders.orEmpty()
-        lifecycleScope.launch {
+        downloadSizeJob?.cancel()
+        downloadSizeJob = lifecycleScope.launch {
             val size = url
                 ?.takeIf { it.isNotBlank() }
-                ?.let { withTimeoutOrNull(VIDEO_SIZE_PROBE_TIMEOUT_MS) { videoSizeProbe.probe(it, headers) } }
-                ?.takeIf { it > 0 }
-                ?.let(::formatVideoSize)
-                ?.takeIf { it.isNotEmpty() }
+                ?.let { withTimeoutOrNull(VIDEO_SIZE_MEASURE_TIMEOUT_MS) { videoSizeProbe.measure(it, headers) } }
+                ?.takeIf { it.bytes > 0 }
+                ?.let { (if (it.isEstimated) "~" else "") + formatVideoSize(it.bytes) }
             when {
                 size == null -> startChapterDownload(manga, chapterId)
                 else -> MaterialAlertDialogBuilder(this@VideoPlayerActivity)
