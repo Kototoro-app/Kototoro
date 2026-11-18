@@ -119,6 +119,8 @@ import org.skepsun.kototoro.video.data.TorrentResolvedStream
 import org.skepsun.kototoro.video.data.TorrentStreamService
 import org.skepsun.kototoro.video.domain.resolveVideoCandidates
 import org.skepsun.kototoro.video.player.PlaybackMediaKind
+import org.skepsun.kototoro.video.player.estimateHlsBytes
+import org.skepsun.kototoro.video.player.parseHlsMediaPlaylist
 import org.skepsun.kototoro.parsers.exception.TooManyRequestExceptions
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentChapter
@@ -2553,9 +2555,14 @@ class DownloadWorker @AssistedInject constructor(
             outputFile.openOutputStream(false).use { it.flush() }
         }
         var writtenTotal = if (resumeIndex > 0) outputFile.length().coerceAtLeast(0L) else 0L
+        val priorTotalBytes = estimateHlsTotalBytes(source, mediaUrl, mediaText, headers)
         outputFile.openOutputStream(resumeIndex > 0).sink().buffer().use { sink ->
             val total = segments.size.coerceAtLeast(1)
-            onProgress(resumeIndex, total, DownloadByteProgress.forSegments(writtenTotal, resumeIndex, total))
+            onProgress(
+                resumeIndex,
+                total,
+                DownloadByteProgress.forSegments(writtenTotal, resumeIndex, total, priorTotalBytes),
+            )
             val remaining = segments.withIndex().drop(resumeIndex)
             remaining.chunked(DownloadPolicy.HLS_SEGMENT_CONCURRENCY).forEach { batch ->
                 val downloaded = coroutineScope {
@@ -2595,7 +2602,7 @@ class DownloadWorker @AssistedInject constructor(
                     onProgress(
                         indexed.index + 1,
                         total,
-                        DownloadByteProgress.forSegments(writtenTotal, indexed.index + 1, total),
+                        DownloadByteProgress.forSegments(writtenTotal, indexed.index + 1, total, priorTotalBytes),
                     )
                     sink.flush()
                     stateFile?.openOutputStream(false)?.bufferedWriter()?.use { state ->
@@ -2611,6 +2618,34 @@ class DownloadWorker @AssistedInject constructor(
             "DownloadWorker",
             "HLS complete: written=$writtenTotal out=${outputFile.length()} segments=${segments.size}",
         )
+    }
+
+    /**
+     * A rough total size for the progress display, sampled from a few segments before the download starts.
+     * It is only a hint, so a slow or failing probe must never delay or break the download.
+     */
+    private suspend fun estimateHlsTotalBytes(
+        source: ContentSource,
+        mediaUrl: String,
+        mediaText: String,
+        headers: Map<String, String>?,
+    ): Long? = withTimeoutOrNull(HLS_ESTIMATE_TIMEOUT_MS) {
+        runCatchingCancellable {
+            estimateHlsBytes(parseHlsMediaPlaylist(mediaUrl, mediaText)) { segment ->
+                runCatchingCancellable {
+                    val request = PageLoader.createPageRequest(segment.url, source, headers)
+                        .newBuilder()
+                        .head()
+                        .build()
+                    okHttp.newCall(request).await().use { response ->
+                        response.takeIf { it.isSuccessful }
+                            ?.header("Content-Length")
+                            ?.toLongOrNull()
+                            ?.takeIf { it > 0 }
+                    }
+                }.getOrNull()
+            }
+        }.getOrNull()
     }
 
     private suspend fun downloadHlsSegment(
@@ -3344,6 +3379,7 @@ class DownloadWorker @AssistedInject constructor(
         const val TAG = "download"
         private const val PAGE_NAME_PATTERN = "%08d_%04d%04d"
         private const val VIDEO_PROBE_BYTE_LIMIT = 1024L
+        private const val HLS_ESTIMATE_TIMEOUT_MS = 8_000L
     }
 
     @AssistedFactory

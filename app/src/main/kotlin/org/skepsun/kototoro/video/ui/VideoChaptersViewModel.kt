@@ -53,6 +53,7 @@ class VideoChaptersViewModel @Inject constructor(
     private val videoDownloadIndex: VideoDownloadIndex,
     mangaRepositoryFactory: org.skepsun.kototoro.core.parser.ContentRepository.Factory,
     chapterTranslationStore: ChapterTranslationStore,
+    videoQualitySizeProber: org.skepsun.kototoro.video.player.VideoQualitySizeProber,
 ) : ChaptersPagesViewModel(
     settings = settings,
     interactor = interactor,
@@ -63,6 +64,7 @@ class VideoChaptersViewModel @Inject constructor(
     mangaRepositoryFactory = mangaRepositoryFactory,
     localStorageChanges = localStorageChanges,
     chapterTranslationStore = chapterTranslationStore,
+    videoQualitySizeProber = videoQualitySizeProber,
 ) {
 
     private val intent = ContentIntent(savedStateHandle)

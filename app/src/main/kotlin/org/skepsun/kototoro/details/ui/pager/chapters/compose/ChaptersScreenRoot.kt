@@ -43,6 +43,8 @@ import org.skepsun.kototoro.details.ui.pager.ChaptersPagesViewModel
 import org.skepsun.kototoro.details.ui.pager.chapters.ChapterGroupsManager
 import org.skepsun.kototoro.details.ui.withVolumeHeaders
 import org.skepsun.kototoro.local.ui.LocalChaptersRemoveService
+import org.skepsun.kototoro.video.domain.formatVideoSize
+import org.skepsun.kototoro.video.player.MeasuredVideoSize
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.reader.ui.ReaderNavigationCallback
 
@@ -291,8 +293,10 @@ fun ChaptersScreenRoot(
     }
 
     qualityProbeResult?.let { result ->
+        val qualitySizes by viewModel.videoQualitySizes.collectAsStateWithLifecycle()
         VideoQualityDialog(
             qualities = result.qualities,
+            sizes = qualitySizes,
             onDismissRequest = { qualityProbeResult = null },
             onConfirm = { quality ->
                 qualityProbeResult = null
@@ -413,6 +417,7 @@ private fun resolveVisibleSelectionRange(
 @Composable
 private fun VideoQualityDialog(
     qualities: List<String>,
+    sizes: Map<String, MeasuredVideoSize>,
     onDismissRequest: () -> Unit,
     onConfirm: (String?) -> Unit,
 ) {
@@ -443,8 +448,16 @@ private fun VideoQualityDialog(
                         Text(
                             text = option ?: stringResource(R.string.system_default),
                             style = MaterialTheme.typography.bodyLarge,
-                            modifier = Modifier.padding(start = 16.dp),
+                            modifier = Modifier.padding(start = 16.dp).weight(1f),
                         )
+                        option?.let(sizes::get)?.let { size ->
+                            Text(
+                                text = (if (size.isEstimated) "~" else "") + formatVideoSize(size.bytes),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(start = 12.dp),
+                            )
+                        }
                     }
                 }
             }
