@@ -102,7 +102,7 @@ internal fun DesktopReader(controller: DesktopController, state: DesktopAppState
             val showMenu = { controlsVisible = true; panel = DesktopReaderPanel.OPTIONS }
             if (continuous) DesktopScrollReader(controller, state, focus, closing, Modifier.fillMaxSize(),
                 onToggleControls = onToggleControls, autoScroll, showMenu, horizontal = horizontalStrip,
-                reversed = settings.continuousHorizontalReversed)
+                reversed = settings.continuousHorizontalReversed, controlsVisible = controlsVisible)
             else DesktopReaderCanvas(controller, state, focus, enabled, Modifier.fillMaxSize(), controlsVisible,
                 onToggleControls = onToggleControls, autoScroll, showMenu)
             DesktopReaderChrome(controller, state, controlsVisible, enabled, continuous, layout, autoScroll,

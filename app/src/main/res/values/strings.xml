@@ -4254,7 +4254,6 @@
     <string name="details_tracking_unlink_hint">Disconnect this title locally. Your entry on the tracking website will be kept.</string>
     <string name="display_options_live_summary">Changes apply immediately and affect only this page.</string>
     <string name="display_options_shared_size_summary">Cover size also applies to other lists.</string>
-    <string name="display_options_library_summary">Changes apply immediately to library and history lists.</string>
     <string name="welcome_start_summary">Choose how to get your first book or video. You can start without configuring the app.</string>
     <string name="welcome_start_sources">Add sources</string>
     <string name="welcome_start_local">Import local files</string>

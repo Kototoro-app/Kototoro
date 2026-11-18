@@ -52,7 +52,7 @@ internal fun DesktopNavigationRail(controller: DesktopController, state: Desktop
     val destinations = navSettings.items.map { TabletNavigationDestination(desktopNavItemId(it), desktopNavItemLabel(it)) } +
         TabletNavigationDestination(DESKTOP_NAV_MORE_ID, desktopText("common.more"))
     val selected = when (state.screen) {
-        DesktopScreen.HOME -> desktopNavItemId(DesktopNavItem.HOME)
+        DesktopScreen.HOME, DesktopScreen.SEARCH -> desktopNavItemId(DesktopNavItem.HOME)
         DesktopScreen.FEED -> desktopNavItemId(DesktopNavItem.SUBSCRIPTIONS)
         DesktopScreen.LIBRARY -> desktopNavItemId(DesktopNavItem.FAVOURITES)
         DesktopScreen.EXPLORE, DesktopScreen.DETAILS, DesktopScreen.PREFERENCES -> desktopNavItemId(DesktopNavItem.BROWSE)

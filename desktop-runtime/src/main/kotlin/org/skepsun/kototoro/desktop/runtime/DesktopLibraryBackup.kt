@@ -5,6 +5,7 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.JsonObject
 import org.skepsun.kototoro.backups.domain.BackupSection
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.library.LibraryBackup
@@ -21,8 +22,22 @@ import java.util.zip.ZipOutputStream
  */
 const val DESKTOP_BACKUP_DATA_VERSION = 1
 
+/**
+ * The extension groups section of a backup, in Android's wire format: what is installed on this host going out, and
+ * the packages a restored archive names (written by Android or by this host) coming back in. The host owns the
+ * installation, so the runtime only moves the JSON.
+ */
+interface DesktopExtensionBackup {
+    /** The section's JSON array, or null when nothing is installed and the section is left out. */
+    suspend fun export(): String?
+
+    /** Installs what [groups] name and this host is missing; failures are the implementation's to report. */
+    suspend fun restore(groups: List<JsonObject>)
+}
+
 /** Library transport over shared backup DTOs and the existing v84 tables; merge never clears local tables. */
-class DesktopLibraryBackup(database: MangaDatabase) {    private val shared = LibraryBackup(database)
+class DesktopLibraryBackup(database: MangaDatabase, private val extensions: DesktopExtensionBackup? = null) {
+    private val shared = LibraryBackup(database)
 
     suspend fun preview(path: Path): DesktopBackupArchive {
         var acquired: DesktopBackupArchive? = null
@@ -41,14 +56,29 @@ class DesktopLibraryBackup(database: MangaDatabase) {    private val shared = Li
         val temporary = Files.createTempFile(requireNotNull(target.parent), ".kototoro-backup-", ".tmp")
         try {
             ZipOutputStream(BackupLimitedOutput(Files.newOutputStream(temporary), DesktopBackupArchive.MAX_ARCHIVE_BYTES)).use { zip ->
-                shared.export(BackupZipWriter(zip), "org.skepsun.kototoro", DESKTOP_BACKUP_DATA_VERSION, System.currentTimeMillis())
+                val writer = BackupZipWriter(zip)
+                shared.export(writer, "org.skepsun.kototoro", DESKTOP_BACKUP_DATA_VERSION, System.currentTimeMillis())
+                extensions?.export()?.let { section ->
+                    writer.beginSection(BackupSection.EXTENSION_GROUPS)
+                    writer.write(section)
+                    writer.endSection()
+                }
             }
             currentCoroutineContext().ensureActive()
             Files.move(temporary, target)
         } finally { Files.deleteIfExists(temporary) }
     }
 
-    suspend fun restore(archive: DesktopBackupArchive): Int = withContext(Dispatchers.IO) { shared.restore(archive) }
+    suspend fun restore(archive: DesktopBackupArchive): Int = withContext(Dispatchers.IO) {
+        val restored = shared.restore(archive)
+        if (extensions != null) {
+            val groups = mutableListOf<JsonObject>()
+            archive.rows(BackupSection.EXTENSION_GROUPS, JsonObject.serializer()) { groups += it }
+            // The library is already merged; a package that cannot be installed must not undo or fail that.
+            if (groups.isNotEmpty()) extensions.restore(groups)
+        }
+        restored
+    }
 }
 
 private class BackupZipWriter(private val zip: ZipOutputStream) : LibraryBackupOutput {

@@ -12,6 +12,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.sync.withLock
 import kotlinx.datetime.TimeZone
 import org.skepsun.kototoro.core.appearance.VisualPreferenceKeys
@@ -103,19 +105,32 @@ private const val IMAGE_SWEEP_INTERVAL_MILLIS = DesktopImageBudget.SWEEP_INTERVA
  */
 private const val READER_MODES = "reader_modes"
 
+/** Sources asked at once by the global search. */
+private const val GLOBAL_SEARCH_CONCURRENCY = 4
+
 internal val DetailsOrigins = setOf(DesktopScreen.HOME, DesktopScreen.FEED, DesktopScreen.EXPLORE, DesktopScreen.LIBRARY,
-    DesktopScreen.HISTORY, DesktopScreen.BOOKMARKS, DesktopScreen.UPDATED, DesktopScreen.SUGGESTIONS)
+    DesktopScreen.HISTORY, DesktopScreen.BOOKMARKS, DesktopScreen.UPDATED, DesktopScreen.SUGGESTIONS, DesktopScreen.SEARCH)
 
 /** The JVM's display locale, matched against branch names as Android matches its locale list. */
 internal fun desktopChapterBranchLocales(): List<ChapterBranchLocale> =
     listOf(Locale.getDefault(Locale.Category.DISPLAY), Locale.getDefault()).distinct()
         .map { ChapterBranchLocale(it.getDisplayLanguage(it), it.getDisplayName(it)) }
 
+/** The state of the global search page; [results] keeps the order in which the sources answered. */
+data class DesktopGlobalSearch(
+    val query: String = "",
+    val results: Map<String, List<SourceContent>> = emptyMap(),
+    val pending: Set<String> = emptySet(),
+    /** Which sources are asked: the same ecosystem / type / language chips as Browse. */
+    val filter: DesktopSourceFilter = DesktopSourceFilter(),
+)
+
 enum class DesktopScreen {
     HOME, FEED, EXPLORE, LIBRARY, HISTORY, DETAILS, READER, NOVEL, VIDEO, PREFERENCES, BROWSER, DOWNLOADS, BACKUPS,
     RECOMMENDATIONS, EXTENSIONS, READER_SETTINGS, SOURCE_SETTINGS, TAG_BLACKLIST, READING_STATS, MORE, STORAGE,
     PLAYBACK_SETTINGS, PROXY_SETTINGS, CHANGELOG, CRASH_LOGS, REPLACE_RULES, DICTIONARY_RULES,
     DOWNLOAD_SETTINGS, NAV_CONFIG, DATA_CLEANUP, SERVICES, SETUP_WIZARD, SOURCE_TEST, EXTENSION_SETTINGS, BOOKMARKS, UPDATED, SUGGESTIONS,
+    SEARCH,
 }
 
 /**
@@ -275,6 +290,8 @@ data class DesktopAppState(
         org.skepsun.kototoro.desktop.runtime.DesktopServicesSettings(),
     val libraryDisplay: DesktopLibraryDisplay =
         DesktopLibraryDisplay(),
+    /** The history shelf's own display options. */
+    val historyDisplay: DesktopLibraryDisplay = DesktopLibraryDisplay(),
     /** Android's "show updated" feed menu item: whether the tracked-with-new-chapters block is drawn. */
     val feedDisplay: org.skepsun.kototoro.desktop.runtime.DesktopFeedDisplay =
         org.skepsun.kototoro.desktop.runtime.DesktopFeedDisplay(),
@@ -295,6 +312,8 @@ data class DesktopAppState(
     val suggestions: List<SourceContent> = emptyList(),
     val suggestionReasons: Map<Long, Pair<org.skepsun.kototoro.suggestions.domain.SuggestionDirection, String?>> = emptyMap(),
     val suggestionDirection: org.skepsun.kototoro.suggestions.domain.SuggestionDirection? = null,
+    /** Android's global search from the home page: the query, each source's answer and the sources still asked. */
+    val globalSearch: DesktopGlobalSearch = DesktopGlobalSearch(),
     /** True while [DesktopController.refreshSuggestions] runs in the background; the window stays usable. */
     val suggestionsGenerating: Boolean = false,
     /**
@@ -454,7 +473,10 @@ class DesktopController(
     /** Chapter keys the download page has selected; kept here so a batch survives leaving and reopening the page. */
     private val mutableDownloadSelection = MutableStateFlow<Set<String>>(emptySet())
     internal val downloadSelection = mutableDownloadSelection.asStateFlow()
-    private val backups = DesktopLibraryBackup(session.storage.database)
+    private val backups = DesktopLibraryBackup(session.storage.database,
+        DesktopExtensionBackupBridge(session, ::onExtensionsRestored))
+    /** What the last restore did to the installed extensions, for the message after it. */
+    @Volatile private var extensionRestore: ExtensionRestoreSummary? = null
     private val mutableBackupPreview = MutableStateFlow<DesktopBackupArchive?>(null)
     internal val backupPreview = mutableBackupPreview.asStateFlow()
     /** Android's in-app update flow: check the published releases, download, and swap the image on restart. */
@@ -484,6 +506,7 @@ class DesktopController(
     private var mirrorProbeJob: Job? = null
     /** The related-works request of the open details; a new details cancels the old one. */
     private var relatedJob: Job? = null
+    private var globalSearchJob: Job? = null
 
     init {
         // The saved language applies before the first screen is composed; `--lang` outranks it for this run.
@@ -500,6 +523,7 @@ class DesktopController(
             libraryDisplay = DesktopLibraryDisplay.from(
                 libraryPreferences.snapshot(),
             ),
+            historyDisplay = DesktopLibraryDisplay.history(libraryPreferences.snapshot()),
             feedDisplay = org.skepsun.kototoro.desktop.runtime.DesktopFeedDisplay.from(
                 libraryPreferences.snapshot(),
             ),
@@ -1605,6 +1629,47 @@ class DesktopController(
 
     internal fun exploreFilter(filter: DesktopSourceFilter) {
         mutableState.update { it.copy(exploreFilter = filter) }
+    }
+
+    fun showSearch() = navigate { mutableState.update { it.copy(screen = DesktopScreen.SEARCH) } }
+
+    /**
+     * Asks every enabled source for [query], a few at a time, off the operation gate: a slow source only delays its own
+     * group. A source that fails or has nothing simply adds no group.
+     */
+    fun globalSearchFilter(filter: DesktopSourceFilter) {
+        mutableState.update { it.copy(globalSearch = it.globalSearch.copy(filter = filter)) }
+        globalSearch(state.value.globalSearch.query)
+    }
+
+    fun globalSearch(query: String) {
+        globalSearchJob?.cancel()
+        val text = query.trim()
+        val current = state.value
+        val settings = current.sourceSettings
+        val filter = current.globalSearch.filter
+        val targets = if (text.isEmpty()) emptyList() else current.enabledSources.filter {
+            filter.accepts(it) && !(settings.hidesNsfw(DesktopNsfwTarget.SOURCES) && it.isNsfwSource(current.sourceNsfwOverrides))
+        }
+        mutableState.update { it.copy(globalSearch = DesktopGlobalSearch(text,
+            pending = targets.mapTo(linkedSetOf()) { s -> s.source.name }, filter = filter)) }
+        if (targets.isEmpty()) return
+        globalSearchJob = scope.launch {
+            val gate = Semaphore(GLOBAL_SEARCH_CONCURRENCY)
+            targets.map { listing ->
+                launch {
+                    val found = gate.withPermit {
+                        relatedAttempt { session.sources.getList(listing.source.name, 0, null, SourceFilter(query = text)) }
+                    }.orEmpty()
+                    mutableState.update { s ->
+                        val search = s.globalSearch
+                        if (search.query != text) s else s.copy(globalSearch = search.copy(
+                            results = if (found.isEmpty()) search.results else search.results + (listing.source.name to found),
+                            pending = search.pending - listing.source.name))
+                    }
+                }
+            }.joinAll()
+        }
     }
 
     /** Android's home: hero, history and updates rows over the shared history/tracker tables. */
@@ -2976,6 +3041,13 @@ class DesktopController(
         }
     }
     /** Android's display options: the shelves render either the poster grid or one work per row. */
+    internal fun historyDisplay(display: DesktopLibraryDisplay) {
+        mutableState.update { it.copy(historyDisplay = display) }
+        if (!libraryPreferences.edit(SourcePreferenceEdit(changes = display.toPreferences(DesktopDisplayPage.HISTORY)))) {
+            mutableState.update { it.copy(error = desktopText("library.displaySaveFailed")) }
+        }
+    }
+
     internal fun libraryDisplay(display: DesktopLibraryDisplay) {
         mutableState.update { it.copy(libraryDisplay = display) }
         if (!libraryPreferences.edit(SourcePreferenceEdit(changes = display.toPreferences()))) {
@@ -3005,9 +3077,21 @@ class DesktopController(
     internal fun restoreLibraryBackup(preview: DesktopBackupArchive) = action {
         require(mutableBackupPreview.value === preview) { desktopText("backups.expired") }
         mutableBackupPreview.value = null
+        extensionRestore = null
         val processed = preview.use { backups.restore(it) }
+        val extensions = extensionRestore
         mutableState.update { it.copy(items = emptyList(), content = null,
-            message = desktopText("backups.merged", processed)) }
+            message = desktopText("backups.merged", processed) + (extensions?.takeIf { it.installed > 0 || it.failed.isNotEmpty() }
+                ?.let { " " + desktopText("backups.extensionsRestored", it.installed, it.failed.size) } ?: "")) }
+    }
+
+    /** A restore installed packages or switched sources: what the extension pages and source lists show changed. */
+    private fun onExtensionsRestored(summary: ExtensionRestoreSummary) {
+        extensionRestore = summary
+        val descriptors = sourceDescriptors()
+        mutableState.update { it.copy(sources = descriptors, installedExtensions = installedVersions(),
+            repositories = session.repositories.saved(), installedEntries = session.installedEntries(),
+            disabledSources = session.disabledSources()) }
     }
 
     internal fun googleDriveSignIn() = scope.launch {
