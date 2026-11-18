@@ -67,6 +67,8 @@ import org.skepsun.kototoro.filter.data.PersistableFilter.Companion.MAX_TITLE_LE
 import org.skepsun.kototoro.filter.ui.FilterCoordinator
 import org.skepsun.kototoro.filter.ui.model.FilterProperty
 import org.skepsun.kototoro.filter.ui.model.UiTagGroup
+import org.skepsun.kototoro.filter.ui.model.tagGroupNeedsExpand
+import org.skepsun.kototoro.filter.ui.model.tagGroupPreviewLimit
 import org.skepsun.kototoro.parsers.model.ContentRating
 import org.skepsun.kototoro.parsers.model.ContentState
 import org.skepsun.kototoro.parsers.model.ContentTag
@@ -1101,8 +1103,8 @@ private fun TagGroupBlock(
         val unselectedTags = group.tags.filterNot { it.key in selectedKeys }.sortedBy { it.title }
         (selectedTags + unselectedTags).distinctBy { it.key }
     }
-    val visibleTags = remember(sortedTags) { sortedTags.take(12) }
-    val canExpand = sortedTags.size > visibleTags.size
+    val visibleTags = remember(sortedTags) { sortedTags.take(tagGroupPreviewLimit(sortedTags.size)) }
+    val canExpand = tagGroupNeedsExpand(sortedTags.size)
 
     Column(
         modifier = Modifier.fillMaxWidth(),
