@@ -740,6 +740,10 @@ struct VideoPlayerView: View {
                 }
                 .labelStyle(.iconOnly).font(.title3).frame(width: 44, height: 44)
                 .glassEffect(.regular.interactive(), in: .circle)
+                Button("旋转屏幕", systemImage: "rotate.right") { Self.rotateScreen() }
+                    .labelStyle(.iconOnly).font(.title3).frame(width: 44, height: 44)
+                    .glassEffect(.regular.interactive(), in: .circle)
+                    .accessibilityIdentifier("player.rotate")
                 downloadButton
             }
             .font(.caption)
@@ -808,6 +812,15 @@ struct VideoPlayerView: View {
             guard !Task.isCancelled, model.isPlaying, scrubbing == nil, !showingEpisodes else { return }
             withAnimation(.easeInOut(duration: 0.3)) { controlsVisible = false }
         }
+    }
+
+    /// Flips between portrait and landscape even when the system rotation lock is on.
+    static func rotateScreen() {
+        guard let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene })
+            .first(where: { $0.activationState == .foregroundActive }) else { return }
+        let target: UIInterfaceOrientationMask = scene.effectiveGeometry.interfaceOrientation.isLandscape
+            ? .portrait : .landscape
+        scene.requestGeometryUpdate(.iOS(interfaceOrientations: target)) { _ in }
     }
 
     static func time(_ seconds: Double) -> String {

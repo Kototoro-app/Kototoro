@@ -22254,6 +22254,22 @@
         }
       }
     },
+    "旋转屏幕": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rotate Screen"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "旋轉螢幕"
+          }
+        }
+      }
+    },
     "画中画": {
       "localizations": {
         "en": {
