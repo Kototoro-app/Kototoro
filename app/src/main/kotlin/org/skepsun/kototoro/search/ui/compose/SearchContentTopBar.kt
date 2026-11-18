@@ -187,6 +187,7 @@ internal fun SearchContentTopBar(
                             // The results grid may sit in a split layout beside the
                             // filter panel, so a window-width column estimate lies.
                             supportsGridColumnsHint = false,
+                            section = org.skepsun.kototoro.list.ui.ListDisplaySection.SEARCH,
                             onDismissRequest = { showDisplayOptionsSheet = false },
                         )
                     }

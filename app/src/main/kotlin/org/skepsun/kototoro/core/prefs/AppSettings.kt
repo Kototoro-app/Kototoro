@@ -39,6 +39,7 @@ import org.skepsun.kototoro.core.ui.glass.GlassTuning
 import org.skepsun.kototoro.core.ui.glass.GlassTuningScope
 import org.skepsun.kototoro.explore.data.SourcesSortOrder
 import org.skepsun.kototoro.list.domain.ListSortOrder
+import org.skepsun.kototoro.list.ui.ListDisplaySection
 import org.skepsun.kototoro.core.prefs.VideoSuperResolutionMode
 import org.skepsun.kototoro.core.prefs.VideoSuperResolutionShader
 import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
@@ -778,6 +779,52 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
     var favoritesListMode: ListMode
         get() = prefs.getEnumValue(KEY_LIST_MODE_FAVORITES, listMode)
         set(value) = prefs.edit { putEnumValue(KEY_LIST_MODE_FAVORITES, value) }
+
+    var updatedListMode: ListMode
+        get() = prefs.getEnumValue(KEY_LIST_MODE_UPDATED, listMode)
+        set(value) = prefs.edit { putEnumValue(KEY_LIST_MODE_UPDATED, value) }
+
+    /** List layout of one page; [section] null is the general value. */
+    fun listModeOf(section: ListDisplaySection?): ListMode = when (section) {
+        ListDisplaySection.FAVORITES -> favoritesListMode
+        ListDisplaySection.HISTORY -> historyListMode
+        ListDisplaySection.SUGGESTIONS -> suggestionsListMode
+        ListDisplaySection.UPDATED -> updatedListMode
+        ListDisplaySection.BROWSE -> browseListMode
+        ListDisplaySection.SEARCH -> prefs.getEnumValue(KEY_LIST_MODE_SEARCH, listMode)
+        ListDisplaySection.LOCAL, ListDisplaySection.FEED -> prefs.getEnumValue(listModeKeyOf(section), listMode)
+        null -> listMode
+    }
+
+    fun setListModeOf(section: ListDisplaySection?, value: ListMode) {
+        when (section) {
+            ListDisplaySection.FAVORITES -> favoritesListMode = value
+            ListDisplaySection.HISTORY -> historyListMode = value
+            ListDisplaySection.SUGGESTIONS -> suggestionsListMode = value
+            ListDisplaySection.UPDATED -> updatedListMode = value
+            ListDisplaySection.BROWSE -> browseListMode = value
+            ListDisplaySection.SEARCH -> prefs.edit { putEnumValue(KEY_LIST_MODE_SEARCH, value) }
+            ListDisplaySection.LOCAL, ListDisplaySection.FEED ->
+                prefs.edit { putEnumValue(listModeKeyOf(section), value) }
+            null -> listMode = value
+        }
+    }
+
+    /** Grid size of one page; follows the general size until the page's own is set. */
+    fun gridSizeOf(section: ListDisplaySection?): Int =
+        if (section == null) gridSize else prefs.getSafeInt(gridSizeKeyOf(section), gridSize).coerceIn(GridSizeRange)
+
+    fun setGridSizeOf(section: ListDisplaySection?, value: Int) {
+        if (section == null) gridSize = value else prefs.edit { putInt(gridSizeKeyOf(section), value.coerceIn(GridSizeRange)) }
+    }
+
+    /** Extra info on cards of one page; follows the general switch until the page's own is set. */
+    fun showExtraInfoOf(section: ListDisplaySection?): Boolean =
+        if (section == null) showExtraInfoOnCards else prefs.getBoolean(extraInfoKeyOf(section), showExtraInfoOnCards)
+
+    fun setShowExtraInfoOf(section: ListDisplaySection?, value: Boolean) {
+        if (section == null) showExtraInfoOnCards = value else prefs.edit { putBoolean(extraInfoKeyOf(section), value) }
+    }
 
     var isTagsWarningsEnabled: Boolean
         get() = prefs.getBoolean(KEY_TAGS_WARNINGS, true)
@@ -3084,6 +3131,8 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_HOME_HERO_CONTENT_LAYOUT = "home_hero_content_layout"
         const val KEY_LIST_MODE_HISTORY = "list_mode_history"
         const val KEY_LIST_MODE_FAVORITES = "list_mode_favorites"
+        const val KEY_LIST_MODE_UPDATED = "list_mode_updated"
+        const val KEY_LIST_MODE_SEARCH = "list_mode_search"
         const val KEY_LIST_MODE_SUGGESTIONS = "list_mode_suggestions"
         const val KEY_THEME = "theme"
         const val KEY_COLOR_THEME = "color_theme"
@@ -3445,6 +3494,32 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_APP_UPDATE_SOURCE = "app_update_source"
         const val KEY_SOURCE_HEALTH_BANNER = "source_health_banner"
         const val KEY_SHOW_EXTRA_INFO_ON_CARDS = "show_extra_info_on_cards"
+
+        private fun listModeKeyOf(section: ListDisplaySection) = "list_mode_${section.id}"
+
+        fun gridSizeKeyOf(section: ListDisplaySection) = "grid_size_${section.id}"
+        fun extraInfoKeyOf(section: ListDisplaySection) = "show_extra_info_${section.id}"
+
+        /** Keys that change what [listModeOf] returns: the page's own one and the general fallback. */
+        fun listModeKeysOf(section: ListDisplaySection?): Set<String> = setOfNotNull(
+            KEY_LIST_MODE,
+            when (section) {
+                ListDisplaySection.FAVORITES -> KEY_LIST_MODE_FAVORITES
+                ListDisplaySection.HISTORY -> KEY_LIST_MODE_HISTORY
+                ListDisplaySection.SUGGESTIONS -> KEY_LIST_MODE_SUGGESTIONS
+                ListDisplaySection.UPDATED -> KEY_LIST_MODE_UPDATED
+                ListDisplaySection.BROWSE -> KEY_LIST_MODE_BROWSE
+                ListDisplaySection.SEARCH -> KEY_LIST_MODE_SEARCH
+                ListDisplaySection.LOCAL, ListDisplaySection.FEED -> listModeKeyOf(section)
+                null -> null
+            },
+        )
+
+        fun gridSizeKeysOf(section: ListDisplaySection?): Set<String> =
+            setOfNotNull(KEY_GRID_SIZE, section?.let(::gridSizeKeyOf))
+
+        fun extraInfoKeysOf(section: ListDisplaySection?): Set<String> =
+            setOfNotNull(KEY_SHOW_EXTRA_INFO_ON_CARDS, section?.let(::extraInfoKeyOf))
         const val KEY_HUGGINGFACE_MIRROR = "huggingface_mirror"
         const val KEY_BANGUMI_MIRROR = "bangumi_mirror"
         const val KEY_BANGUMI_MIRROR_CUSTOM_BASE = "bangumi_mirror_custom_base"

@@ -83,6 +83,8 @@ class LocalListViewModel @Inject constructor(
     localStorageChanges = localStorageChanges,
 ), SharedPreferences.OnSharedPreferenceChangeListener, QuickFilterListener {
 
+    override fun displaySection() = org.skepsun.kototoro.list.ui.ListDisplaySection.LOCAL
+
     val onContentRemoved = MutableEventFlow<Unit>()
 
     override val currentGroupTab: StateFlow<BrowseGroupTab> = globalFavoritesState.selectedGroupTab

@@ -110,6 +110,7 @@ fun HistoryScreen(
         LazyGridState()
     }
     KototoroContentListScreen(
+        displaySection = org.skepsun.kototoro.list.ui.ListDisplaySection.HISTORY,
         modifier = modifier,
         contentPadding = contentPadding,
         items = retainedState?.displayedItems ?: contentItems,

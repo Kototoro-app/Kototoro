@@ -82,6 +82,7 @@ fun ListConfigRoute(
             pendingGridSize = it
             viewModel.updateGridSize(it)
         },
+        section = section.toDisplaySection(),
         railRows = railRows,
         onRailRowsChange = railRows?.let { rows ->
             { value: Int -> viewModel.updateRailRows(value) }

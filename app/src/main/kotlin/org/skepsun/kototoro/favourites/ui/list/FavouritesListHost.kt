@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.favourites.ui.list
 
+import org.skepsun.kototoro.list.ui.ListDisplaySection
 import androidx.paging.PagingData
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -57,6 +58,7 @@ class FavouritesListHost internal constructor(
     val libraryState: StateFlow<FavouriteLibraryUiState> get() = container.libraryState
 
     override val listMode: StateFlow<ListMode> = container.listMode
+    override val displaySection = ListDisplaySection.FAVORITES
     override val gridScale: StateFlow<Float> = container.gridScale
     override val hasMoreItems = MutableStateFlow(false)
     /** Always null: the slice is a static list. The member only exists for the route's

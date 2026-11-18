@@ -3,6 +3,15 @@ package org.skepsun.kototoro.list.ui.config
 import android.os.Parcelable
 import kotlinx.parcelize.Parcelize
 
+/** The page whose own display options this section edits; null for the general ones and the home rails. */
+fun ListConfigSection?.toDisplaySection(): org.skepsun.kototoro.list.ui.ListDisplaySection? = when (this) {
+    is ListConfigSection.Favorites -> org.skepsun.kototoro.list.ui.ListDisplaySection.FAVORITES
+    ListConfigSection.History -> org.skepsun.kototoro.list.ui.ListDisplaySection.HISTORY
+    ListConfigSection.Suggestions -> org.skepsun.kototoro.list.ui.ListDisplaySection.SUGGESTIONS
+    ListConfigSection.Updated -> org.skepsun.kototoro.list.ui.ListDisplaySection.UPDATED
+    else -> null
+}
+
 sealed interface ListConfigSection : Parcelable {
 
     @Parcelize

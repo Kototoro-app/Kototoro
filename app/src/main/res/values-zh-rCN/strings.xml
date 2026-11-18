@@ -4217,9 +4217,8 @@
     <string name="details_tracking_link">关联</string>
     <string name="details_tracking_link_hint">重新关联此作品，即可启用进度同步。</string>
     <string name="details_tracking_unlink_hint">解除本地关联，保留追踪网站上的收藏、评分和进度。</string>
-    <string name="display_options_live_summary">修改立即生效；额外信息也会应用到其他列表。</string>
+    <string name="display_options_live_summary">修改立即生效，只影响当前页面。</string>
     <string name="display_options_shared_size_summary">封面大小也会应用到其他列表。</string>
-    <string name="display_options_library_summary">修改立即生效，应用于书架与历史列表。</string>
     <string name="welcome_start_summary">选择获取第一部作品的方式，也可以直接进入应用。</string>
     <string name="welcome_start_sources">添加来源</string>
     <string name="welcome_start_local">导入本地文件</string>

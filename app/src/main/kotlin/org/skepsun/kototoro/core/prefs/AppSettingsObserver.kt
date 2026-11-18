@@ -30,3 +30,28 @@ fun <T> AppSettings.observeAsStateFlow(
         emit(valueProducer())
     }
 }.stateIn(scope, SharingStarted.Eagerly, valueProducer())
+
+/** Like [observeAsStateFlow], re-reading the value when any of [keys] changes. */
+fun <T> AppSettings.observeAsStateFlow(
+    scope: CoroutineScope,
+    keys: Set<String>,
+    valueProducer: AppSettings.() -> T,
+): StateFlow<T> = observeChanges().transform {
+    if (it in keys) {
+        emit(valueProducer())
+    }
+}.stateIn(scope, SharingStarted.Eagerly, valueProducer())
+
+fun <T> AppSettings.observeAsFlow(keys: Set<String>, valueProducer: AppSettings.() -> T) = flow {
+    var lastValue: T = valueProducer()
+    emit(lastValue)
+    observeChanges().collect {
+        if (it in keys) {
+            val value = valueProducer()
+            if (value != lastValue) {
+                emit(value)
+            }
+            lastValue = value
+        }
+    }
+}

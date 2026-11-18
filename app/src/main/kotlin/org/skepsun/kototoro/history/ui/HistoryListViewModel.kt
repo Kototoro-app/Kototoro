@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.history.ui
 
+import org.skepsun.kototoro.list.ui.ListDisplaySection
 import android.content.Context
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -167,10 +168,12 @@ class HistoryListViewModel @Inject constructor(
         valueProducer = { historySortOrder },
     )
 
+    override fun displaySection() = ListDisplaySection.HISTORY
+
     override val listMode = settings.observeAsStateFlow(
         scope = viewModelScope + Dispatchers.Default,
-        key = AppSettings.KEY_LIST_MODE,
-        valueProducer = { settings.listMode },
+        keys = AppSettings.listModeKeysOf(ListDisplaySection.HISTORY),
+        valueProducer = { listModeOf(ListDisplaySection.HISTORY) },
     )
 
     private val isGroupingEnabled = settings.observeAsFlow(

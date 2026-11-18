@@ -20,6 +20,7 @@ import org.skepsun.kototoro.core.util.ext.sortedByOrdinal
 import org.skepsun.kototoro.favourites.domain.FavouritesRepository
 import org.skepsun.kototoro.core.model.FavouriteCategory.Companion.NO_ID
 import org.skepsun.kototoro.list.domain.ListSortOrder
+import org.skepsun.kototoro.list.ui.ListDisplaySection
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
 import kotlinx.coroutines.plus
 import javax.inject.Inject
@@ -93,14 +94,6 @@ class ListConfigViewModel @Inject constructor(
         HomeSectionGridSizes(history, updates, recommendations)
     }
 
-    private data class ScreenListModes(
-        val section: ListConfigSection?,
-        val general: ListMode,
-        val home: ListMode,
-        val history: ListMode,
-        val suggestions: ListMode,
-    )
-
     private data class HomeSectionModes(
         val history: ListMode,
         val updates: ListMode,
@@ -113,42 +106,22 @@ class ListConfigViewModel @Inject constructor(
         val recommendations: Int,
     )
 
+    /** Any preference that can change a page's own layout, grid size or extra-info switch. */
+    private val pageDisplayKeys: Array<String> = ListDisplaySection.entries.flatMap { section ->
+        AppSettings.listModeKeysOf(section) + AppSettings.gridSizeKeysOf(section)
+    }.toSet().plus(AppSettings.KEY_LIST_MODE_HOME).toTypedArray()
+
     val listModeState: StateFlow<ListMode> = combine(
-        combine(
-            sectionState,
-            settings.observeAsStateFlow(
-                scope = viewModelScope + Dispatchers.Default,
-                key = AppSettings.KEY_LIST_MODE,
-                valueProducer = { listMode },
-            ),
-            settings.observeAsStateFlow(
-                scope = viewModelScope + Dispatchers.Default,
-                key = AppSettings.KEY_LIST_MODE_HOME,
-                valueProducer = { homeListMode },
-            ),
-            settings.observeAsStateFlow(
-                scope = viewModelScope + Dispatchers.Default,
-                key = AppSettings.KEY_LIST_MODE_HISTORY,
-                valueProducer = { historyListMode },
-            ),
-            settings.observeAsStateFlow(
-                scope = viewModelScope + Dispatchers.Default,
-                key = AppSettings.KEY_LIST_MODE_SUGGESTIONS,
-                valueProducer = { suggestionsListMode },
-            ),
-        ) { section, generalMode, homeMode, historyMode, suggestionsMode ->
-            ScreenListModes(section, generalMode, homeMode, historyMode, suggestionsMode)
-        },
+        sectionState,
         homeSectionModesState,
-    ) { screen, sectionModes ->
-        when (screen.section) {
-            ListConfigSection.Home -> screen.home
+        settings.observe(*pageDisplayKeys),
+    ) { section, sectionModes, _ ->
+        when (section) {
+            ListConfigSection.Home -> settings.homeListMode
             ListConfigSection.HomeHistory -> sectionModes.history
             ListConfigSection.HomeUpdates -> sectionModes.updates
             ListConfigSection.HomeRecommendations -> sectionModes.recommendations
-            ListConfigSection.History -> screen.history
-            ListConfigSection.Suggestions -> screen.suggestions
-            else -> screen.general
+            else -> settings.listModeOf(section.toDisplaySection())
         }
     }.stateIn(
         viewModelScope + Dispatchers.Default,
@@ -158,18 +131,14 @@ class ListConfigViewModel @Inject constructor(
 
     val gridSizeState: StateFlow<Int> = combine(
         sectionState,
-        settings.observeAsStateFlow(
-            scope = viewModelScope + Dispatchers.Default,
-            key = AppSettings.KEY_GRID_SIZE,
-            valueProducer = { gridSize },
-        ),
         homeSectionGridSizesState,
-    ) { section, globalSize, sectionSizes ->
+        settings.observe(*pageDisplayKeys),
+    ) { section, sectionSizes, _ ->
         when (section) {
             ListConfigSection.HomeHistory -> sectionSizes.history
             ListConfigSection.HomeUpdates -> sectionSizes.updates
             ListConfigSection.HomeRecommendations -> sectionSizes.recommendations
-            else -> globalSize
+            else -> settings.gridSizeOf(section.toDisplaySection())
         }
     }.stateIn(
         viewModelScope + Dispatchers.Default,
@@ -294,9 +263,7 @@ class ListConfigViewModel @Inject constructor(
             ListConfigSection.HomeHistory -> settings.homeSectionListModeHistory
             ListConfigSection.HomeUpdates -> settings.homeSectionListModeUpdates
             ListConfigSection.HomeRecommendations -> settings.homeSectionListModeRecommendations
-            ListConfigSection.History -> settings.historyListMode
-            ListConfigSection.Suggestions -> settings.suggestionsListMode
-            else -> settings.listMode
+            else -> settings.listModeOf(section.toDisplaySection())
         }
         set(value) {
             when (section) {
@@ -304,9 +271,7 @@ class ListConfigViewModel @Inject constructor(
                 ListConfigSection.HomeHistory -> settings.homeSectionListModeHistory = value
                 ListConfigSection.HomeUpdates -> settings.homeSectionListModeUpdates = value
                 ListConfigSection.HomeRecommendations -> settings.homeSectionListModeRecommendations = value
-                ListConfigSection.History -> settings.historyListMode = value
-                ListConfigSection.Suggestions -> settings.suggestionsListMode = value
-                else -> settings.listMode = value
+                else -> settings.setListModeOf(section.toDisplaySection(), value)
             }
         }
 
@@ -315,14 +280,14 @@ class ListConfigViewModel @Inject constructor(
             ListConfigSection.HomeHistory -> settings.homeSectionGridSizeHistory
             ListConfigSection.HomeUpdates -> settings.homeSectionGridSizeUpdates
             ListConfigSection.HomeRecommendations -> settings.homeSectionGridSizeRecommendations
-            else -> settings.gridSize
+            else -> settings.gridSizeOf(section.toDisplaySection())
         }
         set(value) {
             when (section) {
                 ListConfigSection.HomeHistory -> settings.homeSectionGridSizeHistory = value
                 ListConfigSection.HomeUpdates -> settings.homeSectionGridSizeUpdates = value
                 ListConfigSection.HomeRecommendations -> settings.homeSectionGridSizeRecommendations = value
-                else -> settings.gridSize = value
+                else -> settings.setGridSizeOf(section.toDisplaySection(), value)
             }
         }
 
