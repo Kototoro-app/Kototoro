@@ -9,6 +9,12 @@
             "state": "translated",
             "value": "Local video"
           }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本地影片"
+          }
         }
       }
     },
@@ -20,6 +26,12 @@
             "state": "translated",
             "value": "Comic archive"
           }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "漫畫壓縮包"
+          }
         }
       }
     },
@@ -30,6 +42,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "E-book"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "電子書"
           }
         }
       }

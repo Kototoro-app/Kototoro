@@ -1,0 +1,34 @@
+name: iOS Localization
+
+# Guards the zh-Hant strings in the iOS catalogs: the catalogs use Simplified
+# Chinese as their source language, so a zh-Hant value that still contains
+# Simplified text (for example because it was copied from its key) would leave
+# Traditional-Chinese devices reading Simplified. See iosApp/Scripts/zh-hant-strings.py.
+on:
+  pull_request:
+    paths:
+      - 'iosApp/**/*.xcstrings'
+      - 'iosApp/Scripts/zh-hant-strings.py'
+      - '.github/workflows/ios-localization.yml'
+  workflow_dispatch:
+
+jobs:
+  zh-hant:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install OpenCC
+        # Pure-Python wheel with the dictionaries bundled, so no native build is needed.
+        run: python3 -m pip install --disable-pip-version-check opencc-python-reimplemented
+
+      - name: Check zh-Hant localizations
+        run: python3 iosApp/Scripts/zh-hant-strings.py check
