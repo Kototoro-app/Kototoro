@@ -1,5 +1,7 @@
 package org.skepsun.kototoro.download.ui.compose
 
+import org.skepsun.kototoro.video.domain.formatVideoSize
+import org.skepsun.kototoro.video.player.MeasuredVideoSize
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -137,6 +139,7 @@ fun DownloadDialog(
     val isVideoContent by viewModel.isVideoContent.collectAsStateWithLifecycle()
     val isVideoQualitiesLoading by viewModel.isVideoQualitiesLoading.collectAsStateWithLifecycle()
     val videoQualities by viewModel.videoQualities.collectAsStateWithLifecycle()
+    val videoQualitySizes by viewModel.videoQualitySizes.collectAsStateWithLifecycle()
     val defaultFormat by viewModel.defaultFormat.collectAsStateWithLifecycle()
     val availableDestinations by viewModel.availableDestinations.collectAsStateWithLifecycle()
 
@@ -383,7 +386,8 @@ fun DownloadDialog(
                         value = if (isVideoQualitiesLoading) {
                             stringResource(id = R.string.fetching_video_quality)
                         } else {
-                            selectedVideoQuality ?: stringResource(id = R.string.system_default)
+                            selectedVideoQuality?.let { videoQualityLabel(it, videoQualitySizes) }
+                                ?: stringResource(id = R.string.system_default)
                         },
                         expanded = showVideoQualityMenu,
                         enabled = !isVideoQualitiesLoading,
@@ -400,7 +404,7 @@ fun DownloadDialog(
                         )
                         videoQualities.orEmpty().forEach { quality ->
                             DropdownMenuItem(
-                                text = { Text(text = quality) },
+                                text = { Text(text = videoQualityLabel(quality, videoQualitySizes)) },
                                 onClick = {
                                     selectedVideoQuality = quality
                                     showVideoQualityMenu = false
@@ -759,4 +763,10 @@ private fun rememberDownloadCountOptions(maxAvailableCount: Int): List<Int> {
             }
         }.distinct()
     }
+}
+
+/** A quality option's title, followed by its measured size when known ("~" marks an estimate). */
+private fun videoQualityLabel(quality: String, sizes: Map<String, MeasuredVideoSize>): String {
+    val size = sizes[quality] ?: return quality
+    return quality + " · " + (if (size.isEstimated) "~" else "") + formatVideoSize(size.bytes)
 }
