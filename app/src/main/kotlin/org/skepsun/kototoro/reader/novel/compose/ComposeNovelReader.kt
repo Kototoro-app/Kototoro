@@ -27,6 +27,8 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PageSize
+import androidx.compose.foundation.pager.PagerDefaults
+import androidx.compose.foundation.pager.PagerSnapDistance
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Icon
@@ -1374,6 +1376,30 @@ private fun novelComposePageKey(page: NovelComposePage): String = when (page) {
 internal fun novelComposeImagePageKey(chapterId: Long, sourceKey: String): String =
     "image:$chapterId:$sourceKey"
 
+/** Two pages are shown side by side only on wide viewports; the reader and page-turn keys must agree on it. */
+internal fun novelDualPageActive(enableDualPage: Boolean, widthDp: Float): Boolean =
+    enableDualPage && widthDp >= NOVEL_DUAL_PAGE_MIN_WIDTH_DP
+
+internal const val NOVEL_DUAL_PAGE_MIN_WIDTH_DP = 600f
+
+/** Pages a turn advances: a spread replaces both visible pages instead of shifting by one. */
+internal fun novelPageTurnStep(dualPage: Boolean): Int = if (dualPage) 2 else 1
+
+/** A swipe turns a whole spread, so the left page after a turn is never the old right page. */
+private val NovelSpreadSnapDistance = object : PagerSnapDistance {
+    override fun calculateTargetPage(
+        startPage: Int,
+        suggestedTargetPage: Int,
+        velocity: Float,
+        pageSize: Int,
+        pageSpacing: Int,
+    ): Int = when {
+        suggestedTargetPage > startPage -> startPage + novelPageTurnStep(true)
+        suggestedTargetPage < startPage -> startPage - novelPageTurnStep(true)
+        else -> startPage
+    }
+}
+
 internal fun novelDualPageCurlOffset(
     pageOffset: Float,
     isScrollInProgress: Boolean,
@@ -1853,7 +1879,7 @@ private fun ComposeNovelPagedChapter(
                     }
                 }
         }
-        val dualPage = settings.enableDualPage && maxWidth >= 600.dp
+        val dualPage = novelDualPageActive(settings.enableDualPage, maxWidth.value)
         val pageCurlState = rememberComposeReaderPageCurlState()
         val effectiveAnimation = when {
             !animationsEnabled -> ReaderAnimation.NONE
@@ -1874,6 +1900,10 @@ private fun ComposeNovelPagedChapter(
             pageSize = if (dualPage) PageSize.Fixed(maxWidth / 2) else PageSize.Fill,
             beyondViewportPageCount = 1,
             userScrollEnabled = readyGeneration === displayedGeneration,
+            flingBehavior = PagerDefaults.flingBehavior(
+                state = pagerState,
+                pagerSnapDistance = if (dualPage) NovelSpreadSnapDistance else PagerSnapDistance.atMost(1),
+            ),
             key = { index -> novelComposePageKey(pages[index]) },
             modifier = Modifier
                 .fillMaxSize()

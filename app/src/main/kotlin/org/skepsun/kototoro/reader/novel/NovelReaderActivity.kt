@@ -1312,7 +1312,12 @@ class NovelReaderActivity :
             return
         }
         val position = composeReaderViewModel.uiState.value.position
-        val targetPage = (position?.page ?: currentPageIndex) + delta
+        val dualPage = org.skepsun.kototoro.reader.novel.compose.novelDualPageActive(
+            readerSettings.enableDualPage,
+            resources.configuration.screenWidthDp.toFloat(),
+        )
+        val step = org.skepsun.kototoro.reader.novel.compose.novelPageTurnStep(dualPage)
+        val targetPage = (position?.page ?: currentPageIndex) + delta * step
         val pageCount = position?.pageCount ?: 0
         when {
             targetPage in 0 until pageCount -> composeReaderViewModel.requestPage(targetPage)
