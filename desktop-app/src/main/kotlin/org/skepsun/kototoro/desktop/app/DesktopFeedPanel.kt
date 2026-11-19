@@ -302,9 +302,11 @@ private fun FeedRow(controller: DesktopController, state: DesktopAppState, row: 
         modifier = Modifier.testTag("feed-row:${row.logId}"),
         screenPadding = 0.dp,
         timelineLabel = label,
-        continueAction = FeedContinueAction(painterResource("icons/ic_read.svg"), desktopText("feed.continueReading")) {
-            row.displayMangaId?.let { if (enabled) controller.continueTracked(it) }
-        },
+        continueAction = FeedContinueAction(
+            icon = painterResource("icons/ic_read.svg"),
+            label = desktopText("feed.continueReading"),
+            onClick = { row.displayMangaId?.let { if (enabled) controller.continueTracked(it) } },
+        ),
         cover = { content?.let { DesktopCover(it, controller.session.covers, Modifier.matchParentSize()) } },
     )
 }
