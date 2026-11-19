@@ -16,6 +16,8 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import android.text.format.Formatter
+import java.text.NumberFormat
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.layout.ContentScale
@@ -39,6 +41,8 @@ import org.skepsun.kototoro.core.ui.chapters.PAGE_THUMBNAIL_ASPECT_RATIO
 import org.skepsun.kototoro.core.ui.chapters.ChapterGridCard as SharedChapterGridCard
 import org.skepsun.kototoro.core.ui.chapters.ChapterListCard as SharedChapterListCard
 import org.skepsun.kototoro.details.domain.ChapterThumbnailResolver
+import org.skepsun.kototoro.details.domain.LocalChapterStats
+import org.skepsun.kototoro.details.domain.LocalChapterStatsResolver
 import org.skepsun.kototoro.details.ui.model.ChapterListItem
 import org.skepsun.kototoro.parsers.model.ContentChapter
 
@@ -188,6 +192,7 @@ private fun chapterThumbnailAspectRatio(item: ChapterListItem): Float {
 @InstallIn(SingletonComponent::class)
 internal interface ChapterThumbnailEntryPoint {
     val chapterThumbnailResolver: ChapterThumbnailResolver
+    val localChapterStatsResolver: LocalChapterStatsResolver
 }
 
 /** The chapter's first page, looked up only once the card is composed; null for chapters without pages to show. */
@@ -215,13 +220,45 @@ private fun firstPageThumbnail(chapter: ContentChapter): (@Composable BoxScope.(
 }
 
 @Composable
-private fun ChapterListItem.cardData() = ChapterCardData(
-    title = getTitle(LocalContext.current.resources),
-    description = description,
-    isCurrent = isCurrent,
-    isUnread = isUnread,
-    isBookmarked = isBookmarked,
-    isDownloaded = isDownloaded,
-    isNew = isNew,
-    isTranslated = isTranslated,
-)
+private fun ChapterListItem.cardData(): ChapterCardData {
+    val context = LocalContext.current
+    val stats = downloadedStats()
+    val statsText = stats?.let {
+        listOfNotNull(
+            it.pages?.let { pages -> context.resources.getQuantityString(R.plurals.chapter_pages_count, pages, pages) },
+            it.words?.let { words ->
+                context.resources.getQuantityString(
+                    R.plurals.chapter_words_count,
+                    words,
+                    NumberFormat.getInstance().format(words),
+                )
+            },
+            it.bytes?.let { bytes -> Formatter.formatShortFileSize(context, bytes) },
+        ).joinToString(" • ").ifEmpty { null }
+    }
+    return ChapterCardData(
+        title = getTitle(context.resources),
+        description = listOfNotNull(description, statsText).joinToString(" • ").ifEmpty { null },
+        isCurrent = isCurrent,
+        isUnread = isUnread,
+        isBookmarked = isBookmarked,
+        isDownloaded = isDownloaded,
+        isNew = isNew,
+        isTranslated = isTranslated,
+    )
+}
+
+/** Page count and size of a downloaded chapter, read from local storage once the card is composed (#703). */
+@Composable
+private fun ChapterListItem.downloadedStats(): LocalChapterStats? {
+    if (!isDownloaded) return null
+    val context = LocalContext.current
+    val resolver = remember(context.applicationContext) {
+        EntryPointAccessors.fromApplication<ChapterThumbnailEntryPoint>(context.applicationContext)
+            .localChapterStatsResolver
+    }
+    val stats by produceState<LocalChapterStats?>(null, chapter.id, chapter.url) {
+        value = resolver.stats(chapter)
+    }
+    return stats
+}

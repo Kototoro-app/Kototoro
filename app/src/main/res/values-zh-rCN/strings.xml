@@ -892,6 +892,12 @@
         <item quantity="one">每页</item>
         <item quantity="other">每 %1$d 页</item>
     </plurals>
+    <plurals name="chapter_words_count">
+        <item quantity="other">%s 字</item>
+    </plurals>
+    <plurals name="chapter_pages_count">
+        <item quantity="other">%d 页</item>
+    </plurals>
     <string name="zoom_in">放大</string>
     <string name="reader_zoom_buttons_summary">在右下角显示放大缩小按钮</string>
     <string name="reader_zoom_buttons">缩放按钮</string>

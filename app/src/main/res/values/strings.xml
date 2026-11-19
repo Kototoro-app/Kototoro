@@ -1332,6 +1332,14 @@
         <item quantity="one">Every page</item>
         <item quantity="other">Every %1$d pages</item>
     </plurals>
+    <plurals name="chapter_words_count">
+        <item quantity="one">%s word</item>
+        <item quantity="other">%s words</item>
+    </plurals>
+    <plurals name="chapter_pages_count">
+        <item quantity="one">%d page</item>
+        <item quantity="other">%d pages</item>
+    </plurals>
     <string name="background">Background</string>
     <string name="reader_background">Reader background</string>
     <string name="reader_background_theme">Follow app theme</string>

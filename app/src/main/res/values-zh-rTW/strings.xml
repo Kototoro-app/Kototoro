@@ -3101,6 +3101,12 @@
         <item quantity="one">每頁</item>
         <item quantity="other">每 %1$d 頁</item>
     </plurals>
+    <plurals name="chapter_words_count">
+        <item quantity="other">%s 字</item>
+    </plurals>
+    <plurals name="chapter_pages_count">
+        <item quantity="other">%d 頁</item>
+    </plurals>
     <string name="reader_background">閱讀背景</string>
     <string name="reader_background_theme">跟隨應用主題</string>
     <string name="video_decoder_hardware_only">僅硬體解碼</string>
