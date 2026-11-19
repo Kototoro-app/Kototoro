@@ -1653,8 +1653,10 @@ private fun ComposeNovelPagedChapter(
         val navigationBarInset = WindowInsets.navigationBarsIgnoringVisibility
             .asPaddingValues()
             .calculateBottomPadding()
+        // A spread shows two pages side by side, so each page is measured at half the viewport width.
+        val pageWidth = if (novelDualPageActive(settings.enableDualPage, maxWidth.value)) maxWidth / 2 else maxWidth
         val contentWidthPx = with(density) {
-            (maxWidth - settings.marginHorizontal.dp * 2).coerceAtLeast(1.dp).roundToPx()
+            (pageWidth - settings.marginHorizontal.dp * 2).coerceAtLeast(1.dp).roundToPx()
         }
         val contentHeightPx = with(density) {
             (
