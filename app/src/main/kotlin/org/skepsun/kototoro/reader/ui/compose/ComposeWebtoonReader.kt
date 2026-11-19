@@ -20,7 +20,9 @@ import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -95,6 +97,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlin.math.abs
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.image.AvifAnimatedDrawable
+import org.skepsun.kototoro.core.ui.chapters.ChapterBreakCard
 import org.skepsun.kototoro.reader.ui.pager.ReaderPage
 import org.skepsun.kototoro.reader.ui.pager.ReaderPageSplit
 
@@ -122,6 +125,7 @@ fun ComposeWebtoonReader(
     canGoPreviousChapter: Boolean = true,
     canGoNextChapter: Boolean = true,
     onPullChapter: (Int) -> Unit = {},
+    chapterTitleAt: ((chapterId: Long, offset: Int) -> String?)? = null,
     onShowErrorDetails: (Throwable, String?) -> Unit = { _, _ -> },
     onRetryError: (Throwable, retry: () -> Unit) -> Unit = { _, retry -> retry() },
     resolveErrorStringId: (Throwable) -> Int = { 0 },
@@ -185,6 +189,16 @@ fun ComposeWebtoonReader(
     var pendingAnchor by remember { mutableStateOf<WebtoonListAnchor?>(null) }
     var viewportWidthPx by remember { mutableIntStateOf(0) }
     var viewportHeightPx by remember { mutableIntStateOf(0) }
+    val breakDensity = LocalDensity.current
+    val breakStripHeight = with(breakDensity) {
+        sceneChapterBreakSizePx(
+            viewportWidthPx.toFloat(),
+            viewportHeightPx.toFloat(),
+            SCENE_BREAK_STRIP_FRACTION,
+            horizontal = false,
+            density = breakDensity.density,
+        ).second.toDp()
+    }
     var pullState by remember { mutableStateOf(WebtoonPullState()) }
     var canvasScale by remember(defaultScale) { mutableFloatStateOf(defaultScale.coerceIn(0.5f, 1f)) }
     var canvasOffsetX by remember { mutableFloatStateOf(0f) }
@@ -817,49 +831,66 @@ fun ComposeWebtoonReader(
                     contentType = { WEBTOON_PAGE_CONTENT_TYPE },
                 ) { position ->
                     val measurement = measurementFor(position)
-                    ComposeWebtoonPage(
-                        page = pages[position],
-                        imageLoader = imageLoader,
-                        imagePipeline = imagePipeline,
-                        measurement = measurement,
-                        decodeWidthPx = viewportWidthPx,
-                        decodeHeightPx = viewportHeightPx,
-                        bitmapConfig = bitmapConfig,
-                        onImageSizeResolved = { width, height ->
-                            if (width > 0 && height > 0) {
-                                val pageKey = pages[position].readerKey
-                                val newSize = WebtoonImageSize(width, height)
-                                if (imageSizes[pageKey] != newSize) {
-                                    if (hasAppliedInitialPosition && !listState.isScrollInProgress) {
-                                        val visiblePosition = listState.firstVisibleItemIndex
-                                    pendingAnchor = WebtoonListAnchor(
-                                        pageKey = if (isAnchorRestorePending) {
-                                            stableViewportAnchor.pageKey
-                                        } else {
-                                            pages.getOrNull(visiblePosition)?.readerKey
-                                                ?: stableViewportAnchor.pageKey
-                                        },
-                                            offsetPx = if (isAnchorRestorePending) {
-                                                0
+                    val currentPage = pages[position]
+                    // The card sits under the last page of a chapter, so the items above it never change when
+                    // a neighbouring chapter loads and the scroll anchors stay valid.
+                    // The list holds whole chapters, so the last page is a chapter's last page; the card shows there
+                    // even while the next chapter loads and is the same card once it has.
+                    val nextChapterId = pages.getOrNull(position + 1)?.chapterId
+                    val hasBreakAfter = chapterTitleAt != null &&
+                        (nextChapterId == null || nextChapterId != currentPage.chapterId)
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        ComposeWebtoonPage(
+                            page = currentPage,
+                            imageLoader = imageLoader,
+                            imagePipeline = imagePipeline,
+                            measurement = measurement,
+                            decodeWidthPx = viewportWidthPx,
+                            decodeHeightPx = viewportHeightPx,
+                            bitmapConfig = bitmapConfig,
+                            onImageSizeResolved = { width, height ->
+                                if (width > 0 && height > 0) {
+                                    val pageKey = pages[position].readerKey
+                                    val newSize = WebtoonImageSize(width, height)
+                                    if (imageSizes[pageKey] != newSize) {
+                                        if (hasAppliedInitialPosition && !listState.isScrollInProgress) {
+                                            val visiblePosition = listState.firstVisibleItemIndex
+                                        pendingAnchor = WebtoonListAnchor(
+                                            pageKey = if (isAnchorRestorePending) {
+                                                stableViewportAnchor.pageKey
                                             } else {
-                                                listState.firstVisibleItemScrollOffset
+                                                pages.getOrNull(visiblePosition)?.readerKey
+                                                    ?: stableViewportAnchor.pageKey
                                             },
-                                        )
+                                                offsetPx = if (isAnchorRestorePending) {
+                                                    0
+                                                } else {
+                                                    listState.firstVisibleItemScrollOffset
+                                                },
+                                            )
+                                        }
+                                        imageSizes[pageKey] = newSize
                                     }
-                                    imageSizes[pageKey] = newSize
                                 }
-                            }
-                        },
-                        onShowErrorDetails = onShowErrorDetails,
-                        onRetryError = onRetryError,
-                        resolveErrorStringId = resolveErrorStringId,
-                        readerBackgroundColor = readerBackgroundColor,
-                        imageColorFilter = imageColorFilter,
-                        isCropEnabled = isCropEnabled,
-                        isReaderOptimizationEnabled = isReaderOptimizationEnabled,
-                        isPageVisible = position in visiblePageRange,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
+                            },
+                            onShowErrorDetails = onShowErrorDetails,
+                            onRetryError = onRetryError,
+                            resolveErrorStringId = resolveErrorStringId,
+                            readerBackgroundColor = readerBackgroundColor,
+                            imageColorFilter = imageColorFilter,
+                            isCropEnabled = isCropEnabled,
+                            isReaderOptimizationEnabled = isReaderOptimizationEnabled,
+                            isPageVisible = position in visiblePageRange,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        if (hasBreakAfter && chapterTitleAt != null) {
+                            ChapterBreakCard(
+                                finishedTitle = chapterTitleAt(currentPage.chapterId, 0),
+                                nextTitle = chapterTitleAt(currentPage.chapterId, 1),
+                                modifier = Modifier.heightIn(min = breakStripHeight),
+                            )
+                        }
+                    }
                 }
             }
         }

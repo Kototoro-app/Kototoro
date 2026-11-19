@@ -58,10 +58,19 @@ internal fun DesktopNovelReader(controller: DesktopController, state: DesktopApp
     val paged = settings.paged
     // One pager per chapter: pages follow the measured window, while the anchor survives a mode switch.
     val pager = remember(novel.chapter.id) { DesktopNovelPagerState(novel.startBlock) }
+    val chapterBreak = state.readerSettings.chapterBreak
+    // Paged: the break is its own page after the last one; it never moves the page, the block or the progress.
+    var breakOpen by remember(novel.chapter.id) { mutableStateOf(false) }
     fun flipPage(forward: Boolean) {
         if (!enabled) return
-        val moved = if (forward) pager.next() else pager.previous()
-        if (moved) return
+        if (chapterBreak && breakOpen) {
+            // The break page sits between the last page and the next chapter: back closes it, forward reads on.
+            if (!forward) { breakOpen = false; return }
+        } else {
+            val moved = if (forward) pager.next() else pager.previous()
+            if (moved) return
+            if (chapterBreak && forward) { breakOpen = true; return }
+        }
         when {
             forward && hasNext -> controller.changeNovelChapter(true)
             !forward && hasPrevious -> controller.changeNovelChapter(false)
@@ -119,10 +128,12 @@ internal fun DesktopNovelReader(controller: DesktopController, state: DesktopApp
                         true
                     }
                     event.key == Key.MoveHome -> {
+                        breakOpen = false
                         if (paged) pager.jumpToBlock(0) else scope.launch { list.scrollToItem(0) }
                         true
                     }
                     event.key == Key.MoveEnd -> {
+                        breakOpen = false
                         if (paged) pager.jumpToBlock(novel.blocks.lastIndex) else scope.launch { list.scrollToItem(novel.blocks.lastIndex) }
                         true
                     }
@@ -139,8 +150,17 @@ internal fun DesktopNovelReader(controller: DesktopController, state: DesktopApp
                     DesktopNovelPagedBody(controller, novel, settings, pager, onFlip = ::flipPage,
                         modifier = Modifier.fillMaxSize())
                 } else {
-                    DesktopNovelScrollBody(controller, novel, settings, list, enabled, hasPrevious, hasNext, colors)
+                    DesktopNovelScrollBody(controller, novel, settings, list, enabled, hasPrevious, hasNext, colors,
+                        breakCard = if (chapterBreak) {
+                            { modifier -> DesktopNovelBreakCard(state, novel, modifier) }
+                        } else {
+                            null
+                        })
                 }
+            }
+            if (paged && chapterBreak && breakOpen) {
+                DesktopNovelBreakCard(state, novel,
+                    Modifier.fillMaxSize().background(Color(colors.palette.background)).testTag("novel-chapter-break"))
             }
             DesktopNovelReaderChrome(
                 novel = novel,
@@ -166,6 +186,7 @@ internal fun DesktopNovelReader(controller: DesktopController, state: DesktopApp
                     // Paged mode shows the slider in pages; the pager works in paragraphs, so the page decides.
                     val block = if (paged) pager.pages.getOrNull(position)?.first ?: position else position
                     if (enabled && block in novel.blocks.indices) {
+                        breakOpen = false
                         if (paged) pager.jumpToBlock(block) else scope.launch { list.scrollToItem(block) }
                         focus.requestFocus()
                     }
@@ -198,6 +219,7 @@ private fun DesktopNovelScrollBody(
     hasPrevious: Boolean,
     hasNext: Boolean,
     colors: DesktopNovelTheme,
+    breakCard: (@Composable (Modifier) -> Unit)? = null,
 ) {
     LazyColumn(Modifier.fillMaxSize().testTag("novel-list"), state = list,
         contentPadding = PaddingValues(
@@ -210,6 +232,10 @@ private fun DesktopNovelScrollBody(
                     NovelBlockView(controller, block, settings)
                 }
             }
+        }
+        if (breakCard != null) item(key = "chapter-break") {
+            // A low band marks where the chapter ends; the chapter buttons below stay as they are.
+            breakCard(Modifier.fillParentMaxHeight(BREAK_BAND_FRACTION).testTag("novel-chapter-break"))
         }
         item {
             Row(Modifier.fillMaxWidth().padding(vertical = 40.dp), horizontalArrangement = Arrangement.Center) {
@@ -277,3 +303,22 @@ private fun NovelInlineImage(controller: DesktopController, url: String, muted: 
 private fun themedOutline(theme: DesktopNovelTheme) = ButtonDefaults.outlinedButtonColors(
     containerColor = Color.Transparent, contentColor = Color(theme.palette.text),
     disabledContentColor = Color(theme.palette.secondaryText).copy(alpha = .6f))
+
+/** Share of the viewport the scrolling break band takes. */
+private const val BREAK_BAND_FRACTION = 0.34f
+
+/** The shared chapter break card for the novel reader: the finished chapter and the next one, information only. */
+@Composable
+private fun DesktopNovelBreakCard(
+    state: DesktopAppState,
+    novel: DesktopNovel,
+    modifier: Modifier = Modifier,
+) {
+    val next = state.adjacentChapter(true)
+    Box(modifier, contentAlignment = Alignment.Center) {
+        org.skepsun.kototoro.core.ui.chapters.ChapterBreakCard(
+            finishedTitle = novel.titleOf(novel.chapter),
+            nextTitle = next?.let { novel.titleOf(it)?.takeIf(String::isNotBlank) ?: it.number.toString().removeSuffix(".0") },
+        )
+    }
+}

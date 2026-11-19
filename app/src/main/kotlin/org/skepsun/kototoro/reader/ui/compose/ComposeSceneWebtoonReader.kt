@@ -136,6 +136,23 @@ fun ComposeSceneWebtoonReader(
 ) {
     if (pages.isEmpty()) return
 
+    // Chapter break strips go between chapters here; positions from the caller refer to the list without them.
+    val chapterBreakHandler = LocalChapterBreakHandler.current
+    val breakDensity = LocalDensity.current.density
+    val sourcePages = pages
+    val pages = remember(sourcePages, chapterBreakHandler != null) {
+        withSceneChapterBreaks(sourcePages, chapterBreakHandler != null)
+    }
+    val initialPage = sceneShownPosition(initialPage, sourcePages, pages)
+    val requestedPage = requestedPage?.let { sceneShownPosition(it, sourcePages, pages) }
+    val reportPages = { lower: Long, upper: Long, active: Long ->
+        onPagesChanged(
+            sceneReportedKey(lower, pages),
+            sceneReportedKey(upper, pages),
+            sceneReportedKey(active, pages),
+        )
+    }
+
     val context = LocalContext.current
     val view = LocalView.current
     val coroutineScope = rememberCoroutineScope()
@@ -148,7 +165,7 @@ fun ComposeSceneWebtoonReader(
     }
     val currentPageMap = rememberUpdatedState(pageMap)
     val pageLookup: (PageId) -> ReaderPage? = remember {
-        { id -> currentPageMap.value.get(id.value) }
+        { id -> currentPageMap.value.get(id.value)?.takeUnless { it.isChapterBreak } }
     }
 
     val density = LocalDensity.current
@@ -207,7 +224,11 @@ fun ComposeSceneWebtoonReader(
             VerticalReaderScene(
                 availableWidth = viewportWidthPx.toInt(),
                 defaultViewportHeight = viewportHeightPx.toInt().coerceAtLeast(1000),
-                initialPages = createInitialScenePageHints(pages, adapter),
+                initialPages = createInitialScenePageHints(
+                    pages,
+                    adapter,
+                    breakHint = sceneStripBreakHint(viewportWidthPx, viewportHeightPx, breakDensity, horizontal = false),
+                ),
                 pageSpacingPx = pageGapPx,
             )
         }
@@ -305,10 +326,14 @@ fun ComposeSceneWebtoonReader(
             val newReported = Triple(lowerKey, upperKey, activeKey)
             if (lastReportedPages != newReported) {
                 lastReportedPages = newReported
-                onPagesChanged(lowerKey, upperKey, activeKey)
+                reportPages(lowerKey, upperKey, activeKey)
             }
 
-            val activePage = pageLookup(activeId) ?: pages.firstOrNull()
+            val activePage = if (pageMap[activeId.value]?.isChapterBreak == true) {
+                null
+            } else {
+                pageLookup(activeId) ?: pages.firstOrNull()
+            }
             if (activePage != null) {
                 val pageRelativeScroll = progress.intraPageOffsetPx.roundToInt()
                 onInternalScrollChanged(activePage, pageRelativeScroll)
@@ -334,7 +359,12 @@ fun ComposeSceneWebtoonReader(
             val currentVp = ReaderViewport(
                 FloatRect.fromLtwh(0f, scrollState.scrollY, viewportWidthPx, viewportHeightPx),
             )
-            val newHints = createInitialScenePageHints(pages, adapter, unknownPageRatio = ratioEstimator.convergedRatio)
+            val newHints = createInitialScenePageHints(
+                pages,
+                adapter,
+                unknownPageRatio = ratioEstimator.convergedRatio,
+                breakHint = sceneStripBreakHint(viewportWidthPx, viewportHeightPx, breakDensity, horizontal = false),
+            )
             val compensation = scene.updatePages(newHints, currentVp)
             if (viewportHeightPx > 0f) {
                 scrollState.maxScrollY = (scene.totalSceneHeight - viewportHeightPx).coerceAtLeast(0f)
@@ -364,7 +394,12 @@ fun ComposeSceneWebtoonReader(
         val currentVp = ReaderViewport(
             FloatRect.fromLtwh(0f, scrollState.scrollY, viewportWidthPx, viewportHeightPx),
         )
-        val newHints = createInitialScenePageHints(currentPages.value, adapter, unknownPageRatio = ratio)
+        val newHints = createInitialScenePageHints(
+            currentPages.value,
+            adapter,
+            unknownPageRatio = ratio,
+            breakHint = sceneStripBreakHint(viewportWidthPx, viewportHeightPx, breakDensity, horizontal = false),
+        )
         val compensation = currentScene.updatePages(newHints, currentVp)
         scrollState.maxScrollY = (currentScene.totalSceneHeight - viewportHeightPx).coerceAtLeast(0f)
         if (compensation != null && compensation.deltaY != 0f) {
@@ -1000,16 +1035,21 @@ fun ComposeSceneWebtoonReader(
                                         scrollState,
                                     ),
                                 ) {
-                                    SceneReaderPageLoadOverlay(
-                                        pipeline = adapter,
-                                        pageId = pageId,
-                                        page = pageLookup(pageId),
-                                        onRetryError = onRetryError,
-                                        onShowErrorDetails = onShowErrorDetails,
-                                        resolveErrorStringId = resolveErrorStringId,
-                                        onRetry = { coroutineScope.launch { adapter.retryAsset(pageId) } },
-                                        unresolvedIsLoading = true,
-                                    )
+                                    val breakPage = pageMap[pageId.value]?.takeIf { it.isChapterBreak }
+                                    if (breakPage != null) {
+                                        SceneChapterBreakOverlay(breakPage, viewportWidthPx, viewportHeightPx, SCENE_BREAK_STRIP_FRACTION, false)
+                                    } else {
+                                        SceneReaderPageLoadOverlay(
+                                            pipeline = adapter,
+                                            pageId = pageId,
+                                            page = pageLookup(pageId),
+                                            onRetryError = onRetryError,
+                                            onShowErrorDetails = onShowErrorDetails,
+                                            resolveErrorStringId = resolveErrorStringId,
+                                            onRetry = { coroutineScope.launch { adapter.retryAsset(pageId) } },
+                                            unresolvedIsLoading = true,
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -1035,9 +1075,11 @@ internal fun createInitialScenePageHints(
     adapter: KototoroImagePipelineAdapter? = null,
     defaultRatio: Float = 1.0f,
     unknownPageRatio: Float? = null,
+    breakHint: PageGeometryHint? = null,
 ): List<Pair<PageId, PageGeometryHint>> {
     return pages.map { page ->
         val pageId = PageId(page.readerKey)
+        if (page.isChapterBreak && breakHint != null) return@map pageId to breakHint
         val cachedDims = adapter?.probeCachedDimensions(pageId)
         val hint = if (cachedDims != null) {
             PageGeometryHint.Exact(cachedDims.width, cachedDims.height)

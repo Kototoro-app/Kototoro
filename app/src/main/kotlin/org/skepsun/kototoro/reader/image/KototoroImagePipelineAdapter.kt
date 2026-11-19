@@ -309,7 +309,39 @@ class KototoroImagePipelineAdapter(
 
     override suspend fun retryAsset(pageId: PageId): ReaderImageAsset? = acquireAsset(pageId, force = true)
 
+    /**
+     * Assets the host draws itself for pages that have no image source, such as the chapter break page. They go
+     * through the same store and publish path as a decoded page, so the scene animates them like any other page.
+     */
+    private val syntheticAssets = ConcurrentHashMap<PageId, ReaderImageAsset>()
+
+    /**
+     * Registers [asset] as the content of its page and publishes it to the renderer. Calling it again replaces the
+     * content, for example after a theme change.
+     */
+    suspend fun setSyntheticAsset(asset: ReaderImageAsset) {
+        val pageId = asset.pageId
+        syntheticAssets[pageId] = asset
+        publishSyntheticAsset(pageId, asset)
+    }
+
+    fun clearSyntheticAsset(pageId: PageId) {
+        syntheticAssets.remove(pageId)
+    }
+
+    private suspend fun publishSyntheticAsset(pageId: PageId, asset: ReaderImageAsset) {
+        if (!storeAsset(pageId, asset, publishPresentation = false)) return
+        withContext(Dispatchers.Main) {
+            onAssetLoaded?.invoke(pageId, asset)
+            publishStoredPresentation(pageId, asset)
+        }
+    }
+
     private suspend fun acquireAsset(pageId: PageId, force: Boolean): ReaderImageAsset? {
+        syntheticAssets[pageId]?.let { asset ->
+            if (cachedAssets[pageId] !== asset) publishSyntheticAsset(pageId, asset)
+            return asset
+        }
         val deferred = synchronized(inFlightLoads) {
             inFlightLoads[pageId]?.let { existing ->
                 if (!existing.isCompleted) return@synchronized existing
@@ -589,6 +621,16 @@ class KototoroImagePipelineAdapter(
         // 3. Process requests
         for (request in window.requests) {
             val pageId = request.pageId
+            // Synthetic pages have no source to load, but the window evicts and downgrades their asset like any
+            // other, so it is published again whenever the page is asked to be presentable.
+            val synthetic = syntheticAssets[pageId]
+            if (synthetic != null) {
+                val targetReadiness = desired[pageId] ?: request.readiness
+                if (targetReadiness == PrefetchReadiness.PRESENTATION_READY && cachedAssets[pageId] !== synthetic) {
+                    scope.launch(start = CoroutineStart.UNDISPATCHED) { publishSyntheticAsset(pageId, synthetic) }
+                }
+                continue
+            }
             val page = pageLookup(pageId) ?: continue
 
             if (loadStates.value[pageId] is ReaderImageLoadState.Failed) {
@@ -648,6 +690,7 @@ class KototoroImagePipelineAdapter(
     private fun downgradeToSource(desired: Map<PageId, PrefetchReadiness>) {
         for ((pageId, readiness) in desired) {
             if (readiness != PrefetchReadiness.SOURCE_READY) continue
+            if (syntheticAssets.containsKey(pageId)) continue
 
             // Cancel any speculative decode that is no longer within the presentation window
             inFlightLoads.remove(pageId)?.cancel()

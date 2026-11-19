@@ -371,6 +371,8 @@ data class DesktopAppState(
     val readerScroll: Float = 0f,
     val readerLastVisible: Int = 0,
     val readerAtEnd: Boolean = false,
+    /** The chapter whose paged "next chapter" break page is showing (chapter break setting), null while pages show. */
+    val readerBreakChapterId: Long? = null,
     val readerNavigation: Long = 0,
     val readerTargetPage: Int = 0,
     val readerTargetScroll: Float = 0f,
@@ -3521,6 +3523,7 @@ class DesktopController(
     private suspend fun readOnIo(chapter: SourceChapter? = null, startAtEnd: Boolean = false,
         bookmark: DesktopBookmark? = null) {
         val content = requireNotNull(state.value.content)
+        if (state.value.readerBreakChapterId != null) mutableState.update { it.copy(readerBreakChapterId = null) }
         val chapters = requireNotNull(content.chapters) { desktopText("error.noChapters") }
         val progress = session.library.progress(content.id)
         val restoredId = progress?.let { recoverHistoryChapterId(false, it.chapterId, it.parentChapterId,
@@ -3783,6 +3786,20 @@ class DesktopController(
     fun turnPage(forward: Boolean) = action {
         val snapshot = state.value
         val continuousMode = snapshot.readerSettings.mode.isContinuous
+        if (snapshot.readerSettings.chapterBreak && !continuousMode) {
+            // The paged break page sits between the last page group and the next chapter: back closes it, forward
+            // reads on, and the first forward turn past the last group opens it. Continuous mode has its own band.
+            val open = snapshot.readerBreakChapterId != null && snapshot.readerBreakChapterId == snapshot.chapter?.id
+            if (open) {
+                if (!forward) {
+                    mutableState.update { it.copy(readerBreakChapterId = null) }
+                    return@action
+                }
+            } else if (forward && readerLayout(snapshot).turnIndex(true) == null) {
+                mutableState.update { it.copy(readerBreakChapterId = it.chapter?.id) }
+                return@action
+            }
+        }
         val boundary = if (continuousMode) snapshot.readerScrollReady &&
             (if (forward) snapshot.readerAtEnd else snapshot.pageIndex == 0 && snapshot.readerScroll == 0f)
             else readerLayout(snapshot).turnIndex(forward) == null
@@ -3886,6 +3903,7 @@ class DesktopController(
             "reader_continuous_horizontal_reversed" to
                 SourcePreferenceValue.Toggle(settings.continuousHorizontalReversed),
             "reader_mode_detect" to SourcePreferenceValue.Toggle(settings.readerModeDetection),
+            "reader_chapter_break" to SourcePreferenceValue.Toggle(settings.chapterBreak),
             "as_speed" to SourcePreferenceValue.FloatBits(settings.autoScrollSpeed.toRawBits()),
             "double_cover" to SourcePreferenceValue.Toggle(settings.doublePageCover),
         ) + tapGridPreferences(settings.tapGrid)))
@@ -3957,6 +3975,7 @@ class DesktopController(
             (snapshot["reader_continuous_horizontal_reversed"] as? SourcePreferenceValue.Toggle)?.value ?: false,
             // Android's autodetect switch; AppSettings.isReaderModeDetectionEnabled defaults it to on.
             (snapshot["reader_mode_detect"] as? SourcePreferenceValue.Toggle)?.value ?: true,
+            (snapshot["reader_chapter_break"] as? SourcePreferenceValue.Toggle)?.value ?: false,
         ).also { session.upscale = it.upscale; session.cropPages = it.cropActive }
     }
 
@@ -4014,7 +4033,9 @@ class DesktopController(
                 readerNavigation = it.readerNavigation + 1, readerScrollReady = false, readerAtEnd = false) }
             return
         }
-        mutableState.value = loadPagedOnIo(snapshot, index, refresh)
+        mutableState.value = loadPagedOnIo(snapshot, index, refresh).let {
+            if (it.readerBreakChapterId != null) it.copy(readerBreakChapterId = null) else it
+        }
         prefetchAroundSlot(state.value)
     }
 

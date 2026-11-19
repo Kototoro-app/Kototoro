@@ -35,6 +35,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.flow.distinctUntilChanged
+import org.skepsun.kototoro.core.ui.chapters.ChapterBreakCard
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -136,9 +137,15 @@ internal fun DesktopScrollReader(controller: DesktopController, state: DesktopAp
             list.scrollToItem(list.firstVisibleItemIndex, (list.firstVisibleItemScrollOffset * ratio).roundToInt())
         }
         val panState = rememberScrollState()
-        val visibleFrame by remember(layout, list) { derivedStateOf {
-            layout.frame(list.firstVisibleItemIndex, list.firstVisibleItemScrollOffset)
-        } }
+        // The chapter break card is one more item after the last page. Scrolled to, it counts as the end of that page,
+        // so progress and anchors never see an index the scene does not know.
+        fun frameOf(geometry: DesktopStripLayout, pageCount: Int): org.skepsun.kototoro.reader.core.ReaderFrame {
+            val first = list.firstVisibleItemIndex
+            return if (first >= pageCount && pageCount > 0) {
+                geometry.frame(pageCount - 1, geometry.extent(pageCount - 1).roundToInt() + list.firstVisibleItemScrollOffset)
+            } else geometry.frame(first, list.firstVisibleItemScrollOffset)
+        }
+        val visibleFrame by remember(layout, list) { derivedStateOf { frameOf(layout, state.pages.size) } }
 
         LaunchedEffect(chapterId, state.readerNavigation, width, targetLoaded, state.busy) {
             if (state.busy || restored) return@LaunchedEffect
@@ -156,10 +163,12 @@ internal fun DesktopScrollReader(controller: DesktopController, state: DesktopAp
                 val geometry = currentLayout
                 val snapshot = currentState
                 val indices = info.visibleItemsInfo.map { it.index }.filter { it in snapshot.pages.indices }
-                val frame = geometry.frame(list.firstVisibleItemIndex, list.firstVisibleItemScrollOffset)
+                val frame = frameOf(geometry, snapshot.pages.size)
                 val first = frame.progress.activePageId?.let(geometry.scene::indexOf) ?: -1
                 val last = frame.progress.lastVisiblePageId?.let(geometry.scene::indexOf) ?: -1
-                val matched = info.visibleItemsInfo.all { item -> geometry.extent(item.index).roundToInt() == item.size }
+                val matched = info.visibleItemsInfo.all { item ->
+                    item.index >= snapshot.pages.size || geometry.extent(item.index).roundToInt() == item.size
+                }
                 ObservedViewport(indices, first, frame.progress.intraPageOffsetPx, last, !list.canScrollForward,
                     restored && matched && !snapshot.busy,
                     indices.all { snapshot.pages[it].id in snapshot.readerImages &&
@@ -169,7 +178,7 @@ internal fun DesktopScrollReader(controller: DesktopController, state: DesktopAp
                     controller.continuousImages(chapterId, viewport.indices)
                     // Android's continuous prediction (reader-core): pages within the lookahead load in the background.
                     val geometry = currentLayout
-                    val frame = geometry.frame(list.firstVisibleItemIndex, list.firstVisibleItemScrollOffset)
+                    val frame = frameOf(geometry, currentState.pages.size)
                     controller.prefetchPages(chapterId, prediction.predict(geometry.scene, frame)
                         .filter { it.priority != org.skepsun.kototoro.reader.core.PrefetchPriority.IMMEDIATE }
                         .map { geometry.scene.indexOf(it.pageId) }.filter { it >= 0 && it !in viewport.indices })
@@ -201,6 +210,16 @@ internal fun DesktopScrollReader(controller: DesktopController, state: DesktopAp
                     if (image?.tiled == true) DesktopTiledImage(image,
                         visibleFrame.visibleNodes.firstOrNull { it.pageId.value == page.id }, modifier = item)
                     else ReaderImage(image, index, item)
+                }
+            }
+            if (state.readerSettings.chapterBreak && state.pages.isNotEmpty()) item(key = "chapter-break") {
+                val next = state.adjacentChapter(true)
+                // A low band, not a screen: it marks the boundary and the chapter then runs on as usual.
+                val band = if (horizontal) Modifier.fillMaxHeight().width(maxOf(with(density) { width.toDp() } / 3, 280.dp))
+                    else Modifier.fillMaxWidth().height(viewportHeight / 3)
+                Box(band.testTag("reader-chapter-break"), contentAlignment = Alignment.Center) {
+                    ChapterBreakCard(state.chapter?.title,
+                        next?.let { it.title?.takeIf(String::isNotBlank) ?: it.number.toString().removeSuffix(".0") })
                 }
             }
         }

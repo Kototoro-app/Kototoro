@@ -955,6 +955,16 @@ private fun ReaderMangaSettingsPage(
                 }.value,
                 onCheckedChange = { settings.prefs.edit { putBoolean(AppSettings.KEY_READER_CHAPTER_TOAST, it) } },
             )
+            SettingsRowDivider()
+            SettingsSwitchPreference(
+                title = stringResource(R.string.reader_chapter_break),
+                summary = stringResource(R.string.reader_chapter_break_summary),
+                iconRes = R.drawable.ic_next,
+                checked = settings.observeAsState(AppSettings.KEY_READER_CHAPTER_BREAK) {
+                    isReaderChapterBreakEnabled
+                }.value,
+                onCheckedChange = { settings.prefs.edit { putBoolean(AppSettings.KEY_READER_CHAPTER_BREAK, it) } },
+            )
         },
         platformControlsAfter = {
             SettingsSwitchPreference(

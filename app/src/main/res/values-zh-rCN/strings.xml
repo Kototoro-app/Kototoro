@@ -3020,6 +3020,11 @@
     <string name="reader_chapter_title_at_bottom">章节标题显示在底部</string>
     <string name="reader_chapter_title_at_bottom_summary">把顶部栏里的作品名与章节名移到进度条上方，单手更够得着</string>
     <string name="reader_chapter_toast_summary">切换章节时显示包含章节标题的弹出提示</string>
+    <string name="reader_chapter_break">章节分隔卡片</string>
+    <string name="reader_chapter_break_summary">在章节之间显示过渡页，列出已读完和下一章的标题</string>
+    <string name="chapter_break_finished">本章已读完</string>
+    <string name="chapter_break_next">下一章</string>
+    <string name="chapter_break_last">已经是最后一章</string>
     <string name="reader_super_resolution">AI 超分辨率</string>
     <string name="reader_super_resolution_cache">超分辨率图像缓存</string>
     <string name="reader_super_resolution_cache_cleared">已清除超分辨率图像缓存</string>

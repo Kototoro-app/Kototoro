@@ -1717,6 +1717,11 @@
     <string name="reader_chapter_title_at_bottom">章節標題顯示在底部</string>
     <string name="reader_chapter_title_at_bottom_summary">將頂部欄中的作品名與章節名移到進度條上方，單手更易觸及</string>
     <string name="reader_chapter_toast_summary">切換章節時顯示包含章節標題的彈出提示</string>
+    <string name="reader_chapter_break">章節分隔卡片</string>
+    <string name="reader_chapter_break_summary">在章節之間顯示過渡頁，列出已讀完與下一章的標題</string>
+    <string name="chapter_break_finished">本章已讀完</string>
+    <string name="chapter_break_next">下一章</string>
+    <string name="chapter_break_last">已經是最後一章</string>
     <string name="reader_controls_in_bottom_bar">閱讀器底部控制欄</string>
     <string name="reader_dual_page">橫屏/大屏雙欄顯示</string>
     <string name="reader_font_size">字體大小</string>

@@ -92,6 +92,9 @@ internal fun DesktopReaderCanvas(controller: DesktopController, state: DesktopAp
         val animated = settings.animation != ReaderAnimation.NONE
         val loaded = slot.pageIds.all { it.value in state.readerImages }
         val scope = rememberCoroutineScope()
+        // The chapter break page (chapter break setting) follows the last page group as its own full-screen page.
+        val breakOpen = settings.chapterBreak && state.readerBreakChapterId != null &&
+            state.readerBreakChapterId == state.chapter?.id
 
         // Turn offset in slots relative to the current slot: positive while moving forward.
         val travel = remember(state.chapter?.id) { Animatable(0f) }
@@ -141,6 +144,7 @@ internal fun DesktopReaderCanvas(controller: DesktopController, state: DesktopAp
         /** Animates a turn to the neighbour [step] slots away (±1), then commits it; a boundary hands over to the controller. */
         fun turn(forward: Boolean) {
             if (!enabled) return
+            if (breakOpen) { controller.turnPage(forward); return }
             val target = layout.turnIndex(forward)
             if (target == null || !animated) { controller.turnPage(forward); return }
             scope.launch {
@@ -201,10 +205,10 @@ internal fun DesktopReaderCanvas(controller: DesktopController, state: DesktopAp
                         if (enabled) { if (current().scale > 1f) reset() else transform(2f, anchor = position) }
                     })
                 }
-                .pointerInput(slot, slotIndex, enabled, layout) {
+                .pointerInput(slot, slotIndex, enabled, layout, breakOpen) {
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
-                        if (!enabled) return@awaitEachGesture
+                        if (!enabled || breakOpen) return@awaitEachGesture
                         scope.launch { travel.stop() }
                         val dragState = PagedDragState(direction)
                         val velocity = VelocityTracker()
@@ -333,8 +337,16 @@ internal fun DesktopReaderCanvas(controller: DesktopController, state: DesktopAp
                         }
                     }
                 }
+                if (breakOpen) {
+                    val next = state.adjacentChapter(true)
+                    Box(Modifier.fillMaxSize().zIndex(20f).background(LocalDesktopReaderPageStyle.current.background)
+                        .testTag("reader-chapter-break"), contentAlignment = Alignment.Center) {
+                        org.skepsun.kototoro.core.ui.chapters.ChapterBreakCard(state.chapter?.title,
+                            next?.let { it.title?.takeIf(String::isNotBlank) ?: it.number.toString().removeSuffix(".0") })
+                    }
+                }
                 // Android's page-number overlay.
-                if (settings.pageNumbers) {
+                if (settings.pageNumbers && !breakOpen) {
                     val shown = layout.indices
                     val label = if (shown.size > 1) "${shown.first() + 1}–${shown.last() + 1} / ${state.pages.size}"
                         else "${state.pageIndex + 1} / ${state.pages.size}"
