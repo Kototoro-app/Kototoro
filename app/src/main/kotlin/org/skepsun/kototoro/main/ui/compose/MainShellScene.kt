@@ -1264,6 +1264,7 @@ internal fun SuggestionsTopLevelRouteContent(
             viewModel = viewModel,
             contentPadding = contentPadding,
             appRouter = appRouter,
+            onLoadMore = viewModel::requestMoreItems,
             listHeader = {
                 Column {
                     if (suggestionsLibraryQuery.isNotEmpty()) {

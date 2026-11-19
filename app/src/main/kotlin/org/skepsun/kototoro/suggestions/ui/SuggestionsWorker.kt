@@ -43,6 +43,8 @@ import org.skepsun.kototoro.core.exceptions.CloudFlareException
 import org.skepsun.kototoro.core.exceptions.resolve.CaptchaHandler
 import org.skepsun.kototoro.core.model.GlobalTagBlacklist
 import org.skepsun.kototoro.core.model.getLocale
+import org.skepsun.kototoro.core.model.getContentType
+import org.skepsun.kototoro.core.model.getTitle
 import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.nav.ReaderIntent
@@ -69,6 +71,10 @@ import org.skepsun.kototoro.parsers.util.runCatchingCancellable
 import org.skepsun.kototoro.parsers.util.sizeOrZero
 import org.skepsun.kototoro.settings.work.PeriodicWorkScheduler
 import org.skepsun.kototoro.suggestions.domain.ContentSuggestion
+import org.skepsun.kototoro.suggestions.domain.PopularSourceProbe
+import org.skepsun.kototoro.suggestions.domain.PopularSources
+import org.skepsun.kototoro.suggestions.domain.SuggestionCursors
+import org.skepsun.kototoro.suggestions.domain.SuggestionOrigins
 import org.skepsun.kototoro.suggestions.domain.SuggestionRepository
 import org.skepsun.kototoro.suggestions.domain.TagsBlacklist
 import org.skepsun.kototoro.suggestions.domain.SuggestionTagMatcher
@@ -107,7 +113,7 @@ class SuggestionsWorker @AssistedInject constructor(
             suggestionRepository.clear()
             return Result.success()
         }
-        val count = doWorkImpl()
+        val count = doWorkImpl(append = inputData.getBoolean(DATA_APPEND, false))
         if (count < 0) return Result.retry()
         val outputData = workDataOf(DATA_COUNT to count)
         return Result.success(outputData)
@@ -174,7 +180,9 @@ class SuggestionsWorker @AssistedInject constructor(
         }
     }
 
-    private suspend fun doWorkImpl(): Int {
+    /** [append] loads further pages of every source and adds them below the stored list instead of replacing it. */
+    private suspend fun doWorkImpl(append: Boolean): Int {
+        if (append && suggestionRepository.count() >= MAX_STORED) return 0
         val library = suggestionRepository.getLibraryWorks(SuggestionLimits().libraryHistory)
         val sources = getSources()
         if ((library.isEmpty() && appSettings.suggestionsTagsWhitelist.isEmpty()) || sources.isEmpty()) {
@@ -187,16 +195,24 @@ class SuggestionsWorker @AssistedInject constructor(
         val profile = SuggestionProfile.of(library, now, appSettings.suggestionsTagsWhitelist)
         val ages = suggestionRepository.getAges()
         val answered = java.util.concurrent.atomic.AtomicInteger()
+        val answeredSources = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+        val cursors = if (append) SuggestionCursors.parse(appSettings.suggestionsCursors) else null
+        val stored = if (append) suggestionRepository.knownIds() else emptySet()
 
         val rawResults = collectSourceResults(
             sources = sources.filterNot {
                 it.isNsfw() && (appSettings.isSuggestionsExcludeNsfw || appSettings.isNsfwContentDisabled)
             },
-        ) { source -> getList(source, tagsBlacklist, profile, now) { answered.incrementAndGet() } }
+        ) { source ->
+            getList(source, tagsBlacklist, profile, now, cursors?.get(source.name) ?: cursors?.let { SuggestionCursors.START }, stored) {
+                answered.incrementAndGet()
+                answeredSources += source.name
+            }
+        }
         // Keep the last usable cache and retry when every source failed.
-        if (answered.get() == 0) return -1
+        if (answered.get() == 0) return if (append) 0 else -1
         val suggestions = rankSuggestions(
-            candidates = rawResults.filterNot { it.item in globalTagBlacklist },
+            candidates = rawResults.filterNot { it.item in globalTagBlacklist || it.item.id in stored },
             profile = profile,
             id = { it.id },
             source = { it.source.name },
@@ -204,12 +220,32 @@ class SuggestionsWorker @AssistedInject constructor(
             tags = { manga -> manga.tags.map { it.title } },
             now = now,
             firstSuggestedAt = { ages[it.id] },
-            preferredSources = appSettings.suggestionsPreferredSources - appSettings.suggestionsExcludedSources,
+            preferredSources = PopularSources.preferred(
+                popularFirst = appSettings.isSuggestionsPopularSourcesFirst,
+                picked = appSettings.suggestionsPreferredSources,
+                excluded = appSettings.suggestionsExcludedSources,
+                sources = sources.map { PopularSourceProbe(it.name, it.getTitle(applicationContext)) },
+                favourites = if (appSettings.isSuggestionsFavouriteSourcesFirst) {
+                    PopularSources.favouriteSources(library)
+                } else emptySet(),
+            ),
             languagePriority = {
                 appSettings.suggestionsLanguage.accepts(it.source.getLocale()?.toLanguageTag(), java.util.Locale.getDefault().language)
             },
+            groupOf = {
+                SuggestionOrigins.groupOf(it.source.getContentType().name, it.tags.map { tag -> tag.title }, it.source.getLocale()?.toLanguageTag())
+            },
+            limits = if (append) SuggestionLimits(maxResults = APPEND_BATCH) else SuggestionLimits(),
         ).map { ContentSuggestion(it.item, it.relevance, it.direction, it.reason) }
+        if (append) {
+            val added = suggestionRepository.append(suggestions)
+            appSettings.suggestionsCursors = SuggestionCursors.encode(
+                SuggestionCursors.advance(cursors.orEmpty(), answeredSources),
+            )
+            return added
+        }
         suggestionRepository.replace(suggestions)
+        appSettings.suggestionsCursors = emptySet()
         if (appSettings.isSuggestionsNotificationAvailable
             && applicationContext.checkNotificationPermission(MANGA_CHANNEL_ID)
             && suggestions.isNotEmpty()
@@ -269,6 +305,8 @@ class SuggestionsWorker @AssistedInject constructor(
         blacklist: TagsBlacklist,
         profile: SuggestionProfile,
         seed: Long,
+        cursor: Int?,
+        stored: Set<Long>,
         onAnswered: () -> Unit,
     ): List<SuggestionCandidate<Content>> = runCatchingCancellable {
         val repository = mangaRepositoryFactory.create(source)
@@ -285,20 +323,25 @@ class SuggestionsWorker @AssistedInject constructor(
         val globalTagBlacklist = GlobalTagBlacklist(appSettings.globalTagBlacklist)
         val excludeNsfw = appSettings.isSuggestionsExcludeNsfw || appSettings.isNsfwContentDisabled
         val limit = SuggestionLimits().maxSourceResults
-        fun Content.isKnown() = profile.knows(id, listOf(title) + altTitles)
+        fun Content.isKnown() = id in stored || profile.knows(id, listOf(title) + altTitles)
+        // A full refresh reads the top of each list; incremental loading continues [cursor] pages further.
+        val pageIndexed = repository.listPagingMode == ContentRepository.ListPagingMode.PAGE_INDEX
+        val firstOffset = when {
+            cursor == null -> 0
+            pageIndexed -> cursor
+            else -> cursor * limit
+        }
         queries.flatMap { query ->
             val order = SortOrder.valueOf(query.order)
             val filter = ContentListFilter(tags = setOfNotNull(query.tag))
             // One list failing must not cost the source its other one
-            val first = runCatchingCancellable { repository.getList(offset = 0, order = order, filter = filter) }
+            val first = runCatchingCancellable { repository.getList(offset = firstOffset, order = order, filter = filter) }
                 .onSuccess { onAnswered() }
                 .onFailure { onSourceFailure(it) }
                 .getOrDefault(emptyList())
             // A reader with a big library already has the top of any list: one page further when little is left.
             val next = if (first.isNotEmpty() && first.count { !it.isKnown() } < limit / 2) {
-                val offset = if (repository.listPagingMode == ContentRepository.ListPagingMode.PAGE_INDEX) {
-                    1
-                } else first.size
+                val offset = if (pageIndexed) firstOffset + 1 else firstOffset + first.size
                 runCatchingCancellable { repository.getList(offset = offset, order = order, filter = filter) }
                     .getOrDefault(emptyList())
             } else {
@@ -464,6 +507,19 @@ class SuggestionsWorker @AssistedInject constructor(
                 .any { !it.state.isFinished }
         }
 
+        /** Loads further suggestions below the stored ones; ignored while any suggestion run is already going. */
+        suspend fun startMore() {
+            if (workManager.awaitWorkInfosByTag(TAG_ONESHOT).any { !it.state.isFinished }) {
+                return
+            }
+            val request = OneTimeWorkRequestBuilder<SuggestionsWorker>()
+                .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+                .setInputData(workDataOf(DATA_APPEND to true))
+                .addTag(TAG_ONESHOT)
+                .build()
+            workManager.enqueue(request).await()
+        }
+
         suspend fun startNow() {
             if (workManager.awaitWorkInfosByTag(TAG_ONESHOT).any { !it.state.isFinished }) {
                 return
@@ -490,6 +546,13 @@ class SuggestionsWorker @AssistedInject constructor(
         const val TAG = "suggestions"
         const val TAG_ONESHOT = "suggestions_oneshot"
         const val DATA_COUNT = "count"
+        const val DATA_APPEND = "append"
+
+        /** Suggestions kept in all; incremental loading stops adding beyond it. */
+        const val MAX_STORED = 800
+
+        /** Suggestions one incremental run adds at most. */
+        const val APPEND_BATCH = 120
         const val WORKER_CHANNEL_ID = "suggestion_worker"
         const val MANGA_CHANNEL_ID = "suggestions"
         const val GROUP_SUGGESTION = "org.skepsun.kototoro.SUGGESTIONS"

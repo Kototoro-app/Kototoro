@@ -136,7 +136,7 @@ class SuggestionsViewModel @Inject constructor(
 
     override val content = combine(
         combine(loadParams, direction) { filters, direction -> filters to direction }.flatMapLatest { (filters, direction) ->
-            repository.observeAll(200, filters, direction = direction)
+            repository.observeAll(2000, filters, direction = direction)
         },
         quickFilter.appliedOptions,
         observeListModeWithTriggers(),
@@ -158,6 +158,11 @@ class SuggestionsViewModel @Inject constructor(
         val groupTab = values[3] as BrowseGroupTab
         val sourceTags = values[4] as Set<SourceTag>
         val preset = values[6] as? SourcePreset
+        quickFilter.useScope(groupTab to preset?.id) { source ->
+            preset.matches(source) &&
+                groupTab.matchesContentGroup(sourceGroupManager.getContentGroup(source)) &&
+                groupTab.matchesOriginGroup(sourceGroupManager.getOriginGroup(source))
+        }
         @Suppress("UNCHECKED_CAST")
         val reasons = values[8] as Map<Long, Pair<org.skepsun.kototoro.suggestions.domain.SuggestionDirection, String?>>
         val filteredList = list.filter { manga ->
@@ -257,6 +262,10 @@ class SuggestionsViewModel @Inject constructor(
     fun requestMoreItems() {
         if (isPaginationReady.compareAndSet(true, false)) {
             limit.value += PAGE_SIZE
+            // Everything stored is on screen: fetch the next pages of the sources.
+            launchJob(Dispatchers.Default) {
+                suggestionsScheduler.startMore()
+            }
         }
     }
 

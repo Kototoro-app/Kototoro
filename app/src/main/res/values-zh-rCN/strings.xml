@@ -64,6 +64,10 @@
     <string name="search_chapters">查找章节</string>
     <string name="suggestions_excluded_genres">屏蔽类别</string> <string name="suggestions_preferred_genres">偏好类别</string>
     <string name="suggestions_preferred_sources">偏好源</string>
+    <string name="suggestions_favourite_sources">收藏源优先</string>
+    <string name="suggestions_favourite_sources_summary">优先展示你收藏的作品所在源的推荐</string>
+    <string name="suggestions_popular_sources">热门源优先</string>
+    <string name="suggestions_popular_sources_summary">在偏好源之外，优先展示 EverythingMoe 榜单上排名靠前的源</string>
     <string name="suggestions_preferred_sources_summary">优先展示所选源的推荐作品</string>
     <string name="suggestions_excluded_sources">排除源</string>
     <string name="suggestions_excluded_sources_summary">不从所选源获取推荐作品</string>

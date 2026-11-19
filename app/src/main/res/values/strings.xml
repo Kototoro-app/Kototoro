@@ -834,6 +834,10 @@
     <string name="suggestions_preferred_genres">Preferred genres</string>
     <string name="suggestions_preferred_genres_summary">Specify genres that you want to see prioritized in the suggestions</string>
     <string name="suggestions_preferred_sources">Preferred sources</string>
+    <string name="suggestions_favourite_sources">Favourite sources first</string>
+    <string name="suggestions_favourite_sources_summary">Prioritize the sources your saved works come from</string>
+    <string name="suggestions_popular_sources">Popular sources first</string>
+    <string name="suggestions_popular_sources_summary">Prioritize sources ranked highly on EverythingMoe, in addition to your preferred sources</string>
     <string name="suggestions_preferred_sources_summary">Prioritize suggestions from selected sources</string>
     <string name="suggestions_excluded_sources">Excluded sources</string>
     <string name="suggestions_excluded_sources_summary">Do not fetch suggestions from selected sources</string>

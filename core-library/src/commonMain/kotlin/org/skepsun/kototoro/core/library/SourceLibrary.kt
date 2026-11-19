@@ -536,6 +536,7 @@ class SourceLibrary(
                 chapters = row.history.chaptersCount,
                 lastReadAt = row.history.updatedAt,
                 id = row.manga.id,
+                source = row.manga.source,
             )
         } + saved.filterNot { it.manga.id in readIds }.map { row ->
             LibraryWork(
@@ -543,6 +544,7 @@ class SourceLibrary(
                 tags = row.tags.map { it.title },
                 isFavourite = true,
                 id = row.manga.id,
+                source = row.manga.source,
             )
         }
     }

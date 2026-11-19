@@ -134,6 +134,7 @@ class SourceSuggestions(
             preferredSources = preferences.preferredSources - preferences.excludedSources,
             languagePriority = { preferences.language.accepts(it.source.locale, preferences.systemLanguage) },
             limits = limits,
+            groupOf = { SuggestionOrigins.groupOf(it.source.contentType, it.tags.map { tag -> tag.title }, it.source.locale) },
         ), successful)
     }
 }

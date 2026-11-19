@@ -62,6 +62,35 @@ class SuggestionRepository @Inject constructor(
         })
     }
 
+    suspend fun count(): Int = db.getSuggestionDao().count()
+
+    suspend fun knownIds(): Set<Long> = db.getSuggestionDao().findAll().mapTo(HashSet()) { it.mangaId }
+
+    /** Adds [suggestions] below everything already stored, keeping their own order; works already stored are skipped. */
+    suspend fun append(suggestions: Iterable<ContentSuggestion>): Int = db.withTransaction {
+        val existing = db.getSuggestionDao().findAll()
+        val stored = existing.mapTo(HashSet()) { it.mangaId }
+        val floor = existing.minOfOrNull { it.relevance } ?: 1f
+        var added = 0
+        suggestions.filter { it.manga.id !in stored }.forEach { suggestion ->
+            val manga = suggestion.manga
+            val tags = manga.tags.toEntities()
+            db.getTagsDao().upsert(tags)
+            db.getMangaDao().upsert(manga.toEntity(), tags)
+            db.getSuggestionDao().upsert(
+                SuggestionEntity(
+                    mangaId = manga.id,
+                    relevance = floor * 0.98f * suggestion.relevance,
+                    createdAt = System.currentTimeMillis(),
+                    direction = suggestion.direction.name,
+                    reason = suggestion.reason,
+                ),
+            )
+            added++
+        }
+        added
+    }
+
     suspend fun clear() {
         db.getSuggestionDao().deleteAll()
     }
@@ -70,12 +99,12 @@ class SuggestionRepository @Inject constructor(
         return observeAll().first().isEmpty()
     }
 
-    suspend fun getTopTags(limit: Int): List<ContentTag> {
-        return observeAll().first().flatMap { it.tags }.mostFrequent(limit)
+    suspend fun getTopTags(limit: Int, accepts: (ContentSource) -> Boolean = { true }): List<ContentTag> {
+        return observeAll().first().filter { accepts(it.source) }.flatMap { it.tags }.mostFrequent(limit)
     }
 
-    suspend fun getTopSources(limit: Int): List<ContentSource> {
-        return observeAll().first().map { it.source }.mostFrequent(limit)
+    suspend fun getTopSources(limit: Int, accepts: (ContentSource) -> Boolean = { true }): List<ContentSource> {
+        return observeAll().first().map { it.source }.filter(accepts).mostFrequent(limit)
     }
 
     /** When each stored suggestion was first put on the list it is still on. */
@@ -100,6 +129,7 @@ class SuggestionRepository @Inject constructor(
                 chapters = row.history.chaptersCount,
                 lastReadAt = row.history.updatedAt,
                 id = row.manga.id,
+                source = row.manga.source,
             )
         } + saved.filterNot { it.manga.id in readIds }.map { row ->
             LibraryWork(
@@ -107,6 +137,7 @@ class SuggestionRepository @Inject constructor(
                 tags = row.tags.map { it.title },
                 isFavourite = true,
                 id = row.manga.id,
+                source = row.manga.source,
             )
         }
     }

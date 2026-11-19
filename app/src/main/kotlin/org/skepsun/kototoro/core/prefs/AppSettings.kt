@@ -2414,6 +2414,21 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
             prefs.getString(KEY_SUGGESTIONS_PREFERRED_TAGS, null),
         )
 
+    /** Puts the sources on the EverythingMoe rankings first (default on), beside the reader's own picks. */
+    var isSuggestionsPopularSourcesFirst: Boolean
+        get() = prefs.getBoolean(KEY_SUGGESTIONS_POPULAR_SOURCES, true)
+        set(value) = prefs.edit { putBoolean(KEY_SUGGESTIONS_POPULAR_SOURCES, value) }
+
+    /** Puts the sources the reader's saved works come from first (default on). */
+    var isSuggestionsFavouriteSourcesFirst: Boolean
+        get() = prefs.getBoolean(KEY_SUGGESTIONS_FAVOURITE_SOURCES, true)
+        set(value) = prefs.edit { putBoolean(KEY_SUGGESTIONS_FAVOURITE_SOURCES, value) }
+
+    /** Per-source page cursors of incremental suggestion loading, see [org.skepsun.kototoro.suggestions.domain.SuggestionCursors]. */
+    var suggestionsCursors: Set<String>
+        get() = prefs.getStringSet(KEY_SUGGESTIONS_CURSORS, emptySet()).orEmpty()
+        set(value) = prefs.edit { putStringSet(KEY_SUGGESTIONS_CURSORS, value) }
+
     val suggestionsPreferredSources: Set<String>
         get() = prefs.getStringSet(KEY_SUGGESTIONS_PREFERRED_SOURCES, emptySet()).orEmpty()
 
@@ -3345,6 +3360,9 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_SUGGESTIONS_PREFERRED_TAGS = "suggestions_preferred_tags"
         const val KEY_SUGGESTIONS_PREFERRED_SOURCES = "suggestions_preferred_sources"
         const val KEY_SUGGESTIONS_EXCLUDED_SOURCES = "suggestions_excluded_sources"
+        const val KEY_SUGGESTIONS_FAVOURITE_SOURCES = "suggestions_favourite_sources"
+        const val KEY_SUGGESTIONS_CURSORS = "suggestions_cursors"
+        const val KEY_SUGGESTIONS_POPULAR_SOURCES = "suggestions_popular_sources"
         const val KEY_SUGGESTIONS_DISABLED_SOURCES = "suggestions_disabled_sources"
         const val KEY_SUGGESTIONS_NOTIFICATIONS = "suggestions_notifications"
         const val KEY_SHIKIMORI = "shikimori"

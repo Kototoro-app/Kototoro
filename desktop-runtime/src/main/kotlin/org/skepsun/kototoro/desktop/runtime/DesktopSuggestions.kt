@@ -8,6 +8,8 @@ import org.skepsun.kototoro.core.source.SourceListing
 import org.skepsun.kototoro.core.source.SourcePreferenceValue
 import org.skepsun.kototoro.core.source.SourceRuntime
 import org.skepsun.kototoro.parsers.util.almostEquals
+import org.skepsun.kototoro.suggestions.domain.PopularSourceProbe
+import org.skepsun.kototoro.suggestions.domain.PopularSources
 import org.skepsun.kototoro.suggestions.domain.SUGGESTION_TAG_THRESHOLD
 import org.skepsun.kototoro.suggestions.domain.SuggestionLimits
 import org.skepsun.kototoro.suggestions.domain.SuggestionTagMatcher
@@ -30,6 +32,10 @@ data class DesktopSuggestionSettings(
     val language: org.skepsun.kototoro.suggestions.domain.SuggestionLanguage =
         org.skepsun.kototoro.suggestions.domain.SuggestionLanguage.SYSTEM,
     val languageOnly: Boolean = false,
+    /** `suggestions_popular_sources`: sources on the EverythingMoe rankings go first, beside [preferredSources]. */
+    val popularSourcesFirst: Boolean = true,
+    /** `suggestions_favourite_sources`: the sources the reader's saved works come from go first. */
+    val favouriteSourcesFirst: Boolean = true,
 ) {
     fun preferences(globalTagBlacklist: Set<String> = emptySet()) = SourceSuggestionPreferences(
         excludeNsfw, tagBlacklist, tagWhitelist, preferredSources, excludedSources, language, globalTagBlacklist,
@@ -48,6 +54,8 @@ data class DesktopSuggestionSettings(
         KEY_NOTIFICATIONS to SourcePreferenceValue.Toggle(notifications),
         org.skepsun.kototoro.suggestions.domain.SuggestionLanguage.PREFERENCE_KEY to SourcePreferenceValue.Text(language.name),
         org.skepsun.kototoro.suggestions.domain.SuggestionLanguage.ONLY_PREFERENCE_KEY to SourcePreferenceValue.Toggle(languageOnly),
+        KEY_POPULAR_SOURCES to SourcePreferenceValue.Toggle(popularSourcesFirst),
+        KEY_FAVOURITE_SOURCES to SourcePreferenceValue.Toggle(favouriteSourcesFirst),
     )
 
     companion object {
@@ -57,6 +65,8 @@ data class DesktopSuggestionSettings(
         const val KEY_PREFERRED_TAGS = "suggestions_preferred_tags"
         const val KEY_PREFERRED_SOURCES = "suggestions_preferred_sources"
         const val KEY_EXCLUDED_SOURCES = "suggestions_excluded_sources"
+        const val KEY_POPULAR_SOURCES = "suggestions_popular_sources"
+        const val KEY_FAVOURITE_SOURCES = "suggestions_favourite_sources"
         const val KEY_WIFI_ONLY = "suggestions_wifi"
         const val KEY_DISABLED_SOURCES = "suggestions_disabled_sources"
         const val KEY_NOTIFICATIONS = "suggestions_notifications"
@@ -76,6 +86,8 @@ data class DesktopSuggestionSettings(
             ),
             languageOnly = (values[org.skepsun.kototoro.suggestions.domain.SuggestionLanguage.ONLY_PREFERENCE_KEY]
                 as? SourcePreferenceValue.Toggle)?.value ?: false,
+            popularSourcesFirst = (values[KEY_POPULAR_SOURCES] as? SourcePreferenceValue.Toggle)?.value ?: true,
+            favouriteSourcesFirst = (values[KEY_FAVOURITE_SOURCES] as? SourcePreferenceValue.Toggle)?.value ?: true,
         )
     }
 }
@@ -139,7 +151,11 @@ class DesktopSuggestions(
         if ((works.isEmpty() && settings.tagWhitelist.isEmpty()) || candidates.isEmpty()) return 0
         val time = now()
         val result = SourceSuggestions(runtime, matcher, limits).generate(works, candidates.map { it.source },
-            settings.preferences(globalTagBlacklist), time, library.suggestionAges())
+            settings.copy(preferredSources = PopularSources.preferred(settings.popularSourcesFirst,
+                settings.preferredSources, settings.excludedSources, candidates.map {
+                    PopularSourceProbe(it.source.name, it.displayName, it.siteUrl)
+                }, if (settings.favouriteSourcesFirst) PopularSources.favouriteSources(works) else emptySet()))
+            .preferences(globalTagBlacklist), time, library.suggestionAges())
         check(result.successfulSources > 0) { "No recommendation source responded" }
         return library.replaceSuggestions(result.items, time)
     }

@@ -59,6 +59,12 @@ fun SuggestionsSettingsScreen(
 ) {
     val isEnabled by settings.observeAsState(AppSettings.KEY_SUGGESTIONS) { isSuggestionsEnabled }
     val isWifiOnly by settings.observeAsState(AppSettings.KEY_SUGGESTIONS_WIFI_ONLY) { isSuggestionsWiFiOnly }
+    val favouriteSourcesFirst by settings.observeAsState(AppSettings.KEY_SUGGESTIONS_FAVOURITE_SOURCES) {
+        isSuggestionsFavouriteSourcesFirst
+    }
+    val popularSourcesFirst by settings.observeAsState(AppSettings.KEY_SUGGESTIONS_POPULAR_SOURCES) {
+        isSuggestionsPopularSourcesFirst
+    }
     val includeDisabledSources by settings.observeAsState(AppSettings.KEY_SUGGESTIONS_DISABLED_SOURCES) {
         isSuggestionsIncludeDisabledSources
     }
@@ -164,6 +170,30 @@ fun SuggestionsSettingsScreen(
                         value = preferredTags,
                         enabled = isEnabled,
                         onValueChange = onPreferredTagsChanged,
+                    )
+                }
+                item {
+                    SettingsSwitchPreference(
+                        title = stringResource(R.string.suggestions_favourite_sources),
+                        iconRes = R.drawable.ic_star_small,
+                        summary = stringResource(R.string.suggestions_favourite_sources_summary),
+                        checked = favouriteSourcesFirst,
+                        enabled = isEnabled,
+                        onCheckedChange = { checked ->
+                            settings.isSuggestionsFavouriteSourcesFirst = checked
+                        },
+                    )
+                }
+                item {
+                    SettingsSwitchPreference(
+                        title = stringResource(R.string.suggestions_popular_sources),
+                        iconRes = R.drawable.ic_star_small,
+                        summary = stringResource(R.string.suggestions_popular_sources_summary),
+                        checked = popularSourcesFirst,
+                        enabled = isEnabled,
+                        onCheckedChange = { checked ->
+                            settings.isSuggestionsPopularSourcesFirst = checked
+                        },
                     )
                 }
                 item {

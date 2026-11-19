@@ -27,6 +27,8 @@ data class LibraryWork(
     val lastReadAt: Long = 0L,
     /** The library's id for it, 0 when there is none. */
     val id: Long = 0L,
+    /** Name of the source the work came from, null when not known. */
+    val source: String? = null,
 )
 
 /**

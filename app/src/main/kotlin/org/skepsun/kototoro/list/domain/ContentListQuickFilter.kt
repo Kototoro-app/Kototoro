@@ -14,8 +14,15 @@ abstract class ContentListQuickFilter(
 ) : QuickFilterListener {
 
     private val appliedFilter = MutableStateFlow<Set<ListFilterOption>>(emptySet())
-    private val availableFilterOptions = suspendLazy {
+    private var availableFilterOptions = newAvailableOptions()
+
+    private fun newAvailableOptions() = suspendLazy {
         getAvailableFilterOptions()
+    }
+
+    /** Drops the computed chips so the next [filterItem] builds them again, for a list whose scope has changed. */
+    protected fun invalidateAvailableOptions() {
+        availableFilterOptions = newAvailableOptions()
     }
 
     open val appliedOptions

@@ -58,6 +58,8 @@ data class SuggestionLimits(
     val libraryHistory: Int = 500,
     /** Suggestions at the top of the list that do not move from one generation to the next. */
     val stableHead: Int = 8,
+    /** Largest share of the list one group (see [SuggestionOrigins]) may take while others still have candidates. */
+    val maxGroupShare: Float = 0.4f,
 )
 
 /**
@@ -256,6 +258,7 @@ fun <T> rankSuggestions(
     preferredSources: Set<String> = emptySet(),
     limits: SuggestionLimits = SuggestionLimits(),
     languagePriority: (T) -> Boolean = { false },
+    groupOf: ((T) -> String)? = null,
 ): List<RankedSuggestion<T>> {
     if (limits.maxResults <= 0 || limits.maxResultsPerSource <= 0) return emptyList()
     val fresh = candidates.filterNot { profile.knows(id(it.item), titles(it.item)) }
@@ -292,6 +295,10 @@ fun <T> rankSuggestions(
     val counts = HashMap<String, Int>()
     val seen = HashSet<Long>()
     val selected = ArrayList<SuggestionCandidate<T>>()
+    // One group (say Chinese comics) must not fill the list: past its share a candidate waits and only fills what is left.
+    val groupCap = kotlin.math.ceil(limits.maxResults * limits.maxGroupShare.toDouble()).toInt().coerceAtLeast(1)
+    val groupCounts = HashMap<String, Int>()
+    val deferred = ArrayList<SuggestionCandidate<T>>()
     // Interleave the shares so every available direction appears near the beginning of the mix.
     val schedule = (0 until DirectionShares.values.max()).flatMap { turn ->
         DirectionShares.filterValues { it > turn }.keys
@@ -304,7 +311,13 @@ fun <T> rankSuggestions(
                 val candidate = queue.next().candidate
                 val name = source(candidate.item)
                 if ((counts[name] ?: 0) >= limits.maxResultsPerSource || !seen.add(id(candidate.item))) continue
+                val group = groupOf?.invoke(candidate.item)
+                if (group != null && (groupCounts[group] ?: 0) >= groupCap) {
+                    deferred += candidate
+                    continue
+                }
                 counts[name] = (counts[name] ?: 0) + 1
+                if (group != null) groupCounts[group] = (groupCounts[group] ?: 0) + 1
                 selected += candidate
                 added = true
                 break
@@ -312,6 +325,13 @@ fun <T> rankSuggestions(
             if (selected.size >= limits.maxResults) break
         }
         if (!added) break
+    }
+    for (candidate in deferred) {
+        if (selected.size >= limits.maxResults) break
+        val name = source(candidate.item)
+        if ((counts[name] ?: 0) >= limits.maxResultsPerSource) continue
+        counts[name] = (counts[name] ?: 0) + 1
+        selected += candidate
     }
     return selected.sortedByDescending { languagePriority(it.item) }.mapIndexed { index, candidate ->
         RankedSuggestion(candidate.item, (limits.maxResults - index).toFloat() / limits.maxResults,

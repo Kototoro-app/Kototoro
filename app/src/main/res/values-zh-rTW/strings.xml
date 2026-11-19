@@ -3029,6 +3029,10 @@
     <string name="presentation_mode_tv">TV</string>
     <string name="presentation_mode_restore_standard">恢復標準介面</string>
     <string name="suggestions_preferred_sources">偏好源</string>
+    <string name="suggestions_favourite_sources">收藏源優先</string>
+    <string name="suggestions_favourite_sources_summary">優先展示你收藏的作品所在源的推薦</string>
+    <string name="suggestions_popular_sources">熱門源優先</string>
+    <string name="suggestions_popular_sources_summary">在偏好源之外，優先展示 EverythingMoe 榜單上排名靠前的源</string>
     <string name="suggestions_preferred_sources_summary">優先展示所選源的推薦作品</string>
     <string name="suggestions_excluded_sources">排除源</string>
     <string name="suggestions_excluded_sources_summary">不從所選源獲取推薦作品</string>
