@@ -19,7 +19,12 @@ class HistoryUpdateUseCase @Inject constructor(
     private val epubChapterMappingDao: EpubChapterMappingDao,
 ) {
 
-    suspend operator fun invoke(manga: Content, readerState: ReaderState, percent: Float) {
+    suspend operator fun invoke(
+        manga: Content,
+        readerState: ReaderState,
+        percent: Float,
+        finishedChapterIds: Set<Long>? = null,
+    ) {
         // 从数据库查询父章节ID（用于EPUB内部章节）
         val parentChapterId = extractParentChapterIdFromDatabase(manga.id, readerState.chapterId)
 
@@ -33,6 +38,7 @@ class HistoryUpdateUseCase @Inject constructor(
             percent = percent,
             force = false,
             parentChapterId = parentChapterId,
+            finishedChapterIds = finishedChapterIds,
         )
     }
 
@@ -60,11 +66,12 @@ class HistoryUpdateUseCase @Inject constructor(
     fun invokeAsync(
         manga: Content,
         readerState: ReaderState,
-        percent: Float
+        percent: Float,
+        finishedChapterIds: Set<Long>? = null,
     ) = processLifecycleScope.launch(Dispatchers.Default, CoroutineStart.ATOMIC) {
         runCatchingCancellable {
             withContext(NonCancellable) {
-                invoke(manga, readerState, percent)
+                invoke(manga, readerState, percent, finishedChapterIds)
             }
         }.onFailure {
             it.printStackTraceDebug()

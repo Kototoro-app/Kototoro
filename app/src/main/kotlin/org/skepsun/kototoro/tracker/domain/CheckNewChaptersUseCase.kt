@@ -44,8 +44,13 @@ class CheckNewChaptersUseCase @Inject constructor(
         invokeImpl(track)
     }
 
-    suspend operator fun invoke(manga: Content, currentChapterId: Long, percent: Float) {
-        if (repository.updateReadChapter(manga.id, currentChapterId, percent, manga.chapters)) return
+    suspend operator fun invoke(
+        manga: Content,
+        currentChapterId: Long,
+        percent: Float,
+        finishedChapterIds: Set<Long>? = null,
+    ) {
+        if (repository.updateReadChapter(manga.id, currentChapterId, percent, manga.chapters, finishedChapterIds)) return
         if (ReadingProgress.isCompleted(percent)) {
             markCompleted(manga)
         } else {

@@ -631,6 +631,7 @@ class ReaderViewModel @Inject constructor(
             manga = getContentOrNull() ?: return,
             readerState = readerState,
             percent = computePercent(readerState.chapterId, readerState.page),
+            finishedChapterIds = finishedChapterIds(readerState.chapterId, readerState.page),
         )
     }
 
@@ -647,6 +648,7 @@ class ReaderViewModel @Inject constructor(
             manga = content,
             readerState = readerState,
             percent = computePercent(readerState.chapterId, readerState.page),
+            finishedChapterIds = finishedChapterIds(readerState.chapterId, readerState.page),
         )
         finishReadingSession(allowShort = true, continueFromEnd = false)?.awaitCompletion()
     }
@@ -1186,7 +1188,7 @@ class ReaderViewModel @Inject constructor(
                         if (isIncognitoMode.value == false) {
                             readingState.value?.let {
                                 val percent = computePercent(it.chapterId, it.page)
-                                historyUpdateUseCase(manga, it, percent)
+                                historyUpdateUseCase(manga, it, percent, finishedChapterIds(it.chapterId, it.page))
                             }
                         }
                         notifyStateChanged()
@@ -1405,6 +1407,23 @@ class ReaderViewModel @Inject constructor(
             discordRpc.updateRpc(m.toContent(), newState)
         }
         updateCurrentChapterTranslationProgress()
+    }
+
+    /**
+     * The chapters finished by reaching [pageIndex]: empty before the chapter's last page, otherwise the chapter and,
+     * with repeated chapters merged, its repeats, which the reader shows as one. Update tracking needs this directly:
+     * [computePercent] is relative to the reader's own list (merged repeats, reversed order), not the stored one.
+     */
+    private fun finishedChapterIds(chapterId: Long, pageIndex: Int): Set<Long> {
+        val pagesCount = chaptersLoader.getPagesCount(chapterId)
+        if (pagesCount <= 0 || pageIndex + 1 < pagesCount) return emptySet()
+        val details = mangaDetails.value ?: return setOf(chapterId)
+        if (!isMergeRepeatedChapters.value || !details.toContent().source.getContentType().isManga()) {
+            return setOf(chapterId)
+        }
+        val all = details.allChapters
+        val key = all.firstOrNull { it.id == chapterId }?.getMergeKey() ?: return setOf(chapterId)
+        return all.filter { it.getMergeKey() == key }.mapTo(hashSetOf(chapterId)) { it.id }
     }
 
     private fun computePercent(chapterId: Long, pageIndex: Int): Float {

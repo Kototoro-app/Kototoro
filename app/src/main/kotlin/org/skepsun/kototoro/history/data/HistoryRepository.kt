@@ -217,6 +217,8 @@ class HistoryRepository @Inject constructor(
         parentChapterId: Long? = null,
         // An explicit "I am here" (set as current chapter) replaces the furthest read chapter instead of keeping it.
         resetFurthest: Boolean = false,
+        // Null when the reader cannot tell; update tracking then falls back to [percent].
+        finishedChapterIds: Set<Long>? = null,
     ) {
         if (!force && shouldSkip(manga)) {
             return
@@ -250,7 +252,7 @@ class HistoryRepository @Inject constructor(
                     },
                 ),
             )
-            newChaptersUseCaseProvider.get()(manga, chapterId, percent)
+            newChaptersUseCaseProvider.get()(manga, chapterId, percent, finishedChapterIds)
             scrobblers.forEach { it.tryScrobble(manga, chapterId) }
         }
     }

@@ -228,23 +228,30 @@ class TrackingRepository @Inject constructor(
     /**
      * Returns false only for legacy logs that have no reliable chapter identities. [readerChapters] is the list being
      * read, used for a work without a stored chapter list (a local copy of a remote work).
+     *
+     * [finishedChapterIds] is the reader's own verdict: the chapters whose last page was reached (empty if none).
+     * Without it (novel and video readers) the verdict is derived from [percent], which only matches the stored
+     * chapter list when the reader did not merge or reorder it.
      */
     suspend fun updateReadChapter(
         mangaId: Long,
         chapterId: Long,
         percent: Float? = null,
         readerChapters: List<ContentChapter>? = null,
+        finishedChapterIds: Set<Long>? = null,
     ): Boolean = db.withTransaction {
         if (db.getTrackLogsDao().findByOwner(mangaId).none { it.chapterMetadata.isNotBlank() }) return@withTransaction false
         val chapters = db.getChaptersDao().findAll(mangaId)
             .ifEmpty { readerChapters?.withIndex()?.toEntities(mangaId).orEmpty() }
-        val current = chapters.firstOrNull { it.chapterId == chapterId } ?: return@withTransaction true
-        val branch = chapters.filter { it.branch == current.branch }
-        val index = branch.indexOfFirst { it.chapterId == chapterId }
-        val progress = percent ?: db.getHistoryDao().find(mangaId)?.percent ?: return@withTransaction true
-        if (progress * branch.size + 0.0001f >= index + 1) {
-            db.completeUpdateChapter(mangaId, chapterId, System.currentTimeMillis(), chapters)
+        val finished = finishedChapterIds ?: run {
+            val current = chapters.firstOrNull { it.chapterId == chapterId } ?: return@withTransaction true
+            val branch = chapters.filter { it.branch == current.branch }
+            val index = branch.indexOfFirst { it.chapterId == chapterId }
+            val progress = percent ?: db.getHistoryDao().find(mangaId)?.percent ?: return@withTransaction true
+            if (progress * branch.size + 0.0001f >= index + 1) setOf(chapterId) else emptySet()
         }
+        val now = System.currentTimeMillis()
+        for (id in finished) db.completeUpdateChapter(mangaId, id, now, chapters)
         true
     }
 
