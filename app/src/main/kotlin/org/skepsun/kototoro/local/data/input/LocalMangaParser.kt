@@ -190,6 +190,11 @@ class LocalContentParser {
         // If the folder contains EPUB files, delegate to LocalEpubParser for proper parsing
         if (rootFile.isDirectory && !hasIndexFile) {
             val epubFiles = rootFile.listFiles { f -> f.isFile && f.name.endsWith(".epub", ignoreCase = true) }
+            val novelFileCount = rootFile.listFiles { f -> f.isFile && f.name.isNovelName() }?.size ?: 0
+            if (novelFileCount > 1) {
+                // A multi-volume folder: every .epub/.txt is a volume, not just the first one on disk.
+                UniFile.fromFile(rootFile)?.let { return getUniFileContent(it, withDetails, forceRefresh) }
+            }
             if (!epubFiles.isNullOrEmpty()) {
                 val epubFile = epubFiles.first()
                 val parser = org.skepsun.kototoro.local.epub.LocalEpubParser(epubFile)
