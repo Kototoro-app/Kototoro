@@ -16,7 +16,9 @@ internal fun buildDoublePageDisplayItems(
     if (pages.isEmpty()) return emptyList()
     return buildList {
         var currentChapterId = pages.first().chapterId
-        addDoublePageChapterLeadingSpacer(pages.first(), coverPage)
+        // A break page in front of the window is not a chapter's first page; the real first page that follows
+        // gets its own spacer through the chapter change below.
+        if (!pages.first().isChapterBreak) addDoublePageChapterLeadingSpacer(pages.first(), coverPage)
         pages.forEachIndexed { position, page ->
             if (page.chapterId != currentChapterId) {
                 if (size % 2 != 0) add(DoublePageDisplayItem(page = null, originalPosition = -1))
@@ -69,7 +71,7 @@ internal class DoublePageSpreadModel private constructor(
             // An unsplit page detected as wide always gets a spread to itself.
             fun isWideSolo(pos: Int): Boolean {
                 val page = displayItems.getOrNull(pos)?.page ?: return false
-                return page.split == ReaderPageSplit.NONE && page.id in widePageIds
+                return page.isChapterBreak || (page.split == ReaderPageSplit.NONE && page.id in widePageIds)
             }
 
             fun isSplitHalf(pos: Int): Boolean {
@@ -164,7 +166,7 @@ internal fun DoublePageSpread.isFullWidthWidePage(
 ): Boolean {
     if (lowerPosition != upperPosition) return false
     val page = displayItems.getOrNull(lowerPosition)?.page ?: return false
-    return page.split == ReaderPageSplit.NONE && page.id in widePageIds
+    return page.isChapterBreak || (page.split == ReaderPageSplit.NONE && page.id in widePageIds)
 }
 
 internal fun resolveDoublePageNavigationTarget(

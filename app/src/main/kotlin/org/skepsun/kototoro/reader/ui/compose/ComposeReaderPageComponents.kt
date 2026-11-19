@@ -115,6 +115,17 @@ internal fun ComposeReaderPage(
     pageAlignment: Alignment? = null,
     modifier: Modifier = Modifier,
 ) {
+    if (page.isChapterBreak) {
+        // Opaque like an image page: the stacking animations (advanced, simulation) draw neighbouring pages
+        // underneath, and a transparent break page would show them through.
+        val breakBackground = if (applyPageBackground || pageBackgroundColorOverride != null) {
+            Color(pageBackgroundColorOverride ?: readerBackgroundColor)
+        } else {
+            Color.Transparent
+        }
+        ReaderChapterBreakPage(page, modifier.background(breakBackground))
+        return
+    }
     var retryKey by remember(page.readerKey) { mutableIntStateOf(0) }
     var renderError by remember(page.readerKey) { mutableStateOf<Throwable?>(null) }
     var forceCoil by remember(page.readerKey) { mutableStateOf(false) }

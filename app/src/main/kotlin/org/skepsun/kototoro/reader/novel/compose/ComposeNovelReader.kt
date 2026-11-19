@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -27,6 +28,8 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PageSize
+import androidx.compose.foundation.pager.PagerDefaults
+import androidx.compose.foundation.pager.PagerSnapDistance
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Icon
@@ -61,7 +64,9 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerInputScope
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
@@ -116,6 +121,7 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.ReaderAnimation
 import org.skepsun.kototoro.core.ui.compose.KototoroLoadingIndicator
 import org.skepsun.kototoro.core.ui.compose.KototoroMotion
+import org.skepsun.kototoro.core.ui.chapters.ChapterBreakCard
 import org.skepsun.kototoro.reader.ui.compose.READER_PAGE_CAMERA_DISTANCE
 import org.skepsun.kototoro.reader.ui.compose.ComposeReaderSimulationPageShadow
 import org.skepsun.kototoro.reader.ui.compose.composeReaderPageCurl
@@ -477,6 +483,7 @@ private fun ComposeNovelChapterWindow(
     markingHighlightText: String? = null,
     activeChapterId: Long = 0L,
     bookStyles: Map<Long, NovelStyledText> = emptyMap(),
+    chapterBreak: NovelChapterBreakConfig? = null,
 ) {
     val palette = novelReaderPalette(settings.themePreset, isSystemInDarkTheme())
     val fontFamily = rememberNovelReaderFontFamily(settings.font)
@@ -574,81 +581,108 @@ private fun ComposeNovelChapterWindow(
                 },
             ) { index ->
                 val item = blocks[index]
-                when (val block = item.block) {
-                    is NovelDocumentBlock.Image -> NovelComposeImage(
-                        path = block.path,
-                        imageModel = imageModel,
-                        imageContext = item.chapter.imageContext,
-                        onClick = onImageClick,
-                    )
-
-                    is NovelDocumentBlock.Text -> {
-                        val original = formatNovelParagraphText(
-                            text = block.original,
-                            indentEnabled = settings.enableParagraphIndent,
-                            spacingLines = settings.paragraphSpacingLines,
+                val previousChapter = blocks.getOrNull(index - 1)?.chapter
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    // Between two stitched chapters a short card names the one that ends and the one that starts.
+                    if (chapterBreak != null && previousChapter != null &&
+                        previousChapter.chapterIndex != item.chapter.chapterIndex
+                    ) {
+                        ChapterBreakCard(
+                            finishedTitle = previousChapter.chapterTitle,
+                            nextTitle = item.chapter.chapterTitle,
+                            modifier = Modifier.fillParentMaxHeight(NOVEL_BREAK_STRIP_HEIGHT_FRACTION),
                         )
-                        val translated = block.translation?.let {
-                            formatNovelParagraphText(
-                                text = it,
+                    }
+                    when (val block = item.block) {
+                        is NovelDocumentBlock.Image -> NovelComposeImage(
+                            path = block.path,
+                            imageModel = imageModel,
+                            imageContext = item.chapter.imageContext,
+                            onClick = onImageClick,
+                        )
+
+                        is NovelDocumentBlock.Text -> {
+                            val original = formatNovelParagraphText(
+                                text = block.original,
                                 indentEnabled = settings.enableParagraphIndent,
                                 spacingLines = settings.paragraphSpacingLines,
                             )
-                        }
-                        val style = MaterialTheme.typography.bodyLarge.copy(
-                            fontFamily = fontFamily,
-                            fontSize = settings.fontSizeSp.sp,
-                            lineHeight = (settings.fontSizeSp * settings.lineSpacing).sp,
-                            textDirection = direction,
-                            color = contentColor,
-                        )
-                        if (block.translation == null) {
-                            if (block.inlineImages.isEmpty()) NovelMarkingText(
-                                text = highlightedNovelText(
-                                    text = styledBlocks["${item.chapter.chapterIndex}:${block.key}"]
-                                        ?.toAnnotatedString(style) ?: AnnotatedString(original),
+                            val translated = block.translation?.let {
+                                formatNovelParagraphText(
+                                    text = it,
+                                    indentEnabled = settings.enableParagraphIndent,
+                                    spacingLines = settings.paragraphSpacingLines,
+                                )
+                            }
+                            val style = MaterialTheme.typography.bodyLarge.copy(
+                                fontFamily = fontFamily,
+                                fontSize = settings.fontSizeSp.sp,
+                                lineHeight = (settings.fontSizeSp * settings.lineSpacing).sp,
+                                textDirection = direction,
+                                color = contentColor,
+                            )
+                            if (block.translation == null) {
+                                if (block.inlineImages.isEmpty()) NovelMarkingText(
+                                    text = highlightedNovelText(
+                                        text = styledBlocks["${item.chapter.chapterIndex}:${block.key}"]
+                                            ?.toAnnotatedString(style) ?: AnnotatedString(original),
+                                        sourceRange = block.sourceRange,
+                                        highlightRange = ttsHighlightRange,
+                                        highlightColor = MaterialTheme.colorScheme.secondaryContainer,
+                                        markings = novelMarkings.filter { it.chapterId == item.chapter.chapterId },
+                                        transientHighlightRange = if (item.chapter.chapterId == activeChapterId) markingHighlightRange else null,
+                                        transientHighlightText = if (item.chapter.chapterId == activeChapterId) markingHighlightText else null,
+                                    ),
+                                    style = style,
+                                    textAlign = alignment,
                                     sourceRange = block.sourceRange,
-                                    highlightRange = ttsHighlightRange,
-                                    highlightColor = MaterialTheme.colorScheme.secondaryContainer,
                                     markings = novelMarkings.filter { it.chapterId == item.chapter.chapterId },
-                                    transientHighlightRange = if (item.chapter.chapterId == activeChapterId) markingHighlightRange else null,
-                                    transientHighlightText = if (item.chapter.chapterId == activeChapterId) markingHighlightText else null,
-                                ),
-                                style = style,
-                                textAlign = alignment,
-                                sourceRange = block.sourceRange,
-                                markings = novelMarkings.filter { it.chapterId == item.chapter.chapterId },
-                                onMarkingClick = onMarkingClick,
-                                textSelectionActive = textSelectionActive,
-                            ) else NovelTextWithImageBlocks(
-                                text = original,
-                                inlineImages = block.inlineImages,
-                                imageModel = imageModel,
-                                imageContext = item.chapter.imageContext,
-                                onImageClick = onImageClick,
-                                style = style,
-                                textAlign = alignment,
-                            )
-                        } else if (block.displayMode == NovelTranslationDisplayMode.TRANSLATION_ONLY) {
-                            Text(text = translated.orEmpty(), style = style, textAlign = alignment)
-                        } else {
-                            NovelTextWithImageBlocks(
-                                text = original,
-                                inlineImages = block.inlineImages,
-                                imageModel = imageModel,
-                                imageContext = item.chapter.imageContext,
-                                onImageClick = onImageClick,
-                                style = style.copy(fontSize = (settings.fontSizeSp * 0.86f).sp),
-                                textAlign = alignment,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            Text(
-                                text = translated.orEmpty(),
-                                style = style,
-                                textAlign = alignment,
-                                modifier = Modifier.padding(top = 4.dp),
-                            )
+                                    onMarkingClick = onMarkingClick,
+                                    textSelectionActive = textSelectionActive,
+                                ) else NovelTextWithImageBlocks(
+                                    text = original,
+                                    inlineImages = block.inlineImages,
+                                    imageModel = imageModel,
+                                    imageContext = item.chapter.imageContext,
+                                    onImageClick = onImageClick,
+                                    style = style,
+                                    textAlign = alignment,
+                                )
+                            } else if (block.displayMode == NovelTranslationDisplayMode.TRANSLATION_ONLY) {
+                                Text(text = translated.orEmpty(), style = style, textAlign = alignment)
+                            } else {
+                                NovelTextWithImageBlocks(
+                                    text = original,
+                                    inlineImages = block.inlineImages,
+                                    imageModel = imageModel,
+                                    imageContext = item.chapter.imageContext,
+                                    onImageClick = onImageClick,
+                                    style = style.copy(fontSize = (settings.fontSizeSp * 0.86f).sp),
+                                    textAlign = alignment,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Text(
+                                    text = translated.orEmpty(),
+                                    style = style,
+                                    textAlign = alignment,
+                                    modifier = Modifier.padding(top = 4.dp),
+                                )
+                            }
                         }
+                    }
+                    // The window's end is marked too: with a next chapter still to load the card names it, and once it
+                    // is stitched in the same card sits between the two chapters.
+                    if (chapterBreak != null && index == blocks.lastIndex) {
+                        val hasNextChapter = item.chapter.chapterIndex < chapterBreak.chapterCount - 1
+                        ChapterBreakCard(
+                            finishedTitle = item.chapter.chapterTitle,
+                            nextTitle = if (hasNextChapter) {
+                                chapterBreak.titleOf(item.chapter.chapterIndex + 1)
+                            } else {
+                                null
+                            },
+                            modifier = Modifier.fillParentMaxHeight(NOVEL_BREAK_STRIP_HEIGHT_FRACTION),
+                        )
                     }
                 }
             }
@@ -717,6 +751,8 @@ fun ComposeNovelReaderRoute(
     onPagedPositionChanged: (chapterId: Long, page: Int, pageCount: Int) -> Unit = { _, _, _ -> },
     onBookmarkPositionUnavailable: () -> Unit = {},
     renderContent: Boolean = true,
+    chapterBreak: NovelChapterBreakConfig? = null,
+    onPageStepOutOfBounds: (direction: Int) -> Unit = {},
     onImageClick: ((String) -> Unit)? = null,
     onTap: ((x: Float, y: Float, viewport: IntSize) -> Unit)? = null,
     onLongPress: (() -> Unit)? = null,
@@ -767,6 +803,8 @@ fun ComposeNovelReaderRoute(
                     viewModel.publishPagedPosition(page, pageCount, charStart, charEnd, text)
                     onPagedPositionChanged(chapterId, page, pageCount)
                 },
+                chapterBreak = chapterBreak,
+                onPageStepOutOfBounds = onPageStepOutOfBounds,
                 modifier = modifier,
             )
         } else {
@@ -929,6 +967,7 @@ fun ComposeNovelReaderRoute(
                     markingHighlightText = state.markingHighlightText,
                     activeChapterId = state.chapterId,
                     bookStyles = state.bookStyles,
+                    chapterBreak = chapterBreak,
                 )
             } else {
                 ComposeNovelChapter(
@@ -1316,6 +1355,20 @@ private suspend fun androidx.compose.ui.input.pointer.PointerInputScope.detectNo
     }
 }
 
+/**
+ * Chapter transition pages for the novel reader: an info-only card between two stitched chapters (and after the last
+ * one), shown while the reader keeps flowing from one chapter into the next.
+ */
+class NovelChapterBreakConfig(
+    val chapterCount: Int,
+    val titleOf: (chapterIndex: Int) -> String?,
+    /** Id of the chapter at [chapterIndex] in the book, loaded or not; null when unknown. */
+    val idOf: (chapterIndex: Int) -> Long? = { null },
+)
+
+/** Height of the card between two chapters in the scrolling reader, as a fraction of the viewport. */
+private const val NOVEL_BREAK_STRIP_HEIGHT_FRACTION = 0.33f
+
 internal sealed interface NovelComposePage {
     val chapterId: Long
     val chapterIndex: Int
@@ -1338,7 +1391,33 @@ internal sealed interface NovelComposePage {
         override val charStart: Int,
         override val charEnd: Int,
     ) : NovelComposePage
+
+    /**
+     * The full page between two chapters (and after the last one). It has an identity of its own, so it is never
+     * counted into a chapter's page range, label or progress. A null [nextTitle] marks the end of the book.
+     *
+     * Two-page spreads show the card across the whole spread: it is then made of a [BreakSpread.LEFT] and a
+     * [BreakSpread.RIGHT] page, each drawing its half of the same full-width card, after an empty
+     * [BreakSpread.PAD] page when the chapter's last text page would otherwise share a spread with it.
+     */
+    data class Break(
+        val finishedChapterId: Long,
+        val finishedChapterIndex: Int,
+        val finishedTitle: String?,
+        val nextTitle: String?,
+        val spread: BreakSpread = BreakSpread.NONE,
+    ) : NovelComposePage {
+        override val chapterId: Long get() = NOVEL_BREAK_PAGE_CHAPTER_ID - finishedChapterId
+        override val chapterIndex: Int get() = NOVEL_BREAK_PAGE_CHAPTER_INDEX
+        override val charStart: Int get() = 0
+        override val charEnd: Int get() = 0
+    }
 }
+
+internal enum class BreakSpread { NONE, PAD, LEFT, RIGHT }
+
+private const val NOVEL_BREAK_PAGE_CHAPTER_ID = Long.MIN_VALUE / 2
+private const val NOVEL_BREAK_PAGE_CHAPTER_INDEX = Int.MIN_VALUE / 2
 
 private data class NovelPaginationChapter(
     val chapterId: Long,
@@ -1369,10 +1448,35 @@ private data class NovelPaginationResult(
 private fun novelComposePageKey(page: NovelComposePage): String = when (page) {
     is NovelComposePage.Text -> "text:${page.chapterId}:${page.charStart}:${page.charEnd}"
     is NovelComposePage.Image -> novelComposeImagePageKey(page.chapterId, page.sourceKey)
+    is NovelComposePage.Break -> "break:${page.finishedChapterId}:${page.spread.name}"
 }
 
 internal fun novelComposeImagePageKey(chapterId: Long, sourceKey: String): String =
     "image:$chapterId:$sourceKey"
+
+/** Two pages are shown side by side only on wide viewports; the reader and page-turn keys must agree on it. */
+internal fun novelDualPageActive(enableDualPage: Boolean, widthDp: Float): Boolean =
+    enableDualPage && widthDp >= NOVEL_DUAL_PAGE_MIN_WIDTH_DP
+
+internal const val NOVEL_DUAL_PAGE_MIN_WIDTH_DP = 600f
+
+/** Pages a turn advances: a spread replaces both visible pages instead of shifting by one. */
+internal fun novelPageTurnStep(dualPage: Boolean): Int = if (dualPage) 2 else 1
+
+/** A swipe turns a whole spread, so the left page after a turn is never the old right page. */
+private val NovelSpreadSnapDistance = object : PagerSnapDistance {
+    override fun calculateTargetPage(
+        startPage: Int,
+        suggestedTargetPage: Int,
+        velocity: Float,
+        pageSize: Int,
+        pageSpacing: Int,
+    ): Int = when {
+        suggestedTargetPage > startPage -> startPage + novelPageTurnStep(true)
+        suggestedTargetPage < startPage -> startPage - novelPageTurnStep(true)
+        else -> startPage
+    }
+}
 
 internal fun novelDualPageCurlOffset(
     pageOffset: Float,
@@ -1482,6 +1586,8 @@ private fun ComposeNovelPagedChapter(
     onBookmarkRequestConsumed: (Long, Boolean) -> Unit,
     onMarkingJumpResolved: () -> Unit = {},
     onPositionChanged: (Long, Int, Int, Int, Int, Int, String) -> Unit,
+    chapterBreak: NovelChapterBreakConfig? = null,
+    onPageStepOutOfBounds: (direction: Int) -> Unit = {},
     modifier: Modifier,
 ) {
     val density = LocalDensity.current
@@ -1580,7 +1686,11 @@ private fun ComposeNovelPagedChapter(
                 )
             }
         }
+        val chapterBreakActive = chapterBreak != null
+        val breakDualPage = novelDualPageActive(settings.enableDualPage, maxWidth.value)
         val paginationRequest = androidx.compose.runtime.remember(
+            chapterBreakActive,
+            breakDualPage,
             paginationChapters,
             style,
             contentWidthPx,
@@ -1613,7 +1723,12 @@ private fun ComposeNovelPagedChapter(
                     paragraphIndentEnabled = settings.enableParagraphIndent,
                 )
             }
-            paginationResult = NovelPaginationResult(paginationRequest, pages)
+            paginationResult = NovelPaginationResult(
+                paginationRequest,
+                insertNovelChapterBreaks(pages, chapterBreak, breakDualPage) { index ->
+                    chapters.firstOrNull { it.chapterIndex == index }?.chapterTitle
+                },
+            )
             android.util.Log.d(
                 NOVEL_PAGER_LOG_TAG,
                 "pagination chapters=${paginationChapters.joinToString { "${it.chapterIndex}/${it.chapterId}" }} " +
@@ -1790,6 +1905,24 @@ private fun ComposeNovelPagedChapter(
                 )
                 return@LaunchedEffect
             }
+            if (request.step != null) {
+                // A page turn with transition pages on: move through the window (break pages included) from the
+                // page on screen, and hand over to the host when the window has no page that way.
+                val direction = if (request.step > 0) 1 else -1
+                var landing = pagerState.settledPage + request.step
+                while (
+                    (result.pages.getOrNull(landing) as? NovelComposePage.Break)?.spread == BreakSpread.PAD
+                ) {
+                    landing += direction
+                }
+                if (landing in result.pages.indices) {
+                    pagerState.scrollToPage(landing)
+                } else {
+                    onPageStepOutOfBounds(direction)
+                }
+                onPageRequestConsumed(request.id)
+                return@LaunchedEffect
+            }
             val targetPage = resolveNovelPageRequest(
                 request = request,
                 pages = result.pages.map { NovelPageIdentity(it.chapterId, it.chapterIndex) },
@@ -1818,6 +1951,7 @@ private fun ComposeNovelPagedChapter(
                 .collect { index ->
                     val page = pages.getOrNull(index) ?: return@collect
                     settledPageKey = novelComposePageKey(page)
+                    if (page is NovelComposePage.Break) return@collect
                     val chapterStart = pages.indexOfFirst { it.chapterId == page.chapterId }
                     val chapterEnd = pages.indexOfLast { it.chapterId == page.chapterId }
                     val hasPreviousChapter = pages.any { it.chapterIndex == page.chapterIndex - 1 }
@@ -1853,7 +1987,7 @@ private fun ComposeNovelPagedChapter(
                     }
                 }
         }
-        val dualPage = settings.enableDualPage && maxWidth >= 600.dp
+        val dualPage = novelDualPageActive(settings.enableDualPage, maxWidth.value)
         val pageCurlState = rememberComposeReaderPageCurlState()
         val effectiveAnimation = when {
             !animationsEnabled -> ReaderAnimation.NONE
@@ -1874,6 +2008,10 @@ private fun ComposeNovelPagedChapter(
             pageSize = if (dualPage) PageSize.Fixed(maxWidth / 2) else PageSize.Fill,
             beyondViewportPageCount = 1,
             userScrollEnabled = readyGeneration === displayedGeneration,
+            flingBehavior = PagerDefaults.flingBehavior(
+                state = pagerState,
+                pagerSnapDistance = if (dualPage) NovelSpreadSnapDistance else PagerSnapDistance.atMost(1),
+            ),
             key = { index -> novelComposePageKey(pages[index]) },
             modifier = Modifier
                 .fillMaxSize()
@@ -2006,8 +2144,23 @@ private fun ComposeNovelPagedChapter(
                             onClick = onImageClick,
                         )
                     }
+                    is NovelComposePage.Break -> if (page.spread == BreakSpread.PAD) {
+                        Box(modifier = Modifier.fillMaxSize())
+                    } else {
+                        // A spread-wide card is drawn twice, each page showing its half.
+                        Box(modifier = Modifier.fillMaxSize().clipToBounds()) {
+                            ChapterBreakCard(
+                                finishedTitle = page.finishedTitle,
+                                nextTitle = page.nextTitle,
+                                modifier = Modifier
+                                    .fillMaxHeight()
+                                    .padding(top = statusBarInset, bottom = navigationBarInset)
+                                    .spreadHalf(page.spread),
+                            )
+                        }
+                    }
                 }
-                if (settings.showReadingStatus) {
+                if (settings.showReadingStatus && page !is NovelComposePage.Break) {
                     val chapterStart = pages.indexOfFirst { it.chapterId == page.chapterId }
                     val chapterEnd = pages.indexOfLast { it.chapterId == page.chapterId }
                     val localPage = (index - chapterStart).coerceAtLeast(0)
@@ -2449,6 +2602,18 @@ private fun NovelComposeImage(
             modifier = clickModifier.fillMaxWidth(),
         )
     }
+}
+
+/** Lays a card out over a whole two-page spread and shows only this page's half of it. */
+private fun Modifier.spreadHalf(spread: BreakSpread): Modifier = when (spread) {
+    BreakSpread.LEFT, BreakSpread.RIGHT -> layout { measurable, constraints ->
+        val fullWidth = constraints.maxWidth * 2
+        val placeable = measurable.measure(constraints.copy(minWidth = fullWidth, maxWidth = fullWidth))
+        layout(constraints.maxWidth, placeable.height) {
+            placeable.place(if (spread == BreakSpread.RIGHT) -constraints.maxWidth else 0, 0)
+        }
+    }
+    else -> fillMaxWidth()
 }
 
 private fun Modifier.novelReaderGestures(

@@ -62,6 +62,7 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.skepsun.kototoro.core.model.getLocalizedTitle
 import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.adaptive.tvChipRing
 import org.skepsun.kototoro.core.ui.compose.KototoroSnackbarHost
@@ -876,6 +877,10 @@ class NovelReaderActivity :
                 val floatingControls by settings.observeAsState(AppSettings.KEY_NOVEL_READER_CONTROLS) {
                     novelReaderControls
                 }
+                // Live, so toggling chapter break cards from the settings takes effect without reopening the reader.
+                val chapterBreakEnabled by settings.observeAsState(AppSettings.KEY_READER_CHAPTER_BREAK) {
+                    isReaderChapterBreakEnabled
+                }
                 val showFloatingControlLabels by settings.observeAsState(AppSettings.KEY_READER_CONTROL_LABELS) {
                     isReaderControlLabelsEnabled
                 }
@@ -953,6 +958,8 @@ class NovelReaderActivity :
                                 showReaderMessage(R.string.novel_bookmark_position_unavailable)
                             },
                             renderContent = true,
+                            chapterBreak = chapterBreakConfig(chapterBreakEnabled),
+                            onPageStepOutOfBounds = { direction -> switchChapterBy(direction) },
                             onImageClick = { path ->
                                 val image = composeReaderViewModel.uiState.value.imageContext
                                 openInlineImage(
@@ -1312,8 +1319,18 @@ class NovelReaderActivity :
             return
         }
         val position = composeReaderViewModel.uiState.value.position
-        val targetPage = (position?.page ?: currentPageIndex) + delta
+        val dualPage = org.skepsun.kototoro.reader.novel.compose.novelDualPageActive(
+            readerSettings.enableDualPage,
+            resources.configuration.screenWidthDp.toFloat(),
+        )
+        val step = org.skepsun.kototoro.reader.novel.compose.novelPageTurnStep(dualPage)
+        val targetPage = (position?.page ?: currentPageIndex) + delta * step
         val pageCount = position?.pageCount ?: 0
+        if (settings.isReaderChapterBreakEnabled) {
+            // The window holds transition pages between chapters, so turn through it rather than around it.
+            composeReaderViewModel.requestPageStep(delta * step)
+            return
+        }
         when {
             targetPage in 0 until pageCount -> composeReaderViewModel.requestPage(targetPage)
             delta > 0 -> switchChapterBy(1)
@@ -2504,7 +2521,9 @@ class NovelReaderActivity :
                 }, 300)
                 return  // Don't reset flag yet — the delayed callback will
             } else {
-                // 当前页是本章最后一页，尝试切换到下一章
+                // 当前页是本章最后一页，尝试切换到下一章。
+                // 有意不停在章节过渡页上：连续听书要一直读下去，所以即使开启了章节过渡页，
+                // 朗读读完（pageCount 不含过渡页）也直接进入下一章。
                 val targetIndex = currentChapterIndex + 1
                 if (targetIndex in chapters.indices) {
                     currentChapterIndex = targetIndex
@@ -4393,6 +4412,16 @@ class NovelReaderActivity :
                     chapterPath = data.chapterPath,
                 ),
             ),
+        )
+    }
+
+    /** Non-null when chapter transition pages are on: info-only cards drawn between chapters. */
+    private fun chapterBreakConfig(enabled: Boolean): org.skepsun.kototoro.reader.novel.compose.NovelChapterBreakConfig? {
+        if (!enabled) return null
+        return org.skepsun.kototoro.reader.novel.compose.NovelChapterBreakConfig(
+            chapterCount = chapters.size,
+            titleOf = { index -> chapters.getOrNull(index)?.getLocalizedTitle(resources, index) },
+            idOf = { index -> chapters.getOrNull(index)?.id },
         )
     }
 

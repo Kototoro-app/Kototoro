@@ -30,6 +30,13 @@ data class ReaderPage(
     val readerKey: Long
         get() = "$chapterId#$index#$url#${split.name}#$reloadNonce".longHashCode()
 
+    /**
+     * A synthetic page the paged readers show after the last page of [chapterId] when chapter break cards are on.
+     * It has no image and never takes part in reading progress; its titles come from the chapter list.
+     */
+    val isChapterBreak: Boolean
+        get() = url == CHAPTER_BREAK_URL
+
     constructor(page: ContentPage, index: Int, chapterId: Long) : this(
         id = page.id,
         url = page.url,
@@ -48,4 +55,19 @@ data class ReaderPage(
         headers = headers,
         source = source,
     )
+
+    companion object {
+
+        const val CHAPTER_BREAK_URL = "kototoro://chapter-break"
+
+        fun chapterBreak(afterChapterId: Long, source: ContentSource) = ReaderPage(
+            id = "break#$afterChapterId".longHashCode(),
+            url = CHAPTER_BREAK_URL,
+            preview = null,
+            headers = null,
+            chapterId = afterChapterId,
+            index = -1,
+            source = source,
+        )
+    }
 }

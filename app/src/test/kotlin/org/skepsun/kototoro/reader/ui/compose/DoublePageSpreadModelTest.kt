@@ -76,6 +76,34 @@ class DoublePageSpreadModelTest {
 		source = source,
 	)
 
+	private fun breakPage(afterChapterId: Long) = ReaderPage.chapterBreak(afterChapterId, source)
+
+	@Test
+	fun `a break page in front of the window is a spread of its own and adds no spacer`() {
+		val pages = listOf(breakPage(1), page(0, 2, 0), page(1, 2, 1), page(2, 2, 2), breakPage(2))
+		val items = buildDoublePageDisplayItems(pages)
+		val model = DoublePageSpreadModel.create(items)
+
+		val spreads = model.spreads.map { spread -> spread.positions.mapNotNull { items[it].page } }
+		assertEquals(listOf(true, false, false, true), spreads.map { it.first().isChapterBreak && it.size == 1 }.let {
+			listOf(it[0], it[1], it[2], it[3])
+		})
+		assertEquals(listOf(0L, 1L), spreads[1].map { it.id })
+		assertEquals(listOf(2L), spreads[2].map { it.id })
+	}
+
+	@Test
+	fun `with cover mode the real first page after a front break still gets its spacer`() {
+		val pages = listOf(breakPage(1), page(0, 2, 0), page(1, 2, 1), page(2, 2, 2))
+		val items = buildDoublePageDisplayItems(pages, coverPage = true)
+		val model = DoublePageSpreadModel.create(items)
+
+		val spreads = model.spreads.map { spread -> spread.positions.mapNotNull { items[it].page } }
+		assertTrue(spreads[0].single().isChapterBreak)
+		assertEquals(listOf(0L), spreads[1].map { it.id })
+		assertEquals(listOf(1L, 2L), spreads[2].map { it.id })
+	}
+
 	@Test
 	fun `inserts a spacer between odd chapter boundaries`() {
 		val items = buildDoublePageDisplayItems(

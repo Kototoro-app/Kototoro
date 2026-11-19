@@ -98,6 +98,10 @@ internal fun DesktopReaderSettingsPage(controller: DesktopController, state: Des
             SettingsRowDivider()
             ReaderPreloadSettingsRow(settings.reducePagePreloading,
                 { controller.readerSettings(settings.copy(reducePagePreloading = it)) }, enabled = active)
+            SettingsRowDivider()
+            SettingsSwitchRow(AndroidStrings["reader_chapter_break"], AndroidStrings["reader_chapter_break_summary"],
+                settings.chapterBreak, active, { controller.readerSettings(settings.copy(chapterBreak = it)) },
+                testTag = "reader-setting-chapter-break")
         }
         if (webtoon) {
             ReaderWebtoonSettingsContent(settings.webtoonGaps,

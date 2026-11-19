@@ -223,6 +223,10 @@ object DesktopAppProbe {
                 DesktopReaderGestureProbe.run(args)
                 return
             }
+            if (args[0] == "reader-chapter-break") {
+                DesktopChapterBreakProbe.run(args)
+                return
+            }
             if (args[0] == "reader-webtoon-gaps") {
                 DesktopWebtoonGapsProbe.run(args)
                 return

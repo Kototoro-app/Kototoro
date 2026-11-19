@@ -1332,6 +1332,14 @@
         <item quantity="one">Every page</item>
         <item quantity="other">Every %1$d pages</item>
     </plurals>
+    <plurals name="chapter_words_count">
+        <item quantity="one">%s word</item>
+        <item quantity="other">%s words</item>
+    </plurals>
+    <plurals name="chapter_pages_count">
+        <item quantity="one">%d page</item>
+        <item quantity="other">%d pages</item>
+    </plurals>
     <string name="background">Background</string>
     <string name="reader_background">Reader background</string>
     <string name="reader_background_theme">Follow app theme</string>
@@ -2261,6 +2269,11 @@
     <string name="all_sources_enabled">All sources are enabled</string>
     <string name="reader_chapter_toast">Show chapter change popup</string>
     <string name="reader_chapter_toast_summary">Show a pop-up message with a chapter title when it is changed</string>
+    <string name="reader_chapter_break">Chapter break cards</string>
+    <string name="reader_chapter_break_summary">Show a transition page between chapters, with the finished and next chapter titles</string>
+    <string name="chapter_break_finished">Chapter finished</string>
+    <string name="chapter_break_next">Up next</string>
+    <string name="chapter_break_last">This is the last chapter</string>
     <string name="reader_chapter_title_at_bottom_summary">Moves the work and chapter title from the top bar to above the progress bar, within thumb reach</string>
     <string name="reader_chapter_title_at_bottom">Show chapter title at the bottom</string>
     <string name="reader_info_bar_transparent">Transparent reader information bar</string>

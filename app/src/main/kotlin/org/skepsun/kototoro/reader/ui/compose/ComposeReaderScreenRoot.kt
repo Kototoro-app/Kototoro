@@ -7,6 +7,7 @@ import android.view.ViewConfiguration
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
@@ -79,6 +80,19 @@ fun ComposeReaderScreenRoot(
     val webtoonVolumeKeyScrollDistanceFraction by viewModel.webtoonVolumeKeyScrollDistanceFraction
         .collectAsStateWithLifecycle()
     val readerUiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val isChapterBreakEnabled by viewModel.isChapterBreakEnabled.collectAsStateWithLifecycle()
+    val chapterTitleResources = LocalContext.current.resources
+    // Stable while the option stays on: the handler is a composition local read by every reader.
+    val chapterBreakHandler = remember(isChapterBreakEnabled, viewModel, chapterTitleResources) {
+        if (isChapterBreakEnabled) {
+            ChapterBreakHandler(
+                titleAt = { chapterId, offset -> viewModel.chapterTitleAt(chapterId, offset, chapterTitleResources) },
+            )
+        } else {
+            null
+        }
+    }
+    val chapterTitleAt = chapterBreakHandler?.titleAt
     val pageAnimation by viewModel.pageAnimation.collectAsStateWithLifecycle()
     val readerSettings by viewModel.readerSettingsProducer.collectAsStateWithLifecycle()
     val isAnimationEnabled = animationsEnabled && LocalContext.current.isAnimationsEnabled &&
@@ -127,6 +141,7 @@ fun ComposeReaderScreenRoot(
         }
     }
 
+    CompositionLocalProvider(LocalChapterBreakHandler provides chapterBreakHandler) {
     key(layoutMode, isDoublePage, layoutGeneration) {
     if (isDoublePage) {
         // The two renderer switches are per family: which one owns this layout is decided in
@@ -368,6 +383,7 @@ fun ComposeReaderScreenRoot(
                 canGoPreviousChapter = readerUiState?.hasPreviousChapter() != false,
                 canGoNextChapter = readerUiState?.hasNextChapter() != false,
                 onPullChapter = viewModel::switchChapterBy,
+                chapterTitleAt = chapterTitleAt,
                 onShowErrorDetails = onShowErrorDetails,
                 onRetryError = onRetryError,
                 resolveErrorStringId = resolveErrorStringId,
@@ -507,6 +523,7 @@ fun ComposeReaderScreenRoot(
                 pageOverlay = pageOverlay,
             )
         }
+    }
     }
     }
 }

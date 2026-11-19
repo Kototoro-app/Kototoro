@@ -143,11 +143,14 @@ internal fun createInitialPagedPageSpecs(
     pages: List<ReaderPage>,
     adapter: KototoroImagePipelineAdapter? = null,
     defaultRatio: Float = 0.707f,
+    breakHint: PageGeometryHint? = null,
 ): List<PagedPageSpec> {
     return pages.map { page ->
         val pageId = PageId(page.readerKey)
         val cachedDims = adapter?.probeCachedDimensions(pageId)
-        val hint = if (cachedDims != null) {
+        val hint = if (page.isChapterBreak && breakHint != null) {
+            breakHint
+        } else if (cachedDims != null) {
             PageGeometryHint.Exact(cachedDims.width, cachedDims.height)
         } else {
             PageGeometryHint.Estimated(ratio = defaultRatio)
@@ -226,7 +229,7 @@ fun ComposeScenePagedReader(
     val pageMap = remember(pages) { pages.associateBy { it.readerKey } }
     val currentPageMap = rememberUpdatedState(pageMap)
     val pageLookup: (PageId) -> ReaderPage? = remember {
-        { id -> currentPageMap.value[id.value] }
+        { id -> currentPageMap.value[id.value]?.takeUnless { it.isChapterBreak } }
     }
 
     val adapter = remember(imagePipeline, imageLoader, isCropEnabled, bitmapConfig, isReaderOptimizationEnabled) {
@@ -265,7 +268,11 @@ fun ComposeScenePagedReader(
                     pageSpacingPx = 0,
                     zoomMode = zoomMode,
                 ),
-                initialSpecs = createInitialPagedPageSpecs(pages, adapter),
+                initialSpecs = createInitialPagedPageSpecs(
+                    pages,
+                    adapter,
+                    breakHint = sceneChapterBreakHint(viewportWidthPx, viewportHeightPx),
+                ),
             )
         }
     }
@@ -768,7 +775,11 @@ fun ComposeScenePagedReader(
             } else {
                 ReaderViewport(FloatRect.fromLtwh(0f, scrollState.offset, viewportWidthPx, viewportHeightPx))
             }
-            val newSpecs = createInitialPagedPageSpecs(pages, adapter)
+            val newSpecs = createInitialPagedPageSpecs(
+                pages,
+                adapter,
+                breakHint = sceneChapterBreakHint(viewportWidthPx, viewportHeightPx),
+            )
             val compensation = currentScene.updatePagedPages(newSpecs, currentVp)
             sceneRevision = currentScene.revision
             if (pe > 0f) {
@@ -1712,8 +1723,12 @@ fun ComposeScenePagedReader(
             }
         }
 
+        // Break pages are rendered to bitmaps and drawn by the scene like any page, so they animate with it.
+        SceneChapterBreakCaptures(pages, adapter, viewportWidthPx, viewportHeightPx, fallbackBackgroundColor)
+
         // Per-page Loading & Error UI positioned at the center of each loading page
         for ((pageId, centerX, centerY) in loadingPlacements) {
+            if (pageMap[pageId.value]?.isChapterBreak == true) continue
             key(pageId) {
                 CenteredOverlay(
                     centerX = centerX,

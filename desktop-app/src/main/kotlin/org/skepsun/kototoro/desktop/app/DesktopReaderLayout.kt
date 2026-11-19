@@ -79,6 +79,11 @@ data class DesktopReaderSettings(
      * like a manually picked mode, is remembered per content.
      */
     val readerModeDetection: Boolean = true,
+    /**
+     * Android's `reader_chapter_break` (off by default): the continuous reader ends the chapter with the shared
+     * chapter break card — what was finished, what comes next and a button to go there.
+     */
+    val chapterBreak: Boolean = false,
 ) {
     /** Whether pages are cropped in the current reading mode. */
     val cropActive: Boolean get() = if (mode.isContinuous) cropContinuous else cropPaged

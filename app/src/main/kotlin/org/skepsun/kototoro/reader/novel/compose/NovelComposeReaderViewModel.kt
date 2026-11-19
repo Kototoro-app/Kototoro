@@ -107,6 +107,8 @@ data class NovelPageRequest(
     val page: Int,
     /** Chapter progress to resolve against the current pagination instead of [page]. */
     val progress: Float? = null,
+    /** Pages to move from the one on screen, through whatever the window holds; used when transition pages are on. */
+    val step: Int? = null,
 )
 
 @Immutable
@@ -269,10 +271,13 @@ class NovelComposeReaderViewModel @Inject constructor() : ViewModel() {
 
     fun requestPage(page: Int) = request(page = page.coerceAtLeast(0), progress = null)
 
+    /** Turns [step] pages from the page on screen, crossing chapter transition pages. */
+    fun requestPageStep(step: Int) = request(page = 0, progress = null, step = step)
+
     /** Moves to the page of the current chapter holding [progress], once the chapter is paginated. */
     fun requestProgress(progress: Float) = request(page = 0, progress = progress.coerceIn(0f, 1f))
 
-    private fun request(page: Int, progress: Float?) {
+    private fun request(page: Int, progress: Float?, step: Int? = null) {
         val state = _uiState.value
         val request = NovelPageRequest(
             id = ++nextPageRequestId,
@@ -280,6 +285,7 @@ class NovelComposeReaderViewModel @Inject constructor() : ViewModel() {
             chapterIndex = state.chapterIndex,
             page = page,
             progress = progress,
+            step = step,
         )
         _uiState.value = _uiState.value.copy(
             pageRequest = request,
