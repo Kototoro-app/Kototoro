@@ -297,6 +297,7 @@ private fun FeedRow(controller: DesktopController, state: DesktopAppState, row: 
             else -> " · " + desktopText("feed.pendingChapters", row.pendingCount)
         },
         isNew = row.unread,
+        isRead = !row.unread && row.pendingCount == 0,
         onClick = { open() },
         modifier = Modifier.testTag("feed-row:${row.logId}"),
         screenPadding = 0.dp,

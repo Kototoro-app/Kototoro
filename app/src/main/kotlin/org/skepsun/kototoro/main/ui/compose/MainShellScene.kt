@@ -1021,6 +1021,13 @@ internal fun FeedTopLevelRouteContent(
                 viewModel.onItemClick(item)
                 appRouter.openReader(item.toContentWithOverride())
             },
+            onFeedItemReadChapter = { item, chapterId ->
+                viewModel.onItemClick(item)
+                appRouter.openReader(
+                    item.toContentWithOverride(),
+                    state = org.skepsun.kototoro.reader.ui.ReaderState(chapterId = chapterId, page = 0, scroll = 0),
+                )
+            },
             onUpdatedContentItemClick = { contentItem, _ ->
                 val content = contentItem.model.toContentWithOverride()
                 val sharedElementKey = contentCoverSharedKey(

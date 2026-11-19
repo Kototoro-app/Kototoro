@@ -91,6 +91,7 @@ fun FeedScreen(
     selectedItemIds: Set<Long> = emptySet(),
     onFeedItemLongClick: (FeedItem) -> Unit = {},
     onFeedItemContinueReading: (FeedItem) -> Unit = {},
+    onFeedItemReadChapter: (FeedItem, Long) -> Unit = { _, _ -> },
     onFeedDetailsViewed: (FeedItem) -> Unit = {},
     showCategoryFilterInline: Boolean = true,
     host: RetainedPagingSnapshotHost? = null,
@@ -251,6 +252,7 @@ fun FeedScreen(
                     onFeedItemClick = onFeedItemClick,
                     onFeedItemLongClick = onFeedItemLongClick,
                     onFeedItemContinueReading = onFeedItemContinueReading,
+                    onFeedItemReadChapter = onFeedItemReadChapter,
                         onFeedDetailsViewed = onFeedDetailsViewed,
                     onUpdatedContentItemClick = onUpdatedContentItemClick,
                     onUpdatedContentMoreClick = onUpdatedContentMoreClick,
@@ -274,6 +276,7 @@ fun FeedScreen(
                         onFeedItemClick = onFeedItemClick,
                         onFeedItemLongClick = onFeedItemLongClick,
                         onFeedItemContinueReading = onFeedItemContinueReading,
+                        onFeedItemReadChapter = onFeedItemReadChapter,
                         onFeedDetailsViewed = onFeedDetailsViewed,
                         onUpdatedContentItemClick = onUpdatedContentItemClick,
                         onUpdatedContentMoreClick = onUpdatedContentMoreClick,
@@ -296,6 +299,7 @@ fun FeedScreen(
                         onFeedItemClick = onFeedItemClick,
                         onFeedItemLongClick = onFeedItemLongClick,
                         onFeedItemContinueReading = onFeedItemContinueReading,
+                        onFeedItemReadChapter = onFeedItemReadChapter,
                         onFeedDetailsViewed = onFeedDetailsViewed,
                         onUpdatedContentItemClick = onUpdatedContentItemClick,
                         onUpdatedContentMoreClick = onUpdatedContentMoreClick,
@@ -394,6 +398,7 @@ private fun FeedListItemContent(
     onFeedItemClick: (FeedItem, Rect?) -> Unit,
     onFeedItemLongClick: (FeedItem) -> Unit,
     onFeedItemContinueReading: (FeedItem) -> Unit,
+    onFeedItemReadChapter: (FeedItem, Long) -> Unit,
     onFeedDetailsViewed: (FeedItem) -> Unit,
     onUpdatedContentItemClick: (UpdatedContentHeaderItem, Rect?) -> Unit,
     onUpdatedContentMoreClick: (UpdatedContentHeader) -> Unit,
@@ -419,6 +424,11 @@ private fun FeedListItemContent(
             onDetailsViewed = { onFeedDetailsViewed(item) },
             onContinueReading = if (selectedItemIds.isEmpty()) {
                 { onFeedItemContinueReading(item) }
+            } else {
+                null
+            },
+            onReadChapter = if (selectedItemIds.isEmpty()) {
+                { chapterId -> onFeedItemReadChapter(item, chapterId) }
             } else {
                 null
             },

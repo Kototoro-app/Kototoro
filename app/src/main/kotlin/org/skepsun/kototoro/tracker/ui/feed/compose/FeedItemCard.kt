@@ -3,7 +3,10 @@ package org.skepsun.kototoro.tracker.ui.feed.compose
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
@@ -20,7 +23,6 @@ import coil3.request.crossfade
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.core.ui.compose.AppLayoutTokens
-import org.skepsun.kototoro.core.ui.compose.FastScrollTouchWidth
 import org.skepsun.kototoro.core.ui.compose.HeroCoverSnapshotStore
 import org.skepsun.kototoro.core.ui.compose.LocalNavAnimatedVisibilityScope
 import org.skepsun.kototoro.core.ui.compose.LocalSharedTransitionScope
@@ -30,7 +32,15 @@ import org.skepsun.kototoro.core.ui.compose.rememberDeferredContentCoverBounds
 import org.skepsun.kototoro.core.ui.feed.FeedContinueAction
 import org.skepsun.kototoro.core.ui.feed.FeedCoverWidth
 import org.skepsun.kototoro.core.ui.feed.FeedTimelineCard
-import org.skepsun.kototoro.core.ui.feed.FeedUpdateDetails
+import org.skepsun.kototoro.core.ui.feed.FeedChapterList
+import org.skepsun.kototoro.core.prefs.InterfaceStyle
+import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
+import org.skepsun.kototoro.list.ui.compose.ContentCardBadgePill
+import org.skepsun.kototoro.list.ui.compose.ContentCardBadgeText
+import org.skepsun.kototoro.list.ui.compose.ContentCardBadgeTone
+import org.skepsun.kototoro.core.ui.feed.FeedChapterToggle
+import org.skepsun.kototoro.core.ui.feed.FeedChapterLine
+import org.skepsun.kototoro.tracker.domain.UpdateChapter
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -51,6 +61,8 @@ fun FeedItemCard(
     timelineLabel: String? = null,
     onLongClick: (() -> Unit)? = null,
     onContinueReading: (() -> Unit)? = null,
+    /** Opens the reader at a chapter picked from the unfolded list; null in selection mode. */
+    onReadChapter: ((chapterId: Long) -> Unit)? = null,
     onDetailsViewed: () -> Unit = {},
 ) {
     val coverBounds = rememberDeferredContentCoverBounds()
@@ -77,25 +89,58 @@ fun FeedItemCard(
             HeroCoverSnapshotStore.put(sharedElementKey, state.result.image)
         }
     }
-    val batchText = if (item.count < 0) {
-        stringResource(R.string.update_chapters_available)
-    } else if (item.count > 0) {
-        pluralStringResource(id = R.plurals.new_chapters, count = item.count, item.count)
-    } else {
-        pluralStringResource(id = R.plurals.old_chapters_in_total, count = item.totalChapters, item.totalChapters)
+    // Chapters in reading order: the entry shows the first unread one, i.e. the chapter right after what was read.
+    val ordered = remember(item.updateChapters) {
+        item.updateChapters.sortedBy { it.publishedAt.takeIf { time -> time > 0 } ?: Long.MAX_VALUE }
     }
-    val chapterText = batchText + when {
-        item.pendingCount < 0 -> ""
-        item.pendingCount == 0 -> " · " + stringResource(R.string.update_read_completed)
-        else -> " · " + stringResource(R.string.update_pending_chapters, item.pendingCount)
+    val pending = remember(ordered) { ordered.filter { it.readAt == 0L } }
+    val primary = if (item.pendingCount < 0) null else pending.firstOrNull() ?: ordered.lastOrNull()
+    val legacyText = run {
+        val batch = if (item.count < 0) {
+            stringResource(R.string.update_chapters_available)
+        } else if (item.count > 0) {
+            pluralStringResource(id = R.plurals.new_chapters, count = item.count, item.count)
+        } else {
+            pluralStringResource(id = R.plurals.old_chapters_in_total, count = item.totalChapters, item.totalChapters)
+        }
+        batch + when {
+            item.pendingCount < 0 -> ""
+            item.pendingCount == 0 -> " · " + stringResource(R.string.update_read_completed)
+            else -> " · " + stringResource(R.string.update_pending_chapters, item.pendingCount)
+        }
     }
+    // With known chapters the chapter range sits on the summary line; only legacy entries keep a count line.
+    val chapterText = if (primary != null) "" else legacyText
+    // The pending count rides on the cover; entries without chapter identities fall back to the discovered count.
+    val badgeCount = if (primary != null) pending.size else item.count.coerceAtLeast(0)
+    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
     val continueLabel = stringResource(R.string.continue_reading)
     val continueIcon = painterResource(id = R.drawable.ic_read)
+    var expanded by remember(item.key) { mutableStateOf(false) }
+    val presentation = if (primary == null) null else chapterPresentation(ordered, pending, primary, onReadChapter)
     FeedTimelineCard(
-        supportingContent = { UpdateSourceDetails(item, onDetailsViewed) },
+        supportingContent = presentation?.let { shown ->
+            {
+                FeedChapterToggle(
+                    summary = shown.summary,
+                    expandable = shown.lines.isNotEmpty(),
+                    expanded = expanded,
+                    onToggle = {
+                        expanded = !expanded
+                        if (expanded) onDetailsViewed()
+                    },
+                    expandLabel = stringResource(R.string.update_chapter_details),
+                    isNew = item.isNew,
+                )
+            }
+        },
+        belowContent = presentation?.takeIf { it.lines.isNotEmpty() }?.let { shown ->
+            { FeedChapterList(shown.lines, expanded, continueIcon, stringResource(R.string.read)) }
+        },
         title = item.title,
         chapterText = chapterText,
         isNew = item.isNew,
+        isRead = !item.isNew && item.pendingCount == 0,
         onClick = { onClick(coverBounds.currentBounds()) },
         modifier = modifier,
         screenPadding = AppLayoutTokens.screenHorizontalPadding,
@@ -115,10 +160,9 @@ fun FeedItemCard(
         selectedIcon = painterResource(id = R.drawable.ic_check),
         timelineLabel = timelineLabel,
         onLongClick = onLongClick,
-        continueAction = onContinueReading?.let { FeedContinueAction(continueIcon, continueLabel, it) },
-        // The feed scrollbar owns a [FastScrollTouchWidth]-wide drag strip on the trailing edge and turns taps
-        // inside it into drags, so keep the button fully outside it.
-        continueEndInset = FastScrollTouchWidth - FeedCardEndPadding,
+        continueAction = onContinueReading?.let {
+            FeedContinueAction(continueIcon, continueLabel, it, hint = stringResource(R.string._continue))
+        },
         cover = {
             AsyncImage(
                 model = imageRequest,
@@ -127,6 +171,18 @@ fun FeedItemCard(
                 modifier = Modifier.matchParentSize(),
                 onSuccess = onImageSuccess,
             )
+            if (badgeCount > 0) {
+                ContentCardBadgePill(
+                    tone = ContentCardBadgeTone.COUNTER,
+                    isIosStyle = isIosStyle,
+                    metrics = badgeMetrics,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(badgeMetrics.outerPadding * 0.6f),
+                ) { colors ->
+                    ContentCardBadgeText(badgeCount.toString(), colors.content, badgeMetrics)
+                }
+            }
             if (item.manga.isNsfw()) {
                 ContentCardNsfwBadge(
                     metrics = badgeMetrics,
@@ -139,29 +195,42 @@ fun FeedItemCard(
     )
 }
 
-/** The shared card's trailing padding. */
-private val FeedCardEndPadding = 16.dp
+/** What the third line says and the chapters it unfolds into. */
+private class ChapterPresentation(val summary: String, val lines: List<FeedChapterLine>)
 
 @Composable
-private fun UpdateSourceDetails(item: FeedItem, onViewed: () -> Unit) {
+private fun chapterPresentation(
+    ordered: List<UpdateChapter>,
+    pending: List<UpdateChapter>,
+    primary: UpdateChapter,
+    onReadChapter: ((chapterId: Long) -> Unit)?,
+): ChapterPresentation? {
     val locale = LocalContext.current.resources.configuration.locales[0]
     val zone = ZoneId.systemDefault()
-    val dateFormat = remember(locale) { DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(locale) }
-    val detailFormat = remember(locale) {
-        DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT).withLocale(locale)
+    val shortDate = remember(locale) { DateTimeFormatter.ofLocalizedDate(FormatStyle.SHORT).withLocale(locale) }
+    // Sources publish dates, not times of day, so the unfolded list shows no clock time.
+    val longDate = remember(locale) { DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(locale) }
+    fun format(value: Long, formatter: DateTimeFormatter) =
+        Instant.ofEpochMilli(value).atZone(zone).format(formatter)
+    // The chapters themselves are the summary: the unread range, or the one chapter with its date when known.
+    val summary = when {
+        pending.size > 1 -> "${pending.first().title} – ${pending.last().title}"
+        pending.size == 1 -> pending.single().title +
+            (pending.single().publishedAt.takeIf { it > 0 }?.let { " · " + format(it, shortDate) }.orEmpty())
+        else -> stringResource(R.string.update_read_completed) + " · " + primary.title
     }
-    fun date(value: Long) = Instant.ofEpochMilli(value).atZone(zone).format(dateFormat)
-    val known = item.updateChapters.map { it.publishedAt }.filter { it > 0 }
-    val unknown = stringResource(R.string.update_source_time_unknown)
-    val summary = if (known.isEmpty()) unknown else {
-        val from = date(known.min())
-        val until = date(known.max())
-        stringResource(R.string.update_source_time, if (from == until) from else "$from — $until") +
-            if (known.size < item.updateChapters.size) " · " + stringResource(R.string.update_source_time_partial) else ""
+    // The unfolded list is every chapter of the entry, the one shown above included, so each can be opened.
+    val lines = if (ordered.size > 1) {
+        ordered.map { chapter ->
+            FeedChapterLine(
+                title = chapter.title,
+                date = chapter.publishedAt.takeIf { it > 0 }?.let { format(it, longDate) },
+                isRead = chapter.readAt > 0,
+                onClick = onReadChapter?.let { open -> { open(chapter.chapterId) } },
+            )
+        }
+    } else {
+        emptyList()
     }
-    val details = item.updateChapters.map { chapter ->
-        chapter.title to if (chapter.publishedAt > 0) stringResource(R.string.update_source_time,
-            Instant.ofEpochMilli(chapter.publishedAt).atZone(zone).format(detailFormat)) else unknown
-    }
-    FeedUpdateDetails(summary, details, stringResource(R.string.update_chapter_details), stringResource(R.string.close), onViewed)
+    return ChapterPresentation(summary, lines)
 }

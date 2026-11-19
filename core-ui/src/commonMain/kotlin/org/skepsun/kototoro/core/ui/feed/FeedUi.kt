@@ -1,5 +1,7 @@
 package org.skepsun.kototoro.core.ui.feed
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -42,11 +44,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import org.skepsun.kototoro.core.ui.buttons.FilledTonalIconButton
 import org.skepsun.kototoro.core.ui.buttons.TextButton
 import org.skepsun.kototoro.core.ui.gestures.mouseDragScroll
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -78,22 +80,23 @@ val FeedCoverWidth = 48.dp
 val FeedCoverHeight = 60.dp
 private val FeedCardEndPadding = 16.dp
 val FeedCoverShape = RoundedCornerShape(14.dp)
-private val FeedTimelineRailWidth = 28.dp
+private val FeedTimelineRailWidth = 20.dp
 private val FeedTimelineNodeSize = 10.dp
-private val FeedTimelineNodeStrokeWidth = 3.dp
-private val FeedTimelineDateLabelStart = 2.dp
-private val FeedTimelineDateLabelWidth = 48.dp
-private val FeedTimelineDateLabelNodeGap = 4.dp
+private val FeedHintIconSize = 20.dp
+private val FeedHintIconGap = 6.dp
+private val FeedHintWidth = 36.dp
 
-private fun feedTimelineCardLeadingSpace(screenPadding: Dp): Dp =
-    FeedTimelineDateLabelStart + FeedTimelineDateLabelWidth + FeedTimelineDateLabelNodeGap +
-        (FeedTimelineNodeSize / 2f) + (FeedTimelineNodeStrokeWidth / 2f) - screenPadding - (FeedTimelineRailWidth / 2f)
-
-/** The trailing "continue reading" button of a feed card. */
-class FeedContinueAction(val icon: Painter, val label: String, val onClick: () -> Unit)
+/** What tapping a feed card's body does: resume reading. The cover keeps opening the details. */
+class FeedContinueAction(
+    val icon: Painter,
+    val label: String,
+    val onClick: () -> Unit,
+    /** A one-word caption under the hint icon that says what tapping the row does. */
+    val hint: String? = null,
+)
 
 /**
- * One feed entry on the date timeline: node, cover, title, chapter line and an optional continue button.
+ * One feed entry on the date timeline: node, cover, title and chapter line; the body resumes reading when a continue action is given.
  * [coverModifier] lets hosts attach transitions or bounds tracking to the cover box.
  */
 @OptIn(ExperimentalFoundationApi::class)
@@ -102,6 +105,8 @@ fun FeedTimelineCard(
     title: String,
     chapterText: String,
     isNew: Boolean,
+    /** Fully read entries fade back so what is left to read stands out. */
+    isRead: Boolean = false,
     onClick: () -> Unit,
     cover: @Composable BoxScope.() -> Unit,
     modifier: Modifier = Modifier,
@@ -112,46 +117,66 @@ fun FeedTimelineCard(
     timelineLabel: String? = null,
     onLongClick: (() -> Unit)? = null,
     continueAction: FeedContinueAction? = null,
-    /** Keeps the continue button clear of a trailing fast-scroll strip. */
-    continueEndInset: Dp = 0.dp,
     supportingContent: (@Composable () -> Unit)? = null,
+    /** Shown under the whole row, aligned with the title column and reaching the row's trailing edge. */
+    belowContent: (@Composable () -> Unit)? = null,
 ) {
-    val nodeColor = if (isNew) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary.copy(alpha = 0.66f)
-    val leadingSpace = feedTimelineCardLeadingSpace(screenPadding)
-    Box(modifier = modifier.fillMaxWidth()) {
+    val nodeColor = MaterialTheme.colorScheme.primary
+    val readAlpha = if (isRead) 0.62f else 1f
+    val label = timelineLabel?.takeIf { it.isNotBlank() }
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.26f) else Color.Transparent)
+            .drawBehind {
+                val railCenterX = screenPadding.toPx() + (FeedTimelineRailWidth.toPx() / 2f)
+                drawLine(
+                    color = nodeColor.copy(alpha = 0.22f),
+                    start = Offset(railCenterX, 0f),
+                    end = Offset(railCenterX, size.height),
+                    strokeWidth = 2.dp.toPx(),
+                    cap = StrokeCap.Round,
+                )
+            },
+    ) {
+        // The date sits above the first card of its day instead of reserving a gutter column on every row.
+        if (label != null) FeedTimelineDateHeader(
+            text = label,
+            nodeColor = nodeColor,
+            modifier = Modifier.padding(start = screenPadding, top = 14.dp, bottom = 2.dp),
+        )
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(IntrinsicSize.Min)
-                .background(if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.26f) else Color.Transparent)
-                .drawBehind {
-                    val railCenterX = screenPadding.toPx() + leadingSpace.toPx() + (FeedTimelineRailWidth.toPx() / 2f)
-                    drawLine(
-                        color = nodeColor.copy(alpha = 0.28f),
-                        start = Offset(railCenterX, 0f),
-                        end = Offset(railCenterX, size.height),
-                        strokeWidth = 2.dp.toPx(),
-                        cap = StrokeCap.Butt,
-                    )
-                }
-                .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+                // With a continue action the row body resumes reading and only the cover opens the details;
+                // without one (selection mode) the whole row is a single target.
+                .combinedClickable(
+                    onClickLabel = continueAction?.label,
+                    onClick = continueAction?.onClick ?: onClick,
+                    onLongClick = onLongClick,
+                )
                 .padding(start = screenPadding, end = FeedCardEndPadding, top = 6.dp, bottom = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
+            // Top aligned: an entry that unfolds its chapters grows downwards without moving the cover or the node.
+            verticalAlignment = Alignment.Top,
         ) {
-            Spacer(modifier = Modifier.width(leadingSpace))
             FeedTimelineRail(
                 modifier = Modifier.width(FeedTimelineRailWidth).fillMaxHeight(),
                 nodeColor = nodeColor,
                 nodeSize = FeedTimelineNodeSize,
                 drawLine = false,
+                filled = !isRead,
+                nodeCenterFromTop = FeedCoverHeight / 2,
             )
-            Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+            Spacer(modifier = Modifier.width(4.dp))
+            Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.Top) {
                 Box(
                     modifier = Modifier
                         .size(FeedCoverWidth, FeedCoverHeight)
                         .then(coverModifier)
                         .clip(FeedCoverShape)
-                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .combinedClickable(onClick = onClick, onLongClick = onLongClick),
                 ) {
                     cover()
                     if (isSelected) {
@@ -166,46 +191,165 @@ fun FeedTimelineCard(
                     }
                 }
                 Spacer(modifier = Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Column(
+                    modifier = Modifier.weight(1f).heightIn(min = FeedCoverHeight),
+                    verticalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterVertically),
+                ) {
                     Text(
                         text = title,
                         style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurface,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = readAlpha),
                         fontWeight = FontWeight.Medium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (chapterText.isNotBlank()) Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
                         if (isNew) {
                             Box(Modifier.size(7.dp).clip(CircleShape).background(MaterialTheme.colorScheme.error))
                         }
                         Text(
                             text = chapterText,
                             style = MaterialTheme.typography.bodySmall,
-                            color = if (isNew) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = if (isNew) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = readAlpha),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
                     }
                     supportingContent?.invoke()
                 }
+                // A hint only: the whole row body is the target, so the icon needs no click handling of its own.
                 if (continueAction != null) {
-                    Spacer(modifier = Modifier.width(8.dp))
-                    FilledTonalIconButton(
-                        onClick = continueAction.onClick,
-                        modifier = Modifier.padding(end = continueEndInset).size(34.dp),
+                    Box(
+                        Modifier.padding(start = FeedHintIconGap).width(FeedHintWidth).height(FeedCoverHeight),
+                        contentAlignment = Alignment.Center,
                     ) {
-                        Icon(continueAction.icon, contentDescription = continueAction.label, modifier = Modifier.size(18.dp))
+                        FeedReadHint(continueAction.icon, continueAction.hint, alpha = 1f)
                     }
                 }
             }
         }
-        timelineLabel?.takeIf { it.isNotBlank() }?.let { label ->
-            FeedTimelineDateLabel(
-                text = label,
-                modifier = Modifier.align(Alignment.CenterStart).padding(start = FeedTimelineDateLabelStart)
-                    .width(FeedTimelineDateLabelWidth),
-            )
+        if (belowContent != null) Box(
+            modifier = Modifier.fillMaxWidth().padding(
+                start = screenPadding + FeedTimelineRailWidth + 4.dp + FeedCoverWidth + 12.dp,
+                end = FeedCardEndPadding,
+                bottom = 6.dp,
+            ),
+        ) { belowContent() }
+    }
+}
+
+/** One chapter of an expandable feed entry; [isRead] chapters are shown faded. */
+class FeedChapterLine(
+    val title: String,
+    val date: String?,
+    val isRead: Boolean,
+    /** Opens the reader at this chapter; null leaves the line informational. */
+    val onClick: (() -> Unit)? = null,
+)
+
+/**
+ * The feed card's third line: a short summary and, when the entry has chapters to unfold, a chevron. The state is
+ * hoisted so the list ([FeedChapterList]) can sit below the whole card row, clear of the cover column.
+ */
+@Composable
+fun FeedChapterToggle(
+    summary: String,
+    expandable: Boolean,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    expandLabel: String,
+    /** Marks an entry with chapters not seen yet, as the dot on the chapter line used to. */
+    isNew: Boolean = false,
+) {
+    val rotation by animateFloatAsState(if (expanded) -90f else 90f)
+    Row(
+        modifier = Modifier.clip(RoundedCornerShape(6.dp)).let {
+            if (expandable) it.clickable(onClickLabel = expandLabel, onClick = onToggle) else it
+        },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (isNew) Box(Modifier.padding(end = 6.dp).size(7.dp).clip(CircleShape).background(MaterialTheme.colorScheme.error))
+        Text(
+            summary,
+            modifier = Modifier.weight(1f, fill = false),
+            style = MaterialTheme.typography.bodySmall,
+            color = if (isNew) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        if (expandable) Text(
+            "›",
+            modifier = Modifier.padding(horizontal = 8.dp).rotate(rotation),
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+        )
+    }
+}
+
+/** The reading affordance: the app's read icon with a one-word caption, so the tap target says what it does. */
+@Composable
+private fun FeedReadHint(icon: Painter, caption: String?, alpha: Float) {
+    val tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f * alpha)
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Icon(painter = icon, contentDescription = null, tint = tint, modifier = Modifier.size(FeedHintIconSize))
+        if (caption != null) Text(
+            caption,
+            style = MaterialTheme.typography.labelSmall,
+            color = tint,
+            maxLines = 1,
+            softWrap = false,
+        )
+    }
+}
+
+/** The unfolded chapters; lines with a click handler carry [readIcon], right-aligned with the row's own hint icon. */
+@Composable
+fun FeedChapterList(
+    chapters: List<FeedChapterLine>,
+    expanded: Boolean,
+    readIcon: Painter? = null,
+    /** Caption under [readIcon] on each line. */
+    readHint: String? = null,
+) {
+    AnimatedVisibility(visible = expanded && chapters.isNotEmpty()) {
+        Column(modifier = Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            chapters.forEach { chapter ->
+                val alpha = if (chapter.isRead) 0.5f else 1f
+                Row(
+                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp))
+                        .let { base -> chapter.onClick?.let { base.clickable(onClick = it) } ?: base }
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            chapter.title,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = alpha),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        chapter.date?.let {
+                            Text(
+                                it,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha),
+                                maxLines = 1,
+                            )
+                        }
+                    }
+                    if (readIcon != null && chapter.onClick != null) Box(
+                        Modifier.padding(start = FeedHintIconGap).width(FeedHintWidth),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        FeedReadHint(readIcon, readHint, alpha = alpha.coerceAtLeast(0.6f))
+                    }
+                }
+            }
         }
     }
 }
@@ -220,8 +364,30 @@ fun FeedUpdateDetails(
     onViewed: () -> Unit = {},
 ) {
     var expanded by remember { mutableStateOf(false) }
-    Text(summary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    if (chapters.size > 1) TextButton(onClick = { expanded = true; onViewed() }) { Text(detailsLabel) }
+    val hasDetails = chapters.size > 1
+    // One ellipsized line plus a trailing chevron keeps every row the same height; a separate text button
+    // (48dp touch target on its own line) made merged rows twice as tall as the rest.
+    Row(
+        modifier = Modifier.fillMaxWidth().let {
+            if (hasDetails) it.clip(RoundedCornerShape(6.dp)).clickable(onClickLabel = detailsLabel) { expanded = true; onViewed() } else it
+        },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            summary,
+            modifier = Modifier.weight(1f, fill = false),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        if (hasDetails) Text(
+            " ›",
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+        )
+    }
     if (expanded) AlertDialog(
         onDismissRequest = { expanded = false },
         title = { Text(detailsLabel) },
@@ -239,52 +405,60 @@ fun FeedUpdateDetails(
     )
 }
 
+/** A day's heading hangs on the rail: a larger solid node beside the date, so groups read as milestones. */
 @Composable
-private fun FeedTimelineDateLabel(text: String, modifier: Modifier = Modifier) {
-    Box(modifier = modifier, contentAlignment = Alignment.CenterEnd) {
+private fun FeedTimelineDateHeader(text: String, nodeColor: Color, modifier: Modifier = Modifier) {
+    val surface = MaterialTheme.colorScheme.surface
+    Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
+        Box(modifier = Modifier.width(FeedTimelineRailWidth), contentAlignment = Alignment.Center) {
+            Box(
+                Modifier.size(14.dp).background(surface, CircleShape).padding(3.dp).background(nodeColor, CircleShape),
+            )
+        }
+        Spacer(Modifier.width(4.dp))
         Text(
             text = text,
-            modifier = Modifier
-                .clip(RoundedCornerShape(9.dp))
-                .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.72f))
-                .padding(horizontal = 4.dp, vertical = 3.dp),
-            style = MaterialTheme.typography.labelSmall,
+            style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onPrimaryContainer,
-            maxLines = 2,
-            overflow = TextOverflow.Clip,
-            textAlign = TextAlign.End,
+            color = nodeColor,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
 
+/** An unread entry is a solid dot with a soft halo; a read one is a thin hollow ring. */
 @Composable
 fun FeedTimelineRail(
     nodeSize: Dp,
     nodeColor: Color,
     modifier: Modifier = Modifier,
     drawLine: Boolean = true,
+    filled: Boolean = true,
+    /** Pins the node this far from the top instead of centring it, for rows whose height can change. */
+    nodeCenterFromTop: Dp? = null,
 ) {
+    val surface = MaterialTheme.colorScheme.surface
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
         Canvas(modifier = Modifier.matchParentSize()) {
             if (drawLine) drawLine(
-                color = nodeColor.copy(alpha = 0.28f),
+                color = nodeColor.copy(alpha = 0.22f),
                 start = Offset(size.width / 2f, 0f),
                 end = Offset(size.width / 2f, size.height),
                 strokeWidth = 2.dp.toPx(),
-                cap = StrokeCap.Butt,
+                cap = StrokeCap.Round,
             )
+            val center = Offset(size.width / 2f, nodeCenterFromTop?.toPx() ?: (size.height / 2f))
+            val radius = nodeSize.toPx() / 2f
+            if (filled) {
+                drawCircle(color = nodeColor.copy(alpha = 0.2f), radius = radius * 1.7f, center = center)
+                drawCircle(color = nodeColor, radius = radius * 0.7f, center = center)
+            } else {
+                drawCircle(color = surface, radius = radius * 0.9f, center = center)
+                drawCircle(color = nodeColor.copy(alpha = 0.55f), radius = radius * 0.75f, center = center,
+                    style = Stroke(width = 1.5.dp.toPx()))
+            }
         }
-        Box(
-            modifier = Modifier
-                .size(nodeSize)
-                .background(MaterialTheme.colorScheme.surface, CircleShape)
-                .drawBehind {
-                    drawCircle(color = nodeColor, radius = size.minDimension / 2f,
-                        style = Stroke(width = FeedTimelineNodeStrokeWidth.toPx()))
-                    drawCircle(color = nodeColor, radius = (size.minDimension / 2f) - 5.dp.toPx())
-                },
-        )
     }
 }
 
