@@ -1047,6 +1047,7 @@ private fun FloatingBottomNavRow(
                                 clickPulse = clickPulses[item.id] ?: 0,
                                 badge = badges[item.id],
                                 contentDescription = stringResource(item.title),
+                                selectedTint = selectedContentColor,
                             )
                             AnimatedVisibility(
                                 visible = isSelected && showSelectedLabels,
@@ -1089,6 +1090,7 @@ private fun FloatingBottomNavRow(
                             clickPulse = clickPulses[item.id] ?: 0,
                             badge = badges[item.id],
                             contentDescription = stringResource(item.title),
+                            selectedTint = selectedContentColor,
                         )
                     }
                     if ((isSelected || labelsAlwaysVisible) && showSelectedLabels) {
