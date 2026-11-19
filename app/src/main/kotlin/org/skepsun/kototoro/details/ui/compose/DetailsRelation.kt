@@ -48,7 +48,8 @@ import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.util.ext.takeIfUsableImageUri
 import org.skepsun.kototoro.details.ui.model.EntityRelationSection
 import org.skepsun.kototoro.details.ui.model.EntityRelationItem
-import org.skepsun.kototoro.list.ui.compose.KototoroContentCard
+import org.skepsun.kototoro.list.ui.compose.KototoroContentCardGrid
+import org.skepsun.kototoro.list.ui.model.ContentGridModel
 import androidx.compose.ui.tooling.preview.Preview
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.list.ui.model.ContentListModel
@@ -121,14 +122,18 @@ internal fun DetailsRelatedContentSection(
         horizontalPadding = outerHorizontalPadding,
     ) { index ->
         val item = items[index]
-        KototoroContentCard(
-            model = item,
-            sharedTransitionEnabled = false,
-            cardStyle = cardStyle,
-            onClick = { onItemClick(item) },
-            onLongClick = {},
-            modifier = Modifier.width(cardStyle.itemWidth + 8.dp),
-        )
+        // The rail's 12dp spacing is the whole gap, so the grid cell's own horizontal inset is dropped.
+        (item as? ContentGridModel)?.let { gridItem ->
+            KototoroContentCardGrid(
+                item = gridItem,
+                sharedTransitionEnabled = false,
+                cardStyle = cardStyle,
+                cellContentPadding = PaddingValues(vertical = 8.dp),
+                onClick = { onItemClick(item) },
+                onLongClick = {},
+                modifier = Modifier.width(cardStyle.itemWidth),
+            )
+        }
     }
 }
 
