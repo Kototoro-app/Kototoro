@@ -2829,6 +2829,16 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         get() = prefs.getBoolean(KEY_STATS_ENABLED, true)
         set(value) = prefs.edit { putBoolean(KEY_STATS_ENABLED, value) }
 
+    /** Community ratings and comments; off until the reader opts in, since everything they publish is public. */
+    var isCommunityEnabled: Boolean
+        get() = prefs.getBoolean(KEY_COMMUNITY_ENABLED, false)
+        set(value) = prefs.edit { putBoolean(KEY_COMMUNITY_ENABLED, value) }
+
+    /** Whether ratings of adult works may be published; off by default (community plan §8). */
+    var isCommunityNsfwRatingEnabled: Boolean
+        get() = prefs.getBoolean(KEY_COMMUNITY_NSFW, false)
+        set(value) = prefs.edit { putBoolean(KEY_COMMUNITY_NSFW, value) }
+
     val isAutoLocalChaptersCleanupEnabled: Boolean
         get() = prefs.getBoolean(KEY_CHAPTERS_CLEAR_AUTO, false)
 
@@ -3635,6 +3645,8 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val PAGES_SAVE_MANGA_TITLE_LENGTH_MIN = 12
         const val PAGES_SAVE_MANGA_TITLE_LENGTH_MAX = 64
         const val KEY_STATS_ENABLED = "stats_on"
+        const val KEY_COMMUNITY_ENABLED = "community_enabled"
+        const val KEY_COMMUNITY_NSFW = "community_nsfw_ratings"
         const val KEY_FEED_HEADER = "feed_header"
         const val KEY_FEED_LIMIT = "feed_limit"
         const val KEY_FEED_LAST_OPEN_TIME = "feed_last_open_time"

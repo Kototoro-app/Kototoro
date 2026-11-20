@@ -7,6 +7,10 @@
 		<exclude
 			domain="sharedpref"
 			path="_local_index.xml" />
+		<!-- Sealed by a Keystore key that never leaves this device; useless elsewhere (community plan §2). -->
+		<exclude
+			domain="sharedpref"
+			path="community_identity.xml" />
 		<exclude domain="database" />
 		<exclude domain="device_database" />
 		<exclude domain="external" />
@@ -18,6 +22,10 @@
 		<exclude
 			domain="sharedpref"
 			path="_local_index.xml" />
+		<!-- Sealed by a Keystore key that never leaves this device; useless elsewhere (community plan §2). -->
+		<exclude
+			domain="sharedpref"
+			path="community_identity.xml" />
 		<exclude domain="database" />
 		<exclude domain="device_database" />
 	</device-transfer>

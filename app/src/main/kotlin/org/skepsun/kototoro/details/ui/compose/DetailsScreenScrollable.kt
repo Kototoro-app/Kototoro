@@ -81,6 +81,9 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.request.ImageRequest
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.community.domain.CommunityExternalRef
+import org.skepsun.kototoro.community.domain.CommunityExternalService
+import org.skepsun.kototoro.community.ui.CommunityRatingSection
 import org.skepsun.kototoro.core.model.LocalMangaSource
 import org.skepsun.kototoro.core.model.appUrl
 import org.skepsun.kototoro.core.model.getLocalizedTitle
@@ -356,6 +359,26 @@ internal fun DetailsScrollableContent(
                 onActionClick(DetailsAction.ManageTrackingBinding(match.service, match.remoteId, match.title, match.url))
             },
         )
+        val communityContent = remember(mangaDetails) { mangaDetails?.toContent() }
+        if (!preferLightweightFirstFrame && communityContent != null) {
+            val trackerRefs = remember(linkedTrackingItems) {
+                linkedTrackingItems.mapNotNull { item ->
+                    CommunityExternalService.of(item.service.name)?.let { CommunityExternalRef(it, item.remoteId) }
+                }
+            }
+            CommunityRatingSection(
+                content = communityContent,
+                trackerRefs = trackerRefs,
+                container = { row ->
+                    DetailsReadableSurface(
+                        panoramaEnabled = settings.isPanoramaCoverEnabled,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = outerHorizontalPadding, vertical = 6.dp),
+                    ) { row() }
+                },
+            )
+        }
         if (!preferLightweightFirstFrame &&
             mediaStylePolicy.useInlineEpisodePreview &&
             !isWideAdaptiveLayout &&

@@ -4338,4 +4338,31 @@
     <string name="suggestion_reason_popular">Popular at this source</string>
     <string name="suggestion_reason_new">New or recently updated</string>
     <string name="suggestion_reason_default">Close to your reading taste</string>
+    <!-- Community ratings and comments (docs/architecture/community-nostr-plan-2026-11.md) -->
+    <string name="community_rating_title">Community rating</string>
+    <string name="community_rating_summary">%1$s (%2$d ratings)</string>
+    <string name="community_rating_none">No ratings yet</string>
+    <string name="community_rating_mine">Mine: %1$d</string>
+    <string name="community_rating_rate">Rate</string>
+    <string name="community_rating_dialog_title">Rate this work</string>
+    <string name="community_rating_withdraw">Withdraw</string>
+    <string name="community_rating_public_note">Ratings are public and signed with your community identity. A withdrawn rating stops counting, but relays may keep a copy.</string>
+    <string name="community_rating_nsfw_off">Ratings of adult works are off. Turn them on in Services → Community.</string>
+    <string name="community_rating_no_identity">Set up your community identity in Services → Community first.</string>
+    <string name="community_rating_no_keys">This work has no title or tracker link to rate it under.</string>
+    <string name="community">Community</string>
+    <string name="community_enabled">Community ratings</string>
+    <string name="community_enabled_summary">Rate works together with other readers through public Nostr relays</string>
+    <string name="community_nsfw_ratings">Rate adult works</string>
+    <string name="community_nsfw_ratings_summary">Off by default: ratings are public and show what you read</string>
+    <string name="community_recovery_key">Recovery key</string>
+    <string name="community_recovery_key_summary">Keep it to use the same identity after reinstalling or on another device</string>
+    <string name="community_onboarding_title">Join community ratings?</string>
+    <string name="community_onboarding_message">Your ratings are published to public Nostr relays, signed with a new community identity that is not linked to any of your accounts. Anyone can read them, and relays may keep copies even after you withdraw a rating. Only ratings are published, never your library or reading history.</string>
+    <string name="community_onboarding_create">Create identity</string>
+    <string name="community_onboarding_restore">I have a recovery key</string>
+    <string name="community_restore_hint">Recovery key (nsec1…)</string>
+    <string name="community_restore_invalid">This is not a valid recovery key</string>
+    <string name="community_recovery_key_message">Keep this key somewhere safe. It is the only way to use this identity after reinstalling or on another device: Kototoro backups do not include it. Anyone who has it can rate in your name.</string>
+    <string name="community_recovery_key_copied">Recovery key copied</string>
 </resources>

@@ -36,6 +36,9 @@ fun ServicesSettingsScreen(
     onReadingTimeChange: (Boolean) -> Unit,
     onDiscordSettingsClick: () -> Unit,
     modifier: Modifier = Modifier,
+    onCommunityChange: (Boolean) -> Unit = {},
+    onCommunityNsfwChange: (Boolean) -> Unit = {},
+    onCommunityRecoveryKeyClick: () -> Unit = {},
 ) {
     Scaffold(
         modifier = modifier,
@@ -72,6 +75,9 @@ fun ServicesSettingsScreen(
                 summary = stringResource(R.string.discord_rpc_summary),
                 onClick = onDiscordSettingsClick,
             ),
+            onCommunityChange = onCommunityChange,
+            onCommunityNsfwChange = onCommunityNsfwChange,
+            onCommunityRecoveryKeyClick = onCommunityRecoveryKeyClick,
         )
     }
 }
