@@ -125,16 +125,16 @@ internal fun rememberRetainedPagingSnapshotState(
     val restoredViewportOffset = initialRetainedPagingSnapshot?.firstVisibleItemScrollOffset ?: 0
     val gridState = if (initialRetainedPagingSnapshot != null) {
         key("retained_paging_grid", initialRetainedPagingSnapshot.generation) {
-            rememberSaveable(saver = ContentGridStateSaver) {
-                contentGridState(
+            rememberSaveable(saver = LazyGridState.Saver) {
+                LazyGridState(
                     firstVisibleItemIndex = restoredViewportIndex,
                     firstVisibleItemScrollOffset = restoredViewportOffset,
                 )
             }
         }
     } else {
-        rememberSaveable(host, saver = ContentGridStateSaver) {
-            contentGridState()
+        rememberSaveable(host, saver = LazyGridState.Saver) {
+            LazyGridState()
         }
     }
     val listState = if (initialRetainedPagingSnapshot != null) {

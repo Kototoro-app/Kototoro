@@ -344,7 +344,7 @@ fun KototoroContentListScreen(
                     ListMode.MOVIE_GRID,
                     ListMode.COMPACT_MOVIE_GRID -> {
                         val posterStyle = listMode.gridPosterCardStyle(effectiveGridScale)
-                        val actualGridState = gridState ?: rememberContentGridState()
+                        val actualGridState = gridState ?: rememberLazyGridState()
                         ScrollToTopEffect {
                             scrollToTopAfterPagingSettles(pagingItems) {
                                 actualGridState.scrollToItem(0)

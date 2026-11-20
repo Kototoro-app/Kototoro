@@ -7,6 +7,8 @@ import android.os.Build
 import android.os.Bundle
 import androidx.annotation.WorkerThread
 import androidx.appcompat.app.AppCompatDelegate
+import androidx.compose.foundation.ComposeFoundationFlags
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.room.InvalidationTracker
 import androidx.work.Configuration
@@ -66,6 +68,7 @@ open class BaseApp : App(), Configuration.Provider, SingletonImageLoader.Factory
         return entryPoint.imageLoader()
     }
 
+    @OptIn(ExperimentalFoundationApi::class)
     override fun onCreate() {
         super.onCreate()
         try {
@@ -76,6 +79,10 @@ open class BaseApp : App(), Configuration.Provider, SingletonImageLoader.Factory
         if (ACRA.isACRASenderServiceProcess()) {
             return
         }
+        // Compose 1.13.0-rc01 moves lazy grids onto the default cache window, which read LazyGridSpanLayoutProvider out of
+        // range while dragging the suggestions page (release crash: IndexOutOfBounds in getLineConfiguration). Keep grids on
+        // the 1.12 nested prefetch until a release fixes it; recheck on 1.14 stable (cf. b/398125797) and drop this line.
+        ComposeFoundationFlags.isPreferDefaultCacheWindowOverPrefetchStrategyLazyGrid = false
         // The shared tag rules can match titles before any settings screen is opened; install Android's Hant labels now.
         installTraditionalLabels()
         // Install settings edit listeners before activities can change preferences, including offline.

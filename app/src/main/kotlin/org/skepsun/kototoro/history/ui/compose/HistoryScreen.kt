@@ -106,8 +106,8 @@ fun HistoryScreen(
     val detailedListState = retainedState?.detailedListState ?: rememberSaveable(saver = LazyListState.Saver) {
         LazyListState()
     }
-    val gridState = retainedState?.gridState ?: rememberSaveable(saver = org.skepsun.kototoro.list.ui.compose.ContentGridStateSaver) {
-        org.skepsun.kototoro.list.ui.compose.contentGridState()
+    val gridState = retainedState?.gridState ?: rememberSaveable(saver = LazyGridState.Saver) {
+        LazyGridState()
     }
     KototoroContentListScreen(
         displaySection = org.skepsun.kototoro.list.ui.ListDisplaySection.HISTORY,
