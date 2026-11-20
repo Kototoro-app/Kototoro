@@ -721,15 +721,17 @@ private struct RecordsTimeline: View {
         Text(count == 0 ? "" : String(localized: "\(count) 项")).font(.caption2).foregroundStyle(.secondary)
     }
 
-    /// A day's found updates arrive in bulk, so past [updateFoldLimit] rows the rest fold into one line.
-    private static let updateFoldLimit = 3
+    /// A day's found updates arrive in bulk, so past [minUpdateFoldLimit] rows the rest fold into one line.
+    private static let minUpdateFoldLimit = 3
 
     private func updatesLane(_ group: TimelineDayGroup) -> some View {
+        // The lane keeps as many rows as the day's history, bookmarks and downloads beside it, so both lanes end together.
+        let foldLimit = max(Self.minUpdateFoldLimit, group.history.count)
         // One hidden row isn't worth a fold line of its own.
-        let foldable = group.updates.count > Self.updateFoldLimit + 1
+        let foldable = group.updates.count > foldLimit + 1
         let expanded = expandedDays.contains(group.date)
-        let shown = foldable && !expanded ? Array(group.updates.prefix(Self.updateFoldLimit)) : group.updates
-        let hidden = foldable && !expanded ? Array(group.updates.dropFirst(Self.updateFoldLimit)) : []
+        let shown = foldable && !expanded ? Array(group.updates.prefix(foldLimit)) : group.updates
+        let hidden = foldable && !expanded ? Array(group.updates.dropFirst(foldLimit)) : []
         return VStack(alignment: .leading, spacing: 6) {
             ForEach(shown) { item in eventRow(item, alignment: .leading, showsKind: false) }
             if foldable {
