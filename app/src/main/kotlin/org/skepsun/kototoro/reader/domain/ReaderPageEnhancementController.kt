@@ -10,8 +10,9 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
 import org.skepsun.kototoro.core.prefs.AppSettings
-import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
+import org.skepsun.kototoro.core.util.ext.isContentZipUri
 import org.skepsun.kototoro.core.util.ext.isZipUri
+import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
 import org.skepsun.kototoro.parsers.model.ContentPage
 import org.skepsun.kototoro.reader.translate.domain.ReaderPageTranslationProcessor
 import org.skepsun.kototoro.reader.translate.domain.resolveAutomaticReaderOcrLanguage
@@ -124,10 +125,8 @@ class ReaderPageEnhancementController @Inject constructor(
         sourceUri: Uri,
         convertZipBitmap: suspend (Uri) -> Uri,
     ): PreparedPage {
-        val readyUri = if (
-    settings.isReaderTranslationEnabled &&
-    (sourceUri.isZipUri() || sourceUri.isContentZipUri())
-) {
+        val isArchivePage = sourceUri.isZipUri() || sourceUri.isContentZipUri()
+        val readyUri = if (settings.isReaderTranslationEnabled && isArchivePage) {
             convertZipBitmap(sourceUri)
         } else {
             sourceUri
