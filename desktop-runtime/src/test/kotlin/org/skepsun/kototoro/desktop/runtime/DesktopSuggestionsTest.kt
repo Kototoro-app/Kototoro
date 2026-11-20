@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import org.skepsun.kototoro.core.source.*
+import org.skepsun.kototoro.suggestions.domain.SuggestionDirection
 import org.skepsun.kototoro.suggestions.domain.SuggestionLimits
 import org.skepsun.kototoro.core.library.filter
 import java.io.IOException
@@ -143,6 +144,16 @@ class DesktopSuggestionsTest {
             }
             assertEquals(ids.toSet(), generator.suggestions().map { it.id }.toSet())
             assertEquals(reasons, library.suggestionReasons())
+        }
+    }
+
+    @Test
+    fun `an empty library without pinned tags still gets popular and new lists`() = runBlocking<Unit> {
+        DesktopRuntime.open(directory).use { runtime ->
+            val library = DesktopLibrary(runtime.database) { null }
+            val generator = DesktopSuggestions(library, FakeRuntime(), now = { 42L }, sourceOrder = { it })
+            assertTrue(generator.refresh(listOf(listing(manga))) > 0)
+            assertTrue(library.suggestionReasons().values.none { it.first == SuggestionDirection.TASTE })
         }
     }
 

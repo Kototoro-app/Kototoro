@@ -192,6 +192,13 @@ class SuggestionTasteTest {
 			"between them the sources cover every direction, and never explore what is blocked, adult or a warning",
 		)
 		assertEquals(plan("a", orders, tags), plan("a", orders, tags))
+		val cold = (0 until 60).map {
+			SuggestionProfile.of(emptyList(), now).planQueries("source$it", 1, orders, tags, { tag -> tag }, { tag -> tag == "Blocked" }, exact)
+		}
+		assertTrue(cold.all { it.size == 1 && it[0].direction != SuggestionDirection.TASTE },
+			"an empty library asks every source for one wider list and no taste")
+		assertEquals(setOf(SuggestionDirection.POPULAR, SuggestionDirection.NEW, SuggestionDirection.EXPLORE),
+			cold.map { it[0].direction }.toSet())
 		assertEquals(listOf(SuggestionQuery<String>(SuggestionDirection.NEW, "UPDATED")), plan("bare", listOf("UPDATED"), emptyList()))
 		assertEquals(listOf(SuggestionQuery<String>(SuggestionDirection.POPULAR, "ALPHABETICAL")), plan("odd", listOf("ALPHABETICAL"), emptyList()))
 		assertEquals("恐怖", suggestionReasonLabel("genre.horror", "zh"))

@@ -185,9 +185,8 @@ class SuggestionsWorker @AssistedInject constructor(
         if (append && suggestionRepository.count() >= MAX_STORED) return 0
         val library = suggestionRepository.getLibraryWorks(SuggestionLimits().libraryHistory)
         val sources = getSources()
-        if ((library.isEmpty() && appSettings.suggestionsTagsWhitelist.isEmpty()) || sources.isEmpty()) {
-            return 0
-        }
+        // An empty library still gets the sources' popular and new lists; there is just no taste to ask for yet.
+        if (sources.isEmpty()) return 0
         val tagsBlacklist = TagsBlacklist(appSettings.suggestionsTagsBlacklist, TAG_EQ_THRESHOLD)
         val globalTagBlacklist = GlobalTagBlacklist(appSettings.globalTagBlacklist)
         // The taste profile, scoring and ranking are shared with the other hosts (core-domain SuggestionRules).

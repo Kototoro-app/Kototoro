@@ -54,7 +54,7 @@ class SourceSuggestions(
         ages: Map<Long, Long> = emptyMap(),
         seed: Long = now,
     ): SourceSuggestionResult {
-        if (library.isEmpty() && preferences.tagWhitelist.isEmpty()) return SourceSuggestionResult(emptyList(), 0)
+        // An empty library still gets the sources' popular and new lists; there is just no taste to ask for yet.
         val profile = SuggestionProfile.of(library, now, preferences.tagWhitelist)
         val blacklist = SuggestionTagBlacklist(preferences.tagBlacklist, matches)
         val global = org.skepsun.kototoro.core.model.TagTitleBlacklist(preferences.globalTagBlacklist)

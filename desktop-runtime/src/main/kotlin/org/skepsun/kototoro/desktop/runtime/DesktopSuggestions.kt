@@ -137,7 +137,10 @@ class DesktopSuggestions(
 
     suspend fun suggestions(limit: Int = limits.maxResults): List<SourceContent> = library.suggestions(limit)
 
-    /** Rebuilds the suggestions; returns how many were stored (0 without reading history or installed sources). */
+    /**
+     * Rebuilds the suggestions; returns how many were stored (0 without installed sources). Without reading history
+     * they are the sources' popular and new lists.
+     */
     suspend fun refresh(
         sources: List<SourceListing>,
         settings: DesktopSuggestionSettings = DesktopSuggestionSettings(),
@@ -148,7 +151,7 @@ class DesktopSuggestions(
         val candidates = sourceOrder(sources.filterNot {
             it.source.name in settings.excludedSources || (settings.excludeNsfw && it.isNsfwSource(nsfwOverrides))
         })
-        if ((works.isEmpty() && settings.tagWhitelist.isEmpty()) || candidates.isEmpty()) return 0
+        if (candidates.isEmpty()) return 0
         val time = now()
         val result = SourceSuggestions(runtime, matcher, limits).generate(works, candidates.map { it.source },
             settings.copy(preferredSources = PopularSources.preferred(settings.popularSourcesFirst,
