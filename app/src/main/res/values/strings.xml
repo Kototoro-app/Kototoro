@@ -1268,6 +1268,7 @@
     <string name="tmdb_category_japanese_tv">Japanese TV</string>
     <string name="tmdb_category_korean_tv">Korean TV</string>
     <string name="tmdb_category_anime_tv">Japanese Animation</string>
+    <string name="tmdb_category_anime_airing">Airing Anime</string>
     <string name="tmdb_category_documentary_tv">Documentaries</string>
     <string name="email_password_enter_hint">Enter your email and password to continue</string>
     <string name="username_password_enter_hint">Enter your username and password to continue</string>

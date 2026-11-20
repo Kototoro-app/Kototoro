@@ -4291,5 +4291,6 @@
     <string name="tmdb_category_japanese_tv">日剧</string>
     <string name="tmdb_category_korean_tv">韩剧</string>
     <string name="tmdb_category_anime_tv">日本动画</string>
+    <string name="tmdb_category_anime_airing">近期新番</string>
     <string name="tmdb_category_documentary_tv">纪录片</string>
 </resources>

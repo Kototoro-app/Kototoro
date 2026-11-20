@@ -618,6 +618,7 @@ class DiscoverViewModel @Inject constructor(
             "shiki_seasonal",
             "anime_airing",
             "simkl_tv_airing",
+            "tmdb_anime_airing",
             "anime_upcoming",
             "al_anime_upcoming",
         )

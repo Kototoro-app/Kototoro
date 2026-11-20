@@ -150,10 +150,7 @@ class TmdbRepository @Inject constructor(
     /** The titles of one of TMDB's discovery lists (see [DISCOVERY_CATEGORIES]); [page] starts at 0. */
     suspend fun getDiscoveryItems(categoryId: String, page: Int): List<ScrobblerContent> {
         val category = DISCOVERY_CATEGORIES[categoryId] ?: return emptyList()
-        val released = category.releasedYearsAgo?.let { years ->
-            "primary_release_date.lte" to java.time.LocalDate.now().minusYears(years.toLong()).toString()
-        }
-        val query = category.query + listOfNotNull(released) + ("page" to (page + 1).toString())
+        val query = category.query + category.dated(java.time.LocalDate.now()) + ("page" to (page + 1).toString())
         val response = get(category.path, *query.toTypedArray())
         return response.optJSONArray("results")?.mapJSONNotNull { it.toContent(defaultIsTv = category.isTv) }.orEmpty()
     }
@@ -434,8 +431,8 @@ class TmdbRepository @Inject constructor(
             val path: String,
             val isTv: Boolean,
             val query: List<Pair<String, String>> = emptyList(),
-            /** Only movies out at least this many years, so that new releases still gathering votes stay out. */
-            val releasedYearsAgo: Int? = null,
+            /** The part of the query that moves with today's date. */
+            val dated: (java.time.LocalDate) -> List<Pair<String, String>> = { emptyList() },
         )
 
         /** Live action shows: no animation, documentaries, reality or talk shows. */
@@ -462,7 +459,8 @@ class TmdbRepository @Inject constructor(
                     "vote_count.gte" to "500",
                     "vote_count.lte" to "3000",
                 ),
-                releasedYearsAgo = 2,
+                // New releases still gathering votes would crowd out the older films this list is for.
+                dated = { today -> listOf("primary_release_date.lte" to today.minusYears(2).toString()) },
             ),
             "tmdb_chinese_movies" to movies("with_original_language" to "zh"),
             "tmdb_korean_movies" to movies("with_original_language" to "ko"),
@@ -472,6 +470,21 @@ class TmdbRepository @Inject constructor(
             "tmdb_us_tv" to shows("with_origin_country" to "US", "without_genres" to DRAMA_ONLY),
             "tmdb_japanese_tv" to shows("with_origin_country" to "JP", "without_genres" to DRAMA_ONLY),
             "tmdb_korean_tv" to shows("with_origin_country" to "KR", "without_genres" to DRAMA_ONLY),
+            // This season's Japanese anime: an episode out within a week either side of today, from a show that
+            // premiered in the last half year. A show is one TMDB entry across its seasons, so the premiere date
+            // keeps decades-long runs out, at the cost of new seasons of older shows.
+            "tmdb_anime_airing" to DiscoveryList(
+                "/discover/tv",
+                true,
+                listOf("sort_by" to "popularity.desc", "with_origin_country" to "JP", "with_genres" to "16"),
+                dated = { today ->
+                    listOf(
+                        "air_date.gte" to today.minusDays(7).toString(),
+                        "air_date.lte" to today.plusDays(7).toString(),
+                        "first_air_date.gte" to today.minusMonths(6).toString(),
+                    )
+                },
+            ),
             "tmdb_anime_tv" to shows("with_origin_country" to "JP", "with_genres" to "16"),
             "tmdb_documentary_tv" to shows("with_genres" to "99"),
             "tmdb_popular_movies" to DiscoveryList("/movie/popular", false),

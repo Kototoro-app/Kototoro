@@ -137,6 +137,7 @@ class DefaultTrackingSiteDiscoveryService @Inject constructor(
             "tmdb_trending_movies" to org.skepsun.kototoro.R.string.tmdb_category_trending_movies,
             "tmdb_trending_tv" to org.skepsun.kototoro.R.string.tmdb_category_trending_tv,
             "tmdb_hidden_gem_movies" to org.skepsun.kototoro.R.string.tmdb_category_hidden_gem_movies,
+            "tmdb_anime_airing" to org.skepsun.kototoro.R.string.tmdb_category_anime_airing,
             "tmdb_chinese_movies" to org.skepsun.kototoro.R.string.tmdb_category_chinese_movies,
             "tmdb_korean_movies" to org.skepsun.kototoro.R.string.tmdb_category_korean_movies,
             "tmdb_japanese_movies" to org.skepsun.kototoro.R.string.tmdb_category_japanese_movies,
