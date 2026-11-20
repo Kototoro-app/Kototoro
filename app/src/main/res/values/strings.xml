@@ -2255,6 +2255,12 @@
     <string name="details_search_result_latest_title">Latest: %1$s</string>
     <string name="details_source_search_no_results_group">No results</string>
     <string name="details_source_search_no_visible_results">No visible results. Disable Hide empty sources to inspect unavailable or empty sources.</string>
+    <string name="details_no_reading_source_title">No reading source</string>
+    <string name="details_no_playback_source_title">No playback source</string>
+    <string name="details_no_reading_source_text">The metadata only lists the chapters. Choose a source that has this work to read it.</string>
+    <string name="details_no_playback_source_text">The metadata only lists the episodes. Choose a source that has this work to play it.</string>
+    <string name="details_choose_reading_source">Choose reading source</string>
+    <string name="details_choose_playback_source">Choose playback source</string>
     <string name="details_reading_source_unavailable">Unavailable</string>
     <string name="details_temporary_read_only_notice">Temporary preview. Metadata source and reading source cannot be changed here.</string>
     <string name="details_metadata_source_login_hint">Search and local binding work without login. Sign in to auto-link online progress.</string>

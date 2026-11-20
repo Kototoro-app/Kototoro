@@ -446,6 +446,11 @@ private fun DetailsScreenContent(
             )
         }
     }
+    val chooseReadingSource: (() -> Unit)? = if (isWorkActionEnabled) {
+        { detailsScreenState.setShowReadingSourceDialog(true) }
+    } else {
+        null
+    }
     val readingSourceLabelRes = remember(contentType) {
         when (contentType) {
             ContentType.VIDEO,
@@ -1616,6 +1621,7 @@ private fun DetailsScreenContent(
                                     },
                                     // A single reading source: its chapter tab has nothing to switch to.
                                     onSelectReadingChapterTab = {},
+                                    onChooseReadingSource = chooseReadingSource,
                                     selectedTabId = sheetTabSelection,
                                     availableTabIds = availableTabIds,
                                     isSheetFullyExpanded = false,
@@ -1835,6 +1841,7 @@ private fun DetailsScreenContent(
                             },
                             // A single reading source: its chapter tab has nothing to switch to.
                             onSelectReadingChapterTab = {},
+                            onChooseReadingSource = chooseReadingSource,
                             selectedTabId = sheetTabSelection,
                             availableTabIds = availableTabIds,
                             isSheetFullyExpanded = isCompactPaneFullyExpanded,

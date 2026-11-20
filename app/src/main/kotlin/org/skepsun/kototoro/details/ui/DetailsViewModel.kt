@@ -543,6 +543,8 @@ class DetailsViewModel @Inject constructor(
     val readingSearchHasSearched = MutableStateFlow(false)
     val readingSearchState = MutableStateFlow<LocalSearchState?>(null)
     private val readingSearchFilterState = MutableStateFlow(ReadingSearchFilterState())
+    /** The content kinds last chosen for the reading search by the work's kind rather than by hand. */
+    private var appliedDefaultReadingSearchKinds: Set<SearchContentKind>? = null
     private val readingSearchScopeFilters = MutableStateFlow(
         // Shares the remembered choice with the search screen, so "hide empty sources" does not have to be
         // ticked again in every source search.
@@ -944,16 +946,23 @@ class DetailsViewModel @Inject constructor(
         }
         }
         readingSearchSources.value = filtered
+        // The work's kind is often learnt after the first search began (a tracking entry's details arrive later),
+        // so the default follows it for as long as the kinds were not picked by hand, and a search already run
+        // with the old kinds runs again: a show must not keep the comic sources it was first searched in.
+        val defaultKinds = defaultReadingSearchContentKinds()
+        val previousKinds = readingSearchScopeFilters.value.contentKinds
         readingSearchScopeFilters.update { current ->
-            if (current.sourceTypes == ALL_SOURCE_TYPES &&
-                current.contentKinds == ALL_SEARCH_CONTENT_KINDS &&
-                !current.pinnedOnly &&
-                !current.hideEmpty
-            ) {
-                current.copy(contentKinds = defaultReadingSearchContentKinds())
+            if (current.contentKinds == (appliedDefaultReadingSearchKinds ?: ALL_SEARCH_CONTENT_KINDS)) {
+                current.copy(contentKinds = defaultKinds)
             } else {
                 current
             }
+        }
+        appliedDefaultReadingSearchKinds = defaultKinds
+        if (readingSearchScopeFilters.value.contentKinds != previousKinds &&
+            (readingSearchHasSearched.value || readingSearchLoading.value)
+        ) {
+            searchReadingBindings()
         }
         if (selectedReadingSearchSource.value !in filtered.map { it.mangaSource.name }.toSet()) {
             selectedReadingSearchSource.value = null

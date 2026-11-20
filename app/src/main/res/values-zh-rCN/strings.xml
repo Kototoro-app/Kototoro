@@ -2811,6 +2811,12 @@
     <string name="details_reading_source">阅读源</string>
     <string name="details_source_search_no_results_group">无结果</string>
     <string name="details_source_search_no_visible_results">没有可显示的结果。关闭“隐藏空源”后可查看无结果或不可用的来源。</string>
+    <string name="details_no_reading_source_title">未设置阅读源</string>
+    <string name="details_no_playback_source_title">未设置播放源</string>
+    <string name="details_no_reading_source_text">元数据只列出章节。选择一个收录了这部作品的来源后才能阅读。</string>
+    <string name="details_no_playback_source_text">元数据只列出剧集。选择一个收录了这部作品的来源后才能播放。</string>
+    <string name="details_choose_reading_source">选择阅读源</string>
+    <string name="details_choose_playback_source">选择播放源</string>
     <string name="details_reading_source_unavailable">不可用</string>
     <string name="details_reading_status">阅读状态</string>
     <string name="details_recommendations">推荐</string>
