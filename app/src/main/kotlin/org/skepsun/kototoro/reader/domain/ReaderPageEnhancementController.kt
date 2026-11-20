@@ -124,7 +124,10 @@ class ReaderPageEnhancementController @Inject constructor(
         sourceUri: Uri,
         convertZipBitmap: suspend (Uri) -> Uri,
     ): PreparedPage {
-        val readyUri = if (settings.isReaderTranslationEnabled && sourceUri.isZipUri()) {
+        val readyUri = if (
+    settings.isReaderTranslationEnabled &&
+    (sourceUri.isZipUri() || sourceUri.isContentZipUri())
+) {
             convertZipBitmap(sourceUri)
         } else {
             sourceUri
