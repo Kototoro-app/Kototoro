@@ -24,6 +24,21 @@ kotlin {
 			dependencies {
 				api libs.ktor.client.core
 				implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:${libs.versions.serialization.get()}"
+				// Nostr: BIP-340 signatures, event ids and key generation for the community features.
+				implementation libs.secp256k1.kmp
+				implementation libs.kotlincrypto.sha2
+				implementation libs.kotlincrypto.random
+			}
+		}
+		// secp256k1-kmp's JVM API loads its native code from a separate artifact per platform.
+		getByName('androidMain') {
+			dependencies {
+				implementation libs.secp256k1.kmp.jni.android
+			}
+		}
+		getByName('jvmMain') {
+			dependencies {
+				implementation libs.secp256k1.kmp.jni.jvm
 			}
 		}
 		getByName('jvmTest') {
@@ -32,6 +47,8 @@ kotlin {
 				runtimeOnly 'org.junit.platform:junit-platform-launcher:1.8.2'
 				implementation libs.ktor.client.mock
 				implementation libs.kotlinx.coroutines.test
+				// The live relay test talks to real relays over WebSockets.
+				implementation libs.ktor.client.java
 			}
 		}
 	}
@@ -39,4 +56,11 @@ kotlin {
 
 tasks.withType(Test).configureEach {
 	useJUnitPlatform()
+	// Reads recent events from real relays (network, nothing published): -PnostrLiveRelays=wss://relay.damus.io,wss://nos.lol
+	if (project.hasProperty('nostrLiveRelays')) {
+		systemProperty 'nostrLiveRelays', project.property('nostrLiveRelays')
+		// Publishing one labelled test comment (and its deletion) also needs -PnostrLivePublish=true.
+		systemProperty 'nostrLivePublish', project.findProperty('nostrLivePublish') ?: 'false'
+		testLogging.showStandardStreams = true
+	}
 }

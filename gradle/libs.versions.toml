@@ -81,6 +81,11 @@ ksoupCloudstream = "0.2.6"
 # Cloudstream plugins (YouTube ones) link against the copy the official app bundles; keep the same tag.
 newpipeExtractor = "v0.26.3"
 ktor = "3.5.0"
+# Community (Nostr) event signing, ids and key generation in core-net.
+# 0.15.0 is the last release whose JVM JNI artifact targets Java 11; 0.16.0 needs 17 and 0.17+ need 21.
+secp256k1 = "0.15.0"
+kotlincryptoSha2 = "0.8.0"
+kotlincryptoRandom = "0.6.0"
 kotlinxDatetime = "0.8.0"
 kotlinxIo = "0.9.1"
 libarchive = "1.1.6"
@@ -246,6 +251,11 @@ ktor-client-okhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "kto
 ktor-client-java = { module = "io.ktor:ktor-client-java", version.ref = "ktor" }
 ktor-client-darwin = { module = "io.ktor:ktor-client-darwin", version.ref = "ktor" }
 ktor-client-mock = { module = "io.ktor:ktor-client-mock", version.ref = "ktor" }
+secp256k1-kmp = { module = "fr.acinq.secp256k1:secp256k1-kmp", version.ref = "secp256k1" }
+secp256k1-kmp-jni-jvm = { module = "fr.acinq.secp256k1:secp256k1-kmp-jni-jvm", version.ref = "secp256k1" }
+secp256k1-kmp-jni-android = { module = "fr.acinq.secp256k1:secp256k1-kmp-jni-android", version.ref = "secp256k1" }
+kotlincrypto-sha2 = { module = "org.kotlincrypto.hash:sha2", version.ref = "kotlincryptoSha2" }
+kotlincrypto-random = { module = "org.kotlincrypto.random:crypto-rand", version.ref = "kotlincryptoRandom" }
 rhino = { module = "org.mozilla:rhino", version.ref = "rhino" }
 libarchive = { module = "me.zhanghai.android.libarchive:library", version.ref = "libarchive" }
 quickjsAndroid = { module = "com.github.seven332:quickjs-android", version.ref = "quickjsAndroid" }
