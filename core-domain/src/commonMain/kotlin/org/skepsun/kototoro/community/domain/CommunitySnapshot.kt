@@ -75,6 +75,8 @@ data class CommunitySimilarWork(
     val title: String? = null,
     val score: Double,
     @SerialName("co_raters") val coRaters: Int,
+    /** Whether the similar work is adult, so readers who keep those out can skip it without fetching its shard. */
+    val nsfw: Boolean = false,
 )
 
 @Serializable

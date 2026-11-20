@@ -4385,4 +4385,13 @@
     <string name="community_report_nudity">Sexual content</string>
     <string name="community_report_profanity">Abuse or profanity</string>
     <string name="community_report_other">Other</string>
+    <string name="community_similar_title">Readers who liked this also liked</string>
+    <string name="community_similar_supporting">%1$d readers in common</string>
+    <string name="community_for_you">Community picks</string>
+    <string name="community_because">Because you liked %1$s</string>
+    <string name="community_popular">Community favourites</string>
+    <string name="community_popular_supporting">%1$s · %2$d ratings</string>
+    <string name="community_window_week">This week</string>
+    <string name="community_window_month">This month</string>
+    <string name="community_window_all">All time</string>
 </resources>

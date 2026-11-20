@@ -1244,6 +1244,8 @@ sealed interface DetailsAction {
     data class SearchAuthorEverywhere(val author: String) : DetailsAction
     data class SearchTagOnSource(val tag: ContentTag) : DetailsAction
     data class SearchTagEverywhere(val tagTitle: String) : DetailsAction
+    /** A plain title search across every source, e.g. for a community work the index knows only by name. */
+    data class SearchTitleEverywhere(val title: String) : DetailsAction
     data class OpenWebUrl(val url: String) : DetailsAction
     data class SelectBranch(val branch: String?) : DetailsAction
     data object ManageCategories : DetailsAction

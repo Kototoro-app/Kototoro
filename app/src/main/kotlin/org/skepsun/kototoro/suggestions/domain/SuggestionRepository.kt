@@ -130,6 +130,7 @@ class SuggestionRepository @Inject constructor(
                 lastReadAt = row.history.updatedAt,
                 id = row.manga.id,
                 source = row.manga.source,
+                contentType = row.manga.contentType,
             )
         } + saved.filterNot { it.manga.id in readIds }.map { row ->
             LibraryWork(
@@ -138,6 +139,7 @@ class SuggestionRepository @Inject constructor(
                 isFavourite = true,
                 id = row.manga.id,
                 source = row.manga.source,
+                contentType = row.manga.contentType,
             )
         }
     }

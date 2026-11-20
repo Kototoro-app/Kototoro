@@ -43,6 +43,13 @@ interface CommunityDao {
     @Query("SELECT * FROM community_resolutions WHERE manga_id = :mangaId")
     suspend fun findResolutions(mangaId: Long): List<CommunityResolutionEntity>
 
+    /** Every tracker id search ever bound, for naming the whole library at once. */
+    @Query("SELECT * FROM community_resolutions WHERE status = 'BOUND'")
+    suspend fun findBoundResolutions(): List<CommunityResolutionEntity>
+
+    @Query("SELECT * FROM community_ratings")
+    suspend fun findAllRatings(): List<CommunityRatingEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertResolution(resolution: CommunityResolutionEntity)
 

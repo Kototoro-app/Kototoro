@@ -6,6 +6,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import org.skepsun.kototoro.community.domain.CommunityChart
 import org.skepsun.kototoro.community.domain.CommunityModeration
 import org.skepsun.kototoro.community.domain.CommunitySnapshotManifest
 import org.skepsun.kototoro.community.domain.CommunitySnapshotReader
@@ -60,6 +61,34 @@ class CommunitySnapshotRepository @Inject constructor(
         val group = CommunitySnapshotReader.groupOf(keys) { shard -> shards[CommunitySnapshotShards.keysPath(shard)] } ?: return null
         val works = file(manifest, CommunitySnapshotShards.worksPath(CommunitySnapshotShards.of(group))) ?: return null
         return CommunitySnapshotReader.works(works)[group]
+    }
+
+    /**
+     * The group of each work in [keysByWork], for many works at once: every key shard any of them needs is read once.
+     * Works the index does not know are left out.
+     */
+    suspend fun <K> groupsOf(keysByWork: Map<K, List<String>>): Map<K, String> {
+        val manifest = manifest() ?: return emptyMap()
+        val paths = keysByWork.values.flatMap(CommunitySnapshotReader::keyShardPaths).distinct()
+        val shards = paths.associateWith { path -> file(manifest, path)?.let(CommunitySnapshotReader::keys) }
+        return keysByWork.mapNotNull { (work, keys) ->
+            CommunitySnapshotReader.groupOf(keys) { shard -> shards[CommunitySnapshotShards.keysPath(shard)] }?.let { work to it }
+        }.toMap()
+    }
+
+    /** Summaries of [groupIds], each works shard read once. */
+    suspend fun works(groupIds: Collection<String>): Map<String, CommunityWorkSummary> {
+        val manifest = manifest() ?: return emptyMap()
+        val shards = groupIds.groupBy(CommunitySnapshotShards::of)
+        return shards.flatMap { (shard, ids) ->
+            val works = file(manifest, CommunitySnapshotShards.worksPath(shard))?.let(CommunitySnapshotReader::works).orEmpty()
+            ids.mapNotNull { id -> works[id]?.let { id to it } }
+        }.toMap()
+    }
+
+    suspend fun chart(window: String, medium: String, nsfw: Boolean): CommunityChart? {
+        val manifest = manifest() ?: return null
+        return file(manifest, CommunitySnapshotShards.chartPath(window, medium, nsfw))?.let(CommunitySnapshotReader::chart)
     }
 
     /** The maintainer's blocks and the comments the index hid, for every comment list. */

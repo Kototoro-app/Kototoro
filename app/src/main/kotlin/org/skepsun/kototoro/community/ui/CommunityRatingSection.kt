@@ -25,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -44,6 +45,8 @@ fun CommunityRatingSection(
     trackerRefs: List<CommunityExternalRef>,
     container: @Composable (@Composable () -> Unit) -> Unit,
     modifier: Modifier = Modifier,
+    railPadding: Dp = 0.dp,
+    onSearchTitle: (String) -> Unit = {},
 ) {
     val viewModel = hiltViewModel<CommunityRatingViewModel>(key = "community-rating-${content.id}")
     LaunchedEffect(content, trackerRefs) { viewModel.bind(content, trackerRefs) }
@@ -111,6 +114,20 @@ fun CommunityRatingSection(
                 }
             }
         }
+    }
+
+    val similar = state.similar.filter { !it.title.isNullOrBlank() }
+    if (similar.isNotEmpty()) {
+        CommunityWorksRail(
+            title = stringResource(R.string.community_similar_title),
+            cards = similar.map { work ->
+                CommunityWorkCard(work.id, work.title.orEmpty(), stringResource(R.string.community_similar_supporting, work.coRaters))
+            },
+            onOpen = { onSearchTitle(it.title) },
+            horizontalPadding = railPadding,
+            modifier = Modifier.padding(vertical = 6.dp),
+            testTag = "community-similar",
+        )
     }
 
     if (showDialog) {

@@ -29,6 +29,8 @@ data class LibraryWork(
     val id: Long = 0L,
     /** Name of the source the work came from, null when not known. */
     val source: String? = null,
+    /** Content type name (MANGA, NOVEL, …), null when not known; community keys need the medium it implies. */
+    val contentType: String? = null,
 )
 
 /**

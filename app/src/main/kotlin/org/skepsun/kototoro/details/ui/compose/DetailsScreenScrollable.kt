@@ -377,6 +377,8 @@ internal fun DetailsScrollableContent(
                             .padding(horizontal = outerHorizontalPadding, vertical = 6.dp),
                     ) { row() }
                 },
+                railPadding = outerHorizontalPadding,
+                onSearchTitle = { title -> onActionClick(DetailsAction.SearchTitleEverywhere(title)) },
             )
         }
         if (!preferLightweightFirstFrame &&

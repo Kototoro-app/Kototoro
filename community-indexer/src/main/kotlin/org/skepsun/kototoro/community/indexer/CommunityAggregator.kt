@@ -165,7 +165,7 @@ object CommunityAggregator {
                 rating = summary(ratingsByGroup[id].orEmpty(), mediumOf.getValue(id)),
                 comments = groupComments.count { it.id !in hidden },
                 hiddenComments = groupComments.map { it.id }.filter { it in hidden }.sorted(),
-                similar = similar[id].orEmpty().map { (other, score, co) -> CommunitySimilarWork(other, titleOf[other], round2(score), co) },
+                similar = similar[id].orEmpty().map { (other, score, co) -> CommunitySimilarWork(other, titleOf[other], round2(score), co, nsfwOf.getValue(other)) },
                 nsfw = nsfwOf.getValue(id),
             )
         }

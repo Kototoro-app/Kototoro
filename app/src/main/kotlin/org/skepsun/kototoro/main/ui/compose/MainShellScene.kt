@@ -1300,6 +1300,12 @@ internal fun SuggestionsTopLevelRouteContent(
                             modifier = Modifier.padding(top = 4.dp),
                         )
                     }
+                    // Community picks and favourites (draws nothing while the community is off or the index is empty).
+                    org.skepsun.kototoro.community.ui.CommunitySuggestionsSection(
+                        onSearchTitle = { title -> appRouter.openSearch(title) },
+                        horizontalPadding = 12.dp,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
                 }
             },
             showQuickFilterInline = false,

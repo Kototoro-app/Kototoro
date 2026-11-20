@@ -168,6 +168,7 @@ class DetailsActivity :
             is DetailsAction.SearchAuthorEverywhere -> this.router.openSearch(action.author, SearchKind.AUTHOR)
             is DetailsAction.SearchTagOnSource -> this.router.openSearch(action.tag.source, action.tag.title)
             is DetailsAction.SearchTagEverywhere -> this.router.openSearch(action.tagTitle, SearchKind.TAG)
+            is DetailsAction.SearchTitleEverywhere -> this.router.openSearch(action.title)
             is DetailsAction.OpenWebUrl -> router.openBrowser(action.url, null, null)
             is DetailsAction.SelectBranch -> viewModel.setSelectedBranch(action.branch)
             is DetailsAction.ShareLink -> router.shareLink(action.link, action.title)

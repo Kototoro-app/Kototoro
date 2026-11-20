@@ -67,6 +67,7 @@ internal fun handleDetailsAction(
         is DetailsAction.SearchAuthorEverywhere -> appRouter.openSearch(action.author, SearchKind.AUTHOR)
         is DetailsAction.SearchTagOnSource -> appRouter.openSearch(action.tag.source, action.tag.title)
         is DetailsAction.SearchTagEverywhere -> appRouter.openSearch(action.tagTitle, SearchKind.TAG)
+        is DetailsAction.SearchTitleEverywhere -> appRouter.openSearch(action.title)
         is DetailsAction.OpenWebUrl -> appRouter.openBrowser(action.url, null, null)
         is DetailsAction.SelectBranch -> viewModel.setSelectedBranch(action.branch)
         is DetailsAction.ShareLink -> appRouter.shareLink(action.link, action.title)

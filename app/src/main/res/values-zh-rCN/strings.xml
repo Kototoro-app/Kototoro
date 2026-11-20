@@ -4347,4 +4347,13 @@
     <string name="community_report_nudity">色情内容</string>
     <string name="community_report_profanity">辱骂或粗俗</string>
     <string name="community_report_other">其他</string>
+    <string name="community_similar_title">喜欢这部的读者还喜欢</string>
+    <string name="community_similar_supporting">%1$d 位共同读者</string>
+    <string name="community_for_you">社区推荐</string>
+    <string name="community_because">因为你喜欢《%1$s》</string>
+    <string name="community_popular">社区高分</string>
+    <string name="community_popular_supporting">%1$s · %2$d 人评分</string>
+    <string name="community_window_week">本周</string>
+    <string name="community_window_month">本月</string>
+    <string name="community_window_all">全部</string>
 </resources>
