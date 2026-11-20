@@ -41,6 +41,7 @@ private const val BASE_API_URL = "https://api.themoviedb.org/3"
 private const val BASE_WEB_URL = "https://www.themoviedb.org"
 private const val IMAGE_URL = "https://image.tmdb.org/t/p/w500"
 private const val AVATAR_URL = "https://image.tmdb.org/t/p/w185"
+private const val LOGO_URL = "https://image.tmdb.org/t/p/w500"
 private val JSON_MEDIA_TYPE = "application/json".toMediaType()
 
 /** TMDB rates 0.5..10 in half steps; the app's rating is 0..1. */
@@ -149,8 +150,37 @@ class TmdbRepository @Inject constructor(
     /** The titles of one of TMDB's discovery lists (see [DISCOVERY_CATEGORIES]); [page] starts at 0. */
     suspend fun getDiscoveryItems(categoryId: String, page: Int): List<ScrobblerContent> {
         val category = DISCOVERY_CATEGORIES[categoryId] ?: return emptyList()
-        val response = get(category.first, "page" to (page + 1).toString())
-        return response.optJSONArray("results")?.mapJSONNotNull { it.toContent(defaultIsTv = category.second) }.orEmpty()
+        val released = category.releasedYearsAgo?.let { years ->
+            "primary_release_date.lte" to java.time.LocalDate.now().minusYears(years.toLong()).toString()
+        }
+        val query = category.query + listOfNotNull(released) + ("page" to (page + 1).toString())
+        val response = get(category.path, *query.toTypedArray())
+        return response.optJSONArray("results")?.mapJSONNotNull { it.toContent(defaultIsTv = category.isTv) }.orEmpty()
+    }
+
+    private val logoUrls = java.util.concurrent.ConcurrentHashMap<Long, String>()
+
+    /**
+     * The title's lettering as artwork (TMDB "logos"), in [language] when there is one, else English, else one without
+     * text; null when TMDB has none. SVG logos are skipped since images are not decoded as SVG. Remembered per title,
+     * an empty string standing for "none".
+     */
+    suspend fun getLogoUrl(id: Long, language: String): String? {
+        logoUrls[id]?.let { return it.ifEmpty { null } }
+        val (tmdbId, isTv) = decodeId(id)
+        val logos = get(
+            "/${path(isTv)}/$tmdbId/images",
+            "include_image_language" to listOf(language, "en", "null").distinct().joinToString(","),
+        ).optJSONArray("logos")?.mapJSONNotNull { logo ->
+            logo.takeIf { !it.optString("file_path").endsWith(".svg", ignoreCase = true) }
+        }.orEmpty()
+        val ranked = listOf<String?>(language, "en", null).firstNotNullOfOrNull { lang ->
+            logos.filter { it.optString("iso_639_1").takeIf(String::isNotBlank) == lang }
+                .maxByOrNull { it.optDouble("vote_average").takeIf { v -> !v.isNaN() } ?: 0.0 }
+        }
+        val url = ranked?.optString("file_path")?.takeIf(String::isNotBlank)?.let { LOGO_URL + it }
+        logoUrls[id] = url.orEmpty()
+        return url
     }
 
     override suspend fun getContentInfo(id: Long): ScrobblerContentInfo {
@@ -399,16 +429,57 @@ class TmdbRepository @Inject constructor(
         private const val MAX_CAST = 10
         private const val MAX_SYNC_PAGES = 50
 
-        /** Discovery lists by id: the TMDB path and whether it holds shows (`true`) or movies. */
-        val DISCOVERY_CATEGORIES: Map<String, Pair<String, Boolean>> = linkedMapOf(
-            "tmdb_trending_movies" to ("/trending/movie/week" to false),
-            "tmdb_trending_tv" to ("/trending/tv/week" to true),
-            "tmdb_popular_movies" to ("/movie/popular" to false),
-            "tmdb_popular_tv" to ("/tv/popular" to true),
-            "tmdb_top_rated_movies" to ("/movie/top_rated" to false),
-            "tmdb_top_rated_tv" to ("/tv/top_rated" to true),
-            "tmdb_now_playing" to ("/movie/now_playing" to false),
-            "tmdb_airing_today" to ("/tv/airing_today" to true),
+        /** One discovery list: the TMDB path, whether it holds shows (`true`) or movies, and its fixed query. */
+        data class DiscoveryList(
+            val path: String,
+            val isTv: Boolean,
+            val query: List<Pair<String, String>> = emptyList(),
+            /** Only movies out at least this many years, so that new releases still gathering votes stay out. */
+            val releasedYearsAgo: Int? = null,
+        )
+
+        /** Live action shows: no animation, documentaries, reality or talk shows. */
+        private const val DRAMA_ONLY = "16,99,10764,10767"
+
+        /** Popular is a poor guide below a few votes: the top of such a list is whatever someone just added. */
+        private val POPULAR = listOf("sort_by" to "popularity.desc", "vote_count.gte" to "20")
+
+        private fun movies(vararg query: Pair<String, String>) = DiscoveryList("/discover/movie", false, POPULAR + query)
+
+        private fun shows(vararg query: Pair<String, String>) = DiscoveryList("/discover/tv", true, POPULAR + query)
+
+        /** Discovery lists by id, in the order they are shown. */
+        val DISCOVERY_CATEGORIES: Map<String, DiscoveryList> = linkedMapOf(
+            "tmdb_trending_movies" to DiscoveryList("/trending/movie/week", false),
+            "tmdb_trending_tv" to DiscoveryList("/trending/tv/week", true),
+            // Well rated but little seen: enough votes to trust the score, too few to be a household name.
+            "tmdb_hidden_gem_movies" to DiscoveryList(
+                "/discover/movie",
+                false,
+                listOf(
+                    "sort_by" to "vote_average.desc",
+                    "vote_average.gte" to "7.5",
+                    "vote_count.gte" to "500",
+                    "vote_count.lte" to "3000",
+                ),
+                releasedYearsAgo = 2,
+            ),
+            "tmdb_chinese_movies" to movies("with_original_language" to "zh"),
+            "tmdb_korean_movies" to movies("with_original_language" to "ko"),
+            "tmdb_japanese_movies" to movies("with_original_language" to "ja"),
+            "tmdb_chinese_tv" to shows("with_origin_country" to "CN", "without_genres" to DRAMA_ONLY),
+            "tmdb_variety_tv" to shows("with_genres" to "10764|10767"),
+            "tmdb_us_tv" to shows("with_origin_country" to "US", "without_genres" to DRAMA_ONLY),
+            "tmdb_japanese_tv" to shows("with_origin_country" to "JP", "without_genres" to DRAMA_ONLY),
+            "tmdb_korean_tv" to shows("with_origin_country" to "KR", "without_genres" to DRAMA_ONLY),
+            "tmdb_anime_tv" to shows("with_origin_country" to "JP", "with_genres" to "16"),
+            "tmdb_documentary_tv" to shows("with_genres" to "99"),
+            "tmdb_popular_movies" to DiscoveryList("/movie/popular", false),
+            "tmdb_popular_tv" to DiscoveryList("/tv/popular", true),
+            "tmdb_top_rated_movies" to DiscoveryList("/movie/top_rated", false),
+            "tmdb_top_rated_tv" to DiscoveryList("/tv/top_rated", true),
+            "tmdb_now_playing" to DiscoveryList("/movie/now_playing", false),
+            "tmdb_airing_today" to DiscoveryList("/tv/airing_today", true),
         )
 
         /** The `media_type` the tracking table stores, shared with the account statistics. */

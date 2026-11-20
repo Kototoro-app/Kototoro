@@ -136,6 +136,17 @@ class DefaultTrackingSiteDiscoveryService @Inject constructor(
         val labels = linkedMapOf(
             "tmdb_trending_movies" to org.skepsun.kototoro.R.string.tmdb_category_trending_movies,
             "tmdb_trending_tv" to org.skepsun.kototoro.R.string.tmdb_category_trending_tv,
+            "tmdb_hidden_gem_movies" to org.skepsun.kototoro.R.string.tmdb_category_hidden_gem_movies,
+            "tmdb_chinese_movies" to org.skepsun.kototoro.R.string.tmdb_category_chinese_movies,
+            "tmdb_korean_movies" to org.skepsun.kototoro.R.string.tmdb_category_korean_movies,
+            "tmdb_japanese_movies" to org.skepsun.kototoro.R.string.tmdb_category_japanese_movies,
+            "tmdb_chinese_tv" to org.skepsun.kototoro.R.string.tmdb_category_chinese_tv,
+            "tmdb_variety_tv" to org.skepsun.kototoro.R.string.tmdb_category_variety_tv,
+            "tmdb_us_tv" to org.skepsun.kototoro.R.string.tmdb_category_us_tv,
+            "tmdb_japanese_tv" to org.skepsun.kototoro.R.string.tmdb_category_japanese_tv,
+            "tmdb_korean_tv" to org.skepsun.kototoro.R.string.tmdb_category_korean_tv,
+            "tmdb_anime_tv" to org.skepsun.kototoro.R.string.tmdb_category_anime_tv,
+            "tmdb_documentary_tv" to org.skepsun.kototoro.R.string.tmdb_category_documentary_tv,
             "tmdb_popular_movies" to org.skepsun.kototoro.R.string.tmdb_category_popular_movies,
             "tmdb_popular_tv" to org.skepsun.kototoro.R.string.tmdb_category_popular_tv,
             "tmdb_top_rated_movies" to org.skepsun.kototoro.R.string.tmdb_category_top_rated_movies,
@@ -853,6 +864,9 @@ class DefaultTrackingSiteDiscoveryService @Inject constructor(
         )
             .map { it.toTrackingListItem(ScrobblerService.ANILIST) }
     }
+
+    override suspend fun getTitleLogoUrl(service: ScrobblerService, remoteId: Long, language: String): String? =
+        if (service == ScrobblerService.TMDB) tmdbRepository.getLogoUrl(remoteId, language) else null
 
     override suspend fun getDetails(service: ScrobblerService, remoteId: Long, urlHint: String?): TrackingSiteItemDetails {
         if (service == ScrobblerService.MAL) {

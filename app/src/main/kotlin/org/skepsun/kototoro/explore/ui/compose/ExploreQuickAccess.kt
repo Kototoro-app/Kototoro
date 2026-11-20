@@ -83,6 +83,7 @@ internal fun BrowseHeroBlock(
     onHeroItemClick: (ContentListModel, String) -> Unit,
     sharedElementKeyForItem: (ContentListModel, Int) -> String,
     modifier: Modifier = Modifier,
+    logoUrls: Map<Long, String> = emptyMap(),
 ) {
     if (!browseHeroHasContent(heroItemCount = heroItems.size, isDiscoverLoading = isLoadingOnly)) {
         // Nothing to show and nothing loading: painting a full-height gradient box here leaves the
@@ -103,6 +104,7 @@ internal fun BrowseHeroBlock(
             settings = settings,
             sharedElementKeyForItem = sharedElementKeyForItem,
             modifier = modifier,
+            logoUrls = logoUrls,
         )
     } else {
         val configuration = LocalConfiguration.current

@@ -28,6 +28,8 @@ import org.skepsun.kototoro.core.model.ContentSource
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.ui.BaseViewModel
 import org.skepsun.kototoro.discover.ui.model.DiscoverCarouselRow
+import org.skepsun.kototoro.list.ui.model.ContentListModel
+import org.skepsun.kototoro.parsers.util.runCatchingCancellable
 import org.skepsun.kototoro.discover.ui.model.DiscoverItem
 import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.favourites.domain.GlobalFavoritesState
@@ -119,12 +121,11 @@ class DiscoverViewModel @Inject constructor(
         )
     }
 
-    val availableServices = preferredService
-        .map(::resolveAvailableServices)
+    val availableServices = combine(preferredService, currentGroupTab, ::resolveAvailableServices)
         .stateIn(
             viewModelScope + Dispatchers.Default,
             SharingStarted.Eagerly,
-            resolveAvailableServices(ScrobblerService.BANGUMI),
+            resolveAvailableServices(ScrobblerService.BANGUMI, BrowseGroupTab.All),
         )
 
     val query: StateFlow<String> = searchQuery.asStateFlow()
@@ -134,8 +135,9 @@ class DiscoverViewModel @Inject constructor(
         availableServices,
         selectedServiceOverride,
         searchQuery,
-    ) { preferredService, availableServices, selectedService, query ->
-        resolveActiveService(preferredService, availableServices, selectedService, query)
+        currentGroupTab,
+    ) { preferredService, availableServices, selectedService, query, tab ->
+        resolveActiveService(preferredService, availableServices, selectedService, query, tab)
     }
         .stateIn(
             viewModelScope + Dispatchers.Default,
@@ -172,6 +174,29 @@ class DiscoverViewModel @Inject constructor(
     private var lastHandledRefreshVersion = 0
 
     val content: StateFlow<List<ListModel>> = _contentState.asStateFlow()
+
+    /**
+     * The title artwork of the items the browse hero shows (the first row's first [HERO_LOGO_ITEMS]), by item id.
+     * Only sites that have such artwork (TMDB) fill it; an item without one keeps its plain title.
+     */
+    val heroLogos: StateFlow<Map<Long, String>> = combine(_contentState, activeService) { state, service ->
+        service to state.firstNotNullOfOrNull { row ->
+            (row as? DiscoverCarouselRow)?.items?.filterIsInstance<ContentListModel>()?.takeIf { it.isNotEmpty() }
+        }.orEmpty().take(HERO_LOGO_ITEMS).map { it.id }
+    }
+        .distinctUntilChanged()
+        .mapLatest { (service, ids) ->
+            val language = java.util.Locale.getDefault().language
+            kotlinx.coroutines.coroutineScope {
+                ids.map { id ->
+                    async {
+                        runCatchingCancellable { discoveryService.getTitleLogoUrl(service, id, language) }
+                            .getOrNull()?.let { id to it }
+                    }
+                }.awaitAll().filterNotNull().toMap()
+            }
+        }
+        .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, emptyMap())
     val bangumiRecommendationLoadFailures = _bangumiRecommendationLoadFailures.asSharedFlow()
 
     private var loadJob: kotlinx.coroutines.Job? = null
@@ -347,7 +372,8 @@ class DiscoverViewModel @Inject constructor(
 
         val isVideo = categoryId.contains("anime") || categoryId.contains("movie") || categoryId.contains("ova") ||
             categoryId.contains("tv") || categoryId.contains("calendar") || categoryId.contains("real") ||
-            categoryId.contains("seasonal") || (service == ScrobblerService.KITSU && !categoryId.contains("manga"))
+            categoryId.contains("seasonal") || categoryId.startsWith("tmdb_") ||
+            (service == ScrobblerService.KITSU && !categoryId.contains("manga"))
 
         val isNovel = categoryId.contains("novel") || categoryId.contains("light_novel") ||
             (service == ScrobblerService.BANGUMI && categoryId == "book")
@@ -564,7 +590,7 @@ class DiscoverViewModel @Inject constructor(
 
     fun isServiceSelectable(service: ScrobblerService): Boolean {
         return if (searchQuery.value.isBlank()) {
-            supportsTrending(service)
+            supportsTrending(service) && servesTab(service, getCurrentBrowseGroupTab())
         } else {
             supportsSearch(service)
         }
@@ -604,11 +630,21 @@ class DiscoverViewModel @Inject constructor(
         return forceLoadRecommendations.value || isBrowseTrackingRecommendationsEnabled.value || query.isNotBlank()
     }
 
-    private fun resolveAvailableServices(preferred: ScrobblerService): List<ScrobblerService> {
+    /**
+     * Whether a site has anything to show in [tab]: TMDB has only films and shows, so a comic space must not fall
+     * back to its film lists. A site whose lists are not split into categories is kept.
+     */
+    private fun servesTab(service: ScrobblerService, tab: BrowseGroupTab): Boolean {
+        if (tab == BrowseGroupTab.All) return true
+        val categories = discoveryService.getCapabilities(service).discoveryCategories
+        return categories.isEmpty() || categories.any { isCategoryVisibleInTab(it.id, service, tab) }
+    }
+
+    private fun resolveAvailableServices(preferred: ScrobblerService, tab: BrowseGroupTab): List<ScrobblerService> {
         return buildList {
-            // Always include services that support trending discovery
+            // Services with trending discovery for what this space browses
             for (service in ScrobblerService.entries) {
-                if (supportsTrending(service)) add(service)
+                if (supportsTrending(service) && servesTab(service, tab)) add(service)
             }
             // Ensure preferred is included if it supports search
             if (preferred !in this && supportsSearch(preferred)) {
@@ -622,16 +658,18 @@ class DiscoverViewModel @Inject constructor(
         availableServices: List<ScrobblerService>,
         selected: ScrobblerService?,
         query: String,
+        tab: BrowseGroupTab,
     ): ScrobblerService {
-        if (selected != null && selected in availableServices && canUseService(selected, query)) {
+        if (selected != null && selected in availableServices && canUseService(selected, query, tab)) {
             return selected
         }
-        return if (canUseService(preferred, query)) preferred else ScrobblerService.BANGUMI
+        if (canUseService(preferred, query, tab)) return preferred
+        return availableServices.firstOrNull { canUseService(it, query, tab) } ?: ScrobblerService.BANGUMI
     }
 
-    private fun canUseService(service: ScrobblerService, query: String): Boolean {
+    private fun canUseService(service: ScrobblerService, query: String, tab: BrowseGroupTab): Boolean {
         return if (query.isBlank()) {
-            supportsTrending(service)
+            supportsTrending(service) && servesTab(service, tab)
         } else {
             supportsSearch(service)
         }
@@ -686,6 +724,9 @@ class DiscoverViewModel @Inject constructor(
         }
     }
 }
+
+/** How many of the first row the browse hero shows (`prepareBrowseDiscoverItems`). */
+private const val HERO_LOGO_ITEMS = 6
 
 private data class DiscoverRequest(
     val service: ScrobblerService,

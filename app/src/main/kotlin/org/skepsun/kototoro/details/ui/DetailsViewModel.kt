@@ -3492,7 +3492,8 @@ class DetailsViewModel @Inject constructor(
         return when (currentDetailsContentType()) {
             ContentType.VIDEO, ContentType.HENTAI_VIDEO -> setOf(SearchContentKind.VIDEO)
             ContentType.NOVEL, ContentType.HENTAI_NOVEL -> setOf(SearchContentKind.NOVEL)
-            null -> ALL_SEARCH_CONTENT_KINDS
+            // Unknown (e.g. a tracking-site entry that lists several kinds): searching only comics would miss it.
+            null, ContentType.OTHER -> ALL_SEARCH_CONTENT_KINDS
             else -> setOf(SearchContentKind.MANGA)
         }
     }

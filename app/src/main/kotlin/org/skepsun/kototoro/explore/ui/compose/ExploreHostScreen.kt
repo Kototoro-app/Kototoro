@@ -243,6 +243,7 @@ fun KototoroExploreHostRoute(
     val isDiscoverLoading by discoverViewModel.isLoading.collectAsStateWithLifecycle()
     val availableServices by discoverViewModel.availableServices.collectAsStateWithLifecycle()
     val activeService by discoverViewModel.activeService.collectAsStateWithLifecycle()
+    val heroLogos by discoverViewModel.heroLogos.collectAsStateWithLifecycle()
     val query by discoverViewModel.query.collectAsStateWithLifecycle()
     val listState = rememberSaveable(saver = LazyListState.Saver) {
         LazyListState()
@@ -839,6 +840,7 @@ fun KototoroExploreHostRoute(
                     title = heroRow?.category?.let { stringResource(it.nameResId) }
                         ?: stringResource(R.string.discover),
                     heroItems = heroItems,
+                    logoUrls = heroLogos,
                     activeService = activeService,
                     availableServices = availableServices,
                     isLoadingOnly = isDiscoverLoadingOnly,

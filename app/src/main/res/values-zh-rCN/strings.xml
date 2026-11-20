@@ -4281,4 +4281,15 @@
     <string name="tmdb_category_top_rated_tv">高分剧集</string>
     <string name="tmdb_category_now_playing">正在上映</string>
     <string name="tmdb_category_airing_today">今日播出</string>
+    <string name="tmdb_category_hidden_gem_movies">冷门佳片</string>
+    <string name="tmdb_category_chinese_movies">华语电影</string>
+    <string name="tmdb_category_korean_movies">韩国电影</string>
+    <string name="tmdb_category_japanese_movies">日本电影</string>
+    <string name="tmdb_category_chinese_tv">国产剧</string>
+    <string name="tmdb_category_variety_tv">综艺</string>
+    <string name="tmdb_category_us_tv">美剧</string>
+    <string name="tmdb_category_japanese_tv">日剧</string>
+    <string name="tmdb_category_korean_tv">韩剧</string>
+    <string name="tmdb_category_anime_tv">日本动画</string>
+    <string name="tmdb_category_documentary_tv">纪录片</string>
 </resources>

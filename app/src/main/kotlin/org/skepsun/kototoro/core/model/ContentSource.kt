@@ -391,6 +391,9 @@ private class AnonymousContentSource(
         name.startsWith("MIHON_") -> ContentType.MANGA
         name.startsWith("IREADER_") -> ContentType.NOVEL
         name.startsWith("TSUNDOKU_") -> ContentType.NOVEL
+        // Tracking sites that only list one kind of work; the others (AniList, Bangumi…) list several.
+        name.startsWith("TRACKING_TMDB") || name.startsWith("TRACKING_SIMKL") -> ContentType.VIDEO
+        name.startsWith("TRACKING_MANGAUPDATES") || name.startsWith("TRACKING_MANGABAKA") -> ContentType.MANGA
         fallbackContentType != null && fallbackContentType != ContentType.OTHER -> fallbackContentType
         else -> ContentType.OTHER
     }

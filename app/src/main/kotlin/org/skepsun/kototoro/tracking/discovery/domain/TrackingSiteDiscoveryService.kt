@@ -20,6 +20,9 @@ interface TrackingSiteDiscoveryService {
 
     suspend fun getDetails(service: ScrobblerService, remoteId: Long, urlHint: String? = null): TrackingSiteItemDetails
 
+    /** The title drawn as artwork (a logo) in [language] or a fallback, null when the site has none. */
+    suspend fun getTitleLogoUrl(service: ScrobblerService, remoteId: Long, language: String): String? = null
+
     suspend fun getEntityDetails(
         service: ScrobblerService,
         entityType: EntityType,
