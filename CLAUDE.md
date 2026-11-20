@@ -237,6 +237,16 @@ Android 与桌面的 UI 按 CMP 共享呈现演进；Windows 与 macOS 始终共
 - `parser-host/` - JVM 上加载 kototoro-parsers / kotatsu-parsers / UMA（Tsuki）插件 JAR：子优先 classloader、
   宿主共享 ABI、`ParserSourceRuntime`（OFFSET 分页、小说 `getChapterContent`）；真实插件用 `-PkototoroParsersJar`、
   `-PdexPluginJar`、`-PparserHostOnline` 选择性验证。
+- `community-indexer/` - 社区评分/评论的 Nostr 索引器（JVM，`application`，不随应用发布）：
+  - 从中继拉取带 `org.kototoro` 标签的事件，存进 `Kototoro-app/community-index` 的 `archive` 分支；
+  - 再从完整存档重建静态快照，发布到该仓库的 Pages（`https://kototoro-app.github.io/community-index/v1/manifest.json`）。
+  - 共享代码：作品标识、归一与外部 ID 匹配在 `core-domain` 的 `community/domain`（快照格式 `CommunitySnapshot.kt` 也在这里）；
+    Nostr 协议栈与事件格式 `CommunityEventSchema` 在 `core-net` 的 `community/nostr`（secp256k1-kmp 固定 0.15.0，
+    更新的版本要求 Java 17/21）。
+  - workflow 模板 `deploy/build-index.yml` 在 community-index 仓库内运行。
+  - 线上测试都要显式开启：`-PnostrLiveRelays`，再加 `-PnostrLivePublish=true` 才会真的发布；
+    `-PcommunityResolveBackup` 会查询 AniList/Bangumi。
+  - 设计与实测记录见 `docs/architecture/community-nostr-plan-2026-11.md`。
 - `dex-convert/` - Android DEX/APK → JVM JAR（dex2jar 2.4.38 + `computeFrames` + `dontSanitizeNames`），
   `DexRepair` 在转换前修复 R8 内联构造器（`new-instance T` + 祖先 `<init>`），`ApkManifestReader` 解码二进制清单，
   `ApkExtensionConverter` 产出带文本清单的扩展 JAR；`-PrealApkDirectory` 用真实 APK 验证并逐类链接校验。

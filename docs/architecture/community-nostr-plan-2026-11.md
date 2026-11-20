@@ -273,7 +273,7 @@ WorkManager 每 30 分钟运行一次（iOS 用 `BGAppRefreshTask`，系统调�
 | P0（已完成） | `CommunityWorkKeys` 与 `CommunityWorkGroups`，加测试 | 见 §3.5：准确率达标，召回率受限于强标识覆盖率 |
 | P0.5（规则与实测已完成） | 外部 ID 自动解析（AniList / Bangumi 标题搜索，严格匹配，本地永久缓存） | 见 §3.6：一般漫画 16/29，28 条绑定无误配；客户端缓存与调度放到 P3 一起做 |
 | P1（已完成） | `core-net` 的 Nostr 栈，见 §10 | 对照 NIP-01 测试向量验证签名；在 2 个真实中继上完成写入、按 `#i` 查询、删除 |
-| P2（代码完成，待部署） | 索引器与快照，先跑 `workflow_dispatch`，见 §10.1 | 用种子事件生成快照；归档能增量追加；重复运行结果一致 |
+| P2（已部署） | 索引器与快照，先跑 `workflow_dispatch`，见 §10.1 | 用种子事件生成快照；归档能增量追加；重复运行结果一致 |
 | P3 | Android 评分、评论、举报、屏蔽 | 详情页、评论页、发件箱离线重试可用；被屏蔽的内容不显示 |
 | P4 | 回复通知、本地推荐、排行榜 | 推荐过滤正确，不推荐库内已有作品 |
 | P5 | 桌面与 iOS | 复用 P0–P2，各端只写界面 |
@@ -343,6 +343,12 @@ Android 和桌面分别通过 `androidMain` / `jvmMain` 引入对应的 JNI 产�
 - **部署**：workflow 模板在 `community-indexer/deploy/build-index.yml`，已通过 actionlint 检查；
   需要复制到 `community-index` 仓库的 `.github/workflows/`。
   它构建的是 Kototoro 的 `devel` 分支（可用 `kototoro-ref` 参数指定其他分支），所以本模块必须先合入。
+- **已部署**（2026-11-20）：
+  - `Kototoro-app/community-index`（公开）的 `main` 分支放 workflow 和 README，每 6 小时运行一次（cron `17 */6 * * *`）。
+  - 首次手动运行（run 44733308571）全部步骤成功，索引器耗时 2 分 40 秒；当时还没有事件，`archive` 分支会在第一次有新事件时创建。
+  - Pages 从 `gh-pages` 分支提供服务。**快照根地址：`https://kototoro-app.github.io/community-index/`**，
+    客户端先读 `v1/manifest.json`。
+  - 维护者屏蔽列表尚未配置：在该仓库设置变量 `MAINTAINER_NPUB` 后生效。
 
 ## 11. 待定
 
