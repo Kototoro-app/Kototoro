@@ -109,7 +109,7 @@ class CommunityAggregatorTest {
         val unmined = rate(readers[1], naruto, 10)
         assertTrue(aggregate(archive(unmined), cfg = config.copy(powRating = 8)).works.isEmpty())
         val mined = runBlocking {
-            NostrKeys.sign(NostrPow.mine(CommunityEventSchema.rating(naruto, "comic", null, 10, null, false, now - day), readers[1].publicKeyHex, 8), readers[1])
+            NostrKeys.sign(NostrPow.mine(CommunityEventSchema.rating(naruto, "comic", null, 10, null, false, now - day), readers[1].publicKeyHex, 8, CommunityEventSchema.POW_TAG), readers[1])
         }
         assertEquals(1, aggregate(archive(mined), cfg = config.copy(powRating = 8)).stats.ratings)
 

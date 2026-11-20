@@ -78,7 +78,7 @@ object CommunityAggregator {
 
         val ratings = archive.asSequence()
             .map { it.event }
-            .filter { it.kind == CommunityEventSchema.KIND_RATING && NostrPow.satisfies(it, config.powRating) && !gone(it) }
+            .filter { it.kind == CommunityEventSchema.KIND_RATING && NostrPow.satisfies(it, config.powRating, CommunityEventSchema.POW_TAG) && !gone(it) }
             .mapNotNull(CommunityEventSchema::parseRating)
             .filter { rating ->
                 val withdrawn = withdrawnUntil["${CommunityEventSchema.KIND_RATING}:${rating.pubkey}:${rating.address}"]
@@ -89,7 +89,7 @@ object CommunityAggregator {
 
         val allComments = archive.asSequence()
             .map { it.event }
-            .filter { it.kind == CommunityEventSchema.KIND_COMMENT && NostrPow.satisfies(it, config.powComment) && it.id !in deletedIds }
+            .filter { it.kind == CommunityEventSchema.KIND_COMMENT && NostrPow.satisfies(it, config.powComment, CommunityEventSchema.POW_TAG) && it.id !in deletedIds }
             .mapNotNull { event -> CommunityEventSchema.parseComment(event)?.let { it to event } }
             .toList()
 

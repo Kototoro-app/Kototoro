@@ -148,7 +148,8 @@ private fun CommunityRatingDialog(
         confirmButton = {
             TextButton(
                 onClick = { selected?.let(onRate) },
-                enabled = selected != null && selected != current,
+                // The same score again is allowed: it republishes a rating whose earlier copy never reached a relay.
+                enabled = selected != null,
                 modifier = Modifier.testTag("community-rating-confirm"),
             ) { Text(stringResource(android.R.string.ok)) }
         },

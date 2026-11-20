@@ -23,11 +23,16 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object CommunityNetworkModule {
 
-    /** Relays speak WebSockets; the shared Ktor factory installs no plugins, so this client adds it. */
+    /**
+     * Relays speak WebSockets; the shared Ktor factory installs no plugins, so this client adds it. Relay names resolve
+     * through [CommunityRelayDns], since plain DNS answers for them are poisoned in mainland China.
+     */
     @Provides
     @Singleton
-    fun provideNostrRelayClient(@BaseHttpClient baseClient: OkHttpClient): NostrRelayClient =
-        NostrRelayClient(KtorNostrRelayConnector(createKtorOkHttpClient(baseClient).config { install(WebSockets) }))
+    fun provideNostrRelayClient(@BaseHttpClient baseClient: OkHttpClient): NostrRelayClient {
+        val relayClient = baseClient.newBuilder().dns(CommunityRelayDns(baseClient, baseClient.dns)).build()
+        return NostrRelayClient(KtorNostrRelayConnector(createKtorOkHttpClient(relayClient).config { install(WebSockets) }))
+    }
 
     /** Bangumi's search timed out at 20 s on one search in nine during the evaluation (plan §3.6), so it gets longer. */
     @Provides

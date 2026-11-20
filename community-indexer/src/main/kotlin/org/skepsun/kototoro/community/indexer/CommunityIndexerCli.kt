@@ -21,7 +21,15 @@ private const val USAGE = """community-indexer --archive <dir> --out <dir> [opti
   --offline              do not read relays; rebuild the snapshot from the archive alone
   --now <seconds>        clock for the snapshot (default: now)"""
 
-private val DEFAULT_RELAYS = listOf("wss://nos.lol", "wss://relay.primal.net", "wss://nostr.mom", "wss://relay.damus.io")
+// The app's own list (CommunityRepository.DEFAULT_RELAYS): two relays reachable from mainland China, then the major ones.
+private val DEFAULT_RELAYS = listOf(
+    "wss://yabu.me",
+    "wss://relay.nostr.wirednet.jp",
+    "wss://nos.lol",
+    "wss://relay.primal.net",
+    "wss://nostr.mom",
+    "wss://relay.damus.io",
+)
 
 /**
  * One indexer run (plan §6.2): archive what relays have that the archive does not, then rebuild the snapshot from the

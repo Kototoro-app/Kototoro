@@ -75,6 +75,13 @@ object CommunityEventSchema {
     const val KIND_REPORT = 1984
     const val KIND_MUTE_LIST = 10000
 
+    /**
+     * Kototoro's proof of work: NIP-13's scheme under its own tag name. relay.nostr.wirednet.jp, one of the two relays
+     * reachable from mainland China without a VPN, refuses any event with a `nonce` tag (measured 2026-11-20); none of
+     * the relays used require NIP-13 itself, and the indexer checks this tag.
+     */
+    const val POW_TAG = "kototoro-nonce"
+
     const val LABEL_NAMESPACE = "org.kototoro"
     const val LABEL_VALUE = "community/v1"
     const val MAX_COMMENT_LENGTH = 4000

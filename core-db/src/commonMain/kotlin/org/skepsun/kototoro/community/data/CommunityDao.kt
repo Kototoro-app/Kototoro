@@ -30,6 +30,9 @@ interface CommunityDao {
     @Query("SELECT COUNT(*) FROM community_outbox")
     fun observeOutboxCount(): Flow<Int>
 
+    @Query("SELECT COUNT(*) FROM community_outbox")
+    suspend fun countOutbox(): Int
+
     @Query("DELETE FROM community_outbox WHERE event_id = :eventId")
     suspend fun deleteOutbox(eventId: String)
 

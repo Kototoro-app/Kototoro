@@ -61,10 +61,16 @@ class CommunityRatingViewModel @Inject constructor(
                 flowOf<Loaded?>(null)
             } else {
                 flow {
-                    emit(Loaded(null, null))
-                    val identity = repository.identity(target.content, target.refs, resolve = true)
-                    emit(Loaded(identity, null))
-                    emit(Loaded(identity, repository.summary(identity)))
+                    // What is already known (titles, the reader's bindings, earlier searches) answers at once; the
+                    // tracker searches can take tens of seconds and only replace it when they found another key.
+                    val known = repository.identity(target.content, target.refs, resolve = false)
+                    emit(Loaded(known, null, isLoading = true))
+                    val knownSummary = repository.summary(known)
+                    emit(Loaded(known, knownSummary, isLoading = false))
+                    val resolved = repository.identity(target.content, target.refs, resolve = true)
+                    if (resolved.keys != known.keys) {
+                        emit(Loaded(resolved, repository.summary(resolved) ?: knownSummary, isLoading = false))
+                    }
                 }.flowOn(Dispatchers.IO)
             }
         }
@@ -74,10 +80,10 @@ class CommunityRatingViewModel @Inject constructor(
     val state: StateFlow<CommunityRatingUiState?> = combine(loaded, myStars, publishing) { loaded, myStars, publishing ->
         loaded ?: return@combine null
         CommunityRatingUiState(
-            isLoading = loaded.identity == null,
+            isLoading = loaded.isLoading,
             rating = loaded.summary?.rating,
             myStars = myStars,
-            refusal = loaded.identity?.let(repository::refusal),
+            refusal = repository.refusal(loaded.identity),
             isPublishing = publishing,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
@@ -85,7 +91,14 @@ class CommunityRatingViewModel @Inject constructor(
     fun bind(content: Content, refs: List<CommunityExternalRef>) {
         val next = Target(content, refs)
         if (target.value != next) target.value = next
+        // Until a background worker retries the outbox, each details page the reader opens gives it another try.
+        if (!outboxTried && repository.isEnabled) {
+            outboxTried = true
+            viewModelScope.launch(Dispatchers.IO) { runCatchingCancellable { repository.flushOutbox() } }
+        }
     }
+
+    private var outboxTried = false
 
     fun rate(stars: Int) = publish { identity, mangaId -> repository.rate(mangaId, identity, stars) }
 
@@ -105,5 +118,9 @@ class CommunityRatingViewModel @Inject constructor(
         }
     }
 
-    private data class Loaded(val identity: CommunityWorkIdentity?, val summary: org.skepsun.kototoro.community.domain.CommunityWorkSummary?)
+    private data class Loaded(
+        val identity: CommunityWorkIdentity,
+        val summary: org.skepsun.kototoro.community.domain.CommunityWorkSummary?,
+        val isLoading: Boolean,
+    )
 }

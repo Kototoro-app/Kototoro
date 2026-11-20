@@ -12,6 +12,7 @@ import org.skepsun.kototoro.community.data.CommunityKeyStore
 import org.skepsun.kototoro.community.data.CommunityOutboxEntity
 import org.skepsun.kototoro.community.data.CommunityRatingEntity
 import org.skepsun.kototoro.community.data.CommunityResolutionEntity
+import org.skepsun.kototoro.community.data.CommunityOutboxWorker
 import org.skepsun.kototoro.community.data.CommunitySnapshotRepository
 import org.skepsun.kototoro.community.external.CommunityExternalHit
 import org.skepsun.kototoro.community.external.CommunityExternalSearchApi
@@ -61,6 +62,7 @@ class CommunityRepository @Inject constructor(
     private val relayClient: NostrRelayClient,
     private val searchApi: CommunityExternalSearchApi,
     private val snapshots: CommunitySnapshotRepository,
+    private val outboxScheduler: CommunityOutboxWorker.Scheduler,
 ) {
 
     private val dao get() = db.getCommunityDao()
@@ -111,9 +113,11 @@ class CommunityRepository @Inject constructor(
             identity.keys, identity.medium.wire, identity.contentType, stars, identity.title, identity.nsfw, createdAt,
         )
         val rating = withContext(Dispatchers.Default) {
-            NostrKeys.sign(NostrPow.mine(draft, keys.publicKeyHex, powRating()), keys)
+            NostrKeys.sign(NostrPow.mine(draft, keys.publicKeyHex, powRating(), CommunityEventSchema.POW_TAG), keys)
         }
         val address = CommunityEventSchema.ratingAddress(identity.medium.wire, identity.keys)
+        // The new rating replaces the old one, so an old one still waiting to be sent is not sent at all.
+        previous?.let { dao.deleteOutbox(it.eventId) }
         // A work that gained a strong key since it was last rated has a new address; the old rating must not keep counting.
         if (previous != null && previous.address != address) {
             enqueue(sign(CommunityEventSchema.ratingWithdrawal(keys.publicKeyHex, previous.address, createdAt), keys))
@@ -127,6 +131,7 @@ class CommunityRepository @Inject constructor(
     /** Takes the reader's rating back, everywhere it was published. */
     suspend fun withdraw(mangaId: Long) {
         val previous = dao.findRating(mangaId) ?: return
+        dao.deleteOutbox(previous.eventId)
         val keys = keyStore.keys()
         if (keys != null) {
             val createdAt = maxOf(nowSeconds(), previous.createdAt + 1)
@@ -136,35 +141,42 @@ class CommunityRepository @Inject constructor(
         flushOutbox()
     }
 
-    /** Publishes what is due in the outbox; returns how many events still wait. */
+    /**
+     * Publishes what is due in the outbox and returns how many events are left in it, due or not. Anything left gets
+     * the background worker, which keeps trying once the device is online.
+     */
     suspend fun flushOutbox(): Int = outboxLock.withLock {
         val now = System.currentTimeMillis()
         val due = dao.findDueOutbox(now, OUTBOX_BATCH)
-        if (due.isEmpty()) return@withLock 0
-        val pool = NostrRelayPool(relayClient, snapshots.relays() ?: DEFAULT_RELAYS, minAccepted = 2)
-        var waiting = 0
-        for (entry in due) {
-            val event = runCatching { NostrEvent.fromJson(json.parseToJsonElement(entry.eventJson).jsonObject) }.getOrNull()
-            if (event == null) {
-                dao.deleteOutbox(entry.eventId)
-                continue
-            }
-            val result = runCatchingCancellable { pool.publish(event) }.getOrNull()
-            if (result?.isPublished == true) {
-                dao.deleteOutbox(entry.eventId)
-            } else {
-                waiting++
-                val attempts = entry.attempts + 1
-                dao.upsertOutbox(
-                    entry.copy(
-                        attempts = attempts,
-                        nextAttemptAt = now + retryDelay(attempts),
-                        lastError = result?.results?.joinToString { "${it.relay}: ${it.message}" }?.take(500) ?: "no relay answered",
-                    ),
-                )
-            }
+        if (due.isNotEmpty()) {
+            // One relay is enough: the indexer archives everything it reads, so the archive, not a second relay, is
+            // what keeps the event; and from mainland China only one relay both connects and accepts writes (plan §5).
+            val pool = NostrRelayPool(relayClient, (DEFAULT_RELAYS + snapshots.relays().orEmpty()).distinct(), minAccepted = 1)
+            for (entry in due) publishQueued(pool, entry, now)
         }
-        waiting
+        dao.countOutbox().also { left -> if (left > 0) outboxScheduler.enqueue() }
+    }
+
+    private suspend fun publishQueued(pool: NostrRelayPool, entry: CommunityOutboxEntity, now: Long) {
+        val event = runCatching { NostrEvent.fromJson(json.parseToJsonElement(entry.eventJson).jsonObject) }.getOrNull()
+        // Unreadable, or refused for about a week of retries: no later try will do better.
+        if (event == null || entry.attempts >= MAX_ATTEMPTS) {
+            dao.deleteOutbox(entry.eventId)
+            return
+        }
+        val result = runCatchingCancellable { pool.publish(event) }.getOrNull()
+        if (result?.isPublished == true) {
+            dao.deleteOutbox(entry.eventId)
+        } else {
+            val attempts = entry.attempts + 1
+            dao.upsertOutbox(
+                entry.copy(
+                    attempts = attempts,
+                    nextAttemptAt = now + retryDelay(attempts),
+                    lastError = result?.results?.joinToString { "${it.relay}: ${it.message}" }?.take(500) ?: "no relay answered",
+                ),
+            )
+        }
     }
 
     private suspend fun enqueue(event: NostrEvent) {
@@ -233,13 +245,27 @@ class CommunityRepository @Inject constructor(
 
     companion object {
 
-        /** Until the first manifest names them (plan §10). */
-        val DEFAULT_RELAYS = listOf("wss://nos.lol", "wss://relay.primal.net", "wss://nostr.mom", "wss://relay.damus.io")
+        /**
+         * Always written to, together with whatever the manifest adds. The first two answered a direct WebSocket upgrade
+         * from mainland China on 2026-11-20 and accept anyone's writes; the major relays after them are blocked there by
+         * SNI and serve readers elsewhere or behind a VPN (plan §5).
+         */
+        val DEFAULT_RELAYS = listOf(
+            "wss://yabu.me",
+            "wss://relay.nostr.wirednet.jp",
+            "wss://nos.lol",
+            "wss://relay.primal.net",
+            "wss://nostr.mom",
+            "wss://relay.damus.io",
+        )
 
         private const val DEFAULT_POW_RATING = 16
         private const val OUTBOX_BATCH = 20
         private const val SEARCH_TITLES = 2
         private const val MAX_RETRY_DELAY = 6 * 60 * 60 * 1000L
+
+        /** A minute doubling to six hours: thirty tries span about a week. */
+        private const val MAX_ATTEMPTS = 30
 
         /** The platform fold of plan §3.2: NFKC, traditional to simplified Chinese, then invariant lowercase. */
         fun fold(text: String): String =

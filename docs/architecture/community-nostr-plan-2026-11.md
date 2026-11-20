@@ -175,6 +175,20 @@ TMDB、Simkl 等后续再加。
 - 读取：实时订阅只连 2–3 个中继，按事件 ID 去重。
 - 用户可以在设置里增删中继。
 
+### 5.1 中国大陆网络实测（2026-11-20，真机，未开 VPN）
+
+| 问题 | 实测 | 对策 |
+|---|---|---|
+| DNS 污染 | 中继域名被解析到 Twitter、Facebook 的地址；国际 DoH（Cloudflare、Google、AdGuard）连不上；AliDNS 的 DoH 也返回污染结果 | 中继连接单独用 `CommunityRelayDns`：先问 DNSPod（`doh.pub`，结果与 Cloudflare 一致），再问 Cloudflare 和 Google，最后才用系统 DNS；缓存 10 分钟 |
+| SNI 阻断 | nos.lol、relay.damus.io、relay.primal.net、nostr.mom 等约 20 个主流中继，即使 IP 正确，TLS 握手也会按 SNI 被重置；同一 IP 换成中性 SNI 则可以连上 | 客户端无解；这些中继留给境外用户和开 VPN 的用户 |
+| 可直连且开放写入 | 只有 relay.nostr.wirednet.jp（拒绝带 `nonce` 标签的事件）；yabu.me 能连上但返回 `Country CN not allowed`；einundzwanzig、nostrzh、vectorapp 限制写入；nostr.moe、lang.relays.land 需要白名单或认证 | 工作量证明改用自有标签 `kototoro-nonce`（`CommunityEventSchema.POW_TAG`），索引器按同一标签校验；发件箱只要 1 个中继接受就算发布成功，持久性由索引器的 `archive` 负责 |
+
+默认中继（应用与索引器一致）：`yabu.me`、`relay.nostr.wirednet.jp`、`nos.lol`、`relay.primal.net`、`nostr.mom`、`relay.damus.io`。
+应用使用这份列表与快照 manifest 中列表的并集，确保 manifest 不会挤掉内置的可直连中继。
+
+风险：大陆用户免 VPN 写入目前只依赖 wirednet 这一个由个人运营的中继。备选是在 Cloudflare Workers 上自建中继（例如 nosflare），
+但必须绑定自有域名，因为 `workers.dev` 在大陆同样被阻断。
+
 ## 6. 索引器（community-indexer）
 
 ### 6.1 位置
