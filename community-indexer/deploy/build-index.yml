@@ -1,0 +1,112 @@
+# Copy to Kototoro-app/community-index as .github/workflows/build-index.yml (community plan §6.1).
+#
+# Every six hours: read Kototoro's Nostr events from the relays, add the new ones to the `archive` branch, rebuild the
+# snapshot from the whole archive and publish it on the `gh-pages` branch, which GitHub Pages serves. Pushes use this
+# repository's own GITHUB_TOKEN, so no deploy key is involved. The repository has to be public for free Pages.
+#
+# Optional repository variable MAINTAINER_NPUB: the npub whose kind 10000 mute list moderates the index.
+name: Build community index
+
+on:
+  schedule:
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      full:
+        description: 'Read relays from the beginning instead of two days before the newest archived event'
+        required: false
+        default: false
+        type: boolean
+      kototoro-ref:
+        description: 'Kototoro branch or commit to build the indexer from'
+        required: false
+        default: 'devel'
+        type: string
+
+permissions:
+  contents: write
+
+# Two runs at once would both rewrite the same archive month and one push would be lost.
+concurrency:
+  group: community-index
+  cancel-in-progress: false
+
+jobs:
+  index:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Check out the indexer
+        uses: actions/checkout@v5
+        with:
+          repository: Kototoro-app/Kototoro
+          ref: ${{ inputs.kototoro-ref || 'devel' }}
+          path: kototoro
+          submodules: recursive
+
+      - name: Check out the archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          remote="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          if git ls-remote --exit-code --heads "$remote" archive > /dev/null; then
+            git clone --depth 1 --branch archive "$remote" archive
+          else
+            # First run: an empty orphan branch.
+            git init -b archive archive
+            git -C archive remote add origin "$remote"
+          fi
+
+      - name: Set up Gradle JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Prepare Android SDK platform
+        # Gradle configures the whole Kototoro project, and the app module needs the platform to configure.
+        run: |
+          set -euo pipefail
+          (yes || true) | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-37.0' > /dev/null
+
+      - name: Run the indexer
+        working-directory: kototoro
+        env:
+          FULL: ${{ inputs.full && '--full' || '' }}
+          MAINTAINER: ${{ vars.MAINTAINER_NPUB }}
+        run: |
+          set -euo pipefail
+          args="--archive $GITHUB_WORKSPACE/archive --out $GITHUB_WORKSPACE/site $FULL"
+          if [ -n "$MAINTAINER" ]; then args="$args --maintainer $MAINTAINER"; fi
+          ./gradlew :community-indexer:run --no-daemon --args="$args"
+
+      - name: Push the archive
+        working-directory: archive
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          if git diff --cached --quiet; then
+            echo 'No new events.'
+          else
+            git commit -q -m "Archive events $(date -u +%Y-%m-%dT%H:%MZ)"
+            git push origin archive
+          fi
+
+      - name: Publish the snapshot
+        working-directory: site
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # Only the latest snapshot is kept (plan §6.2): a fresh orphan commit replaces the branch every run.
+          touch .nojekyll
+          git init -q -b gh-pages
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -q -m "Snapshot $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" gh-pages
