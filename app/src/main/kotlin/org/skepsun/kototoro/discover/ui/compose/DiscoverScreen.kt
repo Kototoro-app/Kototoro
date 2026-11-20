@@ -247,7 +247,9 @@ fun DiscoverScreen(
                 }
             }
 
-            LaunchedEffect(shouldLoadMore) {
+            // A short first page is near its end from the start, while the refresh is still running: ask again
+            // once it is done and after every page, or the list stops at its first page.
+            LaunchedEffect(shouldLoadMore, isRefreshing, gridItems.size) {
                 if (shouldLoadMore && !isRefreshing) {
                     onLoadMore()
                 }

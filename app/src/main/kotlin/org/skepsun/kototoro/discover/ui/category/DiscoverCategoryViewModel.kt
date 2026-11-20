@@ -212,7 +212,12 @@ class DiscoverCategoryViewModel @Inject constructor(
 
 
 
-    private suspend fun loadData(service: ScrobblerService, category: String, pageRequested: Int) {
+    private suspend fun loadData(
+        service: ScrobblerService,
+        category: String,
+        pageRequested: Int,
+        skippedPages: Int = 0,
+    ) {
         val isFirstPage = pageRequested == 0
         if (isFirstPage) {
             _contentState.value = listOf(LoadingState)
@@ -246,6 +251,13 @@ class DiscoverCategoryViewModel @Inject constructor(
             val currentItems = if (isFirstPage) emptyList() else _items.value
             val seenRemoteIds = currentItems.mapTo(HashSet()) { it.remoteId }
             val appendedItems = newItems.filter { seenRemoteIds.add(it.remoteId) }
+            // A list restored from the cache may hold several pages while paging restarts at the first, so a
+            // page of titles already shown moves on instead of ending the list.
+            if (!isFirstPage && appendedItems.isEmpty() && newItems.isNotEmpty() && skippedPages < MAX_SKIPPED_PAGES) {
+                _page.value = pageRequested
+                loadData(service, category, pageRequested + 1, skippedPages + 1)
+                return@onSuccess
+            }
             val updatedItems = currentItems + appendedItems
             val hasMore = appendedItems.isNotEmpty()
 
@@ -436,5 +448,10 @@ class DiscoverCategoryViewModel @Inject constructor(
             context.getString(seasonNameResId),
             season.year,
         )
+    }
+
+    private companion object {
+        /** Cached pages to step over before a run of repeated titles counts as the end of the list. */
+        const val MAX_SKIPPED_PAGES = 5
     }
 }
