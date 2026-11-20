@@ -1,6 +1,10 @@
 package org.skepsun.kototoro.community.data
 
+import android.content.Context
 import dagger.Module
+import dagger.hilt.android.qualifiers.ApplicationContext
+import org.skepsun.kototoro.BuildConfig
+import java.io.File
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
@@ -49,12 +53,26 @@ object CommunityNetworkModule {
     @Provides
     @Singleton
     fun provideCommunitySnapshotFetcher(
+        @ApplicationContext context: Context,
         @BaseHttpClient baseClient: OkHttpClient,
         settings: AppSettings,
         mirrors: GitHubMirrorCatalogRepository,
-    ): CommunitySnapshotFetcher = CommunitySnapshotFetcher(
-        httpClient = createKtorOkHttpClient(baseClient),
-        baseUrl = CommunitySnapshotFetcher.RAW_BASE_URL,
-        rewriteUrl = { url -> GitHubMirrorCatalog.apply(url, mirrors.entry(settings.gitHubMirrorId) ?: GitHubMirrorCatalog.NATIVE) },
-    )
+    ): CommunitySnapshotFetcher {
+        // Debug builds only: a base URL in this file replaces the published index, so the community screens can be
+        // checked against a seeded snapshot (`run-as … tee files/community/debug-snapshot-base-url`, then restart).
+        val override = if (BuildConfig.DEBUG) {
+            File(context.filesDir, "community/debug-snapshot-base-url").takeIf { it.isFile }?.readText()?.trim()?.ifEmpty { null }
+        } else {
+            null
+        }
+        return CommunitySnapshotFetcher(
+            httpClient = createKtorOkHttpClient(baseClient),
+            baseUrl = override ?: CommunitySnapshotFetcher.RAW_BASE_URL,
+            rewriteUrl = if (override != null) {
+                { it }
+            } else {
+                { url -> GitHubMirrorCatalog.apply(url, mirrors.entry(settings.gitHubMirrorId) ?: GitHubMirrorCatalog.NATIVE) }
+            },
+        )
+    }
 }
