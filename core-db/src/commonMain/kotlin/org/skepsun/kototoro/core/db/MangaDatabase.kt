@@ -76,8 +76,12 @@ import org.skepsun.kototoro.core.dictionary.DictionaryRule
 import org.skepsun.kototoro.core.dictionary.DictionaryRuleDao
 import org.skepsun.kototoro.core.dictionary.TranslationDictionaryDao
 import org.skepsun.kototoro.core.dictionary.TranslationDictionaryEntity
+import org.skepsun.kototoro.community.data.CommunityDao
+import org.skepsun.kototoro.community.data.CommunityOutboxEntity
+import org.skepsun.kototoro.community.data.CommunityRatingEntity
+import org.skepsun.kototoro.community.data.CommunityResolutionEntity
 
-const val DATABASE_VERSION = 89
+const val DATABASE_VERSION = 90
 
 @Database(
     entities = [
@@ -97,6 +101,7 @@ const val DATABASE_VERSION = 89
         MediaNoteEntity::class,
         DictionaryRule::class,
         TranslationDictionaryEntity::class,
+        CommunityRatingEntity::class, CommunityOutboxEntity::class, CommunityResolutionEntity::class,
         // EpubChapterEntity::class,
     ],
     version = DATABASE_VERSION,
@@ -177,6 +182,8 @@ abstract class MangaDatabase : RoomDatabase() {
     abstract fun getDictionaryRuleDao(): DictionaryRuleDao
 
     abstract fun getTranslationDictionaryDao(): TranslationDictionaryDao
+
+    abstract fun getCommunityDao(): CommunityDao
 
     // abstract fun getEpubChapterDao(): EpubChapterDao
 }

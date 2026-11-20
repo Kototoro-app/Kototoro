@@ -15,6 +15,9 @@ import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import org.skepsun.kototoro.community.data.CommunityOutboxEntity
+import org.skepsun.kototoro.community.data.CommunityRatingEntity
+import org.skepsun.kototoro.community.data.CommunityResolutionEntity
 import org.skepsun.kototoro.core.db.migrations.sharedDatabaseMigrations
 import org.skepsun.kototoro.suggestions.data.SuggestionEntity
 import org.skepsun.kototoro.tracker.data.TrackScheduleEntity
@@ -75,6 +78,20 @@ class SharedMigrationTest {
             assertEquals("genre.horror", replaced.reason)
             assertEquals(1, db.getSuggestionDao().observeAll(20, emptyList(), direction = "EXPLORE").first().size)
             assertTrue(db.getSuggestionDao().observeAll(20, emptyList(), direction = "TASTE").first().isEmpty())
+
+            // v90: community rating, outbox and tracker id search tables start empty and take rows.
+            val community = db.getCommunityDao()
+            assertEquals(null, community.findRating(MANGA_ID))
+            val rating = CommunityRatingEntity(MANGA_ID, stars = 8, address = "comic:x", eventId = "e1", createdAt = 10)
+            community.upsertRating(rating)
+            assertEquals(rating, community.observeRating(MANGA_ID).first())
+            community.upsertOutbox(CommunityOutboxEntity("e1", "{}", 34259, 10, attempts = 0, nextAttemptAt = 5, lastError = null))
+            assertEquals(listOf("e1"), community.findDueOutbox(now = 5, limit = 10).map { it.eventId })
+            assertTrue(community.findDueOutbox(now = 4, limit = 10).isEmpty())
+            val resolution = CommunityResolutionEntity(MANGA_ID, "ANILIST", "BOUND", remoteId = 7, checkedAt = 1, failures = 0)
+            community.upsertResolution(resolution)
+            community.upsertResolution(resolution.copy(service = "BANGUMI", status = "FAILED", remoteId = null, failures = 1))
+            assertEquals(2, community.findResolutions(MANGA_ID).size)
         } finally {
             db.close()
         }
