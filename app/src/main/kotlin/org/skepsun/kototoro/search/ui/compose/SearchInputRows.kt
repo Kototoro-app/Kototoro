@@ -69,6 +69,7 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.titleResId
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
+import org.skepsun.kototoro.core.ui.chips.CompactChoicePill
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarHorizontalPadding
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarItemSpacing
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
@@ -495,15 +496,31 @@ private fun PinnedRowPill(
     trailing: (@Composable () -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
+    // Material styles use the same toggle pill as the home shell's quick-filter rail, so the
+    // source list's tag row no longer reads as a different control family.
+    if (LocalInterfaceStyle.current != InterfaceStyle.IOS) {
+        CompactChoicePill(
+            selected = selected,
+            onClick = onClick,
+            modifier = modifier,
+            enabled = enabled,
+            leadingIcon = leading,
+            trailingIcon = trailing,
+            label = content,
+        )
+        return
+    }
+    // iOS keeps the floating glass capsule, but a selected tag becomes a solid tinted capsule
+    // (the system's filled-button treatment) instead of a faint wash over the glass.
     val contentColor = (
         if (selected) {
-            MaterialTheme.colorScheme.onPrimaryContainer
+            MaterialTheme.colorScheme.onPrimary
         } else {
-            MaterialTheme.colorScheme.onSurfaceVariant
+            MaterialTheme.colorScheme.onSurface
         }
     ).copy(alpha = if (enabled) 1f else 0.56f)
-    val selectedOverlayColor = if (selected) {
-        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.56f)
+    val selectedFillColor = if (selected) {
+        MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
     } else {
         Color.Transparent
     }
@@ -517,8 +534,8 @@ private fun PinnedRowPill(
         Row(
             modifier = Modifier
                 .height(SearchPinnedChipHeight)
-                .background(selectedOverlayColor, CircleShape)
-                .padding(horizontal = 11.dp),
+                .background(selectedFillColor, CircleShape)
+                .padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
