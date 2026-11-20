@@ -2,6 +2,7 @@ package org.skepsun.kototoro.community.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -48,6 +49,7 @@ fun CommunityRatingSection(
     LaunchedEffect(content, trackerRefs) { viewModel.bind(content, trackerRefs) }
     val state = viewModel.state.collectAsStateWithLifecycle().value ?: return
     var showDialog by rememberSaveable { mutableStateOf(false) }
+    var showComments by rememberSaveable { mutableStateOf(false) }
 
     container {
         Row(
@@ -81,6 +83,20 @@ fun CommunityRatingSection(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                // The index's count lags by up to a run; the sheet reads the relays and shows what exists now.
+                TextButton(
+                    onClick = { showComments = true },
+                    contentPadding = PaddingValues(0.dp),
+                    modifier = Modifier.testTag("community-comments-open"),
+                ) {
+                    Text(
+                        if (state.comments > 0) {
+                            stringResource(R.string.community_comments_count, state.comments)
+                        } else {
+                            stringResource(R.string.community_comments)
+                        },
+                    )
+                }
             }
             when {
                 state.isPublishing -> CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
@@ -110,6 +126,10 @@ fun CommunityRatingSection(
             },
             onDismiss = { showDialog = false },
         )
+    }
+
+    if (showComments) {
+        CommunityCommentsSheet(content = content, trackerRefs = trackerRefs, onDismiss = { showComments = false })
     }
 }
 
@@ -167,7 +187,7 @@ private fun CommunityRatingDialog(
 }
 
 @Composable
-private fun refusalText(refusal: CommunityRatingRefusal?): String? = when (refusal) {
+internal fun refusalText(refusal: CommunityRatingRefusal?): String? = when (refusal) {
     CommunityRatingRefusal.NSFW -> stringResource(R.string.community_rating_nsfw_off)
     CommunityRatingRefusal.NO_IDENTITY -> stringResource(R.string.community_rating_no_identity)
     CommunityRatingRefusal.NO_KEYS -> stringResource(R.string.community_rating_no_keys)

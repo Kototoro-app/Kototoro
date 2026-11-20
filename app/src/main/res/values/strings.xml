@@ -4365,4 +4365,24 @@
     <string name="community_restore_invalid">This is not a valid recovery key</string>
     <string name="community_recovery_key_message">Keep this key somewhere safe. It is the only way to use this identity after reinstalling or on another device: Kototoro backups do not include it. Anyone who has it can rate in your name.</string>
     <string name="community_recovery_key_copied">Recovery key copied</string>
+    <string name="community_comments">Comments</string>
+    <string name="community_comments_count">Comments · %1$d</string>
+    <string name="community_comments_empty">No comments yet</string>
+    <string name="community_comments_offline">Could not reach any relay</string>
+    <string name="community_comments_reload">Reload</string>
+    <string name="community_comment_hint">Write a comment</string>
+    <string name="community_comment_reply_to">Replying to %1$s</string>
+    <string name="community_comment_spoiler">Spoiler</string>
+    <string name="community_comment_spoiler_hidden">Contains spoilers, tap to show</string>
+    <string name="community_comment_reply">Reply</string>
+    <string name="community_comment_pending">Sending…</string>
+    <string name="community_comment_block">Block author</string>
+    <string name="community_comment_mine">You</string>
+    <string name="community_comment_publishing">Signing and publishing…</string>
+    <string name="community_report_title">Report comment</string>
+    <string name="community_report_spam">Spam or advertising</string>
+    <string name="community_report_illegal">Illegal content</string>
+    <string name="community_report_nudity">Sexual content</string>
+    <string name="community_report_profanity">Abuse or profanity</string>
+    <string name="community_report_other">Other</string>
 </resources>

@@ -4327,4 +4327,24 @@
     <string name="community_restore_invalid">这不是有效的恢复密钥</string>
     <string name="community_recovery_key_message">请把这个密钥保存在安全的地方。重装应用或换设备后，只有它能让你继续使用这个身份：Kototoro 的备份不包含它。拿到它的人可以用你的名义评分。</string>
     <string name="community_recovery_key_copied">恢复密钥已复制</string>
+    <string name="community_comments">评论</string>
+    <string name="community_comments_count">评论 · %1$d</string>
+    <string name="community_comments_empty">暂无评论</string>
+    <string name="community_comments_offline">无法连接任何中继</string>
+    <string name="community_comments_reload">重新加载</string>
+    <string name="community_comment_hint">写评论</string>
+    <string name="community_comment_reply_to">回复 %1$s</string>
+    <string name="community_comment_spoiler">剧透</string>
+    <string name="community_comment_spoiler_hidden">含剧透，点按显示</string>
+    <string name="community_comment_reply">回复</string>
+    <string name="community_comment_pending">发送中…</string>
+    <string name="community_comment_block">屏蔽作者</string>
+    <string name="community_comment_mine">我</string>
+    <string name="community_comment_publishing">正在签名并发布…</string>
+    <string name="community_report_title">举报评论</string>
+    <string name="community_report_spam">垃圾广告</string>
+    <string name="community_report_illegal">违法内容</string>
+    <string name="community_report_nudity">色情内容</string>
+    <string name="community_report_profanity">辱骂或粗俗</string>
+    <string name="community_report_other">其他</string>
 </resources>

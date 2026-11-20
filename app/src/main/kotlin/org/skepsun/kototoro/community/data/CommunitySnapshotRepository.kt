@@ -6,6 +6,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import org.skepsun.kototoro.community.domain.CommunityModeration
 import org.skepsun.kototoro.community.domain.CommunitySnapshotManifest
 import org.skepsun.kototoro.community.domain.CommunitySnapshotReader
 import org.skepsun.kototoro.community.domain.CommunitySnapshotShards
@@ -59,6 +60,12 @@ class CommunitySnapshotRepository @Inject constructor(
         val group = CommunitySnapshotReader.groupOf(keys) { shard -> shards[CommunitySnapshotShards.keysPath(shard)] } ?: return null
         val works = file(manifest, CommunitySnapshotShards.worksPath(CommunitySnapshotShards.of(group))) ?: return null
         return CommunitySnapshotReader.works(works)[group]
+    }
+
+    /** The maintainer's blocks and the comments the index hid, for every comment list. */
+    suspend fun moderation(): CommunityModeration {
+        val manifest = manifest() ?: return CommunityModeration()
+        return file(manifest, CommunitySnapshotShards.MODERATION_PATH)?.let(CommunitySnapshotReader::moderation) ?: CommunityModeration()
     }
 
     /** The relays the index currently recommends, or null before the first manifest. */

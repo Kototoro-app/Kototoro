@@ -84,6 +84,9 @@ data class NostrEvent(
             )
         }
 
+        /** [value] as [serializeForId] writes a string, quotes included. */
+        internal fun quoted(value: String): String = buildString { appendQuoted(value) }
+
         private fun StringBuilder.appendQuoted(value: String) {
             append('"')
             for (char in value) {

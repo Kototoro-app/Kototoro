@@ -2,6 +2,7 @@ package org.skepsun.kototoro.community.nostr
 
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import org.kotlincrypto.hash.sha2.SHA256
 
 /**
  * NIP-13 proof of work: a `nonce` tag varied until the event id starts with [difficulty] zero bits. It is what an event
@@ -46,13 +47,35 @@ object NostrPow {
     ): NostrUnsignedEvent {
         if (difficulty <= 0) return event
         val base = event.tags.filterNot { it.firstOrNull() == tagName }
+        fun tagsFor(nonce: Long) = base + listOf(listOf(tagName, nonce.toString(), difficulty.toString()))
+        // The nonce is the only part that changes, and it is the last tag: everything before it is hashed once and the
+        // state copied, so each attempt hashes only the nonce and what follows it (comments ask for 2^20 attempts).
+        val text = NostrEvent.serializeForId(pubkeyHex, event.createdAt, event.kind, tagsFor(0), event.content)
+        val tail = "\",\"$difficulty\"]]," + NostrEvent.quoted(event.content) + "]"
+        check(text.endsWith(tail)) { "unexpected serialization" }
+        val prefix = SHA256().apply { update(text.substring(0, text.length - tail.length - 1).encodeToByteArray()) }
+        val tailBytes = tail.encodeToByteArray()
         var nonce = 0L
         while (true) {
             if (nonce and 0xFFF == 0L) currentCoroutineContext().ensureActive()
-            val tags = base + listOf(listOf(tagName, nonce.toString(), difficulty.toString()))
-            val id = NostrEvent.computeId(pubkeyHex, event.createdAt, event.kind, tags, event.content)
-            if (leadingZeroBits(id) >= difficulty) return event.copy(tags = tags)
+            val digest = prefix.copy()
+            digest.update(nonce.toString().encodeToByteArray())
+            digest.update(tailBytes)
+            if (leadingZeroBits(digest.digest()) >= difficulty) return event.copy(tags = tagsFor(nonce))
             nonce++
         }
+    }
+
+    private fun leadingZeroBits(hash: ByteArray): Int {
+        var count = 0
+        for (byte in hash) {
+            val value = byte.toInt() and 0xFF
+            if (value == 0) {
+                count += 8
+            } else {
+                return count + value.countLeadingZeroBits() - (Int.SIZE_BITS - 8)
+            }
+        }
+        return count
     }
 }

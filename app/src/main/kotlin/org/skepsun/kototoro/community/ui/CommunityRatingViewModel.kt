@@ -31,6 +31,8 @@ data class CommunityRatingUiState(
     val isLoading: Boolean,
     val rating: CommunityRatingSummary?,
     val myStars: Int?,
+    /** Comments the index counted; the sheet itself reads the relays. */
+    val comments: Int,
     /** Why the reader cannot rate this work, or null when they can. */
     val refusal: CommunityRatingRefusal?,
     val isPublishing: Boolean,
@@ -83,6 +85,7 @@ class CommunityRatingViewModel @Inject constructor(
             isLoading = loaded.isLoading,
             rating = loaded.summary?.rating,
             myStars = myStars,
+            comments = loaded.summary?.comments ?: 0,
             refusal = repository.refusal(loaded.identity),
             isPublishing = publishing,
         )

@@ -33,6 +33,10 @@ interface CommunityDao {
     @Query("SELECT COUNT(*) FROM community_outbox")
     suspend fun countOutbox(): Int
 
+    /** Events of one kind still waiting, e.g. the reader's own comments shown as pending. */
+    @Query("SELECT * FROM community_outbox WHERE kind = :kind ORDER BY created_at")
+    suspend fun findOutboxByKind(kind: Int): List<CommunityOutboxEntity>
+
     @Query("DELETE FROM community_outbox WHERE event_id = :eventId")
     suspend fun deleteOutbox(eventId: String)
 

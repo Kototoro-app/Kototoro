@@ -91,6 +91,21 @@ class NostrCoreTest {
     }
 
     @Test
+    fun `mining hashes what the event id is, for any content and tag, and stays fast`() = runTest {
+        val tricky = unsigned(content = "多行\n\"引号\" \\ 和 \u0001 控制字符", tags = listOf(listOf("i", "x"), listOf("title", "\"t\"")))
+        for (tag in listOf(NostrPow.NIP13_TAG, CommunityEventSchema.POW_TAG)) {
+            val mined = NostrPow.mine(tricky, keys.publicKeyHex, difficulty = 10, tagName = tag)
+            val event = NostrKeys.sign(mined, keys)
+            assertTrue(NostrKeys.verify(event), "the id the miner hashed is the id NIP-01 computes")
+            assertTrue(NostrPow.satisfies(event, 10, tag))
+            assertEquals(tag, event.tags.last().first(), "the nonce stays the last tag")
+        }
+        val start = System.nanoTime()
+        NostrPow.mine(unsigned(), keys.publicKeyHex, difficulty = 16, tagName = CommunityEventSchema.POW_TAG)
+        println("16 bits mined in ${(System.nanoTime() - start) / 1_000_000} ms")
+    }
+
+    @Test
     fun `filters match the way relays do and serialize their tag letters`() {
         val event = NostrKeys.sign(unsigned(), keys)
         assertTrue(NostrFilter(kinds = listOf(1111), tags = mapOf("i" to listOf("https://anilist.co/manga/1", "x"))).matches(event))

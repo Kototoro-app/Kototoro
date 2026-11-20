@@ -151,7 +151,7 @@ class CommunityRepository @Inject constructor(
         if (due.isNotEmpty()) {
             // One relay is enough: the indexer archives everything it reads, so the archive, not a second relay, is
             // what keeps the event; and from mainland China only one relay both connects and accepts writes (plan §5).
-            val pool = NostrRelayPool(relayClient, (DEFAULT_RELAYS + snapshots.relays().orEmpty()).distinct(), minAccepted = 1)
+            val pool = NostrRelayPool(relayClient, relays(), minAccepted = 1)
             for (entry in due) publishQueued(pool, entry, now)
         }
         dao.countOutbox().also { left -> if (left > 0) outboxScheduler.enqueue() }
@@ -196,6 +196,29 @@ class CommunityRepository @Inject constructor(
     private suspend fun sign(event: NostrUnsignedEvent, keys: NostrKeyPair) = withContext(Dispatchers.Default) { NostrKeys.sign(event, keys) }
 
     private suspend fun powRating(): Int = runCatchingCancellable { snapshots.manifest()?.powRating }.getOrNull() ?: DEFAULT_POW_RATING
+
+    /** What a comment needs to count: the index's current difficulty, or the default before its first manifest. */
+    suspend fun powComment(): Int = runCatchingCancellable { snapshots.manifest()?.powComment }.getOrNull() ?: DEFAULT_POW_COMMENT
+
+    /** Every relay the community reads and writes: the built-in ones and whatever the index adds (plan §5.1). */
+    suspend fun relays(): List<String> = (DEFAULT_RELAYS + snapshots.relays().orEmpty()).distinct()
+
+    fun keys(): NostrKeyPair? = keyStore.keys()
+
+    /** Signs, queues and tries to publish an event built elsewhere (comments, deletions, reports). */
+    suspend fun publish(event: NostrUnsignedEvent, keys: NostrKeyPair, pow: Int = 0): NostrEvent {
+        val signed = withContext(Dispatchers.Default) {
+            NostrKeys.sign(NostrPow.mine(event, keys.publicKeyHex, pow, CommunityEventSchema.POW_TAG), keys)
+        }
+        enqueue(signed)
+        flushOutbox()
+        return signed
+    }
+
+    /** The reader's own events of [kind] that no relay has stored yet. */
+    suspend fun pendingEvents(kind: Int): List<NostrEvent> = dao.findOutboxByKind(kind).mapNotNull { entry ->
+        runCatching { NostrEvent.fromJson(json.parseToJsonElement(entry.eventJson).jsonObject) }.getOrNull()
+    }
 
     private suspend fun storedRecords(mangaId: Long): List<CommunityResolutionRecord> =
         dao.findResolutions(mangaId).mapNotNull { it.toRecord() }
@@ -260,6 +283,7 @@ class CommunityRepository @Inject constructor(
         )
 
         private const val DEFAULT_POW_RATING = 16
+        private const val DEFAULT_POW_COMMENT = 20
         private const val OUTBOX_BATCH = 20
         private const val SEARCH_TITLES = 2
         private const val MAX_RETRY_DELAY = 6 * 60 * 60 * 1000L
