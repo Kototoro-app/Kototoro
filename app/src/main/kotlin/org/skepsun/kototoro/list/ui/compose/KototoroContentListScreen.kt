@@ -772,6 +772,7 @@ fun QuickFilterSection(
     leadingContent: (@Composable () -> Unit)? = null,
     modifier: Modifier = Modifier,
     appliedOnly: Boolean = false,
+    verticalPadding: androidx.compose.ui.unit.Dp = 4.dp,
 ) {
     val context = LocalContext.current
     val isTvPresentation = LocalUiPresentationConfig.current.isTv
@@ -819,7 +820,7 @@ fun QuickFilterSection(
     }
     LazyRow(
         state = listState,
-        contentPadding = PaddingValues(horizontal = AppLayoutTokens.sectionHorizontalPadding, vertical = 4.dp),
+        contentPadding = PaddingValues(horizontal = AppLayoutTokens.sectionHorizontalPadding, vertical = verticalPadding),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         modifier = modifier
             .fillMaxWidth()

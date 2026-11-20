@@ -49,7 +49,8 @@ fun SuggestionsHeader(
     val languageText = if (language == SuggestionLanguage.ALL) suggestionLanguageLabel(language)
         else uiString(if (languageOnly) "suggestion_language_only_badge" else "suggestion_language_preferred_badge",
             suggestionLanguageLabel(language))
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    // The direction pills sit in a 36dp touch box around a 32dp body; 6dp here reads as an 8dp gap.
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Surface(shape = RoundedCornerShape(20.dp), color = colors.surfaceContainerLow,
             border = BorderStroke(1.dp, accent.copy(alpha = .10f)), modifier = Modifier.testTag("suggestions-summary")) {
             BoxWithConstraints(Modifier.fillMaxWidth().background(Brush.horizontalGradient(

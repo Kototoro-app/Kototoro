@@ -1235,6 +1235,11 @@ internal fun SuggestionsTopLevelRouteContent(
     val suggestionCount by viewModel.visibleCount.collectAsStateWithLifecycle()
     val suggestionLanguage by viewModel.language.collectAsStateWithLifecycle()
     val suggestionLanguageOnly by viewModel.languageOnly.collectAsStateWithLifecycle()
+    val suggestionItems by viewModel.content.collectAsStateWithLifecycle()
+    val suggestionQuickFilter = remember(suggestionItems) {
+        suggestionItems.firstOrNull { it is org.skepsun.kototoro.list.ui.model.QuickFilter }
+            as? org.skepsun.kototoro.list.ui.model.QuickFilter
+    }
     val context = LocalContext.current
     var suggestionsContextualTopBarOverride by remember { mutableStateOf<TopBarOverrideState?>(null) }
     var suggestionsFilterRailOverride by remember { mutableStateOf<CompactFilterRailOverrideState?>(null) }
@@ -1282,10 +1287,22 @@ internal fun SuggestionsTopLevelRouteContent(
                         onSelect = viewModel::selectDirection,
                         onRefresh = viewModel::updateSuggestions,
                         onSettings = appRouter::openSuggestionsSettings,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        modifier = Modifier.padding(start = 12.dp, top = 8.dp, end = 12.dp),
                     )
+                    // The quick-filter rail joins the header so summary, directions and filters share one
+                    // 8dp rhythm instead of stacking the header padding, grid row spacing and rail padding.
+                    // 4dp plus the two pills' 2dp touch slack reads as 8dp between the pill rows.
+                    suggestionQuickFilter?.let { filter ->
+                        org.skepsun.kototoro.list.ui.compose.QuickFilterSection(
+                            quickFilter = filter,
+                            onQuickFilterOptionClick = viewModel::toggleFilterOption,
+                            verticalPadding = 0.dp,
+                            modifier = Modifier.padding(top = 4.dp),
+                        )
+                    }
                 }
             },
+            showQuickFilterInline = false,
             onTopBarOverrideChanged = { suggestionsContextualTopBarOverride = it },
             showRemoveOption = false,
             showScrollbar = true,

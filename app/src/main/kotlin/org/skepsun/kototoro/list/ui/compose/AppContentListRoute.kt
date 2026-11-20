@@ -151,7 +151,7 @@ fun AppContentListRoute(
     } else {
         remember { mutableStateOf(emptyList()) }
     }
-    val items = remember(sourceItems, quickFilterOverride) {
+    val routeItems = remember(sourceItems, quickFilterOverride) {
         if (quickFilterOverride == null) {
             sourceItems
         } else {
@@ -172,6 +172,11 @@ fun AppContentListRoute(
                 }
             }
         }
+    }
+    // A rail the host draws in its own header stays out of the list: an empty item would still take
+    // the grid's row spacing and open a gap under the header.
+    val items = remember(routeItems, showQuickFilterInline) {
+        if (showQuickFilterInline) routeItems else routeItems.filterNot { it is QuickFilter }
     }
     val listMode by viewModel.listMode.collectAsStateWithLifecycle()
     val gridScale by viewModel.gridScale.collectAsStateWithLifecycle()
@@ -209,7 +214,7 @@ fun AppContentListRoute(
     val coroutineScope = rememberCoroutineScope()
     val exceptionResolver = (activity as? BaseComposeActivity)?.exceptionResolver
     val loadedPagingItems = lazyPagingItems?.itemSnapshotList?.items.orEmpty()
-    val quickFilter = remember(items) { items.firstOrNull { it is QuickFilter } as? QuickFilter }
+    val quickFilter = remember(routeItems) { routeItems.firstOrNull { it is QuickFilter } as? QuickFilter }
     // 返回列表时先用"保留快照"渲染（displayedItems = items + snapshot.items），初始滚动
     // 位置取快照内记录的 firstVisibleItemIndex：详情页刷新会让分页源失效重载，新旧数据
     // 内容/排序错位时，若用【新加载数据】里 anchor 的 index 换算成布局位置去定位旧快照，
