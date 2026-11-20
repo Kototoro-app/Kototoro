@@ -71,6 +71,7 @@ import org.skepsun.kototoro.details.ui.pager.bookmarks.BookmarksViewModel
 import org.skepsun.kototoro.details.ui.pager.chapters.compose.ChapterSelectionUiState
 import org.skepsun.kototoro.details.ui.pager.bookmarks.compose.BookmarksScreenRoot
 import org.skepsun.kototoro.details.ui.pager.chapters.compose.ChaptersScreen
+import org.skepsun.kototoro.details.ui.pager.chapters.ChapterGroupsManager
 import org.skepsun.kototoro.details.ui.pager.chapters.compose.ChaptersScreenRoot
 import org.skepsun.kototoro.details.ui.pager.pages.PagesViewModel
 import org.skepsun.kototoro.details.ui.pager.pages.compose.PagesScreenRoot
@@ -559,6 +560,9 @@ private fun MetadataChapterPanel(
             )
         }.withVolumeHeaders(context)
     }
+    val groupsManager = remember { ChapterGroupsManager() }
+    val visibleItems = remember(items, groupsManager.collapsedGroups) { groupsManager.applyCollapsedState(items) }
+    val foldableGroupIds = remember(items) { groupsManager.foldableGroupIds(items) }
 
     Column(modifier = Modifier.fillMaxSize()) {
         if (tabs.size > 1) {
@@ -570,7 +574,7 @@ private fun MetadataChapterPanel(
         }
         ChaptersScreen(
             requestInitialFocus = requestInitialFocus,
-            items = items,
+            items = visibleItems,
             isGridView = isGridView,
             isScrollEnabled = isScrollEnabled,
             gridScale = 1.0f,
@@ -581,7 +585,9 @@ private fun MetadataChapterPanel(
             initialChapterId = null,
             onItemClick = { viewModel.value = it.chapter },
             onItemLongClick = {},
-            onHeaderClick = {},
+            onHeaderClick = { header -> if (header.isCollapsible) groupsManager.toggleGroup(header.groupId) },
+            allGroupsCollapsed = groupsManager.areAllCollapsed(foldableGroupIds),
+            onToggleAllGroups = { groupsManager.toggleAll(foldableGroupIds) },
             onFilterChipClick = {},
             onSelectionActionClick = {},
             onClearSelection = {},

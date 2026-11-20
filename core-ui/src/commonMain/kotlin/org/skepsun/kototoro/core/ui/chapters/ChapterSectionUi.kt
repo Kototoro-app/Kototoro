@@ -6,6 +6,7 @@ import org.skepsun.kototoro.core.ui.chips.CompactChoicePill
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -22,8 +23,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import org.skepsun.kototoro.core.ui.buttons.TextButton
 import org.skepsun.kototoro.core.ui.gestures.mouseDragScroll
+import org.skepsun.kototoro.core.ui.text.uiString
 
 /** Android's chapter list section header; [expandIcon] is shown (and rotated when collapsed) for collapsible groups. */
 @Composable
@@ -55,6 +59,32 @@ fun ChapterSectionHeader(
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.rotate(if (!isExpanded) -90f else 0f),
             )
+        }
+    }
+}
+
+/**
+ * The chapter filter rail with the "expand/collapse all volumes" action at its end; [allGroupsCollapsed] null (fewer
+ * than two foldable volumes) leaves the rail as it was, true makes the action expand.
+ */
+@Composable
+fun ChapterFilterBar(
+    allGroupsCollapsed: Boolean?,
+    onToggleGroups: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    toggleModifier: Modifier = Modifier,
+    chips: @Composable (Modifier) -> Unit,
+) {
+    if (allGroupsCollapsed == null) {
+        chips(modifier)
+        return
+    }
+    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.weight(1f)) { chips(Modifier) }
+        TextButton(onToggleGroups, enabled = enabled,
+            modifier = toggleModifier.padding(end = 8.dp).testTag("chapter-groups-toggle")) {
+            Text(uiString(if (allGroupsCollapsed) "chapter_volumes_expand_all" else "chapter_volumes_collapse_all"))
         }
     }
 }

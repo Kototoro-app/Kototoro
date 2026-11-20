@@ -85,4 +85,28 @@ class ChapterGroupingTest {
             },
         )
     }
+
+    @Test
+    fun `folded volumes hide their chapters and a plain header ends the fold`() {
+        // "#x" foldable header, "=" plain header, numbers are chapters.
+        val rows = listOf("#a", "1", "2", "#b", "3", "=", "4", "#a", "5")
+        val key = { row: String -> row.takeIf { it.startsWith("#") }?.drop(1) }
+        val isHeader = { row: String -> !row.first().isDigit() }
+        assertEquals(rows, collapseChapterGroups(rows, key, isHeader, emptySet()))
+        assertEquals(listOf("#a", "#b", "3", "=", "4", "#a"), collapseChapterGroups(rows, key, isHeader, setOf("a")))
+        assertEquals(listOf("#a", "1", "2", "#b", "=", "4", "#a", "5"),
+            collapseChapterGroups(rows, key, isHeader, setOf("b")))
+        assertEquals("b", chapterGroupOf(rows, key, isHeader) { it == "3" })
+        assertNull(chapterGroupOf(rows, key, isHeader) { it == "4" })
+        assertNull(chapterGroupOf(rows, key, isHeader) { it == "9" })
+    }
+
+    @Test
+    fun `the expand-collapse-all action needs two volumes and flips between all open and all folded`() {
+        assertNull(allChapterGroupsCollapsed(listOf("a"), emptySet()))
+        assertEquals(false, allChapterGroupsCollapsed(listOf("a", "b"), setOf("a")))
+        assertEquals(true, allChapterGroupsCollapsed(listOf("a", "b"), setOf("a", "b", "other")))
+        assertEquals(setOf("x", "a", "b"), toggledChapterGroups(listOf("a", "b"), setOf("x", "a")))
+        assertEquals(setOf("x"), toggledChapterGroups(listOf("a", "b"), setOf("x", "a", "b")))
+    }
 }

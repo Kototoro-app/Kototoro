@@ -107,3 +107,53 @@ fun <T> withVolumeSections(
     }
     return result
 }
+
+/** The one-tap fold action appears once a list has this many foldable groups. */
+const val MIN_FOLDABLE_CHAPTER_GROUPS = 2
+
+/**
+ * Drops the rows under collapsed groups; [groupKey] names a foldable header's group and is null for every other row.
+ * A row that is neither (a plain header) ends the folded group before it.
+ */
+fun <T> collapseChapterGroups(
+    items: List<T>,
+    groupKey: (T) -> String?,
+    isHeader: (T) -> Boolean,
+    collapsed: Set<String>,
+): List<T> {
+    if (collapsed.isEmpty()) return items
+    var hiding = false
+    return items.filter { item ->
+        if (isHeader(item)) {
+            hiding = groupKey(item)?.let { it in collapsed } ?: false
+            true
+        } else {
+            !hiding
+        }
+    }
+}
+
+/** The foldable group holding the first row matching [isTarget], so locating a chapter can open its volume. */
+fun <T> chapterGroupOf(
+    items: List<T>,
+    groupKey: (T) -> String?,
+    isHeader: (T) -> Boolean,
+    isTarget: (T) -> Boolean,
+): String? {
+    var group: String? = null
+    for (item in items) {
+        if (isHeader(item)) group = groupKey(item) else if (isTarget(item)) return group
+    }
+    return null
+}
+
+/**
+ * The state of the "expand/collapse all" action over [groups]: null hides it (fewer than
+ * [MIN_FOLDABLE_CHAPTER_GROUPS]), true when every group is collapsed, so the action expands them.
+ */
+fun allChapterGroupsCollapsed(groups: Collection<String>, collapsed: Set<String>): Boolean? =
+    if (groups.size < MIN_FOLDABLE_CHAPTER_GROUPS) null else groups.all { it in collapsed }
+
+/** What the "expand/collapse all" action leaves collapsed: nothing when all were collapsed, otherwise every group. */
+fun toggledChapterGroups(groups: Collection<String>, collapsed: Set<String>): Set<String> =
+    if (groups.all { it in collapsed }) collapsed - groups.toSet() else collapsed + groups

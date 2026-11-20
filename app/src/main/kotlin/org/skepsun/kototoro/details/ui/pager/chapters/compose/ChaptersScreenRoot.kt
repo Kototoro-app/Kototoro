@@ -87,13 +87,16 @@ fun ChaptersScreenRoot(
         chapters.withVolumeHeaders(context)
     }
 
-    var groupsVersion by remember { mutableIntStateOf(0) }
-
     val groupsManager = remember { ChapterGroupsManager() }
 
-    val collapsedChapters = remember(chaptersWithHeaders, groupsVersion) {
+    val collapsedChapters = remember(chaptersWithHeaders, groupsManager.collapsedGroups) {
         groupsManager.applyCollapsedState(chaptersWithHeaders)
     }
+    val foldableGroupIds = remember(chaptersWithHeaders) {
+        groupsManager.foldableGroupIds(chaptersWithHeaders)
+    }
+    // Folding moves the rows; once the user folds, the list stays put instead of jumping back to the current chapter.
+    var hasFolded by remember { mutableStateOf(false) }
 
     val selectedItemIds = remember { mutableStateListOf<Long>() }
     var hasShownSelectionHint by remember { mutableStateOf(false) }
@@ -318,7 +321,7 @@ fun ChaptersScreenRoot(
             filterChips = quickFilter,
             isLoading = isLoading,
         emptyMessageResId = emptyReason?.msgResId,
-        initialChapterId = initialCurrentChapterId,
+        initialChapterId = initialCurrentChapterId.takeUnless { hasFolded },
         onItemDownload = if (rowActions.showDownload) {
             { item -> startDownload(setOf(item.chapter.id)) }
         } else {
@@ -374,9 +377,14 @@ fun ChaptersScreenRoot(
         },
         onHeaderClick = { header ->
             if (header.isCollapsible) {
+                hasFolded = true
                 groupsManager.toggleGroup(header.groupId)
-                groupsVersion++
             }
+        },
+        allGroupsCollapsed = groupsManager.areAllCollapsed(foldableGroupIds),
+        onToggleAllGroups = {
+            hasFolded = true
+            groupsManager.toggleAll(foldableGroupIds)
         },
         onFilterChipClick = { chip ->
             val branch = chip.data as? org.skepsun.kototoro.list.domain.ListFilterOption.Branch

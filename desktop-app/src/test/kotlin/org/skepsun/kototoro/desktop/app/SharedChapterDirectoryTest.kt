@@ -237,4 +237,46 @@ class SharedChapterDirectoryTest {
             onNodeWithTag("item:1").assertIsDisplayed()
         }
     }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun `the filter bar folds every volume at once and a header reopens its own`() = runDesktopComposeUiTest(
+        width = 480, height = 480,
+    ) {
+        val rows = listOf("A", "1", "2", "B", "3")
+        val key = { row: String -> row.takeIf { it.first().isLetter() } }
+        var collapsed by mutableStateOf(emptySet<String>())
+        setContent {
+            DesktopTheme(DesktopAppearance.LIGHT) {
+                val groups = listOf("A", "B")
+                Column {
+                    ChapterFilterBar(allChapterGroupsCollapsed(groups, collapsed),
+                        { collapsed = toggledChapterGroups(groups, collapsed) }) { Box(it) }
+                    collapseChapterGroups(rows, key, { key(it) != null }, collapsed).forEach { row ->
+                        if (key(row) != null) {
+                            ChapterSectionHeader(row, Modifier.testTag("header:$row"), isCollapsible = true,
+                                isExpanded = row !in collapsed, onClick = {
+                                    collapsed = if (row in collapsed) collapsed - row else collapsed + row
+                                })
+                        } else {
+                            Text(row, Modifier.testTag("row:$row"))
+                        }
+                    }
+                }
+            }
+        }
+        onNodeWithTag("chapter-groups-toggle").assertTextContains(AndroidStrings["chapter_volumes_collapse_all"])
+            .performClick()
+        onNodeWithTag("row:1").assertDoesNotExist()
+        onNodeWithTag("row:3").assertDoesNotExist()
+        onNodeWithTag("chapter-groups-toggle").assertTextContains(AndroidStrings["chapter_volumes_expand_all"])
+        onNodeWithTag("header:B").performClick()
+        onNodeWithTag("row:3").assertIsDisplayed()
+        onNodeWithTag("row:1").assertDoesNotExist()
+        // One volume open again, so the action folds everything rather than expanding.
+        onNodeWithTag("chapter-groups-toggle").assertTextContains(AndroidStrings["chapter_volumes_collapse_all"])
+            .performClick()
+        onNodeWithTag("chapter-groups-toggle").performClick()
+        listOf("1", "2", "3").forEach { onNodeWithTag("row:$it").assertIsDisplayed() }
+    }
 }

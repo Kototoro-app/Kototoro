@@ -1506,6 +1506,8 @@
     <string name="hide_from_main_screen">从主页面中隐藏</string>
     <string name="collapse">折叠</string>
     <string name="expand">展开</string>
+    <string name="chapter_volumes_expand_all">全部展开</string>
+    <string name="chapter_volumes_collapse_all">全部折叠</string>
     <string name="adblock">屏蔽广告</string>
     <string name="adblock_summary">屏蔽内置浏览器内显示的广告 (实验性)</string>
     <string name="pref_cloudflare_strategy">Cloudflare 自动验证策略</string>

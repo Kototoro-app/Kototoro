@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.chapters.ChapterDirectoryLayout
+import org.skepsun.kototoro.core.ui.chapters.ChapterFilterBar
 import org.skepsun.kototoro.core.ui.chapters.ChapterFilterChips
 import org.skepsun.kototoro.core.ui.chapters.ChapterSectionHeader
 import org.skepsun.kototoro.core.ui.chapters.chapterBranchChipLabel
@@ -76,6 +77,9 @@ fun ChaptersScreen(
     /** Shows each image chapter's first page when the source gives the chapter no artwork of its own. */
     showFirstPageThumbnails: Boolean = false,
     onHeaderClick: (CollapsibleListHeader) -> Unit,
+    /** Null hides the "expand/collapse all volumes" action; true when every volume is collapsed. */
+    allGroupsCollapsed: Boolean? = null,
+    onToggleAllGroups: () -> Unit = {},
     onFilterChipClick: (ChipModel) -> Unit,
     onSelectionActionClick: (Int) -> Unit,
     onClearSelection: () -> Unit,
@@ -143,20 +147,30 @@ fun ChaptersScreen(
         contentModifier = paneNestedScrollModifier,
         scrollableModifier = if (isTvPresentation) Modifier.focusGroup() else Modifier,
         filters = {
-            ChapterFilterChips(
-                options = filterChips,
-                key = { chip -> (chip.data as? ListFilterOption.Branch)?.titleText ?: chip.title ?: chip.titleResId },
-                label = { chip ->
-                    chapterBranchChipLabel(
-                        chip.title?.toString() ?: if (chip.titleResId != 0) context.getString(chip.titleResId) else "",
-                        chip.counter,
-                    )
-                },
-                selected = ChipModel::isChecked,
-                onClick = onFilterChipClick,
+            ChapterFilterBar(
+                allGroupsCollapsed = allGroupsCollapsed,
+                onToggleGroups = onToggleAllGroups,
                 modifier = dragModifier.then(if (isTvPresentation) Modifier.focusGroup() else Modifier),
-                chipModifier = { Modifier.tvFocusable(shape = RoundedCornerShape(999.dp), addFocusTarget = false) },
-            )
+                toggleModifier = Modifier.tvFocusable(shape = RoundedCornerShape(999.dp), addFocusTarget = false),
+            ) { chipsModifier ->
+                ChapterFilterChips(
+                    options = filterChips,
+                    key = { chip ->
+                        (chip.data as? ListFilterOption.Branch)?.titleText ?: chip.title ?: chip.titleResId
+                    },
+                    label = { chip ->
+                        chapterBranchChipLabel(
+                            chip.title?.toString()
+                                ?: if (chip.titleResId != 0) context.getString(chip.titleResId) else "",
+                            chip.counter,
+                        )
+                    },
+                    selected = ChipModel::isChecked,
+                    onClick = onFilterChipClick,
+                    modifier = chipsModifier,
+                    chipModifier = { Modifier.tvFocusable(shape = RoundedCornerShape(999.dp), addFocusTarget = false) },
+                )
+            }
         },
         listScrollbar = {
             VerticalScrollbar(listState, draggable = isScrollEnabled,

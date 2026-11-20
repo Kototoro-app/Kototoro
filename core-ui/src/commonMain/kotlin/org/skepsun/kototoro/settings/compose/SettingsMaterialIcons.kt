@@ -20,6 +20,7 @@ object SettingsMaterialIcons {
     val Checklist: ImageVector by lazy { materialIcon("Checklist", false, "M22,7h-9v2h9V7z M22,15h-9v2h9V15z M5.54,11L2,7.46l1.41-1.41l2.12,2.12l4.24-4.24l1.41,1.41L5.54,11z M5.54,19L2,15.46 l1.41-1.41l2.12,2.12l4.24-4.24l1.41,1.41L5.54,19z") }
     val ListAlt: ImageVector by lazy { materialIcon("ListAlt", true, "M19 5v14H5V5h14m1.1-2H3.9c-.5 0-.9.4-.9.9v16.2c0 .4.4.9.9.9h16.2c.4 0 .9-.5.9-.9V3.9c0-.5-.5-.9-.9-.9zM11 7h6v2h-6V7zm0 4h6v2h-6v-2zm0 4h6v2h-6zM7 7h2v2H7zm0 4h2v2H7zm0 4h2v2H7z") }
     val Reorder: ImageVector by lazy { materialIcon("Reorder", false, "M3 15h18v-2H3v2zm0 4h18v-2H3v2zm0-8h18V9H3v2zm0-6v2h18V5H3z") }
+    val ArrowDropDown: ImageVector by lazy { materialIcon("ArrowDropDown", false, "M7 10l5 5 5-5z") }
     val Check: ImageVector by lazy { materialIcon("Check", false, "M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z") }
     val Edit: ImageVector by lazy { materialIcon("Edit", false, "M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z") }
     val Info: ImageVector by lazy { materialIcon("Info", false, "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z") }

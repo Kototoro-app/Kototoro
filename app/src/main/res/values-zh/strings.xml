@@ -982,6 +982,8 @@
     <string name="exit_confirmation">退出确认</string>
     <string name="exit_confirmation_summary">按两次返回键退出应用</string>
     <string name="expand">展开</string>
+    <string name="chapter_volumes_expand_all">全部展开</string>
+    <string name="chapter_volumes_collapse_all">全部折叠</string>
     <string name="explore">浏览</string>
     <string name="extension_download_in_progress">下载中…</string>
     <string name="extension_download_progress">下载中 %1$d%%</string>

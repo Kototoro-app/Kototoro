@@ -12,7 +12,6 @@ import org.skepsun.kototoro.core.ui.chapters.withVolumeSections
 import org.skepsun.kototoro.details.data.ContentDetails
 import org.skepsun.kototoro.details.ui.model.ChapterListItem
 import org.skepsun.kototoro.details.ui.model.toListItem
-import org.skepsun.kototoro.list.ui.model.ListHeader
 import org.skepsun.kototoro.list.ui.model.ListModel
 import org.skepsun.kototoro.local.epub.ChapterMetadata
 import org.skepsun.kototoro.local.epub.ChapterType
@@ -175,12 +174,15 @@ fun List<ChapterListItem>.withVolumeHeaders(context: Context): MutableList<ListM
             ArrayList<ListModel>((size * 1.4).toInt()),
         ) { section ->
             when (section) {
-                is ChapterSection.Header -> ListHeader(
-                    section.customName ?: if (section.volume <= 0) {
+                // Volumes fold like EPUB books; a volume that comes back later in the list folds with its first run.
+                is ChapterSection.Header -> org.skepsun.kototoro.list.ui.model.CollapsibleListHeader(
+                    text = section.customName ?: if (section.volume <= 0) {
                         context.getString(R.string.volume_unknown)
                     } else {
                         context.getString(R.string.volume_, section.volume)
                     },
+                    isCollapsible = true,
+                    groupId = "volume_${section.volume}_${section.customName.orEmpty()}",
                 )
                 is ChapterSection.Item -> section.chapter
             }

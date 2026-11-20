@@ -1,15 +1,25 @@
 package org.skepsun.kototoro.details.ui.pager.chapters
 
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import org.skepsun.kototoro.core.ui.chapters.allChapterGroupsCollapsed
+import org.skepsun.kototoro.core.ui.chapters.collapseChapterGroups
+import org.skepsun.kototoro.core.ui.chapters.toggledChapterGroups
 import org.skepsun.kototoro.details.ui.model.ChapterListItem
 import org.skepsun.kototoro.list.ui.model.CollapsibleListHeader
 import org.skepsun.kototoro.list.ui.model.ListModel
 
 /**
- * Manages the collapsed/expanded state of chapter groups
+ * Manages the collapsed/expanded state of chapter groups; the state is snapshot-backed, so a composition that applies
+ * it recomposes when a group is toggled.
  */
+@Stable
 class ChapterGroupsManager {
 
-    private val collapsedGroups = mutableSetOf<String>()
+    var collapsedGroups by mutableStateOf(emptySet<String>())
+        private set
 
     /**
      * Toggles the collapsed state of a group
@@ -17,13 +27,9 @@ class ChapterGroupsManager {
      * @return true if the group is now expanded, false if collapsed
      */
     fun toggleGroup(groupId: String): Boolean {
-        return if (collapsedGroups.contains(groupId)) {
-            collapsedGroups.remove(groupId)
-            true // Now expanded
-        } else {
-            collapsedGroups.add(groupId)
-            false // Now collapsed
-        }
+        val expanded = groupId in collapsedGroups
+        collapsedGroups = if (expanded) collapsedGroups - groupId else collapsedGroups + groupId
+        return expanded
     }
 
     /**
@@ -32,7 +38,22 @@ class ChapterGroupsManager {
      * @return true if expanded, false if collapsed
      */
     fun isGroupExpanded(groupId: String): Boolean {
-        return !collapsedGroups.contains(groupId)
+        return groupId !in collapsedGroups
+    }
+
+    /** The foldable groups of [items], in list order. */
+    fun foldableGroupIds(items: List<ListModel>): List<String> = items
+        .filterIsInstance<CollapsibleListHeader>()
+        .filter { it.isCollapsible }
+        .map { it.groupId }
+        .distinct()
+
+    /** Null hides the "expand/collapse all" action; true when every group in [groupIds] is collapsed. */
+    fun areAllCollapsed(groupIds: List<String>): Boolean? = allChapterGroupsCollapsed(groupIds, collapsedGroups)
+
+    /** Expands every group in [groupIds] when all are collapsed, otherwise collapses them all. */
+    fun toggleAll(groupIds: List<String>) {
+        collapsedGroups = toggledChapterGroups(groupIds, collapsedGroups)
     }
 
     /**
@@ -40,42 +61,21 @@ class ChapterGroupsManager {
      * @param items The list of items including headers and chapters
      * @return A new list with collapsed groups hidden
      */
-    fun applyCollapsedState(items: List<ListModel>): List<ListModel> {
-        val result = mutableListOf<ListModel>()
-        var currentHeader: CollapsibleListHeader? = null
-        var isCurrentGroupCollapsed = false
-
-        for (item in items) {
-            when (item) {
-                is CollapsibleListHeader -> {
-                    currentHeader = item
-                    isCurrentGroupCollapsed = !isGroupExpanded(item.groupId)
-                    // Update the header's expanded state
-                    val updatedHeader = item.copy(isExpanded = !isCurrentGroupCollapsed)
-                    result.add(updatedHeader)
-                }
-                is ChapterListItem -> {
-                    // Only add chapter if its group is not collapsed
-                    if (!isCurrentGroupCollapsed) {
-                        result.add(item)
-                    }
-                }
-                else -> {
-                    // Add other items (like regular headers) as-is
-                    result.add(item)
-                    currentHeader = null
-                    isCurrentGroupCollapsed = false
-                }
-            }
-        }
-
-        return result
+    fun applyCollapsedState(items: List<ListModel>): List<ListModel> = collapseChapterGroups(
+        items = items,
+        groupKey = { (it as? CollapsibleListHeader)?.takeIf { header -> header.isCollapsible }?.groupId },
+        // Other rows (like regular headers) end a folded group, as before.
+        isHeader = { it !is ChapterListItem },
+        collapsed = collapsedGroups,
+    ).map { item ->
+        // Update the header's expanded state
+        if (item is CollapsibleListHeader) item.copy(isExpanded = isGroupExpanded(item.groupId)) else item
     }
 
     /**
      * Clears all collapsed state
      */
     fun clear() {
-        collapsedGroups.clear()
+        collapsedGroups = emptySet()
     }
 }

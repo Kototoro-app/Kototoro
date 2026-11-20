@@ -9,6 +9,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.core.source.SourceChapter
@@ -17,6 +18,7 @@ import org.skepsun.kototoro.core.ui.buttons.TextButton
 import org.skepsun.kototoro.core.ui.chapters.*
 import org.skepsun.kototoro.reader.novel.compose.SharedNovelReaderSearchField
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderPanelIcons
+import org.skepsun.kototoro.settings.compose.SettingsMaterialIcons
 
 /** Kept above the width-dependent panes so resizing does not discard search, order or the active lazy state. */
 @Stable
@@ -29,6 +31,8 @@ internal class DesktopDetailsChapterState(initialGrid: Boolean = false) {
     /** Android's batch mode; a mouse reaches it from the header toggle or by holding on a row. */
     var selecting by mutableStateOf(false)
     var selection by mutableStateOf(DesktopChapterSelection())
+    /** Folded volumes by [desktopChapterGroupKey], kept across search and order like Android's group state. */
+    var collapsedGroups by mutableStateOf(emptySet<String>())
     val listState = LazyListState()
     val gridState = LazyGridState()
 
@@ -56,7 +60,31 @@ internal fun DesktopDetailsChapters(
     val list = remember(chapters, state.chapterBranch, ui.query, ui.reversed) {
         desktopChapterList(chapters, state.chapterBranch, ui.query, ui.reversed)
     }
-    val targetIndex = list.sections.indexOfFirst {
+    val groupKeys = remember(list.sections) {
+        list.sections.mapNotNull { (it as? ChapterSection.Header)?.let(::desktopChapterGroupKey) }.distinct()
+    }
+    val sections = remember(list.sections, ui.collapsedGroups) {
+        collapseChapterGroups(list.sections, { (it as? ChapterSection.Header)?.let(::desktopChapterGroupKey) },
+            { it is ChapterSection.Header }, ui.collapsedGroups)
+    }
+    // Locating the current chapter opens its folded volume once the (possibly re-branched) list holds it.
+    var revealedLocate by remember { mutableIntStateOf(ui.locateRequest) }
+    LaunchedEffect(ui.locateRequest, list.sections) {
+        if (ui.locateRequest == revealedLocate) return@LaunchedEffect
+        val isTarget = { section: ChapterSection<SourceChapter> ->
+            section is ChapterSection.Item && section.chapter.id == ui.targetChapterId
+        }
+        if (list.sections.none(isTarget)) return@LaunchedEffect
+        chapterGroupOf(list.sections, { (it as? ChapterSection.Header)?.let(::desktopChapterGroupKey) },
+            { it is ChapterSection.Header }, isTarget)?.let { ui.collapsedGroups -= it }
+        revealedLocate = ui.locateRequest
+    }
+    // Folding moves the rows, so it drops the located chapter rather than scrolling back to it.
+    val toggleGroup = { key: String ->
+        ui.targetChapterId = null
+        ui.collapsedGroups = if (key in ui.collapsedGroups) ui.collapsedGroups - key else ui.collapsedGroups + key
+    }
+    val targetIndex = sections.indexOfFirst {
         it is ChapterSection.Item && it.chapter.id == ui.targetChapterId
     }.takeIf { it >= 0 }
     val downloads by controller.session.downloadStore.records.collectAsState()
@@ -87,8 +115,9 @@ internal fun DesktopDetailsChapters(
             options.map { it to desktopDownloadTargets(ordered, current, downloaded, it) }
         }.filter { (_, targets) -> targets.isNotEmpty() }
     }
-    val visible = remember(list.sections) {
-        list.sections.mapNotNull { (it as? ChapterSection.Item)?.chapter }
+    // Like Android, batch selection works on the rows left open.
+    val visible = remember(sections) {
+        sections.mapNotNull { (it as? ChapterSection.Item)?.chapter }
     }
     val selectedChapters = ui.selection.resolve(visible)
     val selectedDownloaded = selectedChapters.count { chapter -> downloaded.any { DesktopDownloadStore.sameChapter(it, chapter) } }
@@ -140,9 +169,15 @@ internal fun DesktopDetailsChapters(
             SharedNovelReaderSearchField(ui.query, { ui.query = it }, AndroidStrings["search_chapters"],
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                 clearContentDescription = AndroidStrings["clear"], queryTag = "details-chapter-query")
-            ChapterBranchChips(list.options, list.selectedBranch, title = { it ?: desktopText("details.chapterBranchDefault") },
-                onSelect = controller::selectChapterBranch, enabled = enabled,
-                chipModifier = { Modifier.testTag("chapter-branch:${it.name ?: "default"}") })
+            ChapterFilterBar(allChapterGroupsCollapsed(groupKeys, ui.collapsedGroups), {
+                ui.targetChapterId = null
+                ui.collapsedGroups = toggledChapterGroups(groupKeys, ui.collapsedGroups)
+            }, enabled = enabled) { chipsModifier ->
+                ChapterBranchChips(list.options, list.selectedBranch,
+                    title = { it ?: desktopText("details.chapterBranchDefault") },
+                    onSelect = controller::selectChapterBranch, modifier = chipsModifier, enabled = enabled,
+                    chipModifier = { Modifier.testTag("chapter-branch:${it.name ?: "default"}") })
+            }
             if (ui.selecting) {
                 DesktopChapterSelectionBar(
                     selection = ui.selection,
@@ -162,7 +197,7 @@ internal fun DesktopDetailsChapters(
     }
     Box(modifier) {
         ChapterDirectoryLayout(
-            items = list.sections,
+            items = sections,
             itemKey = { when (it) {
                 is ChapterSection.Header -> "header:${it.volume}:${it.customName}"
                 is ChapterSection.Item -> "chapter:${it.chapter.id}:${it.chapter.url}"
@@ -188,8 +223,14 @@ internal fun DesktopDetailsChapters(
             },
         ) { _, section, grid ->
             when (section) {
-                is ChapterSection.Header -> ChapterSectionHeader(desktopChapterSectionTitle(section),
-                    Modifier.testTag("chapter-header:${desktopChapterSectionTitle(section)}"))
+                is ChapterSection.Header -> {
+                    val key = desktopChapterGroupKey(section)
+                    ChapterSectionHeader(desktopChapterSectionTitle(section),
+                        Modifier.testTag("chapter-header:${desktopChapterSectionTitle(section)}"),
+                        isCollapsible = true, isExpanded = key !in ui.collapsedGroups,
+                        expandIcon = rememberVectorPainter(SettingsMaterialIcons.ArrowDropDown),
+                        onClick = { if (enabled) toggleGroup(key) })
+                }
                 is ChapterSection.Item -> {
                     val chapter = section.chapter
                     val isDownloaded = downloaded.any { DesktopDownloadStore.sameChapter(it, chapter) }
@@ -230,6 +271,10 @@ internal fun DesktopDetailsChapters(
         }
     }
 }
+
+/** A volume's fold key; a volume that comes back later in the list folds with its first run, as on Android. */
+internal fun desktopChapterGroupKey(header: ChapterSection.Header): String =
+    "${header.volume}:${header.customName.orEmpty()}"
 
 /** Android's chapter selection bar: the same actions in the same order, as labels instead of icon-only buttons. */
 @Composable
