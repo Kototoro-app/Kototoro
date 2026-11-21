@@ -14,6 +14,8 @@ import org.skepsun.kototoro.suggestions.domain.SUGGESTION_TAG_THRESHOLD
 import org.skepsun.kototoro.suggestions.domain.SuggestionLimits
 import org.skepsun.kototoro.suggestions.domain.SuggestionTagMatcher
 import org.skepsun.kototoro.suggestions.domain.parseSuggestionTags
+import org.skepsun.kototoro.suggestions.domain.suggestionRotationSeed
+import kotlin.random.Random
 
 /** Windows counterparts of Android's suggestion settings, stored under Android's keys and defaults. */
 data class DesktopSuggestionSettings(
@@ -131,7 +133,7 @@ class DesktopSuggestions(
     private val runtime: SourceRuntime,
     private val now: () -> Long = System::currentTimeMillis,
     private val limits: SuggestionLimits = SuggestionLimits(),
-    private val sourceOrder: (List<SourceListing>) -> List<SourceListing> = { it.shuffled() },
+    private val sourceOrder: ((List<SourceListing>) -> List<SourceListing>)? = null,
 ) {
     private val matcher: SuggestionTagMatcher = { a, b -> a.almostEquals(b, SUGGESTION_TAG_THRESHOLD) }
 
@@ -146,19 +148,22 @@ class DesktopSuggestions(
         settings: DesktopSuggestionSettings = DesktopSuggestionSettings(),
         nsfwOverrides: SourceNsfwOverrideSet = SourceNsfwOverrideSet(),
         globalTagBlacklist: Set<String> = emptySet(),
+        manual: Boolean = false,
     ): Int {
         val works = library.libraryWorks(limits.libraryHistory)
-        val candidates = sourceOrder(sources.filterNot {
+        val eligible = sources.filterNot {
             it.source.name in settings.excludedSources || (settings.excludeNsfw && it.isNsfwSource(nsfwOverrides))
-        })
-        if (candidates.isEmpty()) return 0
+        }
+        if (eligible.isEmpty()) return 0
         val time = now()
+        val seed = suggestionRotationSeed(time, refreshAt = if (manual) time else 0L)
+        val candidates = sourceOrder?.invoke(eligible) ?: eligible.sortedBy { it.source.name }.shuffled(Random(seed))
         val result = SourceSuggestions(runtime, matcher, limits).generate(works, candidates.map { it.source },
             settings.copy(preferredSources = PopularSources.preferred(settings.popularSourcesFirst,
                 settings.preferredSources, settings.excludedSources, candidates.map {
                     PopularSourceProbe(it.source.name, it.displayName, it.siteUrl)
                 }, if (settings.favouriteSourcesFirst) PopularSources.favouriteSources(works) else emptySet()))
-            .preferences(globalTagBlacklist), time, library.suggestionAges())
+            .preferences(globalTagBlacklist), time, library.suggestionAges(), seed = seed)
         check(result.successfulSources > 0) { "No recommendation source responded" }
         return library.replaceSuggestions(result.items, time)
     }

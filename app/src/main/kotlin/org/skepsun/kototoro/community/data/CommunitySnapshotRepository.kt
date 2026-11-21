@@ -65,23 +65,25 @@ class CommunitySnapshotRepository @Inject constructor(
 
     /**
      * The group of each work in [keysByWork], for many works at once: every key shard any of them needs is read once.
-     * Works the index does not know are left out.
+     * Works the index does not know are left out. [cachedOnly] skips all network requests.
      */
-    suspend fun <K> groupsOf(keysByWork: Map<K, List<String>>): Map<K, String> {
-        val manifest = manifest() ?: return emptyMap()
+    suspend fun <K> groupsOf(keysByWork: Map<K, List<String>>, cachedOnly: Boolean = false): Map<K, String> {
+        val manifest = snapshotManifest(cachedOnly) ?: return emptyMap()
         val paths = keysByWork.values.flatMap(CommunitySnapshotReader::keyShardPaths).distinct()
-        val shards = paths.associateWith { path -> file(manifest, path)?.let(CommunitySnapshotReader::keys) }
+        val shards = paths.associateWith { path -> file(manifest, path, cachedOnly)?.let(CommunitySnapshotReader::keys) }
         return keysByWork.mapNotNull { (work, keys) ->
             CommunitySnapshotReader.groupOf(keys) { shard -> shards[CommunitySnapshotShards.keysPath(shard)] }?.let { work to it }
         }.toMap()
     }
 
-    /** Summaries of [groupIds], each works shard read once. */
-    suspend fun works(groupIds: Collection<String>): Map<String, CommunityWorkSummary> {
-        val manifest = manifest() ?: return emptyMap()
+    /** Summaries of [groupIds], each works shard read once. [cachedOnly] skips all network requests. */
+    suspend fun works(groupIds: Collection<String>, cachedOnly: Boolean = false): Map<String, CommunityWorkSummary> {
+        if (groupIds.isEmpty()) return emptyMap()
+        val manifest = snapshotManifest(cachedOnly) ?: return emptyMap()
         val shards = groupIds.groupBy(CommunitySnapshotShards::of)
         return shards.flatMap { (shard, ids) ->
-            val works = file(manifest, CommunitySnapshotShards.worksPath(shard))?.let(CommunitySnapshotReader::works).orEmpty()
+            val works = file(manifest, CommunitySnapshotShards.worksPath(shard), cachedOnly)
+                ?.let(CommunitySnapshotReader::works).orEmpty()
             ids.mapNotNull { id -> works[id]?.let { id to it } }
         }.toMap()
     }
@@ -108,7 +110,20 @@ class CommunitySnapshotRepository @Inject constructor(
         }
     }
 
-    private suspend fun file(manifest: CommunitySnapshotManifest, path: String): String? = withContext(Dispatchers.IO) {
+    private suspend fun snapshotManifest(cachedOnly: Boolean): CommunitySnapshotManifest? = if (cachedOnly) {
+        withContext(Dispatchers.IO) {
+            manifest ?: readLocal(CommunitySnapshotShards.MANIFEST_PATH)?.let(CommunitySnapshotReader::manifest)
+        }
+    } else {
+        manifest()
+    }
+
+    private suspend fun file(
+        manifest: CommunitySnapshotManifest,
+        path: String,
+        cachedOnly: Boolean = false,
+    ): String? = withContext(Dispatchers.IO) {
+        if (cachedOnly) return@withContext if (path in manifest.files) readLocal(path) else null
         val cachedHash = File(root, "$path$HASH_SUFFIX").takeIf { it.exists() }?.readText()
         when (CommunitySnapshotReader.cacheState(manifest, path, cachedHash)) {
             CommunitySnapshotReader.CacheState.ABSENT -> null

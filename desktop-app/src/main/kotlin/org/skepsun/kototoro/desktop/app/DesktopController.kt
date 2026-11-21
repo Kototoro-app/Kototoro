@@ -1848,7 +1848,7 @@ class DesktopController(
         mutableState.update { it.copy(suggestionsGenerating = true, message = desktopText("message.generatingSuggestions")) }
         scope.launch {
             try {
-                val stored = backgroundMutex.withLock { runSuggestionsOnIo() }
+                val stored = backgroundMutex.withLock { runSuggestionsOnIo(manual = true) }
                 mutableState.update { it.copy(message = when {
                     stored > 0 -> desktopText("message.suggestionsGenerated", stored)
                     state.value.enabledSources.isEmpty() -> desktopText("message.installSourceFirst")
@@ -1897,7 +1897,7 @@ class DesktopController(
         }
     }
 
-    private suspend fun runSuggestionsOnIo(): Int {
+    private suspend fun runSuggestionsOnIo(manual: Boolean = false): Int {
         val settings = state.value.suggestionSettings
         // Android's UNMETERED constraint: with "only using Wi-Fi" on, a mobile link is not a reason to spend data.
         // The run is not recorded, so the next wake retries instead of waiting a whole interval.
@@ -1906,7 +1906,9 @@ class DesktopController(
         // unless "include disabled sources" asks for candidates from every installed source.
         val disabled = if (settings.includeDisabledSources) emptySet() else state.value.disabledSources
         val sources = session.sourceListings().filterNot { it.source.name in disabled }
-        val stored = session.suggestions.refresh(sources, settings, session.sourceNsfwOverrides(), state.value.sourceSettings.tagBlacklist)
+        val stored = session.suggestions.refresh(
+            sources, settings, session.sourceNsfwOverrides(), state.value.sourceSettings.tagBlacklist, manual = manual,
+        )
         recordRun(LAST_SUGGESTIONS_RUN)
         val items = session.suggestions.suggestions()
         // A rebuild can stop offering a chip (a tag no longer in the list, both adult macros after the nsfw switch),

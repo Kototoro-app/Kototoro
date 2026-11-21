@@ -16,7 +16,6 @@ import org.skepsun.kototoro.core.db.entity.toEntity
 import org.skepsun.kototoro.core.db.entity.toContent
 import org.skepsun.kototoro.core.db.entity.toContentTagsList
 import org.skepsun.kototoro.core.model.toContentSources
-import org.skepsun.kototoro.core.util.ext.mapItems
 import org.skepsun.kototoro.list.domain.ListFilterOption
 import org.skepsun.kototoro.list.domain.toCriteria
 import org.skepsun.kototoro.parsers.model.Content
@@ -32,9 +31,7 @@ class SuggestionRepository @Inject constructor(
 ) {
 
     fun observeAll(): Flow<List<Content>> {
-        return db.getSuggestionDao().observeAll().mapItems {
-            it.toContent()
-        }.withCurrentPreferences()
+        return db.getSuggestionDao().observeAll().withCurrentPreferences()
     }
 
     fun observeAll(
@@ -43,9 +40,8 @@ class SuggestionRepository @Inject constructor(
         contentTypes: Collection<String>? = null,
         direction: SuggestionDirection? = null,
     ): Flow<List<Content>> {
-        return db.getSuggestionDao().observeAll(Int.MAX_VALUE, filterOptions.toCriteria(), contentTypes, direction?.name).mapItems {
-            it.toContent()
-        }.withCurrentPreferences().map { it.take(limit) }
+        return db.getSuggestionDao().observeAll(Int.MAX_VALUE, filterOptions.toCriteria(), contentTypes, direction?.name)
+            .withCurrentPreferences().map { it.take(limit) }
     }
 
     fun observeCount(): Flow<Int> {
@@ -57,10 +53,16 @@ class SuggestionRepository @Inject constructor(
     }
 
     suspend fun getRandomList(limit: Int): List<Content> {
-        return filter(db.getSuggestionDao().getRandom(limit).map {
-            it.toContent()
-        })
+        return if (settings.isCommunityEnabled) {
+            filter(db.getSuggestionDao().getRandom(limit).map { it.toContent() })
+        } else {
+            observeAll().first().shuffled().take(limit)
+        }
     }
+
+    fun observeHasCommunity(): Flow<Boolean> = db.getSuggestionDao()
+        .observeAll(Int.MAX_VALUE, emptySet<ListFilterOption>().toCriteria(), null, SuggestionDirection.COMMUNITY.name)
+        .withCurrentPreferences().map { it.isNotEmpty() }
 
     suspend fun count(): Int = db.getSuggestionDao().count()
 
@@ -167,10 +169,14 @@ class SuggestionRepository @Inject constructor(
         }
     }
 
-    private fun Flow<List<Content>>.withCurrentPreferences(): Flow<List<Content>> = combine(
+    private fun Flow<List<SuggestionWithContent>>.withCurrentPreferences(): Flow<List<Content>> = combine(
         this,
         settings.observeChanges().onStart { emit("") },
-    ) { items, _ -> filter(items) }
+    ) { items, _ -> visibleContent(items) }
+
+    private fun visibleContent(rows: List<SuggestionWithContent>): List<Content> = filter(rows.asSequence()
+        .filter { settings.isCommunityEnabled || it.suggestion.direction != SuggestionDirection.COMMUNITY.name }
+        .map { it.toContent() }.toList())
 
     private fun filter(items: List<Content>): List<Content> {
         val excluded = SuggestionTagBlacklist(settings.suggestionsTagsBlacklist, ::suggestionTagsMatch)

@@ -3,7 +3,9 @@
 package org.skepsun.kototoro.ios
 
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.Json
 import org.skepsun.kototoro.core.source.*
+import org.skepsun.kototoro.community.domain.*
 import platform.Foundation.NSFileManager
 import platform.Foundation.NSTemporaryDirectory
 import platform.Foundation.NSUUID
@@ -90,6 +92,59 @@ class IosSuggestionsTest {
         val reopened = IosLibrary("$directory/library.db")
         try { assertEquals(24, reopened.suggestions.items(sources, settings).size) }
         finally { reopened.close() }
+    }
+
+    @Test
+    fun communityOptInMatchesAnIndexedWorkAndOffHidesStoredCommunityRows() = withDirectory { directory ->
+        val seed = content(1, manga).copy(title = "Favourite Work")
+        val similar = content(101, manga).copy(title = "Another Work")
+        val key = checkNotNull(CommunityWorkKeys.titleKey(seed.title, CommunityMedium.COMIC))
+        val keyPath = CommunitySnapshotShards.keysPath(CommunitySnapshotShards.of(key))
+        val seedPath = CommunitySnapshotShards.worksPath(CommunitySnapshotShards.of("seed"))
+        val similarPath = CommunitySnapshotShards.worksPath(CommunitySnapshotShards.of("similar"))
+        val index = CommunitySnapshotManifest(
+            generatedAt = 1, relays = emptyList(), powRating = 0, powComment = 0, minChartWeight = 5.0,
+            files = setOf(keyPath, seedPath, similarPath).associateWith { "hash" },
+            stats = CommunitySnapshotStats(0, 0, 0, 0, 2),
+        )
+        val seedSummary = CommunityWorkSummary("seed", "comic", seed.title, similar = listOf(
+            CommunitySimilarWork("similar", similar.title, 0.9, 5),
+        ))
+        val summary = CommunityWorkSummary("similar", "comic", similar.title)
+        val shards = mapOf("seed" to seedSummary, "similar" to summary).entries
+            .groupBy { CommunitySnapshotShards.worksPath(CommunitySnapshotShards.of(it.key)) }
+            .mapValues { (_, entries) -> Json.encodeToString(entries.associate { it.key to it.value }) }
+        val files = shards + mapOf(
+            CommunitySnapshotShards.MANIFEST_PATH to Json.encodeToString(index),
+            keyPath to Json.encodeToString(mapOf(key to "seed")),
+        )
+        val onlyManga = sources.take(1)
+        val runtime = IosSources(Fixture { call ->
+            when (call) {
+                is SourceCall.Describe -> SourceResult.Descriptor(SourceDescriptor(
+                    manga, setOf("POPULARITY"), "POPULARITY",
+                    SourceFilterCapabilities(true, false, false, false, false, false, false, false), SourcePagingMode.OFFSET))
+                is SourceCall.Filters -> error("No tags")
+                is SourceCall.ListContent -> SourceResult.ListContent(
+                    if (call.filter?.query == similar.title) listOf(similar) else listOf(content(102)),
+                )
+                else -> error("Unexpected request $call")
+            }
+        })
+        val library = IosLibrary("$directory/library.db")
+        try {
+            library.setFavourite(IosSourceContent(seed), true)
+            var requests = 0
+            val recommendations = IosSuggestions(library) { path -> requests++; files[path] }
+            recommendations.refresh(runtime, onlyManga, settings, IosCancellation())
+            assertEquals(0, requests)
+            val optedIn = settings.copy(communityEnabled = true)
+            recommendations.refresh(runtime, onlyManga, optedIn, IosCancellation())
+            val item = recommendations.items(onlyManga, optedIn).single { it.suggestionDirection == "COMMUNITY" }
+            assertEquals(similar.title, item.title)
+            assertEquals(seed.title, item.suggestionReason)
+            assertEquals(listOf("102"), recommendations.items(onlyManga, settings).map { it.id })
+        } finally { library.close(); runtime.close() }
     }
 
     @Test

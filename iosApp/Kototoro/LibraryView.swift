@@ -31,6 +31,7 @@ struct LibraryView: View {
     @ObservedObject var library: LibraryModel
     @ObservedObject var sources: SourcesModel
     @AppStorage("listMode.library") private var mode = ContentListMode.grid
+    @AppStorage("list.gridSize.library") private var gridSize = ContentGridSize.legacyDefault
     @AppStorage("library.sort") private var sort = LibrarySort.updated
     @AppStorage("library.kind") private var pageKind = ""
     @AppStorage(ContentSpace.key) private var space = ""
@@ -127,7 +128,7 @@ struct LibraryView: View {
                                   systemImage: shelf.count > 0 ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease")
                         }
                         .accessibilityIdentifier("library.filter")
-                        ContentListModeMenu(mode: $mode) {
+                        ContentListModeMenu(mode: $mode, gridSize: $gridSize) {
                             VStack(alignment: .leading, spacing: 6) {
                                 Text("排序").font(.subheadline)
                                 Picker("排序", selection: $sort) {
@@ -421,7 +422,7 @@ struct LibraryView: View {
                     ContentUnavailableView.search(text: query).padding(.top, 40)
                 }
             } else {
-                ContentCollection(runtime: runtime, items: shown, mode: mode, identifierPrefix: "favourite.",
+                ContentCollection(runtime: runtime, items: shown, mode: mode, identifierPrefix: "favourite.", gridSize: gridSize,
                                   marksFavourites: false, selectedKeys: selecting ? selected : nil,
                                   onSelect: { item in
                                       let key = ContentMarks.key(item.content)

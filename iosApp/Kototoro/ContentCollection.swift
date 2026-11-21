@@ -40,10 +40,11 @@ enum ContentListMode: String, CaseIterable, Identifiable {
     }
 }
 
-/// Grid size shared by all work lists, as Android's `gridSize` (50–150%).
+/// Use the old global value as the initial size until each page saves its own.
 enum ContentGridSize {
     static let key = "list.gridSize"
     static let range = 50.0...150.0
+    static var legacyDefault: Double { UserDefaults.standard.object(forKey: key) as? Double ?? 100 }
 }
 
 /// One work in a list, with what the screen knows about it beyond the source's own fields.
@@ -107,11 +108,16 @@ private extension ContentItem {
 /// and any screen-specific options (the library's sort order).
 struct ContentListModeMenu<Extra: View>: View {
     @Binding var mode: ContentListMode
+    @Binding var gridSize: Double
+    let modes: [ContentListMode]
     @ViewBuilder var extra: () -> Extra
     @State private var presented = false
 
-    init(mode: Binding<ContentListMode>, @ViewBuilder extra: @escaping () -> Extra) {
+    init(mode: Binding<ContentListMode>, gridSize: Binding<Double>, modes: [ContentListMode] = ContentListMode.allCases,
+         @ViewBuilder extra: @escaping () -> Extra) {
         _mode = mode
+        _gridSize = gridSize
+        self.modes = modes
         self.extra = extra
     }
 
@@ -119,21 +125,24 @@ struct ContentListModeMenu<Extra: View>: View {
         Button { presented = true } label: { Label("显示", systemImage: mode.icon) }
             .accessibilityIdentifier("list.mode")
             .popover(isPresented: $presented) {
-                ContentDisplayOptions(mode: $mode, extra: extra) { presented = false }
+                ContentDisplayOptions(mode: $mode, gridSize: $gridSize, modes: modes, extra: extra) { presented = false }
                     .presentationCompactAdaptation(.popover)
             }
     }
 }
 
 extension ContentListModeMenu where Extra == EmptyView {
-    init(mode: Binding<ContentListMode>) { self.init(mode: mode) { EmptyView() } }
+    init(mode: Binding<ContentListMode>, gridSize: Binding<Double>, modes: [ContentListMode] = ContentListMode.allCases) {
+        self.init(mode: mode, gridSize: gridSize, modes: modes) { EmptyView() }
+    }
 }
 
 private struct ContentDisplayOptions<Extra: View>: View {
     @Binding var mode: ContentListMode
+    @Binding var gridSize: Double
+    let modes: [ContentListMode]
     let extra: () -> Extra
     let done: () -> Void
-    @AppStorage(ContentGridSize.key) private var gridSize = 100.0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -143,7 +152,7 @@ private struct ContentDisplayOptions<Extra: View>: View {
                 Button("完成", action: done).fontWeight(.semibold).accessibilityIdentifier("list.options.done")
             }
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
-                ForEach(ContentListMode.allCases) { option in
+                ForEach(modes) { option in
                     let selected = option == mode
                     Button { withAnimation(.snappy) { mode = option } } label: {
                         Label(option.title, systemImage: option.icon)
@@ -157,6 +166,7 @@ private struct ContentDisplayOptions<Extra: View>: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityAddTraits(selected ? .isSelected : [])
+                    .accessibilityIdentifier("list.options.mode.\(option.rawValue)")
                 }
             }
             VStack(alignment: .leading, spacing: 6) {
@@ -192,6 +202,7 @@ struct ContentCollection<Destination: View, Actions: View>: View {
     let mode: ContentListMode
     /// Accessibility identifier prefix for each item (`favourite.`, `history.`, `source.content.`).
     let identifierPrefix: String
+    let gridSize: Double
     var onItemAppear: ((ContentItem) -> Void)?
     /// The library itself does not mark its own works as favourites.
     var marksFavourites = true
@@ -201,7 +212,6 @@ struct ContentCollection<Destination: View, Actions: View>: View {
     @ViewBuilder let destination: (ContentItem) -> Destination
     @ViewBuilder let actions: (ContentItem) -> Actions
 
-    @AppStorage(ContentGridSize.key) private var gridSize = 100.0
     @EnvironmentObject private var library: LibraryModel
     @EnvironmentObject private var downloads: DownloadedContent
     @ObservedObject private var tagFilter = TagFilterStore.shared

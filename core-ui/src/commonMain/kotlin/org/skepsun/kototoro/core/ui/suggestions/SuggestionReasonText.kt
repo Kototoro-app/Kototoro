@@ -13,5 +13,7 @@ fun suggestionReasonText(strings: UiStrings, direction: SuggestionDirection, rea
             else strings.format("suggestion_reason_explore", label)
         SuggestionDirection.POPULAR -> strings.string("suggestion_reason_popular")
         SuggestionDirection.NEW -> strings.string("suggestion_reason_new")
+        SuggestionDirection.COMMUNITY -> if (reason.isNullOrBlank()) strings.string("community_for_you")
+            else strings.format("community_because", reason)
     }
 }

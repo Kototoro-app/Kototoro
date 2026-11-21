@@ -23,6 +23,8 @@ enum class SuggestionDirection {
 
     /** Popular in a genre the reader has not read; the reason is that genre's tag key. */
     EXPLORE,
+
+    COMMUNITY,
     ;
 
     companion object {

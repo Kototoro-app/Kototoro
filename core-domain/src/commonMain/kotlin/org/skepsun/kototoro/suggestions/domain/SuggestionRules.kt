@@ -57,7 +57,7 @@ data class SuggestionLimits(
     /** History entries read for the reader's taste, most recent first; favourites are read whole. */
     val libraryHistory: Int = 500,
     /** Suggestions at the top of the list that do not move from one generation to the next. */
-    val stableHead: Int = 8,
+    val stableHead: Int = 12,
     /** Largest share of the list one group (see [SuggestionOrigins]) may take while others still have candidates. */
     val maxGroupShare: Float = 0.4f,
 )
@@ -168,8 +168,49 @@ private const val STALE_HALF_LIFE_DAYS = 5.0
 private const val STALE_FLOOR = 0.3
 private const val DAY_MS = 24 * 60 * 60 * 1000.0
 
-/** How far down the list chance reaches: 0 keeps the order, larger lets weaker matches surface more often. */
-private const val ROTATION_TEMPERATURE = 0.4
+/**
+ * How far down the list chance reaches: 0 keeps the order, larger lets weaker matches surface more often. Kept low now
+ * that quality counts: the rotation is for variety between days and refreshes, not for overruling the ranking.
+ */
+private const val ROTATION_TEMPERATURE = 0.25
+
+/** How much a full tag overlap with an earlier pick costs, at most: half its score. */
+private const val DIVERSITY = 0.5
+
+/**
+ * The [sorted] candidates re-ranked so a direction is not twenty variations of one thing: greedy maximal marginal
+ * relevance, each pick's score discounted by its largest tag overlap (Jaccard) with what was already picked.
+ */
+internal fun <T> diversifyByTags(sorted: List<T>, score: (T) -> Double, tags: (T) -> Set<String>): List<Pair<T, Double>> {
+    val items = sorted.toMutableList()
+    val itemTags = items.mapTo(ArrayList(items.size)) { tags(it) }
+    val baseScores = items.mapTo(ArrayList(items.size)) { score(it) }
+    // Each candidate's largest overlap with anything picked so far, updated with every new pick: O(n²) overall.
+    val overlap = MutableList(items.size) { 0.0 }
+    val picked = ArrayList<Pair<T, Double>>(items.size)
+    while (items.isNotEmpty()) {
+        var best = 0
+        for (index in 1 until items.size) {
+            if (baseScores[index] * (1.0 - DIVERSITY * overlap[index]) > baseScores[best] * (1.0 - DIVERSITY * overlap[best])) {
+                best = index
+            }
+        }
+        val pickedTags = itemTags[best]
+        picked += items[best] to baseScores[best] * (1.0 - DIVERSITY * overlap[best])
+        items.removeAt(best)
+        itemTags.removeAt(best)
+        baseScores.removeAt(best)
+        overlap.removeAt(best)
+        if (pickedTags.isEmpty()) continue
+        for (index in items.indices) {
+            val own = itemTags[index]
+            if (own.isEmpty()) continue
+            val shared = own.count { it in pickedTags }
+            overlap[index] = maxOf(overlap[index], shared.toDouble() / (own.size + pickedTags.size - shared))
+        }
+    }
+    return picked
+}
 
 /**
  * The same work listed by several sources, under any name they share, is one candidate. Groups keep the order
@@ -253,12 +294,14 @@ fun <T> rankSuggestions(
     titles: (T) -> Collection<String>,
     tags: (T) -> Collection<String>,
     now: Long,
-    seed: Long = now,
+    seed: Long = suggestionRotationSeed(now),
     firstSuggestedAt: (T) -> Long? = { null },
     preferredSources: Set<String> = emptySet(),
     limits: SuggestionLimits = SuggestionLimits(),
     languagePriority: (T) -> Boolean = { false },
     groupOf: ((T) -> String)? = null,
+    /** How good each candidate is, as a factor on its score; see [SuggestionQuality]. */
+    quality: (T) -> Double = { SuggestionQuality.NEUTRAL },
 ): List<RankedSuggestion<T>> {
     if (limits.maxResults <= 0 || limits.maxResultsPerSource <= 0) return emptyList()
     val fresh = candidates.filterNot { profile.knows(id(it.item), titles(it.item)) }
@@ -272,24 +315,31 @@ fun <T> rankSuggestions(
             val fit = if (candidate.direction == SuggestionDirection.TASTE) BASE_SCORE + affinity
                 else (1.0 + TASTE_NUDGE * affinity) / (1.0 + candidate.rank.coerceAtLeast(0) / RANK_DAMPING)
             val age = firstSuggestedAt(candidate.item)?.let { (now - it).coerceAtLeast(0L) / DAY_MS } ?: 0.0
-            return fit * 0.5.pow(age / STALE_HALF_LIFE_DAYS).coerceAtLeast(STALE_FLOOR)
+            return fit * quality(candidate.item) * 0.5.pow(age / STALE_HALF_LIFE_DAYS).coerceAtLeast(STALE_FLOOR)
         }
-        // A work found by taste keeps that reason even when it also appears on a wider list.
-        val direction = SuggestionDirection.entries.first { direction -> group.any { it.direction == direction } }
+        val direction = if (group.any { it.direction == SuggestionDirection.COMMUNITY }) SuggestionDirection.COMMUNITY
+            else SuggestionDirection.entries.first { direction -> group.any { it.direction == direction } }
         val chosen = group.filter { it.direction == direction }.sortedWith(
             compareByDescending<SuggestionCandidate<T>> { languagePriority(it.item) }
                 .thenByDescending { source(it.item) in preferredSources }
-                .thenByDescending(::score),
+                .thenByDescending(::score)
+                .thenBy { id(it.item) },
         ).first()
         val agreement = 1.0 + AGREEMENT_WEIGHT * ln(group.map { source(it.item) }.distinct().size.toDouble()) / ln(2.0)
         Scored(chosen, score(chosen) * agreement)
     }
     val queues = SuggestionDirection.entries.associateWith { direction ->
-        val sorted = scored.filter { it.candidate.direction == direction }.sortedByDescending { it.score }
         // A preference is explicit: keep preferred sources ahead even when rotating the tail.
-        val tiers = sorted.groupBy { languagePriority(it.candidate.item) to (source(it.candidate.item) in preferredSources) }
+        val tiers = scored.filter { it.candidate.direction == direction }
+            .groupBy { languagePriority(it.candidate.item) to (source(it.candidate.item) in preferredSources) }
         listOf(true to true, true to false, false to true, false to false).flatMap { tier ->
-            rotateRanked(tiers[tier].orEmpty(), { it.score }, seed xor direction.ordinal.toLong(), limits.stableHead)
+            val diversified = diversifyByTags(
+                tiers[tier].orEmpty().sortedWith(compareByDescending<Scored<T>> { it.score }.thenBy { id(it.candidate.item) }),
+                score = { it.score },
+                tags = { suggestionTagKeys(tags(it.candidate.item)) },
+            )
+            rotateRanked(diversified, { it.second }, seed xor direction.ordinal.toLong(), limits.stableHead)
+                .map { it.first }
         }.iterator()
     }
     val counts = HashMap<String, Int>()
@@ -300,8 +350,15 @@ fun <T> rankSuggestions(
     val groupCounts = HashMap<String, Int>()
     val deferred = ArrayList<SuggestionCandidate<T>>()
     // Interleave the shares so every available direction appears near the beginning of the mix.
-    val schedule = (0 until DirectionShares.values.max()).flatMap { turn ->
-        DirectionShares.filterValues { it > turn }.keys
+    val shares = if (queues.getValue(SuggestionDirection.COMMUNITY).hasNext()) linkedMapOf(
+        SuggestionDirection.TASTE to 4,
+        SuggestionDirection.COMMUNITY to 3,
+        SuggestionDirection.POPULAR to 1,
+        SuggestionDirection.NEW to 1,
+        SuggestionDirection.EXPLORE to 1,
+    ) else DirectionShares
+    val schedule = (0 until shares.values.max()).flatMap { turn ->
+        shares.filterValues { it > turn }.keys
     }
     while (selected.size < limits.maxResults) {
         var added = false

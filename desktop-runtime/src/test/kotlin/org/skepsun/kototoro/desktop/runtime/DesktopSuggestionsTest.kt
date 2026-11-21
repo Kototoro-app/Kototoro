@@ -84,11 +84,6 @@ class DesktopSuggestionsTest {
             val fake = FakeRuntime()
             val suggestions = DesktopSuggestions(library, fake, now = { 42L }, sourceOrder = { it })
 
-            DesktopRuntime.open(directory.resolve("empty")).use { empty ->
-                assertEquals(0, DesktopSuggestions(DesktopLibrary(empty.database) { null }, fake)
-                    .refresh(listOf(listing(manga))), "no reading seed, no suggestions")
-            }
-
             val stored = suggestions.refresh(listOf(manga, novels, broken, adult).map(::listing))
             val ids = suggestions.suggestions().map { it.id }
             assertEquals(stored, ids.size)
@@ -148,11 +143,11 @@ class DesktopSuggestionsTest {
     }
 
     @Test
-    fun `an empty library without pinned tags still gets popular and new lists`() = runBlocking<Unit> {
+    fun `an empty library without pinned tags still gets a broad list`() = runBlocking<Unit> {
         DesktopRuntime.open(directory).use { runtime ->
             val library = DesktopLibrary(runtime.database) { null }
             val generator = DesktopSuggestions(library, FakeRuntime(), now = { 42L }, sourceOrder = { it })
-            assertTrue(generator.refresh(listOf(listing(manga))) > 0)
+            assertTrue(generator.refresh(listOf(listing(novels))) > 0)
             assertTrue(library.suggestionReasons().values.none { it.first == SuggestionDirection.TASTE })
         }
     }

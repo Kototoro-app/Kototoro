@@ -1,8 +1,9 @@
 package org.skepsun.kototoro.community.ui
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -45,9 +46,9 @@ fun CommunityWorksRail(
             onClick = { onOpen(card) },
             shape = RoundedCornerShape(14.dp),
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            modifier = Modifier.size(width = 148.dp, height = 96.dp).testTag("$testTag-item"),
+            modifier = Modifier.width(148.dp).heightIn(min = 64.dp).testTag("$testTag-item"),
         ) {
-            Column(modifier = Modifier.padding(12.dp)) {
+            Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
                 Text(
                     text = card.title,
                     style = MaterialTheme.typography.titleSmall,

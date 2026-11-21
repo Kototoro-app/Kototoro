@@ -4315,6 +4315,7 @@
     <string name="suggestion_direction_popular">Popular</string>
     <string name="suggestion_direction_new">New &amp; updated</string>
     <string name="suggestion_direction_explore">Explore</string>
+    <string name="suggestion_direction_community">Community</string>
     <string name="suggestion_language_title">Recommendation language</string>
     <string name="suggestion_language_summary">Mixed by default, with your system language first. Optionally show only the selected language. Uses each source’s declared language.</string>
     <string name="suggestion_language_system">System language</string>

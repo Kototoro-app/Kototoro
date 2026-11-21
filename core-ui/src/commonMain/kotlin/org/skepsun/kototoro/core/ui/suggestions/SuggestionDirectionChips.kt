@@ -20,8 +20,9 @@ fun SuggestionDirectionChips(
     onSelect: (SuggestionDirection?) -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    hasCommunity: Boolean = false,
 ) {
-    val directions = listOf(null) + SuggestionDirection.entries
+    val directions = listOf(null) + SuggestionDirection.entries.filter { hasCommunity || it != SuggestionDirection.COMMUNITY }
     Row(modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
         directions.forEachIndexed { index, direction ->
             val label = when (direction) {
@@ -30,6 +31,7 @@ fun SuggestionDirectionChips(
                 SuggestionDirection.POPULAR -> uiString("suggestion_direction_popular")
                 SuggestionDirection.NEW -> uiString("suggestion_direction_new")
                 SuggestionDirection.EXPLORE -> uiString("suggestion_direction_explore")
+                SuggestionDirection.COMMUNITY -> uiString("suggestion_direction_community")
             }
             CompactChoicePill(
                 selected = selected == direction,

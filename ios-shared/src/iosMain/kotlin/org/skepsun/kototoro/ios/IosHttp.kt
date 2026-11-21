@@ -24,6 +24,10 @@ internal object IosHttp : TvBoxHttp {
         }
     }
 
+    internal val communitySnapshot by lazy {
+        org.skepsun.kototoro.community.snapshot.CommunitySnapshotFetcher(client)
+    }
+
     override suspend fun get(url: String, headers: Map<String, String>): String {
         val response = client.get(url) {
             headers.forEach { (name, value) -> header(name, value) }

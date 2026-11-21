@@ -1,5 +1,12 @@
 package org.skepsun.kototoro.community.domain
 
+import kotlinx.coroutines.withTimeoutOrNull
+import org.skepsun.kototoro.suggestions.domain.LibraryWork
+import org.skepsun.kototoro.suggestions.domain.SuggestionCandidate
+import org.skepsun.kototoro.suggestions.domain.SuggestionDirection
+
+data class CommunitySuggestionTarget(val groupId: String, val title: String, val medium: CommunityMedium, val reason: String?)
+
 /** A work in the reader's library that recommendations start from: its community group and how much they like it. */
 data class CommunitySeed(val groupId: String, val title: String?, val affinity: Double)
 
@@ -17,6 +24,78 @@ data class CommunityRecommendation(
  * held back by what they rated low.
  */
 object CommunityRecommendations {
+
+    suspend fun <Source, Work> resolve(
+        targets: List<CommunitySuggestionTarget>,
+        sources: Map<CommunityMedium, List<Source>>,
+        cached: (Source) -> List<Work>,
+        search: suspend (Source, String) -> List<Work>,
+        titles: (Work) -> List<String>,
+        eligible: (Source, Work) -> Boolean,
+        fold: (String) -> String,
+    ): List<SuggestionCandidate<Work>> {
+        val results = ArrayList<SuggestionCandidate<Work>>()
+        withTimeoutOrNull(15_000L) {
+            for ((rank, target) in targets.withIndex()) {
+                val key = CommunityWorkKeys.titleKey(target.title, target.medium, fold) ?: continue
+                fun matches(source: Source, item: Work) = eligible(source, item) &&
+                    key in CommunityWorkKeys.keys(target.medium, titles(item), fold = fold)
+                val choices = sources[target.medium].orEmpty()
+                val known = choices.firstNotNullOfOrNull { source ->
+                    cached(source).firstOrNull { matches(source, it) }
+                }
+                val match = known ?: choices.take(3).firstNotNullOfOrNull { source ->
+                    withTimeoutOrNull(4_000L) { search(source, target.title).firstOrNull { matches(source, it) } }
+                } ?: continue
+                results += SuggestionCandidate(match, SuggestionDirection.COMMUNITY, target.reason, rank)
+            }
+        }
+        return results
+    }
+
+    suspend fun targets(
+        library: List<LibraryWork>,
+        stars: Map<Long, Int>,
+        refs: Map<Long, List<CommunityExternalRef>>,
+        fold: (String) -> String,
+        groupsOf: suspend (Map<Long, List<String>>) -> Map<Long, String>,
+        works: suspend (Collection<String>) -> Map<String, CommunityWorkSummary>,
+        limit: Int = 20,
+    ): List<CommunitySuggestionTarget> {
+        val identified = library.filter { it.id != 0L }
+        val keysById = identified.associate { item ->
+            item.id to CommunityWorkKeys.keys(
+                CommunityMedium.of(item.contentType), item.titles, refs[item.id].orEmpty(), fold,
+            )
+        }.filterValues { it.isNotEmpty() }
+        if (keysById.isEmpty()) return emptyList()
+        val groups = groupsOf(keysById)
+        val seeds = identified.mapNotNull { item ->
+            val group = groups[item.id] ?: return@mapNotNull null
+            val affinity = affinity(stars[item.id], item.isFavourite, item.percent) ?: return@mapNotNull null
+            CommunitySeed(group, item.titles.firstOrNull(), affinity)
+        }
+        if (seeds.isEmpty()) return emptyList()
+        val summaries = works(seeds.map { it.groupId }.distinct())
+        val knownTitles = keysById.values.flatten().filterNot(CommunityWorkKeys::isStrong).toHashSet()
+        val ranked = rank(
+            seeds = seeds,
+            similar = { summaries[it]?.similar.orEmpty() },
+            known = groups.values.toSet(),
+            excluded = { work -> work.nsfw || work.title?.let { title ->
+                CommunityMedium.entries.any { CommunityWorkKeys.titleKey(title, it, fold) in knownTitles }
+            } == true },
+            limit = limit,
+        )
+        val targets = works(ranked.map { it.groupId })
+        return ranked.mapNotNull { pick ->
+            val summary = targets[pick.groupId]?.takeUnless { it.nsfw } ?: return@mapNotNull null
+            val medium = CommunityMedium.entries.firstOrNull { it.wire == summary.medium && it != CommunityMedium.OTHER }
+                ?: return@mapNotNull null
+            val title = (summary.title ?: pick.title)?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            CommunitySuggestionTarget(pick.groupId, title, medium, pick.because.firstOrNull()?.title)
+        }
+    }
 
     const val FAVOURITE_AFFINITY = 2.0
     const val FINISHED_AFFINITY = 1.5

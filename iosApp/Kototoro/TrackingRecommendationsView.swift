@@ -19,13 +19,10 @@ struct TrackingScheduleWindow {
     }
 }
 
-/// A compact chart shelf complements the personal artwork carousel; each space keeps a valid media scope.
+/// Website charts in Browse, scoped to the current content space.
 struct TrackingRecommendationsView: View {
     let spaceKind: String?
     let onPreview: (IosTrackingItem) -> Void
-    var compact = false
-    var selectedFeed: Binding<String> = .constant("website")
-    var collapsed: Binding<Bool> = .constant(false)
     @EnvironmentObject private var library: LibraryModel
     @AppStorage("browse.tracking.site") private var site = 5
     @AppStorage("browse.tracking.category") private var category = "calendar"
@@ -59,76 +56,76 @@ struct TrackingRecommendationsView: View {
     }
     private var identity: String {
         "\(selectedSite)|\(spaceKind ?? "ALL")|\(selectedCategory)|\(TrackingScheduleWindow(weekday: selectedWeekday).start)|" +
-            "\(bangumiApiBase)|\(library.library != nil)|\(collapsed.wrappedValue)"
+            "\(bangumiApiBase)|\(library.library != nil)"
     }
     private var visible: [IosTrackingItem] {
-        loadedIdentity == identity ? Array(items.filter { spaceKind == nil || $0.mediaKind == spaceKind }.prefix(10)) : []
+        loadedIdentity == identity ? Array(items.filter { spaceKind == nil || $0.mediaKind == spaceKind }) : []
     }
     private var siteTitle: String { availableSites.first { Int($0.id) == selectedSite }?.title ?? "Bangumi" }
     private var categoryTitle: String {
         sections.first { $0.id == selectedCategory }?.title ?? String(localized: "热门作品")
     }
 
+    @AppStorage("listMode.websiteRecommendations") private var mode = ContentListMode.grid
+    @AppStorage("list.gridSize.websiteRecommendations") private var gridSize = ContentGridSize.legacyDefault
+
     var body: some View {
-        VStack(alignment: .leading, spacing: compact ? 8 : 12) {
-            HStack(alignment: .firstTextBaseline) {
-                NavigationLink {
-                    TrackingSitesView(initialMediaKind: mediaKind, initialService: selectedSite,
-                                      initialCategory: selectedCategory, initialWeekday: selectedWeekday, followsSpace: true)
-                        .navigationLinkIndicatorVisibility(.automatic)
-                } label: {
-                    HStack(spacing: 6) {
-                        Text("网站推荐").font(.title3.bold())
-                        Image(systemName: "chevron.right").font(.caption.bold()).foregroundStyle(.secondary)
-                    }.foregroundStyle(.primary)
-                }.accessibilityIdentifier("sources.tracking")
-                Spacer(minLength: 6)
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text(siteTitle).lineLimit(1)
-                    Text(selectionSubtitle).foregroundStyle(.secondary).lineLimit(1)
-                }.font(.caption)
-                if loading && !collapsed.wrappedValue { ProgressView().controlSize(.small) }
-                selectionMenu
-            }
-            if collapsed.wrappedValue {
-                EmptyView()
-            } else if !visible.isEmpty {
-                ScrollView(.horizontal) {
-                    LazyHStack(alignment: .top, spacing: 12) {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack {
+                    Text("\(siteTitle) · \(selectionSubtitle)").font(.subheadline).foregroundStyle(.secondary)
+                    Spacer()
+                    NavigationLink {
+                        TrackingSitesView(initialMediaKind: mediaKind, initialService: selectedSite,
+                                          initialCategory: selectedCategory, initialWeekday: selectedWeekday, followsSpace: true)
+                    } label: { Label("追踪网站", systemImage: "chevron.right") }
+                        .accessibilityIdentifier("sources.tracking")
+                }
+                if loading { ProgressView("正在读取网站推荐…") }
+                if let error { Label(error, systemImage: "exclamationmark.triangle").font(.footnote) }
+                if visible.isEmpty && !loading && error == nil {
+                    ContentUnavailableView("此分区暂无作品", systemImage: "chart.bar")
+                }
+                if mode.isGrid {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: mode.targetWidth(scale: gridSize / 100)))]) {
                         ForEach(visible, id: \.key) { item in
                             Button { onPreview(item) } label: {
-                                RecommendationPoster(title: item.title, subtitle: subtitle(item), compact: compact) {
-                                    AsyncImage(url: item.coverUrl.flatMap(URL.init(string:))) { image in
-                                        image.resizable().scaledToFill()
-                                    } placeholder: {
-                                        Rectangle().fill(.quaternary).overlay { Image(systemName: "book.closed") }
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Color.clear.aspectRatio(mode.isMovie ? 16.0 / 9 : 2.0 / 3, contentMode: .fit)
+                                        .overlay {
+                                            AsyncImage(url: item.coverUrl.flatMap(URL.init(string:))) { image in
+                                                image.resizable().scaledToFill()
+                                            } placeholder: {
+                                                Rectangle().fill(.quaternary).overlay { Image(systemName: "book.closed") }
+                                            }
+                                        }.clipped().clipShape(.rect(cornerRadius: 8))
+                                    Text(item.title).font(.subheadline).lineLimit(2)
+                                    if !mode.hasTitleOverlay {
+                                        Text(subtitle(item)).font(.caption).foregroundStyle(.secondary)
                                     }
-                                }
+                                }.frame(maxWidth: .infinity, alignment: .leading)
                             }.buttonStyle(.plain).accessibilityIdentifier("tracking.preview.\(item.remoteId)")
                         }
-                    }.scrollTargetLayout()
+                    }
+                } else {
+                    LazyVStack(alignment: .leading, spacing: 10) {
+                        ForEach(visible, id: \.key) { item in
+                            Button { onPreview(item) } label: { TrackingItemRow(item: item) }
+                                .buttonStyle(.plain).accessibilityIdentifier("tracking.preview.\(item.remoteId)")
+                        }
+                    }
                 }
-                .scrollIndicators(.hidden).scrollTargetBehavior(.viewAligned)
-                .accessibilityIdentifier("tracking.shelf")
-                if let error {
-                    Label(error, systemImage: "exclamationmark.triangle")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-            } else if loading {
-                ProgressView("正在读取网站推荐…").frame(maxWidth: .infinity, minHeight: 70, alignment: .leading)
-            } else {
-                HStack(alignment: .top) {
-                    Text(error ?? String(localized: "此分区暂无作品"))
-                        .font(.subheadline).foregroundStyle(.secondary)
-                    Spacer()
-                    Button("重试") { Task { await load(force: true) } }.font(.subheadline)
-                }.accessibilityIdentifier("tracking.shelf.status")
+            }.padding()
+        }
+        .toolbar {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                ContentListModeMenu(mode: $mode, gridSize: $gridSize, modes: [.list, .grid, .movieGrid])
+                selectionMenu
             }
         }
-        .buttonStyle(.plain)
-        .navigationLinkIndicatorVisibility(.hidden)
+        .refreshable { await load(force: true) }
         .task(id: identity) { await load() }
-        .onDisappear { request = nil }
+        .onDisappear { request = nil; loading = false }
     }
 
     private var selectionMenu: some View {
@@ -136,7 +133,7 @@ struct TrackingRecommendationsView: View {
             Button { Task { await load(force: true) } } label: {
                 Label("刷新推荐", systemImage: "arrow.clockwise")
             }
-            .disabled(loading || collapsed.wrappedValue)
+            .disabled(loading)
             .accessibilityIdentifier("recommendations.refresh")
             Divider()
             Picker("追踪网站", selection: Binding(get: { selectedSite }, set: { site = $0 })) {
@@ -150,10 +147,6 @@ struct TrackingRecommendationsView: View {
                     Text("今天").tag(0)
                     ForEach(1...7, id: \.self) { Text(Self.weekdayTitle($0)).tag($0) }
                 }.pickerStyle(.menu)
-            }
-            if compact {
-                Divider()
-                BrowseRecommendationActions(selectedFeed: selectedFeed, collapsed: collapsed)
             }
         } label: {
             Label("推荐选项", systemImage: "ellipsis").labelStyle(.iconOnly)
@@ -185,7 +178,7 @@ struct TrackingRecommendationsView: View {
         if !force && loadedIdentity == key && Date().timeIntervalSince(loadedAt) < 15 * 60 { return }
         loading = true; error = nil
         defer { if request == token { loading = false } }
-        guard !collapsed.wrappedValue, let tracking = library.library?.tracking else { return }
+        guard let tracking = library.library?.tracking else { return }
         do {
             let result = try await requestItems(tracking: tracking)
             guard !Task.isCancelled, request == token, identity == key else { return }
@@ -242,41 +235,5 @@ struct TrackingRecommendationsView: View {
             }
         }
         return result
-    }
-}
-
-/// One compact, optional discovery strip keeps source navigation as Browse's primary content.
-struct BrowseRecommendationsView: View {
-    let spaceKind: String?
-    let onPreview: (IosTrackingItem) -> Void
-    @AppStorage("browse.recommendations.feed") private var selectedFeed = "personal"
-    @AppStorage("browse.recommendations.collapsed") private var collapsed = false
-
-    var body: some View {
-        Group {
-            if selectedFeed == "website" {
-                TrackingRecommendationsView(spaceKind: spaceKind, onPreview: onPreview, compact: true,
-                    selectedFeed: $selectedFeed, collapsed: $collapsed)
-            } else {
-                SuggestionsView(previewLimit: 6, previewKind: spaceKind, compact: true,
-                    selectedFeed: $selectedFeed, collapsed: $collapsed)
-            }
-        }
-    }
-}
-
-struct BrowseRecommendationActions: View {
-    @Binding var selectedFeed: String
-    @Binding var collapsed: Bool
-
-    var body: some View {
-        Picker("推荐内容", selection: $selectedFeed) {
-            Text("为你推荐").tag("personal")
-            Text("网站推荐").tag("website")
-        }.pickerStyle(.menu)
-        Button { collapsed.toggle() } label: {
-            Label(collapsed ? "展开推荐" : "收起推荐", systemImage: collapsed ? "chevron.down" : "chevron.up")
-        }
-        .accessibilityIdentifier("recommendations.collapse")
     }
 }

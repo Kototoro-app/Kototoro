@@ -2429,6 +2429,10 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         get() = prefs.getStringSet(KEY_SUGGESTIONS_CURSORS, emptySet()).orEmpty()
         set(value) = prefs.edit { putStringSet(KEY_SUGGESTIONS_CURSORS, value) }
 
+    var suggestionsRotationSeed: Long
+        get() = prefs.getLong(KEY_SUGGESTIONS_ROTATION_SEED, 0L)
+        set(value) = prefs.edit { putLong(KEY_SUGGESTIONS_ROTATION_SEED, value) }
+
     val suggestionsPreferredSources: Set<String>
         get() = prefs.getStringSet(KEY_SUGGESTIONS_PREFERRED_SOURCES, emptySet()).orEmpty()
 
@@ -3372,6 +3376,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_SUGGESTIONS_EXCLUDED_SOURCES = "suggestions_excluded_sources"
         const val KEY_SUGGESTIONS_FAVOURITE_SOURCES = "suggestions_favourite_sources"
         const val KEY_SUGGESTIONS_CURSORS = "suggestions_cursors"
+        const val KEY_SUGGESTIONS_ROTATION_SEED = "suggestions_rotation_seed"
         const val KEY_SUGGESTIONS_POPULAR_SOURCES = "suggestions_popular_sources"
         const val KEY_SUGGESTIONS_DISABLED_SOURCES = "suggestions_disabled_sources"
         const val KEY_SUGGESTIONS_NOTIFICATIONS = "suggestions_notifications"

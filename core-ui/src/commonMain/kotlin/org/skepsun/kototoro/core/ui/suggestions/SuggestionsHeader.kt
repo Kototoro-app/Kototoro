@@ -43,6 +43,7 @@ fun SuggestionsHeader(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     refreshing: Boolean = false,
+    hasCommunity: Boolean = false,
 ) {
     val colors = MaterialTheme.colorScheme
     val accent = colors.tertiary
@@ -95,11 +96,12 @@ fun SuggestionsHeader(
                         SuggestionDirection.POPULAR -> uiString("suggestion_description_popular")
                         SuggestionDirection.NEW -> uiString("suggestion_description_new")
                         SuggestionDirection.EXPLORE -> uiString("suggestion_description_explore")
+                        SuggestionDirection.COMMUNITY -> uiString("community_for_you")
                     }, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant,
                         maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
             }
         }
-        SuggestionDirectionChips(selected, onSelect, enabled = enabled)
+        SuggestionDirectionChips(selected, onSelect, enabled = enabled, hasCommunity = hasCommunity)
     }
 }

@@ -35,6 +35,11 @@ fun SourceSuggestionPreferences.filter(items: List<SourceContent>): List<SourceC
 
 data class SourceSuggestionResult(val items: List<RankedSuggestion<SourceContent>>, val successfulSources: Int)
 
+data class SourceSuggestionCommunity(
+    val candidates: List<SuggestionCandidate<SourceContent>>,
+    val ratings: Map<Long, org.skepsun.kototoro.community.domain.CommunityRatingSummary>,
+)
+
 /** Source-protocol implementation of Android's worker rules, used by Apple and desktop hosts. */
 class SourceSuggestions(
     private val runtime: SourceRuntime,
@@ -52,7 +57,8 @@ class SourceSuggestions(
         preferences: SourceSuggestionPreferences,
         now: Long,
         ages: Map<Long, Long> = emptyMap(),
-        seed: Long = now,
+        seed: Long = suggestionRotationSeed(now),
+        community: (suspend (List<SourceContent>) -> SourceSuggestionCommunity)? = null,
     ): SourceSuggestionResult {
         // An empty library still gets the sources' popular and new lists; there is just no taste to ask for yet.
         val profile = SuggestionProfile.of(library, now, preferences.tagWhitelist)
@@ -121,8 +127,9 @@ class SourceSuggestions(
             if (answered) lock.withLock { successful++ }
             found
         }
+        val extra = if (successful > 0) community?.invoke(raw.map { it.item }) else null
         return SourceSuggestionResult(rankSuggestions(
-            candidates = raw,
+            candidates = raw + extra?.candidates.orEmpty(),
             profile = profile,
             id = { it.id },
             source = { it.source.name },
@@ -135,6 +142,10 @@ class SourceSuggestions(
             languagePriority = { preferences.language.accepts(it.source.locale, preferences.systemLanguage) },
             limits = limits,
             groupOf = { SuggestionOrigins.groupOf(it.source.contentType, it.tags.map { tag -> tag.title }, it.source.locale) },
+            quality = { item ->
+                val rating = extra?.ratings?.get(item.id)
+                SuggestionQuality.of(item.rating, rating?.score, rating?.weight)
+            },
         ), successful)
     }
 }

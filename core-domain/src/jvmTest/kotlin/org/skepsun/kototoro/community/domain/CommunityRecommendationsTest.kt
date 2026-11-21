@@ -1,11 +1,36 @@
 package org.skepsun.kototoro.community.domain
 
+import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class CommunityRecommendationsTest {
+
+    @Test
+    fun `resolves a cached alias first and ignores loose matches and other media`() = runBlocking {
+        val queries = mutableListOf<Pair<String, String>>()
+        val targets = listOf(
+            CommunitySuggestionTarget("cached", "Moon Story", CommunityMedium.COMIC, "Favourite"),
+            CommunitySuggestionTarget("uncached", "Sun Story", CommunityMedium.NOVEL, null),
+        )
+        val resolved = CommunityRecommendations.resolve(
+            targets = targets,
+            sources = mapOf(CommunityMedium.COMIC to listOf("comic"), CommunityMedium.NOVEL to listOf("novel")),
+            cached = { source -> if (source == "comic") listOf(listOf("Original", "Moon-Story")) else emptyList() },
+            search = { source, title ->
+                queries += source to title
+                listOf(listOf("Sun Story sequel"), listOf("Sun Story"))
+            },
+            titles = { it },
+            eligible = { _, _ -> true },
+            fold = String::lowercase,
+        )
+        assertEquals(listOf("novel" to "Sun Story"), queries)
+        assertEquals(listOf("Original", "Sun Story"), resolved.map { it.item.first() })
+        assertEquals("Favourite", resolved.first().reason)
+    }
 
     private fun sim(id: String, score: Double, title: String? = id.uppercase()) = CommunitySimilarWork(id, title, score, coRaters = 5)
 

@@ -226,12 +226,13 @@ struct SourceBrowseView: View {
     }
 
     @AppStorage("listMode.browse") private var mode = ContentListMode.grid
+    @AppStorage("list.gridSize.browse") private var gridSize = ContentGridSize.legacyDefault
 
     var body: some View {
         ScrollView {
             categoryBar.disabled(selecting)
             ContentCollection(runtime: model.runtime, items: model.contentItems, mode: mode,
-                              identifierPrefix: "source.content.",
+                              identifierPrefix: "source.content.", gridSize: gridSize,
                               onItemAppear: { item in
                                   // Ask for the next page about two screens early, so a fling does not hit the end
                                   // and wait for the network there.
@@ -330,7 +331,7 @@ struct SourceBrowseView: View {
                     .accessibilityIdentifier("browse.selection.favourite")
                 }
             } else {
-                ToolbarItem(placement: .topBarTrailing) { ContentListModeMenu(mode: $mode) }
+                ToolbarItem(placement: .topBarTrailing) { ContentListModeMenu(mode: $mode, gridSize: $gridSize) }
                 if model.source.name == "LOCAL_VIDEO" {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button("导入视频文件夹", systemImage: "folder.badge.plus") { importingFolder = true }

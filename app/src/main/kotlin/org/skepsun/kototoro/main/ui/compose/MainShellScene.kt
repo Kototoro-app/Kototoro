@@ -1232,6 +1232,7 @@ internal fun SuggestionsTopLevelRouteContent(
     val viewModel = spaceBoundHiltViewModel<org.skepsun.kototoro.suggestions.ui.SuggestionsViewModel>("suggestions")
     val suggestionsLibraryQuery by viewModel.libraryQuery.collectAsStateWithLifecycle()
     val suggestionDirection by viewModel.direction.collectAsStateWithLifecycle()
+    val hasCommunity by viewModel.hasCommunity.collectAsStateWithLifecycle()
     val suggestionCount by viewModel.visibleCount.collectAsStateWithLifecycle()
     val suggestionLanguage by viewModel.language.collectAsStateWithLifecycle()
     val suggestionLanguageOnly by viewModel.languageOnly.collectAsStateWithLifecycle()
@@ -1281,6 +1282,7 @@ internal fun SuggestionsTopLevelRouteContent(
                     }
                     org.skepsun.kototoro.core.ui.suggestions.SuggestionsHeader(
                         selected = suggestionDirection,
+                        hasCommunity = hasCommunity,
                         language = suggestionLanguage,
                         languageOnly = suggestionLanguageOnly,
                         count = suggestionCount,
@@ -1300,7 +1302,6 @@ internal fun SuggestionsTopLevelRouteContent(
                             modifier = Modifier.padding(top = 4.dp),
                         )
                     }
-                    // Community picks and favourites (draws nothing while the community is off or the index is empty).
                     org.skepsun.kototoro.community.ui.CommunitySuggestionsSection(
                         onSearchTitle = { title -> appRouter.openSearch(title) },
                         horizontalPadding = 12.dp,

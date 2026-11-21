@@ -4258,6 +4258,7 @@
     <string name="suggestion_direction_popular">热门榜</string>
     <string name="suggestion_direction_new">新作与更新</string>
     <string name="suggestion_direction_explore">换换口味</string>
+    <string name="suggestion_direction_community">社区</string>
     <string name="suggestion_language_title">推荐语言</string>
     <string name="suggestion_language_summary">默认混合推荐，优先系统语言；也可仅显示所选语言。按来源声明的语言判断。</string>
     <string name="suggestion_language_system">系统语言</string>

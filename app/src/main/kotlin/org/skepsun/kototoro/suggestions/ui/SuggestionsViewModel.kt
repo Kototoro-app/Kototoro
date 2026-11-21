@@ -115,7 +115,14 @@ class SuggestionsViewModel @Inject constructor(
 
     private val loadParams = quickFilter.appliedOptions.combineWithSettings()
 
-    val direction = MutableStateFlow<org.skepsun.kototoro.suggestions.domain.SuggestionDirection?>(null)
+    private val requestedDirection = MutableStateFlow<org.skepsun.kototoro.suggestions.domain.SuggestionDirection?>(null)
+
+    val hasCommunity = repository.observeHasCommunity()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val direction = combine(requestedDirection, hasCommunity) { selected, available ->
+        selected.takeUnless { !available && it == org.skepsun.kototoro.suggestions.domain.SuggestionDirection.COMMUNITY }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     val language = settings.observeAsFlow(org.skepsun.kototoro.suggestions.domain.SuggestionLanguage.PREFERENCE_KEY) {
         suggestionsLanguage
@@ -126,7 +133,7 @@ class SuggestionsViewModel @Inject constructor(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), settings.suggestionsLanguageOnly)
 
     fun selectDirection(value: org.skepsun.kototoro.suggestions.domain.SuggestionDirection?) {
-        direction.value = value
+        requestedDirection.value = value
     }
 
     /** Text typed in the overlay's "Suggestions" tab; narrows the loaded suggestions in memory. */

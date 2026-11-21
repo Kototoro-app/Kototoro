@@ -2,9 +2,12 @@ package org.skepsun.kototoro.community.domain
 
 import org.skepsun.kototoro.community.data.CommunitySnapshotRepository
 import org.skepsun.kototoro.core.db.MangaDatabase
+import org.skepsun.kototoro.core.model.getContentType
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.parsers.model.Content
+import org.skepsun.kototoro.parsers.util.runCatchingCancellable
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
-import org.skepsun.kototoro.suggestions.domain.SuggestionRepository
+import org.skepsun.kototoro.suggestions.domain.LibraryWork
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -16,39 +19,39 @@ import javax.inject.Singleton
 class CommunitySuggestionsRepository @Inject constructor(
     private val settings: AppSettings,
     private val db: MangaDatabase,
-    private val suggestions: SuggestionRepository,
     private val snapshots: CommunitySnapshotRepository,
 ) {
 
-    suspend fun recommendations(limit: Int = LIMIT): List<CommunityRecommendation> {
-        if (!settings.isCommunityEnabled) return emptyList()
-        val library = suggestions.getLibraryWorks(LIBRARY_HISTORY).filter { it.id != 0L }
-        if (library.isEmpty()) return emptyList()
-        val dao = db.getCommunityDao()
-        val myStars = dao.findAllRatings().associate { it.mangaId to it.stars }
-        val refs = libraryRefs()
-        val keysByWork = library.associate { work ->
-            work.id to CommunityWorkKeys.keys(
-                CommunityMedium.of(work.contentType), work.titles, refs[work.id].orEmpty(), CommunityRepository.Companion::fold,
-            )
-        }.filterValues { it.isNotEmpty() }
-        val groups = snapshots.groupsOf(keysByWork)
-        val seeds = library.mapNotNull { work ->
-            val group = groups[work.id] ?: return@mapNotNull null
-            val affinity = CommunityRecommendations.affinity(myStars[work.id], work.isFavourite, work.percent) ?: return@mapNotNull null
-            CommunitySeed(group, work.titles.firstOrNull(), affinity)
-        }
-        if (seeds.isEmpty()) return emptyList()
-        val summaries = snapshots.works(seeds.map { it.groupId }.distinct())
-        // A work the index never grouped with the library's copy can still be on the shelf under the same title.
-        val libraryTitleKeys = keysByWork.values.flatten().filterNot(CommunityWorkKeys::isStrong).toHashSet()
-        val allowNsfw = settings.isCommunityNsfwRatingEnabled
-        return CommunityRecommendations.rank(
-            seeds = seeds,
-            similar = { summaries[it]?.similar.orEmpty() },
-            known = groups.values.toSet(),
-            excluded = { work -> (work.nsfw && !allowNsfw) || work.title?.let { isKnownTitle(it, libraryTitleKeys) } == true },
-            limit = limit,
+    suspend fun cachedRatings(candidates: Collection<Content>): Map<Long, CommunityRatingSummary> {
+        if (!settings.isCommunityEnabled || candidates.isEmpty()) return emptyMap()
+        return runCatchingCancellable {
+            val keysById = candidates.associate { item ->
+                item.id to CommunityWorkKeys.keys(
+                    CommunityMedium.of(item.source.getContentType().name),
+                    listOf(item.title) + item.altTitles,
+                    fold = CommunityRepository.Companion::fold,
+                )
+            }.filterValues { it.isNotEmpty() }
+            val groups = snapshots.groupsOf(keysById, cachedOnly = true)
+            val works = snapshots.works(groups.values.toSet(), cachedOnly = true)
+            groups.mapNotNull { (id, group) ->
+                val work = works[group] ?: return@mapNotNull null
+                if (work.nsfw && !settings.isCommunityNsfwRatingEnabled) return@mapNotNull null
+                work.rating?.let { id to it }
+            }.toMap()
+        }.getOrDefault(emptyMap())
+    }
+
+    suspend fun suggestionTargets(library: List<LibraryWork>): List<CommunitySuggestionTarget> {
+        if (!settings.isCommunityEnabled || library.isEmpty()) return emptyList()
+        return CommunityRecommendations.targets(
+            library = library,
+            stars = db.getCommunityDao().findAllRatings().associate { it.mangaId to it.stars },
+            refs = libraryRefs(),
+            fold = CommunityRepository.Companion::fold,
+            groupsOf = { snapshots.groupsOf(it) },
+            works = { snapshots.works(it) },
+            limit = LIMIT,
         )
     }
 
@@ -75,12 +78,8 @@ class CommunitySuggestionsRepository @Inject constructor(
         return (tracked + bound).groupBy({ it.first }, { it.second }).mapValues { (_, list) -> list.distinctBy { it.service } }
     }
 
-    private fun isKnownTitle(title: String, libraryTitleKeys: Set<String>): Boolean =
-        CommunityMedium.entries.any { medium -> CommunityWorkKeys.titleKey(title, medium, CommunityRepository.Companion::fold) in libraryTitleKeys }
-
     private companion object {
         const val LIMIT = 20
-        const val LIBRARY_HISTORY = 500
         val MEDIA = listOf("comic", "novel", "video")
     }
 }

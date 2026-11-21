@@ -303,6 +303,8 @@ enum SourceSort: String, CaseIterable, Identifiable {
 }
 
 struct SourcesView: View {
+    private enum Page: String { case sources, personal, website }
+    @State private var page = Page.sources
     /// Held without observing: the library publishes often (update checks, refreshes) and every publish would rebuild
     /// and re-diff the whole source list mid-scroll; only actions and the preview sheet read it.
     let library: LibraryModel
@@ -426,13 +428,24 @@ struct SourcesView: View {
     }
 
     var body: some View {
-        let display = displaySources
         NavigationStack {
             Group {
-                if layout == .grid { grid(display) } else { list(display) }
+                switch page {
+                case .sources: sourcePage
+                case .personal: SuggestionsView()
+                case .website: TrackingRecommendationsView(spaceKind: kind, onPreview: previewTracking)
+                }
             }
-            .overlay {
-                if model.isLoading && model.sources.isEmpty { ProgressView("正在读取源…") }
+            .safeAreaInset(edge: .top, spacing: 0) {
+                Picker("浏览分页", selection: $page) {
+                    Text("来源").tag(Page.sources)
+                    Text("为你推荐").tag(Page.personal)
+                    Text("网站推荐").tag(Page.website)
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal).padding(.vertical, 6)
+                .background(.bar)
+                .accessibilityIdentifier("browse.page")
             }
             .navigationTitle("浏览")
             .navigationBarTitleDisplayMode(.inline)
@@ -441,20 +454,19 @@ struct SourcesView: View {
                     SourceBrowseView(runtime: runtime, source: route.source)
                 }
             }
-            // The system search field under the title; the search tab stays the app-wide search.
-            .pageSearch(text: $query, prompt: String(localized: "搜索源"))
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     if spacesEnabled { SpaceMenu() }
                 }
-                ToolbarItemGroup(placement: .topBarTrailing) {
-                    NavigationLink { RepositoriesView() } label: {
-                        Label("仓库与扩展", systemImage: "shippingbox")
-                    }.accessibilityIdentifier("sources.repositories")
-                    displayMenu
+                if page == .sources {
+                    ToolbarItemGroup(placement: .topBarTrailing) {
+                        NavigationLink { RepositoriesView() } label: {
+                            Label("仓库与扩展", systemImage: "shippingbox")
+                        }.accessibilityIdentifier("sources.repositories")
+                        displayMenu
+                    }
                 }
             }
-            .refreshable { await model.load() }
             .onAppear(perform: migrateHiddenKinds)
             .sheet(isPresented: $reordering) { SourceOrderSheet() }
             .sheet(item: $migration) { request in
@@ -465,6 +477,16 @@ struct SourcesView: View {
         .sheet(item: $trackingPreview, onDismiss: { Task { await library.refresh() } }) { selection in
             TrackingItemPreview(item: selection.item, tracking: selection.tracking, content: nil, onBound: {})
         }
+    }
+
+    private var sourcePage: some View {
+        let display = displaySources
+        return Group {
+            if layout == .grid { grid(display) } else { list(display) }
+        }
+        .overlay { if model.isLoading && model.sources.isEmpty { ProgressView("正在读取源…") } }
+        .pageSearch(text: $query, prompt: String(localized: "搜索源"))
+        .refreshable { await model.load() }
     }
 
     private func previewTracking(_ item: IosTrackingItem) {
@@ -488,14 +510,6 @@ struct SourcesView: View {
                 Section { ContentKindPicker(selection: $pageKind, available: availableKinds) }
                     .listRowBackground(Color.clear)
                     .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
-            }
-            if query.isEmpty && !newOnly {
-                Section {
-                    BrowseRecommendationsView(spaceKind: kind, onPreview: previewTracking)
-                        .listRowBackground(Color.clear).listRowSeparator(.hidden)
-                        // Transparent List rows still clip their contents to the cell's rounded corners.
-                        .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
-                }
             }
             statusSections
             if display.newSourceCount > 0 { Section { newSourcesNotice(count: display.newSourceCount) } }
@@ -547,9 +561,6 @@ struct SourcesView: View {
             VStack(alignment: .leading, spacing: 18) {
                 if !spacesEnabled && ContentKindPicker.isShown(availableKinds) {
                     ContentKindPicker(selection: $pageKind, available: availableKinds).padding(.horizontal, 16)
-                }
-                if query.isEmpty && !newOnly {
-                    BrowseRecommendationsView(spaceKind: kind, onPreview: previewTracking).padding(.horizontal, 16)
                 }
                 if let error = model.error {
                     Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.red).padding(.horizontal)

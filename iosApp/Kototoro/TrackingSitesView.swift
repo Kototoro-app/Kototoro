@@ -348,7 +348,7 @@ struct TrackingSitesView: View {
     }
 }
 
-private struct TrackingItemRow: View {
+struct TrackingItemRow: View {
     let item: IosTrackingItem
     var body: some View {
         HStack(alignment: .top, spacing: 12) {

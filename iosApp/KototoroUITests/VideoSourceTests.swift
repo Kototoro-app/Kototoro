@@ -576,8 +576,7 @@ final class VideoSourceTests: XCTestCase {
         app.launchArguments = ["-sources.layout", "grid", "-sources.grouping", "ecosystem", "-sources.sort", "manual",
                                "-sources.hiddenKinds", "", "-sources.hiddenEcosystems", "", "-sources.newOnly", "NO",
                                "-space.enabled", "YES", "-space.kind", "",
-                               "-suggestions", "YES", "-suggestions_preferred_tags", "动画",
-                               "-browse.recommendations.feed", "personal", "-browse.recommendations.collapsed", "NO"]
+                               "-suggestions", "YES", "-suggestions_preferred_tags", "动画"]
         app.launch()
         app.mainTab("浏览").tap()
         let list = app.scrollViews.firstMatch

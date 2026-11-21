@@ -38,7 +38,12 @@ import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import dagger.assisted.AssistedFactory
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.withTimeoutOrNull
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.community.domain.CommunitySuggestionsRepository
+import org.skepsun.kototoro.community.domain.CommunityMedium
+import org.skepsun.kototoro.community.domain.CommunityRepository
+import org.skepsun.kototoro.community.domain.CommunityRecommendations
 import org.skepsun.kototoro.core.exceptions.CloudFlareException
 import org.skepsun.kototoro.core.exceptions.resolve.CaptchaHandler
 import org.skepsun.kototoro.core.model.GlobalTagBlacklist
@@ -76,6 +81,7 @@ import org.skepsun.kototoro.suggestions.domain.PopularSources
 import org.skepsun.kototoro.suggestions.domain.SuggestionCursors
 import org.skepsun.kototoro.suggestions.domain.SuggestionOrigins
 import org.skepsun.kototoro.suggestions.domain.SuggestionRepository
+import org.skepsun.kototoro.suggestions.domain.SuggestionQuality
 import org.skepsun.kototoro.suggestions.domain.TagsBlacklist
 import org.skepsun.kototoro.suggestions.domain.SuggestionTagMatcher
 import org.skepsun.kototoro.suggestions.domain.cleanSuggestionList
@@ -86,10 +92,13 @@ import org.skepsun.kototoro.suggestions.domain.planQueries
 import org.skepsun.kototoro.suggestions.domain.rankSuggestions
 import org.skepsun.kototoro.suggestions.domain.SuggestionLimits
 import org.skepsun.kototoro.suggestions.domain.SuggestionProfile
+import org.skepsun.kototoro.suggestions.domain.LibraryWork
+import org.skepsun.kototoro.suggestions.domain.suggestionRotationSeed
 import org.skepsun.kototoro.suggestions.domain.suggestionTagKeys
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import kotlin.random.Random
+import kotlinx.coroutines.flow.first
 import androidx.appcompat.R as appcompatR
 
 @HiltWorker
@@ -103,6 +112,7 @@ class SuggestionsWorker @AssistedInject constructor(
     private val workManager: WorkManager,
     private val mangaRepositoryFactory: ContentRepository.Factory,
     private val sourcesRepository: ContentSourcesRepository,
+    private val communitySuggestions: CommunitySuggestionsRepository,
 ) : CoroutineWorker(appContext, params) {
 
     private val notificationManager by lazy { NotificationManagerCompat.from(appContext) }
@@ -184,13 +194,16 @@ class SuggestionsWorker @AssistedInject constructor(
     private suspend fun doWorkImpl(append: Boolean): Int {
         if (append && suggestionRepository.count() >= MAX_STORED) return 0
         val library = suggestionRepository.getLibraryWorks(SuggestionLimits().libraryHistory)
-        val sources = getSources()
+        val now = System.currentTimeMillis()
+        val refreshAt = inputData.getLong(DATA_REFRESH_AT, 0L)
+        val rotationSeed = suggestionRotationSeed(refreshAt.takeIf { it != 0L } ?: now, refreshAt)
+        val seed = if (append) appSettings.suggestionsRotationSeed.takeIf { it != 0L } ?: rotationSeed else rotationSeed
+        val sources = getSources(seed)
         // An empty library still gets the sources' popular and new lists; there is just no taste to ask for yet.
         if (sources.isEmpty()) return 0
         val tagsBlacklist = TagsBlacklist(appSettings.suggestionsTagsBlacklist, TAG_EQ_THRESHOLD)
         val globalTagBlacklist = GlobalTagBlacklist(appSettings.globalTagBlacklist)
         // The taste profile, scoring and ranking are shared with the other hosts (core-domain SuggestionRules).
-        val now = System.currentTimeMillis()
         val profile = SuggestionProfile.of(library, now, appSettings.suggestionsTagsWhitelist)
         val ages = suggestionRepository.getAges()
         val answered = java.util.concurrent.atomic.AtomicInteger()
@@ -203,31 +216,42 @@ class SuggestionsWorker @AssistedInject constructor(
                 it.isNsfw() && (appSettings.isSuggestionsExcludeNsfw || appSettings.isNsfwContentDisabled)
             },
         ) { source ->
-            getList(source, tagsBlacklist, profile, now, cursors?.get(source.name) ?: cursors?.let { SuggestionCursors.START }, stored) {
+            getList(source, tagsBlacklist, profile, seed, cursors?.get(source.name) ?: cursors?.let { SuggestionCursors.START }, stored) {
                 answered.incrementAndGet()
                 answeredSources += source.name
             }
         }
         // Keep the last usable cache and retry when every source failed.
         if (answered.get() == 0) return if (append) 0 else -1
+        val candidates = rawResults.filterNot { it.item in globalTagBlacklist || it.item.id in stored }
+        val preferredSources = PopularSources.preferred(
+            popularFirst = appSettings.isSuggestionsPopularSourcesFirst,
+            picked = appSettings.suggestionsPreferredSources,
+            excluded = appSettings.suggestionsExcludedSources,
+            sources = sources.map { PopularSourceProbe(it.name, it.getTitle(applicationContext)) },
+            favourites = if (appSettings.isSuggestionsFavouriteSourcesFirst) {
+                PopularSources.favouriteSources(library)
+            } else emptySet(),
+        )
+        val community = if (!append && appSettings.isCommunityEnabled) {
+            communityCandidates(library, sources, preferredSources, candidates.map { it.item }) { item ->
+                !item.isNsfw() && item !in tagsBlacklist && item !in globalTagBlacklist &&
+                    !profile.knows(item.id, listOf(item.title) + item.altTitles)
+            }
+        } else emptyList()
+        val allCandidates = candidates + community
+        val ratings = communitySuggestions.cachedRatings(allCandidates.map { it.item })
         val suggestions = rankSuggestions(
-            candidates = rawResults.filterNot { it.item in globalTagBlacklist || it.item.id in stored },
+            candidates = allCandidates,
             profile = profile,
             id = { it.id },
             source = { it.source.name },
             titles = { listOf(it.title) + it.altTitles },
             tags = { manga -> manga.tags.map { it.title } },
             now = now,
+            seed = seed,
             firstSuggestedAt = { ages[it.id] },
-            preferredSources = PopularSources.preferred(
-                popularFirst = appSettings.isSuggestionsPopularSourcesFirst,
-                picked = appSettings.suggestionsPreferredSources,
-                excluded = appSettings.suggestionsExcludedSources,
-                sources = sources.map { PopularSourceProbe(it.name, it.getTitle(applicationContext)) },
-                favourites = if (appSettings.isSuggestionsFavouriteSourcesFirst) {
-                    PopularSources.favouriteSources(library)
-                } else emptySet(),
-            ),
+            preferredSources = preferredSources,
             languagePriority = {
                 appSettings.suggestionsLanguage.accepts(it.source.getLocale()?.toLanguageTag(), java.util.Locale.getDefault().language)
             },
@@ -235,6 +259,10 @@ class SuggestionsWorker @AssistedInject constructor(
                 SuggestionOrigins.groupOf(it.source.getContentType().name, it.tags.map { tag -> tag.title }, it.source.getLocale()?.toLanguageTag())
             },
             limits = if (append) SuggestionLimits(maxResults = APPEND_BATCH) else SuggestionLimits(),
+            quality = { item ->
+                val rating = ratings[item.id]
+                SuggestionQuality.of(item.rating, rating?.score, rating?.weight)
+            },
         ).map { ContentSuggestion(it.item, it.relevance, it.direction, it.reason) }
         if (append) {
             val added = suggestionRepository.append(suggestions)
@@ -244,6 +272,7 @@ class SuggestionsWorker @AssistedInject constructor(
             return added
         }
         suggestionRepository.replace(suggestions)
+        appSettings.suggestionsRotationSeed = seed
         appSettings.suggestionsCursors = emptySet()
         if (appSettings.isSuggestionsNotificationAvailable
             && applicationContext.checkNotificationPermission(MANGA_CHANNEL_ID)
@@ -281,14 +310,46 @@ class SuggestionsWorker @AssistedInject constructor(
         return suggestions.size
     }
 
-    private suspend fun getSources(): List<ContentSource> {
+    private suspend fun communityCandidates(
+        library: List<LibraryWork>,
+        sources: List<ContentSource>,
+        preferredSources: Set<String>,
+        current: List<Content>,
+        eligible: (Content) -> Boolean,
+    ): List<SuggestionCandidate<Content>> {
+        val targets = withTimeoutOrNull(10_000L) {
+            runCatchingCancellable { communitySuggestions.suggestionTargets(library) }.getOrDefault(emptyList())
+        }.orEmpty()
+        if (targets.isEmpty()) return emptyList()
+        val enabled = sourcesRepository.getEnabledSources().mapTo(HashSet()) { it.name }
+        val used = library.mapNotNullTo(HashSet()) { it.source }
+        val orderedSources = sources.filter { it.name in enabled && !it.isNsfw() }
+            .sortedWith(compareByDescending<ContentSource> { it.name in preferredSources }
+                .thenByDescending { it.name in used })
+            .groupBy { CommunityMedium.of(it.getContentType().name) }
+        val cached = (current + suggestionRepository.observeAll().first()).groupBy { it.source.name }
+        return CommunityRecommendations.resolve(
+            targets = targets,
+            sources = orderedSources,
+            cached = { cached[it.name].orEmpty() },
+            search = { source, title ->
+                runCatchingCancellable {
+                    mangaRepositoryFactory.create(source).getList(0, null, ContentListFilter(query = title))
+                }.getOrDefault(emptyList())
+            },
+            titles = { listOf(it.title) + it.altTitles },
+            eligible = { source, item -> item.source.name == source.name && item.title.isNotBlank() &&
+                (item.url.isNotBlank() || item.publicUrl.isNotBlank()) && eligible(item) },
+            fold = CommunityRepository.Companion::fold,
+        )
+    }
+
+    private suspend fun getSources(seed: Long): List<ContentSource> {
         val sources = if (appSettings.isSuggestionsIncludeDisabledSources) {
-            val result = sourcesRepository.getAllAvailableSourcesForActiveTvBoxRepository().toMutableList()
-            result.shuffle()
-            result.sortWith(compareBy(nullsLast(LocaleComparator())) { it.getLocale() })
-            result
+            sourcesRepository.getAllAvailableSourcesForActiveTvBoxRepository().sortedBy { it.name }
+                .shuffled(Random(seed)).sortedWith(compareBy(nullsLast(LocaleComparator())) { it.getLocale() })
         } else {
-            sourcesRepository.getEnabledSources().shuffled()
+            sourcesRepository.getEnabledSources().sortedBy { it.name }.shuffled(Random(seed))
         }
         val excludedSources = appSettings.suggestionsExcludedSources
         return sources.filterNot {
@@ -528,6 +589,7 @@ class SuggestionsWorker @AssistedInject constructor(
                 .build()
             val request = OneTimeWorkRequestBuilder<SuggestionsWorker>()
                 .setConstraints(constraints)
+                .setInputData(workDataOf(DATA_REFRESH_AT to System.currentTimeMillis()))
                 .addTag(TAG_ONESHOT)
                 .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
                 .build()
@@ -546,6 +608,7 @@ class SuggestionsWorker @AssistedInject constructor(
         const val TAG_ONESHOT = "suggestions_oneshot"
         const val DATA_COUNT = "count"
         const val DATA_APPEND = "append"
+        const val DATA_REFRESH_AT = "refresh_at"
 
         /** Suggestions kept in all; incremental loading stops adding beyond it. */
         const val MAX_STORED = 800
