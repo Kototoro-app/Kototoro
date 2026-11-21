@@ -244,6 +244,8 @@ Android 与桌面的 UI 按 CMP 共享呈现演进；Windows 与 macOS 始终共
     Nostr 协议栈与事件格式 `CommunityEventSchema` 在 `core-net` 的 `community/nostr`（secp256k1-kmp 固定 0.15.0，
     更新的版本要求 Java 17/21）。
   - workflow 模板 `deploy/build-index.yml` 在 community-index 仓库内运行。
+  - 维护者审核：`deploy/maintainer.sh`（私钥只在本机登录钥匙串，CI 只有仓库变量 `MAINTAINER_NPUB`），
+    `mute show|add|remove` 签发 kind 10000 屏蔽列表，见计划 §11。
   - 线上测试都要显式开启：`-PnostrLiveRelays`，再加 `-PnostrLivePublish=true` 才会真的发布；
     `-PcommunityResolveBackup` 会查询 AniList/Bangumi。
   - 设计与实测记录见 `docs/architecture/community-nostr-plan-2026-11.md`。
@@ -356,6 +358,27 @@ Android 与桌面的 UI 按 CMP 共享呈现演进；Windows 与 macOS 始终共
   回归用 `DesktopModeDetectTest`（探针 `reader-mode-detect`，fixture 新增 `fixture.reader.probe.tall` 把第 2 页变 400x2400：
   关开关仍是分页、开开关出条带、再关开关仍是条带，且离开后偏好里的模式未变）。
   `DesktopProbes` 的白名单同时开始透传 `fixture.*`；`:reader-core:jvmTest` 的隔离守卫也补上 `reader.image` 包。
+  社区评分与评论也接上了（§206）：引擎是 `core-library` 的 `core/library/community/CommunityService`
+  （Android 三个社区仓库在 `SourceContent` 与共享库上的版本：作品键/AniList·Bangumi 解析、评分与撤回、发件箱、评论/举报/屏蔽、
+  昵称、榜单、推荐候选；快照缓存 `CommunitySnapshots` 由平台注入存储），界面是 `core-ui` 的
+  `community/ui`（评分卡 `CommunityRatingCard`、评论 `CommunityCommentsContent`、设置对话框 `CommunitySettingsDialogs`、
+  榜单 `CommunityChartSection`、轨道 `CommunityWorksRail`），Android 的同名入口只剩 ViewModel 与外壳（Android 的数据层仍是
+  `CommunityRepository`/`CommunityCommentsRepository`/`CommunitySnapshotRepository` 现在只是这份引擎的 Hilt 外壳，
+  `CommunitySuggestionsRepository` 仍是 Android 自己的）。发件箱从 v91 起分两段：没有中继接受的事件按退避重试并计入待发数；
+  只有一个中继接受的事件（`published_at`/`accepted_relays`）不再计入，却留着每小时补发给其他中继，直到两个中继持有、
+  或快照生成时间晚于发布时间 10 分钟（索引器已归档）、或满 3 天。详情页评分卡另显示快照之后的新评分数
+  （`freshRatings`，按 `#i` 直接问中继，自己的评分即使离线也计入）。Windows 的 `DesktopCommunity` 有自己的 StateFlow：私钥存系统凭据库
+  （`desktopCommunityCredentialStore`，与 Drive 令牌同一套），公钥与屏蔽/举报存 `desktop_community`，开关是
+  `desktop_services` 的 `community_enabled`/`community_nsfw_ratings`；中继与索引走 OkHttp（代理页的 selector 与认证，
+  HTTP/SOCKS 都行），中继 WebSocket 是 `desktop-runtime` 的 `OkHttpNostrRelayConnector`，直连时中继域名由自写 RFC 8484 的
+  `DesktopRelayDns` 解析；AniList·Bangumi 仍走 Ktor Java 引擎（同一 selector，HTTP 代理凭据经 `java.net.Authenticator`），
+  发件箱每 10 分钟重试；Android 与桌面的 DoH 都同时问 DNSPod/Cloudflare/Google，只有后两者 1.5 s 内都连不上时才用 DNSPod 的答案
+  （`core-library` jvmMain 的 `CommunityRelayAnswers`；2026-11-21 实测 DNSPod 把 nos.lol 解析成被污染的地址）；详情页在信息卡后画评分卡、评论开对话框，
+  推荐页有社区标签、榜单与社区候选。标题归一用 `core-domain` 的 `core/text/ChineseScript`（原 catvod `Trans` 的繁简表，
+  `Trans` 现委托给它）。iOS 的 `IosCommunityDetails` 发布/发件箱/昵称/评论已走同一引擎
+  （Swift API 不变，身份每次调用传入），概览与榜单仍读 `IosCommunityIndex`，评论在审核文件读不到时照旧拒绝显示；
+  `IosSuggestions` 的社区候选还是 iOS 自己那份。回归：`DesktopCommunityTest`（假中继）、
+  `DesktopCommunityViewsTest`、`DesktopServicesProbe` 的社区引导段。
   .pb/新版 JSON 仓库添加/列表/搜索、JAR 安装/更新/导入及身份恢复；新产物保存到应用管理的 SHA 目录。
   仓库可“忘记”（只删索引条目，已安装扩展与 JAR 保留，重新添加即恢复）。
   来源浏览/搜索、详情、收藏、分页图片阅读、历史与源设置，以及可选网页/HTML/JS 调试。
@@ -693,8 +716,8 @@ KMP/iOS 方案与进度见 `docs/architecture/kmp-ios-plan-2026-10.md`。KMP 模
 - 处理 Cloudflare 挑战和 Cookie 同步
 
 **数据库**：
-- Room 数据库（`MangaDatabase`）在 KMP 模块 `core-db/`，DATABASE_VERSION = 89（`core-db/src/commonMain/.../core/db/MangaDatabase.kt`）；导出的 schema 仍位于 `app/schemas/org.skepsun.kototoro.core.db.MangaDatabase/`（已提交，由 `core-db` 的 Room 插件导出，`app` 的 androidTest 以 assets 读取）
-- 迁移文件 `core-db/src/androidMain/kotlin/org/skepsun/kototoro/core/db/migrations/Migration1To2.kt` 到 `Migration83To84.kt`（另含历史遗留的降级迁移 `Migration24To23.kt`，仍保留在 `getDatabaseMigrations` 列表中，位于 `core-db` 的 `MangaDatabaseMigrations.kt`）；84→85 起的迁移在 commonMain（`Migration84To85.kt` 到 `Migration88To89.kt`，注册在 `sharedDatabaseMigrations()`），Android/Windows/iOS 三端共用
+- Room 数据库（`MangaDatabase`）在 KMP 模块 `core-db/`，DATABASE_VERSION = 91（`core-db/src/commonMain/.../core/db/MangaDatabase.kt`）；导出的 schema 仍位于 `app/schemas/org.skepsun.kototoro.core.db.MangaDatabase/`（已提交，由 `core-db` 的 Room 插件导出，`app` 的 androidTest 以 assets 读取）
+- 迁移文件 `core-db/src/androidMain/kotlin/org/skepsun/kototoro/core/db/migrations/Migration1To2.kt` 到 `Migration83To84.kt`（另含历史遗留的降级迁移 `Migration24To23.kt`，仍保留在 `getDatabaseMigrations` 列表中，位于 `core-db` 的 `MangaDatabaseMigrations.kt`）；84→85 起的迁移在 commonMain（`Migration84To85.kt` 到 `Migration90To91.kt`，注册在 `sharedDatabaseMigrations()`），Android/Windows/iOS 三端共用
 - Android 必须继续使用框架 SQLite 驱动：旧迁移实现的是 `migrate(SupportSQLiteDatabase)`，换成 `BundledSQLiteDriver` 会抛 `NotImplementedError`
 - DAO 的过滤条件使用数据类型 `ListFilterCriteria`（`core-db`）；应用层的 `ListFilterOption`（带资源 id 与图标）在 Repository 边界用 `toCriteria()` 转换
 - 用户状态（收藏/历史/统计/偏好/追踪）直接挂在 `manga` 行上；实体图谱与 work 表已在 v84 移除（`Migration83To84` → `ProjectionOwnershipMigrationResolver`）

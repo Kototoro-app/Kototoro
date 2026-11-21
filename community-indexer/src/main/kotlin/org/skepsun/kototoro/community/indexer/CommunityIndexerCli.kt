@@ -21,8 +21,8 @@ private const val USAGE = """community-indexer --archive <dir> --out <dir> [opti
   --offline              do not read relays; rebuild the snapshot from the archive alone
   --now <seconds>        clock for the snapshot (default: now)"""
 
-// The app's own list (CommunityRepository.DEFAULT_RELAYS): two relays reachable from mainland China, then the major ones.
-private val DEFAULT_RELAYS = listOf(
+// The app's own list (core-library CommunityService.DEFAULT_RELAYS): two relays reachable from mainland China, then the major ones.
+internal val INDEXER_RELAYS = listOf(
     "wss://yabu.me",
     "wss://relay.nostr.wirednet.jp",
     "wss://nos.lol",
@@ -36,13 +36,16 @@ private val DEFAULT_RELAYS = listOf(
  * whole archive. Exits non-zero when no relay could be read, so a scheduled run that learned nothing fails visibly.
  */
 fun main(args: Array<String>) {
+    if (args.firstOrNull() in setOf("keygen", "pubkey", "mute")) exitProcess(MaintainerCli.run(args.toList()))
     val options = parseOptions(args) ?: run {
         System.err.println(USAGE)
+        System.err.println()
+        System.err.println(MAINTAINER_USAGE)
         exitProcess(2)
     }
     val archiveDir = File(options.getValue("archive"))
     val outDir = File(options.getValue("out"))
-    val relays = options["relays"]?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() } ?: DEFAULT_RELAYS
+    val relays = options["relays"]?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() } ?: INDEXER_RELAYS
     val maintainer = options["maintainer"]?.let { value ->
         if (value.startsWith(NostrBech32.PUBLIC_PREFIX)) NostrBech32.decode(value, NostrBech32.PUBLIC_PREFIX) else value.lowercase()
     }
@@ -59,7 +62,7 @@ fun main(args: Array<String>) {
     var moderation = org.skepsun.kototoro.community.domain.CommunityModeration()
     var all = archived
     if ("offline" !in options) {
-        val http = httpClient()
+        val http = indexerHttpClient()
         try {
             val fetcher = RelayFetcher(NostrRelayClient(KtorNostrRelayConnector(http)))
             val since = if ("full" in options) null else archived.maxOfOrNull { it.event.createdAt }?.minus(2 * CommunityAggregator.DAY)
@@ -99,7 +102,7 @@ private fun parseOptions(args: Array<String>): Map<String, String>? {
     return options.takeIf { "archive" in it && "out" in it }
 }
 
-private fun httpClient(): HttpClient {
+internal fun indexerHttpClient(): HttpClient {
     val proxy = (System.getenv("https_proxy") ?: System.getenv("HTTPS_PROXY"))?.takeIf { it.startsWith("http") }
     return HttpClient(Java) {
         install(WebSockets)

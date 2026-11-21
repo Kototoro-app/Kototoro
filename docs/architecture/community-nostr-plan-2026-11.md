@@ -186,6 +186,13 @@ TMDB、Simkl 等后续再加。
 默认中继（应用与索引器一致）：`yabu.me`、`relay.nostr.wirednet.jp`、`nos.lol`、`relay.primal.net`、`nostr.mom`、`relay.damus.io`。
 应用使用这份列表与快照 manifest 中列表的并集，确保 manifest 不会挤掉内置的可直连中继。
 
+2026-11-21 复测：DNSPod 的 DoH 把 `nos.lol` 解析成 108.160.163.116（Cloudflare 给的是 142.132.206.70），即 DNSPod 自己也会返回污染结果。
+直连时这无所谓（nos.lol 本来就被 SNI 阻断），但全局 VPN（TUN）用户会被导向错误地址。现在 Android 与桌面同时询问三家，
+只有 Cloudflare 和 Google 在 1.5 s 内都连不上时才采用 DNSPod 的答案（`core-library` 的 `CommunityRelayAnswers`）。
+
+发件箱（v91）：一个中继接受即算“已发布”，但事件留在发件箱里，每小时补发给其他中继，直到两个中继持有，
+或者快照的生成时间晚于发布时间 10 分钟（说明索引器已从那个中继读到并归档），最长保留 3 天。
+
 风险：大陆用户免 VPN 写入目前只依赖 wirednet 这一个由个人运营的中继。备选是在 Cloudflare Workers 上自建中继（例如 nosflare），
 但必须绑定自有域名，因为 `workers.dev` 在大陆同样被阻断。
 
@@ -290,7 +297,7 @@ WorkManager 每 30 分钟运行一次（iOS 用 `BGAppRefreshTask`，系统调�
 | P2（已部署） | 索引器与快照，先跑 `workflow_dispatch`，见 §10.1 | 用种子事件生成快照；归档能增量追加；重复运行结果一致 |
 | P3 | Android 评分、评论、举报、屏蔽 | 详情页、评论页、发件箱离线重试可用；被屏蔽的内容不显示 |
 | P4 | 回复通知、本地推荐、排行榜 | 推荐过滤正确，不推荐库内已有作品 |
-| P5 | 桌面与 iOS | 复用 P0–P2，各端只写界面 |
+| P5（桌面 2026-11-21） | 桌面与 iOS | 复用 P0–P2，各端只写界面。桌面用 `core-library` 的 `CommunityService` 与 `core-ui` 的社区界面（Android 界面也改用后者）；iOS 仍是自己的 `IosCommunityDetails` |
 
 ## 10. P1 实现记录（2026-11-20）
 
@@ -376,5 +383,12 @@ Android 和桌面分别通过 `androidMain` / `jvmMain` 引入对应的 JNI 产�
   `community-indexer`，用自带的 `GITHUB_TOKEN`（`contents: write`）推送到本仓库的 `archive` 和 `gh-pages` 分支，不需要 deploy key。
   该仓库必须公开：免费账户的 GitHub Pages 只支持公开仓库，公开仓库的 Actions 也不限分钟数；归档的事件本来就公开在中继上。
 - 默认中继名单（P1 实测后确定）。
-- 维护者审核密钥的保管方式（建议离线保存，只在本地 CLI 中签名）。
+- ~~维护者审核密钥的保管方式~~：定于 2026-11-21。
+  - 专用密钥，与任何读者身份无关；npub 为 `npub1m0vtpky72qe5acr93q38slkg52t24jthtmnmf5jp54zs4yxp369sugez2l`，
+    已设为 `community-index` 仓库变量 `MAINTAINER_NPUB`。
+  - 私钥只在维护者 Mac 的登录钥匙串里（service `org.skepsun.kototoro.community-maintainer`），不进仓库、不进 GitHub Secrets；
+    CI 只读 npub，签名只在本地进行。另需一份离线备份（`maintainer.sh backup` 输出后抄到密码管理器或纸上）。
+  - 工具：`community-indexer/deploy/maintainer.sh`（`keygen` / `npub` / `backup` / `mute show|add|remove`），
+    编辑 kind 10000 时以中继上最新的一份为基础、保留不认识的标签、发布到全部中继，下一次索引运行生效。
+- 自建中继（§5 风险）：2026-11-21 决定暂不做，大陆免 VPN 写入继续依赖 wirednet；发件箱在只有一个中继接受时会持续补发（§5.1）。
 - 是否给 Kotatsu-Redo 用户提供数据导入（他们的服务器数据无法获取，大概率不做）。
