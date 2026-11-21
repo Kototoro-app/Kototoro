@@ -42,6 +42,9 @@ internal class IosCommunityIndex(
     private suspend fun fetchSnapshot(path: String): String? =
         communityAttempt { readSnapshot(path) }.getOrNull()
 
+    /** One index file straight from the network, for the shared service's own copy of the index. */
+    suspend fun read(path: String): String? = readSnapshot(path)
+
     inner class Snapshot(val manifest: CommunitySnapshotManifest) {
         suspend fun files(paths: Collection<String>, cachedOnly: Boolean = false): Map<String, String> = lock.withLock {
             val files = mutableMapOf<String, String>()

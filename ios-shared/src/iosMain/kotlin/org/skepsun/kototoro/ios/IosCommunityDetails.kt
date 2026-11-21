@@ -1,42 +1,26 @@
 package org.skepsun.kototoro.ios
 
-import androidx.room.immediateTransaction
-import androidx.room.useWriterConnection
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonObject
-import org.skepsun.kototoro.community.data.CommunityOutboxEntity
-import org.skepsun.kototoro.community.data.CommunityRatingEntity
 import org.skepsun.kototoro.community.domain.CommunityChartEntry
 import org.skepsun.kototoro.community.domain.CommunityCommentFilter
-import org.skepsun.kototoro.community.domain.CommunityCommentThreads
-import org.skepsun.kototoro.community.domain.CommunityExternalRef
-import org.skepsun.kototoro.community.domain.CommunityExternalService
 import org.skepsun.kototoro.community.domain.CommunityHighlights
 import org.skepsun.kototoro.community.domain.CommunityMedium
-import org.skepsun.kototoro.community.domain.CommunityModeration
 import org.skepsun.kototoro.community.domain.CommunitySnapshotReader
 import org.skepsun.kototoro.community.domain.CommunitySnapshotShards
-import org.skepsun.kototoro.community.domain.CommunityWorkKeys
+import org.skepsun.kototoro.community.domain.CommunityWorkIdentity
 import org.skepsun.kototoro.community.domain.CommunityWorkSummary
 import org.skepsun.kototoro.community.nostr.CommunityComment
 import org.skepsun.kototoro.community.nostr.CommunityEventSchema
 import org.skepsun.kototoro.community.nostr.CommunityProfiles
-import org.skepsun.kototoro.community.nostr.CommunityRecentPublications
 import org.skepsun.kototoro.community.nostr.NostrBech32
-import org.skepsun.kototoro.community.nostr.NostrFilter
-import org.skepsun.kototoro.community.nostr.NostrEvent
 import org.skepsun.kototoro.community.nostr.NostrKeyPair
-import org.skepsun.kototoro.community.nostr.NostrKeys
-import org.skepsun.kototoro.community.nostr.NostrPow
 import org.skepsun.kototoro.community.nostr.NostrRelayClient
-import org.skepsun.kototoro.community.nostr.NostrRelayPool
-import org.skepsun.kototoro.community.nostr.NostrUnsignedEvent
-import org.skepsun.kototoro.tracking.discovery.PublicTrackingSite
+import org.skepsun.kototoro.core.library.community.CommunityBlocklist
+import org.skepsun.kototoro.core.library.community.CommunityCommentItem
+import org.skepsun.kototoro.core.library.community.CommunityIdentityStore
+import org.skepsun.kototoro.core.library.community.CommunityService
+import org.skepsun.kototoro.core.library.community.CommunitySnapshotCache
+import org.skepsun.kototoro.core.library.community.CommunitySnapshots
+import org.skepsun.kototoro.core.library.community.CommunitySwitches
 
 class IosCommunityOverview internal constructor(value: CommunityWorkSummary?) {
     val score: Double? = value?.rating?.score
@@ -83,45 +67,66 @@ class IosCommunityIdentity private constructor(internal val keys: NostrKeyPair) 
 
 class IosCommunityPublication internal constructor(val published: Boolean, val pendingCount: Int)
 
+/**
+ * The community for the SwiftUI screens. Publishing, the outbox, nicknames and comment threads are the shared
+ * [CommunityService] (the same code as Android and the desktop); reads of the index stay on [IosCommunityIndex], which
+ * keeps its iOS error messages. Swift holds the identity in the Keychain and hands it in with every call that signs.
+ * Adult works and works outside comic/novel/video are never published from iOS.
+ */
 class IosCommunityDetails internal constructor(
     private val library: IosLibrary,
     private val index: IosCommunityIndex = library.communityIndex,
     private val relayClient: () -> NostrRelayClient = { IosHttp.communityRelays },
 ) {
-    private val publishLock = Mutex()
-    private val recent = CommunityRecentPublications()
     private val dao get() = library.database.getCommunityDao()
 
+    /** The identity of the call in progress; Swift owns the Keychain item. */
+    private val identities = object : CommunityIdentityStore {
+        var current: NostrKeyPair? = null
+        override val hasIdentity: Boolean get() = current != null
+        override fun keys(): NostrKeyPair? = current
+        override fun store(keys: NostrKeyPair) {
+            current = keys
+        }
+        override fun clear() {
+            current = null
+        }
+    }
+
+    private val service by lazy {
+        CommunityService(
+            database = library.database,
+            identities = identities,
+            // iOS has no per-reader block list yet; the index's moderation and hidden comments still apply.
+            blocklist = object : CommunityBlocklist {
+                override val filter = CommunityCommentFilter()
+                override fun block(pubkey: String) = Unit
+                override fun hide(eventId: String) = Unit
+            },
+            snapshots = CommunitySnapshots(fetch = index::read, cache = MemorySnapshotCache()),
+            relayClient = relayClient(),
+            searchApi = null,
+            // Swift shows these screens only while the reader has the community on; adult works are refused below.
+            switches = { CommunitySwitches(enabled = true) },
+            fold = ::foldCommunityTitle,
+        )
+    }
+
     val maxCommentLength: Int get() = CommunityEventSchema.MAX_COMMENT_LENGTH
+
+    val maxNicknameLength: Int get() = CommunityProfiles.MAX_NAME_LENGTH
 
     @Throws(Exception::class)
     suspend fun myRating(content: IosSourceContent): Int = dao.findRating(content.value.id)?.stars ?: 0
 
     @Throws(Exception::class)
-    suspend fun rate(content: IosSourceContent, stars: Int, identity: IosCommunityIdentity): IosCommunityPublication =
-        publishLock.withLock {
-            val work = requireWork(content)
-            val item = content.value
-            val medium = CommunityMedium.of(item.source.contentType).wire
-            val old = dao.findRating(item.id)
-            val time = maxOf(nowMillis() / 1000, (old?.createdAt ?: 0) + 1)
-            val address = CommunityEventSchema.ratingAddress(medium, work.keys)
-            val rating = sign(CommunityEventSchema.rating(
-                work.keys, medium, item.source.contentType, stars, item.title, false, time,
-            ), identity, work.index.manifest.powRating)
-            val withdrawal = old?.takeIf { it.address != address }?.let {
-                sign(CommunityEventSchema.ratingWithdrawal(identity.keys.publicKeyHex, it.address, time), identity)
-            }
-            library.database.useWriterConnection { writer ->
-                writer.immediateTransaction {
-                    old?.let { dao.deleteOutbox(it.eventId) }
-                    if (withdrawal != null) dao.upsertOutbox(withdrawal.queued())
-                    dao.upsertOutbox(rating.queued())
-                    dao.upsertRating(CommunityRatingEntity(item.id, stars, address, rating.id, time))
-                }
-            }
-            flush(identity, work.index, rating.id, withdrawal?.id)
-        }
+    suspend fun rate(content: IosSourceContent, stars: Int, identity: IosCommunityIdentity): IosCommunityPublication {
+        val work = requireIdentity(content)
+        identities.current = identity.keys
+        check(service.rate(content.value.id, work, stars) == null) { localized("此作品暂不支持社区发布") }
+        val published = service.ratingEventId(content.value.id)?.let { service.isPublished(it) } ?: false
+        return IosCommunityPublication(published, service.pendingCount())
+    }
 
     @Throws(Exception::class)
     suspend fun postComment(
@@ -129,113 +134,36 @@ class IosCommunityDetails internal constructor(
         text: String,
         spoiler: Boolean,
         identity: IosCommunityIdentity,
-    ): IosCommunityPublication = publishLock.withLock {
-        val work = requireWork(content)
-        val event = sign(CommunityEventSchema.comment(
-            work.keys, text.trim(), content.value.title, nowMillis() / 1000, spoiler = spoiler,
-        ), identity, work.index.manifest.powComment)
-        dao.upsertOutbox(event.queued())
-        flush(identity, work.index, event.id)
+    ): IosCommunityPublication {
+        val work = requireIdentity(content)
+        identities.current = identity.keys
+        val event = checkNotNull(service.postCommentEvent(work, text.trim(), parent = null, spoiler, language = null)) {
+            localized("此作品暂不支持社区发布")
+        }
+        return IosCommunityPublication(service.isPublished(event.id), service.pendingCount())
     }
-
-    val maxNicknameLength: Int get() = CommunityProfiles.MAX_NAME_LENGTH
 
     @Throws(Exception::class)
     suspend fun nickname(identity: IosCommunityIdentity): String? {
-        val snapshot = requireIndex()
-        val pubkey = identity.keys.publicKeyHex
-        return profiles(NostrRelayPool(relayClient(), relayUrls(snapshot)), listOf(pubkey))[pubkey]
-            ?.let(CommunityProfiles::nickname)
+        identities.current = identity.keys
+        return service.nickname()
     }
 
     @Throws(Exception::class)
-    suspend fun setNickname(nickname: String, identity: IosCommunityIdentity): IosCommunityPublication = publishLock.withLock {
-        val snapshot = requireIndex()
-        val pubkey = identity.keys.publicKeyHex
-        val pool = NostrRelayPool(relayClient(), relayUrls(snapshot))
-        val previous = profiles(pool, listOf(pubkey))[pubkey]
-        val event = sign(CommunityProfiles.update(nickname, nowMillis() / 1000, previous), identity)
-        library.database.useWriterConnection { writer ->
-            writer.immediateTransaction {
-                pendingEvents(CommunityProfiles.KIND).filter { it.pubkey == pubkey }.forEach { dao.deleteOutbox(it.id) }
-                dao.upsertOutbox(event.queued())
-            }
-        }
-        flush(identity, snapshot, event.id)
-    }
-
-    private suspend fun requireIndex() = checkNotNull(index.snapshot()) { localized("社区索引暂不可用") }
-
-    @Throws(Exception::class)
-    suspend fun retryPending(identity: IosCommunityIdentity): Int = publishLock.withLock {
-        val snapshot = requireIndex()
-        flush(identity, snapshot, force = true).pendingCount
+    suspend fun setNickname(nickname: String, identity: IosCommunityIdentity): IosCommunityPublication {
+        identities.current = identity.keys
+        val published = service.setNickname(nickname.trim())
+        return IosCommunityPublication(published, service.pendingCount())
     }
 
     @Throws(Exception::class)
-    suspend fun pendingCount(): Int = dao.countOutbox()
-
-    private suspend fun requireWork(content: IosSourceContent): Work =
-        checkNotNull(work(content)) { localized("此作品暂不支持社区发布") }
-
-    private suspend fun sign(event: NostrUnsignedEvent, identity: IosCommunityIdentity, difficulty: Int = 0): NostrEvent {
-        check(difficulty in 0..24) { localized("社区工作量要求超出设备限制") }
-        return checkNotNull(withTimeoutOrNull(60_000L) {
-            withContext(Dispatchers.Default) {
-                NostrKeys.sign(NostrPow.mine(event, identity.keys.publicKeyHex, difficulty, CommunityEventSchema.POW_TAG),
-                    identity.keys)
-            }
-        }) { localized("生成发布证明超时，请重试") }
+    suspend fun retryPending(identity: IosCommunityIdentity): Int {
+        identities.current = identity.keys
+        return service.flushOutbox(force = true)
     }
 
-    private suspend fun flush(
-        identity: IosCommunityIdentity,
-        snapshot: IosCommunityIndex.Snapshot,
-        target: String? = null,
-        relatedEvent: String? = null,
-        force: Boolean = false,
-    ): IosCommunityPublication {
-        val now = nowMillis()
-        val relays = relayUrls(snapshot)
-        if (relays.isEmpty()) return IosCommunityPublication(false, dao.countOutbox())
-        val pool = NostrRelayPool(relayClient(), relays, minAccepted = 1)
-        var published = false
-        val entries = if (target == null) dao.findDueOutbox(if (force) Long.MAX_VALUE else now, 20) else
-            listOfNotNull(relatedEvent, target).mapNotNull { dao.findOutbox(it) }
-        for (entry in entries) {
-            val event = entry.eventOrNull()
-            if (event == null || event.pubkey != identity.keys.publicKeyHex) continue
-            val sent = communityAttempt { pool.publish(event, timeoutMillis = 5_000L).isPublished }.getOrDefault(false)
-            if (sent) {
-                recent.remember(event)
-                dao.deleteOutbox(entry.eventId)
-                if (entry.eventId == target) published = true
-            } else {
-                val attempts = entry.attempts + 1
-                val delay = (60_000L shl attempts.coerceIn(1, 10)).coerceAtMost(24 * 60 * 60 * 1000L)
-                dao.upsertOutbox(entry.copy(attempts = attempts, nextAttemptAt = now + delay))
-            }
-        }
-        return IosCommunityPublication(published, dao.countOutbox())
-    }
-
-    private fun CommunityOutboxEntity.eventOrNull(): NostrEvent? =
-        runCatching { NostrEvent.fromJson(Json.parseToJsonElement(eventJson).jsonObject) }.getOrNull()
-            ?.takeIf(NostrKeys::verify)
-
-    private suspend fun pendingEvents(kind: Int): List<NostrEvent> =
-        dao.findOutboxByKind(kind).mapNotNull { it.eventOrNull() }
-
-    private suspend fun profiles(pool: NostrRelayPool, authors: List<String>): Map<String, NostrEvent> {
-        if (authors.isEmpty()) return emptyMap()
-        val remote = CommunityProfiles.query(pool, authors)
-        val pending = pendingEvents(CommunityProfiles.KIND).filter { it.pubkey in authors }
-        return CommunityProfiles.latest(remote + pending + recent.profiles(authors))
-    }
-
-    private fun NostrEvent.queued() = CommunityOutboxEntity(id, toJson().toString(), kind, createdAt, 0, 0, null)
-
-    private fun nowMillis() = kotlin.time.Clock.System.now().toEpochMilliseconds()
+    @Throws(Exception::class)
+    suspend fun pendingCount(): Int = service.pendingCount()
 
     @Throws(Exception::class)
     suspend fun overview(content: IosSourceContent): IosCommunityOverview? =
@@ -265,84 +193,64 @@ class IosCommunityDetails internal constructor(
     @Throws(Exception::class)
     suspend fun comments(content: IosSourceContent): List<IosCommunityComment> {
         val work = work(content) ?: return emptyList()
-        val relays = relayUrls(work.index)
+        // App Review 1.2: no comment is shown without the index's moderation when the index lists it.
         val moderationPath = CommunitySnapshotShards.MODERATION_PATH
-        val moderation = if (moderationPath in work.index.manifest.files) {
+        if (moderationPath in work.index.manifest.files) {
             val file = checkNotNull(work.index.files(listOf(moderationPath))[moderationPath]) {
                 localized("暂时无法读取社区审核规则")
             }
             checkNotNull(CommunitySnapshotReader.moderationOrNull(file)) { localized("暂时无法读取社区审核规则") }
-        } else CommunityModeration()
-        val pool = NostrRelayPool(relayClient(), relays)
-        val result = pool.query(listOf(NostrFilter(
-            kinds = listOf(CommunityEventSchema.KIND_COMMENT), tags = mapOf("I" to work.keys), limit = 100,
-        )), timeoutMillis = 5_000L)
-        val published = result.events.filter { NostrPow.satisfies(it, work.index.manifest.powComment, CommunityEventSchema.POW_TAG) }
-            .take(100)
-        val pending = pendingEvents(CommunityEventSchema.KIND_COMMENT)
-            .filter { event -> event.tagValues("I").any { it in work.keys } }
-        val publishedIds = published.mapTo(HashSet(), NostrEvent::id)
-        val pendingIds = pending.mapNotNullTo(HashSet()) { it.id.takeUnless(publishedIds::contains) }
-        val comments = (published + pending + recent.comments(work.keys)).distinctBy(NostrEvent::id)
-            .mapNotNull(CommunityEventSchema::parseComment).filterNot { it.nsfw }
-        check(comments.isNotEmpty() || result.relays.any { it.complete }) { localized("社区中继暂不可用") }
-        if (comments.isEmpty()) return emptyList()
-        val deleted = pool.query(listOf(NostrFilter(
-            kinds = listOf(CommunityEventSchema.KIND_DELETION), tags = mapOf("e" to comments.map { it.id }),
-        )), timeoutMillis = 5_000L).events.mapNotNull(CommunityEventSchema::parseDeletion)
-            .groupBy({ it.pubkey }, { it.eventIds }).mapValues { (_, ids) -> ids.flatten().toSet() }
-        val filter = CommunityCommentFilter(
-            blockedPubkeys = moderation.blockedPubkeys.toSet(),
-            blockedEvents = moderation.blockedEvents.toSet() + work.summary?.hiddenComments.orEmpty(),
-            blockedWords = moderation.blockedWords,
-        )
-        val visible = CommunityCommentThreads.visible(
-            comments, filter, deleted, CommunityComment::id, CommunityComment::pubkey, CommunityComment::content,
-        )
-        val names = profiles(pool, visible.map { it.pubkey }.distinct()).mapValues { CommunityProfiles.nickname(it.value) }
-        return CommunityCommentThreads.build(
-            visible, CommunityComment::id, CommunityComment::parentId, CommunityComment::createdAt,
-        ).flatMap { thread ->
-            listOf(thread.root.toDisplayComment(false, names, pendingIds)) +
-                thread.replies.map { it.toDisplayComment(true, names, pendingIds) }
+        }
+        val page = service.comments(work.identity, work.summary)
+        check(page.threads.isNotEmpty() || page.relaysAnswered > 0) { localized("社区中继暂不可用") }
+        return page.threads.flatMap { thread ->
+            if (thread.root.comment.nsfw) return@flatMap emptyList()
+            listOf(thread.root.toDisplayComment(false)) +
+                thread.replies.filterNot { it.comment.nsfw }.map { it.toDisplayComment(true) }
         }
     }
 
-    private fun CommunityComment.toDisplayComment(isReply: Boolean, names: Map<String, String?>, pending: Set<String>) =
-        IosCommunityComment(this, isReply, names[pubkey], id in pending)
+    private fun CommunityCommentItem.toDisplayComment(isReply: Boolean) =
+        IosCommunityComment(comment, isReply, author, isPending)
 
-    private data class Work(val keys: List<String>, val summary: CommunityWorkSummary?, val index: IosCommunityIndex.Snapshot)
+    private class Work(val identity: CommunityWorkIdentity, val summary: CommunityWorkSummary?, val index: IosCommunityIndex.Snapshot)
 
-    private fun relayUrls(snapshot: IosCommunityIndex.Snapshot): List<String> =
-        snapshot.manifest.relays.filter { it.startsWith("wss://") }.distinct().take(6)
+    private fun publishable(content: IosSourceContent) =
+        !content.isNsfw && CommunityMedium.of(content.value.source.contentType) != CommunityMedium.OTHER
+
+    private suspend fun requireIdentity(content: IosSourceContent): CommunityWorkIdentity {
+        check(publishable(content)) { localized("此作品暂不支持社区发布") }
+        return service.identity(content.value, resolve = false).let { it.copy(keys = it.keys.take(MAX_KEYS)) }
+            .also { check(it.keys.isNotEmpty()) { localized("此作品暂不支持社区发布") } }
+    }
 
     private suspend fun work(content: IosSourceContent): Work? {
-        val item = content.value
-        val medium = CommunityMedium.of(item.source.contentType)
-        if (content.isNsfw || medium == CommunityMedium.OTHER) return null
-        val tracked = library.tracking.bindings(content).mapNotNull { item ->
-            val name = PublicTrackingSite.entries.firstOrNull { it.id == item.service }?.name
-            CommunityExternalService.of(name)?.let { CommunityExternalRef(it, item.value.remoteId) }
-        }
-        val stored = library.database.getCommunityDao().findResolutions(item.id).mapNotNull { entry ->
-            if (entry.status != "BOUND") return@mapNotNull null
-            val service = CommunityExternalService.of(entry.service) ?: return@mapNotNull null
-            CommunityExternalRef(service, entry.remoteId ?: return@mapNotNull null)
-        }
-        val keys = CommunityWorkKeys.keys(
-            medium, listOf(item.title) + item.altTitles, (tracked + stored).distinctBy { it.service }, ::foldCommunityTitle,
-        ).take(10)
-        if (keys.isEmpty()) return null
+        if (!publishable(content)) return null
+        val identity = service.identity(content.value, resolve = false).let { it.copy(keys = it.keys.take(MAX_KEYS)) }
+        if (identity.keys.isEmpty()) return null
         val snapshot = checkNotNull(index.snapshot()) { localized("社区索引暂不可用") }
-        val group = snapshot.groups(mapOf(item.id to keys), requireListedFiles = true)[item.id]
+        val group = snapshot.groups(mapOf(content.value.id to identity.keys), requireListedFiles = true)[content.value.id]
         val summary = group?.let {
             checkNotNull(snapshot.works(listOf(it))[it]) { localized("暂时无法读取社区作品数据") }
         }
-        return if (summary?.nsfw == true) null else Work(keys, summary, snapshot)
+        return if (summary?.nsfw == true) null else Work(identity, summary, snapshot)
+    }
+
+    /** The service's copy of the index files, for proof-of-work difficulty, relays and moderation. */
+    private class MemorySnapshotCache : CommunitySnapshotCache {
+        private val files = mutableMapOf<String, Pair<String, String>>()
+        override fun read(path: String): String? = files[path]?.first
+        override fun readHash(path: String): String? = files[path]?.second
+        override fun write(path: String, text: String, hash: String) {
+            files[path] = text to hash
+        }
+        override fun clear() = files.clear()
     }
 
     private companion object {
         val MEDIA = listOf("comic", "novel", "video")
         const val HIGHLIGHTS = 20
+        /** Relays cap filter sizes; a work's strong keys and first titles name it well enough. */
+        const val MAX_KEYS = 10
     }
 }

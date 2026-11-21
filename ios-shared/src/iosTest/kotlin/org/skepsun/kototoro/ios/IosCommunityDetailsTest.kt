@@ -102,7 +102,8 @@ class IosCommunityDetailsTest {
         assertNull(community.overview(IosSourceContent(work.copy(contentRating = "ADULT"))))
         assertFailsWith<IllegalStateException> { details(false).comments(content) }
         assertEquals("Author", comments.first().author)
-        assertEquals(3, connections, "Comment, deletion and nickname queries should reach the relay")
+        // The shared service reads its built-in relays besides the manifest's; the fixture answers every address.
+        assertTrue(connections >= 3, "Comment, deletion and nickname queries should reach the relays")
 
         val identity = IosCommunityIdentity.create()
         assertNull(IosCommunityIdentity.restore("invalid"))
@@ -120,7 +121,8 @@ class IosCommunityDetailsTest {
         accepting = true
         assertEquals(0, community.retryPending(identity))
         assertFalse(community.comments(content).single { it.content == "A public comment" }.isPending)
-        val retried = submitted.takeLast(2)
+        // Each event goes to every relay; the last two distinct ones are the retried rating and comment.
+        val retried = submitted.distinctBy { it.id }.takeLast(2)
         assertTrue(retried.all(NostrKeys::verify))
         assertEquals(9, retried.firstNotNullOf { CommunityEventSchema.parseRating(it) }.stars)
         val posted = retried.single { it.kind == CommunityEventSchema.KIND_COMMENT }
