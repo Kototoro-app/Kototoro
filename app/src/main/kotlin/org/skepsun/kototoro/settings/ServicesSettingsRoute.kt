@@ -67,6 +67,7 @@ fun ServicesSettingsRoute(
         onCommunityChange = communityViewModel::setEnabled,
         onCommunityNsfwChange = { settings.isCommunityNsfwRatingEnabled = it },
         onCommunityRecoveryKeyClick = communityViewModel::showRecoveryKey,
+        onCommunityNicknameClick = communityViewModel::showNickname,
     )
     CommunitySettingsDialogs(
         dialog = communityDialog,

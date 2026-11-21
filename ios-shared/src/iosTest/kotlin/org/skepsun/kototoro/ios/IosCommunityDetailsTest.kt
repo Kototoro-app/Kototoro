@@ -17,6 +17,7 @@ import platform.Foundation.NSUUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -37,7 +38,10 @@ class IosCommunityDetailsTest {
         val hidden = comment("Index-hidden content", 5)
         val invalid = comment("Forged", 6).copy(sig = "0".repeat(128))
         val deletion = NostrKeys.sign(CommunityEventSchema.deletion(removed, 7), author)
-        val events = listOf(root, reply, blocked, removed, hidden, invalid, deletion)
+        val profile = NostrKeys.sign(NostrUnsignedEvent(
+            createdAt = 8, kind = 0, tags = emptyList(), content = """{"name":"Author","about":"Keep this"}""",
+        ), author)
+        val events = mutableListOf(root, reply, blocked, removed, hidden, invalid, deletion, profile)
         var connections = 0
         var accepting = false
         val submitted = mutableListOf<NostrEvent>()
@@ -86,13 +90,19 @@ class IosCommunityDetailsTest {
         val overview = checkNotNull(community.overview(content))
         assertEquals(8.3, overview.score)
         assertEquals(6, overview.ratingCount)
+        assertEquals(listOf(0, 0, 0, 0, 0), overview.starCounts)
+        // No chart file exists, so the small index is listed whole.
+        val highlights = community.highlights("week")
+        assertTrue(highlights.isFallback)
+        assertEquals(listOf(work.title), highlights.entries.map { it.title })
         assertEquals(0, connections)
         val comments = community.comments(content)
         assertEquals(listOf("Root", "Plot detail"), comments.map { it.content })
         assertTrue(comments.last().spoiler && comments.last().isReply)
         assertNull(community.overview(IosSourceContent(work.copy(contentRating = "ADULT"))))
         assertFailsWith<IllegalStateException> { details(false).comments(content) }
-        assertEquals(2, connections, "Only the comment and deletion queries should reach the relay")
+        assertEquals("Author", comments.first().author)
+        assertEquals(3, connections, "Comment, deletion and nickname queries should reach the relay")
 
         val identity = IosCommunityIdentity.create()
         assertNull(IosCommunityIdentity.restore("invalid"))
@@ -104,12 +114,28 @@ class IosCommunityDetailsTest {
         val queued = community.postComment(content, "A public comment", spoiler = true, identity = identity)
         assertEquals(false, queued.published)
         assertEquals(2, queued.pendingCount)
+        assertTrue(details(true).comments(content).single { it.content == "A public comment" }.isPending)
+        val anotherWork = IosSourceContent(work.copy(id = 102L, title = "A different story"))
+        assertTrue(community.comments(anotherWork).isEmpty())
         accepting = true
         assertEquals(0, community.retryPending(identity))
+        assertFalse(community.comments(content).single { it.content == "A public comment" }.isPending)
         val retried = submitted.takeLast(2)
         assertTrue(retried.all(NostrKeys::verify))
         assertEquals(9, retried.firstNotNullOf { CommunityEventSchema.parseRating(it) }.stars)
-        assertTrue(retried.firstNotNullOf { CommunityEventSchema.parseComment(it) }.spoiler)
+        val posted = retried.single { it.kind == CommunityEventSchema.KIND_COMMENT }
+        assertTrue(checkNotNull(CommunityEventSchema.parseComment(posted)).spoiler)
+        val restoredAuthor = checkNotNull(IosCommunityIdentity.restore(NostrBech32.encodeSecretKey(author)))
+        assertEquals("Author", community.nickname(restoredAuthor))
+        assertTrue(community.setNickname(" New nickname ", restoredAuthor).published)
+        assertEquals("Keep this", Json.parseToJsonElement(submitted.last().content).jsonObject["about"]?.jsonPrimitive?.content)
+        assertEquals("New nickname", community.comments(content).first { it.content == "Root" }.author)
+        accepting = false
+        assertFalse(community.setNickname("My nickname", identity).published)
+        assertEquals("My nickname", details(true).nickname(identity))
+        assertEquals("My nickname", community.comments(content).single { it.id == posted.id }.author)
+        events += posted
+        assertFalse(community.comments(content).single { it.id == posted.id }.isPending)
     }
 
     private fun withLibrary(block: suspend (IosLibrary) -> Unit) = runBlocking {

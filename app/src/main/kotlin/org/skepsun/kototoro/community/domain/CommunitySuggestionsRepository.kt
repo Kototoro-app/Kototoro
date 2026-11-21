@@ -59,9 +59,13 @@ class CommunitySuggestionsRepository @Inject constructor(
     suspend fun popular(window: String, limit: Int = LIMIT): List<CommunityChartEntry> {
         if (!settings.isCommunityEnabled) return emptyList()
         val nsfw = listOf(false) + listOfNotNull(true.takeIf { settings.isCommunityNsfwRatingEnabled })
-        return MEDIA.flatMap { medium -> nsfw.flatMap { snapshots.chart(window, medium, it)?.entries.orEmpty() } }
-            .sortedWith(compareByDescending<CommunityChartEntry> { it.score }.thenByDescending { it.count })
-            .take(limit)
+        return CommunityHighlights.merge(MEDIA.flatMap { medium -> nsfw.map { snapshots.chart(window, medium, it) } }, limit)
+    }
+
+    /** Every work readers rated, best first, for while no chart has entries ([CommunityHighlights]). */
+    suspend fun rated(limit: Int = LIMIT): List<CommunityChartEntry> {
+        if (!settings.isCommunityEnabled) return emptyList()
+        return CommunityHighlights.rated(snapshots.allWorks(), settings.isCommunityNsfwRatingEnabled, limit)
     }
 
     /** Tracker ids for every library work: the reader's own bindings, then what searches bound. */

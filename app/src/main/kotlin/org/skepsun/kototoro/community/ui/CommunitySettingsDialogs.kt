@@ -23,6 +23,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.community.nostr.CommunityProfiles
 
 /** The services page's community dialogs; [onCopied] lets the page confirm the copy in its own snackbar. */
 @Composable
@@ -33,6 +34,47 @@ fun CommunitySettingsDialogs(
 ) {
     when (dialog) {
         null -> Unit
+        is CommunityDialog.Nickname -> {
+            var name by rememberSaveable(dialog.saved) { mutableStateOf(dialog.saved) }
+            val trimmed = name.trim()
+            AlertDialog(
+                onDismissRequest = { if (!dialog.busy) viewModel.dismiss() },
+                title = { Text(stringResource(R.string.community_nickname)) },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = name,
+                            onValueChange = { name = it },
+                            label = { Text(stringResource(R.string.community_nickname)) },
+                            enabled = !dialog.busy,
+                            singleLine = true,
+                            isError = trimmed.length > CommunityProfiles.MAX_NAME_LENGTH,
+                            modifier = Modifier.fillMaxWidth().testTag("community-nickname-input"),
+                        )
+                        val status = when {
+                            dialog.busy -> R.string.community_nickname_working
+                            dialog.status == NicknameStatus.PUBLISHED -> R.string.community_nickname_published
+                            dialog.status == NicknameStatus.PENDING -> R.string.community_nickname_pending
+                            dialog.status == NicknameStatus.FAILED -> R.string.community_nickname_error
+                            else -> R.string.community_nickname_summary
+                        }
+                        Text(stringResource(status))
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = { viewModel.saveNickname(trimmed) },
+                        enabled = !dialog.busy && trimmed != dialog.saved &&
+                            trimmed.length in 1..CommunityProfiles.MAX_NAME_LENGTH,
+                    ) { Text(stringResource(R.string.community_nickname_save)) }
+                },
+                dismissButton = {
+                    TextButton(onClick = viewModel::dismiss, enabled = !dialog.busy) {
+                        Text(stringResource(android.R.string.cancel))
+                    }
+                },
+            )
+        }
         CommunityDialog.Onboarding -> AlertDialog(
             onDismissRequest = viewModel::dismiss,
             title = { Text(stringResource(R.string.community_onboarding_title)) },

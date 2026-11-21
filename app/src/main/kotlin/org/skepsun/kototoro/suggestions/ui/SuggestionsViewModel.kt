@@ -117,8 +117,9 @@ class SuggestionsViewModel @Inject constructor(
 
     private val requestedDirection = MutableStateFlow<org.skepsun.kototoro.suggestions.domain.SuggestionDirection?>(null)
 
-    val hasCommunity = repository.observeHasCommunity()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    /** The community tab is offered whenever the community is on; it explains itself while it has no picks yet. */
+    val hasCommunity = settings.observeAsFlow(AppSettings.KEY_COMMUNITY_ENABLED) { isCommunityEnabled }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), settings.isCommunityEnabled)
 
     val direction = combine(requestedDirection, hasCommunity) { selected, available ->
         selected.takeUnless { !available && it == org.skepsun.kototoro.suggestions.domain.SuggestionDirection.COMMUNITY }
@@ -199,7 +200,17 @@ class SuggestionsViewModel @Inject constructor(
 
         if (visibleList.isEmpty()) {
             groupedSuggestionIds = emptyMap()
-            if (filters.isEmpty() && groupTab == BrowseGroupTab.All && sourceTags.isEmpty() && libraryQuery.isEmpty()) {
+            val unfiltered = filters.isEmpty() && groupTab == BrowseGroupTab.All && sourceTags.isEmpty() && libraryQuery.isEmpty()
+            if (unfiltered && direction.value == org.skepsun.kototoro.suggestions.domain.SuggestionDirection.COMMUNITY) {
+                resultList.add(
+                    EmptyState(
+                        icon = R.drawable.ic_empty_common,
+                        textPrimary = R.string.community_picks_empty_title,
+                        textSecondary = R.string.community_picks_empty_summary,
+                        actionStringRes = 0,
+                    )
+                )
+            } else if (unfiltered) {
                 resultList.add(
                     EmptyState(
                         icon = R.drawable.ic_empty_common,

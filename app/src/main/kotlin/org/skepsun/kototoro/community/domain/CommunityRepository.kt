@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.community.domain
 
+import androidx.room.withTransaction
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -19,6 +20,8 @@ import org.skepsun.kototoro.community.external.CommunityExternalSearchApi
 import org.skepsun.kototoro.community.external.CommunityExternalSearchKind
 import org.skepsun.kototoro.community.external.CommunityExternalSite
 import org.skepsun.kototoro.community.nostr.CommunityEventSchema
+import org.skepsun.kototoro.community.nostr.CommunityProfiles
+import org.skepsun.kototoro.community.nostr.CommunityRecentPublications
 import org.skepsun.kototoro.community.nostr.NostrEvent
 import org.skepsun.kototoro.community.nostr.NostrKeyPair
 import org.skepsun.kototoro.community.nostr.NostrKeys
@@ -67,6 +70,8 @@ class CommunityRepository @Inject constructor(
 
     private val dao get() = db.getCommunityDao()
     private val outboxLock = Mutex()
+    private val profileLock = Mutex()
+    private val recent = CommunityRecentPublications()
     private val json = Json { ignoreUnknownKeys = true }
 
     val isEnabled: Boolean get() = settings.isCommunityEnabled
@@ -166,6 +171,7 @@ class CommunityRepository @Inject constructor(
         }
         val result = runCatchingCancellable { pool.publish(event) }.getOrNull()
         if (result?.isPublished == true) {
+            recent.remember(event)
             dao.deleteOutbox(entry.eventId)
         } else {
             val attempts = entry.attempts + 1
@@ -213,6 +219,33 @@ class CommunityRepository @Inject constructor(
         enqueue(signed)
         flushOutbox()
         return signed
+    }
+
+    fun recentComments(keys: List<String>): List<NostrEvent> = recent.comments(keys)
+
+    suspend fun profiles(pool: NostrRelayPool, authors: List<String>): Map<String, NostrEvent> {
+        if (authors.isEmpty()) return emptyMap()
+        val remote = CommunityProfiles.query(pool, authors)
+        val pending = pendingEvents(CommunityProfiles.KIND).filter { it.pubkey in authors }
+        return CommunityProfiles.latest(remote + pending + recent.profiles(authors))
+    }
+
+    suspend fun nickname(keys: NostrKeyPair): String? =
+        profiles(NostrRelayPool(relayClient, relays()), listOf(keys.publicKeyHex))[keys.publicKeyHex]
+            ?.let(CommunityProfiles::nickname)
+
+    suspend fun setNickname(nickname: String, keys: NostrKeyPair): Boolean = profileLock.withLock {
+        val pubkey = keys.publicKeyHex
+        val previous = profiles(NostrRelayPool(relayClient, relays()), listOf(pubkey))[pubkey]
+        val event = sign(CommunityProfiles.update(nickname, System.currentTimeMillis() / 1000, previous), keys)
+        outboxLock.withLock {
+            db.withTransaction {
+                pendingEvents(CommunityProfiles.KIND).filter { it.pubkey == pubkey }.forEach { dao.deleteOutbox(it.id) }
+                enqueue(event)
+            }
+        }
+        flushOutbox()
+        recent.profiles(listOf(pubkey)).any { it.id == event.id }
     }
 
     /** The reader's own events of [kind] that no relay has stored yet. */

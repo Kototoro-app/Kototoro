@@ -1,13 +1,10 @@
 package org.skepsun.kototoro.community.domain
 
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import org.skepsun.kototoro.community.data.CommunityLocalStore
 import org.skepsun.kototoro.community.data.CommunitySnapshotRepository
 import org.skepsun.kototoro.community.nostr.CommunityComment
 import org.skepsun.kototoro.community.nostr.CommunityEventSchema
+import org.skepsun.kototoro.community.nostr.CommunityProfiles
 import org.skepsun.kototoro.community.nostr.CommunityReportType
 import org.skepsun.kototoro.community.nostr.NostrBech32
 import org.skepsun.kototoro.community.nostr.NostrEvent
@@ -48,8 +45,6 @@ class CommunityCommentsRepository @Inject constructor(
     private val local: CommunityLocalStore,
 ) {
 
-    private val json = Json { ignoreUnknownKeys = true }
-
     suspend fun load(identity: CommunityWorkIdentity, summary: CommunityWorkSummary?): CommunityCommentsPage {
         val pool = NostrRelayPool(relayClient, repository.relays())
         val keys = identity.keys.take(MAX_QUERY_KEYS)
@@ -59,7 +54,8 @@ class CommunityCommentsRepository @Inject constructor(
         val published = result.events.filter { it.pubkey == me || NostrPow.satisfies(it, pow, CommunityEventSchema.POW_TAG) }
         val pending = repository.pendingEvents(CommunityEventSchema.KIND_COMMENT)
             .filter { event -> event.tagValues("I").any { it in keys } && published.none { it.id == event.id } }
-        val events = published + pending
+        val events = (published + pending + repository.recentComments(keys).filter { it.pubkey == me })
+            .distinctBy(NostrEvent::id)
         val comments = events.mapNotNull { event -> CommunityEventSchema.parseComment(event)?.let { it to event } }
         if (comments.isEmpty()) return CommunityCommentsPage(emptyList(), result.relays.count { it.error == null })
 
@@ -70,7 +66,8 @@ class CommunityCommentsRepository @Inject constructor(
             .mapNotNull(CommunityEventSchema::parseDeletion)
             .groupBy({ it.pubkey }, { it.eventIds })
             .mapValues { (_, sets) -> sets.flatten().toSet() }
-        val names = names(pool, comments.map { it.first.pubkey }.distinct())
+        val names = repository.profiles(pool, comments.map { it.first.pubkey }.distinct())
+            .mapValues { CommunityProfiles.nickname(it.value) }
         val moderation = runCatchingCancellable { snapshots.moderation() }.getOrNull() ?: CommunityModeration()
         val filter = CommunityCommentFilter(
             blockedPubkeys = moderation.blockedPubkeys.toSet(),
@@ -136,27 +133,10 @@ class CommunityCommentsRepository @Inject constructor(
 
     fun block(pubkey: String) = local.block(pubkey)
 
-    /** NIP-01 profiles (kind 0) of [pubkeys]: `display_name`, else `name`. */
-    private suspend fun names(pool: NostrRelayPool, pubkeys: List<String>): Map<String, String> {
-        if (pubkeys.isEmpty()) return emptyMap()
-        val events = runCatchingCancellable {
-            pool.query(listOf(NostrFilter(kinds = listOf(KIND_PROFILE), authors = pubkeys)))
-        }.getOrNull()?.events.orEmpty()
-        return events.groupBy { it.pubkey }.mapNotNull { (pubkey, profiles) ->
-            val profile = runCatching { json.parseToJsonElement(profiles.maxBy { it.createdAt }.content).jsonObject }.getOrNull()
-            val name = listOf("display_name", "name").firstNotNullOfOrNull { key ->
-                profile?.get(key)?.jsonPrimitive?.contentOrNull?.trim()?.takeIf { it.isNotEmpty() }
-            }
-            name?.let { pubkey to it.take(MAX_NAME) }
-        }.toMap()
-    }
-
     companion object {
-        private const val KIND_PROFILE = 0
         private const val LIMIT = 500
         /** Relays cap filter sizes; a work's strong keys and first titles name it well enough. */
         private const val MAX_QUERY_KEYS = 10
-        private const val MAX_NAME = 32
 
         fun shortKey(pubkey: String): String =
             NostrBech32.encodePublicKey(pubkey).let { "${it.take(10)}…${it.takeLast(4)}" }

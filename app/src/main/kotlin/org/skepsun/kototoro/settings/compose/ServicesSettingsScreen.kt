@@ -39,6 +39,7 @@ fun ServicesSettingsScreen(
     onCommunityChange: (Boolean) -> Unit = {},
     onCommunityNsfwChange: (Boolean) -> Unit = {},
     onCommunityRecoveryKeyClick: () -> Unit = {},
+    onCommunityNicknameClick: (() -> Unit)? = null,
 ) {
     Scaffold(
         modifier = modifier,
@@ -78,6 +79,7 @@ fun ServicesSettingsScreen(
             onCommunityChange = onCommunityChange,
             onCommunityNsfwChange = onCommunityNsfwChange,
             onCommunityRecoveryKeyClick = onCommunityRecoveryKeyClick,
+            onCommunityNicknameClick = onCommunityNicknameClick,
         )
     }
 }

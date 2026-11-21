@@ -4318,6 +4318,13 @@
     <string name="community_enabled_summary">通过公共 Nostr 中继与其他读者一起评分</string>
     <string name="community_nsfw_ratings">为成人作品评分</string>
     <string name="community_nsfw_ratings_summary">默认关闭：评分是公开的，会暴露你读过什么</string>
+    <string name="community_nickname">社区昵称</string>
+    <string name="community_nickname_summary">昵称会与公钥一起发布到公共中继，并显示在评论旁。</string>
+    <string name="community_nickname_save">公开保存</string>
+    <string name="community_nickname_working">正在连接中继…</string>
+    <string name="community_nickname_published">昵称已发布</string>
+    <string name="community_nickname_pending">昵称已加入待发送队列</string>
+    <string name="community_nickname_error">暂时无法读取或保存昵称</string>
     <string name="community_recovery_key">恢复密钥</string>
     <string name="community_recovery_key_summary">重装应用或换设备后，用它继续使用同一个身份</string>
     <string name="community_onboarding_title">加入社区评分？</string>
@@ -4357,4 +4364,19 @@
     <string name="community_window_week">本周</string>
     <string name="community_window_month">本月</string>
     <string name="community_window_all">全部</string>
+    <string name="community_rated">读者评分</string>
+    <string name="community_rated_note">评分人数还不够上榜，这里列出读者评过分的全部作品</string>
+    <string name="community_chart_empty">这段时间暂无上榜作品</string>
+    <string name="community_picks_empty_title">暂无社区推荐</string>
+    <string name="community_picks_empty_summary">社区推荐来自与你给同一作品打过分的读者。在详情页为读过的作品打分，索引更新后这里会出现推荐。</string>
+    <string name="community_rating_count">%1$d 人评分</string>
+    <string name="community_rating_be_first">来做第一个评分的人</string>
+    <string name="community_rating_your">我的评分</string>
+    <string name="community_rating_tap_stars">点按星星评分，点左半边为半星</string>
+    <string name="community_rating_level_1">很差</string>
+    <string name="community_rating_level_2">较差</string>
+    <string name="community_rating_level_3">还行</string>
+    <string name="community_rating_level_4">推荐</string>
+    <string name="community_rating_level_5">力荐</string>
+    <string name="community_comment_send">发布评论</string>
 </resources>

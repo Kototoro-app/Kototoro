@@ -76,6 +76,7 @@ fun ServicesSettingsContent(
     onCommunityChange: (Boolean) -> Unit = {},
     onCommunityNsfwChange: (Boolean) -> Unit = {},
     onCommunityRecoveryKeyClick: () -> Unit = {},
+    onCommunityNicknameClick: (() -> Unit)? = null,
 ) {
     @Composable
     fun onOff(value: Boolean): String = if (value) uiString("enabled") else uiString("disabled")
@@ -139,6 +140,10 @@ fun ServicesSettingsContent(
                     SettingsRowDivider()
                     SettingsValueRow(uiString("community_recovery_key"), uiString("community_recovery_key_summary"), null,
                         enabled, onCommunityRecoveryKeyClick, testTag = "services-community-recovery-key")
+                    if (onCommunityNicknameClick != null) {
+                        SettingsValueRow(uiString("community_nickname"), uiString("community_nickname_summary"), null,
+                            enabled, onCommunityNicknameClick, testTag = "services-community-nickname")
+                    }
                 }
             }
         }

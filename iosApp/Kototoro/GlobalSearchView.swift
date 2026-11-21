@@ -127,6 +127,8 @@ struct GlobalSearchView: View {
     @Binding var query: String
     var selectionMediaKind: String? = nil
     var onSelect: ((IosSourceContent) -> Void)? = nil
+    /// Searches `query` as soon as the sources are ready, for a sheet opened on a known title.
+    var autoSubmit = false
     @Environment(\.dismiss) private var dismiss
     @State private var libraryMatches: [IosSourceContent] = []
     @State private var historyMatches: [IosSourceContent] = []
@@ -144,12 +146,12 @@ struct GlobalSearchView: View {
         }
         .onSubmit(of: .search) { submit(query) }
         .task(id: "\(sources.isLoading)|\(sources.catalogRevision)|\(sources.runtime != nil)") {
-            if onSelect != nil, !sources.isLoading, model.submitted.isEmpty { submit(query) }
+            if onSelect != nil || autoSubmit, !sources.isLoading, model.submitted.isEmpty { submit(query) }
         }
         .onChange(of: [hiddenKinds, String(pinnedOnly), String(showAdult)] + targets.map(\.name)) { _, _ in
             if !model.submitted.isEmpty { submit(model.submitted) }
         }
-        .onDisappear { if onSelect != nil { model.cancel() } }
+        .onDisappear { if onSelect != nil || autoSubmit { model.cancel() } }
         .onChange(of: query) { _, value in
             if value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 model.cancel()
@@ -191,6 +193,8 @@ struct GlobalSearchView: View {
         .toolbar {
             if onSelect != nil {
                 ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
+            } else if autoSubmit {
+                ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } }
             }
         }
     }

@@ -20,33 +20,30 @@ struct CommunityDetailsSection: View {
                 Label("暂时无法读取社区评分", systemImage: "exclamationmark.circle")
                     .foregroundStyle(.secondary)
             } else if let overview {
-                if let score = overview.score?.doubleValue, overview.ratingCount > 0 {
-                    let formatted = score.formatted(.number.precision(.fractionLength(1)))
-                    Label("社区评分 \(formatted) / 10 · \(overview.ratingCount) 人", systemImage: "star.fill")
-                        .accessibilityIdentifier("details.community.rating")
-                } else {
-                    Label("暂无社区评分", systemImage: "star")
-                        .accessibilityIdentifier("details.community.rating")
-                }
+                CommunityRatingSummaryRow(overview: overview)
+                    .accessibilityIdentifier("details.community.rating")
                 Button {
                     showingRating = true
                 } label: {
-                    if myRating > 0 {
-                        Label("我的评分：\(myRating) / 10", systemImage: "star.bubble")
-                    } else {
-                        Label("给作品打分", systemImage: "star.bubble")
+                    HStack {
+                        Text("我的评分").foregroundStyle(Color.primary)
+                        Spacer()
+                        if myRating > 0 {
+                            CommunityStars(value: Double(myRating) / 2, size: 15)
+                            Text(verbatim: "\(myRating)").monospacedDigit().foregroundStyle(.secondary)
+                        } else {
+                            Text("点按评分")
+                        }
                     }
                 }
+                .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("details.community.rate")
                 Button {
                     showingComments = true
                 } label: {
-                    if overview.commentCount > 0 {
-                        Label("查看社区评论（\(overview.commentCount)）", systemImage: "bubble.left.and.bubble.right")
-                    } else {
-                        Label("查看社区评论", systemImage: "bubble.left.and.bubble.right")
-                    }
+                    Label("社区评论", systemImage: "bubble.left.and.bubble.right")
                 }
+                .badge(Int(overview.commentCount))
                 .accessibilityIdentifier("details.community.comments")
             }
         }
@@ -71,8 +68,107 @@ struct CommunityDetailsSection: View {
         .sheet(isPresented: $showingRating, onDismiss: {
             Task { myRating = (try? await community.myRating(content: content))?.int32Value ?? 0 }
         }) {
-            CommunityRatingView(community: community, content: content, stars: myRating > 0 ? myRating : 8)
+            CommunityRatingView(community: community, content: content, stars: myRating > 0 ? myRating : 0)
         }
+    }
+}
+
+/// The score, its stars and count beside how the ratings spread over one to five stars, as in the App Store.
+private struct CommunityRatingSummaryRow: View {
+    let overview: IosCommunityOverview
+
+    var body: some View {
+        let score = overview.ratingCount > 0 ? overview.score?.doubleValue : nil
+        HStack(alignment: .center, spacing: 16) {
+            VStack(spacing: 2) {
+                Text(score.map { $0.formatted(.number.precision(.fractionLength(1))) } ?? "–")
+                    .font(.system(.largeTitle, design: .rounded, weight: .bold))
+                    .foregroundStyle(score == nil ? .secondary : .primary)
+                CommunityStars(value: (score ?? 0) / 2, size: 11)
+                Text(score == nil ? String(localized: "暂无评分") : String(localized: "\(overview.ratingCount) 人评分"))
+                    .font(.caption2).foregroundStyle(.secondary)
+            }
+            .frame(minWidth: 84)
+            if score == nil {
+                Text("来做第一个评分的人")
+                    .font(.subheadline).foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                let counts = overview.starCounts.map(\.intValue)
+                let total = max(counts.reduce(0, +), 1)
+                VStack(spacing: 3) {
+                    ForEach((1...5).reversed(), id: \.self) { star in
+                        HStack(spacing: 6) {
+                            Text(verbatim: "\(star)").font(.caption2.monospacedDigit()).foregroundStyle(.secondary)
+                                .frame(width: 10)
+                            ProgressView(value: Double(counts[star - 1]), total: Double(total))
+                                .tint(.orange)
+                        }
+                    }
+                }
+                .accessibilityHidden(true)
+            }
+        }
+        .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// Five stars filled to `value` out of five, halves included.
+struct CommunityStars: View {
+    let value: Double
+    var size: CGFloat = 12
+
+    var body: some View {
+        HStack(spacing: size / 6) {
+            ForEach(0..<5, id: \.self) { index in
+                let fill = min(max(value - Double(index), 0), 1)
+                Image(systemName: fill >= 0.75 ? "star.fill" : fill >= 0.25 ? "star.leadinghalf.filled" : "star")
+            }
+        }
+        .font(.system(size: size))
+        .foregroundStyle(.orange)
+        .accessibilityHidden(true)
+    }
+}
+
+/// Five large stars for choosing 1–10: a touch on a star's leading half gives half of it; dragging across adjusts.
+private struct CommunityStarPicker: View {
+    @Binding var stars: Int32
+
+    var body: some View {
+        GeometryReader { proxy in
+            CommunityStars(value: Double(stars) / 2, size: 34)
+                .frame(maxWidth: .infinity)
+                .contentShape(Rectangle())
+                .gesture(DragGesture(minimumDistance: 0).onChanged { value in
+                    let width = proxy.size.width
+                    let starsWidth = min(width, 34 * 5 + 34 / 6 * 4)
+                    let x = value.location.x - (width - starsWidth) / 2
+                    stars = Int32(min(max((x / starsWidth * 10).rounded(.up), 1), 10))
+                })
+        }
+        .frame(height: 44)
+        .accessibilityElement()
+        .accessibilityLabel("我的评分")
+        .accessibilityValue(stars > 0 ? "\(stars) / 10" : String(localized: "未评分"))
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment: stars = min(stars + 1, 10)
+            case .decrement: stars = max(stars - 1, 1)
+            @unknown default: break
+            }
+        }
+    }
+}
+
+private func communityRatingLevel(_ stars: Int32) -> LocalizedStringKey {
+    switch (stars + 1) / 2 {
+    case 1: "很差"
+    case 2: "较差"
+    case 3: "还行"
+    case 4: "推荐"
+    default: "力荐"
     }
 }
 
@@ -90,9 +186,9 @@ private struct CommunityCommentsView: View {
     var body: some View {
         NavigationStack {
             List {
-                if loading {
+                if loading && comments.isEmpty {
                     ProgressView("正在读取社区评论…")
-                } else if failed {
+                } else if failed && comments.isEmpty {
                     ContentUnavailableView {
                         Label("暂时无法读取评论", systemImage: "exclamationmark.bubble")
                     } actions: {
@@ -102,21 +198,31 @@ private struct CommunityCommentsView: View {
                     ContentUnavailableView("暂无社区评论", systemImage: "bubble.left")
                 } else {
                     ForEach(comments, id: \.id) { comment in
-                        VStack(alignment: .leading, spacing: 6) {
-                            HStack {
-                                Text(verbatim: comment.author)
-                                Spacer()
-                                Text(Date(timeIntervalSince1970: TimeInterval(comment.createdAt)), style: .date)
-                            }
-                            .font(.caption).foregroundStyle(.secondary)
-                            if comment.spoiler && !revealed.contains(comment.id) {
-                                Button("显示剧透内容") { revealed.insert(comment.id) }
-                            } else {
-                                Text(verbatim: comment.content)
-                                    .textSelection(.enabled)
+                        HStack(alignment: .top, spacing: 10) {
+                            CommunityAvatar(name: comment.author, size: comment.isReply ? 26 : 34)
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack(spacing: 6) {
+                                    Text(verbatim: comment.author).font(.subheadline.weight(.semibold)).lineLimit(1)
+                                    if comment.isPending {
+                                        Text("待发送").font(.caption).foregroundStyle(.tint)
+                                    } else {
+                                        Text(Date(timeIntervalSince1970: TimeInterval(comment.createdAt)), style: .relative)
+                                            .font(.caption).foregroundStyle(.secondary)
+                                    }
+                                }
+                                if comment.spoiler && !revealed.contains(comment.id) {
+                                    Button { revealed.insert(comment.id) } label: {
+                                        Label("显示剧透内容", systemImage: "eye.slash").font(.subheadline)
+                                    }
+                                    .buttonStyle(.bordered).controlSize(.small)
+                                } else {
+                                    Text(verbatim: comment.content)
+                                        .textSelection(.enabled)
+                                }
                             }
                         }
-                        .padding(.leading, comment.isReply ? 20 : 0)
+                        .padding(.leading, comment.isReply ? 44 : 0)
+                        .padding(.vertical, 2)
                         .accessibilityIdentifier("details.community.comment.\(comment.id)")
                     }
                 }
@@ -150,6 +256,26 @@ private struct CommunityCommentsView: View {
     }
 }
 
+/// A round initial in a colour picked from the author's name, so one author looks the same in every thread.
+private struct CommunityAvatar: View {
+    let name: String
+    let size: CGFloat
+    private static let palette: [Color] = [.blue, .teal, .indigo, .orange, .pink, .green, .purple, .brown]
+
+    var body: some View {
+        let hash = name.unicodeScalars.reduce(0) { ($0 &* 31 &+ Int($1.value)) & 0x7fffffff }
+        Circle()
+            .fill(Self.palette[hash % Self.palette.count].gradient)
+            .frame(width: size, height: size)
+            .overlay {
+                Text(verbatim: String(name.trimmingCharacters(in: .whitespaces).prefix(1)).uppercased())
+                    .font(.system(size: size * 0.45, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white)
+            }
+            .accessibilityHidden(true)
+    }
+}
+
 private struct CommunityRatingView: View {
     let community: IosCommunityDetails
     let content: IosSourceContent
@@ -158,10 +284,20 @@ private struct CommunityRatingView: View {
     var body: some View {
         CommunityPublishingForm(
             title: "作品评分", community: community, publishTitle: "公开发布评分",
-            publishIdentifier: "details.community.publishRating", canPublish: true,
+            publishIdentifier: "details.community.publishRating", canPublish: stars > 0,
             operation: { try await community.rate(content: content, stars: stars, identity: $0) }
         ) {
-            Stepper("我的评分：\(stars) / 10", value: $stars, in: 1...10)
+            VStack(spacing: 6) {
+                CommunityStarPicker(stars: $stars)
+                if stars > 0 {
+                    (Text(verbatim: "\(stars) / 10 · ") + Text(communityRatingLevel(stars)))
+                        .font(.headline)
+                } else {
+                    Text("点按星星评分，点左半边为半星").font(.subheadline).foregroundStyle(.secondary)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 6)
         }
     }
 }
@@ -191,6 +327,17 @@ private struct CommunityCommentComposer: View {
     }
 }
 
+struct CommunityIdentitySettings: View {
+    let community: IosCommunityDetails
+
+    var body: some View {
+        CommunityPublishingForm(
+            title: "社区身份", community: community, publishTitle: "", publishIdentifier: "",
+            canPublish: false, operation: nil
+        ) { EmptyView() }
+    }
+}
+
 private struct CommunityPublishingForm<Controls: View>: View {
     typealias Operation = (IosCommunityIdentity) async throws -> IosCommunityPublication
     @Environment(\.dismiss) private var dismiss
@@ -200,10 +347,13 @@ private struct CommunityPublishingForm<Controls: View>: View {
     let publishTitle: LocalizedStringKey
     let publishIdentifier: String
     let canPublish: Bool
-    let operation: Operation
+    let operation: Operation?
     @ViewBuilder let controls: () -> Controls
     @State private var identity: IosCommunityIdentity?
     @State private var recoveryKey = ""
+    @State private var nickname = ""
+    @State private var savedNickname = ""
+    @State private var loadingNickname = false
     @State private var showingBackup = false
     @State private var busy = false
     @State private var pending: Int32 = 0
@@ -238,14 +388,39 @@ private struct CommunityPublishingForm<Controls: View>: View {
                 } footer: {
                     Text("恢复密钥只保存在本机钥匙串，不随备份同步。请勿分享恢复密钥。")
                 }
-                if identity != nil {
+                if let identity {
                     Section {
-                        controls()
-                        Button(publishTitle) { start() }
-                            .disabled(!canPublish)
-                            .accessibilityIdentifier(publishIdentifier)
+                        TextField("社区昵称", text: $nickname)
+                            .disabled(loadingNickname)
+                            .accessibilityIdentifier("community.nickname")
+                        Button("公开保存昵称") { saveNickname(identity) }
+                            .disabled(loadingNickname || trimmedNickname.isEmpty || trimmedNickname == savedNickname ||
+                                trimmedNickname.utf16.count > Int(community.maxNicknameLength))
                     } footer: {
-                        Text("发布内容和公钥将发送到公共中继，可能被复制或归档。")
+                        Text("昵称会与公钥一起发布到公共中继，并显示在评论旁。")
+                    }
+                    .task(id: identity.publicKey) {
+                        loadingNickname = true
+                        defer { loadingNickname = false }
+                        do {
+                            let value = try await community.nickname(identity: identity) ?? ""
+                            guard !Task.isCancelled else { return }
+                            nickname = value
+                            savedNickname = value
+                        } catch {
+                            guard !Task.isCancelled else { return }
+                            message = error.localizedDescription
+                        }
+                    }
+                    if operation != nil {
+                        Section {
+                            controls()
+                            Button(publishTitle) { start() }
+                                .disabled(!canPublish)
+                                .accessibilityIdentifier(publishIdentifier)
+                        } footer: {
+                            Text("发布内容和公钥将发送到公共中继，可能被复制或归档。")
+                        }
                     }
                     if pending > 0 {
                         Section {
@@ -285,15 +460,32 @@ private struct CommunityPublishingForm<Controls: View>: View {
         } catch { message = String(localized: "无法保存社区身份，未覆盖已有密钥") }
     }
 
+    private var trimmedNickname: String { nickname.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    private func saveNickname(_ identity: IosCommunityIdentity) {
+        let name = trimmedNickname
+        submit {
+            let result = try await community.setNickname(nickname: name, identity: identity)
+            nickname = name
+            savedNickname = name
+            return result
+        }
+    }
+
     private func start() {
-        guard let identity, !busy else { return }
+        guard let identity, let operation else { return }
+        submit { try await operation(identity) }
+    }
+
+    private func submit(_ operation: @escaping () async throws -> IosCommunityPublication) {
+        guard !busy else { return }
         busy = true
         showingBackup = false
         message = nil
         Task {
             defer { busy = false }
             do {
-                let result = try await operation(identity)
+                let result = try await operation()
                 pending = result.pendingCount
                 message = result.published ? String(localized: "中继已接收") : String(localized: "已保存到待发送队列")
             } catch { message = error.localizedDescription }

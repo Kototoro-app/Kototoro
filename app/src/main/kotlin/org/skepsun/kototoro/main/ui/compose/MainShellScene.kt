@@ -1302,11 +1302,16 @@ internal fun SuggestionsTopLevelRouteContent(
                             modifier = Modifier.padding(top = 4.dp),
                         )
                     }
-                    org.skepsun.kototoro.community.ui.CommunitySuggestionsSection(
-                        onSearchTitle = { title -> appRouter.openSearch(title) },
-                        horizontalPadding = 12.dp,
-                        modifier = Modifier.padding(top = 8.dp),
-                    )
+                    // The community's ratings belong with everything and with its own tab, not the source directions.
+                    if (suggestionDirection == null ||
+                        suggestionDirection == org.skepsun.kototoro.suggestions.domain.SuggestionDirection.COMMUNITY
+                    ) {
+                        org.skepsun.kototoro.community.ui.CommunitySuggestionsSection(
+                            onSearchTitle = { title -> appRouter.openSearch(title) },
+                            horizontalPadding = 12.dp,
+                            modifier = Modifier.padding(top = 8.dp),
+                        )
+                    }
                 }
             },
             showQuickFilterInline = false,

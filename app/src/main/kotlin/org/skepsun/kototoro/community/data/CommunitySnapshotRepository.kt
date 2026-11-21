@@ -7,6 +7,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.community.domain.CommunityChart
+import org.skepsun.kototoro.community.domain.CommunityHighlights
 import org.skepsun.kototoro.community.domain.CommunityModeration
 import org.skepsun.kototoro.community.domain.CommunitySnapshotManifest
 import org.skepsun.kototoro.community.domain.CommunitySnapshotReader
@@ -86,6 +87,14 @@ class CommunitySnapshotRepository @Inject constructor(
                 ?.let(CommunitySnapshotReader::works).orEmpty()
             ids.mapNotNull { id -> works[id]?.let { id to it } }
         }.toMap()
+    }
+
+    /** Every work of an index small enough to read whole ([CommunityHighlights.worksShardPaths]); empty past that. */
+    suspend fun allWorks(): List<CommunityWorkSummary> {
+        val manifest = manifest() ?: return emptyList()
+        return CommunityHighlights.worksShardPaths(manifest).flatMap { path ->
+            file(manifest, path)?.let(CommunitySnapshotReader::works)?.values.orEmpty()
+        }
     }
 
     suspend fun chart(window: String, medium: String, nsfw: Boolean): CommunityChart? {

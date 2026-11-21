@@ -60,10 +60,6 @@ class SuggestionRepository @Inject constructor(
         }
     }
 
-    fun observeHasCommunity(): Flow<Boolean> = db.getSuggestionDao()
-        .observeAll(Int.MAX_VALUE, emptySet<ListFilterOption>().toCriteria(), null, SuggestionDirection.COMMUNITY.name)
-        .withCurrentPreferences().map { it.isNotEmpty() }
-
     suspend fun count(): Int = db.getSuggestionDao().count()
 
     suspend fun knownIds(): Set<Long> = db.getSuggestionDao().findAll().mapTo(HashSet()) { it.mangaId }

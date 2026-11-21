@@ -64,8 +64,7 @@ struct SuggestionsView: View {
     private var visible: [ContentItem] {
         // Resolving a page's type can scan the source catalog; do it once for the whole list.
         let kind = selectedKind
-        let selected = direction == "COMMUNITY" && !items.contains(where: { $0.suggestionDirection == "COMMUNITY" })
-            ? "ALL" : direction
+        let selected = direction == "COMMUNITY" && !communityEnabled ? "ALL" : direction
         return items.filter {
             (kind == nil || $0.mediaKind == kind) &&
                 (selected == "ALL" || $0.suggestionDirection == selected)
@@ -98,7 +97,8 @@ struct SuggestionsView: View {
                         directionButton("POPULAR", title: "热门榜")
                         directionButton("NEW", title: "新作与更新")
                         directionButton("EXPLORE", title: "换换口味")
-                        if communityEnabled && items.contains(where: { $0.suggestionDirection == "COMMUNITY" }) {
+                        // Offered whenever the community is on; the tab explains itself while it has no picks yet.
+                        if communityEnabled {
                             directionButton("COMMUNITY", title: "社区")
                         }
                     }.padding(.horizontal)
@@ -131,6 +131,10 @@ struct SuggestionsView: View {
                                 .accessibilityIdentifier("suggestions.retry")
                         }.padding(.horizontal).foregroundStyle(.secondary)
                     }
+                    if communityEnabled && (direction == "ALL" || direction == "COMMUNITY"),
+                       let community = library.library?.community {
+                        CommunityHighlightsSection(community: community)
+                    }
                     if !visible.isEmpty, let runtime = sources.runtime {
                         HStack {
                             Text("根据你的阅读偏好").font(.subheadline).foregroundStyle(.secondary)
@@ -149,8 +153,14 @@ struct SuggestionsView: View {
                             }
                         }
                     } else if !loading && error == nil && !sources.isLoading {
-                        ContentUnavailableView("暂无推荐作品", systemImage: "sparkles",
-                                               description: Text("试试其他内容空间、调整偏好，或下拉刷新。"))
+                        if direction == "COMMUNITY" {
+                            ContentUnavailableView("暂无社区推荐", systemImage: "person.2",
+                                                   description: Text("社区推荐来自与你给同一作品打过分的读者。在详情页为读过的作品打分，索引更新后这里会出现推荐。"))
+                                .accessibilityIdentifier("suggestions.community.empty")
+                        } else {
+                            ContentUnavailableView("暂无推荐作品", systemImage: "sparkles",
+                                                   description: Text("试试其他内容空间、调整偏好，或下拉刷新。"))
+                        }
                     }
                 }
             }.padding(.vertical, 16)

@@ -6,6 +6,8 @@ import SwiftUI
 struct SettingsView: View {
     @ObservedObject var library: LibraryModel
     let extensionUpdates: Int
+    @AppStorage("community_enabled") private var communityEnabled = false
+    @State private var showingCommunityIdentity = false
 
     var body: some View {
         List {
@@ -49,6 +51,12 @@ struct SettingsView: View {
                 .accessibilityIdentifier("settings.backup")
                 NavigationLink { TrackingSitesView() } label: { Label("追踪网站", systemImage: "link") }
                     .accessibilityIdentifier("settings.tracking")
+                if communityEnabled, library.library != nil {
+                    Button { showingCommunityIdentity = true } label: {
+                        Label("社区身份", systemImage: "person.crop.circle")
+                    }
+                    .accessibilityIdentifier("settings.communityIdentity")
+                }
             }
             Section {
                 NavigationLink { PrivacySettingsPage() } label: { Label("隐私与安全", systemImage: "hand.raised") }
@@ -62,6 +70,11 @@ struct SettingsView: View {
             }
         }
         .navigationTitle("设置")
+        .sheet(isPresented: $showingCommunityIdentity) {
+            if let community = library.library?.community {
+                CommunityIdentitySettings(community: community)
+            }
+        }
     }
 }
 
