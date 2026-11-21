@@ -708,6 +708,7 @@ internal fun DesktopTabletDetails(controller: DesktopController, state: DesktopA
                 }
                 DesktopDetailsInfo(content, enabled = !state.busy, warnings = state.sourceSettings,
                     readingTime = state.detailsReadingTime, heroVisible = mediaStylePolicy.useCenteredHeroHeader)
+                DesktopCommunityRating(controller, content)
                 DesktopDetailsRelated(controller, state)
             }
         }

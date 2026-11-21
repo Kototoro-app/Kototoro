@@ -4,6 +4,8 @@ import androidx.compose.ui.graphics.asSkiaBitmap
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.isRoot
+import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.onNodeWithTag
@@ -144,6 +146,24 @@ internal object DesktopServicesProbe {
                 onNodeWithText(AndroidStrings["reading_time_estimation"]).assertExists()
                 onNodeWithText(AndroidStrings["reading_time_estimation_summary"]).assertExists()
                 snapshot("services-page")
+
+                // §206: the community section. Its switch asks first, as Android's onboarding does, and stays off until
+                // an identity exists; cancelling here keeps the system credential store untouched.
+                onNodeWithTag("services-community").performScrollTo().assertExists()
+                onNodeWithTag("services-community-nsfw").assertDoesNotExist()
+                onNodeWithTag("services-community").performClick(); idle()
+                onNodeWithTag("community-onboarding-create").assertExists()
+                onNodeWithText(AndroidStrings["community_onboarding_title"]).assertExists()
+                // The dialog is a second root; capture it on its own.
+                Image.makeFromBitmap(onAllNodes(isRoot()).onLast().captureToImage().asSkiaBitmap()).use { image ->
+                    image.encodeToData()?.use {
+                        Files.write(Files.createDirectories(Path.of(args[3]))
+                            .resolve("${args[0]}-services-community-onboarding.png"), it.bytes)
+                    }
+                }
+                onNodeWithText(AndroidStrings["cancel"]).performClick(); idle()
+                onNodeWithTag("community-onboarding-create").assertDoesNotExist()
+                check(!controller.state.value.services.communityEnabled) { "cancelling onboarding leaves the community off" }
 
                 // §191: 相关漫画 is Android's `related_manga`. Off empties the open page's rail and stores the key; back on
                 // fills it again without reopening the details (the wrong way round would leave a dead switch behind).

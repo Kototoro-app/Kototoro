@@ -536,6 +536,17 @@ class DesktopController(
     private var relatedJob: Job? = null
     private var globalSearchJob: Job? = null
     private val searchPreferences = session.storage.preferences.open("desktop_search")
+    /** Android's community ratings and comments (§206); its own flows, never the operation gate. */
+    internal val community = DesktopCommunity(
+        root = session.storage.paths.root,
+        preferences = session.storage.preferences.open("desktop_community"),
+        database = session.storage.database,
+        proxy = session.proxy,
+        rewriteGitHubUrl = session.githubMirror::rewrite,
+        switches = { state.value.services },
+        saveSwitches = ::servicesSettings,
+        scope = scope,
+    )
 
     init {
         // The saved language applies before the first screen is composed; `--lang` outranks it for this run.
@@ -1678,6 +1689,17 @@ class DesktopController(
     fun globalSearchAdvanced(advanced: AdvancedSearchParams) {
         mutableState.update { it.copy(globalSearch = it.globalSearch.copy(advanced = advanced)) }
         runGlobalSearch()
+        session.community = community.service
+        community.start()
+    }
+
+    /**
+     * A community work, which the index names by title only: every source is searched for it, so the reader lands on
+     * their own sources rather than on a link that may not work for them (Android's details-dock title search).
+     */
+    fun searchTitle(title: String) {
+        showSearch()
+        globalSearch(title)
     }
 
     fun globalSearch(query: String) {
@@ -2809,6 +2831,12 @@ class DesktopController(
                 services = value,
                 error = if (saved) it.error else desktopText("services.saveFailed"),
             )
+        }
+        // The community switches change what the details card and the suggestions chart may show.
+        if (previous.communityEnabled != value.communityEnabled || previous.communityNsfwRatings != value.communityNsfwRatings) {
+            community.bindDetails(null)
+            if (state.value.screen == DesktopScreen.DETAILS) community.bindDetails(state.value.content)
+            community.loadChart()
         }
         // `related_manga` is read when details opens, so an open page follows the switch instead of waiting for a reopen.
         if (previous.relatedContent != value.relatedContent) {
@@ -4350,6 +4378,7 @@ class DesktopController(
         runCatching { updates.installOnExitIfRequested() }
         session.browserChallenges?.close()
         job.cancelAndJoin()
+        runCatching { community.close() }
         withContext(NonCancellable + Dispatchers.IO) {
             try { gate.withLock { continuous.flush(); novelOperations.flush(); videoOperations.flush() } }
             finally {

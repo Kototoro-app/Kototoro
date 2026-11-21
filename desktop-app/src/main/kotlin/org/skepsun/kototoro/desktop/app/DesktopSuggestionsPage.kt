@@ -57,11 +57,15 @@ internal fun DesktopSuggestionsPage(controller: DesktopController, state: Deskto
         desktopSuggestionFilters(items, includeAdultChips = !settings.excludeNsfw)
     }
     val filters = state.suggestionFilters
-    val visible = remember(items, filters, state.suggestionDirection, state.suggestionReasons) {
+    // Android offers the community tab whenever the community is on; its picks and tab go away with the switch.
+    val hasCommunity = state.services.communityEnabled
+    val community = org.skepsun.kototoro.suggestions.domain.SuggestionDirection.COMMUNITY
+    val direction = state.suggestionDirection.takeUnless { !hasCommunity && it == community }
+    val visible = remember(items, filters, direction, state.suggestionReasons, hasCommunity) {
         desktopSuggestedContents(items, filters).filter {
-            state.suggestionDirection == null ||
-                (state.suggestionReasons[it.id]?.first ?: org.skepsun.kototoro.suggestions.domain.SuggestionDirection.TASTE) ==
-                state.suggestionDirection
+            val itemDirection = state.suggestionReasons[it.id]?.first
+                ?: org.skepsun.kototoro.suggestions.domain.SuggestionDirection.TASTE
+            (hasCommunity || itemDirection != community) && (direction == null || itemDirection == direction)
         }
     }
     // The header card, notices and chips lead the grid, so they scroll beneath the floating bar with the works.
@@ -69,7 +73,7 @@ internal fun DesktopSuggestionsPage(controller: DesktopController, state: Deskto
     val header: @Composable () -> Unit = { Column(Modifier.fillMaxWidth().padding(bottom = 4.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
         org.skepsun.kototoro.core.ui.suggestions.SuggestionsHeader(
-            selected = state.suggestionDirection,
+            selected = direction,
             language = settings.language,
             languageOnly = settings.languageOnly,
             count = visible.size,
@@ -78,6 +82,7 @@ internal fun DesktopSuggestionsPage(controller: DesktopController, state: Deskto
             onSettings = { controller.showRecommendations() },
             enabled = enabled,
             refreshing = state.suggestionsGenerating || !settings.enabled,
+            hasCommunity = hasCommunity,
         )
         if (!settings.enabled) {
             // Android's tab keeps leading to a page that asks for the feature instead of hiding the destination.
@@ -108,6 +113,14 @@ internal fun DesktopSuggestionsPage(controller: DesktopController, state: Deskto
         } else if (items.isNotEmpty()) {
             if (chips.isNotEmpty()) SuggestionChips(chips, filters, enabled, controller::toggleSuggestionFilter,
                 sourceTitles = state.sources.associate { it.source.name to it.displayName })
+        }
+        // The community's chart belongs with everything and with its own tab, not with the source directions.
+        if (hasCommunity && (direction == null || direction == community)) DesktopCommunityChart(controller)
+        if (hasCommunity && direction == community && items.isNotEmpty() && visible.isEmpty()) {
+            Column(Modifier.fillMaxWidth().testTag("community-picks-empty"), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(AndroidStrings["community_picks_empty_title"], style = MaterialTheme.typography.titleSmall)
+                Text(AndroidStrings["community_picks_empty_summary"], color = Muted, fontSize = 13.sp)
+            }
         }
     } }
     Box(Modifier.fillMaxSize().testTag("suggestions-panel")) {

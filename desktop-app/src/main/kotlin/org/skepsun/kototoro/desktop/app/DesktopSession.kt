@@ -223,7 +223,10 @@ class DesktopSession private constructor(
     )
 
     /** Suggestions with Android's worker rules, from the installed sources, stored in the shared table. */
-    val suggestions = org.skepsun.kototoro.desktop.runtime.DesktopSuggestions(library, sources)
+    val suggestions = org.skepsun.kototoro.desktop.runtime.DesktopSuggestions(library, sources) { community }
+
+    /** Set by the controller once it built the community; suggestion runs ask it for community picks. */
+    @Volatile internal var community: org.skepsun.kototoro.core.library.community.CommunityService? = null
 
     /** Android's feed read model over the shared tracker tables, classified by the installed ecosystems. */
     val feed = org.skepsun.kototoro.tracker.domain.feed.FeedSnapshotAssembler(

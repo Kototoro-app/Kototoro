@@ -21,21 +21,52 @@ internal interface DesktopDriveCredentialStore {
 }
 
 /** Credentials never enter the preference directory, Room, backups or the source browser's cookie store. */
-internal fun desktopDriveCredentialStore(root: Path): DesktopDriveCredentialStore {
-    val identity = MessageDigest.getInstance("SHA-256")
-        .digest("${root.toAbsolutePath().normalize()}\n$DESKTOP_GOOGLE_CLIENT_ID".toByteArray(UTF_8))
-        .joinToString("") { "%02x".format(it) }
+internal fun desktopDriveCredentialStore(root: Path): DesktopDriveCredentialStore =
+    desktopCredentialStore(DesktopCredentialSlot(
+        identity = slotIdentity(root, DESKTOP_GOOGLE_CLIENT_ID),
+        macService = "org.skepsun.kototoro.desktop.google-drive",
+        windowsPrefix = "Kototoro/GoogleDrive",
+        linuxLabel = "Kototoro Google Drive",
+    ))
+
+/**
+ * The community identity's secret key (community plan §2): kept where the Drive token is, in the system's own
+ * credential store for the current user, never in the data directory, so a copied profile carries no identity.
+ */
+internal fun desktopCommunityCredentialStore(root: Path): DesktopDriveCredentialStore =
+    desktopCredentialStore(DesktopCredentialSlot(
+        identity = slotIdentity(root, "community"),
+        macService = "org.skepsun.kototoro.desktop.community",
+        windowsPrefix = "Kototoro/Community",
+        linuxLabel = "Kototoro community identity",
+        linuxAccountPrefix = "community-",
+    ))
+
+/** One secret in the system credential store, named per data directory so two profiles never share it. */
+private class DesktopCredentialSlot(
+    val identity: String,
+    val macService: String,
+    val windowsPrefix: String,
+    val linuxLabel: String,
+    val linuxAccountPrefix: String = "",
+)
+
+private fun slotIdentity(root: Path, purpose: String): String = MessageDigest.getInstance("SHA-256")
+    .digest("${root.toAbsolutePath().normalize()}\n$purpose".toByteArray(UTF_8))
+    .joinToString("") { "%02x".format(it) }
+
+private fun desktopCredentialStore(slot: DesktopCredentialSlot): DesktopDriveCredentialStore {
     val os = System.getProperty("os.name").lowercase()
     return when {
-        os.contains("mac") -> MacDriveCredentialStore(identity)
-        os.contains("win") -> WindowsDriveCredentialStore("Kototoro/GoogleDrive/$identity")
-        else -> SecretServiceDriveCredentialStore(identity)
+        os.contains("mac") -> MacDriveCredentialStore(slot.macService, slot.identity)
+        os.contains("win") -> WindowsDriveCredentialStore("${slot.windowsPrefix}/${slot.identity}")
+        else -> SecretServiceDriveCredentialStore(slot.linuxAccountPrefix + slot.identity, slot.linuxLabel)
     }
 }
 
 /** The Security framework is supplied by macOS; JNA is already shipped for desktop playback. */
-private class MacDriveCredentialStore(private val account: String) : DesktopDriveCredentialStore {
-    private val service = "org.skepsun.kototoro.desktop.google-drive".toByteArray(UTF_8)
+private class MacDriveCredentialStore(serviceName: String, private val account: String) : DesktopDriveCredentialStore {
+    private val service = serviceName.toByteArray(UTF_8)
     private val accountBytes = account.toByteArray(UTF_8)
     private val security by lazy { Native.load("/System/Library/Frameworks/Security.framework/Security", Security::class.java) }
     private val foundation by lazy { Native.load("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation", Foundation::class.java) }
@@ -168,9 +199,12 @@ private class WindowsDriveCredentialStore(private val target: String) : DesktopD
 }
 
 /** Linux uses the desktop keyring, with no plaintext fallback when Secret Service is unavailable. */
-private class SecretServiceDriveCredentialStore(private val account: String) : DesktopDriveCredentialStore {
+private class SecretServiceDriveCredentialStore(
+    private val account: String,
+    private val label: String,
+) : DesktopDriveCredentialStore {
     override fun read(): String? = command(listOf("lookup"), null, allowMissing = true)
-    override fun write(value: String) { command(listOf("store", "--label=Kototoro Google Drive"), value) }
+    override fun write(value: String) { command(listOf("store", "--label=$label"), value) }
     override fun clear() { command(listOf("clear"), null, allowMissing = true) }
 
     private fun command(arguments: List<String>, input: String?, allowMissing: Boolean = false): String? {

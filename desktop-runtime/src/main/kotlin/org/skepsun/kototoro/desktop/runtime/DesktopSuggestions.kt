@@ -134,6 +134,8 @@ class DesktopSuggestions(
     private val now: () -> Long = System::currentTimeMillis,
     private val limits: SuggestionLimits = SuggestionLimits(),
     private val sourceOrder: ((List<SourceListing>) -> List<SourceListing>)? = null,
+    /** The community, when the reader turned it on: its picks join the run and its scores rank the candidates. */
+    private val community: () -> org.skepsun.kototoro.core.library.community.CommunityService? = { null },
 ) {
     private val matcher: SuggestionTagMatcher = { a, b -> a.almostEquals(b, SUGGESTION_TAG_THRESHOLD) }
 
@@ -158,12 +160,20 @@ class DesktopSuggestions(
         val time = now()
         val seed = suggestionRotationSeed(time, refreshAt = if (manual) time else 0L)
         val candidates = sourceOrder?.invoke(eligible) ?: eligible.sortedBy { it.source.name }.shuffled(Random(seed))
+        val preferences = settings.copy(preferredSources = PopularSources.preferred(settings.popularSourcesFirst,
+            settings.preferredSources, settings.excludedSources, candidates.map {
+                PopularSourceProbe(it.source.name, it.displayName, it.siteUrl)
+            }, if (settings.favouriteSourcesFirst) PopularSources.favouriteSources(works) else emptySet()))
+            .preferences(globalTagBlacklist)
+        // Community picks are looked up only in sources that are not adult, whatever the reader's own nsfw choice.
+        val safeSources = candidates.filterNot { it.isNsfwSource(nsfwOverrides) }.map { it.source }
+        val service = community()?.takeIf { it.isEnabled }
         val result = SourceSuggestions(runtime, matcher, limits).generate(works, candidates.map { it.source },
-            settings.copy(preferredSources = PopularSources.preferred(settings.popularSourcesFirst,
-                settings.preferredSources, settings.excludedSources, candidates.map {
-                    PopularSourceProbe(it.source.name, it.displayName, it.siteUrl)
-                }, if (settings.favouriteSourcesFirst) PopularSources.favouriteSources(works) else emptySet()))
-            .preferences(globalTagBlacklist), time, library.suggestionAges(), seed = seed)
+            preferences, time, library.suggestionAges(), seed = seed,
+            community = service?.let { { raw ->
+                it.suggestionCandidates(runtime, works, safeSources, preferences, time, raw,
+                    library.suggestions(limits.maxResults))
+            } })
         check(result.successfulSources > 0) { "No recommendation source responded" }
         return library.replaceSuggestions(result.items, time)
     }
