@@ -29,7 +29,7 @@ class MangaDatabaseSnapshotChainTest {
 
 	private val migrations = getDatabaseMigrations(InstrumentationRegistry.getInstrumentation().targetContext)
 
-	private val snapshots = listOf(32, 33, 34, 35, 36, 37, 39, 40, 42, 68, 69, 70, 71, 72, 73, 76, 77, 78, 79, 80, 82, 83, 84, 85, 86, 87, 88, 89, 90)
+	private val snapshots = listOf(32, 33, 34, 35, 36, 37, 39, 40, 42, 68, 69, 70, 71, 72, 73, 76, 77, 78, 79, 80, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91)
 
 	@Test
 	fun migrationListIsContiguousAndEndsAtCurrentVersion() {

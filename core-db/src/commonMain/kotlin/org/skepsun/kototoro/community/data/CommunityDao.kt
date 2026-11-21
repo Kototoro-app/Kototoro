@@ -24,20 +24,29 @@ interface CommunityDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertOutbox(event: CommunityOutboxEntity)
 
-    @Query("SELECT * FROM community_outbox WHERE next_attempt_at <= :now ORDER BY created_at LIMIT :limit")
+    /** Events no relay accepted yet whose next try is due. */
+    @Query("SELECT * FROM community_outbox WHERE published_at = 0 AND next_attempt_at <= :now ORDER BY created_at LIMIT :limit")
     suspend fun findDueOutbox(now: Long, limit: Int): List<CommunityOutboxEntity>
+
+    /** Accepted events still waiting for a second relay or an index run, whose next check is due. */
+    @Query("SELECT * FROM community_outbox WHERE published_at > 0 AND next_attempt_at <= :now ORDER BY created_at LIMIT :limit")
+    suspend fun findDueUnconfirmed(now: Long, limit: Int): List<CommunityOutboxEntity>
 
     @Query("SELECT * FROM community_outbox WHERE event_id = :eventId")
     suspend fun findOutbox(eventId: String): CommunityOutboxEntity?
 
-    @Query("SELECT COUNT(*) FROM community_outbox")
+    /** Events no relay has accepted yet; accepted ones waiting for confirmation are already public. */
+    @Query("SELECT COUNT(*) FROM community_outbox WHERE published_at = 0")
     fun observeOutboxCount(): Flow<Int>
 
-    @Query("SELECT COUNT(*) FROM community_outbox")
+    @Query("SELECT COUNT(*) FROM community_outbox WHERE published_at = 0")
     suspend fun countOutbox(): Int
 
-    /** Events of one kind still waiting, e.g. the reader's own comments shown as pending. */
-    @Query("SELECT * FROM community_outbox WHERE kind = :kind ORDER BY created_at")
+    @Query("SELECT COUNT(*) FROM community_outbox WHERE published_at > 0")
+    suspend fun countUnconfirmed(): Int
+
+    /** Events of one kind no relay has accepted yet, e.g. the reader's own comments shown as pending. */
+    @Query("SELECT * FROM community_outbox WHERE kind = :kind AND published_at = 0 ORDER BY created_at")
     suspend fun findOutboxByKind(kind: Int): List<CommunityOutboxEntity>
 
     @Query("DELETE FROM community_outbox WHERE event_id = :eventId")

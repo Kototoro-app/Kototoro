@@ -88,6 +88,14 @@ class SharedMigrationTest {
             community.upsertOutbox(CommunityOutboxEntity("e1", "{}", 34259, 10, attempts = 0, nextAttemptAt = 5, lastError = null))
             assertEquals(listOf("e1"), community.findDueOutbox(now = 5, limit = 10).map { it.eventId })
             assertTrue(community.findDueOutbox(now = 4, limit = 10).isEmpty())
+            // v91: an event a relay accepted leaves the pending count and waits for confirmation instead.
+            val outbox = community.findOutbox("e1")!!
+            assertEquals(0L, outbox.publishedAt)
+            community.upsertOutbox(outbox.copy(publishedAt = 6, acceptedRelays = "wss://a", nextAttemptAt = 9))
+            assertEquals(0, community.countOutbox())
+            assertEquals(1, community.countUnconfirmed())
+            assertTrue(community.findDueOutbox(now = 100, limit = 10).isEmpty())
+            assertEquals(listOf("e1"), community.findDueUnconfirmed(now = 9, limit = 10).map { it.eventId })
             val resolution = CommunityResolutionEntity(MANGA_ID, "ANILIST", "BOUND", remoteId = 7, checkedAt = 1, failures = 0)
             community.upsertResolution(resolution)
             community.upsertResolution(resolution.copy(service = "BANGUMI", status = "FAILED", remoteId = null, failures = 1))

@@ -81,7 +81,7 @@ import org.skepsun.kototoro.community.data.CommunityOutboxEntity
 import org.skepsun.kototoro.community.data.CommunityRatingEntity
 import org.skepsun.kototoro.community.data.CommunityResolutionEntity
 
-const val DATABASE_VERSION = 90
+const val DATABASE_VERSION = 91
 
 @Database(
     entities = [
