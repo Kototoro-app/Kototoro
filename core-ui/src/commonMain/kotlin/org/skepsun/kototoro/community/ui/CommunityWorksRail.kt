@@ -16,8 +16,6 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -31,7 +29,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
-import java.util.Locale
+import org.skepsun.kototoro.settings.compose.SettingsMaterialIcons
+import kotlin.math.abs
+import kotlin.math.roundToLong
 
 /** One community work in a rail: the index knows its title and how it relates, not where to read it. */
 data class CommunityWorkCard(
@@ -157,10 +157,10 @@ private fun CommunityWorkTile(card: CommunityWorkCard, rank: Int?, onClick: () -
 
 /** A star and a score out of 10, the way every community surface shows a rating. */
 @Composable
-internal fun CommunityScoreBadge(score: Double, modifier: Modifier = Modifier) {
+fun CommunityScoreBadge(score: Double, modifier: Modifier = Modifier) {
     Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
         Icon(
-            imageVector = Icons.Filled.Star,
+            imageVector = SettingsMaterialIcons.Star,
             contentDescription = null,
             tint = communityStarColor(),
             modifier = Modifier.size(14.dp),
@@ -175,6 +175,10 @@ internal fun CommunityScoreBadge(score: Double, modifier: Modifier = Modifier) {
 }
 
 @Composable
-internal fun communityStarColor() = MaterialTheme.colorScheme.tertiary
+fun communityStarColor() = MaterialTheme.colorScheme.tertiary
 
-internal fun formatCommunityScore(score: Double): String = String.format(Locale.ROOT, "%.1f", score)
+/** One decimal, the same in every locale (`7.5`), as Android's `String.format(Locale.ROOT, "%.1f")` wrote it. */
+fun formatCommunityScore(score: Double): String {
+    val tenths = (abs(score) * 10).roundToLong()
+    return (if (score < 0 && tenths != 0L) "-" else "") + "${tenths / 10}.${tenths % 10}"
+}

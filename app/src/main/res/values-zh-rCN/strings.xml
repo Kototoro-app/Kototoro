@@ -4371,6 +4371,9 @@
     <string name="community_picks_empty_summary">社区推荐来自与你给同一作品打过分的读者。在详情页为读过的作品打分，索引更新后这里会出现推荐。</string>
     <string name="community_rating_count">%1$d 人评分</string>
     <string name="community_rating_be_first">来做第一个评分的人</string>
+    <string name="community_rating_fresh">另有 %1$d 条新评分将在下次索引更新后计入</string>
+    <string name="community_rating_fresh_mine">你的评分将在下次索引更新后计入</string>
+    <string name="community_rating_fresh_with_mine">包括你的评分在内，%1$d 条新评分将在下次索引更新后计入</string>
     <string name="community_rating_your">我的评分</string>
     <string name="community_rating_tap_stars">点按星星评分，点左半边为半星</string>
     <string name="community_rating_level_1">很差</string>

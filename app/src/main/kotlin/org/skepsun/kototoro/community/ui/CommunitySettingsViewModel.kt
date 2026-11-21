@@ -14,16 +14,6 @@ import org.skepsun.kototoro.parsers.util.runCatchingCancellable
 import org.skepsun.kototoro.core.prefs.AppSettings
 import javax.inject.Inject
 
-/** Which community dialog the services page shows. */
-sealed interface CommunityDialog {
-    data object Onboarding : CommunityDialog
-    data class Restore(val invalid: Boolean = false) : CommunityDialog
-    data class RecoveryKey(val key: String) : CommunityDialog
-    data class Nickname(val saved: String = "", val busy: Boolean = false, val status: NicknameStatus? = null) : CommunityDialog
-}
-
-enum class NicknameStatus { PUBLISHED, PENDING, FAILED }
-
 /**
  * Turning the community on (plan §8): the first time, the reader sees what becomes public and chooses a new identity or
  * an existing recovery key; the feature is on only after that. Turning it off keeps the identity for next time.

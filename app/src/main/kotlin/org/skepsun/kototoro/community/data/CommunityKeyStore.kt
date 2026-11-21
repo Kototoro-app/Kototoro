@@ -7,6 +7,7 @@ import android.util.Base64
 import androidx.core.content.edit
 import dagger.hilt.android.qualifiers.ApplicationContext
 import org.skepsun.kototoro.community.nostr.NostrBech32
+import org.skepsun.kototoro.core.library.community.CommunityIdentityStore
 import org.skepsun.kototoro.community.nostr.NostrKeyPair
 import java.security.KeyStore
 import javax.crypto.Cipher
@@ -22,7 +23,7 @@ import javax.inject.Singleton
  * it as the `nsec` recovery key instead.
  */
 @Singleton
-class CommunityKeyStore @Inject constructor(@ApplicationContext context: Context) {
+class CommunityKeyStore @Inject constructor(@ApplicationContext context: Context) : CommunityIdentityStore {
 
     private val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
@@ -31,10 +32,10 @@ class CommunityKeyStore @Inject constructor(@ApplicationContext context: Context
 
     val publicKeyHex: String? get() = prefs.getString(KEY_PUBLIC, null)
 
-    val hasIdentity: Boolean get() = publicKeyHex != null
+    override val hasIdentity: Boolean get() = publicKeyHex != null
 
     /** The identity, unsealed once per process; null when there is none or the Keystore key is gone (device reset). */
-    fun keys(): NostrKeyPair? {
+    override fun keys(): NostrKeyPair? {
         cached?.let { return it }
         val sealed = prefs.getString(KEY_SEALED, null) ?: return null
         val iv = prefs.getString(KEY_IV, null) ?: return null
@@ -46,21 +47,21 @@ class CommunityKeyStore @Inject constructor(@ApplicationContext context: Context
         return NostrKeyPair.fromSecretHex(secret)?.also { cached = it }
     }
 
-    fun create(): NostrKeyPair = store(NostrKeyPair.generate())
+    fun create(): NostrKeyPair = NostrKeyPair.generate().also(::store)
 
     /** From a recovery key a reader pasted; null when it is not one. */
     fun restore(nsec: String): NostrKeyPair? =
-        NostrBech32.decode(nsec, NostrBech32.SECRET_PREFIX)?.let(NostrKeyPair::fromSecretHex)?.let(::store)
+        NostrBech32.decode(nsec, NostrBech32.SECRET_PREFIX)?.let(NostrKeyPair::fromSecretHex)?.also(::store)
 
     fun recoveryKey(): String? = keys()?.let(NostrBech32::encodeSecretKey)
 
-    fun clear() {
+    override fun clear() {
         cached = null
         prefs.edit { clear() }
         runCatching { keyStore().deleteEntry(ALIAS) }
     }
 
-    private fun store(keys: NostrKeyPair): NostrKeyPair {
+    override fun store(keys: NostrKeyPair) {
         val cipher = Cipher.getInstance(TRANSFORMATION)
         cipher.init(Cipher.ENCRYPT_MODE, existingKey() ?: newKey())
         val sealed = cipher.doFinal(keys.secretKeyHex.toByteArray(Charsets.US_ASCII))
@@ -70,7 +71,6 @@ class CommunityKeyStore @Inject constructor(@ApplicationContext context: Context
             putString(KEY_IV, encode(cipher.iv))
         }
         cached = keys
-        return keys
     }
 
     private fun keyStore() = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }

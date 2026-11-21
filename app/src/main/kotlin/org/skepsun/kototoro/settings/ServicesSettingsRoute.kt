@@ -9,7 +9,10 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.community.ui.CommunityDialogActions
 import org.skepsun.kototoro.community.ui.CommunitySettingsDialogs
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import org.skepsun.kototoro.community.ui.CommunitySettingsViewModel
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsState
@@ -69,11 +72,21 @@ fun ServicesSettingsRoute(
         onCommunityRecoveryKeyClick = communityViewModel::showRecoveryKey,
         onCommunityNicknameClick = communityViewModel::showNickname,
     )
+    val clipboard = LocalClipboardManager.current
     CommunitySettingsDialogs(
         dialog = communityDialog,
-        viewModel = communityViewModel,
-        onCopied = {
-            scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.community_recovery_key_copied)) }
+        actions = remember(communityViewModel, clipboard) {
+            object : CommunityDialogActions {
+                override fun dismiss() = communityViewModel.dismiss()
+                override fun createIdentity() = communityViewModel.createIdentity()
+                override fun startRestore() = communityViewModel.startRestore()
+                override fun restore(recoveryKey: String) = communityViewModel.restore(recoveryKey)
+                override fun saveNickname(nickname: String) = communityViewModel.saveNickname(nickname)
+                override fun copyRecoveryKey(key: String) {
+                    clipboard.setText(AnnotatedString(key))
+                    scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.community_recovery_key_copied)) }
+                }
+            }
         },
     )
 }

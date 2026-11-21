@@ -10,6 +10,11 @@ import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import io.ktor.client.plugins.websocket.WebSockets
 import okhttp3.OkHttpClient
+import kotlinx.coroutines.Dispatchers
+import org.skepsun.kototoro.community.domain.CommunityRepository
+import org.skepsun.kototoro.core.db.MangaDatabase
+import org.skepsun.kototoro.core.library.community.CommunityService
+import org.skepsun.kototoro.core.library.community.CommunitySwitches
 import org.skepsun.kototoro.community.external.CommunityExternalSearchApi
 import org.skepsun.kototoro.community.nostr.KtorNostrRelayConnector
 import org.skepsun.kototoro.community.nostr.NostrRelayClient
@@ -75,4 +80,27 @@ object CommunityNetworkModule {
             },
         )
     }
+
+    /** The shared community engine (core-library), over Android's key store, preferences and index cache. */
+    @Provides
+    @Singleton
+    fun provideCommunityService(
+        db: MangaDatabase,
+        keyStore: CommunityKeyStore,
+        local: CommunityLocalStore,
+        snapshots: CommunitySnapshotRepository,
+        relayClient: NostrRelayClient,
+        searchApi: CommunityExternalSearchApi,
+        settings: AppSettings,
+    ): CommunityService = CommunityService(
+        database = db,
+        identities = keyStore,
+        blocklist = local,
+        snapshots = snapshots.snapshots,
+        relayClient = relayClient,
+        searchApi = searchApi,
+        switches = { CommunitySwitches(settings.isCommunityEnabled, settings.isCommunityNsfwRatingEnabled) },
+        fold = CommunityRepository.Companion::fold,
+        io = Dispatchers.IO,
+    )
 }

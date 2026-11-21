@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.core.content.edit
 import dagger.hilt.android.qualifiers.ApplicationContext
 import org.skepsun.kototoro.community.domain.CommunityCommentFilter
+import org.skepsun.kototoro.core.library.community.CommunityBlocklist
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -12,19 +13,19 @@ import javax.inject.Singleton
  * once and stay on this device; a report also goes to the relays for the index to weigh.
  */
 @Singleton
-class CommunityLocalStore @Inject constructor(@ApplicationContext context: Context) {
+class CommunityLocalStore @Inject constructor(@ApplicationContext context: Context) : CommunityBlocklist {
 
     private val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
-    val filter: CommunityCommentFilter
+    override val filter: CommunityCommentFilter
         get() = CommunityCommentFilter(
             blockedPubkeys = prefs.getStringSet(KEY_BLOCKED, emptySet()).orEmpty(),
             blockedEvents = prefs.getStringSet(KEY_REPORTED, emptySet()).orEmpty(),
         )
 
-    fun block(pubkey: String) = add(KEY_BLOCKED, pubkey)
+    override fun block(pubkey: String) = add(KEY_BLOCKED, pubkey)
 
-    fun hide(eventId: String) = add(KEY_REPORTED, eventId)
+    override fun hide(eventId: String) = add(KEY_REPORTED, eventId)
 
     fun clear() = prefs.edit { clear() }
 

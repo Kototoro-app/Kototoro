@@ -141,6 +141,7 @@ fun ServicesSettingsContent(
                     SettingsValueRow(uiString("community_recovery_key"), uiString("community_recovery_key_summary"), null,
                         enabled, onCommunityRecoveryKeyClick, testTag = "services-community-recovery-key")
                     if (onCommunityNicknameClick != null) {
+                        SettingsRowDivider()
                         SettingsValueRow(uiString("community_nickname"), uiString("community_nickname_summary"), null,
                             enabled, onCommunityNicknameClick, testTag = "services-community-nickname")
                     }
