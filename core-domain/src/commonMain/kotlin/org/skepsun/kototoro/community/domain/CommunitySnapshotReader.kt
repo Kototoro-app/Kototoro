@@ -24,7 +24,10 @@ object CommunitySnapshotReader {
     fun chart(text: String): CommunityChart? = runCatching { json.decodeFromString(CommunityChart.serializer(), text) }.getOrNull()
 
     fun moderation(text: String): CommunityModeration =
-        runCatching { json.decodeFromString(CommunityModeration.serializer(), text) }.getOrDefault(CommunityModeration())
+        moderationOrNull(text) ?: CommunityModeration()
+
+    fun moderationOrNull(text: String): CommunityModeration? =
+        runCatching { json.decodeFromString(CommunityModeration.serializer(), text) }.getOrNull()
 
     /**
      * Whether a cached file at [path] is the one [manifest] lists: same content hash. A path the manifest does not list

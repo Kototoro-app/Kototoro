@@ -27,6 +27,9 @@ interface CommunityDao {
     @Query("SELECT * FROM community_outbox WHERE next_attempt_at <= :now ORDER BY created_at LIMIT :limit")
     suspend fun findDueOutbox(now: Long, limit: Int): List<CommunityOutboxEntity>
 
+    @Query("SELECT * FROM community_outbox WHERE event_id = :eventId")
+    suspend fun findOutbox(eventId: String): CommunityOutboxEntity?
+
     @Query("SELECT COUNT(*) FROM community_outbox")
     fun observeOutboxCount(): Flow<Int>
 

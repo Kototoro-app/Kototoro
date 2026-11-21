@@ -338,6 +338,7 @@ struct SourceDetailsView: View {
     @EnvironmentObject private var sources: SourcesModel
     @EnvironmentObject private var downloads: ReaderDownloadQueue
     @StateObject private var model: SourceDetailsModel
+    @AppStorage("community_enabled") private var communityEnabled = false
     @State private var playing: PlaybackRequest?
     @State private var reading: PlaybackRequest?
     @State private var isTitleExpanded = false
@@ -390,6 +391,9 @@ struct SourceDetailsView: View {
     var body: some View {
         List {
             header
+            if communityEnabled, let community = library.library?.community, !shownContent.isNsfw {
+                CommunityDetailsSection(community: community, content: model.details ?? model.content)
+            }
             if let recordError { Text(recordError).foregroundStyle(.red) }
             if model.isLoading && model.details == nil {
                 ProgressView("正在读取详情…").frame(maxWidth: .infinity).listRowBackground(Color.clear)

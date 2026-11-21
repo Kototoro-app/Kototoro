@@ -1,7 +1,6 @@
 package org.skepsun.kototoro.ios
 
 import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.ensureActive
@@ -29,11 +28,6 @@ import org.skepsun.kototoro.suggestions.domain.suggestionRotationSeed
 import org.skepsun.kototoro.suggestions.domain.suggestionTagsMatch
 import org.skepsun.kototoro.tracking.discovery.PublicTrackingSite
 import kotlin.random.Random
-import kotlinx.cinterop.BetaInteropApi
-import platform.Foundation.NSString
-import platform.Foundation.create
-import platform.Foundation.precomposedStringWithCompatibilityMapping
-import platform.Foundation.stringByApplyingTransform
 
 data class IosSuggestionSettings(
     val excludeNsfw: Boolean,
@@ -55,11 +49,10 @@ data class IosSuggestionSettings(
 /** Uses the same suggestions table and ranking as Android; Swift owns opt-in and foreground scheduling. */
 class IosSuggestions internal constructor(
     private val library: IosLibrary,
-    private val readSnapshot: suspend (String) -> String? = { IosHttp.communitySnapshot.fetch(it)?.text },
+    readSnapshot: (suspend (String) -> String?)? = null,
 ) {
     private val refreshLock = Mutex()
-    private val snapshotFiles = mutableMapOf<String, Pair<String, String>>()
-    private var lastManifest: CommunitySnapshotManifest? = null
+    private val communityIndex = readSnapshot?.let(::IosCommunityIndex) ?: library.communityIndex
 
     @Throws(Exception::class)
     suspend fun items(sources: List<IosSource>, settings: IosSuggestionSettings): List<IosSourceContent> {
@@ -129,10 +122,7 @@ class IosSuggestions internal constructor(
     ): SourceSuggestionCommunity {
         val empty = SourceSuggestionCommunity(emptyList(), emptyMap())
         return communityAttempt {
-            val manifest = withTimeoutOrNull(5_000L) {
-                fetchSnapshot(CommunitySnapshotShards.MANIFEST_PATH)?.let(CommunitySnapshotReader::manifest)
-            }?.also { lastManifest = it } ?: lastManifest ?: return@communityAttempt empty
-            val index = Snapshot(manifest)
+            val index = communityIndex.snapshot() ?: return@communityAttempt empty
             val targets = withTimeoutOrNull(10_000L) {
                 val dao = library.database.getCommunityDao()
                 val bound = dao.findBoundResolutions().mapNotNull { row ->
@@ -183,59 +173,4 @@ class IosSuggestions internal constructor(
             }.toMap())
         }.getOrDefault(empty)
     }
-
-    private suspend fun fetchSnapshot(path: String): String? =
-        communityAttempt { readSnapshot(path) }.getOrNull()
-
-    private inner class Snapshot(private val manifest: CommunitySnapshotManifest) {
-        private suspend fun files(paths: Collection<String>, cachedOnly: Boolean): Map<String, String> {
-            val files = mutableMapOf<String, String>()
-            for (batch in paths.distinct().chunked(8)) {
-                val missing = batch.mapNotNull { path ->
-                    val hash = manifest.files[path] ?: return@mapNotNull null
-                    val cached = snapshotFiles[path]
-                    if (cached != null) files[path] = cached.second
-                    if (!cachedOnly && cached?.first != hash) path to hash else null
-                }
-                val fetched = coroutineScope {
-                    missing.map { (path, hash) -> async { Triple(path, hash, fetchSnapshot(path)) } }.awaitAll()
-                }
-                for ((path, hash, body) in fetched) {
-                    if (body != null) {
-                        snapshotFiles[path] = hash to body
-                        files[path] = body
-                    }
-                }
-            }
-            return files
-        }
-
-        suspend fun groups(keys: Map<Long, List<String>>, cachedOnly: Boolean = false): Map<Long, String> {
-            val shards = files(keys.values.flatMap(CommunitySnapshotReader::keyShardPaths), cachedOnly)
-                .mapValues { CommunitySnapshotReader.keys(it.value) }
-            return keys.mapNotNull { (id, keys) ->
-                CommunitySnapshotReader.groupOf(keys) { shards[CommunitySnapshotShards.keysPath(it)] }
-                    ?.let { id to it }
-            }.toMap()
-        }
-
-        suspend fun works(ids: Collection<String>, cachedOnly: Boolean = false): Map<String, CommunityWorkSummary> {
-            val shards = ids.groupBy(CommunitySnapshotShards::of)
-            val files = files(shards.keys.map(CommunitySnapshotShards::worksPath), cachedOnly)
-            return shards.flatMap { (shard, groups) ->
-                val works = files[CommunitySnapshotShards.worksPath(shard)]?.let(CommunitySnapshotReader::works).orEmpty()
-                groups.mapNotNull { id -> works[id]?.let { id to it } }
-            }.toMap()
-        }
-    }
 }
-
-@OptIn(BetaInteropApi::class)
-private fun foldCommunityTitle(text: String): String {
-    val normalized = NSString.create(string = text).precomposedStringWithCompatibilityMapping
-    return (NSString.create(string = normalized).stringByApplyingTransform("Traditional-Simplified", false)
-        ?: normalized).lowercase()
-}
-
-private inline fun <T> communityAttempt(block: () -> T): Result<T> =
-    runCatching(block).onFailure { if (it is CancellationException) throw it }

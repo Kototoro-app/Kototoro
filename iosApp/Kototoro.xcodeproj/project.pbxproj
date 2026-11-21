@@ -66,6 +66,7 @@
 		B00000000000000000000003 /* SourcesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000013 /* SourcesView.swift */; };
 		B00000000000000000000004 /* SourceRuntimeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000014 /* SourceRuntimeTests.swift */; };
 		C00000000000000000000001 /* SourceDetailsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000011 /* SourceDetailsView.swift */; };
+		CF0000000000000000000021 /* CommunityDetailsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF0000000000000000000022 /* CommunityDetailsSection.swift */; };
 		C00000000000000000000002 /* SourceReaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000012 /* SourceReaderView.swift */; };
 		C00000000000000000000003 /* SourceImageFile.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000013 /* SourceImageFile.swift */; };
 		C00000000000000000000004 /* SourceImageLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000014 /* SourceImageLoader.swift */; };
@@ -240,6 +241,7 @@
 		B00000000000000000000013 /* SourcesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourcesView.swift; sourceTree = "<group>"; };
 		B00000000000000000000014 /* SourceRuntimeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceRuntimeTests.swift; sourceTree = "<group>"; };
 		C00000000000000000000011 /* SourceDetailsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceDetailsView.swift; sourceTree = "<group>"; };
+		CF0000000000000000000022 /* CommunityDetailsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommunityDetailsSection.swift; sourceTree = "<group>"; };
 		C00000000000000000000012 /* SourceReaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceReaderView.swift; sourceTree = "<group>"; };
 		C00000000000000000000013 /* SourceImageFile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceImageFile.swift; sourceTree = "<group>"; };
 		C00000000000000000000014 /* SourceImageLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceImageLoader.swift; sourceTree = "<group>"; };
@@ -440,6 +442,7 @@
 				F80000000000000000000023 /* ExtensionWebKit.swift */,
 				B00000000000000000000013 /* SourcesView.swift */,
 				C00000000000000000000011 /* SourceDetailsView.swift */,
+				CF0000000000000000000022 /* CommunityDetailsSection.swift */,
 				AD0000000000000000000004 /* DetailsChapterPreview.swift */,
 				AD0000000000000000000007 /* DetailsChaptersView.swift */,
 				AB0000000000000000000002 /* SourceChangeView.swift */,
@@ -761,6 +764,7 @@
 				F80000000000000000000022 /* ExtensionWebKit.swift in Sources */,
 				B00000000000000000000003 /* SourcesView.swift in Sources */,
 				C00000000000000000000001 /* SourceDetailsView.swift in Sources */,
+				CF0000000000000000000021 /* CommunityDetailsSection.swift in Sources */,
 				AD0000000000000000000001 /* DetailsChapterPreview.swift in Sources */,
 				AD0000000000000000000006 /* DetailsChaptersView.swift in Sources */,
 				AB0000000000000000000001 /* SourceChangeView.swift in Sources */,

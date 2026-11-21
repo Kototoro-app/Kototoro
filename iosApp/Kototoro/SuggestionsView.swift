@@ -249,7 +249,7 @@ private struct SuggestionPreferencesView: View {
                 Section {
                     Toggle("开启推荐", isOn: $draftEnabled).accessibilityIdentifier("suggestions.enabled")
                     Toggle("排除成人内容", isOn: $draftExcludeAdult)
-                    Toggle("加入社区推荐", isOn: $draftCommunity).accessibilityIdentifier("suggestions.community")
+                    Toggle("开启社区评分、评论与推荐", isOn: $draftCommunity).accessibilityIdentifier("suggestions.community")
                 } footer: {
                     Text("进入推荐时先显示缓存，超过六小时或偏好、可用来源变化时重新生成。可在推荐页下拉刷新。社区推荐读取公开索引，书库匹配在本机完成；匹配来源时仅搜索推荐作品标题。")
                 }
