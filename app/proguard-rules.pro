@@ -125,6 +125,16 @@
 -keep class com.squareup.zstd.** { *; }
 -keep interface com.squareup.zstd.** { *; }
 
+# secp256k1-kmp builds the Android loader name dynamically and calls load() via reflection.
+-keep class fr.acinq.secp256k1.jni.NativeSecp256k1AndroidLoader {
+    public static fr.acinq.secp256k1.Secp256k1 load();
+}
+
+# The secp256k1 native library constructs this exception via JNI.
+-keep class fr.acinq.secp256k1.Secp256k1Exception {
+    public <init>(java.lang.String);
+}
+
 # FrostWire jlibtorrent is a SWIG-generated Java/JNI binding. The native
 # library resolves classes and native method names at runtime, and SWIG
 # director callbacks can call back into Java without a static reference that
