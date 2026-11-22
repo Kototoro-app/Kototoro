@@ -21,6 +21,10 @@ import org.skepsun.kototoro.community.domain.CommunityExternalMatch
 import org.skepsun.kototoro.community.domain.CommunityExternalRef
 import org.skepsun.kototoro.community.domain.CommunityExternalResolution
 import org.skepsun.kototoro.community.domain.CommunityExternalService
+import org.skepsun.kototoro.community.domain.CommunityGenres
+import org.skepsun.kototoro.community.domain.CommunitySources
+import org.skepsun.kototoro.community.domain.CommunityWorkSource
+import org.skepsun.kototoro.community.nostr.CommunitySourceHint
 import org.skepsun.kototoro.community.domain.CommunityHighlights
 import org.skepsun.kototoro.community.domain.CommunityMedium
 import org.skepsun.kototoro.community.domain.CommunityModeration
@@ -90,7 +94,19 @@ interface CommunityBlocklist {
 }
 
 /** The two switches of the services page; Android's `community_enabled` and `community_nsfw_ratings`. */
-data class CommunitySwitches(val enabled: Boolean = false, val nsfwRatings: Boolean = false)
+data class CommunitySwitches(
+    val enabled: Boolean = false,
+    val nsfwRatings: Boolean = false,
+    /** Android's `community_share_sources`: name the source a rating or comment was made on ([CommunitySources]). */
+    val shareSources: Boolean = true,
+)
+
+/** A source of the reader's own where a community work can be looked for, and the entry its readers named there. */
+data class CommunitySourceOption(
+    val source: SourceRef,
+    /** The entry the work's readers named on this source or site; null for one of the reader's other sources. */
+    val listed: CommunityWorkSource?,
+)
 
 /** One comment as a comment list shows it. */
 data class CommunityCommentItem(
@@ -183,6 +199,10 @@ class CommunityService(
             title = content.title,
             keys = CommunityWorkKeys.keys(medium, titles, CommunityExternalResolution.refs(trackerRefs, records), fold),
             nsfw = content.isNsfw,
+            genres = CommunityGenres.of(content.tags.map { it.title }),
+            source = content.takeIf {
+                switches().shareSources && !it.isNsfw && CommunitySources.publishable(it.source.name, it.source.contentType)
+            }?.let { CommunityWorkSource(it.source.name, it.url, CommunitySources.hostOf(it.publicUrl), readers = 0) },
         )
     }
 
@@ -233,6 +253,8 @@ class CommunityService(
         val createdAt = maxOf(nowSeconds(), (previous?.createdAt ?: 0) + 1)
         val draft = CommunityEventSchema.rating(
             identity.keys, identity.medium.wire, identity.contentType, stars, identity.title, identity.nsfw, createdAt,
+            genres = identity.genres,
+            source = identity.source?.hint(),
         )
         val rating = sign(draft, keys, powRating())
         val address = CommunityEventSchema.ratingAddress(identity.medium.wire, identity.keys)
@@ -446,6 +468,7 @@ class CommunityService(
             spoiler = spoiler,
             nsfw = identity.nsfw,
             language = language,
+            source = identity.source?.hint(),
         )
         return publish(draft, keys, powComment())
     }
@@ -582,6 +605,110 @@ class CommunityService(
         } ?: empty
     }
 
+    // Opening a community work
+
+    /**
+     * The reader's sources where the community work [groupId] can be looked for, best first: those the work's readers
+     * named (the same source id first, then another of the reader's sources for the same site), each in the order of
+     * [sources], which the host sorts by its own preference; then, when [includeOthers], the rest of [sources] that
+     * carry its medium. Adult sources never.
+     */
+    suspend fun sourceOptions(
+        groupId: String,
+        sources: List<SourceRef>,
+        hostOf: (SourceRef) -> String? = { null },
+        includeOthers: Boolean = false,
+    ): List<CommunitySourceOption> = withContext(io) {
+        val summary = attempt { snapshots.works(listOf(groupId))[groupId] }
+        val mediums = mediumsOf(summary)
+        val usable = sources.filter { !it.contentType.startsWith("HENTAI_") && CommunityMedium.of(it.contentType) in mediums }
+        val listed = summary?.sources.orEmpty()
+        val byName = usable.mapNotNull { source -> listed.firstOrNull { it.source == source.name }?.let { CommunitySourceOption(source, it) } }
+        val byHost = usable.filter { source -> byName.none { it.source == source } }.mapNotNull { source ->
+            val host = hostOf(source)?.removePrefix("www.")?.lowercase() ?: return@mapNotNull null
+            listed.filter { it.host == host }.maxByOrNull { it.readers }?.let { CommunitySourceOption(source, it) }
+        }
+        val named = byName + byHost
+        val others = if (includeOthers) usable.filter { source -> named.none { it.source == source } }.map { CommunitySourceOption(it, null) }
+            else emptyList()
+        named + others
+    }
+
+    /**
+     * A community work as something the reader can open. The index names works by group and title, plus where its
+     * readers read it, so a chart or a similar-works rail would otherwise end in a title search. First the reader's
+     * own copy ([library]) when one is in the group; then the sources its readers named, best first ([sourceOptions]),
+     * where the entry with the named address wins; then up to [FIND_SOURCES] of the reader's other sources. An entry
+     * counts when the index puts it in the group, or when its title key matches the work's and the index has not
+     * seen it. Null when nothing matches, and the host falls back to its title search.
+     */
+    suspend fun findWork(
+        groupId: String,
+        title: String,
+        library: List<SourceContent>,
+        sources: List<SourceRef>,
+        hostOf: (SourceRef) -> String? = { null },
+        search: suspend (SourceRef, String) -> List<SourceContent>,
+    ): SourceContent? = withContext(io) {
+        val summary = attempt { snapshots.works(listOf(groupId))[groupId] }
+        val mediums = mediumsOf(summary)
+        // The library's own copy: only its key shards that are cached, so this costs nothing on a slow network.
+        inGroup(groupId, library.filter { CommunityMedium.of(it.source.contentType) in mediums }, cachedOnly = true)
+            ?.let { return@withContext it }
+        val options = sourceOptions(groupId, sources, hostOf, includeOthers = true)
+        val named = options.filter { it.listed != null }
+        val others = options.filter { it.listed == null }.take(FIND_SOURCES)
+        for (option in named + others) {
+            searchIn(option, groupId, title, mediums, search)?.let { return@withContext it }
+        }
+        null
+    }
+
+    /** [findWork] on one source the reader picked, for the "other sources" list. */
+    suspend fun findWorkIn(
+        option: CommunitySourceOption,
+        groupId: String,
+        title: String,
+        search: suspend (SourceRef, String) -> List<SourceContent>,
+    ): SourceContent? = withContext(io) {
+        searchIn(option, groupId, title, mediumsOf(attempt { snapshots.works(listOf(groupId))[groupId] }), search)
+    }
+
+    private fun mediumsOf(summary: CommunityWorkSummary?): List<CommunityMedium> =
+        summary?.medium?.let { wire -> CommunityMedium.entries.firstOrNull { it.wire == wire } }?.let(::listOf)
+            ?: CommunityMedium.entries.filter { it != CommunityMedium.OTHER }
+
+    private suspend fun inGroup(groupId: String, items: List<SourceContent>, cachedOnly: Boolean): SourceContent? {
+        val keys = items.associate { item ->
+            item.id to CommunityWorkKeys.keys(CommunityMedium.of(item.source.contentType),
+                listOf(item.title) + item.altTitles, fold = fold)
+        }.filterValues { it.isNotEmpty() }
+        if (keys.isEmpty()) return null
+        val groups = attempt { snapshots.groupsOf(keys, cachedOnly) }.orEmpty()
+        return items.firstOrNull { groups[it.id] == groupId }
+    }
+
+    private suspend fun searchIn(
+        option: CommunitySourceOption,
+        groupId: String,
+        title: String,
+        mediums: List<CommunityMedium>,
+        search: suspend (SourceRef, String) -> List<SourceContent>,
+    ): SourceContent? {
+        val found = withTimeoutOrNull(FIND_TIMEOUT_MILLIS) { attempt { search(option.source, title) } }.orEmpty()
+            .filter { it.title.isNotBlank() && (it.url.isNotBlank() || it.publicUrl.isNotBlank()) && !it.isNsfw }
+        if (found.isEmpty()) return null
+        val wanted = mediums.mapNotNull { CommunityWorkKeys.titleKey(title, it, fold) }.toSet()
+        fun titled(item: SourceContent) = CommunityWorkKeys.keys(CommunityMedium.of(item.source.contentType),
+            listOf(item.title) + item.altTitles, fold = fold).any { it in wanted }
+        val listed = option.listed?.takeIf { it.source == option.source.name }
+        // The address its readers named, as long as the entry is still the same work: a wrong record costs one search.
+        listed?.let { entry -> found.firstOrNull { it.url == entry.url } }
+            ?.takeIf { titled(it) || inGroup(groupId, listOf(it), cachedOnly = false) != null }
+            ?.let { return it }
+        return inGroup(groupId, found, cachedOnly = false) ?: found.firstOrNull(::titled)
+    }
+
     // Internals
 
     /** Every relay the community reads and writes: the built-in ones and whatever the index adds (plan §5.1). */
@@ -689,6 +816,8 @@ class CommunityService(
 
     private fun nowSeconds() = nowMillis() / 1000
 
+    private fun CommunityWorkSource.hint() = CommunitySourceHint(source, url, host)
+
     companion object {
         /** Android's `CommunityRepository.DEFAULT_RELAYS`; see there for why these and in this order. */
         val DEFAULT_RELAYS = listOf(
@@ -701,6 +830,9 @@ class CommunityService(
         )
 
         const val CHART_LIMIT = 20
+        /** How many of the reader's sources [findWork] searches, and how long each may take. */
+        private const val FIND_SOURCES = 4
+        private const val FIND_TIMEOUT_MILLIS = 8_000L
         private val MEDIA = listOf("comic", "novel", "video")
         private const val DEFAULT_POW_RATING = 16
         private const val DEFAULT_POW_COMMENT = 20

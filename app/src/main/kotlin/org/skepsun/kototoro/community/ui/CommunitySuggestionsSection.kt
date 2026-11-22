@@ -25,6 +25,10 @@ import org.skepsun.kototoro.community.domain.CommunitySuggestionsRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsFlow
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.skepsun.kototoro.community.domain.CommunityWorkFinder
+import org.skepsun.kototoro.parsers.model.Content
 import javax.inject.Inject
 
 /** The suggestions page's community chart; empty while the community is off. */
@@ -32,6 +36,7 @@ import javax.inject.Inject
 @HiltViewModel
 class CommunitySuggestionsViewModel @Inject constructor(
     private val repository: CommunitySuggestionsRepository,
+    private val finder: CommunityWorkFinder,
     settings: AppSettings,
 ) : ViewModel() {
 
@@ -46,6 +51,14 @@ class CommunitySuggestionsViewModel @Inject constructor(
         }
     }.flowOn(Dispatchers.IO)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CommunitySuggestionsUiState())
+
+    /** A chart work opened: the reader's copy or a source's, else the title search ([CommunityWorkFinder]). */
+    fun openWork(id: String, title: String, onFound: (Content) -> Unit, onMissing: (String) -> Unit) {
+        viewModelScope.launch {
+            val found = withContext(Dispatchers.IO) { finder.find(id, title) }
+            if (found != null) onFound(found) else onMissing(title)
+        }
+    }
 
     fun selectWindow(value: String) {
         window.value = value
@@ -73,8 +86,17 @@ fun CommunitySuggestionsSection(
     onSearchTitle: (String) -> Unit,
     modifier: Modifier = Modifier,
     horizontalPadding: Dp = 0.dp,
+    onOpenContent: (Content) -> Unit = {},
 ) {
     val viewModel = hiltViewModel<CommunitySuggestionsViewModel>()
     val state = viewModel.state.collectAsStateWithLifecycle().value
-    CommunityChartSection(state, viewModel::selectWindow, onSearchTitle, modifier, horizontalPadding)
+    val showSources = rememberCommunitySources(onOpenContent, onSearchTitle)
+    CommunityChartSection(
+        state = state,
+        onSelectWindow = viewModel::selectWindow,
+        onOpenWork = { id, title -> viewModel.openWork(id, title, onOpenContent, onSearchTitle) },
+        modifier = modifier,
+        horizontalPadding = horizontalPadding,
+        onShowSources = showSources,
+    )
 }

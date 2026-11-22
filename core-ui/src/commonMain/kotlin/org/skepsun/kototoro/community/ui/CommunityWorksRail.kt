@@ -1,5 +1,7 @@
 package org.skepsun.kototoro.community.ui
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -23,6 +25,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -52,6 +55,8 @@ fun CommunityWorksRail(
     title: String,
     cards: List<CommunityWorkCard>,
     onOpen: (CommunityWorkCard) -> Unit,
+    /** A long press: every source of the reader's where the work can be looked for ([CommunitySourcePicker]). */
+    onLongOpen: ((CommunityWorkCard) -> Unit)? = null,
     modifier: Modifier = Modifier,
     horizontalPadding: Dp = 0.dp,
     titleTrailing: (@Composable () -> Unit)? = null,
@@ -98,20 +103,28 @@ fun CommunityWorksRail(
             contentPadding = PaddingValues(horizontal = horizontalPadding),
         ) {
             itemsIndexed(cards, key = { _, card -> card.key }) { index, card ->
-                CommunityWorkTile(card, rank = if (ranked) index + 1 else null, onClick = { onOpen(card) }, testTag = "$testTag-item")
+                CommunityWorkTile(card, rank = if (ranked) index + 1 else null, onClick = { onOpen(card) },
+                    onLongClick = onLongOpen?.let { { it(card) } }, testTag = "$testTag-item")
             }
         }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun CommunityWorkTile(card: CommunityWorkCard, rank: Int?, onClick: () -> Unit, testTag: String) {
+private fun CommunityWorkTile(
+    card: CommunityWorkCard,
+    rank: Int?,
+    onClick: () -> Unit,
+    onLongClick: (() -> Unit)?,
+    testTag: String,
+) {
     val colors = MaterialTheme.colorScheme
     Surface(
-        onClick = onClick,
         shape = RoundedCornerShape(16.dp),
         color = colors.surfaceContainerHigh,
-        modifier = Modifier.width(156.dp).height(108.dp).testTag(testTag),
+        modifier = Modifier.width(156.dp).height(108.dp).clip(RoundedCornerShape(16.dp))
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick).testTag(testTag),
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {

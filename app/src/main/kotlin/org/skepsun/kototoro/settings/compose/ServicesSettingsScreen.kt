@@ -38,6 +38,7 @@ fun ServicesSettingsScreen(
     modifier: Modifier = Modifier,
     onCommunityChange: (Boolean) -> Unit = {},
     onCommunityNsfwChange: (Boolean) -> Unit = {},
+    onCommunityShareSourcesChange: (Boolean) -> Unit = {},
     onCommunityRecoveryKeyClick: () -> Unit = {},
     onCommunityNicknameClick: (() -> Unit)? = null,
 ) {
@@ -78,6 +79,7 @@ fun ServicesSettingsScreen(
             ),
             onCommunityChange = onCommunityChange,
             onCommunityNsfwChange = onCommunityNsfwChange,
+            onCommunityShareSourcesChange = onCommunityShareSourcesChange,
             onCommunityRecoveryKeyClick = onCommunityRecoveryKeyClick,
             onCommunityNicknameClick = onCommunityNicknameClick,
         )

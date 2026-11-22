@@ -19,6 +19,7 @@ import androidx.compose.ui.window.DialogProperties
 import org.skepsun.kototoro.community.ui.CommunityChartSection
 import org.skepsun.kototoro.community.ui.CommunityCommentsContent
 import org.skepsun.kototoro.community.ui.CommunityRatingCard
+import org.skepsun.kototoro.community.ui.CommunitySourcePicker
 import org.skepsun.kototoro.core.source.SourceContent
 import java.time.Duration
 import java.time.Instant
@@ -42,7 +43,8 @@ internal fun DesktopCommunityRating(controller: DesktopController, content: Sour
         onRate = community::rate,
         onWithdraw = community::withdraw,
         onOpenComments = community::openComments,
-        onSearchTitle = controller::searchTitle,
+        onOpenWork = controller::openCommunityWork,
+        onShowSources = controller::showCommunitySources,
         container = { card ->
             Surface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surface) {
                 card()
@@ -83,8 +85,25 @@ internal fun DesktopCommunityChart(controller: DesktopController, modifier: Modi
     CommunityChartSection(
         state = community.chart.collectAsState().value,
         onSelectWindow = community::loadChart,
-        onSearchTitle = controller::searchTitle,
+        onOpenWork = controller::openCommunityWork,
+        onShowSources = controller::showCommunitySources,
         modifier = modifier,
+    )
+}
+
+/** The "other sources" list a long press on a community work opens; drawn once at the window's root. */
+@Composable
+internal fun DesktopCommunitySourcePicker(controller: DesktopController) {
+    val picker = controller.community.sourcePicker.collectAsState().value ?: return
+    CommunitySourcePicker(
+        title = picker.title,
+        choices = picker.choices,
+        onPick = controller::openCommunityWorkIn,
+        onSearchAll = {
+            controller.community.closeSourcePicker()
+            controller.searchTitle(picker.title)
+        },
+        onDismiss = controller.community::closeSourcePicker,
     )
 }
 

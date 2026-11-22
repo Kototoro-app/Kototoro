@@ -391,9 +391,6 @@ struct SourceDetailsView: View {
     var body: some View {
         List {
             header
-            if communityEnabled, let community = library.library?.community, !shownContent.isNsfw {
-                CommunityDetailsSection(community: community, content: model.details ?? model.content)
-            }
             if let recordError { Text(recordError).foregroundStyle(.red) }
             if model.isLoading && model.details == nil {
                 ProgressView("正在读取详情…").frame(maxWidth: .infinity).listRowBackground(Color.clear)
@@ -417,6 +414,10 @@ struct SourceDetailsView: View {
             if let details = model.details {
                 chapterPreview(details)
                 if !model.isVideo && !bookmarks.isEmpty { bookmarkPreview(details) }
+                // After the chapters, as on Android: the community's view of the work, then what is related to it.
+                if communityEnabled, let community = library.library?.community, !shownContent.isNsfw {
+                    CommunityDetailsSection(community: community, content: details)
+                }
                 relatedSection
             }
         }
@@ -1484,7 +1485,7 @@ struct SourceDetailsView: View {
 }
 
 /// Content stays on standard material; Liquid Glass is reserved for the controls above it.
-private struct DetailsContentPanel: ViewModifier {
+struct DetailsContentPanel: ViewModifier {
     var cornerRadius: CGFloat = 22
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.colorSchemeContrast) private var contrast

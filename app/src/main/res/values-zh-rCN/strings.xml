@@ -4318,6 +4318,11 @@
     <string name="community_enabled_summary">通过公共 Nostr 中继与其他读者一起评分</string>
     <string name="community_nsfw_ratings">为成人作品评分</string>
     <string name="community_nsfw_ratings_summary">默认关闭：评分是公开的，会暴露你读过什么</string>
+    <string name="community_share_sources">发布时附带来源</string>
+    <string name="community_share_sources_summary">评分和评论会公开你在哪个来源阅读这部作品，其他读者可以在同一来源直接打开。本地、自定义和成人来源不会附带</string>
+    <string name="community_other_sources">其他来源</string>
+    <string name="community_source_readers">%1$d 位读者在此阅读</string>
+    <string name="community_source_same_site">同一站点</string>
     <string name="community_nickname">社区昵称</string>
     <string name="community_nickname_summary">昵称会与公钥一起发布到公共中继，并显示在评论旁。</string>
     <string name="community_nickname_save">公开保存</string>
@@ -4328,7 +4333,7 @@
     <string name="community_recovery_key">恢复密钥</string>
     <string name="community_recovery_key_summary">重装应用或换设备后，用它继续使用同一个身份</string>
     <string name="community_onboarding_title">加入社区评分？</string>
-    <string name="community_onboarding_message">你的评分会发布到公共 Nostr 中继上，并以一个新建的社区身份签名；这个身份与你的任何账号都没有关联。任何人都能看到评分，撤回之后中继上也可能仍留有副本。只发布评分，不会发布你的书架和阅读记录。</string>
+    <string name="community_onboarding_message">你的评分会发布到公共 Nostr 中继上，并以一个新建的社区身份签名；这个身份与你的任何账号都没有关联。任何人都能看到评分，撤回之后中继上也可能仍留有副本。只发布评分和评论，并附带你阅读这部作品的来源，方便其他人在同一来源打开（可以关闭）；不会发布你的书架和阅读记录。</string>
     <string name="community_onboarding_create">创建身份</string>
     <string name="community_onboarding_restore">我有恢复密钥</string>
     <string name="community_restore_hint">恢复密钥（nsec1…）</string>
@@ -4357,6 +4362,7 @@
     <string name="community_report_other">其他</string>
     <string name="community_similar_title">喜欢这部的读者还喜欢</string>
     <string name="community_similar_supporting">%1$d 位共同读者</string>
+    <string name="community_similar_tags">%1$d 个相同标签</string>
     <string name="community_for_you">社区推荐</string>
     <string name="community_because">因为你喜欢《%1$s》</string>
     <string name="community_popular">社区高分</string>

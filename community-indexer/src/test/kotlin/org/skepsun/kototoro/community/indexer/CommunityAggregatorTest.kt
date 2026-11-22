@@ -15,6 +15,7 @@ import org.skepsun.kototoro.community.domain.CommunitySnapshotManifest
 import org.skepsun.kototoro.community.domain.CommunitySnapshotShards
 import org.skepsun.kototoro.community.nostr.CommunityEventSchema
 import org.skepsun.kototoro.community.nostr.CommunityReportType
+import org.skepsun.kototoro.community.nostr.CommunitySourceHint
 import org.skepsun.kototoro.community.nostr.NostrEvent
 import org.skepsun.kototoro.community.nostr.NostrKeyPair
 import org.skepsun.kototoro.community.nostr.NostrKeys
@@ -36,8 +37,16 @@ class CommunityAggregatorTest {
 
     private val readers = List(6) { NostrKeyPair.generate() }
 
-    private fun rate(who: NostrKeyPair, keys: List<String>, stars: Int, at: Long = now - day, nsfw: Boolean = false, title: String? = null) =
-        NostrKeys.sign(CommunityEventSchema.rating(keys, "comic", "MANGA", stars, title, nsfw, at), who)
+    private fun rate(
+        who: NostrKeyPair,
+        keys: List<String>,
+        stars: Int,
+        at: Long = now - day,
+        nsfw: Boolean = false,
+        title: String? = null,
+        genres: List<String> = emptyList(),
+        source: CommunitySourceHint? = null,
+    ) = NostrKeys.sign(CommunityEventSchema.rating(keys, "comic", "MANGA", stars, title, nsfw, at, genres, source), who)
 
     private fun comment(who: NostrKeyPair, keys: List<String>, text: String, parent: NostrEvent? = null) =
         NostrKeys.sign(CommunityEventSchema.comment(keys, text, null, now - day, parent = parent), who)
@@ -153,6 +162,9 @@ class CommunityAggregatorTest {
         ), cfg = config.copy(minChartWeight = 2.0))
         fun chart(window: String, nsfw: Boolean = false) = output.charts.single { it.window == window && it.medium == "comic" && it.nsfw == nsfw }
         assertEquals(listOf(naruto[0]), chart("week").entries.map { it.id })
+        // Readers see the mean they gave; the score the chart is ordered by is pulled toward the medium's mean.
+        assertEquals(9.0, chart("week").entries.single().displayScore)
+        assertTrue(chart("week").entries.single().score < 9.0)
         assertEquals(listOf(naruto[0], bleach[0]), chart("month").entries.map { it.id })
         assertTrue(chart("all", nsfw = true).entries.isEmpty(), "one rating is below the chart weight")
         assertEquals(24, output.charts.size)
@@ -171,6 +183,49 @@ class CommunityAggregatorTest {
         assertEquals(works[1][0], similar.first().id)
         assertEquals(5, similar.first().coRaters)
         assertFalse(similar.any { it.id == works[3][0] }, "opposite tastes are not similar")
+    }
+
+    @Test
+    fun `tags most raters agree on are kept, and works sharing rare ones are similar while ratings are too few`() {
+        val (romance, villainess, school, action) = listOf("genre.romance", "theme.revenge", "setting.historical", "genre.action")
+        val events = listOf(
+            // Two readers agree on the first work's tags; a third sends an odd one, which stays out.
+            rate(readers[0], naruto, 8, genres = listOf(romance, villainess, school)),
+            rate(readers[1], naruto, 7, genres = listOf(romance, villainess)),
+            rate(readers[2], naruto, 9, genres = listOf(romance, villainess, action, "made.up")),
+            rate(readers[3], bleach, 6, genres = listOf(romance, villainess, school)),
+            rate(readers[4], onePiece, 9, genres = listOf(action, school)),
+        )
+        val works = aggregate(archive(*events.toTypedArray())).works
+        assertEquals(setOf(romance, villainess), works.getValue(naruto[0]).tags.toSet(),
+            "a tag one reader in three sent stays out, and so does one the vocabulary does not know")
+        val alike = works.getValue(naruto[0]).similar
+        assertEquals(listOf(bleach[0]), alike.map { it.id }, "two shared tags make a pair; one does not")
+        assertEquals(0, alike.single().coRaters)
+        assertEquals(2, alike.single().sharedTags)
+        assertTrue(alike.single().score in 0.0..0.5, "tag neighbours rank below any rating-based one")
+    }
+
+    @Test
+    fun `readers' sources are merged per work, once per reader, best used first`() {
+        val dex = CommunitySourceHint("MIHON_1", "/title/a", "www.MangaDex.org")
+        val dexMoved = CommunitySourceHint("MIHON_1", "/title/a-new", "mangadex.org")
+        val parser = CommunitySourceHint("MANGADEX", "/manga/a", "mangadex.org")
+        val events = listOf(
+            rate(readers[0], naruto, 8, source = dex),
+            rate(readers[1], naruto, 7, source = dex),
+            rate(readers[2], naruto, 9, source = dexMoved),
+            rate(readers[3], naruto, 6, source = parser),
+            // A reader who read it twice counts once, by the newer post.
+            rate(readers[4], naruto, 6, at = now - 3 * day, source = CommunitySourceHint("OLD", "/x", null)),
+            NostrKeys.sign(CommunityEventSchema.comment(naruto, "again", null, now - day, source = parser), readers[4]),
+        )
+        val sources = aggregate(archive(*events.toTypedArray())).works.getValue(naruto[0]).sources
+        // Two readers each; a tie goes by source id. MIHON_1 keeps /title/a (two readers) over /title/a-new (one).
+        assertEquals(listOf("MANGADEX" to "/manga/a", "MIHON_1" to "/title/a"), sources.map { it.source to it.url },
+            "one source keeps its most used address; the older post of a reader does not count")
+        assertEquals(listOf(2, 2), sources.map { it.readers })
+        assertEquals("mangadex.org", sources.last().host)
     }
 
     @Test

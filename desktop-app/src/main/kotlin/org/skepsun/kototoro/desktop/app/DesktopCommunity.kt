@@ -142,7 +142,7 @@ internal class DesktopCommunity(
         ),
         relayClient = NostrRelayClient(OkHttpNostrRelayConnector(relayHttp)),
         searchApi = CommunityExternalSearchApi(http),
-        switches = { switches().let { CommunitySwitches(it.communityEnabled, it.communityNsfwRatings) } },
+        switches = { switches().let { CommunitySwitches(it.communityEnabled, it.communityNsfwRatings, it.communityShareSources) } },
         fold = ::desktopCommunityFold,
         io = Dispatchers.IO,
     )
@@ -408,6 +408,37 @@ internal class DesktopCommunity(
             attempt { block() }
             reloadComments()
         }
+    }
+
+    // Other sources of a community work
+
+    /** The "other sources" list of one community work; [choices] null while they are worked out. */
+    data class SourcePicker(
+        val groupId: String,
+        val title: String,
+        val choices: List<org.skepsun.kototoro.community.ui.CommunitySourceChoice>? = null,
+        val options: Map<String, org.skepsun.kototoro.core.library.community.CommunitySourceOption> = emptyMap(),
+    )
+
+    private val mutableSourcePicker = MutableStateFlow<SourcePicker?>(null)
+    val sourcePicker: StateFlow<SourcePicker?> = mutableSourcePicker.asStateFlow()
+
+    fun showSourcePicker(groupId: String, title: String) {
+        mutableSourcePicker.value = SourcePicker(groupId, title)
+    }
+
+    fun setSourceChoices(
+        groupId: String,
+        choices: List<Pair<org.skepsun.kototoro.core.library.community.CommunitySourceOption, org.skepsun.kototoro.community.ui.CommunitySourceChoice>>,
+    ) = mutableSourcePicker.update { picker ->
+        picker?.takeIf { it.groupId == groupId }?.copy(
+            choices = choices.map { it.second },
+            options = choices.associate { it.second.key to it.first },
+        )
+    }
+
+    fun closeSourcePicker() {
+        mutableSourcePicker.value = null
     }
 
     // Suggestions page

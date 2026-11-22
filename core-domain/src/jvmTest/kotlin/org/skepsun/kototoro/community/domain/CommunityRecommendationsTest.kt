@@ -79,4 +79,35 @@ class CommunityRecommendationsTest {
         assertEquals(4.5, ranked.single().score, 1e-9)
         assertTrue(CommunityRecommendations.rank(emptyList(), { emptyList() }, emptySet()).isEmpty())
     }
+
+    @Test
+    fun `a popular work is damped, so a closer less known match can pass it`() {
+        val similar = mapOf("liked" to listOf(sim("popular", 0.6), sim("niche", 0.5)))
+        val seeds = listOf(CommunitySeed("liked", null, 2.0))
+        val plain = CommunityRecommendations.rank(seeds, { similar[it].orEmpty() }, emptySet())
+        assertEquals(listOf("popular", "niche"), plain.map { it.groupId })
+        val damped = CommunityRecommendations.rank(seeds, { similar[it].orEmpty() }, emptySet(),
+            readers = { if (it == "popular") 2_000 else 3 })
+        assertEquals(listOf("niche", "popular"), damped.map { it.groupId })
+    }
+
+    @Test
+    fun `a near copy of an earlier pick gives way to something new`() {
+        val similar = mapOf("liked" to listOf(sim("a", 0.9), sim("a2", 0.85), sim("b", 0.6)))
+        val seeds = listOf(CommunitySeed("liked", null, 2.0))
+        val ranked = CommunityRecommendations.rank(seeds, { similar[it].orEmpty() }, emptySet(),
+            overlap = { x, y -> if (setOf(x, y) == setOf("a", "a2")) 1.0 else 0.0 })
+        assertEquals(listOf("a", "b", "a2"), ranked.map { it.groupId })
+        assertEquals(0.85 * 2.0 * (1 - CommunityRecommendations.DIVERSITY), ranked[2].score, 1e-9)
+    }
+
+    @Test
+    fun `source tags map onto taxonomy ids, without warnings, raw tags or adult markers`() {
+        val genres = CommunityGenres.of(listOf("Romance", "恋爱", "Sci-Fi", "Hentai", "something nobody tags"))
+        assertTrue("genre.romance" in genres)
+        assertTrue("genre.science-fiction" in genres)
+        assertTrue(genres.none { it.startsWith("raw.") || it.startsWith("warning.") || it == "genre.erotica" })
+        assertEquals(genres.distinct(), genres)
+        assertEquals(0.5, CommunityGenres.overlap(listOf("a", "b"), listOf("b", "c", "a", "d")))
+    }
 }

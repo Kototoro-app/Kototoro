@@ -99,7 +99,9 @@ object CommunityNetworkModule {
         snapshots = snapshots.snapshots,
         relayClient = relayClient,
         searchApi = searchApi,
-        switches = { CommunitySwitches(settings.isCommunityEnabled, settings.isCommunityNsfwRatingEnabled) },
+        switches = {
+            CommunitySwitches(settings.isCommunityEnabled, settings.isCommunityNsfwRatingEnabled, settings.isCommunityShareSourcesEnabled)
+        },
         fold = CommunityRepository.Companion::fold,
         io = Dispatchers.IO,
     )

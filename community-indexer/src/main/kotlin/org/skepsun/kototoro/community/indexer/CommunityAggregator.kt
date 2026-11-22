@@ -2,6 +2,10 @@ package org.skepsun.kototoro.community.indexer
 
 import org.skepsun.kototoro.community.domain.CommunityChart
 import org.skepsun.kototoro.community.domain.CommunityChartEntry
+import org.skepsun.kototoro.community.domain.CommunityGenres
+import org.skepsun.kototoro.community.domain.CommunitySources
+import org.skepsun.kototoro.community.domain.CommunityWorkSource
+import org.skepsun.kototoro.community.nostr.CommunitySourceHint
 import org.skepsun.kototoro.community.domain.CommunityModeration
 import org.skepsun.kototoro.community.domain.CommunityRatingSummary
 import org.skepsun.kototoro.community.domain.CommunitySimilarWork
@@ -14,6 +18,7 @@ import org.skepsun.kototoro.community.nostr.CommunityEventSchema
 import org.skepsun.kototoro.community.nostr.CommunityRating
 import org.skepsun.kototoro.community.nostr.NostrEvent
 import org.skepsun.kototoro.community.nostr.NostrPow
+import kotlin.math.ln
 import kotlin.math.sqrt
 
 /** An event as the archive keeps it: [seen] is when the indexer first had it, which its author cannot backdate. */
@@ -155,7 +160,16 @@ object CommunityAggregator {
             )
         }
 
+        val tagsOf = groupIds.associateWith { id -> agreedTags(ratingsByGroup[id].orEmpty()) }
+        val sourcesOf = groupIds.associateWith { id ->
+            readSources(
+                ratingsByGroup[id].orEmpty().map { Triple(it.pubkey, it.createdAt, it.source) } +
+                    commentsByGroup[id].orEmpty().filter { it.id !in hidden }.map { Triple(it.pubkey, it.createdAt, it.source) },
+                ::weight,
+            )
+        }
         val similar = similarWorks(counted, ::groupOf, config)
+        val alike = tagSimilarWorks(tagsOf, mediumOf, config)
         val works = groupIds.associateWith { id ->
             val groupComments = commentsByGroup[id].orEmpty()
             CommunityWorkSummary(
@@ -165,8 +179,21 @@ object CommunityAggregator {
                 rating = summary(ratingsByGroup[id].orEmpty(), mediumOf.getValue(id)),
                 comments = groupComments.count { it.id !in hidden },
                 hiddenComments = groupComments.map { it.id }.filter { it in hidden }.sorted(),
-                similar = similar[id].orEmpty().map { (other, score, co) -> CommunitySimilarWork(other, titleOf[other], round2(score), co, nsfwOf.getValue(other)) },
+                similar = mergeSimilar(
+                    rated = similar[id].orEmpty().map { (other, score, co) ->
+                        CommunitySimilarWork(other, titleOf[other], round2(score), co,
+                            sharedTags = CommunityGenres.sharedCount(tagsOf.getValue(id), tagsOf.getValue(other)),
+                            nsfw = nsfwOf.getValue(other))
+                    },
+                    tagged = alike[id].orEmpty().map { (other, score, shared) ->
+                        CommunitySimilarWork(other, titleOf[other], round2(score), coRaters = 0, sharedTags = shared,
+                            nsfw = nsfwOf.getValue(other))
+                    },
+                    size = config.similarSize,
+                ),
                 nsfw = nsfwOf.getValue(id),
+                tags = tagsOf.getValue(id),
+                sources = sourcesOf.getValue(id),
             )
         }
 
@@ -187,7 +214,7 @@ object CommunityAggregator {
                             .sortedWith(compareByDescending<Triple<String, String, CommunityRatingSummary>> { it.third.score }
                                 .thenByDescending { it.third.count }.thenBy { it.first })
                             .take(config.chartSize)
-                            .map { (id, _, summary) -> CommunityChartEntry(id, titleOf[id], summary.score, summary.count) },
+                            .map { (id, _, summary) -> CommunityChartEntry(id, titleOf[id], summary.score, summary.count, summary.mean) },
                     )
                 }
             }
@@ -274,6 +301,83 @@ object CommunityAggregator {
         }
     }
 
+    /**
+     * Where a work's readers read it (plan §10.3): each reader counts once, by their newest post that names a source;
+     * entries merge by source and address and add up their readers' weights, so new accounts count for less. A source
+     * named with several addresses keeps the one the most weight used; at most [CommunitySources.MAX_PER_WORK].
+     */
+    private fun readSources(
+        posts: List<Triple<String, Long, CommunitySourceHint?>>,
+        weight: (String) -> Double,
+    ): List<CommunityWorkSource> {
+        val latest = posts.filter { it.third != null }.groupBy { it.first }
+            .mapValues { (_, list) -> list.maxBy { it.second }.third!! }
+        val entries = latest.entries.groupBy { (_, hint) -> hint.source to hint.url }.map { (key, readers) ->
+            Triple(key, readers.sumOf { weight(it.key) }, readers)
+        }
+        return entries.groupBy { it.first.first }.values
+            .map { sameSource -> sameSource.maxWith(compareBy<Triple<Pair<String, String>, Double, List<Map.Entry<String, CommunitySourceHint>>>> { it.second }.thenBy { it.first.second }) }
+            .sortedWith(compareByDescending<Triple<Pair<String, String>, Double, List<Map.Entry<String, CommunitySourceHint>>>> { it.second }.thenBy { it.first.first })
+            .take(CommunitySources.MAX_PER_WORK)
+            .map { (key, _, readers) ->
+                val host = readers.mapNotNull { it.value.host }.groupingBy { it }.eachCount().maxByOrNull { it.value }?.key
+                CommunityWorkSource(key.first, key.second, host?.lowercase()?.removePrefix("www."), readers.size)
+            }
+    }
+
+    /**
+     * The tags a work's raters agree on: each rater's source tags count once, and a tag stays when at least half of the
+     * raters who sent any tags sent it. One reader with an odd source cannot tag a work alone once others rated it too.
+     */
+    private fun agreedTags(ratings: List<CommunityRating>): List<String> {
+        val tagged = ratings.map { rating -> rating.genres.filter(CommunityGenres::isKnown).toSet() }.filter { it.isNotEmpty() }
+        if (tagged.isEmpty()) return emptyList()
+        val votes = tagged.flatten().groupingBy { it }.eachCount()
+        return votes.filterValues { it * 2 >= tagged.size }.entries
+            .sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { it.key })
+            .map { it.key }
+            .take(CommunityGenres.MAX)
+    }
+
+    /**
+     * Works alike by their agreed tags, for while too few readers rated both (plan §6.2 step 5's sparse case). Cosine
+     * over tags weighted by rarity in the medium (`ln(1 + N / df)`): two works sharing a rare tag are far more alike
+     * than two sharing a common one. Pairs need [TAG_MIN_SHARED] shared tags; the score is scaled by [TAG_WEIGHT] so a
+     * rating-based neighbour always outranks a tag-based one. Tags on more than a fifth of a medium's works do not
+     * propose pairs (they still count in the score), which keeps this far from quadratic.
+     */
+    private fun tagSimilarWorks(
+        tagsOf: Map<String, List<String>>,
+        mediumOf: Map<String, String>,
+        config: IndexerConfig,
+    ): Map<String, List<Triple<String, Double, Int>>> {
+        val result = HashMap<String, List<Triple<String, Double, Int>>>()
+        for ((_, ids) in tagsOf.keys.filter { tagsOf.getValue(it).isNotEmpty() }.groupBy { mediumOf.getValue(it) }) {
+            val documentFrequency = ids.flatMap { tagsOf.getValue(it) }.groupingBy { it }.eachCount()
+            fun weight(tag: String) = ln(1.0 + ids.size.toDouble() / documentFrequency.getValue(tag))
+            val norm = ids.associateWith { id -> sqrt(tagsOf.getValue(id).sumOf { weight(it).let { w -> w * w } }) }
+            val proposing = documentFrequency.filterValues { it <= maxOf(TAG_PROPOSE_MIN, ids.size / 5) }.keys
+            val byTag = HashMap<String, MutableList<String>>()
+            ids.forEach { id -> tagsOf.getValue(id).filter { it in proposing }.forEach { byTag.getOrPut(it, ::ArrayList) += id } }
+            for (id in ids) {
+                val mine = tagsOf.getValue(id).toSet()
+                val others = mine.flatMap { byTag[it].orEmpty() }.toSet() - id
+                result[id] = others.mapNotNull { other ->
+                    val shared = tagsOf.getValue(other).filter { it in mine }
+                    if (shared.size < TAG_MIN_SHARED) return@mapNotNull null
+                    val cosine = shared.sumOf { weight(it).let { w -> w * w } } / (norm.getValue(id) * norm.getValue(other))
+                    Triple(other, cosine * TAG_WEIGHT, shared.size)
+                }.sortedWith(compareByDescending<Triple<String, Double, Int>> { it.second }.thenBy { it.first })
+                    .take(config.similarSize)
+            }
+        }
+        return result
+    }
+
+    /** Rating-based neighbours first, then tag-based ones not already listed, up to [size]. */
+    private fun mergeSimilar(rated: List<CommunitySimilarWork>, tagged: List<CommunitySimilarWork>, size: Int) =
+        (rated + tagged.filter { work -> rated.none { it.id == work.id } }).take(size)
+
     /** A comment's medium when no rating says it: the title key's own, or what the site's URL path is for. */
     fun mediumOfKey(key: String): String = when {
         key.startsWith(CommunityWorkKeys.TITLE_PREFIX) -> key.removePrefix(CommunityWorkKeys.TITLE_PREFIX).substringBefore(':')
@@ -288,4 +392,7 @@ object CommunityAggregator {
     private fun round2(value: Double) = kotlin.math.round(value * 100) / 100
 
     private const val DEFAULT_MEAN = 7.0
+    private const val TAG_MIN_SHARED = 2
+    private const val TAG_WEIGHT = 0.5
+    private const val TAG_PROPOSE_MIN = 50
 }

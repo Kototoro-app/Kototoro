@@ -75,7 +75,8 @@ data class CommunityRatingUiState(
 /**
  * The community rating of a work and the reader's own (plan §7.2), with the rail of works its raters also liked.
  * [container] wraps the card in the page's own panel style; the host owns the comment list [onOpenComments] opens,
- * and [onSearchTitle] searches every source for a similar work, which the index names by title only.
+ * and [onOpenWork] finds a similar work, which the index knows by its group id and title only, in the reader's library
+ * or sources.
  */
 @Composable
 fun CommunityRatingCard(
@@ -83,10 +84,12 @@ fun CommunityRatingCard(
     onRate: (Int) -> Unit,
     onWithdraw: () -> Unit,
     onOpenComments: () -> Unit,
-    onSearchTitle: (String) -> Unit,
+    onOpenWork: (id: String, title: String) -> Unit,
     container: @Composable (@Composable () -> Unit) -> Unit,
     modifier: Modifier = Modifier,
     railPadding: Dp = 0.dp,
+    /** A long press on a similar work: where else it can be looked for. */
+    onShowSources: ((id: String, title: String) -> Unit)? = null,
 ) {
     var showDialog by rememberSaveable { mutableStateOf(false) }
     val canRate = state.refusal == null && !state.isLoading
@@ -150,11 +153,15 @@ fun CommunityRatingCard(
                 CommunityWorkCard(
                     work.id,
                     work.title.orEmpty(),
-                    uiString("community_similar_supporting", work.coRaters),
-                    score = work.score,
+                    // Too few shared raters yet: the index related them by the tags their raters' sources agree on.
+                    if (work.coRaters > 0) uiString("community_similar_supporting", work.coRaters)
+                    else uiString("community_similar_tags", work.sharedTags),
+                    // Its score is how alike the two are (0–1), not a rating; a star beside it would read as one.
+                    score = null,
                 )
             },
-            onOpen = { onSearchTitle(it.title) },
+            onOpen = { onOpenWork(it.key, it.title) },
+            onLongOpen = onShowSources?.let { show -> { show(it.key, it.title) } },
             horizontalPadding = railPadding,
             modifier = Modifier.padding(vertical = 6.dp),
             testTag = "community-similar",
@@ -210,11 +217,13 @@ private fun ScoreOverview(rating: CommunityRatingSummary?, isLoading: Boolean, m
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
-                text = rating?.let { formatCommunityScore(it.score) } ?: "–",
+                // The mean readers gave. The Bayesian score is for ordering charts: with few ratings it sits near the
+                // medium's mean, so a single 10 would read as 9.8.
+                text = rating?.let { formatCommunityScore(it.mean) } ?: "–",
                 style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Bold),
                 color = if (rating == null) colors.onSurfaceVariant else colors.onSurface,
             )
-            StarBar(value = (rating?.score ?: 0.0) / 2, starSize = 14.dp)
+            StarBar(value = (rating?.mean ?: 0.0) / 2, starSize = 14.dp)
             Text(
                 text = when {
                     isLoading -> uiString("loading_")

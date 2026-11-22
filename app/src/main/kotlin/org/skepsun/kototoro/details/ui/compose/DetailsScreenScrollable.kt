@@ -379,6 +379,7 @@ internal fun DetailsScrollableContent(
                 },
                 railPadding = outerHorizontalPadding,
                 onSearchTitle = { title -> onActionClick(DetailsAction.SearchTitleEverywhere(title)) },
+                onOpenContent = { content -> onActionClick(DetailsAction.OpenContent(content)) },
             )
         }
         if (!preferLightweightFirstFrame &&

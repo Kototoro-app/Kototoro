@@ -37,6 +37,8 @@ data class ServicesSettingsUiState(
 data class CommunityServicesState(
     val enabled: Boolean,
     val nsfwRatings: Boolean,
+    /** `community_share_sources`: name the source a rating or comment was made on. */
+    val shareSources: Boolean = true,
 )
 
 /** Android's icons for the same rows; desktop passes none because its settings pages have no leading artwork. */
@@ -75,6 +77,7 @@ fun ServicesSettingsContent(
     discordSettings: ServicesSettingsAction? = null,
     onCommunityChange: (Boolean) -> Unit = {},
     onCommunityNsfwChange: (Boolean) -> Unit = {},
+    onCommunityShareSourcesChange: (Boolean) -> Unit = {},
     onCommunityRecoveryKeyClick: () -> Unit = {},
     onCommunityNicknameClick: (() -> Unit)? = null,
 ) {
@@ -137,6 +140,10 @@ fun ServicesSettingsContent(
                     SettingsRowDivider()
                     SettingsSwitchRow(uiString("community_nsfw_ratings"), uiString("community_nsfw_ratings_summary"),
                         community.nsfwRatings, enabled, onCommunityNsfwChange, testTag = "services-community-nsfw")
+                    SettingsRowDivider()
+                    SettingsSwitchRow(uiString("community_share_sources"), uiString("community_share_sources_summary"),
+                        community.shareSources, enabled, onCommunityShareSourcesChange,
+                        testTag = "services-community-share-sources")
                     SettingsRowDivider()
                     SettingsValueRow(uiString("community_recovery_key"), uiString("community_recovery_key_summary"), null,
                         enabled, onCommunityRecoveryKeyClick, testTag = "services-community-recovery-key")

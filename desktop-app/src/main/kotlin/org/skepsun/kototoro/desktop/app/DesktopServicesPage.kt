@@ -44,7 +44,8 @@ internal fun DesktopServicesPage(controller: DesktopController, state: DesktopAp
                 relatedContent = settings.relatedContent,
                 statsEnabled = settings.statsEnabled,
                 readingTimeEstimation = settings.readingTimeEstimation,
-                community = CommunityServicesState(settings.communityEnabled, settings.communityNsfwRatings),
+                community = CommunityServicesState(settings.communityEnabled, settings.communityNsfwRatings,
+                    settings.communityShareSources),
             ),
             onSuggestionsClick = { controller.showRecommendations() },
             onRelatedContentChange = { controller.servicesSettings(settings.copy(relatedContent = it)) },
@@ -56,6 +57,7 @@ internal fun DesktopServicesPage(controller: DesktopController, state: DesktopAp
             icons = ServicesSettingsRowIcons(suggestions = painterResource("icons/ic_suggestion.svg")),
             onCommunityChange = controller.community::setEnabled,
             onCommunityNsfwChange = controller.community::setNsfwRatings,
+            onCommunityShareSourcesChange = { controller.servicesSettings(settings.copy(communityShareSources = it)) },
             onCommunityRecoveryKeyClick = controller.community::showRecoveryKey,
             onCommunityNicknameClick = controller.community::showNickname,
         )

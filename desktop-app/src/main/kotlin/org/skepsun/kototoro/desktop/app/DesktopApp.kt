@@ -225,6 +225,8 @@ fun DesktopApp(controller: DesktopController, closing: Boolean = false, fullscre
                 DesktopIncognitoDialog(prompt, !closing, controller::resolveIncognitoPrompt,
                     controller::setIncognitoPromptDontAskAgain, controller::dismissIncognitoPrompt)
             }
+            // A community work's other sources, from a chart or a similar-works rail on whichever page is showing.
+            DesktopCommunitySourcePicker(controller)
         }
     }
 }

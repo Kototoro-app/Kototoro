@@ -23,6 +23,8 @@ import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsFlow
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
+import kotlinx.coroutines.withContext
+import org.skepsun.kototoro.community.domain.CommunityWorkFinder
 import org.skepsun.kototoro.core.library.community.CommunityFreshRatings
 import javax.inject.Inject
 
@@ -34,6 +36,7 @@ import javax.inject.Inject
 @HiltViewModel
 class CommunityRatingViewModel @Inject constructor(
     private val repository: CommunityRepository,
+    private val finder: CommunityWorkFinder,
     settings: AppSettings,
 ) : ViewModel() {
 
@@ -100,6 +103,14 @@ class CommunityRatingViewModel @Inject constructor(
     }
 
     private var outboxTried = false
+
+    /** A similar work opened: the reader's copy or a source's, else the title search ([CommunityWorkFinder]). */
+    fun openWork(id: String, title: String, onFound: (Content) -> Unit, onMissing: (String) -> Unit) {
+        viewModelScope.launch {
+            val found = withContext(Dispatchers.IO) { finder.find(id, title) }
+            if (found != null) onFound(found) else onMissing(title)
+        }
+    }
 
     fun rate(stars: Int) = publish { identity, mangaId -> repository.rate(mangaId, identity, stars) }
 

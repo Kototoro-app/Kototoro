@@ -88,7 +88,7 @@ class IosCommunityDetailsTest {
         val content = IosSourceContent(work)
         val community = details(true)
         val overview = checkNotNull(community.overview(content))
-        assertEquals(8.3, overview.score)
+        assertEquals(8.0, overview.score, "the mean readers gave, not the Bayesian score the charts order by")
         assertEquals(6, overview.ratingCount)
         assertEquals(listOf(0, 0, 0, 0, 0), overview.starCounts)
         // No chart file exists, so the small index is listed whole.

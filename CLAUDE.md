@@ -367,7 +367,15 @@ Android 与桌面的 UI 按 CMP 共享呈现演进；Windows 与 macOS 始终共
   `CommunitySuggestionsRepository` 仍是 Android 自己的）。发件箱从 v91 起分两段：没有中继接受的事件按退避重试并计入待发数；
   只有一个中继接受的事件（`published_at`/`accepted_relays`）不再计入，却留着每小时补发给其他中继，直到两个中继持有、
   或快照生成时间晚于发布时间 10 分钟（索引器已归档）、或满 3 天。详情页评分卡另显示快照之后的新评分数
-  （`freshRatings`，按 `#i` 直接问中继，自己的评分即使离线也计入）。Windows 的 `DesktopCommunity` 有自己的 StateFlow：私钥存系统凭据库
+  （`freshRatings`，按 `#i` 直接问中继，自己的评分即使离线也计入）。评分事件带上作品标签映射到的分类 ID
+  （多字母 `genre` 标签，`core-domain` 的 `CommunityGenres`，不发来源原始标签），索引器按“过半评分者一致”保留作品标签，
+  评分相似作品不足 20 个时用标签相似（稀有度加权余弦、至少 2 个相同标签、分数 ×0.5，`coRaters` 为 0、`sharedTags` 记数）补齐；
+  `CommunityRecommendations.rank` 按评分人数对数压制热门并做 MMR 去重复（重叠度取索引相似度或标签 Jaccard）。
+  榜单与相似作品点开走 `CommunityService.findWork`：书库已有的那一份（只用已缓存的键分片），否则在前 4 个非成人来源里按标题搜索、
+  命中同组或同标题键的条目直接打开详情，都没有才退回全局搜索（Android `CommunityWorkFinder`、桌面 `openCommunityWork`；iOS 仍是搜索）。
+  评分与评论还可附带 `["source", 来源 ID, 地址, 域名]`（`community_share_sources`，默认开；本地、`JSON_` 与成人来源从不附带，
+  规则在 `core-domain` 的 `CommunitySources`），索引器汇总成作品摘要的 `sources`，`findWork` 先在读者装了的同 ID 来源、
+  再在同站点来源里按记录的地址检索；长按卡片打开共享的 `CommunitySourcePicker`（「其他来源」），见计划 §10.3。Windows 的 `DesktopCommunity` 有自己的 StateFlow：私钥存系统凭据库
   （`desktopCommunityCredentialStore`，与 Drive 令牌同一套），公钥与屏蔽/举报存 `desktop_community`，开关是
   `desktop_services` 的 `community_enabled`/`community_nsfw_ratings`；中继与索引走 OkHttp（代理页的 selector 与认证，
   HTTP/SOCKS 都行），中继 WebSocket 是 `desktop-runtime` 的 `OkHttpNostrRelayConnector`，直连时中继域名由自写 RFC 8484 的

@@ -35,9 +35,11 @@ data class CommunitySuggestionsUiState(
 fun CommunityChartSection(
     state: CommunitySuggestionsUiState,
     onSelectWindow: (String) -> Unit,
-    onSearchTitle: (String) -> Unit,
+    onOpenWork: (id: String, title: String) -> Unit,
     modifier: Modifier = Modifier,
     horizontalPadding: Dp = 0.dp,
+    /** A long press on a work: where else it can be looked for. */
+    onShowSources: ((id: String, title: String) -> Unit)? = null,
 ) {
     if (!state.isLoaded || (state.isFallback && state.entries.isEmpty())) return
     CommunityWorksRail(
@@ -47,10 +49,11 @@ fun CommunityChartSection(
                 key = entry.id,
                 title = entry.title.orEmpty(),
                 supportingText = uiString("community_rating_count", entry.count),
-                score = entry.score,
+                score = entry.displayScore,
             )
         },
-        onOpen = { onSearchTitle(it.title) },
+        onOpen = { onOpenWork(it.key, it.title) },
+        onLongOpen = onShowSources?.let { show -> { show(it.key, it.title) } },
         horizontalPadding = horizontalPadding,
         ranked = !state.isFallback,
         note = if (state.isFallback) uiString("community_rated_note") else null,

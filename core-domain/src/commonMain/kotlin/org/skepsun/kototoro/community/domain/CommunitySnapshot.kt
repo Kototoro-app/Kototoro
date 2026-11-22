@@ -54,6 +54,19 @@ data class CommunityWorkSummary(
     @SerialName("hidden_comments") val hiddenComments: List<String> = emptyList(),
     val similar: List<CommunitySimilarWork> = emptyList(),
     val nsfw: Boolean = false,
+    /** Taxonomy tag ids most of its raters' sources gave it ([CommunityGenres]), most agreed first. */
+    val tags: List<String> = emptyList(),
+    /** Where its raters and commenters read it, most readers first ([CommunitySources]). */
+    val sources: List<CommunityWorkSource> = emptyList(),
+)
+
+/** One place a work can be read: a source id, the entry there, the site's host and how many readers used it. */
+@Serializable
+data class CommunityWorkSource(
+    val source: String,
+    val url: String,
+    val host: String? = null,
+    val readers: Int,
 )
 
 @Serializable
@@ -75,6 +88,11 @@ data class CommunitySimilarWork(
     val title: String? = null,
     val score: Double,
     @SerialName("co_raters") val coRaters: Int,
+    /**
+     * Taxonomy tags the two works share. A work with [coRaters] 0 is similar by its tags alone: the index lists those
+     * after the rating-based ones while too few readers rated both.
+     */
+    @SerialName("shared_tags") val sharedTags: Int = 0,
     /** Whether the similar work is adult, so readers who keep those out can skip it without fetching its shard. */
     val nsfw: Boolean = false,
 )
@@ -91,9 +109,15 @@ data class CommunityChart(
 data class CommunityChartEntry(
     val id: String,
     val title: String? = null,
+    /** The Bayesian score the chart is ordered by: pulled toward the medium's mean while few readers rated it. */
     val score: Double,
     val count: Int,
-)
+    /** The plain (weighted) mean of the stars given; what readers see. Absent from snapshots before 2026-11-21. */
+    val mean: Double? = null,
+) {
+    /** What to show: the mean readers gave, the ranking score only for snapshots that do not have it. */
+    val displayScore: Double get() = mean ?: score
+}
 
 @Serializable
 data class CommunityModeration(

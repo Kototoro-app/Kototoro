@@ -1697,6 +1697,91 @@ class DesktopController(
      * A community work, which the index names by title only: every source is searched for it, so the reader lands on
      * their own sources rather than on a link that may not work for them (Android's details-dock title search).
      */
+    /**
+     * A community work from a chart or a similar-works rail, which the index knows by group and title only: the
+     * reader's own copy when the library has it, else the first of their sources whose search finds it (preferred
+     * recommendation sources first, then the ones their library reads from); the title search only when none does.
+     * Off the operation gate, with a notice while sources are asked.
+     */
+    fun openCommunityWork(groupId: String, title: String) {
+        mutableState.update { it.copy(message = desktopText("community.finding", title)) }
+        scope.launch {
+            val found = communityAttempt {
+                val (library, listings) = communitySources()
+                community.service.findWork(groupId, title, library, listings.map { it.source }, communityHostOf(listings)) { source, query ->
+                    session.sources.getList(source.name, 0, null, SourceFilter(query = query))
+                }
+            }
+            mutableState.update { it.copy(message = null) }
+            if (found != null) details(found) else searchTitle(title)
+        }
+    }
+
+    /** Android's "other sources" for a community work: the reader's sources its readers named first, then the rest. */
+    internal fun showCommunitySources(groupId: String, title: String) {
+        community.showSourcePicker(groupId, title)
+        scope.launch {
+            val choices = communityAttempt {
+                val (_, listings) = communitySources()
+                val names = listings.associate { it.source.name to it.displayName }
+                community.service.sourceOptions(groupId, listings.map { it.source }, communityHostOf(listings), includeOthers = true)
+                    .map { option ->
+                        val listed = option.listed
+                        option to org.skepsun.kototoro.community.ui.CommunitySourceChoice(
+                            key = option.source.name,
+                            name = names[option.source.name] ?: option.source.name,
+                            readers = listed?.readers,
+                            sameSite = listed != null && listed.source != option.source.name,
+                        )
+                    }
+            }.orEmpty()
+            community.setSourceChoices(groupId, choices)
+        }
+    }
+
+    /** The picked source of the "other sources" list: the work there, else the title search. */
+    internal fun openCommunityWorkIn(choice: org.skepsun.kototoro.community.ui.CommunitySourceChoice) {
+        val picker = community.sourcePicker.value ?: return
+        val option = picker.options[choice.key] ?: return
+        community.closeSourcePicker()
+        mutableState.update { it.copy(message = desktopText("community.finding", picker.title)) }
+        scope.launch {
+            val found = communityAttempt {
+                community.service.findWorkIn(option, picker.groupId, picker.title) { source, query ->
+                    session.sources.getList(source.name, 0, null, SourceFilter(query = query))
+                }
+            }
+            mutableState.update { it.copy(message = null) }
+            if (found != null) details(found) else searchTitle(picker.title)
+        }
+    }
+
+    /** The library, and the enabled non-adult sources: preferred recommendation sources, then the library's own. */
+    private suspend fun communitySources(): Pair<List<SourceContent>, List<SourceListing>> {
+        val library = session.library.favourites(withChapters = false) + session.library.history(withChapters = false)
+        val preferred = state.value.suggestionSettings.preferredSources
+        val used = library.mapTo(HashSet()) { it.source.name }
+        val overrides = session.sourceNsfwOverrides()
+        val listings = state.value.enabledSources
+            .filterNot { it.isNsfwSource(overrides) }
+            .sortedWith(compareByDescending<SourceListing> { it.source.name in preferred }
+                .thenByDescending { it.source.name in used })
+        return library to listings
+    }
+
+    private fun communityHostOf(listings: List<SourceListing>): (org.skepsun.kototoro.core.source.SourceRef) -> String? {
+        val hosts = listings.associate { it.source.name to org.skepsun.kototoro.community.domain.CommunitySources.hostOf(it.siteUrl) }
+        return { hosts[it.name] }
+    }
+
+    private suspend fun <T> communityAttempt(block: suspend () -> T): T? = try {
+        block()
+    } catch (error: CancellationException) {
+        throw error
+    } catch (_: Exception) {
+        null
+    }
+
     fun searchTitle(title: String) {
         showSearch()
         globalSearch(title)

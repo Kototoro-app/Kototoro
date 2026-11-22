@@ -76,6 +76,10 @@ class AndroidSourceRuntime @Inject constructor(
         return result.repository
     }
 
+    /** [content] back as the parser model Android's screens open. */
+    fun toParserContent(content: SourceContent): org.skepsun.kototoro.parsers.model.Content =
+        content.toParser(resolver(repository(content.source.name)))
+
     private fun resolver(repository: ContentRepository): (String) -> ContentSource = { name ->
         if (name == repository.source.name) repository.source else repository(name).source
     }

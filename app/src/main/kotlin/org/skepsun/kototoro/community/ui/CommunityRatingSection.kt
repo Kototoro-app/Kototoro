@@ -27,21 +27,24 @@ fun CommunityRatingSection(
     modifier: Modifier = Modifier,
     railPadding: Dp = 0.dp,
     onSearchTitle: (String) -> Unit = {},
+    onOpenContent: (Content) -> Unit = {},
 ) {
     val viewModel = hiltViewModel<CommunityRatingViewModel>(key = "community-rating-${content.id}")
     LaunchedEffect(content, trackerRefs) { viewModel.bind(content, trackerRefs) }
     val state = viewModel.state.collectAsStateWithLifecycle().value ?: return
     var showComments by rememberSaveable { mutableStateOf(false) }
+    val showSources = rememberCommunitySources(onOpenContent, onSearchTitle)
 
     CommunityRatingCard(
         state = state,
         onRate = viewModel::rate,
         onWithdraw = viewModel::withdraw,
         onOpenComments = { showComments = true },
-        onSearchTitle = onSearchTitle,
+        onOpenWork = { id, title -> viewModel.openWork(id, title, onOpenContent, onSearchTitle) },
         container = container,
         modifier = modifier,
         railPadding = railPadding,
+        onShowSources = showSources,
     )
 
     if (showComments) {

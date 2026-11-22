@@ -32,6 +32,8 @@ import org.skepsun.kototoro.community.ui.CommunityDialogActions
 import org.skepsun.kototoro.community.ui.CommunityRatingCard
 import org.skepsun.kototoro.community.ui.CommunityRatingUiState
 import org.skepsun.kototoro.community.ui.CommunitySettingsDialogs
+import org.skepsun.kototoro.community.ui.CommunitySourceChoice
+import org.skepsun.kototoro.community.ui.CommunitySourcePicker
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Instant
@@ -63,7 +65,7 @@ class DesktopCommunityViewsTest {
                             onRate = { rated = it },
                             onWithdraw = { rated = null },
                             onOpenComments = { opened = true },
-                            onSearchTitle = { searched = it },
+                            onOpenWork = { _, title -> searched = title },
                             container = { card ->
                                 Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surface) { card() }
                             },
@@ -73,6 +75,10 @@ class DesktopCommunityViewsTest {
             }
         }
         onNodeWithTag("community-rating-score").assertExists()
+        // The mean (8.6) is shown, not the Bayesian 8.4; a similar work's likeness gets no star.
+        onNodeWithText("8.6").assertExists()
+        onNodeWithText("8.4").assertDoesNotExist()
+        onNodeWithText("9.1").assertDoesNotExist()
         capture("rating-card")
         onNodeWithTag("community-rating-rate").performClick()
         // The right half of the fourth star is eight of ten; its left half would be seven.
@@ -90,7 +96,7 @@ class DesktopCommunityViewsTest {
     fun `a refused reader sees why instead of the rate button`() = runDesktopComposeUiTest(width = 720, height = 600) {
         setContent {
             DesktopTheme {
-                CommunityRatingCard(rated.copy(refusal = CommunityRatingRefusal.NO_IDENTITY), {}, {}, {}, {}, { it() })
+                CommunityRatingCard(rated.copy(refusal = CommunityRatingRefusal.NO_IDENTITY), {}, {}, {}, { _, _ -> }, { it() })
             }
         }
         onNodeWithTag("community-rating-rate").assertDoesNotExist()
@@ -164,6 +170,71 @@ class DesktopCommunityViewsTest {
     }
 
     @Test
+    fun `the other sources list says who read it where and picks one`() = runDesktopComposeUiTest(width = 720, height = 700) {
+        var picked: String? = null
+        setContent {
+            DesktopTheme {
+                CommunitySourcePicker(
+                    title = "葬送的芙莉莲",
+                    choices = listOf(
+                        CommunitySourceChoice("NAMED", "Named source", readers = 3),
+                        CommunitySourceChoice("SAME", "Same site source", readers = 1, sameSite = true),
+                        CommunitySourceChoice("MINE", "My source", readers = null),
+                    ),
+                    onPick = { picked = it.key },
+                    onSearchAll = {},
+                    onDismiss = {},
+                )
+            }
+        }
+        onNodeWithText(AndroidStrings.format("community_source_readers", 3)).assertExists()
+        onNodeWithText(AndroidStrings.format("community_source_readers", 1) + " · " + AndroidStrings["community_source_same_site"])
+            .assertExists()
+        capture("source-picker", dialog = true)
+        onNodeWithTag("community-source:SAME").performClick()
+        runOnIdle { assertEquals("SAME", picked) }
+    }
+
+    @Test
+    fun `fresh ratings and tag neighbours read as sentences, not keys`() = runDesktopComposeUiTest(width = 720, height = 700) {
+        setContent {
+            DesktopTheme {
+                Surface(color = MaterialTheme.colorScheme.background) { Column(Modifier.padding(16.dp)) {
+                    CommunityRatingCard(
+                        state = rated.copy(myStars = 10, freshRatings = 3, myRatingFresh = true,
+                            similar = listOf(CommunitySimilarWork("g2", "迷宫饭", 0.4, coRaters = 0, sharedTags = 4))),
+                        onRate = {}, onWithdraw = {}, onOpenComments = {}, onOpenWork = { _, _ -> },
+                        container = { card -> Surface(shape = RoundedCornerShape(20.dp)) { card() } },
+                    )
+                } }
+            }
+        }
+        onNodeWithText("community_", substring = true).assertDoesNotExist()
+        capture("fresh-and-tags")
+    }
+
+    @Test
+    fun `the community services rows read as sentences, not keys`() = runDesktopComposeUiTest(width = 720, height = 900) {
+        setContent {
+            DesktopTheme {
+                Surface(color = MaterialTheme.colorScheme.background) {
+                    org.skepsun.kototoro.core.ui.settings.ServicesSettingsContent(
+                        state = org.skepsun.kototoro.core.ui.settings.ServicesSettingsUiState(
+                            suggestionsEnabled = true, relatedContent = true, statsEnabled = true, readingTimeEstimation = true,
+                            community = org.skepsun.kototoro.core.ui.settings.CommunityServicesState(true, false, true),
+                        ),
+                        onSuggestionsClick = {}, onRelatedContentChange = {}, onStatsClick = {}, onStatsEnabledChange = {},
+                        onReadingTimeChange = {}, onCommunityNicknameClick = {},
+                    )
+                }
+            }
+        }
+        onNodeWithTag("services-community-share-sources").assertExists()
+        onNodeWithText("community_", substring = true).assertDoesNotExist()
+        capture("services-community")
+    }
+
+    @Test
     fun `relative times read like Android's`() {
         val now = Instant.parse("2026-11-21T12:00:00Z")
         assertEquals(desktopText("feed.timeNow"), desktopRelativeTime(now.epochSecond - 20, now))
@@ -172,9 +243,10 @@ class DesktopCommunityViewsTest {
         assertEquals(desktopText("feed.timeDaysAgo", 2L), desktopRelativeTime(now.epochSecond - 2 * 86_400, now))
     }
 
-    private fun ComposeUiTest.capture(name: String) {
+    private fun ComposeUiTest.capture(name: String, dialog: Boolean = false) {
         val report = Files.createDirectories(Path.of("build/reports/community")).resolve("$name.png")
-        Image.makeFromBitmap(onAllNodes(isRoot()).onFirst().captureToImage().asSkiaBitmap()).use { image ->
+        val roots = onAllNodes(isRoot())
+        Image.makeFromBitmap((if (dialog) roots.onLast() else roots.onFirst()).captureToImage().asSkiaBitmap()).use { image ->
             image.encodeToData()?.use { Files.write(report, it.bytes) }
         }
     }

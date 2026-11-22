@@ -21,9 +21,11 @@ import org.skepsun.kototoro.core.library.community.CommunityService
 import org.skepsun.kototoro.core.library.community.CommunitySnapshotCache
 import org.skepsun.kototoro.core.library.community.CommunitySnapshots
 import org.skepsun.kototoro.core.library.community.CommunitySwitches
+import platform.Foundation.NSUserDefaults
 
 class IosCommunityOverview internal constructor(value: CommunityWorkSummary?) {
-    val score: Double? = value?.rating?.score
+    /** The mean readers gave; the Bayesian score only orders charts. */
+    val score: Double? = value?.rating?.mean
     val ratingCount: Int = value?.rating?.count ?: 0
     val commentCount: Int = value?.comments ?: 0
     /** Ratings per star, index 0 being one star (1–2 of 10). */
@@ -33,7 +35,7 @@ class IosCommunityOverview internal constructor(value: CommunityWorkSummary?) {
 class IosCommunityChartEntry internal constructor(value: CommunityChartEntry) {
     val id: String = value.id
     val title: String = value.title.orEmpty()
-    val score: Double = value.score
+    val score: Double = value.displayScore
     val ratingCount: Int = value.count
 }
 
@@ -107,7 +109,14 @@ class IosCommunityDetails internal constructor(
             relayClient = relayClient(),
             searchApi = null,
             // Swift shows these screens only while the reader has the community on; adult works are refused below.
-            switches = { CommunitySwitches(enabled = true) },
+            // `community_share_sources` is the toggle in the community settings sheet; unset means on.
+            switches = {
+                val defaults = NSUserDefaults.standardUserDefaults
+                CommunitySwitches(
+                    enabled = true,
+                    shareSources = defaults.objectForKey(SHARE_SOURCES_KEY) == null || defaults.boolForKey(SHARE_SOURCES_KEY),
+                )
+            },
             fold = ::foldCommunityTitle,
         )
     }
@@ -248,6 +257,7 @@ class IosCommunityDetails internal constructor(
     }
 
     private companion object {
+        const val SHARE_SOURCES_KEY = "community_share_sources"
         val MEDIA = listOf("comic", "novel", "video")
         const val HIGHLIGHTS = 20
         /** Relays cap filter sizes; a work's strong keys and first titles name it well enough. */

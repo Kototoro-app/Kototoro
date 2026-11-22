@@ -27,6 +27,8 @@ data class DesktopServicesSettings(
     val communityEnabled: Boolean = false,
     /** Android's `community_nsfw_ratings`: whether ratings of adult works may be published; off by default. */
     val communityNsfwRatings: Boolean = false,
+    /** Android's `community_share_sources`: name the source a rating or comment was made on; on by default. */
+    val communityShareSources: Boolean = true,
 ) {
     fun toPreferences(): Map<String, SourcePreferenceValue?> = mapOf(
         KEY_STATS_ENABLED to SourcePreferenceValue.Toggle(statsEnabled),
@@ -34,6 +36,7 @@ data class DesktopServicesSettings(
         KEY_RELATED_CONTENT to SourcePreferenceValue.Toggle(relatedContent),
         KEY_COMMUNITY_ENABLED to SourcePreferenceValue.Toggle(communityEnabled),
         KEY_COMMUNITY_NSFW to SourcePreferenceValue.Toggle(communityNsfwRatings),
+        KEY_COMMUNITY_SHARE_SOURCES to SourcePreferenceValue.Toggle(communityShareSources),
     )
 
     companion object {
@@ -52,6 +55,9 @@ data class DesktopServicesSettings(
         /** Android's `AppSettings.KEY_COMMUNITY_NSFW`. */
         const val KEY_COMMUNITY_NSFW = "community_nsfw_ratings"
 
+        /** Android's `AppSettings.KEY_COMMUNITY_SHARE_SOURCES`. */
+        const val KEY_COMMUNITY_SHARE_SOURCES = "community_share_sources"
+
         fun from(values: Map<String, SourcePreferenceValue>) = DesktopServicesSettings(
             // Android reads all three with a `true` default, so a fresh profile is fully switched on.
             statsEnabled = (values[KEY_STATS_ENABLED] as? SourcePreferenceValue.Toggle)?.value ?: true,
@@ -59,6 +65,7 @@ data class DesktopServicesSettings(
             relatedContent = (values[KEY_RELATED_CONTENT] as? SourcePreferenceValue.Toggle)?.value ?: true,
             communityEnabled = (values[KEY_COMMUNITY_ENABLED] as? SourcePreferenceValue.Toggle)?.value ?: false,
             communityNsfwRatings = (values[KEY_COMMUNITY_NSFW] as? SourcePreferenceValue.Toggle)?.value ?: false,
+            communityShareSources = (values[KEY_COMMUNITY_SHARE_SOURCES] as? SourcePreferenceValue.Toggle)?.value ?: true,
         )
     }
 }

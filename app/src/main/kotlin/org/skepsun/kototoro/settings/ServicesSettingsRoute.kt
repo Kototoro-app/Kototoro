@@ -43,6 +43,8 @@ fun ServicesSettingsRoute(
     val isCommunityNsfwEnabled =
         settings.observeAsState(AppSettings.KEY_COMMUNITY_NSFW) { isCommunityNsfwRatingEnabled }.value
     val snackbarHostState = remember { SnackbarHostState() }
+    val isCommunityShareSources =
+        settings.observeAsState(AppSettings.KEY_COMMUNITY_SHARE_SOURCES) { isCommunityShareSourcesEnabled }.value
     val communityViewModel = hiltViewModel<CommunitySettingsViewModel>()
     val communityDialog = communityViewModel.dialog.collectAsStateWithLifecycle().value
     val context = LocalContext.current
@@ -56,7 +58,7 @@ fun ServicesSettingsRoute(
             readingTimeEstimation = isReadingTimeEstimationEnabled,
             browseTracking = isBrowseTrackingRecommendationsEnabled,
             browseMoreTracking = isBrowseMoreTrackingRecommendationsEnabled,
-            community = CommunityServicesState(isCommunityEnabled, isCommunityNsfwEnabled),
+            community = CommunityServicesState(isCommunityEnabled, isCommunityNsfwEnabled, isCommunityShareSources),
         ),
         snackbarHostState = snackbarHostState,
         onSuggestionsClick = onSuggestionsClick,
@@ -69,6 +71,7 @@ fun ServicesSettingsRoute(
         onDiscordSettingsClick = onDiscordSettingsClick,
         onCommunityChange = communityViewModel::setEnabled,
         onCommunityNsfwChange = { settings.isCommunityNsfwRatingEnabled = it },
+        onCommunityShareSourcesChange = { settings.isCommunityShareSourcesEnabled = it },
         onCommunityRecoveryKeyClick = communityViewModel::showRecoveryKey,
         onCommunityNicknameClick = communityViewModel::showNickname,
     )

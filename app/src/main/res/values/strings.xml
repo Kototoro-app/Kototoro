@@ -4356,6 +4356,11 @@
     <string name="community_enabled_summary">Rate works together with other readers through public Nostr relays</string>
     <string name="community_nsfw_ratings">Rate adult works</string>
     <string name="community_nsfw_ratings_summary">Off by default: ratings are public and show what you read</string>
+    <string name="community_share_sources">Name the source when posting</string>
+    <string name="community_share_sources_summary">Ratings and comments say which source you read the work on, so other readers can open it on the same source. Local, custom and adult sources are never named</string>
+    <string name="community_other_sources">Other sources</string>
+    <string name="community_source_readers">%1$d readers here</string>
+    <string name="community_source_same_site">Same site</string>
     <string name="community_nickname">Community nickname</string>
     <string name="community_nickname_summary">Your nickname and public key are sent to public relays. The nickname appears beside your comments.</string>
     <string name="community_nickname_save">Save publicly</string>
@@ -4366,7 +4371,7 @@
     <string name="community_recovery_key">Recovery key</string>
     <string name="community_recovery_key_summary">Keep it to use the same identity after reinstalling or on another device</string>
     <string name="community_onboarding_title">Join community ratings?</string>
-    <string name="community_onboarding_message">Your ratings are published to public Nostr relays, signed with a new community identity that is not linked to any of your accounts. Anyone can read them, and relays may keep copies even after you withdraw a rating. Only ratings are published, never your library or reading history.</string>
+    <string name="community_onboarding_message">Your ratings are published to public Nostr relays, signed with a new community identity that is not linked to any of your accounts. Anyone can read them, and relays may keep copies even after you withdraw a rating. Only ratings and comments are published, with the source you read the work on so others can open it there (you can turn that off), never your library or reading history.</string>
     <string name="community_onboarding_create">Create identity</string>
     <string name="community_onboarding_restore">I have a recovery key</string>
     <string name="community_restore_hint">Recovery key (nsec1…)</string>
@@ -4395,6 +4400,7 @@
     <string name="community_report_other">Other</string>
     <string name="community_similar_title">Readers who liked this also liked</string>
     <string name="community_similar_supporting">%1$d readers in common</string>
+    <string name="community_similar_tags">%1$d tags in common</string>
     <string name="community_for_you">Community picks</string>
     <string name="community_because">Because you liked %1$s</string>
     <string name="community_popular">Community favourites</string>

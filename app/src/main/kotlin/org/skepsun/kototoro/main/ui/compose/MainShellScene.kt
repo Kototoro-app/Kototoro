@@ -1308,6 +1308,7 @@ internal fun SuggestionsTopLevelRouteContent(
                     ) {
                         org.skepsun.kototoro.community.ui.CommunitySuggestionsSection(
                             onSearchTitle = { title -> appRouter.openSearch(title) },
+                            onOpenContent = { content -> appRouter.openDetails(content) },
                             horizontalPadding = 12.dp,
                             modifier = Modifier.padding(top = 8.dp),
                         )

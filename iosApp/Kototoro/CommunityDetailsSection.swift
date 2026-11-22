@@ -2,6 +2,8 @@ import KototoroShared
 import Security
 import SwiftUI
 
+/// The community card on a work's details: the same material panel as the chapter and bookmark panels, titled
+/// in-panel with its comments entry on the trailing side, then the score and the reader's own rating.
 struct CommunityDetailsSection: View {
     let community: IosCommunityDetails
     let content: IosSourceContent
@@ -13,40 +15,32 @@ struct CommunityDetailsSection: View {
     @State private var myRating: Int32 = 0
 
     var body: some View {
-        Section("社区") {
-            if loading {
-                ProgressView("正在读取社区评分…")
-            } else if unavailable {
-                Label("暂时无法读取社区评分", systemImage: "exclamationmark.circle")
-                    .foregroundStyle(.secondary)
-            } else if let overview {
-                CommunityRatingSummaryRow(overview: overview)
-                    .accessibilityIdentifier("details.community.rating")
-                Button {
-                    showingRating = true
-                } label: {
-                    HStack {
-                        Text("我的评分").foregroundStyle(Color.primary)
-                        Spacer()
-                        if myRating > 0 {
-                            CommunityStars(value: Double(myRating) / 2, size: 15)
-                            Text(verbatim: "\(myRating)").monospacedDigit().foregroundStyle(.secondary)
-                        } else {
-                            Text("点按评分")
-                        }
-                    }
+        Section {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 12) {
+                    Text("社区评分").font(.headline)
+                    Spacer(minLength: 0)
+                    if let overview { commentsButton(count: Int(overview.commentCount)) }
                 }
-                .accessibilityElement(children: .combine)
-                .accessibilityIdentifier("details.community.rate")
-                Button {
-                    showingComments = true
-                } label: {
-                    Label("社区评论", systemImage: "bubble.left.and.bubble.right")
+                if loading {
+                    Label { Text("正在读取社区评分…") } icon: { ProgressView() }
+                        .font(.subheadline).foregroundStyle(.secondary)
+                } else if unavailable {
+                    Label("暂时无法读取社区评分", systemImage: "exclamationmark.circle")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                } else if let overview {
+                    CommunityRatingSummaryRow(overview: overview)
+                        .accessibilityIdentifier("details.community.rating")
+                    Divider()
+                    myRatingRow
                 }
-                .badge(Int(overview.commentCount))
-                .accessibilityIdentifier("details.community.comments")
             }
+            .padding(16)
+            .modifier(DetailsContentPanel())
+            .listRowBackground(Color.clear)
+            .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 10, trailing: 0))
         }
+        .listRowSeparator(.hidden)
         .task(id: content.contentKey + "|" + content.title) {
             loading = true
             unavailable = false
@@ -71,29 +65,68 @@ struct CommunityDetailsSection: View {
             CommunityRatingView(community: community, content: content, stars: myRating > 0 ? myRating : 0)
         }
     }
+
+    /// The panel's trailing action, styled like the chapter panel's “全部 N 集”.
+    private func commentsButton(count: Int) -> some View {
+        Button { showingComments = true } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "bubble.left.and.bubble.right")
+                    .font(.caption.weight(.semibold))
+                Text(count > 0 ? String(localized: "评论 \(count)") : String(localized: "评论"))
+                    .font(.subheadline.weight(.medium))
+                    .monospacedDigit()
+                Image(systemName: "chevron.right")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .buttonStyle(.borderless)
+        .tint(.primary)
+        .accessibilityLabel("社区评论")
+        .accessibilityValue(count > 0 ? String(localized: "\(count) 条评论") : "")
+        .accessibilityIdentifier("details.community.comments")
+    }
+
+    /// The reader's own rating, and the capsule that opens the picker.
+    private var myRatingRow: some View {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("我的评分").font(.subheadline).foregroundStyle(.secondary)
+                HStack(spacing: 8) {
+                    CommunityStars(value: Double(myRating) / 2, size: 17)
+                    if myRating > 0 {
+                        Text(verbatim: "\(myRating) / 10").font(.subheadline.weight(.semibold)).monospacedDigit()
+                        Text(communityRatingLevel(myRating)).font(.subheadline).foregroundStyle(.secondary)
+                    }
+                }
+            }
+            Spacer(minLength: 0)
+            Button(myRating > 0 ? "修改" : "评分") { showingRating = true }
+                .buttonStyle(.bordered)
+                .buttonBorderShape(.capsule)
+                .controlSize(.small)
+                .accessibilityIdentifier("details.community.rate")
+        }
+    }
 }
 
-/// The score, its stars and count beside how the ratings spread over one to five stars, as in the App Store.
+/// The score, its stars and count beside how the ratings spread over one to five stars, as in the App Store. Without
+/// any rating it says so in a line instead of drawing an empty score and a row of empty stars.
 private struct CommunityRatingSummaryRow: View {
     let overview: IosCommunityOverview
 
     var body: some View {
         let score = overview.ratingCount > 0 ? overview.score?.doubleValue : nil
-        HStack(alignment: .center, spacing: 16) {
-            VStack(spacing: 2) {
-                Text(score.map { $0.formatted(.number.precision(.fractionLength(1))) } ?? "–")
-                    .font(.system(.largeTitle, design: .rounded, weight: .bold))
-                    .foregroundStyle(score == nil ? .secondary : .primary)
-                CommunityStars(value: (score ?? 0) / 2, size: 11)
-                Text(score == nil ? String(localized: "暂无评分") : String(localized: "\(overview.ratingCount) 人评分"))
-                    .font(.caption2).foregroundStyle(.secondary)
-            }
-            .frame(minWidth: 84)
-            if score == nil {
-                Text("来做第一个评分的人")
-                    .font(.subheadline).foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            } else {
+        if let score {
+            HStack(alignment: .center, spacing: 16) {
+                VStack(spacing: 2) {
+                    Text(score.formatted(.number.precision(.fractionLength(1))))
+                        .font(.system(.largeTitle, design: .rounded, weight: .bold))
+                    CommunityStars(value: score / 2, size: 11)
+                    Text("\(overview.ratingCount) 人评分")
+                        .font(.caption2).foregroundStyle(.secondary)
+                }
+                .frame(minWidth: 84)
                 let counts = overview.starCounts.map(\.intValue)
                 let total = max(counts.reduce(0, +), 1)
                 VStack(spacing: 3) {
@@ -108,13 +141,20 @@ private struct CommunityRatingSummaryRow: View {
                 }
                 .accessibilityHidden(true)
             }
+            .accessibilityElement(children: .combine)
+        } else {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("暂无评分").font(.title3.weight(.semibold))
+                Text("来做第一个评分的人").font(.subheadline).foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .combine)
         }
-        .padding(.vertical, 4)
-        .accessibilityElement(children: .combine)
     }
 }
 
-/// Five stars filled to `value` out of five, halves included.
+/// Five stars filled to `value` out of five, halves included: the filled part in orange, the rest in a quiet gray, as
+/// the system draws ratings.
 struct CommunityStars: View {
     let value: Double
     var size: CGFloat = 12
@@ -123,11 +163,20 @@ struct CommunityStars: View {
         HStack(spacing: size / 6) {
             ForEach(0..<5, id: \.self) { index in
                 let fill = min(max(value - Double(index), 0), 1)
-                Image(systemName: fill >= 0.75 ? "star.fill" : fill >= 0.25 ? "star.leadinghalf.filled" : "star")
+                ZStack {
+                    Image(systemName: "star.fill").foregroundStyle(Color(uiColor: .tertiaryLabel))
+                    if fill >= 0.25 {
+                        // Half a star is the leading half of a filled one, so no outline sits on the gray star.
+                        let shown = fill >= 0.75 ? 1.0 : 0.5
+                        Image(systemName: "star.fill").foregroundStyle(.orange)
+                            .mask(alignment: .leading) {
+                                GeometryReader { proxy in Rectangle().frame(width: proxy.size.width * shown) }
+                            }
+                    }
+                }
             }
         }
         .font(.system(size: size))
-        .foregroundStyle(.orange)
         .accessibilityHidden(true)
     }
 }
@@ -358,6 +407,8 @@ private struct CommunityPublishingForm<Controls: View>: View {
     @State private var busy = false
     @State private var pending: Int32 = 0
     @State private var message: String?
+    /** Read by the shared engine as `community_share_sources` (IosCommunityDetails). */
+    @AppStorage("community_share_sources") private var shareSources = true
 
     var body: some View {
         NavigationStack {
@@ -411,6 +462,12 @@ private struct CommunityPublishingForm<Controls: View>: View {
                             guard !Task.isCancelled else { return }
                             message = error.localizedDescription
                         }
+                    }
+                    Section {
+                        Toggle("发布时附带来源", isOn: $shareSources)
+                            .accessibilityIdentifier("community.shareSources")
+                    } footer: {
+                        Text("评分和评论会公开你在哪个来源阅读这部作品，其他读者可以在同一来源直接打开。本地、自定义和成人来源不会附带。")
                     }
                     if operation != nil {
                         Section {

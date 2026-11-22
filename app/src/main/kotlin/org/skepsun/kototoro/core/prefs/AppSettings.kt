@@ -2843,6 +2843,11 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         get() = prefs.getBoolean(KEY_COMMUNITY_NSFW, false)
         set(value) = prefs.edit { putBoolean(KEY_COMMUNITY_NSFW, value) }
 
+    /** Whether ratings and comments name the source they were made on (community plan §10.3); on by default. */
+    var isCommunityShareSourcesEnabled: Boolean
+        get() = prefs.getBoolean(KEY_COMMUNITY_SHARE_SOURCES, true)
+        set(value) = prefs.edit { putBoolean(KEY_COMMUNITY_SHARE_SOURCES, value) }
+
     val isAutoLocalChaptersCleanupEnabled: Boolean
         get() = prefs.getBoolean(KEY_CHAPTERS_CLEAR_AUTO, false)
 
@@ -3652,6 +3657,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_STATS_ENABLED = "stats_on"
         const val KEY_COMMUNITY_ENABLED = "community_enabled"
         const val KEY_COMMUNITY_NSFW = "community_nsfw_ratings"
+        const val KEY_COMMUNITY_SHARE_SOURCES = "community_share_sources"
         const val KEY_FEED_HEADER = "feed_header"
         const val KEY_FEED_LIMIT = "feed_limit"
         const val KEY_FEED_LAST_OPEN_TIME = "feed_last_open_time"

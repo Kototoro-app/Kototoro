@@ -27,7 +27,17 @@ data class CommunityRating(
     val stars: Int,
     val title: String?,
     val nsfw: Boolean,
+    /** Taxonomy tag ids the rater's source gave the work; the index keeps the ones most raters agree on. */
+    val genres: List<String> = emptyList(),
+    val source: CommunitySourceHint? = null,
 )
+
+/**
+ * Where the author read the work: a source id every install of the same extension or parser shares, the entry's
+ * address inside that source, and the site's host, so a reader with another ecosystem's source for the same site can
+ * find it too. Only a hint for finding the work; which work it is stays decided by the work keys.
+ */
+data class CommunitySourceHint(val source: String, val url: String, val host: String?)
 
 data class CommunityComment(
     val id: String,
@@ -43,6 +53,7 @@ data class CommunityComment(
     val spoiler: Boolean,
     val nsfw: Boolean,
     val language: String?,
+    val source: CommunitySourceHint? = null,
 )
 
 data class CommunityDeletion(
@@ -85,6 +96,12 @@ object CommunityEventSchema {
     const val LABEL_NAMESPACE = "org.kototoro"
     const val LABEL_VALUE = "community/v1"
     const val MAX_COMMENT_LENGTH = 4000
+    const val GENRE_TAG = "genre"
+    const val SOURCE_TAG = "source"
+    private const val MAX_SOURCE = 128
+    private const val MAX_URL = 1024
+    private const val MAX_HOST = 253
+    const val MAX_GENRES = 16
     const val MIN_STARS = 1
     const val MAX_STARS = 10
 
@@ -127,6 +144,12 @@ object CommunityEventSchema {
         title: String?,
         nsfw: Boolean,
         createdAt: Long,
+        /**
+         * Taxonomy tag ids (core-domain CommunityGenres), as multi-letter `genre` tags: relays do not index those, so
+         * the ratings stay out of other clients' hashtag feeds.
+         */
+        genres: List<String> = emptyList(),
+        source: CommunitySourceHint? = null,
     ): NostrUnsignedEvent {
         require(keys.isNotEmpty()) { "a rating needs at least one work key" }
         val tags = buildList {
@@ -137,6 +160,8 @@ object CommunityEventSchema {
             contentType?.let { add(listOf("content_type", it)) }
             title?.takeIf { it.isNotBlank() }?.let { add(listOf("title", it.trim())) }
             if (nsfw) add(listOf("content-warning", NSFW))
+            genres.distinct().take(MAX_GENRES).forEach { add(listOf(GENRE_TAG, it)) }
+            sourceTag(source)?.let(::add)
             addAll(label())
         }
         return NostrUnsignedEvent(createdAt, KIND_RATING, tags, "")
@@ -156,6 +181,7 @@ object CommunityEventSchema {
         spoiler: Boolean = false,
         nsfw: Boolean = false,
         language: String? = null,
+        source: CommunitySourceHint? = null,
     ): NostrUnsignedEvent {
         require(keys.isNotEmpty()) { "a comment needs at least one work key" }
         require(content.isNotBlank() && content.length <= MAX_COMMENT_LENGTH) { "comment length out of range" }
@@ -179,6 +205,7 @@ object CommunityEventSchema {
                 add(listOf("L", LANGUAGE_NAMESPACE))
                 add(listOf("l", it, LANGUAGE_NAMESPACE))
             }
+            sourceTag(source)?.let(::add)
             addAll(label())
         }
         return NostrUnsignedEvent(createdAt, KIND_COMMENT, tags, content.trim())
@@ -222,6 +249,8 @@ object CommunityEventSchema {
             stars = starsOf(event.tagValues("rating").firstOrNull()) ?: return null,
             title = event.tagValues("title").firstOrNull(),
             nsfw = NSFW in event.tagValues("content-warning"),
+            genres = event.tagValues(GENRE_TAG).filter { it.isNotBlank() && it.length <= 64 }.distinct().take(MAX_GENRES),
+            source = parseSource(event),
         )
     }
 
@@ -242,8 +271,19 @@ object CommunityEventSchema {
             spoiler = SPOILER in warnings,
             nsfw = NSFW in warnings,
             language = event.tags.firstOrNull { it.size >= 3 && it[0] == "l" && it[2] == LANGUAGE_NAMESPACE }?.get(1),
+            source = parseSource(event),
         )
     }
+
+    /** `["source", <source id>, <url>, <host>]`, multi-letter so relays do not index it; empty host is written as "". */
+    private fun sourceTag(source: CommunitySourceHint?): List<String>? = source
+        ?.takeIf { it.source.isNotBlank() && it.url.isNotBlank() && it.source.length <= MAX_SOURCE && it.url.length <= MAX_URL }
+        ?.let { listOf(SOURCE_TAG, it.source, it.url, it.host.orEmpty()) }
+
+    private fun parseSource(event: NostrEvent): CommunitySourceHint? = event.tags
+        .firstOrNull { it.size >= 3 && it[0] == SOURCE_TAG }
+        ?.takeIf { it[1].isNotBlank() && it[2].isNotBlank() && it[1].length <= MAX_SOURCE && it[2].length <= MAX_URL }
+        ?.let { CommunitySourceHint(it[1], it[2], it.getOrNull(3)?.takeIf { host -> host.isNotBlank() && host.length <= MAX_HOST }) }
 
     fun parseDeletion(event: NostrEvent): CommunityDeletion? {
         if (event.kind != KIND_DELETION) return null

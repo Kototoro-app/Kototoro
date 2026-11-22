@@ -1,6 +1,8 @@
 package org.skepsun.kototoro.community.domain
 
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.math.abs
+import kotlin.math.ln
 import org.skepsun.kototoro.suggestions.domain.LibraryWork
 import org.skepsun.kototoro.suggestions.domain.SuggestionCandidate
 import org.skepsun.kototoro.suggestions.domain.SuggestionDirection
@@ -78,6 +80,8 @@ object CommunityRecommendations {
         if (seeds.isEmpty()) return emptyList()
         val summaries = works(seeds.map { it.groupId }.distinct())
         val knownTitles = keysById.values.flatten().filterNot(CommunityWorkKeys::isStrong).toHashSet()
+        // What every candidate is like, for damping and diversifying: its readers, its tags and its own similar works.
+        val candidates = works(summaries.values.flatMap { summary -> summary.similar.map { it.id } }.distinct())
         val ranked = rank(
             seeds = seeds,
             similar = { summaries[it]?.similar.orEmpty() },
@@ -86,8 +90,10 @@ object CommunityRecommendations {
                 CommunityMedium.entries.any { CommunityWorkKeys.titleKey(title, it, fold) in knownTitles }
             } == true },
             limit = limit,
+            readers = { candidates[it]?.rating?.count ?: 0 },
+            overlap = { a, b -> overlap(candidates[a], candidates[b]) },
         )
-        val targets = works(ranked.map { it.groupId })
+        val targets = candidates
         return ranked.mapNotNull { pick ->
             val summary = targets[pick.groupId]?.takeUnless { it.nsfw } ?: return@mapNotNull null
             val medium = CommunityMedium.entries.firstOrNull { it.wire == summary.medium && it != CommunityMedium.OTHER }
@@ -95,6 +101,19 @@ object CommunityRecommendations {
             val title = (summary.title ?: pick.title)?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
             CommunitySuggestionTarget(pick.groupId, title, medium, pick.because.firstOrNull()?.title)
         }
+    }
+
+    /**
+     * How alike two candidates are, for diversifying: the index's own similarity between them when it lists one, else
+     * the overlap of their tags.
+     */
+    fun overlap(a: CommunityWorkSummary?, b: CommunityWorkSummary?): Double {
+        if (a == null || b == null) return 0.0
+        val listed = maxOf(
+            a.similar.firstOrNull { it.id == b.id && it.coRaters > 0 }?.score ?: 0.0,
+            b.similar.firstOrNull { it.id == a.id && it.coRaters > 0 }?.score ?: 0.0,
+        )
+        return maxOf(listed, CommunityGenres.overlap(a.tags, b.tags))
     }
 
     const val FAVOURITE_AFFINITY = 2.0
@@ -117,6 +136,11 @@ object CommunityRecommendations {
     /**
      * Ranks what [similar] lists for the [seeds]. A seed's group counts once, at its strongest affinity. [known] groups
      * (the library) and anything [excluded] (adult or blocked) are never recommended.
+     *
+     * Two adjustments follow, both after Kotatsu-Redo's suggestion ranking. A work many readers rated is damped by the
+     * log of [readers], mildly, so popularity alone does not lift a looser match above a closer, less known one. Then
+     * the list is diversified (greedy maximal marginal relevance): each pick is discounted by its [overlap] with the
+     * closest pick already made, so a slightly weaker match with something new beats a near-copy of what is listed.
      */
     fun rank(
         seeds: List<CommunitySeed>,
@@ -124,8 +148,10 @@ object CommunityRecommendations {
         known: Set<String>,
         excluded: (CommunitySimilarWork) -> Boolean = { false },
         limit: Int = 30,
+        readers: (groupId: String) -> Int = { 0 },
+        overlap: (a: String, b: String) -> Double = { _, _ -> 0.0 },
     ): List<CommunityRecommendation> {
-        val strongest = seeds.groupBy { it.groupId }.mapValues { (_, list) -> list.maxBy { kotlin.math.abs(it.affinity) } }
+        val strongest = seeds.groupBy { it.groupId }.mapValues { (_, list) -> list.maxBy { abs(it.affinity) } }
         val scores = HashMap<String, Double>()
         val titles = HashMap<String, String?>()
         val contributions = HashMap<String, MutableList<Pair<CommunitySeed, Double>>>()
@@ -138,17 +164,42 @@ object CommunityRecommendations {
                 if (contribution > 0) contributions.getOrPut(work.id, ::ArrayList) += seed to contribution
             }
         }
-        return scores.entries
+        val pool = scores.entries
             .filter { it.value > 0.0 }
-            .sortedWith(compareByDescending<Map.Entry<String, Double>> { it.value }.thenBy { it.key })
-            .take(limit)
-            .map { (id, score) ->
-                CommunityRecommendation(
-                    groupId = id,
-                    title = titles[id],
-                    score = score,
-                    because = contributions[id].orEmpty().sortedByDescending { it.second }.take(2).map { it.first },
-                )
+            .map { (id, score) -> id to score / (1.0 + POPULARITY_DAMPING * ln(1.0 + readers(id).coerceAtLeast(0))) }
+            .sortedWith(compareByDescending<Pair<String, Double>> { it.second }.thenBy { it.first })
+            .take(limit * DIVERSITY_POOL)
+            .toMutableList()
+        val picked = ArrayList<Pair<String, Double>>(minOf(limit, pool.size))
+        while (pool.isNotEmpty() && picked.size < limit) {
+            var bestIndex = 0
+            var bestScore = Double.NEGATIVE_INFINITY
+            pool.forEachIndexed { index, (id, score) ->
+                val closest = picked.maxOfOrNull { overlap(it.first, id).coerceIn(0.0, 1.0) } ?: 0.0
+                val discounted = score * (1.0 - DIVERSITY * closest)
+                if (discounted > bestScore) {
+                    bestScore = discounted
+                    bestIndex = index
+                }
             }
+            picked += pool.removeAt(bestIndex).first to bestScore
+        }
+        return picked.map { (id, score) ->
+            CommunityRecommendation(
+                groupId = id,
+                title = titles[id],
+                score = score,
+                because = contributions[id].orEmpty().sortedByDescending { it.second }.take(2).map { it.first },
+            )
+        }
     }
+
+    /** How much a log-unit of readers damps a score: 1000 readers divide it by about 2. */
+    const val POPULARITY_DAMPING = 0.15
+
+    /** How much an exact copy of an earlier pick is discounted. */
+    const val DIVERSITY = 0.5
+
+    /** How many candidates past the limit the diversification may reach into. */
+    private const val DIVERSITY_POOL = 3
 }

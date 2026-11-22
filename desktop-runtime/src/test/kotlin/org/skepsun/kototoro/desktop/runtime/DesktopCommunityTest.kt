@@ -2,6 +2,15 @@ package org.skepsun.kototoro.desktop.runtime
 
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.Json
+import org.skepsun.kototoro.community.domain.CommunityMedium
+import org.skepsun.kototoro.community.domain.CommunitySnapshotManifest
+import org.skepsun.kototoro.community.domain.CommunitySnapshotShards
+import org.skepsun.kototoro.community.domain.CommunitySnapshotStats
+import org.skepsun.kototoro.community.domain.CommunityWorkKeys
+import org.skepsun.kototoro.community.domain.CommunityWorkSummary
+import org.skepsun.kototoro.community.domain.CommunityWorkSource
+import org.skepsun.kototoro.community.nostr.CommunitySourceHint
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -183,19 +192,108 @@ class DesktopCommunityTest {
         }
     }
 
+    @Test
+    fun `a chart work opens the reader's own copy, else a source's, never an adult source's`() = runBlocking {
+        DesktopRuntime.open(directory.resolve("data")).use { runtime ->
+            val key = checkNotNull(CommunityWorkKeys.titleKey("Moon Story", CommunityMedium.COMIC, ::desktopCommunityFold))
+            val keysPath = CommunitySnapshotShards.keysPath(CommunitySnapshotShards.of(key))
+            val worksPath = CommunitySnapshotShards.worksPath(CommunitySnapshotShards.of("g1"))
+            val files = mapOf(
+                keysPath to Json.encodeToString(mapOf(key to "g1")),
+                worksPath to Json.encodeToString(mapOf("g1" to CommunityWorkSummary("g1", "comic", "Moon Story"))),
+            )
+            val manifest = Json.encodeToString(CommunitySnapshotManifest(
+                generatedAt = 1, relays = emptyList(), powRating = 0, powComment = 0, minChartWeight = 5.0,
+                files = files.mapValues { "x" }, stats = CommunitySnapshotStats(0, 0, 0, 0, 1),
+            ))
+            val service = service(runtime, FakeRelay(online = true), manifest = { manifest }, files = files)
+            fun item(id: Long, title: String, source: SourceRef = this@DesktopCommunityTest.source) = work.copy(id = id, title = title, source = source)
+            val adult = SourceRef("ADULT", "zh", "HENTAI_MANGA")
+            val asked = mutableListOf<String>()
+            val search: suspend (SourceRef, String) -> List<SourceContent> = { source, _ ->
+                asked += source.name
+                listOf(item(8, "Another Story", source), item(9, "Moon Story", source))
+            }
+            val owned = service.findWork("g1", "Moon Story", listOf(item(5, "Moon Story")), listOf(adult, source), search = search)
+            // The library's key shard is not cached yet, so the copy is found by searching; once cached, the library wins.
+            assertEquals(9L, owned?.id)
+            assertEquals(listOf(source.name), asked, "an adult source is never asked")
+            assertEquals(5L, service.findWork("g1", "Moon Story", listOf(item(5, "Moon Story")), listOf(source), search = search)?.id)
+            assertNull(service.findWork("g1", "Moon Story", emptyList(), listOf(source)) { _, _ -> listOf(item(8, "Another Story")) })
+        }
+    }
+
+    @Test
+    fun `posts name a shareable source unless the reader turned it off`() = runBlocking {
+        DesktopRuntime.open(directory.resolve("data")).use { runtime ->
+            val relay = FakeRelay(online = true)
+            var share = true
+            val service = service(runtime, relay) { CommunitySwitches(enabled = true, shareSources = share) }
+            service.createIdentity()
+            val shared = work.copy(publicUrl = "https://www.Example.org/w7")
+            service.rate(shared.id, service.identity(shared, resolve = false), 8)
+            val hint = CommunityEventSchema.parseRating(relay.stored.last())?.source
+            assertEquals(CommunitySourceHint("MANGA_SITE", "/w7", "example.org"), hint)
+            val custom = shared.copy(id = 70, source = SourceRef("JSON_TVBOX_1", "zh", "VIDEO"))
+            service.postComment(service.identity(custom, resolve = false), "自定义来源", null, false, null)
+            assertNull(CommunityEventSchema.parseComment(relay.stored.last())?.source, "a user-configured source is never named")
+            share = false
+            service.rate(shared.id, service.identity(shared, resolve = false), 9)
+            assertNull(CommunityEventSchema.parseRating(relay.stored.last())?.source)
+        }
+    }
+
+    @Test
+    fun `the source its readers named is searched first and its named entry wins`() = runBlocking {
+        DesktopRuntime.open(directory.resolve("data")).use { runtime ->
+            val key = checkNotNull(CommunityWorkKeys.titleKey("Moon Story", CommunityMedium.COMIC, ::desktopCommunityFold))
+            val keysPath = CommunitySnapshotShards.keysPath(CommunitySnapshotShards.of(key))
+            val worksPath = CommunitySnapshotShards.worksPath(CommunitySnapshotShards.of("g1"))
+            val summary = CommunityWorkSummary("g1", "comic", "Moon Story", sources = listOf(
+                CommunityWorkSource("NAMED", "/moon-2", "named.example", readers = 3),
+                CommunityWorkSource("OTHER_ECOSYSTEM", "/m/1", "site.example", readers = 1),
+            ))
+            val files = mapOf(
+                keysPath to Json.encodeToString(mapOf(key to "g1")),
+                worksPath to Json.encodeToString(mapOf("g1" to summary)),
+            )
+            val manifest = Json.encodeToString(CommunitySnapshotManifest(
+                generatedAt = 1, relays = emptyList(), powRating = 0, powComment = 0, minChartWeight = 5.0,
+                files = files.mapValues { "x" }, stats = CommunitySnapshotStats(0, 0, 0, 0, 1),
+            ))
+            val service = service(runtime, FakeRelay(online = true), manifest = { manifest }, files = files)
+            val mine = SourceRef("MINE", "zh", "MANGA")
+            val named = SourceRef("NAMED", "zh", "MANGA")
+            val sameSite = SourceRef("SAME_SITE", "zh", "MANGA")
+            val hostOf: (SourceRef) -> String? = { if (it == sameSite) "site.example" else null }
+            val options = service.sourceOptions("g1", listOf(mine, sameSite, named), hostOf, includeOthers = true)
+            assertEquals(listOf("NAMED", "SAME_SITE", "MINE"), options.map { it.source.name },
+                "named sources first, then the same site under another id, then the rest")
+            val asked = mutableListOf<String>()
+            val found = service.findWork("g1", "Moon Story", emptyList(), listOf(mine, sameSite, named), hostOf) { source, _ ->
+                asked += source.name
+                listOf(work.copy(id = 1, title = "Moon Story", url = "/moon-1", source = source),
+                    work.copy(id = 2, title = "Moon Story", url = "/moon-2", source = source))
+            }
+            assertEquals(2L, found?.id, "the entry at the address its readers named")
+            assertEquals(listOf("NAMED"), asked)
+        }
+    }
+
     private fun service(
         runtime: DesktopRuntime,
         relay: FakeRelay,
         preferences: String = "desktop_community",
         now: () -> Long = System::currentTimeMillis,
         manifest: () -> String = { MANIFEST },
+        files: Map<String, String> = emptyMap(),
         switches: () -> CommunitySwitches = { CommunitySwitches(enabled = true) },
     ) = CommunityService(
         database = runtime.database,
         identities = MemoryIdentities(),
         blocklist = DesktopCommunityBlocklist(runtime.preferences.open(preferences)),
         snapshots = CommunitySnapshots(
-            fetch = { path -> if (path == "v1/manifest.json") manifest() else null },
+            fetch = { path -> if (path == "v1/manifest.json") manifest() else files[path] },
             now = now,
             cache = DesktopCommunitySnapshotCache(directory.resolve("snapshot-$preferences")),
         ),

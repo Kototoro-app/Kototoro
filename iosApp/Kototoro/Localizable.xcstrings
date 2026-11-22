@@ -28918,6 +28918,690 @@
           }
         }
       }
+    },
+    "发布时附带来源": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Name the source when posting"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "發布時附帶來源"
+          }
+        }
+      }
+    },
+    "评分和评论会公开你在哪个来源阅读这部作品，其他读者可以在同一来源直接打开。本地、自定义和成人来源不会附带。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ratings and comments say which source you read the work on, so other readers can open it on the same source. Local, custom and adult sources are never named."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "評分和評論會公開你在哪個來源閱讀這部作品，其他讀者可以在同一來源直接開啟。本地、自訂和成人來源不會附帶。"
+          }
+        }
+      }
+    },
+    "社区评分": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Community rating"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "社群評分"
+          }
+        }
+      }
+    },
+    "评论 %lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comments %lld"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "評論 %lld"
+          }
+        }
+      }
+    },
+    "评论": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comments"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "評論"
+          }
+        }
+      }
+    },
+    "%lld 条评论": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld comments"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 條評論"
+          }
+        }
+      }
+    },
+    "修改": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edit"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "修改"
+          }
+        }
+      }
+    },
+    "正在读取社区评分…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loading community ratings…"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在讀取社群評分…"
+          }
+        }
+      }
+    },
+    "暂时无法读取社区评分": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t load community ratings"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暫時無法讀取社群評分"
+          }
+        }
+      }
+    },
+    "正在读取社区评论…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loading comments…"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在讀取社群評論…"
+          }
+        }
+      }
+    },
+    "暂时无法读取评论": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t load comments"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暫時無法讀取評論"
+          }
+        }
+      }
+    },
+    "暂无社区评论": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No comments yet"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暫無社群評論"
+          }
+        }
+      }
+    },
+    "写评论": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Write a comment"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "寫評論"
+          }
+        }
+      }
+    },
+    "评论内容": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comment"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "評論內容"
+          }
+        }
+      }
+    },
+    "包含剧透": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contains spoilers"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "包含劇透"
+          }
+        }
+      }
+    },
+    "创建社区身份": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create community identity"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "建立社群身份"
+          }
+        }
+      }
+    },
+    "已有恢复密钥（nsec）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Existing recovery key (nsec)"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已有恢復金鑰（nsec）"
+          }
+        }
+      }
+    },
+    "恢复社区身份": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restore community identity"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢復社群身份"
+          }
+        }
+      }
+    },
+    "恢复密钥无效": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invalid recovery key"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢復金鑰無效"
+          }
+        }
+      }
+    },
+    "恢复密钥只保存在本机钥匙串，不随备份同步。请勿分享恢复密钥。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The recovery key is kept only in this device’s Keychain and is not included in backups. Never share it."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢復金鑰只儲存在本機鑰匙串，不隨備份同步。請勿分享恢復金鑰。"
+          }
+        }
+      }
+    },
+    "发布内容和公钥将发送到公共中继，可能被复制或归档。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What you post and your public key are sent to public relays, where they may be copied or archived."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "釋出內容和公鑰將傳送到公共中繼，可能被複制或歸檔。"
+          }
+        }
+      }
+    },
+    "待发送：%d 条": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Waiting to send: %d"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "待傳送：%d 條"
+          }
+        }
+      }
+    },
+    "重试待发送内容": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retry waiting posts"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重試待傳送內容"
+          }
+        }
+      }
+    },
+    "正在准备签名或发送…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Signing or sending…"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在準備簽名或傳送…"
+          }
+        }
+      }
+    },
+    "无法读取本地社区身份或待发送内容": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t read the community identity or waiting posts on this device"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無法讀取本地社群身份或待傳送內容"
+          }
+        }
+      }
+    },
+    "无法保存社区身份，未覆盖已有密钥": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t save the community identity; the existing key was left unchanged"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無法儲存社群身份，未覆蓋已有金鑰"
+          }
+        }
+      }
+    },
+    "中继已接收": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Accepted by a relay"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "中繼已接收"
+          }
+        }
+      }
+    },
+    "已保存到待发送队列": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saved to the send queue"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已儲存到待傳送佇列"
+          }
+        }
+      }
+    },
+    "待发送内容已清空": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nothing left to send"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "待傳送內容已清空"
+          }
+        }
+      }
+    },
+    "仍有内容待发送": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Some posts are still waiting to send"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仍有內容待傳送"
+          }
+        }
+      }
+    },
+    "因为你喜欢《%@》": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Because you liked “%@”"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "因為你喜歡《%@》"
+          }
+        }
+      }
+    },
+    "社区推荐": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Community picks"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "社群推薦"
+          }
+        }
+      }
+    },
+    "开启社区评分、评论与推荐": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enable community ratings, comments and recommendations"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "開啟社群評分、評論與推薦"
+          }
+        }
+      }
+    },
+    "进入推荐时先显示缓存，超过六小时或偏好、可用来源变化时重新生成。可在推荐页下拉刷新。社区推荐读取公开索引，书库匹配在本机完成；匹配来源时仅搜索推荐作品标题。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recommendations open with the cached list and are rebuilt after six hours, or when your preferences or available sources change. Pull down on the recommendations page to refresh. Community picks read a public index and match your library on this device; only the recommended titles are searched in your sources."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "進入推薦時先顯示快取，超過六小時或偏好、可用來源變化時重新生成。可在推薦頁下拉重新整理。社群推薦讀取公開索引，書庫匹配在本機完成；匹配來源時僅搜尋推薦作品標題。"
+          }
+        }
+      }
+    },
+    "作品评分": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rate this work"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "作品評分"
+          }
+        }
+      }
+    },
+    "公开发布评分": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Publish rating"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "公開發布評分"
+          }
+        }
+      }
+    },
+    "写社区评论": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Write a community comment"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "寫社群評論"
+          }
+        }
+      }
+    },
+    "公开发布评论": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Publish comment"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "公開發布評論"
+          }
+        }
+      }
+    },
+    "显示恢复密钥": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show recovery key"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "顯示恢復金鑰"
+          }
+        }
+      }
+    },
+    "隐藏恢复密钥": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hide recovery key"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "隱藏恢復金鑰"
+          }
+        }
+      }
+    },
+    "浏览分页": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Browse sections"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "瀏覽分頁"
+          }
+        }
+      }
+    },
+    "%@：%@，%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@: %2$@, %3$@"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@：%2$@，%3$@"
+          }
+        }
+      }
+    },
+    "%@ · %@ → %@": {
+      "shouldTranslate": false
+    },
+    "/ 10": {
+      "shouldTranslate": false
+    },
+    "https://dav.example.com": {
+      "shouldTranslate": false
+    },
+    "kototoro": {
+      "shouldTranslate": false
     }
   },
   "version": "1.0"

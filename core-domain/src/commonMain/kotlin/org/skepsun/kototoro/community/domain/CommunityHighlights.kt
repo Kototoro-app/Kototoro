@@ -32,7 +32,7 @@ object CommunityHighlights {
         works.asSequence()
             .filter { (allowNsfw || !it.nsfw) && !it.title.isNullOrBlank() }
             .mapNotNull { work ->
-                work.rating?.takeIf { it.count > 0 }?.let { CommunityChartEntry(work.id, work.title, it.score, it.count) }
+                work.rating?.takeIf { it.count > 0 }?.let { CommunityChartEntry(work.id, work.title, it.score, it.count, it.mean) }
             }
             .sortedWith(BEST_FIRST)
             .take(limit)
