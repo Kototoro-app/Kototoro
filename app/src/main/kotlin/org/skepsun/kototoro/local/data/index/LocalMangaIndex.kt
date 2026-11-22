@@ -120,7 +120,8 @@ private suspend fun updateIndex(rootKeys: Set<String>) {
             if (novel != null) return@runCatchingCancellable novel
             LocalContentParser(dir).getContent(withDetails)
         } else {
-            LocalContentParser(uri).getContent(withDetails)
+            // A downloaded folder keeps the remote url in its manga, so the indexed path is the location.
+            LocalContentParser(uri).getContent(withDetails).copy(storageUri = uri)
         }
     }.onFailure {
         it.printStackTraceDebug()

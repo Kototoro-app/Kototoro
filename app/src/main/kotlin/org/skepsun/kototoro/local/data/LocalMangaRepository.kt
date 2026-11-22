@@ -284,9 +284,10 @@ class LocalMangaRepository @Inject constructor(
     }
 
     suspend fun findSavedContent(remoteContent: Content, withDetails: Boolean = true): LocalContent? = runCatchingCancellable {
-        // very fast path
+        // very fast path: already indexed, so nothing is written back. Re-indexing the hit stored it
+        // under the remote row (the File parse keeps the remote url), adding a duplicate library entry.
         localContentIndex.get(remoteContent.id, withDetails)?.let { cached ->
-            return@runCatchingCancellable cached
+            return cached
         }
         // fast path
         findParser(remoteContent)?.let {
