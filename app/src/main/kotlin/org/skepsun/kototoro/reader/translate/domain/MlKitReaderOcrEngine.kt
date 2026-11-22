@@ -7,7 +7,9 @@ import android.util.Log
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions
+import com.google.mlkit.vision.text.TextRecognizer
 import com.google.mlkit.vision.text.japanese.JapaneseTextRecognizerOptions
+import com.google.mlkit.vision.text.korean.KoreanTextRecognizerOptions
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import org.skepsun.kototoro.core.LocalizedAppContext
 import org.skepsun.kototoro.core.image.BitmapDecoderCompat
@@ -29,14 +31,7 @@ class MlKitReaderOcrEngine @Inject constructor(
         val sourceUri = request.sourceUri
         val sourceLang = request.sourceLang
         log { "recognize start lang=$sourceLang uri=$sourceUri" }
-        val recognizer = when (sourceLang) {
-            "ja" -> TextRecognition.getClient(JapaneseTextRecognizerOptions.Builder().build())
-            "zh", "zh-cn", "zh-hans", "zh-tw", "zh-hant" -> {
-                TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build())
-            }
-
-            else -> TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
-        }
+        val recognizer = recognizerFor(sourceLang)
         return try {
             val offsetRect = request.roi
             var decodedBitmap: Bitmap? = null
@@ -105,13 +100,7 @@ class MlKitReaderOcrEngine @Inject constructor(
 
     override suspend fun recognize(bitmap: Bitmap, regions: List<TextRegion>): List<OcrTextBlock> {
         if (regions.isEmpty()) return emptyList()
-        val recognizer = when (settings.readerTranslationSourceLanguage) {
-            "ja" -> TextRecognition.getClient(JapaneseTextRecognizerOptions.Builder().build())
-            "zh", "zh-cn", "zh-hans", "zh-tw", "zh-hant" -> {
-                TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build())
-            }
-            else -> TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
-        }
+        val recognizer = recognizerFor(settings.readerTranslationSourceLanguage)
         return try {
             buildList {
                 for (region in regions) {
@@ -146,6 +135,17 @@ class MlKitReaderOcrEngine @Inject constructor(
         } finally {
             recognizer.close()
         }
+    }
+
+    // The Latin recognizer reads Hangul as Latin garbage (#688), so every CJK source needs its own script model.
+    private fun recognizerFor(sourceLang: String): TextRecognizer = when (sourceLang) {
+        "ja" -> TextRecognition.getClient(JapaneseTextRecognizerOptions.Builder().build())
+        "ko" -> TextRecognition.getClient(KoreanTextRecognizerOptions.Builder().build())
+        "zh", "zh-cn", "zh-hans", "zh-tw", "zh-hant" -> {
+            TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build())
+        }
+
+        else -> TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
     }
 
     private fun cropBitmap(source: Bitmap, box: Rect): Bitmap {
