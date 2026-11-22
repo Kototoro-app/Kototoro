@@ -2279,7 +2279,11 @@ class DownloadWorker @AssistedInject constructor(
                     currentChapterTitle = chapter.value.title?.takeIf { totalChapters > 1 },
                 ),
             )
-            val target = resolveVideoTarget(repo, chapter.value, task) ?: continue
+            // An episode the source offers no stream for fails the task: skipping it left a "downloaded" task with
+            // nothing on disk (issue #707). Not an IOException, which would be retried as a network error.
+            val target = checkNotNull(resolveVideoTarget(repo, chapter.value, task)) {
+                "No downloadable video for episode: ${chapter.value.title ?: chapter.value.id}"
+            }
             val torrentStream = if (target.isTorrent) {
                 torrentStreamService.openStream(target.url, target.headers.orEmpty())
             } else {
