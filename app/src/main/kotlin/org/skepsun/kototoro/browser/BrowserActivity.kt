@@ -10,7 +10,6 @@ import android.webkit.WebView
 import android.webkit.CookieManager
 import androidx.activity.result.contract.ActivityResultContract
 import androidx.lifecycle.lifecycleScope
-import com.google.android.material.snackbar.Snackbar
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -27,7 +26,6 @@ import org.skepsun.kototoro.core.parser.ParserContentRepository
 import org.skepsun.kototoro.core.network.CommonHeaders
 import org.skepsun.kototoro.core.network.cookies.sensitiveValueFingerprint
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
-import org.skepsun.kototoro.core.util.ext.makeSnackbar
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
 import org.skepsun.kototoro.parsers.model.ContentSource
 import kotlin.coroutines.resume
@@ -71,7 +69,7 @@ class BrowserActivity : BaseBrowserActivity() {
                 proxyProvider.applyWebViewConfig()
             } catch (e: Exception) {
                 e.printStackTraceDebug()
-                browserWebView.makeSnackbar(e.getDisplayMessage(resources), Snackbar.LENGTH_LONG).show()
+                showBrowserMessage(e.getDisplayMessage(resources))
             }
             if (savedInstanceState == null) {
                 val url = intent?.dataString
@@ -162,7 +160,7 @@ class BrowserActivity : BaseBrowserActivity() {
 
         R.id.action_browser -> {
             if (!router.openExternalBrowser(browserWebView.url.orEmpty(), item.title)) {
-                browserWebView.makeSnackbar(R.string.operation_not_supported, Snackbar.LENGTH_SHORT).show()
+                showBrowserMessage(getString(R.string.operation_not_supported), long = false)
             }
             true
         }

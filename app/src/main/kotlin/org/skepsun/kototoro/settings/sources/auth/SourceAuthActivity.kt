@@ -8,7 +8,6 @@ import android.view.MenuItem
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContract
 import androidx.lifecycle.lifecycleScope
-import com.google.android.material.snackbar.Snackbar
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -20,7 +19,6 @@ import org.skepsun.kototoro.core.model.getTitle
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.parser.ParserContentRepository
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
-import org.skepsun.kototoro.core.util.ext.makeSnackbar
 import org.skepsun.kototoro.parsers.exception.AuthRequiredException
 import org.skepsun.kototoro.parsers.ContentParserAuthProvider
 import org.skepsun.kototoro.parsers.model.ContentSource
@@ -53,7 +51,7 @@ class SourceAuthActivity : BaseBrowserActivity(), BrowserCallback {
             try {
                 proxyProvider.applyWebViewConfig()
             } catch (e: Exception) {
-                browserWebView.makeSnackbar(e.getDisplayMessage(resources), Snackbar.LENGTH_LONG).show()
+                showBrowserMessage(e.getDisplayMessage(resources))
             }
             if (savedInstanceState == null) {
                 val url = authProvider.authUrl

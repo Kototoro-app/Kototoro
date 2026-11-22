@@ -3,6 +3,7 @@ package org.skepsun.kototoro.browser
 import android.os.Bundle
 import android.view.ViewGroup
 import android.webkit.WebView
+import android.widget.Toast
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
@@ -18,7 +19,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.google.android.material.snackbar.Snackbar
 import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 import org.skepsun.kototoro.core.model.ContentSource
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.network.CommonHeaders
@@ -29,9 +32,9 @@ import org.skepsun.kototoro.core.parser.ParserContentRepository
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
 import org.skepsun.kototoro.core.ui.progress.LinearProgressIndicator
 import org.skepsun.kototoro.core.util.ext.configureForParser
+import org.skepsun.kototoro.core.util.ext.makeSnackbar
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.util.nullIfEmpty
-import javax.inject.Inject
 
 @AndroidEntryPoint
 abstract class BaseBrowserActivity : BaseComposeActivity(), BrowserCallback {
@@ -44,6 +47,19 @@ abstract class BaseBrowserActivity : BaseComposeActivity(), BrowserCallback {
 
     @Inject
     lateinit var adBlock: AdBlock
+
+    /**
+     * A message about the page. The WebView lives inside Compose and is not attached during onCreate, where a
+     * Snackbar finds no parent and throws (issue #710), so until then the message is a toast.
+     */
+    protected fun showBrowserMessage(message: CharSequence, long: Boolean = true) {
+        if (isFinishing || isDestroyed) return
+        if (browserWebView.isAttachedToWindow) {
+            browserWebView.makeSnackbar(message, if (long) Snackbar.LENGTH_LONG else Snackbar.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(this, message, if (long) Toast.LENGTH_LONG else Toast.LENGTH_SHORT).show()
+        }
+    }
 
     private lateinit var onBackPressedCallback: WebViewBackPressedCallback
     protected lateinit var browserWebView: WebView
