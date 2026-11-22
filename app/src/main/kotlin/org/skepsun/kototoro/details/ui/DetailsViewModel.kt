@@ -834,8 +834,19 @@ class DetailsViewModel @Inject constructor(
     private fun currentMetadataContentType(): ContentType? {
         return when (selectedMetadataSource.safeValueOrNull() ?: MetadataSourceSelection.Base) {
             MetadataSourceSelection.Base -> currentBaseContentType()
-            is MetadataSourceSelection.Tracking -> currentTrackingMetadataDetails()?.contentType ?: currentBaseContentType()
+            // Local files are what gets read, and the reader picked their kind on import: a tracker that lists the
+            // novel as its manga adaptation must not turn the page into the manga layout.
+            is MetadataSourceSelection.Tracking -> currentBaseContentType()?.takeIf { isBaseContentLocal() }
+                ?: currentTrackingMetadataDetails()?.contentType
+                ?: currentBaseContentType()
         }
+    }
+
+    private fun isBaseContentLocal(): Boolean {
+        val base = baseLoadedDetails?.toContent()
+            ?: mangaDetails.safeValueOrNull()?.toContent()
+            ?: originContent
+        return base?.isLocal == true
     }
 
     private fun currentDetailsContentType(): ContentType? {
