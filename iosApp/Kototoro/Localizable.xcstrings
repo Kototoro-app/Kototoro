@@ -29602,6 +29602,70 @@
     },
     "kototoro": {
       "shouldTranslate": false
+    },
+    "浏览来源": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Browse sources"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "瀏覽來源"
+          }
+        }
+      }
+    },
+    "搜索会同时查找作品库、历史和 %lld 个已启用的来源。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Searches look through your library, history and %lld enabled sources at once."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搜尋會同時查找作品庫、歷史和 %lld 個已啟用的來源。"
+          }
+        }
+      }
+    },
+    "已搜索 %lld 个来源，找到 %lld 部": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Searched %1$lld sources, found %2$lld"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已搜尋 %lld 個來源，找到 %lld 部"
+          }
+        }
+      }
+    },
+    "%lld 个来源搜索失败": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld sources failed"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 個來源搜尋失敗"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

@@ -352,7 +352,7 @@ struct ContentCollection<Destination: View, Actions: View>: View {
 
 // MARK: - Cells
 
-private struct GridCard: View {
+struct GridCard: View {
     let runtime: IosSources
     let item: ContentItem
     var movie = false
