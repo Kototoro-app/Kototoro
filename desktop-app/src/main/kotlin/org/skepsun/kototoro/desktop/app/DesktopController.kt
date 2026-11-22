@@ -1762,8 +1762,11 @@ class DesktopController(
         val preferred = state.value.suggestionSettings.preferredSources
         val used = library.mapTo(HashSet()) { it.source.name }
         val overrides = session.sourceNsfwOverrides()
+        // Adult sources only once adult ratings are allowed, and never while the sources page hides them.
+        val adult = state.value.services.communityNsfwRatings &&
+            !state.value.sourceSettings.hidesNsfw(DesktopNsfwTarget.SOURCES)
         val listings = state.value.enabledSources
-            .filterNot { it.isNsfwSource(overrides) }
+            .filterNot { !adult && it.isNsfwSource(overrides) }
             .sortedWith(compareByDescending<SourceListing> { it.source.name in preferred }
                 .thenByDescending { it.source.name in used })
         return library to listings

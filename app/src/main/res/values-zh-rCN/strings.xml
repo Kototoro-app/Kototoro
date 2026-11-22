@@ -4317,9 +4317,9 @@
     <string name="community_enabled">社区评分</string>
     <string name="community_enabled_summary">通过公共 Nostr 中继与其他读者一起评分</string>
     <string name="community_nsfw_ratings">为成人作品评分</string>
-    <string name="community_nsfw_ratings_summary">默认关闭：评分是公开的，会暴露你读过什么</string>
+    <string name="community_nsfw_ratings_summary">默认关闭：评分是公开的，会暴露你读过什么；开启附带来源时也会公开所用来源</string>
     <string name="community_share_sources">发布时附带来源</string>
-    <string name="community_share_sources_summary">评分和评论会公开你在哪个来源阅读这部作品，其他读者可以在同一来源直接打开。本地、自定义和成人来源不会附带</string>
+    <string name="community_share_sources_summary">评分和评论会公开你在哪个来源阅读这部作品，其他读者可以在同一来源直接打开。本地和自定义来源不会附带；成人来源仅在开启「为成人作品评分」后附带</string>
     <string name="community_other_sources">其他来源</string>
     <string name="community_source_readers">%1$d 位读者在此阅读</string>
     <string name="community_source_same_site">同一站点</string>

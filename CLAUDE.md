@@ -373,7 +373,7 @@ Android 与桌面的 UI 按 CMP 共享呈现演进；Windows 与 macOS 始终共
   `CommunityRecommendations.rank` 按评分人数对数压制热门并做 MMR 去重复（重叠度取索引相似度或标签 Jaccard）。
   榜单与相似作品点开走 `CommunityService.findWork`：书库已有的那一份（只用已缓存的键分片），否则在前 4 个非成人来源里按标题搜索、
   命中同组或同标题键的条目直接打开详情，都没有才退回全局搜索（Android `CommunityWorkFinder`、桌面 `openCommunityWork`；iOS 仍是搜索）。
-  评分与评论还可附带 `["source", 来源 ID, 地址, 域名]`（`community_share_sources`，默认开；本地、`JSON_` 与成人来源从不附带，
+  评分与评论还可附带 `["source", 来源 ID, 地址, 域名]`（`community_share_sources`，默认开；本地与 `JSON_` 来源从不附带，成人来源只在开启 `community_nsfw_ratings` 后附带与检索，
   规则在 `core-domain` 的 `CommunitySources`），索引器汇总成作品摘要的 `sources`，`findWork` 先在读者装了的同 ID 来源、
   再在同站点来源里按记录的地址检索；长按卡片打开共享的 `CommunitySourcePicker`（「其他来源」），见计划 §10.3。Windows 的 `DesktopCommunity` 有自己的 StateFlow：私钥存系统凭据库
   （`desktopCommunityCredentialStore`，与 Drive 令牌同一套），公钥与屏蔽/举报存 `desktop_community`，开关是

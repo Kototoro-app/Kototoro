@@ -201,7 +201,10 @@ class CommunityService(
             nsfw = content.isNsfw,
             genres = CommunityGenres.of(content.tags.map { it.title }),
             source = content.takeIf {
-                switches().shareSources && !it.isNsfw && CommunitySources.publishable(it.source.name, it.source.contentType)
+                // Adult works and sources only once the reader allows adult ratings, which publishes them anyway.
+                val adult = switches().nsfwRatings
+                switches().shareSources && (adult || !it.isNsfw) &&
+                    CommunitySources.publishable(it.source.name, it.source.contentType, allowAdult = adult)
             }?.let { CommunityWorkSource(it.source.name, it.url, CommunitySources.hostOf(it.publicUrl), readers = 0) },
         )
     }
@@ -621,7 +624,10 @@ class CommunityService(
     ): List<CommunitySourceOption> = withContext(io) {
         val summary = attempt { snapshots.works(listOf(groupId))[groupId] }
         val mediums = mediumsOf(summary)
-        val usable = sources.filter { !it.contentType.startsWith("HENTAI_") && CommunityMedium.of(it.contentType) in mediums }
+        val adult = switches().nsfwRatings
+        val usable = sources.filter {
+            (adult || !CommunitySources.isAdult(it.contentType)) && CommunityMedium.of(it.contentType) in mediums
+        }
         val listed = summary?.sources.orEmpty()
         val byName = usable.mapNotNull { source -> listed.firstOrNull { it.source == source.name }?.let { CommunitySourceOption(source, it) } }
         val byHost = usable.filter { source -> byName.none { it.source == source } }.mapNotNull { source ->
@@ -696,7 +702,8 @@ class CommunityService(
         search: suspend (SourceRef, String) -> List<SourceContent>,
     ): SourceContent? {
         val found = withTimeoutOrNull(FIND_TIMEOUT_MILLIS) { attempt { search(option.source, title) } }.orEmpty()
-            .filter { it.title.isNotBlank() && (it.url.isNotBlank() || it.publicUrl.isNotBlank()) && !it.isNsfw }
+            .filter { it.title.isNotBlank() && (it.url.isNotBlank() || it.publicUrl.isNotBlank()) }
+            .filter { switches().nsfwRatings || !it.isNsfw }
         if (found.isEmpty()) return null
         val wanted = mediums.mapNotNull { CommunityWorkKeys.titleKey(title, it, fold) }.toSet()
         fun titled(item: SourceContent) = CommunityWorkKeys.keys(CommunityMedium.of(item.source.contentType),

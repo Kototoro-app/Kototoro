@@ -4355,9 +4355,9 @@
     <string name="community_enabled">Community ratings</string>
     <string name="community_enabled_summary">Rate works together with other readers through public Nostr relays</string>
     <string name="community_nsfw_ratings">Rate adult works</string>
-    <string name="community_nsfw_ratings_summary">Off by default: ratings are public and show what you read</string>
+    <string name="community_nsfw_ratings_summary">Off by default: ratings are public and show what you read, including the source when sources are named</string>
     <string name="community_share_sources">Name the source when posting</string>
-    <string name="community_share_sources_summary">Ratings and comments say which source you read the work on, so other readers can open it on the same source. Local, custom and adult sources are never named</string>
+    <string name="community_share_sources_summary">Ratings and comments say which source you read the work on, so other readers can open it on the same source. Local and custom sources are never named; adult sources only when adult ratings are on</string>
     <string name="community_other_sources">Other sources</string>
     <string name="community_source_readers">%1$d readers here</string>
     <string name="community_source_same_site">Same site</string>

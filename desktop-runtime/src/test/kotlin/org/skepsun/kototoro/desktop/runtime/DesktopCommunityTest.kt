@@ -244,6 +244,29 @@ class DesktopCommunityTest {
     }
 
     @Test
+    fun `adult sources are named and searched only once adult ratings are on`() = runBlocking {
+        DesktopRuntime.open(directory.resolve("data")).use { runtime ->
+            var adultRatings = false
+            val service = service(runtime, FakeRelay(online = true)) {
+                CommunitySwitches(enabled = true, nsfwRatings = adultRatings)
+            }
+            val adultSource = SourceRef("ADULT", "zh", "HENTAI_MANGA")
+            val adult = work.copy(id = 8, source = adultSource, publicUrl = "https://adult.example/w8")
+            assertNull(service.identity(adult, resolve = false).source)
+            val asked = mutableListOf<String>()
+            val search: suspend (SourceRef, String) -> List<SourceContent> = { source, _ -> asked += source.name; emptyList() }
+            service.findWork("g1", "Moon Story", emptyList(), listOf(adultSource, source), search = search)
+            assertEquals(listOf(source.name), asked)
+
+            adultRatings = true
+            assertEquals("ADULT", service.identity(adult, resolve = false).source?.source)
+            asked.clear()
+            service.findWork("g1", "Moon Story", emptyList(), listOf(adultSource, source), search = search)
+            assertEquals(listOf(adultSource.name, source.name), asked)
+        }
+    }
+
+    @Test
     fun `the source its readers named is searched first and its named entry wins`() = runBlocking {
         DesktopRuntime.open(directory.resolve("data")).use { runtime ->
             val key = checkNotNull(CommunityWorkKeys.titleKey("Moon Story", CommunityMedium.COMIC, ::desktopCommunityFold))

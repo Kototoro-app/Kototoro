@@ -383,7 +383,10 @@ Android 和桌面分别通过 `androidMain` / `jvmMain` 引入对应的 JNI 产�
 
 - 事件：评分与评论可带一个多字母标签 `["source", <来源 ID>, <条目地址>, <站点域名>]`（`CommunitySourceHint`）。
   只有其他读者也能以同一 ID 拥有的来源会被写上：扩展与内置解析器；本地来源、所有 `JSON_` 来源（TVBox / Legado / LNReader /
-  JS 规则，ID 来自读者自己的配置链接）与成人来源一律不写（`CommunitySources.publishable`）。
+  JS 规则，ID 来自读者自己的配置链接）一律不写（`CommunitySources.publishable`）。成人作品与成人来源只在读者开启
+  「为成人作品评分」（`community_nsfw_ratings`）后才写：那个开关本来就会公开读者读过的成人作品，默认关闭；
+  同一开关也决定「其他来源」与 `findWork` 是否列出、检索成人来源（Android 另受全局成人内容过滤，桌面受「来源与浏览」过滤）。
+  iOS 不发布成人作品，不受影响。
 - 开关：服务 → 社区「发布时附带来源」（`community_share_sources`，默认开）；首次开启社区的引导文案写明会公开来源。
 - 作品是否同一部仍只由作品键决定；来源只挂在作品组上，说明“在哪能读到”。
 - 索引器：每位读者对每部作品只按最新一条带来源的评分或评论计一次；按（来源，地址）合并、按读者权重求和；
