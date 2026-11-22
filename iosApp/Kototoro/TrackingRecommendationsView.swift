@@ -19,6 +19,12 @@ struct TrackingScheduleWindow {
     }
 }
 
+/// Loaded charts by selection. Browse builds this view anew whenever its segment or the space changes, so a cache in
+/// the view's own state lasted only until the reader looked at another segment and every return reloaded the chart.
+@MainActor private enum TrackingRecommendationsCache {
+    static var entries: [String: (items: [IosTrackingItem], loadedAt: Date)] = [:]
+}
+
 /// Website charts in Browse, scoped to the current content space.
 struct TrackingRecommendationsView: View {
     let spaceKind: String?
@@ -160,6 +166,9 @@ struct TrackingRecommendationsView: View {
         return title
     }
 
+    /// How long a loaded chart is shown again without asking the site; pull to refresh always asks.
+    private static let freshness: TimeInterval = 15 * 60
+
     static func weekdayTitle(_ day: Int) -> String {
         let names = [String(localized: "周一"), String(localized: "周二"), String(localized: "周三"),
                      String(localized: "周四"), String(localized: "周五"), String(localized: "周六"), String(localized: "周日")]
@@ -175,7 +184,17 @@ struct TrackingRecommendationsView: View {
         let token = UUID()
         request = token
         let key = identity
-        if !force && loadedIdentity == key && Date().timeIntervalSince(loadedAt) < 15 * 60 { return }
+        if !force && loadedIdentity == key && Date().timeIntervalSince(loadedAt) < Self.freshness { return }
+        // A chart this selection loaded a little earlier, before the view was rebuilt: shown as it was.
+        if !force, let cached = TrackingRecommendationsCache.entries[key],
+           Date().timeIntervalSince(cached.loadedAt) < Self.freshness {
+            items = cached.items
+            loadedIdentity = key
+            loadedAt = cached.loadedAt
+            error = nil
+            loading = false
+            return
+        }
         loading = true; error = nil
         defer { if request == token { loading = false } }
         guard let tracking = library.library?.tracking else { return }
@@ -185,6 +204,7 @@ struct TrackingRecommendationsView: View {
             items = result
             loadedIdentity = key
             loadedAt = Date()
+            TrackingRecommendationsCache.entries[key] = (result, loadedAt)
         } catch {
             guard !Task.isCancelled, request == token, identity == key else { return }
             self.error = error.localizedDescription
