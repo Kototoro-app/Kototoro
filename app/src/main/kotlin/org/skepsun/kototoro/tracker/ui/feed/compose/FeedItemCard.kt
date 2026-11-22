@@ -30,6 +30,7 @@ import org.skepsun.kototoro.core.ui.compose.contentCoverCacheKey
 import org.skepsun.kototoro.core.ui.compose.contentCoverSharedKey
 import org.skepsun.kototoro.core.ui.compose.rememberDeferredContentCoverBounds
 import org.skepsun.kototoro.core.ui.feed.FeedContinueAction
+import org.skepsun.kototoro.core.ui.feed.rememberFeedHintWidth
 import org.skepsun.kototoro.core.ui.feed.FeedCoverWidth
 import org.skepsun.kototoro.core.ui.feed.FeedTimelineCard
 import org.skepsun.kototoro.core.ui.feed.FeedChapterList
@@ -116,6 +117,9 @@ fun FeedItemCard(
     val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
     val continueLabel = stringResource(R.string.continue_reading)
     val continueIcon = painterResource(id = R.drawable.ic_read)
+    val continueHint = stringResource(R.string._continue)
+    val readHint = stringResource(R.string.read)
+    val hintWidth = rememberFeedHintWidth(continueHint, readHint)
     var expanded by remember(item.key) { mutableStateOf(false) }
     val presentation = if (primary == null) null else chapterPresentation(ordered, pending, primary, onReadChapter)
     FeedTimelineCard(
@@ -135,7 +139,7 @@ fun FeedItemCard(
             }
         },
         belowContent = presentation?.takeIf { it.lines.isNotEmpty() }?.let { shown ->
-            { FeedChapterList(shown.lines, expanded, continueIcon, stringResource(R.string.read)) }
+            { FeedChapterList(shown.lines, expanded, continueIcon, readHint, hintWidth) }
         },
         title = item.title,
         chapterText = chapterText,
@@ -160,8 +164,9 @@ fun FeedItemCard(
         selectedIcon = painterResource(id = R.drawable.ic_check),
         timelineLabel = timelineLabel,
         onLongClick = onLongClick,
+        hintWidth = hintWidth,
         continueAction = onContinueReading?.let {
-            FeedContinueAction(continueIcon, continueLabel, it, hint = stringResource(R.string._continue))
+            FeedContinueAction(continueIcon, continueLabel, it, hint = continueHint)
         },
         cover = {
             AsyncImage(

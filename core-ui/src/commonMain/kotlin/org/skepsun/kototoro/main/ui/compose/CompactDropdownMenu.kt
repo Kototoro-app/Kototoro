@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.LocalTextStyle
@@ -105,7 +104,8 @@ fun CompactDropdownMenuDivider(
     Box(
         modifier = modifier
             .padding(horizontal = 12.dp, vertical = 4.dp)
-            .width(96.dp)
+            // Spans the menu like its rows; a fixed short line looked like a rendering fault in wide menus.
+            .fillMaxWidth()
             .height(1.dp)
             .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.32f)),
     )

@@ -63,6 +63,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
@@ -85,6 +86,23 @@ private val FeedTimelineNodeSize = 10.dp
 private val FeedHintIconSize = 20.dp
 private val FeedHintIconGap = 6.dp
 private val FeedHintWidth = 36.dp
+private val FeedHintMaxWidth = 72.dp
+
+/**
+ * The width of the hint column: wide enough for the longest of [captions] ("Continue" does not fit the 36 dp that
+ * suits Chinese), so a row and its chapter lines can share one width and keep their icons aligned.
+ */
+@Composable
+fun rememberFeedHintWidth(vararg captions: String?): Dp {
+    val measurer = rememberTextMeasurer()
+    val style = MaterialTheme.typography.labelSmall
+    val density = LocalDensity.current
+    val texts = captions.filterNotNull()
+    return remember(texts, style, density) {
+        val widest = texts.maxOfOrNull { measurer.measure(it, style, maxLines = 1, softWrap = false).size.width } ?: 0
+        with(density) { widest.toDp() }.coerceIn(FeedHintWidth, FeedHintMaxWidth)
+    }
+}
 
 /** What tapping a feed card's body does: resume reading. The cover keeps opening the details. */
 class FeedContinueAction(
@@ -117,6 +135,8 @@ fun FeedTimelineCard(
     timelineLabel: String? = null,
     onLongClick: (() -> Unit)? = null,
     continueAction: FeedContinueAction? = null,
+    /** See [rememberFeedHintWidth]; pass the same value to [FeedChapterList] under this row. */
+    hintWidth: Dp = rememberFeedHintWidth(continueAction?.hint),
     supportingContent: (@Composable () -> Unit)? = null,
     /** Shown under the whole row, aligned with the title column and reaching the row's trailing edge. */
     belowContent: (@Composable () -> Unit)? = null,
@@ -223,7 +243,7 @@ fun FeedTimelineCard(
                 // A hint only: the whole row body is the target, so the icon needs no click handling of its own.
                 if (continueAction != null) {
                     Box(
-                        Modifier.padding(start = FeedHintIconGap).width(FeedHintWidth).height(FeedCoverHeight),
+                        Modifier.padding(start = FeedHintIconGap).width(hintWidth).height(FeedCoverHeight),
                         contentAlignment = Alignment.Center,
                     ) {
                         FeedReadHint(continueAction.icon, continueAction.hint, alpha = 1f)
@@ -302,6 +322,7 @@ private fun FeedReadHint(icon: Painter, caption: String?, alpha: Float) {
             color = tint,
             maxLines = 1,
             softWrap = false,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
@@ -314,6 +335,7 @@ fun FeedChapterList(
     readIcon: Painter? = null,
     /** Caption under [readIcon] on each line. */
     readHint: String? = null,
+    hintWidth: Dp = rememberFeedHintWidth(readHint),
 ) {
     AnimatedVisibility(visible = expanded && chapters.isNotEmpty()) {
         Column(modifier = Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -343,7 +365,7 @@ fun FeedChapterList(
                         }
                     }
                     if (readIcon != null && chapter.onClick != null) Box(
-                        Modifier.padding(start = FeedHintIconGap).width(FeedHintWidth),
+                        Modifier.padding(start = FeedHintIconGap).width(hintWidth),
                         contentAlignment = Alignment.Center,
                     ) {
                         FeedReadHint(readIcon, readHint, alpha = alpha.coerceAtLeast(0.6f))
