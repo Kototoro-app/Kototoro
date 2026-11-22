@@ -3,14 +3,17 @@ package org.skepsun.kototoro.community.domain
 /**
  * What the suggestions page lists under "Community" (plan §7.3). A chart only holds works whose rater weight reached
  * [CommunitySnapshotManifest.minChartWeight], so while the community is small every chart is empty; until the index
- * outgrows [MAX_FALLBACK_SHARDS] works files, it is read whole and every rated work is listed instead.
+ * outgrows [MAX_FALLBACK_WORKS] works, it is read whole and every rated work is listed instead.
  */
 object CommunityHighlights {
 
     const val WINDOW_ALL = "all"
 
-    /** Past this many works files the index is too big to read whole, and the charts have entries of their own. */
-    const val MAX_FALLBACK_SHARDS = 16
+    /**
+     * Past this many works the index is too big to read whole, and the charts have entries of their own. Counted in
+     * works rather than files: group ids hash over 256 shards, so even a couple dozen works spread over as many files.
+     */
+    const val MAX_FALLBACK_WORKS = 100
 
     private const val WORKS_PREFIX = "v1/works/"
 
@@ -25,7 +28,11 @@ object CommunityHighlights {
 
     /** The works files to read for [rated]; empty once the index is too big for that. */
     fun worksShardPaths(manifest: CommunitySnapshotManifest): List<String> =
-        manifest.files.keys.filter { it.startsWith(WORKS_PREFIX) }.sorted().takeIf { it.size <= MAX_FALLBACK_SHARDS }.orEmpty()
+        if (manifest.stats.works > MAX_FALLBACK_WORKS) {
+            emptyList()
+        } else {
+            manifest.files.keys.filter { it.startsWith(WORKS_PREFIX) }.sorted()
+        }
 
     /** Every rated work in [works], best first, as chart entries. */
     fun rated(works: Collection<CommunityWorkSummary>, allowNsfw: Boolean, limit: Int): List<CommunityChartEntry> =

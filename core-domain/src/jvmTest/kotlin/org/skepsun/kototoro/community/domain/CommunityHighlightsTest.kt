@@ -28,7 +28,10 @@ class CommunityHighlightsTest {
 
         val small = manifest((0 until 3).map { "v1/works/0$it.json" } + "v1/keys/00.json")
         assertEquals(listOf("v1/works/00.json", "v1/works/01.json", "v1/works/02.json"), CommunityHighlights.worksShardPaths(small))
-        val big = manifest((0..CommunityHighlights.MAX_FALLBACK_SHARDS).map { "v1/works/%02x.json".format(it) })
+        // A couple dozen works already spread over as many files; only the work count closes the fallback.
+        val spread = manifest((0 until 21).map { "v1/works/%02x.json".format(it) }, works = 22)
+        assertEquals(21, CommunityHighlights.worksShardPaths(spread).size)
+        val big = manifest((0 until 21).map { "v1/works/%02x.json".format(it) }, works = CommunityHighlights.MAX_FALLBACK_WORKS + 1)
         assertTrue(CommunityHighlights.worksShardPaths(big).isEmpty())
     }
 
@@ -46,8 +49,8 @@ class CommunityHighlightsTest {
         nsfw = nsfw,
     )
 
-    private fun manifest(paths: List<String>) = CommunitySnapshotManifest(
+    private fun manifest(paths: List<String>, works: Int = 3) = CommunitySnapshotManifest(
         generatedAt = 0, relays = emptyList(), powRating = 0, powComment = 0, minChartWeight = 5.0,
-        files = paths.associateWith { "hash" }, stats = CommunitySnapshotStats(0, 0, 0, 0, 0),
+        files = paths.associateWith { "hash" }, stats = CommunitySnapshotStats(0, 0, 0, 0, works),
     )
 }

@@ -1,6 +1,9 @@
 package org.skepsun.kototoro.core.library.community
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -94,8 +97,11 @@ class CommunitySnapshots(
     /** Every work of an index small enough to read whole ([CommunityHighlights.worksShardPaths]); empty past that. */
     suspend fun allWorks(): List<CommunityWorkSummary> {
         val manifest = manifest() ?: return emptyList()
-        return CommunityHighlights.worksShardPaths(manifest).flatMap { path ->
-            file(manifest, path)?.let(CommunitySnapshotReader::works)?.values.orEmpty()
+        // Up to a hundred small files on the first read; fetched together, then from the cache until they change.
+        return coroutineScope {
+            CommunityHighlights.worksShardPaths(manifest).map { path ->
+                async { file(manifest, path)?.let(CommunitySnapshotReader::works)?.values.orEmpty() }
+            }.awaitAll().flatten()
         }
     }
 
