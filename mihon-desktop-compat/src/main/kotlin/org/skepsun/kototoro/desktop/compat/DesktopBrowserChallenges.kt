@@ -160,8 +160,10 @@ class DesktopBrowserChallenges internal constructor(
                         engine.getCookies(url).firstOrNull { it.name in CLEARANCE_COOKIE_NAMES }
                     // Mihon removes the old clearance first, so a freshly written cookie is the success signal.
                     val old = clearance()
+                    // Best effort: a fresh value is the success signal, so a deletion WebView2 refuses must not end
+                    // the verification before the page even opens (issue #709).
                     engine.getCookies(url).filter { it.name in CLEARANCE_COOKIE_NAMES && it.domain != null }
-                        .forEach { engine.deleteCookie(it.name, it.domain!!, it.path ?: "/") }
+                        .forEach { cookie -> ignoringFailure { engine.deleteCookie(cookie.name, cookie.domain!!, cookie.path ?: "/") } }
                     val tracker = ClearanceSolveTracker(url)
                     // The challenge page loads with an HTTP error status; WebView2 still renders it.
                     try {

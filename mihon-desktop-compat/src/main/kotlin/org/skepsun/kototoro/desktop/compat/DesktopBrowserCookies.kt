@@ -1,9 +1,14 @@
 package org.skepsun.kototoro.desktop.compat
 
 import eu.kanade.tachiyomi.network.PersistentCookieStore
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import okhttp3.Cookie
 import okhttp3.HttpUrl
 import java.net.HttpCookie
+import java.util.logging.Level
+import java.util.logging.Logger
+import kotlin.coroutines.cancellation.CancellationException
 
 /** Uses the SDK's existing cookie store. A browser owner calls push/pull serially around its operations. */
 class DesktopBrowserCookies internal constructor(
@@ -19,7 +24,9 @@ class DesktopBrowserCookies internal constructor(
         // A reused native profile must not resurrect a token removed while no browser was open.
         val previousCookies = if (synchronizedWithBrowser) mirrored else browser.getCookies("").map(::cookie).associateBy(::key)
         for ((identity, previous) in previousCookies) if (identity !in current) {
-            browser.deleteCookie(previous.name, browserDomain(previous), previous.path)
+            // A stale browser cookie WebView2 will not drop is no reason to fail the operation that needs the
+            // browser (issue #709); the next push tries again.
+            ignoringFailure { browser.deleteCookie(previous.name, browserDomain(previous), previous.path) }
         }
         for (cookie in current.values) {
             // Leave browser changes alone when the SDK has not changed this cookie since our last synchronization.
@@ -78,5 +85,20 @@ class DesktopBrowserCookies internal constructor(
 
     private companion object {
         val IPV4 = Regex("""\d{1,3}(\.\d{1,3}){3}""")
+    }
+}
+
+/**
+ * Runs a browser cookie mutation whose failure must not end the surrounding operation. A cancelled caller still
+ * stops; a bridge error or the RPC's own timeout is logged and skipped.
+ */
+internal suspend inline fun ignoringFailure(block: () -> Unit) {
+    try {
+        block()
+    } catch (e: CancellationException) {
+        currentCoroutineContext().ensureActive()
+        Logger.getLogger("DesktopCompatibility").log(Level.WARNING, "A browser cookie change timed out; continuing", e)
+    } catch (e: Exception) {
+        Logger.getLogger("DesktopCompatibility").log(Level.WARNING, "A browser cookie change failed; continuing", e)
     }
 }

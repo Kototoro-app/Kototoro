@@ -354,7 +354,9 @@ namespace Kototoro.WebViewBridge {
                             foreach (var cookie in cookies) {
                                 if (cookie.Name == name && cookie.Domain == domain && cookie.Path == path) {
                                     remaining = true;
-                                    break;
+                                    // Some cookies ignore the domain-and-path form (issue #709); the object form
+                                    // names the exact cookie the store returned.
+                                    webView.CookieManager.DeleteCookie(cookie);
                                 }
                             }
                             if (!remaining) break;
