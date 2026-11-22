@@ -6,7 +6,6 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.network.awaitSuccess
-import java.util.Collections
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CancellationException
@@ -250,18 +249,23 @@ class GitHubMirrorCatalogRepository @Inject constructor(
         _probeState.value = GitHubMirrorProbeState.Running(0, entries.size)
         probeJob = appScope.launch {
             try {
-                val results = Collections.synchronizedMap(LinkedHashMap<String, GitHubMirrorProbeResult>())
+                // Probes finish on several IO threads at once; copying the map while another probe writes to it
+                // threw ConcurrentModificationException, so every write and copy holds the same lock.
+                val results = LinkedHashMap<String, GitHubMirrorProbeResult>()
                 coroutineScope {
                     entries.map { entry ->
                         async {
                             val result = probe(entry)
-                            results[entry.id] = result
-                            _probeResults.value = results.toMap()
-                            _probeState.value = GitHubMirrorProbeState.Running(results.size, entries.size)
+                            val snapshot = synchronized(results) {
+                                results[entry.id] = result
+                                results.toMap()
+                            }
+                            _probeResults.value = snapshot
+                            _probeState.value = GitHubMirrorProbeState.Running(snapshot.size, entries.size)
                         }
                     }.awaitAll()
                 }
-                val finalResults = results.toMap()
+                val finalResults = synchronized(results) { results.toMap() }
                 val available = finalResults.values.count { it.isAvailable }
                 val fastest = finalResults.values
                     .filter { it.isAvailable && it.latencyMillis != null }
