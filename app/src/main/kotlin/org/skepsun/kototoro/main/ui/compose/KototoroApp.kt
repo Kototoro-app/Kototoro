@@ -1142,7 +1142,13 @@ fun KototoroApp(
                         val isEdgeBlurred = edgeBlurRadius > 0.dp
                         val edgeTintScale = if (isEdgeBlurred) ImmersiveEdgeBlurTintScale else 1f
                         val topEdgeHeight = topImmersiveHeight
-                        val bottomEdgeHeight = bottomImmersiveHeight + ImmersiveEdgeFeatherExtension
+                        // The progressive blur already softens the band's content side; only the plain tint needs the
+                        // extra feather to fade out above the bar.
+                        val bottomEdgeHeight = if (isEdgeBlurred) {
+                            bottomImmersiveHeight
+                        } else {
+                            bottomImmersiveHeight + ImmersiveEdgeFeatherExtension
+                        }
                         // iOS keeps the top edge at alpha 0 until content slides under the chrome; skip the blur
                         // pass entirely there rather than rendering it transparent.
                         val isTopEdgeShown = surfaceStyle != SurfaceStyle.BACKDROP || chromeScrollOverlap > 0f
