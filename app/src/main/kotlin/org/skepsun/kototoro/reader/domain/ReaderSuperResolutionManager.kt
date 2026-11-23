@@ -7,6 +7,7 @@ import android.net.Uri
 import android.util.Log
 import androidx.core.net.toFile
 import androidx.core.net.toUri
+import androidx.documentfile.provider.DocumentFile
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -16,6 +17,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.GlobalScope
 import okio.ByteString.Companion.encodeUtf8
+import org.skepsun.kototoro.core.util.ContentZipArchive
+import org.skepsun.kototoro.core.util.ext.isContentZipUri
+import org.skepsun.kototoro.core.util.ext.isFileUri
+import org.skepsun.kototoro.core.util.ext.isZipUri
+import org.skepsun.kototoro.core.util.ext.toUnderlyingZipUri
 import org.skepsun.kototoro.reader.translate.data.OnnxModelManager
 import org.skepsun.kototoro.reader.translate.data.RealCuganNcnnEngine
 import org.skepsun.kototoro.reader.translate.data.RealEsrganNcnnEngine
@@ -23,6 +29,7 @@ import org.skepsun.kototoro.reader.translate.data.Anime4kImageEngine
 import org.skepsun.kototoro.video.player.Anime4KShaderAssets
 import java.io.File
 import java.io.FileOutputStream
+import java.util.zip.ZipFile
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -54,32 +61,40 @@ class ReaderSuperResolutionManager @Inject constructor(
     private val MAX_INPUT_PIXELS_ESRGAN = 1500L * 2100L  // ~3.15M px -> 50M px output
     private val MAX_INPUT_PIXELS_CUGAN  = 3000L * 4200L  // ~12.6M px -> 50M px output
 
+    private val OUTPUT_EXTENSIONS = listOf("jpg", "webp")
+    private val OUTPUT_QUALITY = 92
+
     suspend fun processImage(
         originalUri: Uri,
         modelId: String,
         noiseLevel: Int,
-        cacheLimitMb: Int
+        cacheLimitMb: Int,
+        skipFromWidth: Int = 0,
     ): Uri? = withContext(Dispatchers.IO) {
-        if (originalUri.scheme != "file") {
-            return@withContext null
-        }
-        val originalFile = originalUri.toFile()
-        if (!originalFile.exists()) return@withContext null
+        val source = resolveSource(originalUri) ?: return@withContext null
 
         // Filenames repeat across chapters; a replaced source file must also invalidate its result.
-        val hash = listOf(
-            originalFile.canonicalPath,
-            originalFile.length().toString(),
-            originalFile.lastModified().toString(),
-            modelId,
-            noiseLevel.toString(),
-        ).joinToString("\u0000").encodeUtf8().sha256().hex()
-        val outputFile = File(cacheDir, "sr_$hash.webp")
+        val hash = (source.identity + listOf(modelId, noiseLevel.toString()))
+            .joinToString("\u0000").encodeUtf8().sha256().hex()
+        val cachedFile = OUTPUT_EXTENSIONS.firstNotNullOfOrNull { extension ->
+            File(cacheDir, "sr_$hash.$extension").takeIf { it.exists() && it.length() > 0 }
+        }
+        if (cachedFile != null) {
+            Log.d(TAG, "Using cached SR image: ${cachedFile.name}")
+            updateCacheLru(cachedFile)
+            return@withContext cachedFile.toUri()
+        }
 
-        if (outputFile.exists() && outputFile.length() > 0) {
-            Log.d(TAG, "Using cached SR image: ${outputFile.name}")
-            updateCacheLru(outputFile)
-            return@withContext outputFile.toUri()
+        // Decode only dimensions first to check size limits
+        val boundsOpts = BitmapFactory.Options().apply {
+            inJustDecodeBounds = true
+        }
+        source.decode(boundsOpts)
+        // A page already as wide as the screen is shown downscaled, so upscaling it in real time would only
+        // cost GPU time while the reader scrolls. Prepared results above are still used for such pages.
+        if (skipFromWidth > 0 && boundsOpts.outWidth >= skipFromWidth) {
+            Log.d(TAG, "Skipping SR: input width ${boundsOpts.outWidth} already covers $skipFromWidth px")
+            return@withContext null
         }
 
         // If we've hit too many consecutive GPU failures, the Vulkan device is likely
@@ -90,8 +105,9 @@ class ReaderSuperResolutionManager @Inject constructor(
             return@withContext null
         }
 
-        Log.d(TAG, "Starting SR processing for ${originalFile.name} with model $modelId")
+        Log.d(TAG, "Starting SR processing for $originalUri with model $modelId")
 
+        var isOpaqueSource = false
         val resultBitmap: Bitmap? = try {
             engineMutex.withLock {
                 if (!isActive) return@withLock null
@@ -99,12 +115,6 @@ class ReaderSuperResolutionManager @Inject constructor(
 
                 val isEsrgan = modelId.contains("realesrgan", ignoreCase = true)
                 val isAnime4k = modelId.startsWith("ANIME4K_")
-
-                // Decode only dimensions first to check size limits
-                val boundsOpts = BitmapFactory.Options().apply {
-                    inJustDecodeBounds = true
-                }
-                BitmapFactory.decodeFile(originalFile.absolutePath, boundsOpts)
 
                 val inputPixels = boundsOpts.outWidth.toLong() * boundsOpts.outHeight.toLong()
 
@@ -123,8 +133,7 @@ class ReaderSuperResolutionManager @Inject constructor(
                 val decodeOpts = BitmapFactory.Options().apply {
                     inPreferredConfig = Bitmap.Config.ARGB_8888
                 }
-                val originalBitmap = BitmapFactory.decodeFile(originalFile.absolutePath, decodeOpts)
-                    ?: return@withLock null
+                val originalBitmap = source.decode(decodeOpts) ?: return@withLock null
 
                 val outBmp: Bitmap? = if (isAnime4k) {
                     anime4kEngine?.process(originalBitmap)
@@ -133,6 +142,7 @@ class ReaderSuperResolutionManager @Inject constructor(
                 } else {
                     realcuganEngine?.process(originalBitmap)
                 }
+                isOpaqueSource = !originalBitmap.hasAlpha()
                 originalBitmap.recycle()
 
                 // Validate: null output likely means GPU DEVICE_LOST
@@ -156,14 +166,25 @@ class ReaderSuperResolutionManager @Inject constructor(
         }
 
         if (resultBitmap != null) {
+            // Encoding a 2x page as WebP took longer than many upscales; JPEG is several times faster to write
+            // and to decode. Sources with transparency keep WebP, which JPEG would fill with black.
+            val (format, extension) = if (isOpaqueSource) {
+                Bitmap.CompressFormat.JPEG to "jpg"
+            } else {
+                Bitmap.CompressFormat.WEBP to "webp"
+            }
+            val outputFile = File(cacheDir, "sr_$hash.$extension")
+            val partFile = File(cacheDir, "sr_$hash.$extension.part")
             try {
-                FileOutputStream(outputFile).use { out ->
-                    resultBitmap.compress(Bitmap.CompressFormat.WEBP, 90, out)
+                FileOutputStream(partFile).use { out ->
+                    resultBitmap.compress(format, OUTPUT_QUALITY, out)
                 }
+                check(partFile.renameTo(outputFile)) { "Cannot publish ${outputFile.name}" }
                 manageCache(cacheLimitMb)
                 return@withContext outputFile.toUri()
             } catch (e: Exception) {
                 Log.e(TAG, "NCNN SR Processing Save failed", e)
+                partFile.delete()
                 outputFile.delete()
             } finally {
                 resultBitmap.recycle()
@@ -172,6 +193,79 @@ class ReaderSuperResolutionManager @Inject constructor(
 
         null
     }
+
+    /**
+     * Downloaded chapters are CBZ archives, so pages reach the reader as `file+zip`/`content+zip` entries.
+     * Their identity is the archive and entry rather than a decoded copy in the page cache, whose name
+     * changes every time it is rewritten; this keeps prepared results reachable from the reader.
+     */
+    private fun resolveSource(uri: Uri): SourceImage? = when {
+        uri.isFileUri() -> {
+            val file = uri.toFile()
+            if (!file.exists()) {
+                null
+            } else {
+                SourceImage(
+                    identity = listOf(file.canonicalPath, file.length().toString(), file.lastModified().toString()),
+                ) { options -> BitmapFactory.decodeFile(file.absolutePath, options) }
+            }
+        }
+
+        uri.isZipUri() -> {
+            val entryName = uri.fragment
+            val archive = File(uri.path ?: uri.schemeSpecificPart)
+            if (entryName.isNullOrEmpty() || !archive.isFile) {
+                null
+            } else {
+                // An unreadable archive is a missing page, not a GPU failure.
+                val bytes by lazy {
+                    runCatching {
+                        ZipFile(archive).use { zip ->
+                            zip.getEntry(entryName)?.let { entry -> zip.getInputStream(entry).use { it.readBytes() } }
+                        }
+                    }.getOrNull()
+                }
+                SourceImage(
+                    identity = listOf(
+                        archive.canonicalPath,
+                        archive.length().toString(),
+                        archive.lastModified().toString(),
+                        entryName,
+                    ),
+                ) { options -> bytes?.let { BitmapFactory.decodeByteArray(it, 0, it.size, options) } }
+            }
+        }
+
+        uri.isContentZipUri() -> {
+            val entryName = uri.fragment
+            val archiveUri = uri.toUnderlyingZipUri()
+            val archive = DocumentFile.fromSingleUri(context, archiveUri)
+            if (entryName.isNullOrEmpty() || archive == null || !archive.exists()) {
+                null
+            } else {
+                val bytes by lazy {
+                    runCatching {
+                        ContentZipArchive.withEntry(context.contentResolver, uri) { it.readBytes() }
+                    }.getOrNull()
+                }
+                SourceImage(
+                    identity = listOf(
+                        archiveUri.toString(),
+                        archive.length().toString(),
+                        archive.lastModified().toString(),
+                        entryName,
+                    ),
+                ) { options -> bytes?.let { BitmapFactory.decodeByteArray(it, 0, it.size, options) } }
+            }
+        }
+
+        else -> null
+    }
+
+    private class SourceImage(
+        val identity: List<String>,
+        val decode: (BitmapFactory.Options) -> Bitmap?,
+    )
 
     private suspend fun initEngineIfNeeded(modelId: String) {
         if (activeModelId == modelId) {
@@ -257,4 +351,5 @@ class ReaderSuperResolutionManager @Inject constructor(
             }
         }
     }
+
 }

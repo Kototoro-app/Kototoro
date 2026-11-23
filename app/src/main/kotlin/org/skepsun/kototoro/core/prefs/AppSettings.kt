@@ -2494,6 +2494,9 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
     val readerSuperResolutionCacheLimitMb: Int
         get() = prefs.getString(KEY_READER_SUPER_RESOLUTION_CACHE_LIMIT, "512")?.toIntOrNull() ?: 512
 
+    val isReaderSuperResolutionSkipSharpPages: Boolean
+        get() = prefs.getBoolean(KEY_READER_SUPER_RESOLUTION_SKIP_SHARP, true)
+
     val isReaderKeepScreenOn: Boolean
         get() = prefs.getBoolean(KEY_READER_SCREEN_ON, true)
 
@@ -3428,6 +3431,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_READER_SUPER_RESOLUTION_MODEL = "reader_super_resolution_model"
         const val KEY_READER_SUPER_RESOLUTION_NOISE_LEVEL = "reader_super_resolution_noise_level"
         const val KEY_READER_SUPER_RESOLUTION_CACHE_LIMIT = "reader_super_resolution_cache_limit"
+        const val KEY_READER_SUPER_RESOLUTION_SKIP_SHARP = "reader_super_resolution_skip_sharp"
         const val KEY_READER_BACKGROUND = "reader_background"
         const val KEY_VIDEO_DECODER_MODE = "video_decoder_mode"
         const val KEY_VIDEO_RENDERER_MODE = "video_renderer_mode"

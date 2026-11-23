@@ -1384,6 +1384,8 @@
 
     <string name="reader_super_resolution">AI Super Resolution</string>
     <string name="reader_super_resolution_summary">Upscales images using RealCUGAN (may consume significantly more battery and performance)</string>
+    <string name="reader_super_resolution_skip_sharp">Skip sharp pages</string>
+    <string name="reader_super_resolution_skip_sharp_summary">Pages already as wide as the screen are not upscaled while reading. Chapters prepared in advance still use their upscaled pages</string>
     <string name="reader_super_resolution_engine">Super Resolution Engine</string>
     <string name="reader_super_resolution_model">Neural Model</string>
     <string name="reader_super_resolution_model_se">SE Mode (General enhancement)</string>

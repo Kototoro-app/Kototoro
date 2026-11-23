@@ -837,10 +837,10 @@ class DownloadWorker @AssistedInject constructor(
                         isStuck = false,
                     ),
                 )
-                val sourceUri = resolvePreparationPageUri(page)
-                    ?: error("Cannot resolve page uri for ${page.url}")
                 when (task.kind) {
                     DownloadTaskKind.PREPARE_TRANSLATION -> {
+                        val sourceUri = resolvePreparationPageUri(page)
+                            ?: error("Cannot resolve page uri for ${page.url}")
                         val translationInputUri = prepareTranslationInputUri(sourceUri)
                         translationProcessor.process(
                             page = page,
@@ -850,6 +850,11 @@ class DownloadWorker @AssistedInject constructor(
                     }
 
                     DownloadTaskKind.PREPARE_SUPER_RESOLUTION -> {
+                        // Archive pages keep their archive URI so the result is keyed like the reader's lookup.
+                        val pageUri = page.url.toUri()
+                        val sourceUri = pageUri.takeIf { it.isZipUri() || it.isContentZipUri() }
+                            ?: resolvePreparationPageUri(page)
+                            ?: error("Cannot resolve page uri for ${page.url}")
                         superResolutionManager.processImage(
                             originalUri = sourceUri,
                             modelId = getSuperResolutionModelId(),

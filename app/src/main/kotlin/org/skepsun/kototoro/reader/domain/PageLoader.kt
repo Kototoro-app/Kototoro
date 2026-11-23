@@ -469,11 +469,20 @@ class PageLoader @Inject constructor(
                 settings.readerSuperResolutionModel
             }
 
+            // An untranslated archive page is upscaled from the archive entry itself: the decoded copy that
+            // translation makes is rewritten under a new name each time, so it would never hit the SR cache.
+            val srInput = if (displayUri == preparedPage.translationSourceUri) sourceUri else displayUri
             val srUri = srManager.processImage(
-                originalUri = displayUri,
+                originalUri = srInput,
                 modelId = modelId,
                 noiseLevel = settings.readerSuperResolutionNoiseLevel,
                 cacheLimitMb = settings.readerSuperResolutionCacheLimitMb,
+                skipFromWidth = if (settings.isReaderSuperResolutionSkipSharpPages) {
+                    // The short side is the width a page gets in portrait, and the most it gets on any screen.
+                    context.resources.displayMetrics.let { minOf(it.widthPixels, it.heightPixels) }
+                } else {
+                    0
+                },
             )
             if (srUri != null) {
                 displayUri = srUri

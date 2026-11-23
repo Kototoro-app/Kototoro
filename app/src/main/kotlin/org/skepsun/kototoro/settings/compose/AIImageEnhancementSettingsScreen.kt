@@ -122,6 +122,20 @@ fun AIImageEnhancementSettingsScreen(
                             )
                         }
                     }
+
+                    item {
+                        SettingsSwitchPreference(
+                            title = stringResource(R.string.reader_super_resolution_skip_sharp),
+                            iconRes = R.drawable.ic_fast_forward,
+                            summary = stringResource(R.string.reader_super_resolution_skip_sharp_summary),
+                            checked = settings.observeAsState(AppSettings.KEY_READER_SUPER_RESOLUTION_SKIP_SHARP) {
+                                settings.isReaderSuperResolutionSkipSharpPages
+                            }.value,
+                            onCheckedChange = {
+                                settings.prefs.edit { putBoolean(AppSettings.KEY_READER_SUPER_RESOLUTION_SKIP_SHARP, it) }
+                            },
+                        )
+                    }
                 }
             }
         }

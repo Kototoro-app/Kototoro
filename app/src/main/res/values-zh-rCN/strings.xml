@@ -3056,6 +3056,8 @@
     <string name="reader_super_resolution_noise_3">极高（3）</string>
     <string name="reader_super_resolution_noise_n1">无（-1）</string>
     <string name="reader_super_resolution_summary">使用 RealCUGAN 提升图像分辨率（可能显著增加电池和性能消耗）</string>
+    <string name="reader_super_resolution_skip_sharp">跳过清晰页面</string>
+    <string name="reader_super_resolution_skip_sharp_summary">原图宽度已达到屏幕宽度的页面，阅读时不再实时超分；预先准备过超分的章节仍显示超分结果</string>
     <string name="reader_translation_api_custom_headers">自定义请求头（JSON）</string>
     <string name="reader_translation_api_custom_headers_summary">以 JSON 格式添加自定义 HTTP 请求头（例如 {\"Model\": \"gpt-4\"}）</string>
     <string name="reader_translation_onnx_super_resolution_models_title">超分辨率模型</string>
