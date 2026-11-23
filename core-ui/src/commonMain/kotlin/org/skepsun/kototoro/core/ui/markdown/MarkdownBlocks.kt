@@ -4,8 +4,9 @@ package org.skepsun.kototoro.core.ui.markdown
  * One block of a Markdown document, as far as release notes and changelogs use them.
  *
  * Every screen that shows them renders this subset - the Android changelog and update page included - so the text
- * that reaches the screen is the same on every host. Anything outside the subset (tables, footnotes, raw HTML beyond a line break) is
- * kept as paragraph text rather than dropped, so a note never silently loses its content.
+ * that reaches the screen is the same on every host. GitHub-flavoured tables are part of the subset; anything outside
+ * it (footnotes, raw HTML beyond a line break) is kept as paragraph text rather than dropped, so a note never
+ * silently loses its content.
  */
 sealed interface MarkdownBlock {
     data class Heading(val level: Int, val text: String) : MarkdownBlock
@@ -26,7 +27,20 @@ sealed interface MarkdownBlock {
 
     /** A `---` / `***` / `___` horizontal rule. */
     data object Rule : MarkdownBlock
+
+    /**
+     * A GFM table. [header] and every row hold exactly [alignments]`.size` cells of raw inline Markdown, with the
+     * `\|` escapes already resolved.
+     */
+    data class Table(
+        val header: List<String>,
+        val alignments: List<MarkdownColumnAlign>,
+        val rows: List<List<String>>,
+    ) : MarkdownBlock
 }
+
+/** Column alignment from the `:---`, `:---:` and `---:` delimiter cells; no colon means [START]. */
+enum class MarkdownColumnAlign { START, CENTER, END }
 
 /** An inline run of a text block: literal text with a few toggles, or a link. */
 sealed interface MarkdownSpan {
@@ -43,7 +57,7 @@ sealed interface MarkdownSpan {
 
 /**
  * Splits [markdown] into blocks: ATX headings, paragraphs with soft/hard line breaks, block quotes, bullet, task and
- * ordered lists, fenced code and horizontal rules.
+ * ordered lists, fenced code, tables and horizontal rules.
  *
  * The parser is deliberately forgiving: release notes are written by hand and by GitHub's own generator, so an
  * unclosed fence keeps the rest as code, an unclosed inline marker stays literal, and HTML comments (which the
@@ -103,6 +117,26 @@ fun parseMarkdownBlocks(markdown: String): List<MarkdownBlock> {
                 index++
             }
 
+            isTableStart(lines, index) -> {
+                flushParagraph()
+                val header = splitTableRow(lines[index])
+                val alignments = splitTableRow(lines[index + 1]).map { marker ->
+                    when {
+                        marker.startsWith(':') && marker.endsWith(':') -> MarkdownColumnAlign.CENTER
+                        marker.endsWith(':') -> MarkdownColumnAlign.END
+                        else -> MarkdownColumnAlign.START
+                    }
+                }
+                index += 2
+                val rows = ArrayList<List<String>>()
+                while (index < lines.size && isTableRow(lines[index])) {
+                    val cells = splitTableRow(lines[index])
+                    rows += List(header.size) { cells.getOrElse(it) { "" } }
+                    index++
+                }
+                blocks += MarkdownBlock.Table(header, alignments, rows)
+            }
+
             trimmed.startsWith(">") -> {
                 flushParagraph()
                 val quote = ArrayList<String>()
@@ -154,6 +188,55 @@ fun parseMarkdownBlocks(markdown: String): List<MarkdownBlock> {
     }
     flushParagraph()
     return blocks
+}
+
+/** A table starts at a header row with a pipe, followed by a delimiter row with the same number of cells. */
+private fun isTableStart(lines: List<String>, index: Int): Boolean {
+    val header = lines[index]
+    if (!header.contains('|') || index + 1 >= lines.size) return false
+    val delimiter = lines[index + 1]
+    if (!delimiter.contains('-')) return false
+    val cells = splitTableRow(delimiter)
+    return cells.all { TABLE_DELIMITER.matches(it.trim()) } && cells.size == splitTableRow(header).size
+}
+
+/** A body row continues the table while it is non-blank, has a pipe and is not the start of another block. */
+private fun isTableRow(line: String): Boolean {
+    val trimmed = line.trim()
+    return trimmed.isNotEmpty() && trimmed.contains('|') && !trimmed.startsWith(">") &&
+        !trimmed.startsWith("```") && !trimmed.startsWith("~~~") && !ATX_HEADING.matches(trimmed)
+}
+
+/**
+ * Splits a table row into cells: the optional leading and trailing pipe is dropped, `\|` stays inside its cell and
+ * is unescaped there, and the cell text is trimmed.
+ */
+private fun splitTableRow(line: String): List<String> {
+    val text = line.trim()
+    val cells = ArrayList<String>()
+    val cell = StringBuilder()
+    var index = 0
+    while (index < text.length) {
+        val char = text[index]
+        when {
+            char == '\\' && index + 1 < text.length && text[index + 1] == '|' -> {
+                cell.append('|')
+                index += 2
+                continue
+            }
+            char == '|' -> {
+                cells += cell.toString().trim()
+                cell.clear()
+            }
+            else -> cell.append(char)
+        }
+        index++
+    }
+    cells += cell.toString().trim()
+    // A leading pipe leaves an empty first cell, a trailing one an empty last cell.
+    if (text.startsWith("|")) cells.removeAt(0)
+    if (text.endsWith("|") && !text.endsWith("\\|") && cells.isNotEmpty()) cells.removeAt(cells.lastIndex)
+    return cells
 }
 
 /**
@@ -263,6 +346,9 @@ private val ATX_HEADING = Regex("^(#{1,6})\\s+(.*)$")
 
 /** Three or more of the same rule character, optionally spaced: `---`, `***`, `_ _ _`. */
 private val RULE = Regex("^([-*_])(?:\\s*\\1){2,}$")
+
+/** One cell of a table delimiter row: dashes with an optional colon on either end. */
+private val TABLE_DELIMITER = Regex("^:?-+:?$")
 
 /** Bullet: indentation, the marker, then the text. */
 private val BULLET = Regex("^(\\s*)([-*+])\\s+(.*)$")
