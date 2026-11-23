@@ -85,10 +85,13 @@ import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassLayerBackdrop
 import org.skepsun.kototoro.core.ui.compose.RouteLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.compose.LocalArtworkBackdrop
 import org.skepsun.kototoro.core.ui.compose.LocalImmersiveEdgeBackdrop
+import org.skepsun.kototoro.core.ui.compose.HeroTransitionPhase
+import org.skepsun.kototoro.core.ui.compose.LocalHeroTransitionPhase
 import org.skepsun.kototoro.core.ui.compose.immersiveEdgeBlurRadius
 import org.skepsun.kototoro.core.ui.glass.LocalGlassPrefs
 import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import com.kyant.backdrop.backdrops.LayerBackdrop
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.prefs.ListToDetailsTransition
@@ -216,6 +219,30 @@ private const val TOP_BAR_OWNER_SUGGESTIONS = "suggestions"
 private const val TOP_BAR_OWNER_UPDATED = "updated"
 private const val TOP_BAR_OWNER_BOOKMARKS = "bookmarks"
 
+/**
+ * Spacing between backdrop layer recordings while a list<->details flight runs: two frames at 60 Hz. The glass keeps
+ * following the flight, one frame behind, for the 300-400 ms the transition lasts; outside it the layer records on
+ * every draw again.
+ */
+private const val DetailsTransitionBackdropRecordIntervalMillis = 33L
+
+/**
+ * Throttles [layer] while a list<->details flight runs. A separate composable on purpose: reading the transition
+ * phase here keeps the phase change from recomposing the whole shell scene.
+ */
+@Composable
+private fun DetailsTransitionBackdropThrottle(layer: LayerBackdrop?) {
+    if (layer == null) return
+    val isDetailsTransitionRunning = LocalHeroTransitionPhase.current != HeroTransitionPhase.Idle
+    SideEffect {
+        layer.recordIntervalMillis = if (isDetailsTransitionRunning) {
+            DetailsTransitionBackdropRecordIntervalMillis
+        } else {
+            0L
+        }
+    }
+}
+
 @OptIn(ExperimentalSharedTransitionApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun MainShellScene(
@@ -293,6 +320,10 @@ fun MainShellScene(
             } else {
                 null
             }
+            // The edge layer records the whole route content on every draw, so during a list<->details flight the
+            // animating content behind the glass is re-recorded every frame. Sampling the previous frame for that
+            // short window is invisible and removes most of the offscreen rendering (#672).
+            DetailsTransitionBackdropThrottle(materialEdgeLayer)
             val artworkBackdrop = LocalArtworkBackdrop.current
             val edgeBackdrop = when {
                 useLiquidGlass -> LocalLiquidGlassBackdrop.current

@@ -44,6 +44,8 @@ import org.skepsun.kototoro.core.BaseApp
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.compose.HeroCoverSnapshotStore
+import org.skepsun.kototoro.core.ui.compose.HeroTransitionPhase
+import org.skepsun.kototoro.core.ui.compose.LocalHeroTransitionPhase
 import org.skepsun.kototoro.core.ui.compose.rememberDrawablePainter
 import org.skepsun.kototoro.core.ui.image.rememberPanoramaRequestSize
 import org.skepsun.kototoro.core.ui.image.panoramaBlur
@@ -217,6 +219,11 @@ fun AnimatedPanoramaBackdrop(
     val placeholderPainter = rememberDrawablePainter(stablePlaceholderImage?.asDrawable(context.resources))
     var hasResolvedBackground by remember(backgroundRequest) { mutableStateOf(false) }
     val boundedMaxHeightPx = maxHeightPx?.takeIf { it.isFinite() }
+    // A list<->details flight already scales the whole page, and the realtime blur re-renders the full-screen panorama
+    // for every step of it. Holding the panorama's own slow pan for the 300-400 ms flight is invisible (the measured
+    // step is ~0.5% of its scale range) and keeps the blurred layer static while the flight animates (#672).
+    val isDetailsTransitionRunning = LocalHeroTransitionPhase.current != HeroTransitionPhase.Idle
+    val heldPanoramaMotion = remember { FloatArray(2).also { it[0] = Float.NaN } }
     val scrollLinkedModifier = if (scrollLinkedTranslationYPx.isFinite() && scrollLinkedTranslationYPx != 0f) {
         Modifier.graphicsLayer {
             translationY = scrollLinkedTranslationYPx
@@ -247,10 +254,18 @@ fun AnimatedPanoramaBackdrop(
             },
         )
         .graphicsLayer {
-            val backgroundScale = backgroundScaleState?.value ?: 1f
+            val liveBackgroundScale = backgroundScaleState?.value ?: 1f
+            val liveBackgroundTranslationX = backgroundTranslationXState?.value ?: 0f
+            if (!isDetailsTransitionRunning) {
+                heldPanoramaMotion[0] = liveBackgroundScale
+                heldPanoramaMotion[1] = liveBackgroundTranslationX
+            }
+            // NaN until the panorama has drawn once outside a flight, so the first flight frame never snaps to 1f.
+            val isHoldingPanorama = isDetailsTransitionRunning && !heldPanoramaMotion[0].isNaN()
+            val backgroundScale = if (isHoldingPanorama) heldPanoramaMotion[0] else liveBackgroundScale
             scaleX = backgroundScale
             scaleY = backgroundScale
-            translationX = backgroundTranslationXState?.value ?: 0f
+            translationX = if (isHoldingPanorama) heldPanoramaMotion[1] else liveBackgroundTranslationX
             alpha = resolvePanoramaContentAlpha(
                 contentAlpha = contentAlphaProvider?.invoke() ?: contentAlpha,
                 topOpacityPercent = prefs.topOpacityPercent,
