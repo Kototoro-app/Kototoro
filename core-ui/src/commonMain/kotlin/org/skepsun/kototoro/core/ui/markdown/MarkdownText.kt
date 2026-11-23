@@ -1,11 +1,13 @@
 package org.skepsun.kototoro.core.ui.markdown
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -17,6 +19,13 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -36,7 +45,7 @@ import androidx.compose.ui.unit.dp
 
 /**
  * Renders the Markdown subset in [parseMarkdownBlocks] as Compose text: headings, paragraphs, quotes, lists, fenced
- * code and rules, with bold, italic, strikethrough, inline code and clickable links.
+ * code, tables and rules, with bold, italic, strikethrough, inline code and clickable links.
  *
  * This is the only Markdown renderer in the app: Android's update page and changelog use it too, so the Windows and
  * Android screens show the same text. Links open through Compose's own URL handling unless [onLinkClick] is given,
@@ -117,6 +126,98 @@ fun MarkdownText(
                     color = colors.rule,
                     modifier = Modifier.padding(vertical = 2.dp),
                 )
+
+                is MarkdownBlock.Table -> MarkdownTable(block, style, colors, onLinkClick)
+            }
+        }
+    }
+}
+
+/** The widest a table column grows before its text wraps. */
+private val TableColumnMaxWidth = 240.dp
+
+/**
+ * A table as an aligned grid: columns sized to their widest cell (up to [TableColumnMaxWidth]), a tinted bold header
+ * row, hairline borders, and a horizontal scroll when the grid is wider than the screen.
+ */
+@Composable
+private fun MarkdownTable(
+    table: MarkdownBlock.Table,
+    style: TextStyle,
+    colors: MarkdownColors,
+    onLinkClick: ((String) -> Unit)?,
+) {
+    val columns = table.header.size
+    val shape = RoundedCornerShape(6.dp)
+    val onSurface = MaterialTheme.colorScheme.onSurface
+    val allRows = remember(table) { listOf(table.header) + table.rows }
+    val lineWidthPx = with(LocalDensity.current) { 1.dp.toPx() }
+    val maxWidthPx = with(LocalDensity.current) { TableColumnMaxWidth.roundToPx() }
+    Layout(
+        content = {
+            allRows.forEachIndexed { rowIndex, row ->
+                row.forEachIndexed { column, cell ->
+                    val header = rowIndex == 0
+                    val lastRow = rowIndex == allRows.lastIndex
+                    val lastColumn = column == columns - 1
+                    Box(
+                        modifier = Modifier
+                            .then(if (header) Modifier.background(colors.codeBackground) else Modifier)
+                            .drawBehind {
+                                val line = colors.rule
+                                if (!lastColumn) {
+                                    drawLine(line, Offset(size.width, 0f), Offset(size.width, size.height), lineWidthPx)
+                                }
+                                if (!lastRow) {
+                                    drawLine(line, Offset(0f, size.height), Offset(size.width, size.height), lineWidthPx)
+                                }
+                            }
+                            .padding(horizontal = 8.dp, vertical = 5.dp),
+                    ) {
+                        Text(
+                            text = inlineMarkdown(cell, style, colors, onLinkClick),
+                            style = if (header) style.copy(fontWeight = FontWeight.SemiBold) else style,
+                            color = onSurface,
+                            textAlign = when (table.alignments.getOrElse(column) { MarkdownColumnAlign.START }) {
+                                MarkdownColumnAlign.START -> TextAlign.Start
+                                MarkdownColumnAlign.CENTER -> TextAlign.Center
+                                MarkdownColumnAlign.END -> TextAlign.End
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                }
+            }
+        },
+        modifier = Modifier
+            .clip(shape)
+            .border(1.dp, colors.rule, shape)
+            .horizontalScroll(rememberScrollState()),
+    ) { measurables, _ ->
+        // Column width: the widest natural cell width, capped so a long sentence wraps instead of stretching.
+        val widths = IntArray(columns) { column ->
+            allRows.indices.maxOf { row ->
+                measurables[row * columns + column].maxIntrinsicWidth(Int.MAX_VALUE)
+            }.coerceAtMost(maxWidthPx)
+        }
+        val heights = IntArray(allRows.size) { row ->
+            (0 until columns).maxOf { column ->
+                measurables[row * columns + column].minIntrinsicHeight(widths[column])
+            }
+        }
+        val placeables = measurables.mapIndexed { position, measurable ->
+            val width = widths[position % columns]
+            measurable.measure(Constraints.fixed(width, heights[position / columns]))
+        }
+        layout(widths.sum(), heights.sum()) {
+            var y = 0
+            for (row in allRows.indices) {
+                var x = 0
+                for (column in 0 until columns) {
+                    placeables[row * columns + column].placeRelative(x, y)
+                    x += widths[column]
+                }
+                y += heights[row]
             }
         }
     }
@@ -131,6 +232,7 @@ fun markdownPlainText(markdown: String): String = parseMarkdownBlocks(markdown).
         is MarkdownBlock.ListItem -> "${block.marker} ${block.text}"
         is MarkdownBlock.Code -> block.text
         MarkdownBlock.Rule -> ""
+        is MarkdownBlock.Table -> (listOf(block.header) + block.rows).joinToString("\n") { it.joinToString(" | ") }
     }
 }.trim()
 
@@ -249,6 +351,16 @@ internal fun markdownAnnotatedString(
             }
 
             MarkdownBlock.Rule -> withStyle(SpanStyle(color = colors.rule)) { append("\u2500".repeat(RULE_LENGTH)) }
+
+            // No grid inside a text block: one line per row, cells separated by a bar, the header in bold.
+            is MarkdownBlock.Table -> (listOf(block.header) + block.rows).forEachIndexed { rowIndex, row ->
+                if (rowIndex > 0) append('\n')
+                val rowStyle = if (rowIndex == 0) style.copy(fontWeight = FontWeight.SemiBold) else style
+                row.forEachIndexed { column, cell ->
+                    if (column > 0) append(" \u2502 ")
+                    append(inlineMarkdownString(parseMarkdownInline(cell), rowStyle, colors, null))
+                }
+            }
         }
     }
 }

@@ -223,4 +223,60 @@ class MarkdownBlocksTest {
         assertEquals(emptyList<MarkdownBlock>(), parseMarkdownBlocks("\n\n   \n"))
         assertEquals(emptyList<MarkdownSpan>(), parseMarkdownInline(""))
     }
+
+    @Test
+    fun `table parses header alignments and rows`() {
+        val blocks = parseMarkdownBlocks(
+            "Intro\n\n| Platform | Build | Size |\n| :--- | :---: | ---: |\n| Android | **2.5** | 40 MB |\n| Windows | 2.5 | 90 MB |\n\nAfter",
+        )
+
+        assertEquals(
+            listOf(
+                MarkdownBlock.Paragraph("Intro"),
+                MarkdownBlock.Table(
+                    header = listOf("Platform", "Build", "Size"),
+                    alignments = listOf(MarkdownColumnAlign.START, MarkdownColumnAlign.CENTER, MarkdownColumnAlign.END),
+                    rows = listOf(listOf("Android", "**2.5**", "40 MB"), listOf("Windows", "2.5", "90 MB")),
+                ),
+                MarkdownBlock.Paragraph("After"),
+            ),
+            blocks,
+        )
+    }
+
+    @Test
+    fun `table tolerates missing outer pipes, escaped pipes and ragged rows`() {
+        val blocks = parseMarkdownBlocks("a | b\n--- | ---\nx \\| y | z\nonly | \n1 | 2 | 3")
+
+        val table = blocks.single() as MarkdownBlock.Table
+        assertEquals(listOf("a", "b"), table.header)
+        assertEquals(listOf(listOf("x | y", "z"), listOf("only", ""), listOf("1", "2")), table.rows)
+    }
+
+    @Test
+    fun `table cells keep inline markdown for the renderer`() {
+        val table = parseMarkdownBlocks("| h |\n|---|\n| [x](https://e.com) `c` |").single() as MarkdownBlock.Table
+
+        val spans = parseMarkdownInline(table.rows.single().single())
+        assertTrue(spans.any { it is MarkdownSpan.Link })
+        assertTrue(spans.any { it is MarkdownSpan.Text && it.code })
+    }
+
+    @Test
+    fun `pipes in ordinary text do not make a table`() {
+        assertEquals(
+            listOf(MarkdownBlock.Paragraph("use a | b to pipe")),
+            parseMarkdownBlocks("use a | b to pipe"),
+        )
+        // A delimiter row with a different number of cells is not a table either.
+        assertTrue(parseMarkdownBlocks("a | b\n--- | --- | ---").none { it is MarkdownBlock.Table })
+    }
+
+    @Test
+    fun `table ends at a blank line and plain text flattens rows`() {
+        val blocks = parseMarkdownBlocks("| a | b |\n|---|---|\n| 1 | 2 |\n\ntext")
+
+        assertEquals(2, blocks.size)
+        assertEquals("a | b\n1 | 2\ntext", markdownPlainText("| a | b |\n|---|---|\n| 1 | 2 |\n\ntext"))
+    }
 }
