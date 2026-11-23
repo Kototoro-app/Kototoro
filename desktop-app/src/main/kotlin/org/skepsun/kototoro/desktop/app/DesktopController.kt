@@ -124,6 +124,15 @@ internal fun desktopChapterBranchLocales(): List<ChapterBranchLocale> =
         .map { ChapterBranchLocale(it.getDisplayLanguage(it), it.getDisplayName(it)) }
 
 /**
+ * The works of a source batch that can join [shown]: each work once, and none already on screen. The browse grid keys
+ * rows by work id, and some sites list the same work twice in one page (issue #713).
+ */
+internal fun browseRows(shown: List<SourceContent>, batch: List<SourceContent>): List<SourceContent> {
+    val seen = shown.mapTo(HashSet()) { it.source.name to it.id }
+    return batch.filter { seen.add(it.source.name to it.id) }
+}
+
+/**
  * The state of the global search page. [results] keeps the order in which the sources answered; [history] and
  * [favourites] are the works the user already has that match, shown before the sources' answers like Android's.
  */
@@ -1405,16 +1414,15 @@ class DesktopController(
                 ?: (offsets.last() + (previous.browsePageSize.takeIf { it > 0 } ?: previous.items.size))
         } else offset
         val items = session.sources.getList(source.source.name, requestOffset, order, filter)
+        val batch = browseRows(emptyList(), items)
         // A source that ignores the offset would repeat the batch it already sent; appending those rows would
         // duplicate grid keys and loop forever, so a batch with nothing new is the end of the list.
-        val fresh = if (append) {
-            items.filter { item -> previous.items.none { it.id == item.id && it.source.name == item.source.name } }
-        } else items
+        val fresh = if (append) browseRows(previous.items, batch) else batch
         // Commit the query and controls only when the source has returned a successful result.
         mutableState.update {
             val endsHere = fresh.isEmpty()
             it.copy(screen = DesktopScreen.EXPLORE,
-                items = if (append) previous.items + fresh else items,
+                items = if (append) previous.items + fresh else batch,
                 // An empty batch adds no page: the batch counter keeps pointing at the rows on screen.
                 offset = if (append && endsHere) previous.offset else offset,
                 pageOffsets = if ((append && endsHere) || offset < offsets.size) offsets else offsets + requestOffset,
