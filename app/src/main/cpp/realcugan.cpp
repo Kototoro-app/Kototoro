@@ -11,6 +11,8 @@
 // ncnn
 #include "cpu.h"
 
+#include "sr_yield.h"
+
 #include "realcugan_preproc.comp.hex.h"
 #include "realcugan_postproc.comp.hex.h"
 #include "realcugan_preproc_tta.comp.hex.h"
@@ -350,6 +352,7 @@ int RealCUGAN::process(const ncnn::Mat& inimage, ncnn::Mat& outimage) const
             if (xtiles > 1)
             {
                 cmd.submit_and_wait();
+                sr_yield();
                 cmd.reset();
             }
         }
@@ -702,11 +705,10 @@ int RealCUGAN::process(const ncnn::Mat& inimage, ncnn::Mat& outimage) const
             if (xtiles > 1)
             {
                 cmd.submit_and_wait();
+                sr_yield();
                 cmd.reset();
             }
 
-            // Yield to let HWUI render frames between tiles
-            std::this_thread::sleep_for(std::chrono::milliseconds(2));
         }
 
         // download
@@ -721,6 +723,8 @@ int RealCUGAN::process(const ncnn::Mat& inimage, ncnn::Mat& outimage) const
             cmd.record_clone(out_gpu, out, opt);
 
             cmd.submit_and_wait();
+
+            sr_yield();
 
             if (!(opt.use_fp16_storage && opt.use_int8_storage))
             {
@@ -1425,6 +1429,7 @@ int RealCUGAN::process_se_stage0(const ncnn::Mat& inimage, const std::vector<std
             if (xtiles > 1)
             {
                 cmd.submit_and_wait();
+                sr_yield();
                 cmd.reset();
             }
         }
@@ -1624,11 +1629,14 @@ int RealCUGAN::process_se_stage0(const ncnn::Mat& inimage, const std::vector<std
             if (xtiles > 1)
             {
                 cmd.submit_and_wait();
+                sr_yield();
                 cmd.reset();
             }
         }
 
         cmd.submit_and_wait();
+
+        sr_yield();
         cmd.reset();
     }
 
@@ -1704,6 +1712,7 @@ int RealCUGAN::process_se_stage2(const ncnn::Mat& inimage, const std::vector<std
             if (xtiles > 1)
             {
                 cmd.submit_and_wait();
+                sr_yield();
                 cmd.reset();
             }
         }
@@ -2072,6 +2081,7 @@ int RealCUGAN::process_se_stage2(const ncnn::Mat& inimage, const std::vector<std
             if (xtiles > 1)
             {
                 cmd.submit_and_wait();
+                sr_yield();
                 cmd.reset();
             }
         }
@@ -2088,6 +2098,8 @@ int RealCUGAN::process_se_stage2(const ncnn::Mat& inimage, const std::vector<std
             cmd.record_clone(out_gpu, out, opt);
 
             cmd.submit_and_wait();
+
+            sr_yield();
 
             if (!(opt.use_fp16_storage && opt.use_int8_storage))
             {
@@ -2175,6 +2187,8 @@ int RealCUGAN::process_se_sync_gap(const ncnn::Mat& inimage, const std::vector<s
     }
 
     cmd.submit_and_wait();
+
+    sr_yield();
     cmd.reset();
 
     // global average
@@ -2227,6 +2241,8 @@ int RealCUGAN::process_se_sync_gap(const ncnn::Mat& inimage, const std::vector<s
     }
 
     cmd.submit_and_wait();
+
+    sr_yield();
     cmd.reset();
 
 
@@ -2325,6 +2341,7 @@ int RealCUGAN::process_se_very_rough_stage0(const ncnn::Mat& inimage, const std:
             if (xtiles > 1)
             {
                 cmd.submit_and_wait();
+                sr_yield();
                 cmd.reset();
             }
         }
@@ -2524,11 +2541,14 @@ int RealCUGAN::process_se_very_rough_stage0(const ncnn::Mat& inimage, const std:
             if (xtiles > 1)
             {
                 cmd.submit_and_wait();
+                sr_yield();
                 cmd.reset();
             }
         }
 
         cmd.submit_and_wait();
+
+        sr_yield();
         cmd.reset();
     }
 
@@ -2596,6 +2616,8 @@ int RealCUGAN::process_se_very_rough_sync_gap(const ncnn::Mat& inimage, const st
     }
 
     cmd.submit_and_wait();
+
+    sr_yield();
     cmd.reset();
 
     // global average
@@ -2648,6 +2670,8 @@ int RealCUGAN::process_se_very_rough_sync_gap(const ncnn::Mat& inimage, const st
     }
 
     cmd.submit_and_wait();
+
+    sr_yield();
     cmd.reset();
 
 

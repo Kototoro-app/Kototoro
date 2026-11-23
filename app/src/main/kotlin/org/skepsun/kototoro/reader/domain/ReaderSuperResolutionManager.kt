@@ -4,11 +4,14 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.os.SystemClock
+import android.view.MotionEvent
 import android.util.Log
 import androidx.core.net.toFile
 import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -64,6 +67,14 @@ class ReaderSuperResolutionManager @Inject constructor(
     private val OUTPUT_EXTENSIONS = listOf("jpg", "webp")
     private val OUTPUT_QUALITY = 92
 
+    // The native library stays loaded once an NCNN engine has been created, so pausing is safe from then on.
+    @Volatile
+    private var isNcnnLibraryLoaded = false
+    private var lastTouchPauseAt = 0L
+    private val TOUCH_PAUSE_MS = 1_000L
+    private val TOUCH_PAUSE_RENEW_MS = 100L
+    private val FLING_PAUSE_MS = 800L
+
     suspend fun processImage(
         originalUri: Uri,
         modelId: String,
@@ -106,6 +117,9 @@ class ReaderSuperResolutionManager @Inject constructor(
         }
 
         Log.d(TAG, "Starting SR processing for $originalUri with model $modelId")
+        val startedAt = SystemClock.elapsedRealtime()
+        var decodedAt = startedAt
+        var processedAt = startedAt
 
         var isOpaqueSource = false
         val resultBitmap: Bitmap? = try {
@@ -134,6 +148,7 @@ class ReaderSuperResolutionManager @Inject constructor(
                     inPreferredConfig = Bitmap.Config.ARGB_8888
                 }
                 val originalBitmap = source.decode(decodeOpts) ?: return@withLock null
+                decodedAt = SystemClock.elapsedRealtime()
 
                 val outBmp: Bitmap? = if (isAnime4k) {
                     anime4kEngine?.process(originalBitmap)
@@ -143,6 +158,7 @@ class ReaderSuperResolutionManager @Inject constructor(
                     realcuganEngine?.process(originalBitmap)
                 }
                 isOpaqueSource = !originalBitmap.hasAlpha()
+                processedAt = SystemClock.elapsedRealtime()
                 originalBitmap.recycle()
 
                 // Validate: null output likely means GPU DEVICE_LOST
@@ -160,6 +176,9 @@ class ReaderSuperResolutionManager @Inject constructor(
                 }
             }
         } catch (e: Exception) {
+            // Turning pages cancels the loads of pages left behind; that is not a GPU failure, and counting it
+            // switched super resolution off for the rest of the process after three quick page turns.
+            if (e is CancellationException) throw e
             Log.e(TAG, "NCNN SR processing failed", e)
             consecutiveFailures++
             null
@@ -181,6 +200,11 @@ class ReaderSuperResolutionManager @Inject constructor(
                 }
                 check(partFile.renameTo(outputFile)) { "Cannot publish ${outputFile.name}" }
                 manageCache(cacheLimitMb)
+                Log.d(
+                    TAG,
+                    "SR done ${boundsOpts.outWidth}x${boundsOpts.outHeight}: wait+decode=${decodedAt - startedAt}ms " +
+                        "process=${processedAt - decodedAt}ms save=${SystemClock.elapsedRealtime() - processedAt}ms",
+                )
                 return@withContext outputFile.toUri()
             } catch (e: Exception) {
                 Log.e(TAG, "NCNN SR Processing Save failed", e)
@@ -312,8 +336,25 @@ class ReaderSuperResolutionManager @Inject constructor(
                 realcuganEngine = RealCuganNcnnEngine()
                 realcuganEngine?.initialize(paramFile.absolutePath, binFile.absolutePath, ttaMode = false)
             }
+            isNcnnLibraryLoaded = true
         }
         activeModelId = modelId
+    }
+
+    /**
+     * Gives the reader's frames the GPU while the user touches or flings: NCNN holds between tiles until the
+     * gesture settles (see sr_yield.h). Anime4K runs short GL passes and needs no pause.
+     */
+    fun onReaderTouch(action: Int) {
+        if (!isNcnnLibraryLoaded) return
+        val now = SystemClock.uptimeMillis()
+        val pauseMs = when (action) {
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> FLING_PAUSE_MS
+            MotionEvent.ACTION_MOVE -> if (now - lastTouchPauseAt < TOUCH_PAUSE_RENEW_MS) return else TOUCH_PAUSE_MS
+            else -> TOUCH_PAUSE_MS
+        }
+        lastTouchPauseAt = now
+        RealCuganNcnnEngine.pauseForNative(pauseMs)
     }
 
     private fun releaseEngines() {

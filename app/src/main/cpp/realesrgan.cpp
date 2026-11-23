@@ -7,6 +7,8 @@
 #include <thread>
 #include <chrono>
 
+#include "sr_yield.h"
+
 #include "realesrgan_preproc.comp.hex.h"
 #include "realesrgan_postproc.comp.hex.h"
 #include "realesrgan_preproc_tta.comp.hex.h"
@@ -245,6 +247,7 @@ int RealESRGAN::process(const ncnn::Mat& inimage, ncnn::Mat& outimage) const
             if (xtiles > 1)
             {
                 cmd.submit_and_wait();
+                sr_yield();
                 cmd.reset();
             }
         }
@@ -343,6 +346,7 @@ int RealESRGAN::process(const ncnn::Mat& inimage, ncnn::Mat& outimage) const
 
                     {
                         cmd.submit_and_wait();
+                        sr_yield();
                         cmd.reset();
                     }
                 }
@@ -521,14 +525,9 @@ int RealESRGAN::process(const ncnn::Mat& inimage, ncnn::Mat& outimage) const
             if (xtiles > 1)
             {
                 cmd.submit_and_wait();
+                sr_yield();
                 cmd.reset();
             }
-
-            // Yield to let HWUI render frames between tiles.
-            // Without this, NCNN monopolizes the Vulkan queue and
-            // the UI thread drops 50-80+ frames during SR processing.
-            // 2ms is enough for HWUI to submit 1-2 draw commands.
-            std::this_thread::sleep_for(std::chrono::milliseconds(2));
         }
 
         // download
@@ -543,6 +542,8 @@ int RealESRGAN::process(const ncnn::Mat& inimage, ncnn::Mat& outimage) const
             cmd.record_clone(out_gpu, out, opt);
 
             cmd.submit_and_wait();
+
+            sr_yield();
 
             if (!(opt.use_fp16_storage && opt.use_int8_storage))
             {

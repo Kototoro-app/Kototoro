@@ -5,6 +5,7 @@
 #include "realcugan.h"
 #include "cpu.h"
 #include "gpu.h"
+#include "sr_yield.h"
 
 #define TAG "RealCuganJni"
 #ifndef NDEBUG
@@ -49,14 +50,12 @@ Java_org_skepsun_kototoro_reader_translate_data_RealCuganNcnnEngine_initNative(J
     // Auto-detect tilesize based on GPU heap budget.
     // RealCUGAN 2x is less demanding than ESRGAN 4x, but still needs to respect
     // mobile GPU VRAM limits to avoid VK_ERROR_DEVICE_LOST.
+    // Tiles stay at 200 even with ample VRAM: a submission holds the GPU until it finishes, and a 400px tile
+    // took ~280 ms on an Adreno 830, which froze the reader's frames for as long (see sr_yield.h).
     if (gpuid >= 0) {
         uint32_t heap_budget = ncnn::get_gpu_device(gpuid)->get_heap_budget();
         LOGD("GPU %d heap budget: %u MB", gpuid, heap_budget);
-        if (heap_budget > 1900)
-            realcugan->tilesize = 400;
-        else if (heap_budget > 800)
-            realcugan->tilesize = 300;
-        else if (heap_budget > 400)
+        if (heap_budget > 400)
             realcugan->tilesize = 200;
         else
             realcugan->tilesize = 100;
@@ -158,4 +157,9 @@ Java_org_skepsun_kototoro_reader_translate_data_RealCuganNcnnEngine_releaseNativ
         if (cugan == realcugan) realcugan = nullptr;
         LOGD("RealCUGAN native instance released.");
     }
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_skepsun_kototoro_reader_translate_data_RealCuganNcnnEngine_pauseForNative(JNIEnv *env, jclass clazz, jlong durationMs) {
+    sr_pause_for(durationMs);
 }

@@ -59,4 +59,14 @@ class RealCuganNcnnEngine(private val gpuId: Int = 0) {
             nativeHandle = 0L
         }
     }
+
+    companion object {
+
+        /**
+         * Holds RealCUGAN and RealESRGAN (they share the native library) between tiles for [durationMs], so the
+         * reader's frames get the GPU while it is being touched or flung. Later calls extend the pause.
+         */
+        @JvmStatic
+        external fun pauseForNative(durationMs: Long)
+    }
 }

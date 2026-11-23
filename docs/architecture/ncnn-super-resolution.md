@@ -218,3 +218,29 @@ This two-layer approach ensures:
 - GPU: HWUI can submit draw commands between tiles (2ms windows)
 - CPU: OS scheduler prioritizes UI thread over SR thread
 
+
+## 10. The Yield Never Ran on the RealCUGAN Path, and 400px Tiles Froze Frames
+
+### The Issue
+With RealCUGAN 2x selected, scrolling the reader while pages were being upscaled stuttered badly. Measured on an
+Adreno 830 (`dumpsys gfxinfo`, six scroll gestures): 90th percentile frame time 250 ms and 99th 600 ms, against
+22 ms / 42 ms with super resolution off.
+
+### Root Cause
+1. Pages larger than `tilesize` with `syncgap = 3` go through `process_se_very_rough` (stage0, sync gap, stage2).
+   The 2 ms sleep from Section 9 lived only in `process()`, so this path never yielded at all.
+2. A Vulkan submission holds the GPU until it completes. A 400px RealCUGAN tile took about 280 ms, so even a yield
+   between tiles left HWUI unable to draw for that long.
+3. Cancelled page loads (fast page turns) were caught as ordinary exceptions and counted towards
+   `MAX_CONSECUTIVE_FAILURES`, silently switching super resolution off for the rest of the process.
+
+### The Solution
+- `sr_yield.h`: every `cmd.submit_and_wait()` in both engines is followed by `sr_yield()`, a 2 ms sleep plus a wait
+  while a pause deadline is in the future. `ReaderActivity.dispatchTouchEvent` renews the deadline through
+  `ReaderSuperResolutionManager.onReaderTouch` (1 s while touching, 800 ms after release for flings). It is a
+  deadline rather than a flag, so background preparation can never be stalled by a reader that did not resume.
+- RealCUGAN tiles are capped at 200px (~70 ms per submission), bounding the hitch when a gesture starts mid-tile.
+- `CancellationException` is rethrown instead of counted as a GPU failure.
+
+Result on the same device and gesture script: 90th 19 ms, 99th 48 ms, GPU 90th 1 ms. An idle page (937x1331) takes
+about 3.8 s instead of 3.4 s because of the smaller tiles; pages being scrolled past wait until the gesture settles.

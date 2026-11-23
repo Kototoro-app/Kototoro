@@ -8,6 +8,7 @@ import android.content.res.Configuration
 import android.os.Bundle
 import android.util.Log
 import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.WindowManager
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Arrangement
@@ -97,6 +98,7 @@ import org.skepsun.kototoro.details.ui.pager.bookmarks.BookmarksViewModel
 import org.skepsun.kototoro.details.ui.pager.pages.PagesViewModel
 import org.skepsun.kototoro.parsers.model.ContentChapter
 import org.skepsun.kototoro.reader.data.TapGridSettings
+import org.skepsun.kototoro.reader.domain.ReaderSuperResolutionManager
 import org.skepsun.kototoro.reader.domain.TapGridArea
 import org.skepsun.kototoro.reader.ui.config.ImageServerDelegate
 import org.skepsun.kototoro.reader.ui.compose.ComposeReaderController
@@ -154,6 +156,9 @@ class ReaderActivity :
 
     @Inject
     lateinit var contentDataRepository: ContentDataRepository
+
+    @Inject
+    lateinit var superResolutionManager: ReaderSuperResolutionManager
 
     private val idlingDetector = IdlingDetector(TimeUnit.SECONDS.toMillis(10), this)
 
@@ -1006,6 +1011,11 @@ class ReaderActivity :
                 controlDelegate.onGridLongTouch(area)
             }
         }
+    }
+
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        superResolutionManager.onReaderTouch(ev.actionMasked)
+        return super.dispatchTouchEvent(ev)
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
