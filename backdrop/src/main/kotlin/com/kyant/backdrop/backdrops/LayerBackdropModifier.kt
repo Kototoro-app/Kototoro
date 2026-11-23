@@ -54,6 +54,11 @@ private class LayerBackdropNode(
 
     override fun ContentDrawScope.draw() {
         drawContent()
+        // A skipped frame leaves the previous recording in the layer, so the glass surfaces above sample the last
+        // frame instead of paying for a full offscreen render of animating content (see
+        // LayerBackdrop.recordIntervalMillis).
+        if (!backdrop.shouldRecord()) return
+        backdrop.recordClock.markRecorded()
         recordLayer(backdrop.graphicsLayer) { backdrop.onDraw(this@draw) }
     }
 

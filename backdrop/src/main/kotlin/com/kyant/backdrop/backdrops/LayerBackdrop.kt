@@ -3,6 +3,7 @@ package com.kyant.backdrop.backdrops
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -18,6 +19,8 @@ import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.unit.Density
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.internal.InverseLayerScope
+import com.kyant.backdrop.internal.LayerRecordClock
+import kotlin.time.Duration.Companion.milliseconds
 
 private val DefaultOnDraw: ContentDrawScope.() -> Unit = { drawContent() }
 
@@ -38,6 +41,21 @@ class LayerBackdrop internal constructor(
 ) : Backdrop {
 
     override val isCoordinatesDependent: Boolean = true
+
+    /**
+     * Minimum spacing between two layer recordings, in milliseconds. `0` (the default) records on every draw, which
+     * is what a backdrop attached to static content wants.
+     *
+     * The layer is recorded from inside the draw pass of the content it is attached to, so any animation behind it
+     * re-renders the whole layer every frame. Raising this while a short route transition runs keeps the last
+     * recorded frame in place for a frame or two: on a 300-400 ms flight that is invisible, and it removes most of
+     * the offscreen rendering the glass surfaces would otherwise pay for. Written from the UI thread.
+     */
+    var recordIntervalMillis by mutableLongStateOf(0L)
+
+    internal val recordClock = LayerRecordClock()
+
+    internal fun shouldRecord(): Boolean = recordClock.shouldRecord(recordIntervalMillis.milliseconds)
 
     internal var layerCoordinates: LayoutCoordinates? by mutableStateOf(null)
 
