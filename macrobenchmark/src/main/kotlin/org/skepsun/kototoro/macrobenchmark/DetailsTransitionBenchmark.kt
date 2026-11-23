@@ -12,7 +12,9 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.LargeTest
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
+import androidx.test.uiautomator.BySelector
 import androidx.test.uiautomator.UiDevice
+import androidx.test.uiautomator.UiObject2
 import androidx.test.uiautomator.Until
 import org.junit.After
 import org.junit.Assert.fail
@@ -108,10 +110,23 @@ class DetailsTransitionBenchmark {
         scope.startActivityAndWait(intent)
     }
 
+    /**
+     * How to find the configured work in the list. The card puts the *whole* title in its content description while
+     * the visible line is ellipsized after two lines, so the description is exact and the text is only a fallback
+     * for layouts that build their own semantics.
+     */
+    private fun itemSelectors(): List<BySelector> = listOf(
+        By.desc(contentTitle),
+        By.textStartsWith(contentTitle.take(TITLE_PREFIX_LENGTH)),
+    )
+
+    private fun waitForItem(device: UiDevice, timeoutMs: Long): Boolean = itemSelectors().any {
+        device.wait(Until.hasObject(it), timeoutMs)
+    }
+
     /** Scrolls the favourites grid until the configured title shows up, then leaves the list on screen. */
     private fun waitForList(scope: MacrobenchmarkScope) {
-        val selector = By.textStartsWith(contentTitle.take(TITLE_PREFIX_LENGTH))
-        if (scope.device.wait(Until.hasObject(selector), STARTUP_TIMEOUT_MS)) return
+        if (waitForItem(scope.device, STARTUP_TIMEOUT_MS)) return
         repeat(LIST_SCROLL_ATTEMPTS) {
             scope.device.swipe(
                 scope.device.displayWidth / 2,
@@ -120,7 +135,7 @@ class DetailsTransitionBenchmark {
                 (scope.device.displayHeight * 0.25f).toInt(),
                 SWIPE_STEPS,
             )
-            if (scope.device.wait(Until.hasObject(selector), LIST_WAIT_MS)) return
+            if (waitForItem(scope.device, LIST_WAIT_MS)) return
         }
         fail(
             "Could not find \"$contentTitle\" in the favourites list. Seed the last opened space with that work, " +
@@ -132,10 +147,14 @@ class DetailsTransitionBenchmark {
      * One flight: tap the work, let the details page settle, go back, let the list settle. The settle windows are
      * part of the measurement on purpose - a frame dropped while the hero settles is exactly what #672 is about.
      */
+    private fun findItem(device: UiDevice): UiObject2 =
+        itemSelectors().asSequence().mapNotNull { device.findObject(it) }.firstOrNull()
+            ?: throw AssertionError(
+                "The list item \"$contentTitle\" disappeared between setup and measurement.",
+            )
+
     private fun openDetailsAndBack(scope: MacrobenchmarkScope) {
-        val selector = By.textStartsWith(contentTitle.take(TITLE_PREFIX_LENGTH))
-        scope.device.findObject(selector)?.click()
-            ?: fail("The list item \"$contentTitle\" disappeared between setup and measurement.")
+        findItem(scope.device).click()
         SystemClock.sleep(DETAILS_SETTLE_MS)
         scope.device.pressBack()
         SystemClock.sleep(LIST_SETTLE_MS)
@@ -160,7 +179,7 @@ class DetailsTransitionBenchmark {
         /** Instrumentation argument, not a preference: the harness cannot read the app's database. */
         const val ARG_CONTENT_TITLE = "contentTitle"
 
-        /** Titles are ellipsized in the grid, so match on a prefix short enough to survive truncation. */
+        /** Fallback match only: the grid ellipsizes the visible title, so a prefix short enough to survive truncation. */
         const val TITLE_PREFIX_LENGTH = 12
 
         const val STARTUP_TIMEOUT_MS = 20_000L
