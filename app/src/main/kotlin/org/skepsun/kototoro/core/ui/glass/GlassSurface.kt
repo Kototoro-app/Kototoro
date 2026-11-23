@@ -26,8 +26,6 @@ import com.kyant.backdrop.effects.blur
 import com.kyant.shapes.RoundedRectangle
 import dagger.hilt.android.EntryPointAccessors
 import org.skepsun.kototoro.core.prefs.AppSettings
-import org.skepsun.kototoro.core.ui.compose.HeroTransitionPhase
-import org.skepsun.kototoro.core.ui.compose.LocalHeroTransitionPhase
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.BaseActivityEntryPoint
@@ -290,9 +288,6 @@ fun LiquidGlassSurface(
         lensEnabled = lensEnabled,
         pressFeedbackEnabled = pressFeedbackEnabled,
         exportedBackdrop = exportedBackdrop,
-        // The bars repaint over the flying content on every transition frame; their blur, lens and
-        // colour passes are suspended for that window and restored afterwards (#672).
-        suspendEffects = LocalHeroTransitionPhase.current != HeroTransitionPhase.Idle,
         content = content,
     )
 }

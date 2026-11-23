@@ -99,17 +99,12 @@ fun BoxScope.ImmersiveEdgeBlur(
     radius: Dp,
     modifier: Modifier = Modifier,
 ) {
-    // Every frame of this band re-runs a full resolution blur pass over the recorded page. While a list <-> details
-    // transition is in flight the page under the band is moving anyway, so the pass is suspended for its duration and
-    // the band shows the page as recorded; the tint, rim and layout stay untouched. Measured on a Motorola M332BF:
-    // the blur is what makes the transition stutter, not the recording behind it (see #672).
-    val blurSuspended = LocalHeroTransitionPhase.current != HeroTransitionPhase.Idle
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         val spec = remember(edge, radius) { BlurRadiusSpec.verticalGradient(immersiveEdgeBlurRadiusStops(edge, radius)) }
-        val effects: BackdropEffectScope.() -> Unit = remember(spec, blurSuspended) {
+        val effects: BackdropEffectScope.() -> Unit = remember(spec) {
             {
                 requiresFullResolution = true
-                if (!blurSuspended) effect(spec.createRenderEffect(size, this))
+                effect(spec.createRenderEffect(size, this))
             }
         }
         Box(
@@ -122,7 +117,7 @@ fun BoxScope.ImmersiveEdgeBlur(
                 ),
         )
     } else {
-        ImmersiveEdgeSteppedBlur(backdrop, edge, height, radius, modifier, blurSuspended)
+        ImmersiveEdgeSteppedBlur(backdrop, edge, height, radius, modifier)
     }
 }
 
@@ -137,14 +132,11 @@ private fun ImmersiveEdgeSteppedBlur(
     height: Dp,
     radius: Dp,
     modifier: Modifier,
-    blurSuspended: Boolean,
 ) {
     Box(modifier = modifier.height(height)) {
         ImmersiveEdgeBlurSteps.forEach { step ->
-            val effects: BackdropEffectScope.() -> Unit = remember(radius, step, blurSuspended) {
-                {
-                    if (!blurSuspended) blur((radius * step.radiusFraction).toPx())
-                }
+            val effects: BackdropEffectScope.() -> Unit = remember(radius, step) {
+                { blur((radius * step.radiusFraction).toPx()) }
             }
             val drawMask: DrawScope.() -> Unit = remember(edge, step) {
                 val stops = immersiveEdgeBlurMaskStops(step, edge)
