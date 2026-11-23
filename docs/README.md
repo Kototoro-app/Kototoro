@@ -21,6 +21,8 @@ This directory is organized by task, not by internal implementation. Start with 
 | Import local files (CBZ, EPUB, video) | [Local Import Guide](./local-import.md) |
 | Set up local OCR + translation | [Automatic Translation](./automatic-translation.md) |
 | Connect external source ecosystems | [Source Integrations](./source-integrations.md) |
+| Rate, review, and discover with community | [Community Features](./community.md) |
+| Discover new titles with recommendations | [Recommendations & Discovery](./recommendations.md) |
 | Sync across devices with WebDAV | [WebDAV Sync](./webdav-sync.md) |
 | Get quick answers to common questions | [FAQ](./faq.md) |
 | Solve common setup problems | [Troubleshooting](./troubleshooting.md) |
@@ -35,6 +37,8 @@ This directory is organized by task, not by internal implementation. Start with 
 - [Local Import Guide](./local-import.md) — CBZ, EPUB, TXT, MKV, MP4 and more
 - [Automatic Translation](./automatic-translation.md)
 - [Source Integrations](./source-integrations.md) — built-in, Kotatsu-Redo, Mihon, Aniyomi, IReader, Legado, TVBox
+- [Community Features](./community.md) — decentralized ratings, comments, charts, and recommendations
+- [Recommendations & Discovery](./recommendations.md) — taste profiling, collaborative filtering, and on-device discovery
 - [WebDAV Sync](./webdav-sync.md)
 - [FAQ](./faq.md)
 - [Troubleshooting](./troubleshooting.md)
@@ -43,6 +47,7 @@ This directory is organized by task, not by internal implementation. Start with 
 
 - [Architecture Review](./architecture/architecture-review.md)
 - [Architecture Roadmap](./architecture/architecture-roadmap.md)
+- [Community Architecture Plan (Nostr + Static Index)](./architecture/community-nostr-plan-2026-11.md)
 - [Novel Reader Immersive Refinement (2026-05)](./architecture/novel-reader-immersive-refinement-2026-05.md)
 - [Tracking Site Support Plan (2026-04)](./architecture/tracking-site-support-plan-2026-04.md)
 - [UI Improvement](./architecture/ui_improvement.md)

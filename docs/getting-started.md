@@ -117,6 +117,16 @@ Read more: [Automatic Translation](./automatic-translation.md)
 
 Read more: [WebDAV Sync](./webdav-sync.md)
 
+### Community Ratings and Discussions
+
+1. Open `Settings -> Services -> Community`.
+2. Turn on **Community ratings**.
+3. Generate and safely back up your **Recovery key** (`nsec1...`).
+4. Set a public nickname to display next to your comments.
+5. Browse community ratings and similar works on title detail pages, or check community favorites in Discover.
+
+Read more: [Community Features](./community.md)
+
 ## Favorites Import and Site Sync
 
 Kototoro can import favorites from supported logged-in sites or push local favorites back to them.
@@ -144,6 +154,7 @@ Basic flow:
 - [Reader Features](./reader-features.md)
 - [Automatic Translation](./automatic-translation.md)
 - [Source Integrations](./source-integrations.md)
+- [Community Features](./community.md)
 - [WebDAV Sync](./webdav-sync.md)
 - [FAQ](./faq.md)
 - [Troubleshooting](./troubleshooting.md)
