@@ -694,7 +694,7 @@ private fun ChapterSelectionTopBar(
     modifier: Modifier = Modifier,
 ) {
     var isMoreExpanded by remember { mutableStateOf(false) }
-    val hasOverflowActions = state.canBookmark || state.canMarkCurrent
+    val hasOverflowActions = state.canBookmark || state.canMarkCurrent || state.canPrepareSuperResolution
     Row(
         modifier = modifier.height(ModernDetailsDockChromeHeight),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -827,6 +827,21 @@ private fun ChapterSelectionTopBar(
                                     onClick = {
                                         isMoreExpanded = false
                                         state.onMarkCurrent()
+                                    },
+                                )
+                            }
+                            if (state.canPrepareSuperResolution) {
+                                CompactDropdownMenuItem(
+                                    text = { Text(stringResource(R.string.prepare_super_resolution)) },
+                                    leadingIcon = {
+                                        Icon(
+                                            painter = rememberSafePainter(R.drawable.ic_auto_fix),
+                                            contentDescription = null,
+                                        )
+                                    },
+                                    onClick = {
+                                        isMoreExpanded = false
+                                        state.onPrepareSuperResolution()
                                     },
                                 )
                             }

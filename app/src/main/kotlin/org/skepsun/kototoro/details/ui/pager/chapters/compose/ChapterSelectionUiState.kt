@@ -10,6 +10,7 @@ data class ChapterSelectionUiState(
     val isBookmarkRemoveAction: Boolean,
     val canTranslate: Boolean = false,
     val canCancelTranslation: Boolean = false,
+    val canPrepareSuperResolution: Boolean = false,
     val onClearSelection: () -> Unit,
     val onSelectAll: () -> Unit,
     val onDownload: () -> Unit,
@@ -18,4 +19,5 @@ data class ChapterSelectionUiState(
     val onBookmark: () -> Unit,
     val onTranslate: () -> Unit = {},
     val onCancelTranslation: () -> Unit = {},
+    val onPrepareSuperResolution: () -> Unit = {},
 )

@@ -71,6 +71,9 @@ fun ChaptersScreenRoot(
     val contentDetails by viewModel.mangaDetails.collectAsStateWithLifecycle(initialValue = null)
     val contentType = contentDetails?.toContent()?.source?.getContentType()
     val canTranslateChapters = contentType != ContentType.VIDEO && contentType != ContentType.HENTAI_VIDEO
+    // Super resolution upscales page images, so it only applies to downloaded image chapters.
+    val isImageContent = canTranslateChapters && contentType != ContentType.NOVEL &&
+        contentType != ContentType.HENTAI_NOVEL
     val activeTranslationChapterIds by viewModel.activeTranslationChapterIds.collectAsStateWithLifecycle(
         initialValue = emptySet(),
     )
@@ -257,6 +260,7 @@ fun ChaptersScreenRoot(
         deletableChapterIds,
         downloadableChapterIds,
         handleSelectionAction,
+        isImageContent,
         selectedIds,
         selectedItems,
         startTranslation,
@@ -276,6 +280,8 @@ fun ChaptersScreenRoot(
                 isBookmarkRemoveAction = selectedItems.isNotEmpty() && selectedItems.all { it.isBookmarked },
                 canTranslate = canTranslateChapters && selectedItems.isNotEmpty(),
                 canCancelTranslation = activeTranslationChapterIds.isNotEmpty(),
+                canPrepareSuperResolution = isImageContent && settings.isReaderSuperResolutionEnabled &&
+                    deletableChapterIds.isNotEmpty(),
                 onClearSelection = { selectedItemIds.clear() },
                 onSelectAll = {
                     selectedItemIds.clear()
@@ -287,6 +293,10 @@ fun ChaptersScreenRoot(
                 onBookmark = { handleSelectionAction(R.id.action_bookmark) },
                 onTranslate = { startTranslation(selectedIds, false) },
                 onCancelTranslation = { viewModel.cancelTranslation() },
+                onPrepareSuperResolution = {
+                    viewModel.prepareSuperResolution(deletableChapterIds)
+                    selectedItemIds.clear()
+                },
             )
         }
     }
