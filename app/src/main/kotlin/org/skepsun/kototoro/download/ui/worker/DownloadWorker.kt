@@ -350,6 +350,10 @@ class DownloadWorker @AssistedInject constructor(
                             "DownloadWorker",
                             "doWork before prepareContentImpl: workId=$id mangaId=${executionContext.executionManga.id} kind=${task.kind}",
                         )
+                        if (task.kind == DownloadTaskKind.PREPARE_SUPER_RESOLUTION) {
+                            // Super resolution can be requested for chapters that are not on disk yet.
+                            ensureChapterSourcesDownloaded(executionContext.executionManga, task)
+                        }
                         prepareContentImpl(executionContext.executionManga, task)
                         Log.i(
                             "DownloadWorker",
@@ -639,8 +643,8 @@ class DownloadWorker @AssistedInject constructor(
     }
 
     /**
-     * Downloads the chapters of the translation request that are not on disk yet, so the translate action
-     * works as "download if needed, then translate".
+     * Downloads the requested chapters that are not on disk yet, so translating or preparing super resolution
+     * works as "download if needed, then process".
      */
     private suspend fun ensureChapterSourcesDownloaded(
         subject: Content,
@@ -653,7 +657,8 @@ class DownloadWorker @AssistedInject constructor(
         if (missingChapterIds.isEmpty()) return
         Log.i(
             "DownloadWorker",
-            "translateContentImpl downloading ${missingChapterIds.size} missing chapter(s) mangaId=${subject.id}",
+            "ensureChapterSourcesDownloaded downloading ${missingChapterIds.size} missing chapter(s) " +
+                "mangaId=${subject.id} kind=${task.kind}",
         )
         val resolvedContent = resolveExecutionContent(subject)
         val storedExecutionDetails = mangaDataRepository.storeContentAndReturn(
@@ -819,9 +824,17 @@ class DownloadWorker @AssistedInject constructor(
         manga: Content,
         task: DownloadTask,
     ) {
-        val chapters = getChapters(manga, task)
+        val chapters = resolvePreparationChapters(manga, task)
+        check(chapters.any { isPreparationChapterEligible(it.value) }) {
+            "No downloaded chapter to prepare for ${manga.title}"
+        }
         for ((chapterIndex, chapter) in chapters.withIndex()) {
             checkIsPaused()
+            if (!isPreparationChapterEligible(chapter.value)) {
+                // Its download failed or was skipped; the other chapters are still worth preparing.
+                Log.w("DownloadWorker", "prepareMangaContent skips chapter without local copy id=${chapter.value.id}")
+                continue
+            }
             val pages = loadLocalPages(chapter.value)
             check(pages.isNotEmpty()) { "No local pages found for chapter ${chapter.value.title ?: chapter.value.id}" }
             for ((pageIndex, page) in pages.withIndex()) {
@@ -936,6 +949,34 @@ class DownloadWorker @AssistedInject constructor(
                 isCompleted = true,
             ),
         )
+    }
+
+    /**
+     * The requested chapters, with those downloaded by this task swapped for their local copies: the stored record
+     * still lists the source chapter for them, and only the local copy has pages to read. Local chapters keep the
+     * source chapter's id, or are matched by number or title the way the details screen merges them.
+     */
+    private suspend fun resolvePreparationChapters(
+        manga: Content,
+        task: DownloadTask,
+    ): List<IndexedValue<ContentChapter>> {
+        val requested = getChapters(manga, task)
+        if (requested.all { isPreparationChapterEligible(it.value) }) {
+            return requested
+        }
+        val stored = mangaDataRepository.findContentById(task.executionMangaId, withChapters = true) ?: manga
+        val localChapters = runCatchingCancellable { localContentRepository.getDetails(stored) }
+            .getOrNull()?.chapters.orEmpty()
+        return requested.map { item ->
+            val chapter = item.value
+            if (isPreparationChapterEligible(chapter)) {
+                return@map item
+            }
+            val local = localChapters.find { it.id == chapter.id }
+                ?: localChapters.find { chapter.number > 0f && it.number == chapter.number && it.branch == chapter.branch }
+                ?: localChapters.find { !chapter.title.isNullOrBlank() && it.title == chapter.title }
+            if (local != null) IndexedValue(item.index, local) else item
+        }
     }
 
     private suspend fun loadLocalPages(chapter: ContentChapter): List<ContentPage> {

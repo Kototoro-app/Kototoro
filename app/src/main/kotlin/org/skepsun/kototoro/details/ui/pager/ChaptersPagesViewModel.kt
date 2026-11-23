@@ -656,8 +656,12 @@ abstract class ChaptersPagesViewModel(
         schedulePreparation(snapshot, DownloadTaskKind.PREPARE_TRANSLATION, isMeteredNetworkAllowed)
     }
 
-    fun prepareSuperResolution(snapshot: Set<Long>) {
-        schedulePreparation(snapshot, DownloadTaskKind.PREPARE_SUPER_RESOLUTION, true)
+    /**
+     * Upscales the selected chapters in the background. Chapters that are not downloaded are downloaded first,
+     * and pages already upscaled with the current model are found in the cache and skipped.
+     */
+    fun prepareSuperResolution(snapshot: Set<Long>, isMeteredNetworkAllowed: Boolean) {
+        schedulePreparation(snapshot, DownloadTaskKind.PREPARE_SUPER_RESOLUTION, isMeteredNetworkAllowed)
     }
 
     private fun schedulePreparation(
@@ -667,7 +671,7 @@ abstract class ChaptersPagesViewModel(
     ) {
         val manga = mangaDetails.value?.toContent() ?: return
         val items = chapters.value.filter { it.chapter.id in snapshot }
-            .filter { it.isDownloaded || it.chapter.source.isLocal }
+            .filter { kind == DownloadTaskKind.PREPARE_SUPER_RESOLUTION || it.isDownloaded || it.chapter.source.isLocal }
         if (items.isEmpty()) {
             return
         }

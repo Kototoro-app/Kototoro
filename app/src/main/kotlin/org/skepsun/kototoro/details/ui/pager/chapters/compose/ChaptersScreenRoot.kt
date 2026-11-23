@@ -261,6 +261,7 @@ fun ChaptersScreenRoot(
         downloadableChapterIds,
         handleSelectionAction,
         isImageContent,
+        router,
         selectedIds,
         selectedItems,
         startTranslation,
@@ -280,8 +281,7 @@ fun ChaptersScreenRoot(
                 isBookmarkRemoveAction = selectedItems.isNotEmpty() && selectedItems.all { it.isBookmarked },
                 canTranslate = canTranslateChapters && selectedItems.isNotEmpty(),
                 canCancelTranslation = activeTranslationChapterIds.isNotEmpty(),
-                canPrepareSuperResolution = isImageContent && settings.isReaderSuperResolutionEnabled &&
-                    deletableChapterIds.isNotEmpty(),
+                canPrepareSuperResolution = isImageContent && settings.isReaderSuperResolutionEnabled,
                 onClearSelection = { selectedItemIds.clear() },
                 onSelectAll = {
                     selectedItemIds.clear()
@@ -294,7 +294,15 @@ fun ChaptersScreenRoot(
                 onTranslate = { startTranslation(selectedIds, false) },
                 onCancelTranslation = { viewModel.cancelTranslation() },
                 onPrepareSuperResolution = {
-                    viewModel.prepareSuperResolution(deletableChapterIds)
+                    val chapterIds = selectedIds.toSet()
+                    // Only chapters that still need downloading make the network type matter.
+                    if (downloadableChapterIds.isEmpty()) {
+                        viewModel.prepareSuperResolution(chapterIds, isMeteredNetworkAllowed = true)
+                    } else {
+                        router.askForDownloadOverMeteredNetwork { allow ->
+                            viewModel.prepareSuperResolution(chapterIds, allow)
+                        }
+                    }
                     selectedItemIds.clear()
                 },
             )
