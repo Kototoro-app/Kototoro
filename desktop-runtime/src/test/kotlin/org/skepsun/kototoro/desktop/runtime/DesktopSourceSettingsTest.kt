@@ -188,6 +188,39 @@ class DesktopSourceSettingsTest {
         )).nsfw)
     }
 
+    @Test
+    fun `a restored sequence rewrites the order but keeps the chosen sort`() {
+        // Android's applySourceOrder, which applying an extension group runs: sortKey changes, sourcesSortOrder does not.
+        val current = DesktopSourceSettings(sort = DesktopSourceSort.TITLE, order = listOf("MIHON_2"))
+        val applied = current.appliedOrder(
+            listOf("MIHON_9", "MIHON_1"),
+            offered = setOf("MIHON_9", "MIHON_1", "MIHON_2"),
+        )
+        assertEquals(listOf("MIHON_9", "MIHON_1"), applied.order)
+        assertEquals(DesktopSourceSort.TITLE, applied.sort)
+        // A custom choice is left alone as well; only the sequence follows the backup.
+        assertEquals(DesktopSourceSort.CUSTOM, applied.copy(sort = DesktopSourceSort.CUSTOM)
+            .appliedOrder(listOf("MIHON_1"), setOf("MIHON_1")).sort)
+    }
+
+    @Test
+    fun `saving the order editor still switches to the custom sort`() {
+        // Android's saveSourceOrder keeps writing MANUAL: only the explicit editor save changes the mode.
+        val settings = DesktopSourceSettings(sort = DesktopSourceSort.LANGUAGE, order = listOf("MIHON_2"))
+        val saved = settings.savedOrder(listOf("MIHON_9", "MIHON_1", "MIHON_9"), offered = setOf("MIHON_9", "MIHON_1"))
+        assertEquals(DesktopSourceSort.CUSTOM, saved.sort)
+        assertEquals(listOf("MIHON_9", "MIHON_1"), saved.order)
+    }
+
+    @Test
+    fun `names the rail cannot offer are dropped from a restored sequence`() {
+        val applied = DesktopSourceSettings().appliedOrder(
+            listOf("MIHON_1", "MIHON_GONE", "MIHON_1", "MIHON_2", " "),
+            offered = setOf("MIHON_1", "MIHON_2"),
+        )
+        assertEquals(listOf("MIHON_1", "MIHON_2"), applied.order)
+    }
+
     private fun plainListing() = SourceListing(SourceRef("PLAIN_SOURCE", "en", "MANGA"), "Plain",
         SourceEcosystem.MIHON, true)
 
