@@ -32,9 +32,13 @@ internal fun matchLocalChapter(
 /**
  * Picks the chapters of a translate job, so a selection that still has a chapter on disk never fails as a whole.
  *
- * [requestedChapters] are the stored record's own chapters for the requested ids, [preparedChapters] resolves the
- * same ids against the local copy the way the prepare flow does, [loadLocalCopy] is the local copy itself and
- * [isEligible] tells whether a chapter has pages to translate.
+ * [requestedChapters] are the stored record's own chapters for the requested ids and [preparedChapters] resolves the
+ * same ids against the local copy the way the prepare flow does, chapter by chapter. [loadLocalCopy] is the local
+ * copy itself and [isEligible] tells whether a chapter has pages to translate.
+ *
+ * A chapter without a local counterpart stays in [preparedChapters] as the source chapter, so the result is filtered
+ * again: the chapters that really are missing on disk are dropped here instead of failing later in the job, and a
+ * selection that has none of them left fails with the same message as before.
  */
 internal suspend fun selectTranslationChapters(
 	storedContent: Content,
@@ -43,23 +47,12 @@ internal suspend fun selectTranslationChapters(
 	loadLocalCopy: suspend () -> Content?,
 	isEligible: (ContentChapter) -> Boolean,
 ): TranslationChapterSelection {
-	var chapters = requestedChapters.filter { isEligible(it.value) }
-	var workContent = storedContent
-	if (chapters.isEmpty()) {
-		// The stored record of a source title keeps the source's own chapter links; once downloaded, the same
-		// chapters (same ids) live in the local copy, which is what has pages to translate.
-		val local = loadLocalCopy()
-		val requestedIds = requestedChapters.mapTo(HashSet()) { it.value.id }
-		val localChapters = local?.chapters.orEmpty().filter { it.id in requestedIds }
-		// getChapters() rejects the whole request when a single requested chapter is not part of the content.
-		if (requestedIds.isNotEmpty() && localChapters.size == requestedIds.size) {
-			val localEligible = localChapters.filter(isEligible)
-				.mapIndexed { index, chapter -> IndexedValue(index, chapter) }
-			if (localEligible.isNotEmpty()) {
-				workContent = checkNotNull(local)
-				chapters = localEligible
-			}
-		}
+	val chapters = preparedChapters().filter { isEligible(it.value) }
+	val workContent = if (requestedChapters.any { isEligible(it.value) }) {
+		storedContent
+	} else {
+		// The stored record has no local chapter of its own: novels have to read the paragraphs from the local copy.
+		loadLocalCopy() ?: storedContent
 	}
 	check(chapters.isNotEmpty()) { "No downloaded chapter to translate for ${storedContent.title}" }
 	return TranslationChapterSelection(workContent, chapters)
