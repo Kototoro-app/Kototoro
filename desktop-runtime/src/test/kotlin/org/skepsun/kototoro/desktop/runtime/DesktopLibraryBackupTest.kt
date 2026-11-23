@@ -404,6 +404,32 @@ class DesktopLibraryBackupTest {
         assertEquals(listOf("plugin.z"), target.priority)
     }
 
+    @Test
+    fun `a restored extension group writes the backed-up sequence without changing the chosen sort`() = runBlocking<Unit> {
+        // Android's applySourceOrder on a group: sortKey follows the backup, the chosen sort stays the user's own.
+        val group = """[{"schema":2,"id":"android","name":"Phone","createdAt":9,"repos":[],"packages":[],
+            |"sourceStates":[],"enabledSources":["MIHON_9","MIHON_1"],"enabledSortStart":1,
+            |"enabledSortGaps":[],"enabledUnsorted":[],"jarPriority":[]}]""".trimMargin()
+        val file = zip("index" to index, "categories" to categories, "extension_groups" to group)
+        var settings = DesktopSourceSettings(
+            sort = DesktopSourceSort.LANGUAGE,
+            order = listOf("MIHON_1", "MIHON_9"),
+        )
+        val host = object : DesktopExtensionBackup {
+            override suspend fun export(): String? = null
+            override suspend fun restore(groups: List<JsonObject>) {
+                val plan = DesktopExtensionGroups.decode(groups)
+                settings = settings.appliedOrder(plan.enabledOrder, setOf("MIHON_1", "MIHON_9", "MIHON_2"))
+            }
+        }
+        DesktopRuntime.open(directory.resolve("order")).use { runtime ->
+            val backups = DesktopLibraryBackup(runtime.database, host)
+            backups.preview(file).use { backups.restore(it) }
+        }
+        assertEquals(listOf("MIHON_9", "MIHON_1"), settings.order)
+        assertEquals(DesktopSourceSort.LANGUAGE, settings.sort)
+    }
+
     private fun manga(id: Long, name: String = source.name) =
         """{"id":$id,"title":"Android 内容","url":"/work","public_url":"https://fixture.invalid/work","cover_url":"","source":"$name","future_field":"ignored"}"""
 

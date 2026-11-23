@@ -80,7 +80,8 @@ internal class DesktopExtensionBackupBridge(
         val disabled = plan.disabledSources
         if (disabled.isNotEmpty()) session.setSourcesEnabled(disabled, false)
         // The organization the backup carried: the sequence the rail shows and Android's JAR priority. Both are written
-        // after the installs so the sources that just came back take their place in the order.
+        // after the installs so the sources that just came back take their place in the order. The sequence is written
+        // the way Android's `applySourceOrder` applies an extension group: it never changes the user's chosen sort.
         if (plan.enabledOrder.isNotEmpty()) onRestoreOrder(plan.enabledOrder)
         if (plan.jarPriority.isNotEmpty()) session.setJarPriorityOrder(plan.jarPriority)
         onRestored(ExtensionRestoreSummary(installed, failed))

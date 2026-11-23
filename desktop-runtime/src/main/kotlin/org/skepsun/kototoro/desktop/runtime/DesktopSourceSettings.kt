@@ -99,6 +99,21 @@ data class DesktopSourceSettings(
     fun hidesNsfw(target: DesktopNsfwTarget): Boolean = target in nsfwTargets
 
     /**
+     * Android's `ContentSourcesRepository.applySourceOrder`, which applying an extension group runs: the hand-picked
+     * sequence is rewritten, the chosen sort is left alone. Names the rail cannot offer are dropped, like the editor
+     * does, so a rank nothing renders cannot linger.
+     */
+    fun appliedOrder(names: List<String>, offered: Set<String>): DesktopSourceSettings =
+        copy(order = names.filter { it in offered }.distinct())
+
+    /**
+     * Android's `ContentSourcesRepository.saveSourceOrder`, which only the editor's save runs: the sequence is stored
+     * *and* becomes the chosen sort, so saving the dialog is also what makes the new order visible.
+     */
+    fun savedOrder(names: List<String>, offered: Set<String>): DesktopSourceSettings =
+        copy(sort = DesktopSourceSort.CUSTOM, order = names.filter { it in offered }.distinct())
+
+    /**
      * Android's `AppSettings.isIncognitoModeEnabled(isNsfw)`: the stored choice alone decides, so an adult work opens
      * incognito without a question while everything else always records its progress. Windows has no global
      * incognito switch (Android keeps it out of the settings screens), so only the adult rule applies here.

@@ -511,7 +511,7 @@ class DesktopController(
     private val mutableDownloadSelection = MutableStateFlow<Set<String>>(emptySet())
     internal val downloadSelection = mutableDownloadSelection.asStateFlow()
     private val backups = DesktopLibraryBackup(session.storage.database,
-        DesktopExtensionBackupBridge(session, ::onExtensionsRestored, ::saveSourceOrder))
+        DesktopExtensionBackupBridge(session, ::onExtensionsRestored, ::applySourceOrder))
     /** What the last restore did to the installed extensions, for the message after it. */
     @Volatile private var extensionRestore: ExtensionRestoreSummary? = null
     private val mutableBackupPreview = MutableStateFlow<DesktopBackupArchive?>(null)
@@ -3299,19 +3299,23 @@ class DesktopController(
         sourceSettings(mutableState.value.sourceSettings.copy(incognitoForNsfw = value))
 
     /**
+     * Android's `applySourceOrder`: a restore of an extension group (or a backup carrying one) rewrites the sequence
+     * without touching the chosen sort, so the user's own sorting survives the restore.
+     */
+    internal fun applySourceOrder(names: List<String>) {
+        sourceSettings(mutableState.value.sourceSettings.appliedOrder(names, offeredSourceNames()))
+    }
+
+    /**
      * Android's `saveSourceOrder`: the hand-picked sequence is stored and the sort order switches to it, so saving the
      * editor is also what makes the new order visible. Sources the rail cannot offer (disabled, uninstalled) are
      * dropped from the sequence, otherwise they would keep a rank nothing renders.
      */
     internal fun saveSourceOrder(names: List<String>) {
-        val offered = sourceDescriptors().mapTo(HashSet()) { it.source.name }
-        sourceSettings(
-            mutableState.value.sourceSettings.copy(
-                sort = org.skepsun.kototoro.desktop.runtime.DesktopSourceSort.CUSTOM,
-                order = names.filter { it in offered }.distinct(),
-            ),
-        )
+        sourceSettings(mutableState.value.sourceSettings.savedOrder(names, offeredSourceNames()))
     }
+
+    private fun offeredSourceNames(): Set<String> = sourceDescriptors().mapTo(HashSet()) { it.source.name }
 
     internal fun sourceSettings(settings: org.skepsun.kototoro.desktop.runtime.DesktopSourceSettings) {
         mutableState.update { it.copy(sourceSettings = settings) }
