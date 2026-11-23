@@ -676,9 +676,8 @@ class PageLoader @Inject constructor(
                 .get()
                 .header(CommonHeaders.ACCEPT, IMAGE_ACCEPT)
                 .cacheControl(CommonHeaders.CACHE_CONTROL_NO_STORE)
+                // 来源通过 tag 传给下游拦截器（头值不能含非 ASCII 字符）
                 .tag(ContentSource::class.java, page.source)
-                // 传递 source 名称，便于下游拦截器获知来源
-                .header(CommonHeaders.MANGA_SOURCE, CommonHeaders.encodeSourceName(page.source.name))
             page.headers?.forEach { (k, v) -> builder.header(k, v) }
             val lowerHeaders = page.headers?.keys?.associateBy { it.lowercase() } ?: emptyMap()
             if (!lowerHeaders.containsKey("referer") &&
@@ -701,8 +700,7 @@ class PageLoader @Inject constructor(
                 .get()
                 .header(CommonHeaders.ACCEPT, IMAGE_ACCEPT)
                 .cacheControl(CommonHeaders.CACHE_CONTROL_NO_STORE)
-                // 传递来源，便于下游拦截器注入默认 UA/Referer
-                .header(CommonHeaders.MANGA_SOURCE, CommonHeaders.encodeSourceName(mangaSource.name))
+                // 来源通过 tag 传给下游拦截器注入默认 UA/Referer
                 .tag(ContentSource::class.java, mangaSource)
             headers?.forEach { (k, v) -> builder.header(k, v) }
             return builder.build()

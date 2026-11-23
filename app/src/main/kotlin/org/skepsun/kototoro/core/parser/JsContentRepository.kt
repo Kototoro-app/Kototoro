@@ -49,7 +49,6 @@ import java.util.EnumSet
 import java.nio.charset.Charset
 import java.util.concurrent.TimeUnit
 import kotlin.math.abs
-import org.skepsun.kototoro.core.network.CommonHeaders
 import android.content.SharedPreferences
 
 /**
@@ -1257,7 +1256,6 @@ class JsContentRepository(
             .url(url)
             // 传递来源，便于 CommonHeadersInterceptor 注入默认 UA/Referer
             .tag(ContentSource::class.java, source)
-            .header(CommonHeaders.MANGA_SOURCE, CommonHeaders.encodeSourceName(source.name))
         (headersAny as? Map<*, *>)?.forEach { (k, v) ->
             val name = k?.toString()?.trim().orEmpty()
             if (name.isBlank()) return@forEach

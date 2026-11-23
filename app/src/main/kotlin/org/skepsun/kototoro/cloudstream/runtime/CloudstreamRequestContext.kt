@@ -51,7 +51,6 @@ internal object CloudstreamRequestContext {
             CloudstreamRequestScope.withSourceHeaders(originalRequest, source)
                 .tag(ContentSource::class.java, source)
                 .tag(CloudFlareHandlingPolicy::class.java, policy ?: SOURCE_SOLVER_POLICY)
-                .header(CommonHeaders.MANGA_SOURCE, CommonHeaders.encodeSourceName(source.name))
                 .build()
         } else {
             originalRequest
