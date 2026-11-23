@@ -18,7 +18,7 @@
 static RealESRGAN* realesrgan = nullptr;
 
 extern "C" JNIEXPORT jlong JNICALL
-Java_org_skepsun_kototoro_reader_translate_data_RealEsrganNcnnEngine_initNative(JNIEnv *env, jobject thiz, jstring paramPath, jstring binPath, jint gpuId, jboolean ttaMode) {
+Java_org_skepsun_kototoro_reader_translate_data_RealEsrganNcnnEngine_initNative(JNIEnv *env, jobject thiz, jstring paramPath, jstring binPath, jint gpuId, jboolean ttaMode, jint scale) {
     const char *param_str = env->GetStringUTFChars(paramPath, nullptr);
     const char *bin_str = env->GetStringUTFChars(binPath, nullptr);
 
@@ -34,8 +34,9 @@ Java_org_skepsun_kototoro_reader_translate_data_RealEsrganNcnnEngine_initNative(
 
     realesrgan = new RealESRGAN(gpuid, ttaMode);
     
-    // Default model args for RealESRGAN anime models
-    realesrgan->scale = 4; // Most RealESRGAN anime models are 4x by default
+    // The x4plus models are 4x; the realesr-animevideov3 models come in 2x/3x/4x. The official
+    // realesrgan-ncnn-vulkan uses prepadding 10 for every scale.
+    realesrgan->scale = scale;
     realesrgan->prepadding = 10;
 
     // Auto-detect tilesize based on GPU heap budget.

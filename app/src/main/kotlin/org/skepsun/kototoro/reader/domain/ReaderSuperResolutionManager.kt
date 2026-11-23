@@ -128,16 +128,17 @@ class ReaderSuperResolutionManager @Inject constructor(
                 initEngineIfNeeded(modelId)
 
                 val isEsrgan = modelId.contains("realesrgan", ignoreCase = true)
+                val ncnnModel = NcnnModel.of(modelId)
                 val isAnime4k = modelId.startsWith("ANIME4K_")
 
                 val inputPixels = boundsOpts.outWidth.toLong() * boundsOpts.outHeight.toLong()
 
                 if (!isAnime4k) {
-                    val maxPixels = if (isEsrgan) MAX_INPUT_PIXELS_ESRGAN else MAX_INPUT_PIXELS_CUGAN
+                    val maxPixels = if (ncnnModel.scale >= 4) MAX_INPUT_PIXELS_ESRGAN else MAX_INPUT_PIXELS_CUGAN
 
                     if (inputPixels > maxPixels) {
                         Log.d(TAG, "Skipping SR: input ${boundsOpts.outWidth}x${boundsOpts.outHeight}" +
-                                " (${inputPixels / 1_000_000}M px) exceeds limit for ${if (isEsrgan) "4x" else "2x"}")
+                                " (${inputPixels / 1_000_000}M px) exceeds limit for ${ncnnModel.scale}x")
                         return@withLock null
                     }
                 }
@@ -319,10 +320,9 @@ class ReaderSuperResolutionManager @Inject constructor(
             }
 
             val modelsDir = onnxModelManager.getModelDir(modelId)
-            val expectedParamName = if (modelId.contains("realesrgan", ignoreCase = true))
-                "realesrgan-x4plus-anime.param" else "up2x-conservative.param"
-            val expectedBinName = if (modelId.contains("realesrgan", ignoreCase = true))
-                "realesrgan-x4plus-anime.bin" else "up2x-conservative.bin"
+            val ncnnModel = NcnnModel.of(modelId)
+            val expectedParamName = "${ncnnModel.fileName}.param"
+            val expectedBinName = "${ncnnModel.fileName}.bin"
 
             val paramFile = modelsDir.walkTopDown().firstOrNull { it.name == expectedParamName }
                 ?: throw IllegalStateException("No parameter file $expectedParamName found for model $modelId")
@@ -331,7 +331,12 @@ class ReaderSuperResolutionManager @Inject constructor(
 
             if (modelId.contains("realesrgan", ignoreCase = true)) {
                 realesrganEngine = RealEsrganNcnnEngine()
-                realesrganEngine?.initialize(paramFile.absolutePath, binFile.absolutePath, ttaMode = false)
+                realesrganEngine?.initialize(
+                    paramFile.absolutePath,
+                    binFile.absolutePath,
+                    ttaMode = false,
+                    scale = ncnnModel.scale,
+                )
             } else {
                 realcuganEngine = RealCuganNcnnEngine()
                 realcuganEngine?.initialize(paramFile.absolutePath, binFile.absolutePath, ttaMode = false)
@@ -393,4 +398,19 @@ class ReaderSuperResolutionManager @Inject constructor(
         }
     }
 
+    /** The model files inside an NCNN model package and the scale they upscale by. */
+    private enum class NcnnModel(val fileName: String, val scale: Int) {
+        REALESRGAN_X4PLUS_ANIME("realesrgan-x4plus-anime", 4),
+        REALESR_ANIMEVIDEOV3_X2("realesr-animevideov3-x2", 2),
+        REALCUGAN_2X_CONSERVATIVE("up2x-conservative", 2),
+        ;
+
+        companion object {
+            fun of(modelId: String): NcnnModel = when {
+                modelId.contains("animevideov3", ignoreCase = true) -> REALESR_ANIMEVIDEOV3_X2
+                modelId.contains("realesrgan", ignoreCase = true) -> REALESRGAN_X4PLUS_ANIME
+                else -> REALCUGAN_2X_CONSERVATIVE
+            }
+        }
+    }
 }

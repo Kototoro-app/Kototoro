@@ -463,6 +463,15 @@ object OnnxOfficialModelCatalog {
             description = "Official RealESRGAN anime-optimized super-resolution model for NCNN GPU acceleration (Includes realesrgan-x4plus-anime param and bin).",
         ),
         OnnxOfficialModel(
+            id = "realesrgan_ncnn_animevideov3_x2",
+            title = "RealESRGAN AnimeVideo v3 2x (NCNN Native, fast)",
+            version = "v0.2.5.0",
+            category = OnnxModelCategory.IMAGE_SUPER_RESOLUTION,
+            archiveUrl = "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesrgan-ncnn-vulkan-20220424-windows.zip",
+            files = emptyList(),
+            description = "Official compact RealESRGAN anime video model (SRVGGNetCompact) at 2x; a fraction of RealCUGAN's GPU time (Includes realesr-animevideov3-x2 param and bin).",
+        ),
+        OnnxOfficialModel(
             id = "realcugan_ncnn_2x_conservative",
             title = "RealCUGAN 2x Conservative (NCNN Native)",
             version = "master",

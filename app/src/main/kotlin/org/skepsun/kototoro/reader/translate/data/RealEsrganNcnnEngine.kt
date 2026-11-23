@@ -7,17 +7,24 @@ import android.util.Log
 
 class RealEsrganNcnnEngine(private val gpuId: Int = 0) {
     private var nativeHandle: Long = 0
+    private var scale = 4
 
     init {
         System.loadLibrary("realesrgan_ncnn") // using the shared lib containing both
     }
 
-    private external fun initNative(paramPath: String, binPath: String, gpuId: Int, ttaMode: Boolean): Long
+    private external fun initNative(paramPath: String, binPath: String, gpuId: Int, ttaMode: Boolean, scale: Int): Long
     private external fun processNative(handle: Long, inBitmap: Bitmap, outBitmap: Bitmap): Boolean
     private external fun releaseNative(handle: Long)
 
-    suspend fun initialize(paramPath: String, binPath: String, ttaMode: Boolean = false): Boolean = withContext(Dispatchers.IO) {
-        nativeHandle = initNative(paramPath, binPath, gpuId, ttaMode)
+    suspend fun initialize(
+        paramPath: String,
+        binPath: String,
+        ttaMode: Boolean = false,
+        scale: Int = 4,
+    ): Boolean = withContext(Dispatchers.IO) {
+        this@RealEsrganNcnnEngine.scale = scale
+        nativeHandle = initNative(paramPath, binPath, gpuId, ttaMode, scale)
         nativeHandle != 0L
     }
 
@@ -27,9 +34,8 @@ class RealEsrganNcnnEngine(private val gpuId: Int = 0) {
             return@withContext null
         }
 
-        // RealESRGAN anime models are 4x
-        val outW = inBitmap.width * 4
-        val outH = inBitmap.height * 4
+        val outW = inBitmap.width * scale
+        val outH = inBitmap.height * scale
 
         val outBitmap = try {
             Bitmap.createBitmap(outW, outH, Bitmap.Config.ARGB_8888)

@@ -244,3 +244,13 @@ Adreno 830 (`dumpsys gfxinfo`, six scroll gestures): 90th percentile frame time 
 
 Result on the same device and gesture script: 90th 19 ms, 99th 48 ms, GPU 90th 1 ms. An idle page (937x1331) takes
 about 3.8 s instead of 3.4 s because of the smaller tiles; pages being scrolled past wait until the gesture settles.
+
+## 11. RealESRGAN AnimeVideo v3 2x
+
+`realesrgan_ncnn_animevideov3_x2` runs the compact `realesr-animevideov3-x2` model (SRVGGNetCompact, 16 convolutions)
+through the RealESRGAN engine, which now takes the scale from the model (`NcnnModel` in
+`ReaderSuperResolutionManager`); the files come from the same official v0.2.5.0 package as the 4x model.
+
+Measured on an Adreno 830 with a 937x1331 page and 200px tiles: about 2.1 s per page, against 3.8 s for RealCUGAN 2x,
+with scrolling at 90th 24 ms / 99th 53 ms while it runs. 400px tiles only brought it to 1.84 s and raised the 99th
+percentile to 73 ms, so the 2x model keeps 200px tiles.
