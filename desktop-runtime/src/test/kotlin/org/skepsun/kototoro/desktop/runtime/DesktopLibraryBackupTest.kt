@@ -1,6 +1,13 @@
 package org.skepsun.kototoro.desktop.runtime
 
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.boolean
+import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -303,6 +310,100 @@ class DesktopLibraryBackupTest {
         }
     }
 
+    @Test
+    fun `extension group round trip installs packages and restores enabled order and switched off sources`() = runBlocking<Unit> {
+        val file = directory.resolve("extensions.zip")
+        val original = ExtensionHost(
+            packages = listOf(DesktopExtensionPackage("pkg.a", "https://fixture.invalid/index.json", "mihon", "1.2", 12)),
+            repos = listOf(DesktopExtensionRepo("MIHON", "https://fixture.invalid/index.json", "Fixture repo")),
+            order = listOf("SOURCE_B", "SOURCE_A", "SOURCE_C"),
+            disabled = setOf("SOURCE_D"),
+            priority = listOf("plugin.b", "plugin.a"),
+        )
+        DesktopRuntime.open(directory.resolve("db")).use { runtime ->
+            DesktopLibraryBackup(runtime.database, original).export(file)
+        }
+        // The section keeps Android's field names and the host's real organization, not placeholder empty arrays.
+        val group = ZipFile(file.toFile()).use { zip ->
+            val text = zip.getInputStream(zip.getEntry(BackupSection.EXTENSION_GROUPS.entryName))
+                .bufferedReader().use { it.readText() }
+            Json.parseToJsonElement(text).jsonArray.single().jsonObject
+        }
+        assertEquals(2, group.getValue("schema").jsonPrimitive.int)
+        assertEquals(listOf("SOURCE_B", "SOURCE_A", "SOURCE_C"),
+            group.getValue("enabledSources").jsonArray.map { it.jsonPrimitive.content })
+        assertEquals(1, group.getValue("enabledSortStart").jsonPrimitive.int)
+        assertTrue(group.getValue("enabledSortGaps").jsonArray.isEmpty())
+        assertTrue(group.getValue("enabledUnsorted").jsonArray.isEmpty())
+        val states = group.getValue("sourceStates").jsonArray.map { it.jsonObject }
+        assertEquals(listOf("SOURCE_D"), states.map { it.getValue("source").jsonPrimitive.content })
+        assertFalse(states.single().getValue("enabled").jsonPrimitive.boolean)
+        assertEquals(listOf("plugin.b", "plugin.a"),
+            group.getValue("jarPriority").jsonArray.map { it.jsonPrimitive.content })
+        assertEquals("pkg.a", group.getValue("packages").jsonArray.single().jsonObject.getValue("pkg").jsonPrimitive.content)
+
+        val restored = ExtensionHost()
+        DesktopRuntime.open(directory.resolve("db")).use { runtime ->
+            val backups = DesktopLibraryBackup(runtime.database, restored)
+            backups.preview(file).use { backups.restore(it) }
+        }
+        assertTrue(restored.restored)
+        assertEquals(setOf("pkg.a"), restored.packages.keys)
+        assertEquals(listOf("SOURCE_B", "SOURCE_A", "SOURCE_C"), restored.order)
+        assertEquals(setOf("SOURCE_D"), restored.disabled)
+        assertEquals(listOf("plugin.b", "plugin.a"), restored.priority)
+    }
+
+    @Test
+    fun `legacy archives without extension groups or ordering fields restore without failing`() = runBlocking<Unit> {
+        // An archive from before extension groups existed: no section at all, the extension host is never asked.
+        val plain = zip("index" to index, "categories" to categories)
+        val untouched = ExtensionHost()
+        DesktopRuntime.open(directory.resolve("plain")).use { runtime ->
+            val backups = DesktopLibraryBackup(runtime.database, untouched)
+            backups.preview(plain).use { preview ->
+                assertEquals(1, backups.restore(preview))
+                assertTrue(preview.otherEntries.isEmpty())
+            }
+            assertEquals(listOf("传入分类"), runtime.database.getFavouriteCategoriesDao().findAll().map { it.title })
+        }
+        assertFalse(untouched.restored)
+
+        // A schema 1 group: packages yes, but sourceStates/sort fields absent. Missing fields mean "nothing to restore".
+        val legacyGroup = """[{"schema":1,"id":"old","name":"Old PC","createdAt":5,"repos":[],"packages":[{"pkg":"legacy.pkg","kind":"mihon","versionCode":3}]}]"""
+        val legacy = zip("index" to index, "categories" to categories, "extension_groups" to legacyGroup)
+        val target = ExtensionHost()
+        DesktopRuntime.open(directory.resolve("legacy")).use { runtime ->
+            val backups = DesktopLibraryBackup(runtime.database, target)
+            backups.preview(legacy).use { preview -> assertEquals(1, backups.restore(preview)) }
+            assertEquals(listOf("传入分类"), runtime.database.getFavouriteCategoriesDao().findAll().map { it.title })
+        }
+        assertTrue(target.restored)
+        assertEquals(setOf("legacy.pkg"), target.packages.keys)
+        assertTrue(target.order.isEmpty())
+        assertTrue(target.disabled.isEmpty())
+        assertTrue(target.priority.isEmpty())
+    }
+
+    @Test
+    fun `Android schema 2 group decodes sort keys gaps unsorted sources and disabled states`() = runBlocking<Unit> {
+        // What Android's SourceGroupSerializer writes: compact plain sources with a non-zero start and a gap, sortKey 0
+        // for unsorted ones, full records for the sources it switched off, and the JAR order.
+        val androidGroup = """[{"schema":2,"id":"android","name":"Phone","createdAt":9,"repos":[],"packages":[],
+            |"sourceStates":[{"source":"OFF_SOURCE","enabled":false,"pinned":false,"sortKey":1}],
+            |"enabledSources":["FIRST","SECOND"],"enabledSortStart":2,"enabledSortGaps":[1,3],
+            |"enabledUnsorted":["UNSORTED"],"jarPriority":["plugin.z"]}]""".trimMargin()
+        val file = zip("index" to index, "categories" to categories, "extension_groups" to androidGroup)
+        val target = ExtensionHost()
+        DesktopRuntime.open(directory.resolve("android")).use { runtime ->
+            val backups = DesktopLibraryBackup(runtime.database, target)
+            backups.preview(file).use { backups.restore(it) }
+        }
+        assertEquals(listOf("FIRST", "SECOND", "UNSORTED"), target.order)
+        assertEquals(setOf("OFF_SOURCE"), target.disabled)
+        assertEquals(listOf("plugin.z"), target.priority)
+    }
+
     private fun manga(id: Long, name: String = source.name) =
         """{"id":$id,"title":"Android 内容","url":"/work","public_url":"https://fixture.invalid/work","cover_url":"","source":"$name","future_field":"ignored"}"""
 
@@ -320,5 +421,44 @@ class DesktopLibraryBackupTest {
             }
         }
         return file
+    }
+
+    /**
+     * An extension host on the shared wire format, standing in for the Windows host's install and order writes: it
+     * exports its packages and organization, and a restore installs what is missing, keeps the switches and applies the
+     * sequence and JAR priority it read, exactly the behavior the real bridge delegates to [DesktopExtensionGroups].
+     */
+    private class ExtensionHost(
+        packages: List<DesktopExtensionPackage> = emptyList(),
+        private val repos: List<DesktopExtensionRepo> = emptyList(),
+        order: List<String> = emptyList(),
+        disabled: Set<String> = emptySet(),
+        priority: List<String> = emptyList(),
+    ) : DesktopExtensionBackup {
+        val packages = LinkedHashMap<String, DesktopExtensionPackage>().apply { packages.forEach { put(it.pkg, it) } }
+        var order: List<String> = order
+            private set
+        val disabled = LinkedHashSet(disabled)
+        var priority: List<String> = priority
+            private set
+        var restored = false
+            private set
+
+        override suspend fun export(): String? = if (packages.isEmpty()) null else DesktopExtensionGroups.encode(
+            DesktopExtensionExport(
+                id = "desktop", name = "Windows", createdAt = 1, repos = repos,
+                packages = packages.values.toList(), enabledSources = order,
+                disabledSources = disabled.toList(), jarPriority = priority,
+            ),
+        )
+
+        override suspend fun restore(groups: List<JsonObject>) {
+            val plan = DesktopExtensionGroups.decode(groups)
+            for (pkg in plan.packages) packages.putIfAbsent(pkg.pkg, pkg)
+            disabled += plan.disabledSources
+            if (plan.enabledOrder.isNotEmpty()) order = plan.enabledOrder.filterNot { it in disabled }
+            if (plan.jarPriority.isNotEmpty()) priority = plan.jarPriority
+            restored = true
+        }
     }
 }

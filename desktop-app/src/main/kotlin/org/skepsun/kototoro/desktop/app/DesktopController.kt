@@ -511,7 +511,7 @@ class DesktopController(
     private val mutableDownloadSelection = MutableStateFlow<Set<String>>(emptySet())
     internal val downloadSelection = mutableDownloadSelection.asStateFlow()
     private val backups = DesktopLibraryBackup(session.storage.database,
-        DesktopExtensionBackupBridge(session, ::onExtensionsRestored))
+        DesktopExtensionBackupBridge(session, ::onExtensionsRestored, ::saveSourceOrder))
     /** What the last restore did to the installed extensions, for the message after it. */
     @Volatile private var extensionRestore: ExtensionRestoreSummary? = null
     private val mutableBackupPreview = MutableStateFlow<DesktopBackupArchive?>(null)
