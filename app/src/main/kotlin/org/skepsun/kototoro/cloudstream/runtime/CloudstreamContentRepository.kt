@@ -145,7 +145,7 @@ class CloudstreamContentRepository(
                         set(CommonHeaders.USER_AGENT, it)
                     }
                 }
-                .set(CommonHeaders.MANGA_SOURCE, source.name)
+                .set(CommonHeaders.MANGA_SOURCE, CommonHeaders.encodeSourceName(source.name))
                 .build(),
         )
         if (cause !== this) enriched.addSuppressed(cause)

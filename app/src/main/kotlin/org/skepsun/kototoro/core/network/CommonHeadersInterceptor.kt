@@ -37,7 +37,7 @@ class CommonHeadersInterceptor @Inject constructor(
         val request = chain.request()
         val source = request.tag(ContentSource::class.java)
             ?: request.tag(KTMangaSource::class.java)?.let { org.skepsun.kototoro.core.model.ContentSource(it.name) }
-            ?: request.headers[CommonHeaders.MANGA_SOURCE]?.let { ContentSource(it) }
+            ?: request.headers[CommonHeaders.MANGA_SOURCE]?.let { ContentSource(CommonHeaders.decodeSourceName(it)) }
         val repository = if (source != null) {
             mangaRepositoryFactoryLazy.get().create(source)
         } else {

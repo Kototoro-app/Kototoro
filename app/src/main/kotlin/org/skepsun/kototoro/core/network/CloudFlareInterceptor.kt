@@ -236,5 +236,5 @@ internal fun Request.resolveContentSource(): ContentSource? {
     return tag(ContentSource::class.java)
         ?: tag(KotatsuMangaSource::class.java)?.let(::KotatsuParserSource)
         ?: headers[CommonHeaders.MANGA_SOURCE]
-            ?.let { org.skepsun.kototoro.core.model.ContentSource(it) }
+            ?.let { org.skepsun.kototoro.core.model.ContentSource(CommonHeaders.decodeSourceName(it)) }
 }

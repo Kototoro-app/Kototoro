@@ -18,7 +18,7 @@ class ContentSourceHeaderInterceptor : Interceptor {
 
         val request = chain.request
         val newHeaders = request.httpHeaders.newBuilder()
-            .set(CommonHeaders.MANGA_SOURCE, mangaSource.name)
+            .set(CommonHeaders.MANGA_SOURCE, CommonHeaders.encodeSourceName(mangaSource.name))
             .build()
         val newRequest = request.newBuilder()
             .httpHeaders(newHeaders)
