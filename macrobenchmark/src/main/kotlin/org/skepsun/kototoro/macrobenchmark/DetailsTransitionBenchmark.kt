@@ -62,6 +62,11 @@ class DetailsTransitionBenchmark {
             ).let { "" }
     }
 
+    private val iterations: Int by lazy {
+        InstrumentationRegistry.getArguments().getString(ARG_ITERATIONS)?.toIntOrNull()?.coerceAtLeast(1)
+            ?: DEFAULT_ITERATIONS
+    }
+
     /** Two-pane / wide window: the case the issue is worst on. */
     @Test
     fun detailsTransitionTablet() = measureDetailsTransition(
@@ -89,7 +94,7 @@ class DetailsTransitionBenchmark {
             metrics = listOf(FrameTimingMetric()),
             compilationMode = compilationMode,
             startupMode = null,
-            iterations = 5,
+            iterations = iterations,
             setupBlock = {
                 // Idempotent: an aborted previous run may have left a resized window behind.
                 resetWindow(this)
@@ -173,11 +178,15 @@ class DetailsTransitionBenchmark {
     }
 
     private companion object {
-        const val TARGET_PACKAGE = "org.skepsun.kototoro"
+        const val TARGET_PACKAGE = "org.skepsun.kototoro.debug"
         const val TARGET_ACTIVITY = "org.skepsun.kototoro.main.ui.MainActivity"
 
         /** Instrumentation argument, not a preference: the harness cannot read the app's database. */
         const val ARG_CONTENT_TITLE = "contentTitle"
+
+        /** Smoke runs pass 1; a measurement run keeps the default so the median has something to work with. */
+        const val ARG_ITERATIONS = "iterations"
+        const val DEFAULT_ITERATIONS = 5
 
         /** Fallback match only: the grid ellipsizes the visible title, so a prefix short enough to survive truncation. */
         const val TITLE_PREFIX_LENGTH = 12

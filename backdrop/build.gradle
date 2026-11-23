@@ -28,8 +28,5 @@ kotlin {
         androidMain.dependencies { implementation 'androidx.annotation:annotation:1.9.1' }
         skikoMain { dependsOn commonMain }
         jvmMain { dependsOn skikoMain }
-        commonTest.dependencies {
-            implementation kotlin('test')
-        }
     }
 }

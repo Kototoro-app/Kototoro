@@ -56,6 +56,12 @@ fun SharedLiquidGlassSurface(
     lensEnabled: Boolean = true,
     pressFeedbackEnabled: Boolean = true,
     exportedBackdrop: LayerBackdrop? = null,
+    /**
+     * Skips the per-frame blur, lens, vibrancy and colour passes while keeping the tint, rim, highlight and layout.
+     * A list <-> details transition repaints the bars over animating content at every frame, and those passes are what
+     * the frame budget cannot afford there; measured on a Motorola M332BF (#672).
+     */
+    suspendEffects: Boolean = false,
     content: @Composable BoxScope.() -> Unit,
 ) {
     val tuningScope = GlassTuningScope.fromRole(componentRole)
@@ -164,7 +170,7 @@ fun SharedLiquidGlassSurface(
                         // refraction shader (one render pass fewer); saturation is linear, so
                         // doing it after the blur/color controls looks the same.
                         val vibrancy = tuning.isOn(tuningScope, GlassTuningParam.VIBRANCY)
-                        if (vibrancy && lensParams == null) {
+                        if (!suspendEffects && vibrancy && lensParams == null) {
                             vibrancy()
                         }
                         // Independent color grading on top of the glass: saturation /
@@ -173,11 +179,11 @@ fun SharedLiquidGlassSurface(
                         // vibrancy's own saturation lift.
                         val saturation = tuning.value(tuningScope, GlassTuningParam.SATURATION)
                         val brightness = tuning.value(tuningScope, GlassTuningParam.BRIGHTNESS)
-                        if (saturation != 1f || brightness != 0f) {
+                        if (!suspendEffects && (saturation != 1f || brightness != 0f)) {
                             colorControls(brightness = brightness, saturation = saturation)
                         }
-                        blur(tuning.value(tuningScope, GlassTuningParam.BLUR_RADIUS_DP).dp.toPx())
-                        if (lensParams != null) {
+                        if (!suspendEffects) blur(tuning.value(tuningScope, GlassTuningParam.BLUR_RADIUS_DP).dp.toPx())
+                        if (!suspendEffects && lensParams != null) {
                             lens(
                                 refractionHeight = lensParams.refractionHeight,
                                 refractionAmount = lensParams.refractionAmount,
