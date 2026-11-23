@@ -15,6 +15,8 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
+import org.skepsun.kototoro.core.ui.compose.ReorderDialog
+import org.skepsun.kototoro.core.ui.compose.ReorderItem
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
 import org.skepsun.kototoro.core.util.ext.getSerializableCompat
 import org.skepsun.kototoro.core.util.ext.observeEvent
@@ -28,7 +30,8 @@ class FavouritesCategoryEditActivity :
     ActivityResultCallback<Uri?> {
 
     private val viewModel by viewModels<FavouritesCategoryEditViewModel>()
-    private var selectedSortOrder: ListSortOrder? = null
+    private var selectedSortOrder by mutableStateOf<ListSortOrder?>(null)
+    private var reorderItems by mutableStateOf<List<ReorderItem>?>(null)
     private var title by mutableStateOf("")
     private var isTrackerEnabled by mutableStateOf(false)
     private var isVisibleOnShelf by mutableStateOf(true)
@@ -111,7 +114,25 @@ class FavouritesCategoryEditActivity :
                     }
                 },
                 onRemoveCover = viewModel::removeCover,
+                snackbarHostState = snackbarHostState,
+                onReorderClick = if (category != null) {
+                    {
+                        lifecycleScope.launch {
+                            reorderItems = viewModel.manualOrderItems(getString(R.string.source_pinned))
+                        }
+                    }
+                } else null,
             )
+            reorderItems?.let { items ->
+                ReorderDialog(
+                    items = items,
+                    onDismissRequest = { reorderItems = null },
+                    onSave = { ids ->
+                        viewModel.setManualOrder(ids)
+                        reorderItems = null
+                    },
+                )
+            }
         }
     }
 

@@ -9,17 +9,23 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.plus
+import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.core.model.FavouriteCategory
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.ui.compose.ReorderItem
 import org.skepsun.kototoro.core.ui.BaseViewModel
 import org.skepsun.kototoro.core.util.ext.MutableEventFlow
 import org.skepsun.kototoro.core.util.ext.call
 import org.skepsun.kototoro.favourites.data.FavouriteCategoryCoverStore
 import org.skepsun.kototoro.favourites.domain.FavouritesRepository
+import org.skepsun.kototoro.favourites.domain.library.FavouriteLibraryDerivationInput
+import org.skepsun.kototoro.favourites.domain.library.FavouriteLibrarySnapshotStore
+import org.skepsun.kototoro.favourites.domain.library.deriveFavouriteLibraryState
 import org.skepsun.kototoro.favourites.ui.categories.edit.FavouritesCategoryEditActivity.Companion.NO_ID
 import org.skepsun.kototoro.list.domain.ListSortOrder
 import java.io.File
@@ -31,6 +37,7 @@ class FavouritesCategoryEditViewModel @Inject constructor(
     private val repository: FavouritesRepository,
     private val settings: AppSettings,
     private val coverStore: FavouriteCategoryCoverStore,
+    private val snapshotStore: FavouriteLibrarySnapshotStore,
 ) : BaseViewModel() {
 
     private val categoryId = savedStateHandle[AppRouter.KEY_ID] ?: NO_ID
@@ -49,6 +56,9 @@ class FavouritesCategoryEditViewModel @Inject constructor(
     val pickedCover = MutableStateFlow<Uri?>(null)
 
     private val isRemoveCoverRequested = MutableStateFlow(false)
+
+    /** The order arranged in the manual-order dialog, applied on save; null keeps the order shown now. */
+    private var manualOrder: List<Long>? = null
 
     val isTrackerEnabled = flow {
         emit(settings.isTrackerEnabled && AppSettings.TRACK_FAVOURITES in settings.trackSources)
@@ -101,6 +111,27 @@ class FavouritesCategoryEditViewModel @Inject constructor(
         isRemoveCoverRequested.value = true
     }
 
+    /** The category's works in the order the shelf shows them now, which is where a manual order starts. */
+    suspend fun manualOrderItems(pinnedLabel: String): List<ReorderItem> = withContext(Dispatchers.Default) {
+        if (categoryId == NO_ID) return@withContext emptyList()
+        val snapshot = snapshotStore.observe().first()
+        val state = deriveFavouriteLibraryState(
+            snapshot,
+            FavouriteLibraryDerivationInput(ordersByCategory = mapOf(categoryId to repository.getCategory(categoryId).order)),
+        )
+        val pinned = state.pinnedIdsByCategory[categoryId].orEmpty()
+        val ids = manualOrder ?: state.visibleIdsByCategory[categoryId].orEmpty()
+        ids.mapNotNull { id ->
+            snapshot.rowsByEntityId[id]?.let { row ->
+                ReorderItem(id.toString(), row.resolvedTitle, if (id in pinned) pinnedLabel else "")
+            }
+        }
+    }
+
+    fun setManualOrder(ids: List<String>) {
+        manualOrder = ids.map(String::toLong)
+    }
+
     fun save(
         title: String,
         sortOrder: ListSortOrder,
@@ -112,7 +143,13 @@ class FavouritesCategoryEditViewModel @Inject constructor(
             val targetId = if (categoryId == NO_ID) {
                 repository.createCategory(title, sortOrder, isTrackerEnabled, isVisibleOnShelf).id
             } else {
+                // As on the shelf's sort menu: switching to the manual order keeps the order shown until now
+                // instead of the stale sort keys, so it is read before the update changes the category's order.
+                val order = if (sortOrder == ListSortOrder.MANUAL) {
+                    manualOrder ?: manualOrderItems("").map { it.key.toLong() }
+                } else null
                 repository.updateCategory(categoryId, title, sortOrder, isTrackerEnabled, isVisibleOnShelf)
+                order?.let { repository.reorderCategory(categoryId, it) }
                 categoryId
             }
             saveCover(targetId)
