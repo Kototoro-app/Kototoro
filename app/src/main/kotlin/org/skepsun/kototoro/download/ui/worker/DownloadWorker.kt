@@ -580,21 +580,15 @@ class DownloadWorker @AssistedInject constructor(
         val storedContent = checkNotNull(mangaDataRepository.findContentById(task.executionMangaId, withChapters = true)) {
             "Cannot load content ${task.executionMangaId}"
         }
-        var workContent = storedContent
-        var chapters = getChapters(storedContent, task).filter { isPreparationChapterEligible(it.value) }
-        if (chapters.isEmpty()) {
-            // The stored record of a source title keeps the source's own chapter links; once downloaded, the same
-            // chapters (same ids) live in the local copy, which is what has pages to translate.
-            val local = runCatchingCancellable { localContentRepository.getDetails(storedContent) }.getOrNull()
-            val localChapters = local?.let {
-                runCatching { getChapters(it, task) }.getOrNull()?.filter { chapter -> isPreparationChapterEligible(chapter.value) }
-            }.orEmpty()
-            if (localChapters.isNotEmpty()) {
-                workContent = checkNotNull(local)
-                chapters = localChapters
-            }
-        }
-        check(chapters.isNotEmpty()) { "No downloaded chapter to translate for ${storedContent.title}" }
+        val selection = selectTranslationChapters(
+            storedContent = storedContent,
+            requestedChapters = getChapters(storedContent, task),
+            preparedChapters = { resolvePreparationChapters(storedContent, task) },
+            loadLocalCopy = { runCatchingCancellable { localContentRepository.getDetails(storedContent) }.getOrNull() },
+            isEligible = ::isPreparationChapterEligible,
+        )
+        val workContent = selection.workContent
+        val chapters = selection.chapters
         val forceRetranslation = task.isRetranslation
         val languagePair = resolveChapterTranslationLanguagePair(
             preferredSourceLanguage = settings.readerTranslationSourceLanguage,
@@ -972,9 +966,7 @@ class DownloadWorker @AssistedInject constructor(
             if (isPreparationChapterEligible(chapter)) {
                 return@map item
             }
-            val local = localChapters.find { it.id == chapter.id }
-                ?: localChapters.find { chapter.number > 0f && it.number == chapter.number && it.branch == chapter.branch }
-                ?: localChapters.find { !chapter.title.isNullOrBlank() && it.title == chapter.title }
+            val local = matchLocalChapter(chapter, localChapters)
             if (local != null) IndexedValue(item.index, local) else item
         }
     }
