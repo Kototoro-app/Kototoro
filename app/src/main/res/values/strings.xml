@@ -2417,6 +2417,7 @@
     <string name="discord_rpc_summary">Show your reading and watching status on Discord</string>
     <string name="obtain">Obtain</string>
     <string name="discord_rpc_description">Reading manga on Kototoro - a manga reader app</string>
+    <string name="discord_rpc_novel_description">Reading novels on Kototoro</string>
     <string name="discord_rpc_video_description">Watching videos on Kototoro</string>
     <string name="discord_logout_summary">Clear the saved Discord authorization</string>
     <string name="reading_s">Reading %s</string>

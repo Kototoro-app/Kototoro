@@ -21,6 +21,8 @@ import org.skepsun.kototoro.reader.novel.tts.TtsState
 import org.skepsun.kototoro.reader.novel.annotation.NovelMarkingEntity
 import org.skepsun.kototoro.reader.ui.compose.ReaderAutoScrollUiState
 import org.skepsun.kototoro.bookmarks.domain.Bookmark
+import org.skepsun.kototoro.parsers.model.Content
+import org.skepsun.kototoro.scrobbling.discord.ui.DiscordRpc
 import javax.inject.Inject
 import kotlin.math.abs
 
@@ -163,7 +165,31 @@ data class NovelComposeImageContext(
 
 /** State owner for the Compose novel surface. Rendering implementations publish into this state. */
 @HiltViewModel
-class NovelComposeReaderViewModel @Inject constructor() : ViewModel() {
+class NovelComposeReaderViewModel : ViewModel {
+
+    private val discordRpc: DiscordRpc?
+
+    @Inject
+    constructor(discordRpc: DiscordRpc) : super() {
+        this.discordRpc = discordRpc
+    }
+
+    constructor() : super() {
+        this.discordRpc = null
+    }
+
+    fun updateDiscordRpc(
+        content: Content,
+        chapterNumber: Int,
+        chaptersTotal: Int,
+        chapterTitle: String? = null,
+    ) {
+        discordRpc?.updateNovelRpc(content, chapterNumber, chaptersTotal, chapterTitle)
+    }
+
+    fun clearDiscordRpc() {
+        discordRpc?.clearRpc()
+    }
     private val _uiState = MutableStateFlow(NovelComposeReaderUiState())
     val uiState = _uiState.asStateFlow()
     private var nextMessageId = 0L

@@ -1548,6 +1548,7 @@
     <string name="discord_rpc_summary">在 Discord 个人信息栏内显示你的阅读和观看状态</string>
     <string name="obtain">获取</string>
     <string name="discord_rpc_description">正在 Kototoro - 一个漫画阅读软件上阅读漫画</string>
+    <string name="discord_rpc_novel_description">正在 Kototoro 阅读小说</string>
     <string name="discord_rpc_video_description">正在 Kototoro 观看视频</string>
     <string name="reading_s">正在阅读 %s</string>
     <string name="watching_s">正在观看 %s</string>

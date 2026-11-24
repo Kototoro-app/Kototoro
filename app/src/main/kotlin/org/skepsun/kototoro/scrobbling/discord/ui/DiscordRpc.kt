@@ -188,6 +188,50 @@ class DiscordRpc @Inject constructor(
     }
 
     @AnyThread
+    fun updateNovelRpc(
+        content: Content,
+        chapterNumber: Int,
+        chaptersTotal: Int,
+        chapterTitle: String? = null,
+    ) {
+        if (settings.isDiscordRpcSkipNsfw && content.isNsfw()) {
+            clearRpc()
+            return
+        }
+        val coverUrl = content.largeCoverUrl?.takeIf { it.isNotBlank() }
+            ?: content.coverUrl?.takeIf { it.isNotBlank() }
+        val stateText = when {
+            chapterNumber > 0 && chaptersTotal > 0 ->
+                context.getString(R.string.chapter_d_of_d, chapterNumber, chaptersTotal)
+            else -> chapterTitle?.trim()?.takeIf { it.isNotEmpty() && !it.equals(content.title.trim(), ignoreCase = true) }
+        }
+        val presence = RichPresence()
+            .setApplicationId(appId)
+            .setName(appName)
+            .setDetails(content.title)
+            .setType(3)
+            .setStartTimestamp(lastPresence?.timestamps?.get("start") ?: System.currentTimeMillis())
+            .setAssetsLargeImage(coverUrl)
+            .setAssetsLargeText(context.getString(R.string.reading_s, content.title))
+            .setAssetsSmallImage(appIcon)
+            .setAssetsSmallText(context.getString(R.string.discord_rpc_novel_description))
+
+        if (stateText != null) {
+            presence.setState(stateText)
+        }
+        val buttons = buildDiscordButtons(
+            listOf(
+                context.getString(R.string.read_on_s, appName) to content.appUrl.toString(),
+                context.getString(R.string.read_on_s, content.source.getTitle(context)) to content.publicUrl,
+            ),
+        )
+        if (buttons.isNotEmpty()) {
+            presence.setButtons(*buttons.toTypedArray())
+        }
+        updateRpcAsync(presence, idle = false, isNsfw = content.isNsfw())
+    }
+
+    @AnyThread
     fun updateVideoRpc(content: Content?, state: VideoRpcState) {
         val isNsfw = content?.isNsfw() == true
         if (settings.isDiscordRpcSkipNsfw && isNsfw) {

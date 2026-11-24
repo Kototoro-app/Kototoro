@@ -48,7 +48,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.core.graphics.ColorUtils
 import androidx.core.content.FileProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import org.skepsun.kototoro.core.model.isNsfw
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
@@ -468,6 +470,9 @@ class NovelReaderActivity :
         super.onStart()
         val intent = Intent(this, org.skepsun.kototoro.reader.novel.tts.TtsService::class.java)
         bindService(intent, ttsConnection, android.content.Context.BIND_AUTO_CREATE)
+        if (::manga.isInitialized && chapters.isNotEmpty()) {
+            updateNovelDiscordRpc()
+        }
     }
 
     override fun onPause() {
@@ -483,6 +488,7 @@ class NovelReaderActivity :
     override fun onStop() {
         super.onStop()
         finishReadingSession()
+        composeReaderViewModel.clearDiscordRpc()
         if (isFinishing) {
             ttsService?.stopTts()
         }
@@ -491,6 +497,27 @@ class NovelReaderActivity :
             isTtsBound = false
         }
         restoreNovelSystemTextToolbar()
+    }
+
+    private fun updateNovelDiscordRpc() {
+        if (!lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+            return
+        }
+        if (!::manga.isInitialized) {
+            return
+        }
+        if (settings.isIncognitoModeEnabled(manga.isNsfw())) {
+            composeReaderViewModel.clearDiscordRpc()
+            return
+        }
+        val chapterNumber = if (currentChapterIndex in chapters.indices) currentChapterIndex + 1 else 0
+        val chapterTitle = chapters.getOrNull(currentChapterIndex)?.title
+        composeReaderViewModel.updateDiscordRpc(
+            content = manga,
+            chapterNumber = chapterNumber,
+            chaptersTotal = chapters.size,
+            chapterTitle = chapterTitle,
+        )
     }
 
     override fun onDestroy() {
@@ -3396,6 +3423,7 @@ class NovelReaderActivity :
     private fun finishComposeChapterRender(chapter: ContentChapter) {
         desiredProgressRatio = null
         updateNavigationButtons()
+        updateNovelDiscordRpc()
         if (settings.isReaderChapterToastEnabled) {
             showReaderMessage(chapter.title ?: getString(R.string.unnamed_chapter), 2000L)
         }
@@ -4444,6 +4472,7 @@ class NovelReaderActivity :
         if (index !in chapters.indices || index == currentChapterIndex) return
         currentChapterIndex = index
         updateNavigationButtons()
+        updateNovelDiscordRpc()
         updateHistory(0, 1)
     }
 
