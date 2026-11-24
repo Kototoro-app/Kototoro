@@ -35,7 +35,10 @@ import org.skepsun.kototoro.reader.translate.data.ChapterTranslationStore
 import org.skepsun.kototoro.video.data.VideoDownloadIndex
 import org.skepsun.kototoro.details.ui.model.ChapterListItem
 import org.skepsun.kototoro.details.ui.model.ChapterListItem.Companion.FLAG_DOWNLOADED
+import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentChapter
+import org.skepsun.kototoro.scrobbling.discord.ui.DiscordRpc
+import org.skepsun.kototoro.scrobbling.discord.ui.VideoRpcState
 import kotlin.experimental.or
 
 @HiltViewModel
@@ -54,6 +57,7 @@ class VideoChaptersViewModel @Inject constructor(
     mangaRepositoryFactory: org.skepsun.kototoro.core.parser.ContentRepository.Factory,
     chapterTranslationStore: ChapterTranslationStore,
     videoQualitySizeProber: org.skepsun.kototoro.video.player.VideoQualitySizeProber,
+    private val discordRpc: DiscordRpc,
 ) : ChaptersPagesViewModel(
     settings = settings,
     interactor = interactor,
@@ -117,6 +121,14 @@ class VideoChaptersViewModel @Inject constructor(
     }
 
     fun getAllChapters(): List<ContentChapter> = mangaDetails.value?.allChapters.orEmpty()
+
+    fun updateDiscordRpc(content: Content?, state: VideoRpcState) {
+        discordRpc.updateVideoRpc(content, state)
+    }
+
+    fun clearDiscordRpc() {
+        discordRpc.clearRpc()
+    }
 
     private fun doLoad(force: Boolean): Job = launchLoadingJob(Dispatchers.Default) {
         detailsLoadUseCase.invoke(intent, force).collect { details ->

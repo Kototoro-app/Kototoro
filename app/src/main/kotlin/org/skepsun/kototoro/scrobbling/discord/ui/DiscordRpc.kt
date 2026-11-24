@@ -43,6 +43,64 @@ private const val STATUS_IDLE = "idle"
 private const val BUTTON_TEXT_LIMIT = 32
 private const val DEBOUNCE_TIMEOUT = 16_000L // 16 sec
 
+data class VideoRpcState(
+    val title: String,
+    val episodeTitle: String? = null,
+    val episodeNumber: Int = 0,
+    val episodesTotal: Int = 0,
+    val positionMs: Long = 0L,
+    val durationMs: Long = 0L,
+    val isPlaying: Boolean = true,
+    val playbackSpeed: Float = 1f,
+)
+
+internal fun computeVideoRpcTimestamps(
+    nowMs: Long,
+    positionMs: Long,
+    durationMs: Long,
+    isPlaying: Boolean,
+    playbackSpeed: Float,
+    fallbackStartMs: Long? = null,
+): Pair<Long, Long?> {
+    if (!isPlaying || durationMs <= 0L) {
+        return (fallbackStartMs ?: nowMs) to null
+    }
+    val clampedPos = positionMs.coerceIn(0L, durationMs)
+    val speed = playbackSpeed.takeIf { it.isFinite() && it > 0f } ?: 1f
+    val elapsedMs = (clampedPos / speed).toLong()
+    val remainingMs = ((durationMs - clampedPos) / speed).toLong()
+    return (nowMs - elapsedMs) to (nowMs + remainingMs)
+}
+
+internal fun resolveVideoRpcStateText(
+    title: String,
+    episodeTitle: String?,
+    episodeNumber: Int,
+    episodesTotal: Int,
+    formatEpisodeOfTotal: (Int, Int) -> String,
+): String? {
+    val cleanEpisodeTitle = episodeTitle?.trim()?.takeIf { it.isNotEmpty() && !it.equals(title.trim(), ignoreCase = true) }
+    return when {
+        episodeNumber > 0 && episodesTotal > 1 -> formatEpisodeOfTotal(episodeNumber, episodesTotal)
+        cleanEpisodeTitle != null -> cleanEpisodeTitle
+        episodeNumber > 0 && episodesTotal == 1 -> formatEpisodeOfTotal(episodeNumber, episodesTotal)
+        else -> null
+    }
+}
+
+internal fun buildDiscordButtons(
+    candidates: List<Pair<String, String>>,
+): List<Map<String, String>> = candidates.mapNotNull { (label, url) ->
+    val trimmedUrl = url.trim()
+    val isHttp = trimmedUrl.startsWith("http://", ignoreCase = true) ||
+        trimmedUrl.startsWith("https://", ignoreCase = true)
+    if (label.isNotBlank() && label.utf8Size() <= BUTTON_TEXT_LIMIT && isHttp) {
+        mapOf("name" to label, "url" to trimmedUrl)
+    } else {
+        null
+    }
+}.take(2)
+
 @ViewModelScoped
 class DiscordRpc @Inject constructor(
     @LocalizedAppContext private val context: Context,
@@ -67,6 +125,12 @@ class DiscordRpc @Inject constructor(
     @Volatile
     private var lastPresence: RichPresence? = null
 
+    @Volatile
+    private var lastIdle: Boolean = false
+
+    @Volatile
+    private var lastIsNsfw: Boolean = false
+
     init {
         lifecycle.addOnClearedListener(this)
     }
@@ -77,13 +141,18 @@ class DiscordRpc @Inject constructor(
     }
 
     fun clearRpc() = synchronized(this) {
+        rpcUpdateJob?.cancel()
+        rpcUpdateJob = null
         rpc?.disconnect()
         rpc = null
+        lastPresence = null
+        lastIdle = false
+        lastIsNsfw = false
         lastUpdate = 0L
     }
 
     fun setIdle() {
-        lastPresence?.let { updateRpcAsync(it, idle = true, isNsfw = false) }
+        lastPresence?.let { updateRpcAsync(it, idle = true, isNsfw = lastIsNsfw) }
     }
 
     @AnyThread
@@ -106,15 +175,76 @@ class DiscordRpc @Inject constructor(
             .setAssetsSmallImage(appIcon)
             .setAssetsSmallText(context.getString(R.string.discord_rpc_description))
 
-        val appButton = context.getString(R.string.read_on_s, appName)
-        val sourceButton = context.getString(R.string.read_on_s, manga.source.getTitle(context))
-        if (appButton.utf8Size() <= BUTTON_TEXT_LIMIT && sourceButton.utf8Size() <= BUTTON_TEXT_LIMIT) {
-            presence.setButtons(
-                mapOf("name" to appButton, "url" to manga.appUrl.toString()),
-                mapOf("name" to sourceButton, "url" to manga.publicUrl),
-            )
+        val buttons = buildDiscordButtons(
+            listOf(
+                context.getString(R.string.read_on_s, appName) to manga.appUrl.toString(),
+                context.getString(R.string.read_on_s, manga.source.getTitle(context)) to manga.publicUrl,
+            ),
+        )
+        if (buttons.isNotEmpty()) {
+            presence.setButtons(*buttons.toTypedArray())
         }
         updateRpcAsync(presence, idle = false, isNsfw = manga.isNsfw())
+    }
+
+    @AnyThread
+    fun updateVideoRpc(content: Content?, state: VideoRpcState) {
+        val isNsfw = content?.isNsfw() == true
+        if (settings.isDiscordRpcSkipNsfw && isNsfw) {
+            clearRpc()
+            return
+        }
+        val title = content?.title?.takeIf { it.isNotBlank() }
+            ?: state.title.takeIf { it.isNotBlank() }
+            ?: return
+        val coverUrl = content?.largeCoverUrl?.takeIf { it.isNotBlank() }
+            ?: content?.coverUrl?.takeIf { it.isNotBlank() }
+        val (startTimestamp, endTimestamp) = computeVideoRpcTimestamps(
+            nowMs = System.currentTimeMillis(),
+            positionMs = state.positionMs,
+            durationMs = state.durationMs,
+            isPlaying = state.isPlaying,
+            playbackSpeed = state.playbackSpeed,
+            fallbackStartMs = lastPresence?.timestamps?.get("start"),
+        )
+        val stateText = resolveVideoRpcStateText(
+            title = title,
+            episodeTitle = state.episodeTitle,
+            episodeNumber = state.episodeNumber,
+            episodesTotal = state.episodesTotal,
+            formatEpisodeOfTotal = { ep, total -> context.getString(R.string.episode_d_of_d, ep, total) },
+        )
+
+        val presence = RichPresence()
+            .setApplicationId(appId)
+            .setName(appName)
+            .setDetails(title)
+            .setType(3)
+            .setStartTimestamp(startTimestamp)
+            .setAssetsLargeImage(coverUrl)
+            .setAssetsLargeText(context.getString(R.string.watching_s, title))
+            .setAssetsSmallImage(appIcon)
+            .setAssetsSmallText(context.getString(R.string.discord_rpc_video_description))
+
+        if (stateText != null) {
+            presence.setState(stateText)
+        }
+        if (endTimestamp != null) {
+            presence.setEndTimestamp(endTimestamp)
+        }
+
+        if (content != null) {
+            val buttons = buildDiscordButtons(
+                listOf(
+                    context.getString(R.string.watch_on_s, appName) to content.appUrl.toString(),
+                    context.getString(R.string.watch_on_s, content.source.getTitle(context)) to content.publicUrl,
+                ),
+            )
+            if (buttons.isNotEmpty()) {
+                presence.setButtons(*buttons.toTypedArray())
+            }
+        }
+        updateRpcAsync(presence, idle = !state.isPlaying, isNsfw = isNsfw)
     }
 
     private fun updateRpcAsync(
@@ -131,6 +261,8 @@ class DiscordRpc @Inject constructor(
             presence.setAssetsLargeImage(presence.assets["largeImage"]?.toMediaProxyUrl(isNsfw))
             presence.setAssetsSmallImage(presence.assets["smallImage"]?.toMediaProxyUrl(false))
             lastPresence = presence
+            lastIdle = idle
+            lastIsNsfw = isNsfw
             getRpc()?.let { client ->
                 client.send(
                     3,
@@ -173,8 +305,8 @@ class DiscordRpc @Inject constructor(
             ?.takeIf { settings.isDiscordRpcEnabled }
             ?.let { token ->
                 GatewayClient().apply {
-                    onReady = { lastPresence?.let { updateRpcAsync(it, idle = false, isNsfw = false) } }
-                    onResumed = { lastPresence?.let { updateRpcAsync(it, idle = false, isNsfw = false) } }
+                    onReady = { lastPresence?.let { updateRpcAsync(it, idle = lastIdle, isNsfw = lastIsNsfw) } }
+                    onResumed = { lastPresence?.let { updateRpcAsync(it, idle = lastIdle, isNsfw = lastIsNsfw) } }
                     coroutineScope.launch {
                         try {
                             var currentToken = token

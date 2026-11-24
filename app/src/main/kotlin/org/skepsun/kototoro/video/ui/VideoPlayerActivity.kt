@@ -7,7 +7,10 @@ import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.content.ContentValues
 import android.os.Build
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import org.skepsun.kototoro.core.model.isNsfw
+import org.skepsun.kototoro.scrobbling.discord.ui.VideoRpcState
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import android.view.GestureDetector
 import android.view.MotionEvent
@@ -443,7 +446,12 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     private var subtitleCatalogVersion by mutableIntStateOf(0)
     private val playerListener = object : VideoPlayerEngine.Listener {
         override fun onDurationChanged(durationMs: Long) {
-            runOnUiThread { syncComposeControlState() }
+            runOnUiThread {
+                syncComposeControlState()
+                if (durationMs > 0L) {
+                    updateVideoDiscordRpc()
+                }
+            }
             if (!hasRestoredProgress && durationMs > 0) {
                 runOnUiThread {
                     tryApplyInitialSeek()
@@ -464,6 +472,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                 danmakuController.onPlaybackStateChanged(isPlaying)
                 // Pausing parks the chrome on screen; resuming re-arms the auto-hide timer.
                 restartControlsAutoHide()
+                updateVideoDiscordRpc(isPlayingOverride = isPlaying)
             }
         }
 
@@ -523,6 +532,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                     autoSelectTracksByLanguage()
                 }, 250L)
                 syncComposeControlState()
+                updateVideoDiscordRpc()
                 scheduleCloudstreamPlaybackHealthCheck()
             }
         }
@@ -568,6 +578,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
 
         override fun onSeek(positionMs: Long) {
             danmakuController.seekTo(positionMs)
+            runOnUiThread { updateVideoDiscordRpc(positionOverrideMs = positionMs) }
         }
     }
 
@@ -4022,6 +4033,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             appSettings.videoPlaybackSpeed = speed
             applyPlaybackSpeed(speed)
             updatePlaybackSpeedButton()
+            updateVideoDiscordRpc()
         }
     }
 
@@ -4221,6 +4233,9 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     override fun onStart() {
         super.onStart()
         torrentStreamService.resume(currentMediaUrl)
+        if (hasCurrentMediaLoaded) {
+            updateVideoDiscordRpc()
+        }
     }
 
     override fun onResume() {
@@ -4251,6 +4266,52 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         torrentStreamService.pause(currentMediaUrl)
         setPlaybackKeepScreenOn(false)
         danmakuController.pause()
+        chaptersViewModel.clearDiscordRpc()
+    }
+
+    private fun updateVideoDiscordRpc(
+        isPlayingOverride: Boolean? = null,
+        positionOverrideMs: Long? = null,
+    ) {
+        if (!lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+            return
+        }
+        val content = currentMangaContent()
+        if (appSettings.isIncognitoModeEnabled(content?.isNsfw() == true)) {
+            chaptersViewModel.clearDiscordRpc()
+            return
+        }
+        val (title, episodeTitle) = extractChapterInfo()
+        val resolvedTitle = content?.title?.takeIf { it.isNotBlank() } ?: title
+        if (resolvedTitle.isBlank()) {
+            return
+        }
+        val chapters = chaptersViewModel.chapters.value.map { it.chapter }.ifEmpty {
+            content?.chapters.orEmpty()
+        }
+        val currentId = currentReaderStateOrIntent()?.chapterId
+        val currentIndex = if (currentId != null) {
+            chapters.indexOfFirst { it.id == currentId }
+        } else {
+            -1
+        }
+        val player = videoPlayer
+        val isPlaying = isPlayingOverride ?: (player?.isPlaying == true)
+        val positionMs = (positionOverrideMs ?: player?.positionMs ?: 0L).coerceAtLeast(0L)
+        val durationMs = (player?.durationMs ?: 0L).coerceAtLeast(0L)
+        chaptersViewModel.updateDiscordRpc(
+            content = content,
+            state = VideoRpcState(
+                title = resolvedTitle,
+                episodeTitle = episodeTitle.takeIf { it.isNotBlank() },
+                episodeNumber = if (currentIndex >= 0) currentIndex + 1 else 0,
+                episodesTotal = chapters.size,
+                positionMs = positionMs,
+                durationMs = durationMs,
+                isPlaying = isPlaying,
+                playbackSpeed = appSettings.videoPlaybackSpeed,
+            ),
+        )
     }
 
     override fun onDestroy() {

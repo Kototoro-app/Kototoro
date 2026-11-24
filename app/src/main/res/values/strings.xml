@@ -2414,12 +2414,16 @@
     <string name="discord_token_summary">Sign in with Discord to enable Rich Presence</string>
     <string name="discord_token_description">Enter your Discord Token or click %s to get it using browser</string>
     <string name="discord_token_hint">Paste your Discord Token here</string>
-    <string name="discord_rpc_summary">Show your reading status on Discord</string>
+    <string name="discord_rpc_summary">Show your reading and watching status on Discord</string>
     <string name="obtain">Obtain</string>
     <string name="discord_rpc_description">Reading manga on Kototoro - a manga reader app</string>
+    <string name="discord_rpc_video_description">Watching videos on Kototoro</string>
     <string name="discord_logout_summary">Clear the saved Discord authorization</string>
     <string name="reading_s">Reading %s</string>
     <string name="read_on_s">Read on %s</string>
+    <string name="watching_s">Watching %s</string>
+    <string name="watch_on_s">Watch on %s</string>
+    <string name="episode_d_of_d">Episode %1$d of %2$d</string>
     <string name="rpc_skip_nsfw_summary">Do not use RPC for adult content</string>
     <string name="invalid_token">Invalid token: %s</string>
     <string name="show_floating_control_button">Show floating control button</string>

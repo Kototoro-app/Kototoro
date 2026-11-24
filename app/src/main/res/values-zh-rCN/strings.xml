@@ -1545,10 +1545,14 @@
     <string name="discord_token_summary">使用 Discord 登录以启用富状态</string>
     <string name="discord_token_description">输入你的 Discord Token 或者点击 %s 打开内置浏览器获取 Token</string>
     <string name="discord_token_hint">在这里复制你的 Discord Token</string>
-    <string name="discord_rpc_summary">在 Discord 个人信息栏内显示你的阅读状态</string>
+    <string name="discord_rpc_summary">在 Discord 个人信息栏内显示你的阅读和观看状态</string>
     <string name="obtain">获取</string>
     <string name="discord_rpc_description">正在 Kototoro - 一个漫画阅读软件上阅读漫画</string>
+    <string name="discord_rpc_video_description">正在 Kototoro 观看视频</string>
     <string name="reading_s">正在阅读 %s</string>
+    <string name="watching_s">正在观看 %s</string>
+    <string name="watch_on_s">在 %s 观看</string>
+    <string name="episode_d_of_d">第 %1$d/%2$d 集</string>
     <string name="rpc_skip_nsfw_summary">阅读成人内容时不在 Discord 上显示阅读状态</string>
     <string name="invalid_token">非法Token：%s</string>
     <string name="show_floating_control_button">显示浮动控制按钮</string>
