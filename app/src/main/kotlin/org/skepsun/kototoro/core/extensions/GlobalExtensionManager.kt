@@ -54,6 +54,14 @@ object GlobalExtensionManager {
     private val _contentSources = MutableStateFlow<List<PluginContentSource>>(emptyList())
     val contentSources: StateFlow<List<PluginContentSource>> = _contentSources.asStateFlow()
 
+    @Volatile
+    private var mangaSourcesByName: Map<String, PluginMangaSource> = emptyMap()
+
+    @Volatile
+    private var contentSourcesByName: Map<String, PluginContentSource> = emptyMap()
+
+    private val kotatsuSourcesByName = ConcurrentHashMap<String, org.skepsun.kototoro.core.parser.kotatsu.KotatsuParserSource>()
+
     private val _shadowedSources = MutableStateFlow<Map<String, Map<String, String>>>(emptyMap())
 
     /** jarName -> (sourceName -> winning jarName) for sources hidden by deduplication. */
@@ -161,14 +169,30 @@ object GlobalExtensionManager {
             jarName = JarSourceCandidate::jarName,
         )
 
-        _mangaSources.value = selectedSources.mapNotNull { it.mangaSource }
-        _contentSources.value = selectedSources.mapNotNull { it.contentSource }
+        val mangaList = selectedSources.mapNotNull { it.mangaSource }
+        val contentList = selectedSources.mapNotNull { it.contentSource }
+        kotatsuSourcesByName.clear()
+        mangaSourcesByName = mangaList.associateByTo(HashMap(mangaList.size)) { it.name }
+        contentSourcesByName = contentList.associateByTo(HashMap(contentList.size)) { it.name }
+        _mangaSources.value = mangaList
+        _contentSources.value = contentList
         _shadowedSources.value = findShadowedJarSources(
             sources = candidates,
             priorityOrder = priorityOrder,
             sourceName = JarSourceCandidate::sourceName,
             jarName = JarSourceCandidate::jarName,
         )
+    }
+
+    fun findMangaSourceByName(name: String): PluginMangaSource? = mangaSourcesByName[name]
+
+    fun findContentSourceByName(name: String): PluginContentSource? = contentSourcesByName[name]
+
+    fun findKotatsuParserSourceByName(name: String): org.skepsun.kototoro.core.parser.kotatsu.KotatsuParserSource? {
+        val pluginSource = mangaSourcesByName[name] ?: return null
+        return kotatsuSourcesByName.computeIfAbsent(name) {
+            org.skepsun.kototoro.core.parser.kotatsu.KotatsuParserSource(pluginSource)
+        }
     }
 
     private fun publishRegistryUpdate() {

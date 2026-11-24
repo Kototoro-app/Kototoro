@@ -15,6 +15,8 @@ class TsundokuContentSourceResolver @Inject constructor(
     private val tsundokuExtensionManager: TsundokuExtensionManager,
 ) : ContentSourceResolver {
 
+    override fun cacheVersion(): Long = tsundokuExtensionManager.changes.value.toLong()
+
     override fun supports(source: ContentSource): Boolean {
         return source !is TsundokuNovelSource && source != UnknownContentSource && (
             source.name.startsWith(TSUNDOKU_PREFIX) ||

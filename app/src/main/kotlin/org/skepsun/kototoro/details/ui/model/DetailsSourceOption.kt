@@ -1,5 +1,7 @@
 package org.skepsun.kototoro.details.ui.model
 
+import org.skepsun.kototoro.details.ui.isStructurallySameSource
+import org.skepsun.kototoro.details.ui.structuralSourceHashCode
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
 
@@ -14,4 +16,33 @@ data class DetailsSourceOption(
     val subtitle: String? = null,
     val coverUrl: String? = null,
     val isSelected: Boolean = false,
-)
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is DetailsSourceOption) return false
+        return key == other.key &&
+            source.isStructurallySameSource(other.source) &&
+            trackingService == other.trackingService &&
+            targetMangaId == other.targetMangaId &&
+            remoteId == other.remoteId &&
+            url == other.url &&
+            title == other.title &&
+            subtitle == other.subtitle &&
+            coverUrl == other.coverUrl &&
+            isSelected == other.isSelected
+    }
+
+    override fun hashCode(): Int {
+        var result = key.hashCode()
+        result = 31 * result + source.structuralSourceHashCode()
+        result = 31 * result + (trackingService?.hashCode() ?: 0)
+        result = 31 * result + (targetMangaId?.hashCode() ?: 0)
+        result = 31 * result + (remoteId?.hashCode() ?: 0)
+        result = 31 * result + (url?.hashCode() ?: 0)
+        result = 31 * result + (title?.hashCode() ?: 0)
+        result = 31 * result + (subtitle?.hashCode() ?: 0)
+        result = 31 * result + (coverUrl?.hashCode() ?: 0)
+        result = 31 * result + isSelected.hashCode()
+        return result
+    }
+}

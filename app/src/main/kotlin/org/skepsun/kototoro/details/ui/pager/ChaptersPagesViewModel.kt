@@ -297,8 +297,19 @@ abstract class ChaptersPagesViewModel(
 
     private val translatedChapterIdsFlow: Flow<Set<Long>> = translatedChaptersFlow.map { it.ready }
 
+    private val chapterSourceDetails = mangaDetails.distinctUntilChanged { old, new ->
+        old === new || (
+            old != null && new != null &&
+                old.id == new.id &&
+                old.isLocal == new.isLocal &&
+                old.toContent().source.getContentType() == new.toContent().source.getContentType() &&
+                old.allChapters == new.allChapters &&
+                old.local?.manga?.chapters == new.local?.manga?.chapters
+            )
+    }
+
     private val baseChaptersFlow = combine(
-        mangaDetails,
+        chapterSourceDetails,
         combine(readingState, furthestReadChapterId) { state, furthest ->
             ReadMarks(current = state?.chapterId ?: 0L, furthest = furthest)
         }.distinctUntilChanged(),
@@ -309,7 +320,10 @@ abstract class ChaptersPagesViewModel(
         isDownloadedOnly,
         isMergeRepeatedChapters,
     ) { manga, marks, branch, news, bookmarks, grid, downloadedOnly, mergeRepeated ->
-        val baseChapters = if (mergeRepeated && manga != null) {
+        if (manga == null || (manga.allChapters.isEmpty() && manga.local?.manga?.chapters.isNullOrEmpty())) {
+            return@combine emptyList()
+        }
+        val baseChapters = if (mergeRepeated) {
             val allBranches = manga.chapters.keys.toList()
             if (allBranches.size > 1) {
                 allBranches.flatMap { b ->
@@ -336,7 +350,7 @@ abstract class ChaptersPagesViewModel(
                 )
             }
         } else {
-            manga?.mapChapters(
+            manga.mapChapters(
                 currentChapterId = marks.current,
                 furthestChapterId = marks.furthest,
                 newCount = news,
@@ -344,7 +358,7 @@ abstract class ChaptersPagesViewModel(
                 bookmarks = bookmarks,
                 isGrid = grid,
                 isDownloadedOnly = downloadedOnly,
-            ).orEmpty()
+            )
         }
         expandEpubChaptersIfNeeded(baseChapters)
     }

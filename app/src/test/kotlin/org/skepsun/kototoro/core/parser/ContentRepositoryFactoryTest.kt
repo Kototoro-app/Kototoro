@@ -82,6 +82,7 @@ class ContentRepositoryFactoryTest {
 		).forEach { resolver ->
 			every { resolver.supports(any()) } returns false
 			every { resolver.resolve(any()) } returns null
+			every { resolver.cacheVersion() } returns 0L
 		}
 		listOf(
 			parserContentRepositoryProvider,
@@ -356,6 +357,29 @@ class ContentRepositoryFactoryTest {
 		assertSame(ContentRepositoryFactory.ProviderStatus.SKIPPED_BY_CACHE, second.providerStatus)
 		assertSame(ContentRepositoryFactory.CacheStatus.HIT, second.cacheStatus)
 		assertEquals("ContentSourceInfoResolver", first.resolutionTrace.first().resolver)
+	}
+
+	@Test
+	fun `factory invalidate clears cached source resolution`() {
+		val shell = namedSource("SHELL_INVALIDATE")
+		val resolvedV1 = namedSource("REAL_V1")
+		val resolvedV2 = namedSource("REAL_V2")
+		val repoV1 = FakeRepository(resolvedV1)
+		val repoV2 = FakeRepository(resolvedV2)
+		every { contentSourceInfoResolver.supports(shell) } returns true
+		every { contentSourceInfoResolver.resolve(shell) } returns resolvedV1
+		every { parserContentRepositoryProvider.supports(resolvedV1) } returns true
+		every { parserContentRepositoryProvider.create(resolvedV1) } returns repoV1
+		every { parserContentRepositoryProvider.supports(resolvedV2) } returns true
+		every { parserContentRepositoryProvider.create(resolvedV2) } returns repoV2
+
+		assertSame(repoV1, factory.create(shell))
+
+		every { contentSourceInfoResolver.resolve(shell) } returns resolvedV2
+		factory.invalidate(shell)
+
+		assertSame(repoV2, factory.create(shell))
+		verify(exactly = 2) { contentSourceInfoResolver.resolve(shell) }
 	}
 
 	private fun namedSource(name: String): ContentSource = object : ContentSource {
