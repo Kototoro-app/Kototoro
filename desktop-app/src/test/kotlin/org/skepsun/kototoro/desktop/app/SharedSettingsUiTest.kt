@@ -7,6 +7,7 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.unit.dp
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import org.jetbrains.skia.Image
@@ -119,5 +120,26 @@ class SharedSettingsUiTest {
             input.assertTextEquals("pending more")
             runOnIdle { query = submitted }
             input.assertTextEquals("pending more")
+        }
+
+    @Test
+    fun `desktop search field matches the top bar control capsule height`() =
+        runDesktopComposeUiTest(width = 640, height = 120) {
+            setContent {
+                DesktopTheme {
+                    androidx.compose.foundation.layout.Row {
+                        DesktopSearchField(
+                            "",
+                            {},
+                            "Search",
+                            modifier = androidx.compose.ui.Modifier.weight(1f),
+                            tag = "top-search",
+                        )
+                        DesktopSourceFilterControls(DesktopSourceFilter(), emptyList(), {}, true, "top")
+                    }
+                }
+            }
+            onNodeWithTag("top-search").assertHeightIsEqualTo(44.dp)
+            onNodeWithTag("top-source-tags").assertHeightIsEqualTo(44.dp)
         }
 }

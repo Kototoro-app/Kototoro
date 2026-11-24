@@ -108,13 +108,15 @@ internal fun desktopCanvasBrush(): Brush = Brush.verticalGradient(listOf(
 @Composable
 internal fun DesktopSearchField(value: String, onValueChange: (String) -> Unit, placeholder: String,
     modifier: Modifier = Modifier, enabled: Boolean = true, tag: String? = null, onCard: Boolean = false) {
+    val height = LocalInterfaceStyleTokens.current.topBarButtonSize
+    val shape = RoundedCornerShape(percent = 50)
     org.skepsun.kototoro.core.ui.settings.SettingsSearchField(
         query = value, onQueryChange = onValueChange, placeholder = placeholder, enabled = enabled,
-        modifier = modifier, height = 56.dp,
+        modifier = modifier, height = height,
         inputModifier = if (tag != null) Modifier.testTag(tag) else Modifier,
         surface = { bounds, content ->
-            if (onCard) DesktopOutlinedControlSurface(bounds, RoundedCornerShape(28.dp)) { content() }
-            else DesktopControlSurface(bounds, RoundedCornerShape(28.dp)) { content() }
+            if (onCard) DesktopOutlinedControlSurface(bounds, shape) { content() }
+            else DesktopControlSurface(bounds, shape) { content() }
         },
     )
 }

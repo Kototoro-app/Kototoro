@@ -122,7 +122,8 @@ internal fun DesktopSourceFilterControls(filter: DesktopSourceFilter, sources: L
     actions: @Composable RowScope.() -> Unit = {}) {
     val enabledTags = remember(sources) { DesktopSourceFilter.enabledTags(sources) }
     val enabledTabs = remember(sources) { DesktopSourceFilter.enabledTabs(sources) }
-    DesktopControlSurface(Modifier.height(44.dp), RoundedCornerShape(percent = 50)) {
+    val controlHeight = org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens.current.topBarButtonSize
+    DesktopControlSurface(Modifier.height(controlHeight), RoundedCornerShape(percent = 50)) {
         Row(Modifier.padding(horizontal = 4.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
             var typeMenu by remember { mutableStateOf(false) }
             Box {

@@ -23,8 +23,10 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
@@ -87,11 +89,15 @@ fun DesktopApp(controller: DesktopController, closing: Boolean = false, fullscre
     val challenges = controller.session.browserChallenges
     val challenge = challenges?.pending?.collectAsState()?.value
     val blockedSites = challenges?.blocked?.collectAsState()?.value.orEmpty()
+    var blockedDialogOpen by remember { mutableStateOf(false) }
     val browserScope = rememberCoroutineScope()
     val favouritesCollection = rememberContentCollectionState()
     val historyCollection = rememberContentCollectionState()
     val reading = state.screen == DesktopScreen.READER || state.screen == DesktopScreen.NOVEL ||
         state.screen == DesktopScreen.VIDEO
+    LaunchedEffect(blockedSites.isEmpty(), challenge != null, reading) {
+        if (blockedSites.isEmpty() || challenge != null || reading) blockedDialogOpen = false
+    }
     val listState = if (state.screen == DesktopScreen.DETAILS && state.detailsOrigin != null) {
         state.copy(screen = requireNotNull(state.detailsOrigin))
     } else state
@@ -106,8 +112,7 @@ fun DesktopApp(controller: DesktopController, closing: Boolean = false, fullscre
                 val pagePadding = if (reading || listState.screen == DesktopScreen.HOME) 0.dp else 24.dp
                 val headerPage = !reading && listState.screen !in OwnChromeScreens
                 // The progress line is not part of the bar: a load must not move the page's own bar and rows.
-                val rootBar = headerPage || challenge != null || (blockedSites.isNotEmpty() && !reading) ||
-                    state.error != null || state.message != null
+                val rootBar = headerPage || challenge != null || state.error != null || state.message != null
                 Box(Modifier.weight(1f).fillMaxHeight()) {
                 FloatingTopBarScaffold(
                     modifier = Modifier.fillMaxSize(),
@@ -143,11 +148,6 @@ fun DesktopApp(controller: DesktopController, closing: Boolean = false, fullscre
                                 windowNotice?.let { Text(it) }
                             }
                         }
-                    }
-                    // Android's "captcha required" notification: background loads never open the window themselves.
-                    if (blockedSites.isNotEmpty() && challenge == null && !reading) {
-                        BlockedSitesNotice(blockedSites, enabled = !closing && !state.busy,
-                            onVerify = controller::verifyBlockedSite, onDismiss = { challenges?.dismissBlocked(it) })
                     }
                     state.error?.let { Notice(it, true) }
                     state.message?.let { Notice(it, false) }
@@ -215,6 +215,15 @@ fun DesktopApp(controller: DesktopController, closing: Boolean = false, fullscre
                 }
                 // Over everything, at the top edge, without taking room from the bars below it.
                 if (state.busy || closing) LinearProgressIndicator(Modifier.fillMaxWidth().align(Alignment.TopStart))
+                // Android's "captcha required" notification: a subtle corner pill so background challenges never push
+                // the top bar or page content down.
+                if (blockedSites.isNotEmpty() && challenge == null && !reading) {
+                    BlockedSitesCornerPill(
+                        count = blockedSites.size,
+                        onClick = { blockedDialogOpen = true },
+                        modifier = Modifier.align(Alignment.BottomEnd).padding(end = 20.dp, bottom = 20.dp),
+                    )
+                }
                 }
                 // The vertical bar sits on the window's right edge, like Android's tablet bar.
                 if (!reading) DesktopNavigationRail(controller, listState, !closing)
@@ -227,6 +236,22 @@ fun DesktopApp(controller: DesktopController, closing: Boolean = false, fullscre
             }
             // A community work's other sources, from a chart or a similar-works rail on whichever page is showing.
             DesktopCommunitySourcePicker(controller)
+            if (blockedDialogOpen && blockedSites.isNotEmpty() && challenge == null && !reading) {
+                BlockedSitesDialog(
+                    sites = blockedSites,
+                    enabled = !closing && !state.busy,
+                    onVerify = { site ->
+                        blockedDialogOpen = false
+                        controller.verifyBlockedSite(site)
+                    },
+                    onDismissSite = { challenges?.dismissBlocked(it) },
+                    onDismissAll = {
+                        blockedDialogOpen = false
+                        challenges?.dismissAllBlocked()
+                    },
+                    onClose = { blockedDialogOpen = false },
+                )
+            }
         }
     }
 }
@@ -363,27 +388,93 @@ private fun Header(state: DesktopAppState, controller: DesktopController, enable
 }
 
 @Composable
-private fun BlockedSitesNotice(sites: List<String>, enabled: Boolean, onVerify: (String) -> Unit,
-    onDismiss: (String) -> Unit) {
-    Surface(color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(16.dp),
-        modifier = Modifier.testTag("challenge-blocked")) {
-        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(desktopText("challenge.blockedTitle", sites.size), style = MaterialTheme.typography.titleSmall)
-            sites.take(3).forEach { site ->
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(site.removePrefix("https://").removePrefix("http://").trimEnd('/'), maxLines = 1,
-                        overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                    TextButton({ onVerify(site) }, enabled = enabled,
-                        modifier = Modifier.testTag("challenge-blocked-verify:$site")) { Text(desktopText("challenge.verify")) }
-                    TextButton({ onDismiss(site) }, modifier = Modifier.testTag("challenge-blocked-dismiss:$site")) {
-                        Text(desktopText("challenge.dismiss"))
+internal fun BlockedSitesCornerPill(count: Int, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val pillShape = RoundedCornerShape(percent = 50)
+    DesktopControlSurface(modifier = modifier.testTag("challenge-blocked"), shape = pillShape) {
+        Row(
+            modifier = Modifier.clip(pillShape).clickable(onClick = onClick)
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Icon(
+                painterResource("icons/ic_web.svg"),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.tertiary,
+                modifier = Modifier.size(18.dp),
+            )
+            Text(desktopText("challenge.blockedBadge"), style = MaterialTheme.typography.labelLarge, color = Ink)
+            Badge(
+                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                modifier = Modifier.testTag("challenge-blocked-count"),
+            ) {
+                Text(if (count > 99) "99+" else count.toString())
+            }
+        }
+    }
+}
+
+@Composable
+internal fun BlockedSitesDialog(
+    sites: List<String>,
+    enabled: Boolean,
+    onVerify: (String) -> Unit,
+    onDismissSite: (String) -> Unit,
+    onDismissAll: () -> Unit,
+    onClose: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onClose,
+        modifier = Modifier.testTag("challenge-blocked-dialog"),
+        title = { Text(desktopText("challenge.blockedDialogTitle")) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    desktopText("challenge.blockedTitle", sites.size),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Column(
+                    Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    sites.forEach { site ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Text(
+                                site.removePrefix("https://").removePrefix("http://").trimEnd('/'),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f),
+                            )
+                            TextButton(
+                                { onVerify(site) },
+                                enabled = enabled,
+                                modifier = Modifier.testTag("challenge-blocked-verify:$site"),
+                            ) { Text(desktopText("challenge.verify")) }
+                            TextButton(
+                                { onDismissSite(site) },
+                                modifier = Modifier.testTag("challenge-blocked-dismiss:$site"),
+                            ) { Text(desktopText("challenge.dismiss")) }
+                        }
                     }
                 }
             }
-            if (sites.size > 3) Text(desktopText("challenge.blockedMore", sites.size - 3),
-                color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelMedium)
-        }
-    }
+        },
+        dismissButton = {
+            TextButton(onDismissAll, modifier = Modifier.testTag("challenge-blocked-dismiss-all")) {
+                Text(desktopText("challenge.dismissAll"))
+            }
+        },
+        confirmButton = {
+            TextButton(onClose, modifier = Modifier.testTag("challenge-blocked-close")) {
+                Text(desktopText("common.close"))
+            }
+        },
+    )
 }
 
 @Composable
