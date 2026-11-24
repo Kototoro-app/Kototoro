@@ -106,6 +106,8 @@ class DesktopBrowserChallenges internal constructor(
 
     fun dismissBlocked(site: String) = mutableBlocked.update { it - site }
 
+    fun dismissAllBlocked() = mutableBlocked.update { emptyList() }
+
     suspend fun showWindow(id: Long): DesktopBrowserWindow? = withContext(Dispatchers.IO) {
         val engine = synchronized(this@DesktopBrowserChallenges) {
             browser.takeIf { !closed && mutablePending.value?.id == id }
@@ -122,8 +124,18 @@ class DesktopBrowserChallenges internal constructor(
                         val signal = CompletableDeferred<Boolean>()
                         val watcher = launch {
                             while (true) {
-                                if (call.isCanceled() || owner?.isCancelled == true) throw IOException("网页验证请求已取消")
-                                if (signal.isCompleted && !signal.await()) throw IOException("网页验证已取消")
+                                if (call.isCanceled() || owner?.isCancelled == true) throw IOException(
+                                    DesktopChallengeMessages.text(
+                                        "challenge.error.requestCancelled",
+                                        "The web verification request was cancelled.",
+                                    ),
+                                )
+                                if (signal.isCompleted && !signal.await()) throw IOException(
+                                    DesktopChallengeMessages.text(
+                                        "challenge.error.cancelled",
+                                        "Web verification was cancelled.",
+                                    ),
+                                )
                                 delay(100)
                             }
                         }
@@ -134,7 +146,13 @@ class DesktopBrowserChallenges internal constructor(
                 }
             }
         } catch (error: IOException) { throw error }
-        catch (error: Exception) { throw IOException("网页验证未完成：${error.message ?: error.javaClass.simpleName}", error) }
+        catch (error: Exception) {
+            throw IOException(DesktopChallengeMessages.text(
+                "challenge.error.notCompleted",
+                "Web verification did not complete: %1\$s",
+                error.message ?: error.javaClass.simpleName,
+            ), error)
+        }
     }
 
     /**
@@ -194,7 +212,10 @@ class DesktopBrowserChallenges internal constructor(
     }
 
     private suspend fun interact(request: Request, call: Call, signal: CompletableDeferred<Boolean>) {
-        if (call.isCanceled()) throw IOException("网页验证请求已取消")
+        if (call.isCanceled()) throw IOException(DesktopChallengeMessages.text(
+            "challenge.error.requestCancelled",
+            "The web verification request was cancelled.",
+        ))
         val engine = synchronized(this) {
             check(!closed) { "Browser interaction is closed" }
             DesktopWebViewBridge(executable, profile, request.header("User-Agent")).also {
@@ -213,10 +234,19 @@ class DesktopBrowserChallenges internal constructor(
             }
             val headers = request.headers.toMap().filterKeys { !it.equals("Cookie", ignoreCase = true) }
             check(engine.navigate(request.url.toString(), headers = headers, allowHttpErrorResponse = true)) {
-                "验证页面加载失败"
+                DesktopChallengeMessages.text(
+                    "challenge.error.pageFailed",
+                    "The verification page failed to load.",
+                )
             }
-            if (!signal.await()) throw IOException("网页验证已取消")
-            if (call.isCanceled()) throw IOException("网页验证请求已取消")
+            if (!signal.await()) throw IOException(DesktopChallengeMessages.text(
+                "challenge.error.cancelled",
+                "Web verification was cancelled.",
+            ))
+            if (call.isCanceled()) throw IOException(DesktopChallengeMessages.text(
+                "challenge.error.requestCancelled",
+                "The web verification request was cancelled.",
+            ))
             cookies.pull()
         } finally {
             synchronized(this) {

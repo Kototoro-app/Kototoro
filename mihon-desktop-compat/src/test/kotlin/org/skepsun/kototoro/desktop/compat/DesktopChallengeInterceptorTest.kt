@@ -32,7 +32,7 @@ class DesktopChallengeInterceptorTest {
             val failure = assertThrows(IOException::class.java) {
                 client.newCall(Request.Builder().url("https://fixture.invalid/").build()).execute().close()
             }
-            assertEquals("来源访问被拒绝：HTTP $status", failure.message)
+            assertEquals("Source access denied: HTTP $status", failure.message)
             assertNull(owner.pending.value)
         }
     }
@@ -102,7 +102,7 @@ class DesktopChallengeInterceptorTest {
                 client.newCall(Request.Builder().url("https://fixture.invalid/icon.png").build()).execute()
             }.exceptionOrNull()
             assertTrue(failure is IOException, failure.toString())
-            assertTrue(failure?.message?.contains("网页验证") == true, failure?.message)
+            assertTrue(failure?.message?.contains("web verification") == true, failure?.message)
             assertEquals(1, solves.get())
             assertEquals(1, requests)
             assertNull(owner.pending.value, "no verification prompt may appear")

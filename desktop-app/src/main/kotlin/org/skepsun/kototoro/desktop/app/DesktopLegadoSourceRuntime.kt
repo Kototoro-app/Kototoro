@@ -61,7 +61,7 @@ internal class DesktopLegadoSourceRuntime(
         val tags = withRuntime(source) { runtime, _ -> exploreKinds(source, runtime.createRuntimeContext(page = 1)) }
             .mapNotNull { kind -> kind.url?.takeIf(String::isNotBlank)?.let { SourceTag(kind.title, CATEGORY_PREFIX + it, source.ref) } }
             .toSet()
-        val groups = if (tags.isEmpty()) emptyList() else listOf(SourceTagGroup("分类", tags))
+        val groups = if (tags.isEmpty()) emptyList() else listOf(SourceTagGroup(desktopText("filters.categoryGroup"), tags))
         return SourceFilterOptions(tags, groups, emptySet(), emptySet(), emptySet(), emptySet(), emptySet())
     }
 

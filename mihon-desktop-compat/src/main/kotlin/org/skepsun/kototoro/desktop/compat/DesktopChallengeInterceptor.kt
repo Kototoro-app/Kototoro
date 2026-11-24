@@ -76,11 +76,19 @@ internal class DesktopChallengeInterceptor(
             val response = chain.proceed(request)
             if (response.isMihonCloudflareChallenge()) {
                 response.close()
-                throw IOException("此来源需要网页验证，但浏览器组件不可用")
+                throw IOException(DesktopChallengeMessages.text(
+                    "challenge.error.browserUnavailable",
+                    "This source needs web verification, but the browser component is unavailable.",
+                ))
             }
             return guarded(response)
         }
-        if (chain.call().isCanceled() || challenges.isRequestCancelled()) throw IOException("网页验证请求已取消")
+        if (chain.call().isCanceled() || challenges.isRequestCancelled()) throw IOException(
+            DesktopChallengeMessages.text(
+                "challenge.error.requestCancelled",
+                "The web verification request was cancelled.",
+            ),
+        )
         val response = chain.proceed(request)
         if (!response.isMihonCloudflareChallenge()) {
             if (response.isSuccessful) challenges.reportPassed(request.url)
@@ -88,7 +96,11 @@ internal class DesktopChallengeInterceptor(
         }
         if (request.method !in setOf("GET", "HEAD")) {
             response.close()
-            throw IOException("此请求需要网页验证；暂不自动重发 ${request.method} 请求")
+            throw IOException(DesktopChallengeMessages.text(
+                "challenge.error.methodNotRetried",
+                "This request needs web verification; %1\$s requests are not retried automatically.",
+                request.method,
+            ))
         }
         val explicit = response.header("cf-mitigated").equals("challenge", ignoreCase = true)
         // A plain Cloudflare 403/503 may be an ordinary error page; keep it to return if nothing can be solved.
@@ -100,23 +112,35 @@ internal class DesktopChallengeInterceptor(
             if (!retried.isMihonCloudflareChallenge()) return guarded(retried)
             retried.close()
         }
-        if (cancelled()) throw IOException("网页验证请求已取消")
+        if (cancelled()) throw IOException(DesktopChallengeMessages.text(
+            "challenge.error.requestCancelled",
+            "The web verification request was cancelled.",
+        ))
         // Only Cloudflare's explicit challenge marker asks the user; ordinary errors never open a window.
         if (body != null) return guarded(response.newBuilder().body(body).build())
         // Background work (icons, covers, update checks, prefetches) never opens a window; it fails like Android's
         // CloudFlareProtectedException and the next user action on that source asks instead.
         if (!challenges.interactionActive) {
             challenges.reportBlocked(request.url)
-            throw IOException("此来源需要网页验证，请在浏览或阅读该来源时完成验证")
+            throw IOException(DesktopChallengeMessages.text(
+                "challenge.error.verifyWhileBrowsing",
+                "This source needs web verification; complete it while browsing or reading this source.",
+            ))
         }
         // Fallback: the user verifies in the visible browser.
         challenges.resolve(request, chain.call())
-        if (cancelled()) throw IOException("网页验证请求已取消")
+        if (cancelled()) throw IOException(DesktopChallengeMessages.text(
+            "challenge.error.requestCancelled",
+            "The web verification request was cancelled.",
+        ))
         // Do not return an unresolved challenge to the SDK's server-only FlareSolverr handler.
         val retried = chain.proceed(request)
         if (retried.isMihonCloudflareChallenge()) {
             retried.close()
-            throw IOException("网页验证后仍返回验证页面，请稍后重试")
+            throw IOException(DesktopChallengeMessages.text(
+                "challenge.error.stillChallenged",
+                "Still receiving the verification page after verification; try again later.",
+            ))
         }
         return guarded(retried)
     }
@@ -127,7 +151,11 @@ internal class DesktopChallengeInterceptor(
         if (guardSdkHandler && response.code in setOf(403, 503) &&
             response.header("Server") in setOf("cloudflare", "cloudflare-nginx")) {
             response.close()
-            throw IOException("来源访问被拒绝：HTTP ${response.code}")
+            throw IOException(DesktopChallengeMessages.text(
+                "challenge.error.accessDenied",
+                "Source access denied: HTTP %1\$d",
+                response.code,
+            ))
         }
         return response
     }

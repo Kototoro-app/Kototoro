@@ -839,6 +839,8 @@ class DesktopSession private constructor(
         private suspend fun openOnIo(root: Path): DesktopSession {
             // The runtime reports catalog keys with English fallbacks; from here they follow the interface language.
             org.skepsun.kototoro.desktop.runtime.DesktopRuntimeStrings.install(DesktopStrings::localized)
+            // The browser-verification failures of the compatibility layer follow the interface language too.
+            org.skepsun.kototoro.desktop.compat.DesktopChallengeMessages.install(DesktopStrings::localized)
             val storage = DesktopRuntime.open(root)
             // Android installs its crash writer before the UI starts; here the data root is only known once storage is
             // open, so the reports of a failed source or renderer land in `<root>/logs/crash_logs` from this point on.

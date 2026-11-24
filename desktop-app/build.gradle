@@ -296,12 +296,17 @@ def verifyDesktopStrings = tasks.register('verifyDesktopStrings') {
     def catalogs = layout.projectDirectory.dir('src/main/resources/i18n')
     def base = new File(catalogs.asFile, 'desktop-strings.properties')
     def translations = fileTree(catalogs.asFile) { include 'desktop-strings_*.properties' }
-    // The runtime module reports its messages through these catalogs too, so it is scanned as well.
+    // The runtime and compatibility modules report their messages through these catalogs too, so both are scanned.
     def kotlinSources = fileTree('src/main/kotlin') { include '**/*.kt' } +
-        fileTree(rootProject.file('desktop-runtime/src/main/kotlin')) { include '**/*.kt' }
+        fileTree(rootProject.file('desktop-runtime/src/main/kotlin')) { include '**/*.kt' } +
+        fileTree(rootProject.file('mihon-desktop-compat/src/main/kotlin')) { include '**/*.kt' }
+    // `core-domain`'s visual presets carry their catalog keys as data, which the UI looks up through the model.
+    def modelKeySource = rootProject.file(
+        'core-domain/src/commonMain/kotlin/org/skepsun/kototoro/core/appearance/VisualPreset.kt')
     inputs.file(base)
     inputs.files(translations)
     inputs.files(kotlinSources)
+    inputs.file(modelKeySource)
     doLast {
         def placeholders = ~/%\d+\$?[-#+ 0,(]*\d*(?:\.\d+)?[a-zA-Z%]/
         def load = { File file ->
@@ -331,13 +336,48 @@ def verifyDesktopStrings = tasks.register('verifyDesktopStrings') {
         // from the catalog, every catalog key has to be used, and no Chinese literal may remain in the UI code.
         def used = new TreeSet<String>()
         def hardcoded = []
-        // A call may wrap its key onto the next line, so the key scan runs over the whole file; the Chinese literal
-        // check stays line based, because it only has to point at the offending line.
-        def call = ~/(?:desktopText|DesktopRuntimeStrings\.text)\(\s*"([^"]+)"/
+        // A key may hide behind a conditional (`desktopText(if (x) "a" else "b")`) or wrap onto the next line, so
+        // each call's whole argument list is walked instead of matching the literal right after the parenthesis. Only
+        // key-shaped literals count: the other arguments are values the screen passes in, not catalog keys.
+        def callStart = ~/(?:desktopText|DesktopRuntimeStrings\.text|DesktopChallengeMessages\.text)\s*\(/
+        def keyLiteral = ~/"([A-Za-z][A-Za-z0-9_-]*(?:\.[A-Za-z0-9_-]+)+)"/
+        def collectKeys = { String text ->
+            def found = new LinkedHashSet<String>()
+            def calls = callStart.matcher(text)
+            while (calls.find()) {
+                int open = calls.end() - 1
+                int depth = 0
+                boolean quoted = false
+                boolean escaped = false
+                for (int i = open; i < text.length(); i++) {
+                    def c = text[i]
+                    if (quoted) {
+                        if (escaped) escaped = false
+                        else if (c == '\\') escaped = true
+                        else if (c == '"') quoted = false
+                    } else if (c == '"') {
+                        quoted = true
+                    } else if (c == '/' && i + 1 < text.length() && text[i + 1] == '/') {
+                        // A trailing comment may hold quotes; skip to its end so they cannot open a string.
+                        int newline = text.indexOf('\n', i)
+                        i = newline < 0 ? text.length() : newline
+                    } else if (c == '(') {
+                        depth++
+                    } else if (c == ')') {
+                        depth--
+                        if (depth == 0) {
+                            (text.substring(open, i) =~ keyLiteral).each { key -> found << key[1] }
+                            break
+                        }
+                    }
+                }
+            }
+            found
+        }
         def chinese = ~/"[^"\n]*[\u4e00-\u9fff][^"\n]*"/
         kotlinSources.files.sort { it.path }.each { file ->
             def text = file.getText('UTF-8')
-            (text =~ call).each { match -> used << match[1] }
+            used.addAll(collectKeys(text))
             // Read as UTF-8 explicitly: on Windows the platform default would turn the catalogs' own characters into
             // CJK mojibake and report them as hardcoded text.
             file.eachLine('UTF-8') { line ->
@@ -347,6 +387,10 @@ def verifyDesktopStrings = tasks.register('verifyDesktopStrings') {
                     if (found.find()) hardcoded << "${file.name}: ${found.group()}".toString()
                 }
             }
+        }
+        if (modelKeySource.isFile()) {
+            def namedKey = ~/(?:titleKey|summaryKey)\s*=\s*"([^"]+)"/
+            (modelKeySource.getText('UTF-8') =~ namedKey).each { match -> used << match[1] }
         }
         def unknown = used - (baseKeys as Set)
         if (unknown) throw new GradleException("desktopText() keys missing from ${base.name}: ${unknown.take(10)}")
