@@ -2126,6 +2126,11 @@
     <string name="plugin_missing_host_classes">%1$s cannot be installed because it depends on unsupported %2$s host classes:\n%3$s</string>
     <string name="connection_ok">Connection is OK</string>
     <string name="invalid_proxy_configuration">Invalid proxy configuration</string>
+    <string name="local_network_permission_required_title">Local network permission required</string>
+    <string name="local_network_permission_required_message">Android 17 requires local network (Nearby devices) permission to connect to local network addresses such as a LAN proxy, WebDAV server, or DLNA device.</string>
+    <string name="local_network_permission_proxy_banner">Local network permission is required to use a LAN proxy address on Android 17.</string>
+    <string name="local_network_permission_grant">Grant permission</string>
+    <string name="local_network_permission_open_settings">App settings</string>
     <string name="show_quick_filters">Show quick filters</string>
     <string name="show_quick_filters_summary">Provides the ability to filter manga lists by certain parameters</string>
     <string name="sfw">All Ages</string>

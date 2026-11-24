@@ -1310,6 +1310,11 @@
     <string name="connection_ok">连接正常</string>
     <string name="text_empty_holder_secondary_filtered">无筛选结果</string>
     <string name="invalid_proxy_configuration">无效代理配置</string>
+    <string name="local_network_permission_required_title">需要本地网络权限</string>
+    <string name="local_network_permission_required_message">Android 17 需要授予本地网络（附近设备）权限后，才能连接局域网代理、局域网 WebDAV 服务器或 DLNA 投屏设备。</string>
+    <string name="local_network_permission_proxy_banner">在 Android 17 上使用局域网代理需要授予本地网络权限。</string>
+    <string name="local_network_permission_grant">授予权限</string>
+    <string name="local_network_permission_open_settings">应用设置</string>
     <string name="show_quick_filters">显示快速筛选</string>
     <string name="show_quick_filters_summary">可通过某些确定的范围来筛选漫画</string>
     <string name="invalid_server_address_message">无效服务器地址</string>

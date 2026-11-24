@@ -7,7 +7,10 @@ import android.text.format.Formatter
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import org.skepsun.kototoro.core.network.LocalNetworkPermissionHelper
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -59,6 +62,18 @@ fun BackupsSettingsRoute(
     onImportExternalBackupFilePick: (ExternalBackupApp) -> Unit,
 ) {
     val context = LocalContext.current
+    var pendingLocalNetworkWebDavAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+    val localNetworkPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        val action = pendingLocalNetworkWebDavAction
+        pendingLocalNetworkWebDavAction = null
+        if (granted) {
+            action?.invoke()
+        } else {
+            Toast.makeText(context, R.string.local_network_permission_required_message, Toast.LENGTH_LONG).show()
+        }
+    }
     val lastBackupDate = viewModel.lastBackupDate.collectAsStateWithLifecycle().value
     val backupDirectory = viewModel.backupsDirectory.collectAsStateWithLifecycle().value
     val webDavLastAction = viewModel.webDavLastAction.collectAsStateWithLifecycle().value
@@ -209,14 +224,70 @@ fun BackupsSettingsRoute(
         onWebDavUsernameChange = { settings.backupWebDavUsername = it },
         onWebDavPasswordChange = { settings.backupWebDavPassword = it },
         onWebDavRemotePathChange = { settings.backupWebDavRemotePath = it },
-        onWebDavTestClick = { viewModel.checkWebDav() },
-        onWebDavUploadNowClick = { viewModel.uploadWebDavNow() },
-        onWebDavRestoreNowClick = { mode -> viewModel.restoreWebDavNow(mode) },
-        onWebDavRefreshRemoteBackupsClick = { viewModel.refreshWebDavRemoteBackups(inspectPayloads = false) },
-        onWebDavInspectRemoteBackupsClick = { viewModel.refreshWebDavRemoteBackups(inspectPayloads = true) },
-        onWebDavRestoreRemoteBackupClick = { file, mode -> viewModel.restoreWebDavRemoteBackup(file, mode) },
-        onWebDavDeleteRemoteBackupClick = { viewModel.deleteWebDavRemoteBackup(it) },
-        onWebDavClearRemoteBackupsClick = { viewModel.clearWebDavRemoteBackups() },
+        onWebDavTestClick = {
+            if (LocalNetworkPermissionHelper.needsPermissionForHost(context, settings.backupWebDavServerUrl)) {
+                pendingLocalNetworkWebDavAction = { viewModel.checkWebDav() }
+                localNetworkPermissionLauncher.launch(LocalNetworkPermissionHelper.PERMISSION)
+            } else {
+                viewModel.checkWebDav()
+            }
+        },
+        onWebDavUploadNowClick = {
+            if (LocalNetworkPermissionHelper.needsPermissionForHost(context, settings.backupWebDavServerUrl)) {
+                pendingLocalNetworkWebDavAction = { viewModel.uploadWebDavNow() }
+                localNetworkPermissionLauncher.launch(LocalNetworkPermissionHelper.PERMISSION)
+            } else {
+                viewModel.uploadWebDavNow()
+            }
+        },
+        onWebDavRestoreNowClick = { mode ->
+            if (LocalNetworkPermissionHelper.needsPermissionForHost(context, settings.backupWebDavServerUrl)) {
+                pendingLocalNetworkWebDavAction = { viewModel.restoreWebDavNow(mode) }
+                localNetworkPermissionLauncher.launch(LocalNetworkPermissionHelper.PERMISSION)
+            } else {
+                viewModel.restoreWebDavNow(mode)
+            }
+        },
+        onWebDavRefreshRemoteBackupsClick = {
+            if (LocalNetworkPermissionHelper.needsPermissionForHost(context, settings.backupWebDavServerUrl)) {
+                pendingLocalNetworkWebDavAction = { viewModel.refreshWebDavRemoteBackups(inspectPayloads = false) }
+                localNetworkPermissionLauncher.launch(LocalNetworkPermissionHelper.PERMISSION)
+            } else {
+                viewModel.refreshWebDavRemoteBackups(inspectPayloads = false)
+            }
+        },
+        onWebDavInspectRemoteBackupsClick = {
+            if (LocalNetworkPermissionHelper.needsPermissionForHost(context, settings.backupWebDavServerUrl)) {
+                pendingLocalNetworkWebDavAction = { viewModel.refreshWebDavRemoteBackups(inspectPayloads = true) }
+                localNetworkPermissionLauncher.launch(LocalNetworkPermissionHelper.PERMISSION)
+            } else {
+                viewModel.refreshWebDavRemoteBackups(inspectPayloads = true)
+            }
+        },
+        onWebDavRestoreRemoteBackupClick = { file, mode ->
+            if (LocalNetworkPermissionHelper.needsPermissionForHost(context, settings.backupWebDavServerUrl)) {
+                pendingLocalNetworkWebDavAction = { viewModel.restoreWebDavRemoteBackup(file, mode) }
+                localNetworkPermissionLauncher.launch(LocalNetworkPermissionHelper.PERMISSION)
+            } else {
+                viewModel.restoreWebDavRemoteBackup(file, mode)
+            }
+        },
+        onWebDavDeleteRemoteBackupClick = {
+            if (LocalNetworkPermissionHelper.needsPermissionForHost(context, settings.backupWebDavServerUrl)) {
+                pendingLocalNetworkWebDavAction = { viewModel.deleteWebDavRemoteBackup(it) }
+                localNetworkPermissionLauncher.launch(LocalNetworkPermissionHelper.PERMISSION)
+            } else {
+                viewModel.deleteWebDavRemoteBackup(it)
+            }
+        },
+        onWebDavClearRemoteBackupsClick = {
+            if (LocalNetworkPermissionHelper.needsPermissionForHost(context, settings.backupWebDavServerUrl)) {
+                pendingLocalNetworkWebDavAction = { viewModel.clearWebDavRemoteBackups() }
+                localNetworkPermissionLauncher.launch(LocalNetworkPermissionHelper.PERMISSION)
+            } else {
+                viewModel.clearWebDavRemoteBackups()
+            }
+        },
         onWebDavAutoRestoreChange = { settings.isBackupWebDavAutoRestoreEnabled = it },
         onWebDavKeepLocalCopyChange = { settings.isBackupWebDavKeepLocalCopyEnabled = it },
     )

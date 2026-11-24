@@ -343,6 +343,15 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     private var superResolutionDialogVisible by mutableStateOf(false)
     private var superResolutionDialogVersion by mutableStateOf(0)
     private var dlnaDialogState by mutableStateOf<DlnaDeviceDialogState?>(null)
+    private val dlnaLocalNetworkPermissionLauncher = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (granted) {
+            startDlnaDiscovery()
+        } else {
+            showPlayerMessage(R.string.local_network_permission_required_message)
+        }
+    }
     private lateinit var videoZoomController: VideoZoomController
     private var gestureOverlayState by mutableStateOf(VideoGestureOverlayState())
     private var subtitleOverlayState by mutableStateOf(VideoSubtitleOverlayState())
@@ -5320,6 +5329,16 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             showPlayerMessage(R.string.no_video_loaded)
             return
         }
+        if (org.skepsun.kototoro.core.network.LocalNetworkPermissionHelper.needsPermission(this)) {
+            dlnaLocalNetworkPermissionLauncher.launch(
+                org.skepsun.kototoro.core.network.LocalNetworkPermissionHelper.PERMISSION,
+            )
+            return
+        }
+        startDlnaDiscovery()
+    }
+
+    private fun startDlnaDiscovery() {
         dlnaDialogState = DlnaDeviceDialogState.Loading
         lifecycleScope.launch {
             val devices = SsdpDiscovery.discover(this@VideoPlayerActivity, contentHttpClient)

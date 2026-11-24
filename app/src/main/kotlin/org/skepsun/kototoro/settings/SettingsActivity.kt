@@ -58,9 +58,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import okhttp3.CacheControl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.network.LocalNetworkPermissionHelper
+import java.net.Proxy
 import org.skepsun.kototoro.backups.domain.BackupUtils
 import org.skepsun.kototoro.backups.external.ExternalBackupApp
 import org.skepsun.kototoro.backups.ui.backup.AniyomiBackupExportService
@@ -341,6 +344,28 @@ class SettingsActivity :
         ActivityResultContracts.StartActivityForResult(),
     ) {
         trackerDozeTick.update { it + 1 }
+    }
+
+    private var pendingLocalNetworkPermissionAction: (() -> Unit)? = null
+    private val localNetworkPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        val action = pendingLocalNetworkPermissionAction
+        pendingLocalNetworkPermissionAction = null
+        if (granted) {
+            action?.invoke()
+        } else {
+            showConfirmationDialog(
+                titleRes = R.string.local_network_permission_required_title,
+                messageRes = R.string.local_network_permission_required_message,
+                confirmRes = R.string.local_network_permission_open_settings,
+                onConfirm = {
+                    runCatching {
+                        startActivity(LocalNetworkPermissionHelper.createAppSettingsIntent(this))
+                    }
+                },
+            )
+        }
     }
 
     private val backupSelectCall = registerForActivityResult(
@@ -2172,6 +2197,17 @@ class SettingsActivity :
     }
 
     private fun testProxyConnection() {
+        if (kototoroAppSettings.proxyType != Proxy.Type.DIRECT &&
+            LocalNetworkPermissionHelper.needsPermissionForHost(this, kototoroAppSettings.proxyAddress)
+        ) {
+            pendingLocalNetworkPermissionAction = ::runProxyConnectionTest
+            localNetworkPermissionLauncher.launch(LocalNetworkPermissionHelper.PERMISSION)
+            return
+        }
+        runProxyConnectionTest()
+    }
+
+    private fun runProxyConnectionTest() {
         proxyTestJob?.cancel()
         proxyTestJob = lifecycleScope.launch {
             proxyTestSummaryFlow.value = getString(R.string.loading_)
@@ -2181,6 +2217,7 @@ class SettingsActivity :
                     val request = Request.Builder()
                         .get()
                         .url("http://neverssl.com")
+                        .cacheControl(CacheControl.FORCE_NETWORK)
                         .build()
                     okHttpClient.newCall(request).await().use { response ->
                         check(response.isSuccessful) { response.message }
