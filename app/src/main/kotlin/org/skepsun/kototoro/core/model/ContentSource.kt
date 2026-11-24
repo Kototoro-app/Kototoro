@@ -70,8 +70,8 @@ fun ContentSource(name: String?, fallbackContentType: ContentType?): ContentSour
         val parts = name.substringAfter(':').splitTwoParts('/') ?: return UnknownContentSource
         return ExternalContentSource(packageName = parts.first, authority = parts.second)
     }
-    org.skepsun.kototoro.core.extensions.GlobalExtensionManager.mangaSources.value.find { it.name == name }?.let { return org.skepsun.kototoro.core.parser.kotatsu.KotatsuParserSource(it) }
-    org.skepsun.kototoro.core.extensions.GlobalExtensionManager.contentSources.value.find { it.name == name }?.let { return it }
+    org.skepsun.kototoro.core.extensions.GlobalExtensionManager.findKotatsuParserSourceByName(name)?.let { return it }
+    org.skepsun.kototoro.core.extensions.GlobalExtensionManager.findContentSourceByName(name)?.let { return it }
     org.skepsun.kototoro.core.BaseAppHolder.get()?.findSourceByName(name)?.let { return it }
 
     // Fallbacks: If not loaded yet, return stable AnonymousContentSource

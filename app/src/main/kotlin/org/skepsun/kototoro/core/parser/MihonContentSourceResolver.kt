@@ -10,6 +10,8 @@ class MihonContentSourceResolver @Inject constructor(
     private val mihonExtensionManager: MihonExtensionManager,
 ) : ContentSourceResolver {
 
+    override fun cacheVersion(): Long = mihonExtensionManager.changes.value.toLong()
+
     override fun supports(source: ContentSource): Boolean {
         return source !is MihonMangaSource && source != UnknownContentSource && (
             source.name.startsWith(MIHON_PREFIX) ||

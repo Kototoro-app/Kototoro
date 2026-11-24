@@ -26,11 +26,14 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import org.skepsun.kototoro.core.util.ext.combine as extCombine
 import org.skepsun.kototoro.core.util.ext.sanitize
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
@@ -153,6 +156,7 @@ import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.plus
 import java.io.File
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 
 
 private const val DETAILS_TRACE_TAG = "DetailsTrace"
@@ -292,22 +296,6 @@ private data class ReadingSearchFilterState(
     val listFilter: ContentListFilter = ContentListFilter.EMPTY,
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
-)
-
-private data class SourceOptionsUiState(
-    val metadataSourceOptions: List<DetailsSourceOption> = emptyList(),
-    val readingSourceOptions: List<DetailsSourceOption> = emptyList(),
-)
-
-private data class SourceChapterTabsUiState(
-    val metadataChapterTabs: List<DetailsChapterSourceTab> = emptyList(),
-    val readingChapterTabs: List<DetailsChapterSourceTab> = emptyList(),
-)
-
-private data class SourceResolutionUiState(
-    val resolvedMetadataContentType: ContentType? = null,
-    val resolvedMetadataLanguage: String? = null,
-    val resolvedReadingLanguage: String? = null,
 )
 
 private data class TranslationTextUiState(
@@ -623,54 +611,17 @@ class DetailsViewModel @Inject constructor(
     val resolvedMetadataContentType = MutableStateFlow<ContentType?>(null)
     val resolvedMetadataLanguage = MutableStateFlow<String?>(null)
     val resolvedReadingLanguage = MutableStateFlow<String?>(null)
-    private val sourceOptionsUiState = combine(
-        metadataSourceOptions,
-        readingSourceOptions,
-    ) { metadataSourceOptions, readingSourceOptions ->
-        SourceOptionsUiState(
-            metadataSourceOptions = metadataSourceOptions,
-            readingSourceOptions = readingSourceOptions,
-        )
-    }
-    private val sourceChapterTabsUiState = combine(
-        metadataChapterTabs,
-        readingChapterTabs,
-    ) { metadataChapterTabs, readingChapterTabs ->
-        SourceChapterTabsUiState(
-            metadataChapterTabs = metadataChapterTabs,
-            readingChapterTabs = readingChapterTabs,
-        )
-    }
-    private val sourceResolutionUiState = combine(
-        resolvedMetadataContentType,
-        resolvedMetadataLanguage,
-        resolvedReadingLanguage,
-    ) { resolvedMetadataContentType, resolvedMetadataLanguage, resolvedReadingLanguage ->
-        SourceResolutionUiState(
-            resolvedMetadataContentType = resolvedMetadataContentType,
-            resolvedMetadataLanguage = resolvedMetadataLanguage,
-            resolvedReadingLanguage = resolvedReadingLanguage,
-        )
-    }
-    val sourceBindingUiState: StateFlow<SourceBindingUiState> = combine(
-        sourceOptionsUiState,
-        sourceChapterTabsUiState,
-        sourceResolutionUiState,
-    ) { sourceOptions, sourceTabs, sourceResolution ->
-        SourceBindingUiState(
-            metadataSourceOptions = sourceOptions.metadataSourceOptions,
-            readingSourceOptions = sourceOptions.readingSourceOptions,
-            metadataChapterTabs = sourceTabs.metadataChapterTabs,
-            readingChapterTabs = sourceTabs.readingChapterTabs,
-            resolvedMetadataContentType = sourceResolution.resolvedMetadataContentType,
-            resolvedMetadataLanguage = sourceResolution.resolvedMetadataLanguage,
-            resolvedReadingLanguage = sourceResolution.resolvedReadingLanguage,
-        )
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, SourceBindingUiState())
+    private val sourceBindingStateLock = Any()
+    private val _sourceBindingUiState = MutableStateFlow(SourceBindingUiState())
+    val sourceBindingUiState: StateFlow<SourceBindingUiState> = _sourceBindingUiState.asStateFlow()
     val showTranslateAction = MutableStateFlow(false)
     val activeLocalBrowserContent = MutableStateFlow<Content?>(null)
     private val isWorkDetails = MutableStateFlow(initialIsWorkDetails())
     private val allEnabledSourceInfos = MutableStateFlow<List<ContentSourceInfo>>(emptyList())
+    @Volatile
+    private var allEnabledSourcesByName: Map<String, org.skepsun.kototoro.parsers.model.ContentSource> = emptyMap()
+    @Volatile
+    private var lastTranslateVisibilityRequest: TranslateVisibilityRequest? = null
     private val activeSourcePreset = settings.observeAsFlow(
         AppSettings.KEY_ACTIVE_SOURCE_PRESET_ID,
     ) {
@@ -702,11 +653,24 @@ class DetailsViewModel @Inject constructor(
         }
     }.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, 0L to null)
 
+    @Volatile
     private var baseLoadedDetails: ContentDetails? = null
     private val trackingMetadataCandidates = MutableStateFlow<List<TrackingMetadataCandidate>>(emptyList())
     private val selectedMetadataSource = MutableStateFlow<MetadataSourceSelection>(initialMetadataSourceSelection())
-    private val cachedTrackingDetails = LinkedHashMap<String, org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteItemDetails>()
-    private val cachedEntityTrackingDetails = LinkedHashMap<String, org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteItemDetails>()
+    private val cachedTrackingDetails = ConcurrentHashMap<String, org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteItemDetails>()
+    private val cachedEntityTrackingDetails = ConcurrentHashMap<String, org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteItemDetails>()
+
+    private data class TranslateVisibilityRequest(
+        val targetLanguage: String,
+        val metadataLanguage: String?,
+        val sampleText: String,
+    )
+
+    private data class SyntheticContentSource(
+        override val name: String,
+        override val contentType: ContentType,
+        override val locale: String = "",
+    ) : org.skepsun.kototoro.parsers.model.ContentSource
 
     private sealed interface MetadataSourceSelection {
         data object Base : MetadataSourceSelection
@@ -826,8 +790,8 @@ class DetailsViewModel @Inject constructor(
     private fun org.skepsun.kototoro.parsers.model.ContentSource.resolveDetailsSource(): org.skepsun.kototoro.parsers.model.ContentSource {
         return selectResolvedDetailsSource(
             original = this,
-            enabledSources = allEnabledSourceInfos.value,
-            pipelineResolved = contentSourceResolutionPipeline.resolve(ContentSource(name)),
+            enabledSource = allEnabledSourcesByName[name],
+            resolvePipeline = { contentSourceResolutionPipeline.resolveByName(name) },
         )
     }
 
@@ -853,44 +817,10 @@ class DetailsViewModel @Inject constructor(
         return currentMetadataContentType()
     }
 
-    private fun currentMetadataLanguageCode(): String? {
-        return when (selectedMetadataSource.value) {
-            MetadataSourceSelection.Base -> {
-                baseLoadedDetails?.toContent()?.source
-                    ?.resolveDetailsSource()
-                    ?.locale
-                    ?.takeIf { it.isNotBlank() }
-                    ?: originContent?.source
-                        ?.resolveDetailsSource()
-                        ?.locale
-                        ?.takeIf { it.isNotBlank() }
-            }
-            is MetadataSourceSelection.Tracking -> {
-                currentTrackingMetadataDetails()?.let { details ->
-                    resolveTrackingLanguage(details.infoboxProperties).takeIf { it.isNotBlank() }
-                        ?: details.toContentLocale()
-                }
-            }
-        }
-    }
-
     private fun org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteItemDetails.toContentLocale(): String? {
         return contentType?.let { _ ->
             resolveTrackingLanguage(infoboxProperties).takeIf { it.isNotBlank() }
         }
-    }
-
-    private fun currentReadingLanguageCode(): String? {
-        return readingSourceOptions.safeValueOrNull()
-            .orEmpty()
-            .firstOrNull { it.isSelected }
-            ?.source
-            ?.locale
-            ?.takeIf { it.isNotBlank() }
-            ?: baseLoadedDetails?.local?.manga?.source
-                ?.resolveDetailsSource()
-                ?.locale
-                ?.takeIf { it.isNotBlank() }
     }
 
     private fun String.normalizedLanguageCode(): String {
@@ -956,7 +886,9 @@ class DetailsViewModel @Inject constructor(
                     }
         }
         }
-        readingSearchSources.value = filtered
+        if (!areSourceInfoListsEquivalent(readingSearchSources.value, filtered)) {
+            readingSearchSources.value = filtered
+        }
         // The work's kind is often learnt after the first search began (a tracking entry's details arrive later),
         // so the default follows it for as long as the kinds were not picked by hand, and a search already run
         // with the old kinds runs again: a show must not keep the comic sources it was first searched in.
@@ -975,7 +907,8 @@ class DetailsViewModel @Inject constructor(
         ) {
             searchReadingBindings()
         }
-        if (selectedReadingSearchSource.value !in filtered.map { it.mangaSource.name }.toSet()) {
+        val selectedSourceName = selectedReadingSearchSource.value
+        if (selectedSourceName != null && filtered.none { it.mangaSource.name == selectedSourceName }) {
             selectedReadingSearchSource.value = null
             readingSearchFilterState.value = ReadingSearchFilterState()
         }
@@ -1010,11 +943,11 @@ class DetailsViewModel @Inject constructor(
         name: String,
         contentType: ContentType,
         locale: String = "",
-    ): org.skepsun.kototoro.parsers.model.ContentSource = object : org.skepsun.kototoro.parsers.model.ContentSource {
-        override val name: String = name
-        override val locale: String = locale
-        override val contentType: ContentType = contentType
-    }
+    ): org.skepsun.kototoro.parsers.model.ContentSource = SyntheticContentSource(
+        name = name,
+        contentType = contentType,
+        locale = locale,
+    )
 
     private fun trackingDetailsToSyntheticChapters(
         details: org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteItemDetails,
@@ -1289,25 +1222,33 @@ class DetailsViewModel @Inject constructor(
                 activeSourcePreset,
             ) { sources, preset ->
                 sources.filterByPreset(preset)
-            }.collect { sources ->
-                allEnabledSourceInfos.value = sources
-                updateSourceOptions()
-                refreshResolvedPresentationState()
-                refreshReadingSearchSources()
-                allEnabledSourcesLoaded = true
-                maybeAutoSearchReadingSourcesForTrackingWork()
-            }
+            }.distinctUntilChanged(::areSourceInfoListsEquivalent)
+                .collect { sources ->
+                    allEnabledSourceInfos.value = sources
+                    allEnabledSourcesByName = buildMap(sources.size) {
+                        sources.forEach { info ->
+                            putIfAbsent(info.mangaSource.name, info.mangaSource)
+                        }
+                    }
+                    updateSourceOptions()
+                    refreshReadingSearchSources()
+                    allEnabledSourcesLoaded = true
+                    maybeAutoSearchReadingSourcesForTrackingWork()
+                }
         }
 
         launchJob(Dispatchers.Default) {
+            val initialGlobalVersion = org.skepsun.kototoro.core.extensions.GlobalExtensionManager.version
             merge(
-                org.skepsun.kototoro.core.extensions.GlobalExtensionManager.updates,
-                mihonExtensionManager.changes,
-                aniyomiExtensionManager.changes,
-                ireaderExtensionManager.changes,
+                org.skepsun.kototoro.core.extensions.GlobalExtensionManager.updates
+                    .map { org.skepsun.kototoro.core.extensions.GlobalExtensionManager.version }
+                    .filter { it != initialGlobalVersion }
+                    .distinctUntilChanged(),
+                mihonExtensionManager.changes.drop(1),
+                aniyomiExtensionManager.changes.drop(1),
+                ireaderExtensionManager.changes.drop(1),
             ).collect {
                 updateSourceOptions()
-                refreshResolvedPresentationState()
             }
         }
 
@@ -1328,8 +1269,11 @@ class DetailsViewModel @Inject constructor(
                         url = cached?.url,
                     )
                 }
-                trackingMetadataCandidates.value = mergeTrackingMetadataCandidates(linkedCandidates)
-                syncDisplayedState()
+                val merged = mergeTrackingMetadataCandidates(linkedCandidates)
+                if (merged != trackingMetadataCandidates.value) {
+                    trackingMetadataCandidates.value = merged
+                    syncDisplayedState()
+                }
             }
         }
 
@@ -1799,7 +1743,6 @@ class DetailsViewModel @Inject constructor(
         refreshReadingSearchSources()
         maybeAutoSearchReadingSourcesForTrackingWork()
         updateSupplementalDetailsState(supplementalTrackingDetails)
-        refreshResolvedPresentationState()
         refreshContextualEntityRelations()
     }
 
@@ -1820,195 +1763,308 @@ class DetailsViewModel @Inject constructor(
         )
     }
 
-    private fun refreshResolvedPresentationState() {
-        val metadataLanguage = currentMetadataLanguageCode()?.takeIf { it.isNotBlank() }?.normalizedLanguageCode()
-        val readingLanguage = currentReadingLanguageCode()?.takeIf { it.isNotBlank() }?.normalizedLanguageCode()
-        resolvedMetadataContentType.value = currentMetadataContentType()
-        resolvedMetadataLanguage.value = metadataLanguage
-        resolvedReadingLanguage.value = readingLanguage
-        Log.i(
-            DETAILS_TRACE_TAG,
-            "state.presentation metadataSource=${metadataSourceOptions.value.map { "${it.source?.name}:${it.source?.locale}:${it.isSelected}" }} " +
-                "readingSource=${readingSourceOptions.value.map { "${it.source?.name}:${it.source?.locale}:${it.isSelected}" }} " +
-                "metadataLanguage=$metadataLanguage readingLanguage=$readingLanguage contentType=${currentMetadataContentType()}",
-        )
-        refreshActiveLocalBrowserContent()
-        refreshTranslateActionVisibility(metadataLanguage)
-    }
-
     private fun refreshActiveLocalBrowserContent() {
         val activeLocalId = currentWorkContentSnapshot().activeLocalMangaId
         val baseContent = baseLoadedDetails?.toContent()
         if (activeLocalId == null || activeLocalId == baseLoadedDetails?.id) {
-            activeLocalBrowserContent.value = baseContent?.takeIf { it.publicUrl.isNotBlank() }
+            val next = baseContent?.takeIf { it.publicUrl.isNotBlank() }
+            if (activeLocalBrowserContent.value != next) {
+                activeLocalBrowserContent.value = next
+            }
             return
         }
         launchJob(Dispatchers.IO) {
-            activeLocalBrowserContent.value = db.getMangaDao()
+            val next = db.getMangaDao()
                 .find(activeLocalId)
                 ?.toContent()
                 ?.takeIf { it.publicUrl.isNotBlank() }
                 ?: baseContent?.takeIf { it.publicUrl.isNotBlank() }
+            if (activeLocalBrowserContent.value != next) {
+                activeLocalBrowserContent.value = next
+            }
         }
     }
 
     private fun refreshTranslateActionVisibility(metadataLanguage: String?) {
         if (!settings.isDetailsTranslateButtonVisible) {
+            lastTranslateVisibilityRequest = null
+            translateAvailabilityJob?.cancel()
             showTranslateAction.value = false
             return
         }
         val targetLanguage = currentTargetLang().takeIf { it.isNotBlank() }?.normalizedLanguageCode()
         if (targetLanguage.isNullOrBlank()) {
+            lastTranslateVisibilityRequest = null
+            translateAvailabilityJob?.cancel()
             showTranslateAction.value = false
             return
         }
+        if (metadataLanguage != null) {
+            val request = TranslateVisibilityRequest(
+                targetLanguage = targetLanguage,
+                metadataLanguage = metadataLanguage,
+                sampleText = "",
+            )
+            if (lastTranslateVisibilityRequest == request) {
+                return
+            }
+            lastTranslateVisibilityRequest = request
+            translateAvailabilityJob?.cancel()
+            showTranslateAction.value = metadataLanguage != targetLanguage
+            return
+        }
+        val details = mangaDetails.safeValueOrNull()
+        val sampleText = buildString {
+            append(details?.toContent()?.title.orEmpty())
+            if (length < 24) {
+                append(' ')
+                append(details?.description?.toString().orEmpty())
+            }
+        }.trim()
+        val request = TranslateVisibilityRequest(
+            targetLanguage = targetLanguage,
+            metadataLanguage = null,
+            sampleText = sampleText,
+        )
+        if (lastTranslateVisibilityRequest == request) {
+            return
+        }
+        lastTranslateVisibilityRequest = request
         translateAvailabilityJob?.cancel()
         translateAvailabilityJob = viewModelScope.launch(Dispatchers.IO) {
-            val details = mangaDetails.safeValueOrNull()
-            val sampleText = buildString {
-                append(details?.toContent()?.title.orEmpty())
-                if (length < 24) {
-                    append(' ')
-                    append(details?.description?.toString().orEmpty())
-                }
-            }.trim()
             val detectedLanguage = if (sampleText.isNotBlank()) {
                 detectLanguageViaMlKit(sampleText)?.normalizedLanguageCode()
             } else {
                 null
             }
-            val effectiveLanguage = metadataLanguage ?: detectedLanguage
-            showTranslateAction.value = effectiveLanguage == null || effectiveLanguage != targetLanguage
+            showTranslateAction.value = detectedLanguage == null || detectedLanguage != targetLanguage
         }
     }
 
     private fun updateSourceOptions() {
-        val selection = selectedMetadataSource.value
-        val baseContent = baseLoadedDetails?.toContent() ?: originContent
-        val baseSource = baseContent?.source?.resolveDetailsSource()
-        val baseLooksLikeTracking = baseSource?.name?.startsWith("TRACKING_") == true
-        val metadata = buildList {
-            if (baseSource != null && !baseLooksLikeTracking) {
-                add(
-                    DetailsSourceOption(
-                        key = "base:${baseSource.name}",
-                        source = baseSource,
-                        title = baseContent?.title,
-                        coverUrl = baseContent?.coverUrl.normalizedImageUrl(),
-                        isSelected = selection == MetadataSourceSelection.Base,
-                    ),
-                )
-            }
-            addAll(
-                trackingMetadataCandidates.value.map { candidate ->
-                    val cached = cachedTrackingDetails[trackingMetadataKey(candidate.service, candidate.remoteId)]
-                    DetailsSourceOption(
-                        key = trackingMetadataKey(candidate.service, candidate.remoteId),
-                        trackingService = candidate.service,
-                        remoteId = candidate.remoteId,
-                        url = candidate.url,
-                        title = cached?.title ?: contentTitleFallback(candidate.service),
-                        subtitle = contentTitleFallback(candidate.service),
-                        coverUrl = cached?.coverUrl.normalizedImageUrl(),
-                        isSelected = selection is MetadataSourceSelection.Tracking &&
-                            selection.service == candidate.service &&
-                            selection.remoteId == candidate.remoteId,
+        val baseContent: Content?
+        val nextState: SourceBindingUiState
+        val optionsChanged: Boolean
+        val presentationChanged: Boolean
+        synchronized(sourceBindingStateLock) {
+            val selection = selectedMetadataSource.value
+            val currentBaseDetails = baseLoadedDetails
+            baseContent = currentBaseDetails?.toContent() ?: originContent
+            val baseSource = baseContent?.source?.resolveDetailsSource()
+            val baseLooksLikeTracking = baseSource?.name?.startsWith("TRACKING_") == true
+            val candidates = trackingMetadataCandidates.value
+            val metadata = buildList {
+                if (baseSource != null && !baseLooksLikeTracking) {
+                    add(
+                        DetailsSourceOption(
+                            key = "base:${baseSource.name}",
+                            source = baseSource,
+                            title = baseContent?.title,
+                            coverUrl = baseContent?.coverUrl.normalizedImageUrl(),
+                            isSelected = selection == MetadataSourceSelection.Base,
+                        ),
                     )
-                },
-            )
-            if (isEmpty() && baseSource != null) {
-                add(
+                }
+                addAll(
+                    candidates.map { candidate ->
+                        val cached = cachedTrackingDetails[trackingMetadataKey(candidate.service, candidate.remoteId)]
+                        DetailsSourceOption(
+                            key = trackingMetadataKey(candidate.service, candidate.remoteId),
+                            trackingService = candidate.service,
+                            remoteId = candidate.remoteId,
+                            url = candidate.url,
+                            title = cached?.title ?: contentTitleFallback(candidate.service),
+                            subtitle = contentTitleFallback(candidate.service),
+                            coverUrl = cached?.coverUrl.normalizedImageUrl(),
+                            isSelected = selection is MetadataSourceSelection.Tracking &&
+                                selection.service == candidate.service &&
+                                selection.remoteId == candidate.remoteId,
+                        )
+                    },
+                )
+                if (isEmpty() && baseSource != null) {
+                    add(
+                        DetailsSourceOption(
+                            key = "base:${baseSource.name}",
+                            source = baseSource,
+                            title = baseContent?.title,
+                            coverUrl = baseContent?.coverUrl.normalizedImageUrl(),
+                            isSelected = true,
+                        ),
+                    )
+                }
+            }.distinctBy(DetailsSourceOption::key)
+
+            // The reading source is the manga row itself. It is always listed —
+            // the content-type compatibility check is for foreign candidates, and an uninstalled
+            // extension would otherwise make the current manga's own source look incompatible.
+            val currentDisplayedDetails = mangaDetails.safeValueOrNull()
+            val readingSource = baseSource
+                ?.takeUnless { it.name.startsWith("TRACKING_") }
+                ?: currentDisplayedDetails
+                    ?.toContent()
+                    ?.source
+                    ?.resolveDetailsSource()
+                    ?.takeUnless { it.name.startsWith("TRACKING_") }
+                ?: currentDisplayedDetails
+                    ?.takeIf { it.isLocal }
+                    ?.local
+                    ?.manga
+                    ?.source
+            val reading = readingSource?.let {
+                listOf(
                     DetailsSourceOption(
-                        key = "base:${baseSource.name}",
-                        source = baseSource,
+                        key = "reading:${it.name}",
+                        source = it,
+                        targetMangaId = currentObservedLocalMangaIdSnapshot(),
                         title = baseContent?.title,
                         coverUrl = baseContent?.coverUrl.normalizedImageUrl(),
                         isSelected = true,
                     ),
                 )
+            }.orEmpty()
+
+            val baseContentType = baseSource?.getContentType()
+                ?: currentDisplayedDetails?.toContent()?.source?.resolveDetailsSource()?.getContentType()
+                ?: originContent?.source?.resolveDetailsSource()?.getContentType()
+            val trackingSelection = selection as? MetadataSourceSelection.Tracking
+            val currentTrackingDetails = trackingSelection?.let {
+                cachedTrackingDetails[trackingMetadataKey(it.service, it.remoteId)]
             }
-        }.distinctBy(DetailsSourceOption::key)
-        metadataSourceOptions.value = metadata
+            val resolvedContentType = when (selection) {
+                MetadataSourceSelection.Base -> baseContentType
+                is MetadataSourceSelection.Tracking -> baseContentType?.takeIf {
+                    (currentBaseDetails?.toContent() ?: currentDisplayedDetails?.toContent() ?: originContent)?.isLocal == true
+                } ?: currentTrackingDetails?.contentType ?: baseContentType
+            }
+            val metadataLanguage = when (selection) {
+                MetadataSourceSelection.Base -> {
+                    val baseLocale = currentBaseDetails?.toContent()?.source?.let {
+                        if (it === baseContent?.source) baseSource?.locale else it.resolveDetailsSource().locale
+                    }?.takeIf { it.isNotBlank() }
+                    val fallbackOriginLocale = if (baseLocale == null) {
+                        originContent?.source?.let {
+                            if (it === baseContent?.source) baseSource?.locale else it.resolveDetailsSource().locale
+                        }?.takeIf { it.isNotBlank() }
+                    } else {
+                        null
+                    }
+                    (baseLocale ?: fallbackOriginLocale)?.normalizedLanguageCode()
+                }
+                is MetadataSourceSelection.Tracking -> {
+                    currentTrackingDetails?.let { details ->
+                        resolveTrackingLanguage(details.infoboxProperties).takeIf { it.isNotBlank() }
+                            ?: details.toContentLocale()
+                    }?.takeIf { it.isNotBlank() }?.normalizedLanguageCode()
+                }
+            }
+            val readingLanguage = (
+                reading.firstOrNull { it.isSelected }?.source?.locale?.takeIf { it.isNotBlank() }
+                    ?: currentBaseDetails?.local?.manga?.source?.resolveDetailsSource()?.locale?.takeIf { it.isNotBlank() }
+                )?.normalizedLanguageCode()
 
-        // The reading source is the manga row itself. It is always listed —
-        // the content-type compatibility check is for foreign candidates, and an uninstalled
-        // extension would otherwise make the current manga's own source look incompatible.
-        val currentDisplayedDetails = mangaDetails.safeValueOrNull()
-        val readingSource = baseSource
-            ?.takeUnless { it.name.startsWith("TRACKING_") }
-            ?: currentDisplayedDetails
-                ?.toContent()
-                ?.source
-                ?.resolveDetailsSource()
-                ?.takeUnless { it.name.startsWith("TRACKING_") }
-            ?: currentDisplayedDetails
-                ?.takeIf { it.isLocal }
-                ?.local
-                ?.manga
-                ?.source
-        readingSourceOptions.value = readingSource?.let {
-            listOf(
-                DetailsSourceOption(
-                    key = "reading:${it.name}",
-                    source = it,
-                    targetMangaId = currentObservedLocalMangaIdSnapshot(),
-                    title = baseContent?.title,
-                    coverUrl = baseContent?.coverUrl.normalizedImageUrl(),
-                    isSelected = true,
-                ),
-            )
-        }.orEmpty()
-        updateChapterSourceTabs()
-        Log.i(
-            DETAILS_TRACE_TAG,
-            "state.options base=${baseContent.detailsTraceSummary()} " +
-                "metadata=${metadataSourceOptions.value.map { "${it.key}:${it.source?.name}:${it.isSelected}" }} " +
-                "reading=${readingSourceOptions.value.map { "${it.key}:${it.source?.name}:${it.source?.locale}:${it.isSelected}" }}",
-        )
-    }
+            val metadataTabs = if (trackingSelection != null) {
+                candidates.map { candidate ->
+                    val details = cachedTrackingDetails[trackingMetadataKey(candidate.service, candidate.remoteId)]
+                    val contentType = details?.contentType ?: resolvedContentType ?: ContentType.MANGA
+                    val locale = details?.let { resolveTrackingLanguage(it.infoboxProperties) }.orEmpty()
+                    val source = syntheticSource(
+                        name = "TRACKING_${candidate.service.name}",
+                        contentType = contentType,
+                        locale = locale,
+                    )
+                    DetailsChapterSourceTab(
+                        key = trackingMetadataKey(candidate.service, candidate.remoteId),
+                        source = source,
+                        trackingService = candidate.service,
+                        remoteId = candidate.remoteId,
+                        url = candidate.url ?: details?.url,
+                        chapters = details?.let { trackingDetailsToSyntheticChapters(it, source) }.orEmpty(),
+                        isSelected = trackingSelection.service == candidate.service &&
+                            trackingSelection.remoteId == candidate.remoteId,
+                    )
+                }
+            } else {
+                emptyList()
+            }
 
-    private fun updateChapterSourceTabs() {
-        val trackingSelection = selectedMetadataSource.safeValueOrNull() as? MetadataSourceSelection.Tracking
-        metadataChapterTabs.value = if (trackingSelection != null) {
-            trackingMetadataCandidates.safeValueOrNull().orEmpty().map { candidate ->
-                val details = cachedTrackingDetails[trackingMetadataKey(candidate.service, candidate.remoteId)]
-                val contentType = details?.contentType ?: currentMetadataContentType() ?: ContentType.MANGA
-                val locale = details?.let { resolveTrackingLanguage(it.infoboxProperties) }.orEmpty()
-                val source = syntheticSource(
-                    name = "TRACKING_${candidate.service.name}",
-                    contentType = contentType,
-                    locale = locale,
-                )
+            val readingTabs = reading.map { option ->
                 DetailsChapterSourceTab(
-                    key = trackingMetadataKey(candidate.service, candidate.remoteId),
-                    source = source,
-                    trackingService = candidate.service,
-                    remoteId = candidate.remoteId,
-                    url = candidate.url ?: details?.url,
-                    chapters = details?.let { trackingDetailsToSyntheticChapters(it, source) }.orEmpty(),
-                    isSelected = trackingSelection.service == candidate.service &&
-                        trackingSelection.remoteId == candidate.remoteId,
+                    key = option.key,
+                    source = option.source,
+                    targetMangaId = option.targetMangaId,
+                    url = option.url,
+                    isSelected = option.isSelected,
                 )
             }
-        } else {
-            emptyList()
-        }
 
-        readingChapterTabs.value = readingSourceOptions.safeValueOrNull().orEmpty().map { option ->
-            DetailsChapterSourceTab(
-                key = option.key,
-                source = option.source,
-                targetMangaId = option.targetMangaId,
-                url = option.url,
-                isSelected = option.isSelected,
+            nextState = SourceBindingUiState(
+                metadataSourceOptions = metadata,
+                readingSourceOptions = reading,
+                metadataChapterTabs = metadataTabs,
+                readingChapterTabs = readingTabs,
+                resolvedMetadataContentType = resolvedContentType,
+                resolvedMetadataLanguage = metadataLanguage,
+                resolvedReadingLanguage = readingLanguage,
+            )
+            val previousState = _sourceBindingUiState.value
+            optionsChanged = previousState.metadataSourceOptions != nextState.metadataSourceOptions ||
+                previousState.readingSourceOptions != nextState.readingSourceOptions ||
+                previousState.metadataChapterTabs != nextState.metadataChapterTabs ||
+                previousState.readingChapterTabs != nextState.readingChapterTabs
+            presentationChanged = previousState.resolvedMetadataContentType != nextState.resolvedMetadataContentType ||
+                previousState.resolvedMetadataLanguage != nextState.resolvedMetadataLanguage ||
+                previousState.resolvedReadingLanguage != nextState.resolvedReadingLanguage
+            if (optionsChanged || presentationChanged) {
+                if (metadataSourceOptions.value != nextState.metadataSourceOptions) {
+                    metadataSourceOptions.value = nextState.metadataSourceOptions
+                }
+                if (readingSourceOptions.value != nextState.readingSourceOptions) {
+                    readingSourceOptions.value = nextState.readingSourceOptions
+                }
+                if (metadataChapterTabs.value != nextState.metadataChapterTabs) {
+                    metadataChapterTabs.value = nextState.metadataChapterTabs
+                }
+                if (readingChapterTabs.value != nextState.readingChapterTabs) {
+                    readingChapterTabs.value = nextState.readingChapterTabs
+                }
+                if (resolvedMetadataContentType.value != nextState.resolvedMetadataContentType) {
+                    resolvedMetadataContentType.value = nextState.resolvedMetadataContentType
+                }
+                if (resolvedMetadataLanguage.value != nextState.resolvedMetadataLanguage) {
+                    resolvedMetadataLanguage.value = nextState.resolvedMetadataLanguage
+                }
+                if (resolvedReadingLanguage.value != nextState.resolvedReadingLanguage) {
+                    resolvedReadingLanguage.value = nextState.resolvedReadingLanguage
+                }
+                _sourceBindingUiState.value = nextState
+            }
+        }
+        if (optionsChanged) {
+            val metadataTabSummary = nextState.metadataChapterTabs.map { "${it.key}:${it.isSelected}:${it.chapters.size}" }
+            val readingTabSummary = nextState.readingChapterTabs.map { "${it.key}:${it.isSelected}:${it.chapters.size}" }
+            android.util.Log.d(
+                "DetailsViewModel",
+                "updateChapterSourceTabs: metadataTabs=$metadataTabSummary, readingTabs=$readingTabSummary",
+            )
+            Log.i(
+                DETAILS_TRACE_TAG,
+                "state.options base=${baseContent.detailsTraceSummary()} " +
+                    "metadata=${nextState.metadataSourceOptions.map { "${it.key}:${it.source?.name}:${it.isSelected}" }} " +
+                    "reading=${nextState.readingSourceOptions.map { "${it.key}:${it.source?.name}:${it.source?.locale}:${it.isSelected}" }}",
             )
         }
-        val metadataTabSummary = metadataChapterTabs.value.map { "${it.key}:${it.isSelected}:${it.chapters.size}" }
-        val readingTabSummary = readingChapterTabs.value.map { "${it.key}:${it.isSelected}:${it.chapters.size}" }
-        android.util.Log.d(
-            "DetailsViewModel",
-            "updateChapterSourceTabs: metadataTabs=$metadataTabSummary, readingTabs=$readingTabSummary",
-        )
+        if (presentationChanged || optionsChanged) {
+            Log.i(
+                DETAILS_TRACE_TAG,
+                "state.presentation metadataSource=${nextState.metadataSourceOptions.map { "${it.source?.name}:${it.source?.locale}:${it.isSelected}" }} " +
+                    "readingSource=${nextState.readingSourceOptions.map { "${it.source?.name}:${it.source?.locale}:${it.isSelected}" }} " +
+                    "metadataLanguage=${nextState.resolvedMetadataLanguage} readingLanguage=${nextState.resolvedReadingLanguage} " +
+                    "contentType=${nextState.resolvedMetadataContentType}",
+            )
+        }
+        refreshActiveLocalBrowserContent()
+        refreshTranslateActionVisibility(nextState.resolvedMetadataLanguage)
     }
 
     private fun updateSupplementalDetailsState(
@@ -2191,6 +2247,9 @@ class DetailsViewModel @Inject constructor(
     }
 
     private fun refreshContextualEntityRelations() {
+        if (currentTrackingMetadataDetails() == null && entityRelationSections.value.isEmpty()) {
+            return
+        }
         launchJob(Dispatchers.IO) {
             submitEntityRelationSections(buildEntityRelationSections())
         }
@@ -2946,7 +3005,6 @@ class DetailsViewModel @Inject constructor(
                     persistMetadataSourceSelectionForCurrentEntity()
                     refreshContextualEntityRelations()
                 }
-                updateSourceOptions()
                 syncDisplayedState()
             } finally {
                 trackingEditBusy.value = false
@@ -3699,7 +3757,6 @@ class DetailsViewModel @Inject constructor(
         sourceBindingsRefreshJob?.cancel()
         sourceBindingsRefreshJob = launchJob(Dispatchers.IO) {
             updateSourceOptions()
-            refreshResolvedPresentationState()
         }
     }
 

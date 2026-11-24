@@ -9,6 +9,8 @@ class AniyomiContentSourceResolver @Inject constructor(
     private val aniyomiExtensionManager: AniyomiExtensionManager,
 ) : ContentSourceResolver {
 
+    override fun cacheVersion(): Long = aniyomiExtensionManager.changes.value.toLong()
+
     override fun supports(source: ContentSource): Boolean {
         return source !is AniyomiAnimeSource && source.name.startsWith(ANIYOMI_PREFIX)
     }

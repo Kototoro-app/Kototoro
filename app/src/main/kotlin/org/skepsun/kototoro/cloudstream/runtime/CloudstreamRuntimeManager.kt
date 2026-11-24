@@ -66,6 +66,11 @@ class CloudstreamRuntimeManager @Inject constructor(
     private val loadedPlugins = ConcurrentHashMap<String, LoadedCloudstreamPlugin>()
     private val _sources = MutableStateFlow<List<CloudstreamSource>>(emptyList())
     val sources: StateFlow<List<CloudstreamSource>> = _sources.asStateFlow()
+    @Volatile
+    private var sourcesByName: Map<String, CloudstreamSource> = emptyMap()
+    @Volatile
+    var version: Int = 0
+        private set
     private val diagnosticsFile by lazy(LazyThreadSafetyMode.NONE) {
         File(File(context.filesDir, "cloudstream"), "runtime-diagnostics.txt")
     }
@@ -317,7 +322,7 @@ class CloudstreamRuntimeManager @Inject constructor(
         loadedPlugins.values.firstOrNull { File(it.filePath).name == source.pluginFileName }
 
     fun findSourceByName(name: String): CloudstreamSource? {
-        return _sources.value.firstOrNull { it.name == name }
+        return sourcesByName[name]
     }
 
     /** Activate before committing install metadata; failed updates restore the previous archive and runtime. */
@@ -450,7 +455,7 @@ class CloudstreamRuntimeManager @Inject constructor(
     }
 
     private fun publishSources() {
-        _sources.value = loadedPlugins.values
+        val updated = loadedPlugins.values
             .asSequence()
             .flatMap { loaded ->
                 loaded.providers.asSequence().map { api ->
@@ -464,6 +469,9 @@ class CloudstreamRuntimeManager @Inject constructor(
             .distinctBy { it.name }
             .sortedBy { it.displayName.lowercase() }
             .toList()
+        sourcesByName = updated.associateByTo(HashMap(updated.size)) { it.name }
+        _sources.value = updated
+        version++
     }
 
     private fun readManifest(file: File): PluginManifest? {

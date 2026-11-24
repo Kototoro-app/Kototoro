@@ -62,6 +62,10 @@ class JsonSourceManager @Inject constructor(
      * This reduces database queries for commonly used sources
      */
     private val sourceCache = java.util.concurrent.ConcurrentHashMap<String, JsonSourceEntity>()
+    private val versionCounter = java.util.concurrent.atomic.AtomicLong(0L)
+
+    val cacheVersion: Long
+        get() = versionCounter.get()
 
     companion object {
         private const val JSON_PREFIX = "JSON_"
@@ -163,6 +167,7 @@ class JsonSourceManager @Inject constructor(
      */
     private fun invalidateCache(sourceId: String) {
         sourceCache.remove(sourceId)
+        versionCounter.incrementAndGet()
     }
 
     /**
@@ -171,6 +176,7 @@ class JsonSourceManager @Inject constructor(
      */
     fun clearCache() {
         sourceCache.clear()
+        versionCounter.incrementAndGet()
     }
 
     /**
@@ -451,6 +457,7 @@ class JsonSourceManager @Inject constructor(
             )
 
             jsonSourceDao.insert(entity)
+            invalidateCache(entity.id)
 
             runCatching { parser.saveSource(jsContent, "$sourceId.js") }
 
@@ -494,6 +501,7 @@ class JsonSourceManager @Inject constructor(
             )
 
             jsonSourceDao.insert(entity)
+            invalidateCache(entity.id)
             JsonSourceLogger.logInfo("Imported LNReader plugin: ${meta.name} (${meta.id})")
 
             Result.success(1)
@@ -609,6 +617,8 @@ class JsonSourceManager @Inject constructor(
             // Batch insert all valid sources
             try {
                 jsonSourceDao.insertAll(entities)
+                entities.forEach { sourceCache.remove(it.id) }
+                versionCounter.incrementAndGet()
                 JsonSourceLogger.logDebug("Batch inserted ${entities.size} source(s) into database")
             } catch (e: Exception) {
                 JsonSourceLogger.logDatabaseError("batch insert sources", e)
@@ -703,6 +713,8 @@ class JsonSourceManager @Inject constructor(
             }
 
             jsonSourceDao.insertAll(entities)
+            entities.forEach { sourceCache.remove(it.id) }
+            versionCounter.incrementAndGet()
             val duration = System.currentTimeMillis() - startTime
             JsonSourceLogger.logImportSuccess("TVBOX", entities.size, duration)
             if (errors.isNotEmpty()) {

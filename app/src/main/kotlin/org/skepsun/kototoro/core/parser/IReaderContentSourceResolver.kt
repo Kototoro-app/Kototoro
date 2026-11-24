@@ -9,6 +9,8 @@ class IReaderContentSourceResolver @Inject constructor(
     private val ireaderExtensionManager: IReaderExtensionManager,
 ) : ContentSourceResolver {
 
+    override fun cacheVersion(): Long = ireaderExtensionManager.changes.value.toLong()
+
     override fun supports(source: ContentSource): Boolean {
         return source !is IReaderMangaSource && source.name.startsWith(IREADER_PREFIX)
     }
