@@ -29666,6 +29666,22 @@
           }
         }
       }
+    },
+    "%lld 个进行中": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld active"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 個進行中"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
