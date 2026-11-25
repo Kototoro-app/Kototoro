@@ -27,6 +27,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -34,6 +35,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -187,6 +189,20 @@ fun CommunityRatingCard(
     }
 }
 
+/** The rating section's action button: a compact tonal button, so it does not outweigh the score beside it. */
+@Composable
+private fun RateButton(text: String, onClick: () -> Unit) {
+    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 32.dp) {
+        FilledTonalButton(
+            onClick = onClick,
+            modifier = Modifier.height(32.dp).testTag("community-rating-rate"),
+            contentPadding = PaddingValues(horizontal = 14.dp),
+        ) {
+            Text(text, style = MaterialTheme.typography.labelLarge)
+        }
+    }
+}
+
 @Composable
 private fun CommentsPill(count: Int, onClick: () -> Unit) {
     Surface(
@@ -197,11 +213,11 @@ private fun CommentsPill(count: Int, onClick: () -> Unit) {
         modifier = Modifier.testTag("community-comments-open"),
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Icon(ReaderPanelIcons.Comment, contentDescription = null, modifier = Modifier.size(16.dp))
+            Icon(ReaderPanelIcons.Comment, contentDescription = null, modifier = Modifier.size(14.dp))
             Text(
                 text = if (count > 0) uiString("community_comments_count", count) else uiString("community_comments"),
                 style = MaterialTheme.typography.labelLarge,
@@ -319,9 +335,10 @@ private fun MyRatingRow(myStars: Int?, canRate: Boolean, isPublishing: Boolean, 
         }
         when {
             isPublishing -> CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-            canRate -> FilledTonalButton(onClick = onRate, modifier = Modifier.testTag("community-rating-rate")) {
-                Text(if (myStars != null) uiString("edit") else uiString("community_rating_rate"))
-            }
+            canRate -> RateButton(
+                text = if (myStars != null) uiString("edit") else uiString("community_rating_rate"),
+                onClick = onRate,
+            )
         }
     }
 }
@@ -474,9 +491,7 @@ private fun EmptyRatingRow(canRate: Boolean, isPublishing: Boolean, onRate: () -
         )
         when {
             isPublishing -> CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-            canRate -> FilledTonalButton(onClick = onRate, modifier = Modifier.testTag("community-rating-rate")) {
-                Text(uiString("community_rating_rate"))
-            }
+            canRate -> RateButton(text = uiString("community_rating_rate"), onClick = onRate)
         }
     }
 }
