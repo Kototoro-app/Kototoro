@@ -4327,6 +4327,7 @@
     <string name="details_no_episodes">No episodes</string>
     <string name="details_cover">Cover</string>
     <string name="details_view_catalog">View catalog</string>
+    <string name="details_catalog_updated_to">Updated to %1$s</string>
     <string name="details_my_reading">My reading</string>
     <string name="details_not_started">Not started</string>
     <string name="details_tracking_metadata">Tracking and metadata</string>

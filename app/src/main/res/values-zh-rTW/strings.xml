@@ -4158,6 +4158,7 @@
     <string name="details_no_episodes">暫無劇集</string>
     <string name="details_cover">封面</string>
     <string name="details_view_catalog">查看目錄</string>
+    <string name="details_catalog_updated_to">更新至 %1$s</string>
     <string name="details_my_reading">我的閱讀</string>
     <string name="details_not_started">未開始</string>
     <string name="details_tracking_metadata">追蹤和中繼資料</string>

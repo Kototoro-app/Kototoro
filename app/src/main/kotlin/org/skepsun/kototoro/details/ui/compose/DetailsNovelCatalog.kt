@@ -8,10 +8,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -26,101 +27,70 @@ import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.ui.compose.DetailsSectionDivider
-import org.skepsun.kototoro.core.ui.compose.DetailsSectionHeader
 import org.skepsun.kototoro.details.ui.model.ChapterListItem
 
-/** One line of [NovelCatalogSection]: a chapter and the word that says why it is listed (continue, latest). */
-internal data class NovelCatalogRow(val item: ChapterListItem, val tag: NovelCatalogTag?)
-
-internal enum class NovelCatalogTag { CONTINUE, LATEST }
-
 /**
- * The few chapters a novel's details page lists before the full catalogue: where the reader is and the chapter after
- * it (or the first chapter before they start), then the latest one. [chapters] in reading order.
+ * The novel module of the details page: where the serial is up to, as one tappable line that opens the chapters
+ * panel. The panel owns the list (search, order, selection, download state); this page only says whether there is
+ * something new. [chapters] are in display order, so the latest one is the first when [isReversed].
  */
-internal fun novelCatalogRows(chapters: List<ChapterListItem>): List<NovelCatalogRow> {
-    if (chapters.isEmpty()) return emptyList()
-    val current = chapters.indexOfFirst { it.isCurrent }
-    val rows = buildList {
-        if (current >= 0) {
-            add(NovelCatalogRow(chapters[current], NovelCatalogTag.CONTINUE))
-            chapters.getOrNull(current + 1)?.let { add(NovelCatalogRow(it, null)) }
-        } else {
-            add(NovelCatalogRow(chapters.first(), null))
-        }
-    }
-    val latest = chapters.last()
-    return if (rows.any { it.item.chapter.id == latest.chapter.id }) rows else rows + NovelCatalogRow(latest, NovelCatalogTag.LATEST)
-}
-
-/** The novel module of the details page: a section, not a card, that opens a chapter or the whole catalogue. */
 @Composable
-internal fun NovelCatalogSection(
+internal fun NovelCatalogSummary(
     chapters: List<ChapterListItem>,
     totalCount: Int,
     isReversed: Boolean,
     horizontalPadding: Dp,
-    onOpenChapter: (Long) -> Unit,
     onShowAll: () -> Unit,
 ) {
     val resources = LocalContext.current.resources
-    val rows = remember(chapters, isReversed) {
-        novelCatalogRows(if (isReversed) chapters.asReversed() else chapters)
-    }
-    if (rows.isEmpty()) return
+    val latest = if (isReversed) chapters.firstOrNull() else chapters.lastOrNull()
+    val latestTitle = remember(latest) { latest?.getTitle(resources) }
+    val latestDate = remember(latest) { latest?.uploadDate?.toString() }
     DetailsSectionDivider(horizontalPadding = horizontalPadding, modifier = Modifier.padding(top = 12.dp))
-    Column(
+    val shape = RoundedCornerShape(12.dp)
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = horizontalPadding, vertical = 12.dp)
+            .padding(horizontal = horizontalPadding, vertical = 4.dp)
+            .tvFocusable(shape = shape, addFocusTarget = false)
+            .clickable(onClick = onShowAll)
+            .padding(vertical = 12.dp)
+            .heightIn(min = 40.dp)
             .testTag("novel-catalog"),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        DetailsSectionHeader(title = stringResource(R.string.chapters), count = totalCount) {
-            TextButton(
-                onClick = onShowAll,
-                modifier = Modifier.tvFocusable(shape = RoundedCornerShape(999.dp), addFocusTarget = false),
-            ) {
-                Text(stringResource(R.string.show_all))
-            }
-        }
-        rows.forEachIndexed { index, row ->
-            if (index > 0) {
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-            }
-            val highlighted = row.tag == NovelCatalogTag.CONTINUE
-            val shape = RoundedCornerShape(8.dp)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 48.dp)
-                    .tvFocusable(shape = shape, addFocusTarget = false)
-                    .clickable { onOpenChapter(row.item.chapter.id) },
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = row.item.getTitle(resources),
-                    style = MaterialTheme.typography.bodyMedium.copy(
-                        fontWeight = if (highlighted) FontWeight.SemiBold else FontWeight.Normal,
-                    ),
-                    color = if (highlighted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
+                    text = stringResource(R.string.chapters),
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface,
                 )
-                row.tag?.let { tag ->
+                if (totalCount > 0) {
                     Text(
-                        text = stringResource(
-                            when (tag) {
-                                NovelCatalogTag.CONTINUE -> R.string._continue
-                                NovelCatalogTag.LATEST -> R.string.newest
-                            },
-                        ),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = if (highlighted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        text = totalCount.toString(),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
+            if (!latestTitle.isNullOrBlank()) {
+                val updated = stringResource(R.string.details_catalog_updated_to, latestTitle)
+                Text(
+                    text = if (latestDate.isNullOrBlank()) updated else "$updated · $latestDate",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 2.dp).testTag("novel-catalog-latest"),
+                )
+            }
         }
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = stringResource(R.string.show_all),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
