@@ -16,15 +16,23 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalDensity
 
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarHorizontalPadding
+import com.kyant.backdrop.Backdrop
+import com.kyant.backdrop.BackdropQuality
+import com.kyant.backdrop.BottomClippedBackdrop
+import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
@@ -46,6 +54,21 @@ import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.reader.ui.PageSaveHelper
 
 internal const val DETAILS_PANE_PRESS_FEEDBACK_ENABLED = false
+
+internal fun chapterPanelEffectInputScale(qualityScale: Float): Float =
+    if (qualityScale == BackdropQuality.QUALITY) 1f else 0.5f
+
+internal fun compactChapterPanelReveal(expansionProgress: Float): Float =
+    ((easedOpacityProgress(expansionProgress) - 0.04f) / 0.28f).coerceIn(0f, 1f)
+
+internal fun shouldCacheCompactSummary(
+    captureEdge: Boolean,
+    bottomBarGlass: Boolean,
+    bottomPanelGlass: Boolean,
+    modernDock: Boolean,
+    expansionProgress: Float,
+): Boolean = captureEdge || (modernDock && bottomBarGlass) ||
+    (bottomPanelGlass && (!modernDock || compactChapterPanelReveal(expansionProgress) > 0f))
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -139,6 +162,24 @@ internal fun DetailsPaneContent(
         GlassDefaults.regularStyle()
     }
     val bottomBarGlassPrefs = rememberDetailsBottomBarGlassPrefs()
+    val dockBackdrop = LocalLiquidGlassBackdrop.current
+    val panelBackdrop = remember(dockBackdrop, showCollapsedHandle, detailsPaneState) {
+        if (showCollapsedHandle && dockBackdrop != null) {
+            // Read quality while resolving the effect so an open sheet follows preference changes.
+            object : Backdrop by dockBackdrop, BottomClippedBackdrop {
+                override val visibleHeightPx get() = detailsPaneState.visibleHeightPx
+                override val effectInputScale get() = chapterPanelEffectInputScale(BackdropQuality.inputScale)
+            }
+        } else {
+            dockBackdrop
+        }
+    }
+    val panelVisible by remember(showCollapsedHandle, isModernDetailsDockEnabled, sheetExpansionProgressProvider) {
+        derivedStateOf {
+            !showCollapsedHandle || !isModernDetailsDockEnabled ||
+                compactChapterPanelReveal(sheetExpansionProgressProvider()) > 0f
+        }
+    }
     val actionsRow: @Composable (Modifier) -> Unit = { actionsModifier ->
         DetailsPaneActionsRow(
             modifier = actionsModifier,
@@ -190,18 +231,25 @@ internal fun DetailsPaneContent(
             GlassSurface(
                 modifier = Modifier
                     .fillMaxSize()
+                    .layout { measurable, constraints ->
+                        // Keep the pager's composition and scroll state across collapse. A fully
+                        // transparent panel needs neither grid measurement nor a placed glass layer.
+                        if (panelVisible) {
+                            val panel = measurable.measure(constraints)
+                            layout(panel.width, panel.height) { panel.place(0, 0) }
+                        } else {
+                            layout(constraints.maxWidth, constraints.maxHeight) {}
+                        }
+                    }
                     .then(
                         if (isModernDetailsDockEnabled) {
                             Modifier
                                 .padding(top = modernPanelTopPadding)
                                 .graphicsLayer {
-                                    val actualPaneOpacityProgress = easedOpacityProgress(
-                                        sheetExpansionProgressProvider(),
-                                    )
                                     val modernPanelRevealProgress = if (!showCollapsedHandle) {
                                         1f
                                     } else {
-                                        ((actualPaneOpacityProgress - 0.04f) / 0.28f).coerceIn(0f, 1f)
+                                        compactChapterPanelReveal(sheetExpansionProgressProvider())
                                     }
                                     alpha = modernPanelRevealProgress
                                     translationY = with(density) {
@@ -216,6 +264,7 @@ internal fun DetailsPaneContent(
                 style = paneGlassStyle,
                 dialogSurface = LocalInterfaceStyle.current != InterfaceStyle.IOS,
                 componentRole = GlassComponentRole.BottomPanel,
+                backdropOverride = panelBackdrop,
                 pressFeedbackEnabled = DETAILS_PANE_PRESS_FEEDBACK_ENABLED,
             ) {
                 Box(

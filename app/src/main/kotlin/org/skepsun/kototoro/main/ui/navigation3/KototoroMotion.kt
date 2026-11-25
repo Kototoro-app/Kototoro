@@ -156,6 +156,8 @@ internal object KototoroMotionCatalog {
     // Entity expansion: cover hero / shared bounds do the heavy lifting (they live
     // inside the content); the scene itself only applies a shallow depth + Z
     // expansion so it never fights the hero with a full page turn.
+    // Details is above its origin on push and pop. Fading just that foreground
+    // blends the scenes without compositing the entire list into another alpha layer.
     private val heroExpand = preset(
         enter = { scope ->
             scope.slideIntoContainer(
@@ -173,7 +175,7 @@ internal object KototoroMotionCatalog {
                 ) + scaleOut(
                     targetScale = MainNavigationMotion.HeroBackScale,
                     animationSpec = tween(MainNavigationMotion.HeroMillis, easing = LinearEasing),
-                ) + fadeOut(fade)
+                )
                 )
         },
         pop = { scope ->
@@ -184,7 +186,7 @@ internal object KototoroMotionCatalog {
             ) + scaleIn(
                 initialScale = MainNavigationMotion.HeroBackScale,
                 animationSpec = tween(MainNavigationMotion.HeroMillis, easing = LinearEasing),
-            ) + fadeIn(fade) togetherWith (
+            ) togetherWith (
                 scope.slideOutOfContainer(
                     towards = AnimatedContentTransitionScope.SlideDirection.Right,
                     animationSpec = tween(MainNavigationMotion.HeroMillis, easing = LinearEasing),

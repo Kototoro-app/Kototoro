@@ -14,6 +14,21 @@ import org.junit.jupiter.api.Test
 class DetailsPaneStateTest {
 
     @Test
+    fun `visible glass follows the translated sheet between anchors`() {
+        val scope = CoroutineScope(StandardTestDispatcher())
+        try {
+            val pane = createState(scope)
+            assertEquals(Float.POSITIVE_INFINITY, pane.visibleHeightPx)
+            pane.onHostHeightChanged(800f)
+            assertEquals(120f, pane.visibleHeightPx)
+            pane.dispatchPaneDragDelta(-200f)
+            assertEquals(320f, pane.visibleHeightPx)
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
     fun `drag ownership follows settlement target before visual anchor settles`() {
         val scheduler = TestCoroutineScheduler()
         val scope = CoroutineScope(StandardTestDispatcher(scheduler))

@@ -69,6 +69,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -107,6 +108,7 @@ import org.skepsun.kototoro.core.ui.compose.KototoroPullToRefreshBox
 import org.skepsun.kototoro.core.ui.compose.KototoroSnackbarHost
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassLayerBackdrop
+import org.skepsun.kototoro.core.ui.compose.LocalNavAnimatedVisibilityScope
 import org.skepsun.kototoro.core.ui.compose.sharedCoverMemoryCacheKey
 import org.skepsun.kototoro.core.nav.PendingDetailsNavigation
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
@@ -118,7 +120,11 @@ import org.skepsun.kototoro.core.ui.compose.ImmersiveEdge
 import org.skepsun.kototoro.core.ui.compose.ImmersiveEdgeBlur
 import org.skepsun.kototoro.core.ui.compose.ImmersiveEdgeBlurTintScale
 import org.skepsun.kototoro.core.ui.compose.immersiveEdgeBlurRadius
+import org.skepsun.kototoro.core.ui.glass.GlassTuningParam
+import org.skepsun.kototoro.core.ui.glass.GlassTuningScope
 import org.skepsun.kototoro.core.ui.glass.LocalGlassPrefs
+import org.skepsun.kototoro.core.ui.glass.LocalGlassTuning
+import org.skepsun.kototoro.core.ui.glass.emptyGlassTuningState
 import org.skepsun.kototoro.core.ui.glass.rememberGlassPrefsOrFallback
 import org.skepsun.kototoro.core.ui.theme.CoverDominantColor
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
@@ -174,6 +180,7 @@ import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.collect
+import kotlin.math.roundToInt
 
 internal fun Color.withDetailsMinAlpha(minAlpha: Float): Color {
     return copy(alpha = alpha.coerceAtLeast(minAlpha))
@@ -717,11 +724,14 @@ private fun DetailsScreenContent(
     DisposableEffect(Unit) {
         onDispose { currentBottomPanelStateChanged(0f, 0.dp) }
     }
-    val detailsGradientAlpha = if (scrollState.maxValue > 0) {
-        (scrollState.value.toFloat() / scrollState.maxValue.toFloat()).coerceIn(0f, 1f)
-    } else {
-        0f
+    val edgeProgress = remember(scrollState, isWideAdaptiveLayout, detailsPaneState) {
+        {
+            val scrollFraction = scrollState.value.toFloat() / scrollState.maxValue.coerceAtLeast(1)
+            val exposedFraction = if (isWideAdaptiveLayout) 1f else 1f - detailsPaneState.expansionProgress
+            (scrollFraction * exposedFraction).coerceIn(0f, 1f)
+        }
     }
+    val edgeVisible by remember(edgeProgress) { derivedStateOf { edgeProgress() > 0.01f } }
     val toolbarTitle = translatedTitle ?: content?.title.orEmpty()
     val isCompactPaneFullyExpanded = !isWideAdaptiveLayout && compactPaneAnchor == CompactDetailsPaneAnchor.Full
     val visibleStatusBarTopPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
@@ -1023,6 +1033,7 @@ private fun DetailsScreenContent(
         isReducedVisualEffectsEnabled
     }
     val routeLayerBackdrop = LocalLiquidGlassLayerBackdrop.current
+    val routeTransition = LocalNavAnimatedVisibilityScope.current?.transition
     val baseDetailsSurfaceColor = MaterialTheme.colorScheme.surface.copy(alpha = 1f)
     val dominantCoverColor = rememberCoverDominantColor(
         content = content,
@@ -1059,16 +1070,28 @@ private fun DetailsScreenContent(
     } else {
         null
     }
-    val detailsContentBackdrop = if (isIosStyle) rememberLayerBackdrop() else null
+    val detailsEdgeBlurRadius = if (effectiveGlassPrefs.isTopImmersiveEdgeEnabled) immersiveEdgeBlurRadius() else 0.dp
+    val captureDetailsEdge = detailsEdgeBlurRadius > 0.dp && edgeVisible
+    val compactDockGlass = if (
+        !isWideAdaptiveLayout && isWorkDetails && isIosStyle && effectiveGlassPrefs.isGlassEffectEnabled
+    ) {
+        LocalGlassTuning.current ?: remember { emptyGlassTuningState() }
+    } else null
+    val bottomBarGlass = compactDockGlass?.isOn(GlassTuningScope.BOTTOM_BAR, GlassTuningParam.GLASS_ENABLED) == true
+    val bottomPanelGlass = compactDockGlass?.isOn(GlassTuningScope.BOTTOM_PANEL, GlassTuningParam.GLASS_ENABLED) == true
+    val captureSummary = if (isWideAdaptiveLayout) {
+        isIosStyle
+    } else {
+        compactDockGlass != null || captureDetailsEdge
+    }
+    val detailsContentBackdrop = if (captureSummary) rememberLayerBackdrop() else null
     // The compact dock floats over the scrolling content, so its glass samples that content as well as the background.
     val detailsDockBackdrop = if (detailsBackgroundBackdrop != null && detailsContentBackdrop != null) {
         rememberCombinedBackdrop(detailsBackgroundBackdrop, detailsContentBackdrop)
     } else {
         detailsBackgroundBackdrop
     }
-    // The top edge blur samples the background and the panes beneath it, never the top bar drawn above them.
-    val detailsEdgeBlurRadius = if (effectiveGlassPrefs.isTopImmersiveEdgeEnabled) immersiveEdgeBlurRadius() else 0.dp
-    val detailsEdgeBackgroundLayer = detailsBackgroundBackdrop ?: if (detailsEdgeBlurRadius > 0.dp) {
+    val detailsEdgeBackgroundLayer = detailsBackgroundBackdrop ?: if (captureDetailsEdge) {
         rememberLayerBackdrop {
             drawRect(detailsBackdropBackground)
             drawContent()
@@ -1076,13 +1099,17 @@ private fun DetailsScreenContent(
     } else {
         null
     }
-    val detailsEdgePanesLayer = if (detailsEdgeBlurRadius > 0.dp) rememberLayerBackdrop() else null
-    val detailsEdgeBackdrop = if (detailsEdgeBackgroundLayer != null && detailsEdgePanesLayer != null) {
-        rememberCombinedBackdrop(detailsEdgeBackgroundLayer, detailsEdgePanesLayer)
-    } else {
-        null
+    // The moving compact sheet sits in front of the summary. Sampling the pane host here
+    // would replay its full-size refraction just to produce the narrow status-bar blur.
+    val wideEdgePanesLayer = if (isWideAdaptiveLayout && captureDetailsEdge) rememberLayerBackdrop() else null
+    val edgeContentLayer = if (isWideAdaptiveLayout) wideEdgePanesLayer else detailsContentBackdrop
+    val detailsEdgeBackdrop = when {
+        !captureDetailsEdge -> null
+        !isWideAdaptiveLayout && detailsDockBackdrop != null -> detailsDockBackdrop
+        detailsEdgeBackgroundLayer != null && edgeContentLayer != null ->
+            rememberCombinedBackdrop(detailsEdgeBackgroundLayer, edgeContentLayer)
+        else -> null
     }
-    val detailsEdgePanesModifier = detailsEdgePanesLayer?.let { Modifier.layerBackdrop(it) } ?: Modifier
     val routeLiquidGlassSourceModifier = if (
         isIosStyle && routeLayerBackdrop != null
     ) {
@@ -1155,7 +1182,13 @@ private fun DetailsScreenContent(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .then(routeLiquidGlassSourceModifier),
+                .then(routeLiquidGlassSourceModifier)
+                .graphicsLayer {
+                    // The wide panes and shared cover already have their own layers on both legs.
+                    compositingStrategy = if (!isWideAdaptiveLayout && routeTransition != null &&
+                        (routeTransition.currentState != routeTransition.targetState || routeTransition.isRunning)
+                    ) CompositingStrategy.Offscreen else CompositingStrategy.Auto
+                },
         ) {
             Box(
                 modifier = Modifier
@@ -1245,6 +1278,8 @@ private fun DetailsScreenContent(
                                     }
                                 },
                                 fadeToBackground = true,
+                                cacheMovingArtwork = isIosStyle && !isWideAdaptiveLayout,
+                                downsampleWideBlur = isWideAdaptiveLayout,
                                 maxHeightPx = panoramaMaxHeightPx,
                                 scrollLinkedTranslationYPx = panoramaScrollLinkedTranslationPx,
                                 modifier = Modifier,
@@ -1440,7 +1475,7 @@ private fun DetailsScreenContent(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .then(detailsEdgePanesModifier),
+                        .then(wideEdgePanesLayer?.let { Modifier.layerBackdrop(it) } ?: Modifier),
                 ) {
                     TabletDetailsPanes(
                         modifier = Modifier
@@ -1664,8 +1699,7 @@ private fun DetailsScreenContent(
                     .fillMaxSize()
                     .onSizeChanged { size ->
                         detailsPaneState.onHostHeightChanged(size.height.toFloat())
-                    }
-                    .then(detailsEdgePanesModifier),
+                    },
             ) {
                 Scaffold(
                     modifier = Modifier.fillMaxSize(),
@@ -1689,7 +1723,21 @@ private fun DetailsScreenContent(
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .graphicsLayer {
-                                        alpha = (1f - compactSheetExpansionProgressProvider()).coerceIn(0f, 1f)
+                                        val expansion = compactSheetExpansionProgressProvider()
+                                        alpha = (1f - expansion).coerceIn(0f, 1f)
+                                        // The collapsed pills and the moving sheet have separate glass settings.
+                                        val cacheSummary = isIosStyle && shouldCacheCompactSummary(
+                                            captureEdge = captureDetailsEdge,
+                                            bottomBarGlass = bottomBarGlass,
+                                            bottomPanelGlass = bottomPanelGlass,
+                                            modernDock = isModernDetailsDockEnabled,
+                                            expansionProgress = expansion,
+                                        )
+                                        compositingStrategy = if (cacheSummary) {
+                                            CompositingStrategy.Offscreen
+                                        } else {
+                                            CompositingStrategy.Auto
+                                        }
                                     },
                                 scrollState = scrollState,
                                 contentPadding = paddingValues,
@@ -1896,36 +1944,23 @@ private fun DetailsScreenContent(
                 val overflowPx = 6.dp.roundToPx()
                 (sbPx + tbPx + overflowPx).coerceAtLeast(sbPx + overflowPx).toDp()
             }
-            if (detailsEdgeBackdrop != null && detailsGradientAlpha > 0.01f) {
+            if (detailsEdgeBackdrop != null) {
                 DetailsTopEdgeBlur(
                     backdrop = detailsEdgeBackdrop,
                     height = detailsTopImmersiveHeight + ImmersiveEdgeFeatherExtension,
-                    radius = {
-                        // Scale the radius, not the opacity, so sharp text never bleeds through the blur.
-                        detailsEdgeBlurRadius * if (isWideAdaptiveLayout) {
-                            detailsGradientAlpha
-                        } else {
-                            detailsGradientAlpha * (1f - compactSheetExpansionProgressProvider()).coerceIn(0f, 1f)
-                        }
-                    },
+                    radius = detailsEdgeBlurRadius,
+                    progress = edgeProgress,
                     modifier = Modifier
                         .align(Alignment.TopCenter)
                         .fillMaxWidth(),
                 )
             }
-            if (detailsGradientAlpha > 0.01f) {
+            if (edgeVisible) {
                 ImmersiveEdgeGradient(
                     modifier = Modifier
                         .align(Alignment.TopCenter)
                         .fillMaxWidth()
-                        .graphicsLayer {
-                            alpha = if (isWideAdaptiveLayout) {
-                                detailsGradientAlpha
-                            } else {
-                                detailsGradientAlpha *
-                                    (1f - compactSheetExpansionProgressProvider()).coerceIn(0f, 1f)
-                            }
-                        },
+                        .graphicsLayer { alpha = edgeProgress() },
                     height = detailsTopImmersiveHeight + ImmersiveEdgeFeatherExtension,
                     color = detailsImmersiveBase.copy(
                         alpha = (0.72f + (0.98f - 0.72f) * detailsImmersiveStrength) * detailsEdgeTintScale,
@@ -2227,15 +2262,21 @@ private fun DetailsScreenContent(
     }
 }
 
-/** Reads [radius] here so dragging the compact sheet recomposes only the blur, not the whole details screen. */
+/** Reuse the progressive effect until the scroll or drag changes its radius by a physical pixel. */
 @Composable
 private fun BoxScope.DetailsTopEdgeBlur(
     backdrop: Backdrop,
     height: Dp,
-    radius: () -> Dp,
+    radius: Dp,
+    progress: () -> Float,
     modifier: Modifier = Modifier,
 ) {
-    val currentRadius = radius()
+    val density = LocalDensity.current
+    val currentRadius by remember(density, radius, progress) {
+        derivedStateOf {
+            with(density) { (radius.toPx() * progress()).roundToInt().toDp().coerceAtMost(radius) }
+        }
+    }
     if (currentRadius > 0.dp) {
         ImmersiveEdgeBlur(
             backdrop = backdrop,

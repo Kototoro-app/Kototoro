@@ -129,6 +129,9 @@ class DetailsPaneState internal constructor(
             collapsedOffset = collapsedOffsetPx,
         )
 
+    val visibleHeightPx: Float
+        get() = if (hostHeightPx > 0f) (hostHeightPx - translationY).coerceAtLeast(0f) else Float.POSITIVE_INFINITY
+
     val expansionProgress: Float
         get() {
             val currentOffset = anchoredState.offset.takeIf { it.isFinite() } ?: compactPaneOffsetForAnchor(

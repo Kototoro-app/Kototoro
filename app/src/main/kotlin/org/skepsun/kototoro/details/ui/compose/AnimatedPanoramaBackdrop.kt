@@ -28,10 +28,15 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.constrainWidth
+import androidx.compose.ui.unit.constrainHeight
 import androidx.compose.ui.unit.dp
 import coil3.Image
 import coil3.asDrawable
@@ -109,6 +114,8 @@ fun AnimatedPanoramaBackdrop(
     crossfadeEnabled: Boolean = false,
     onLoadError: (() -> Unit)? = null,
     fadeToBackground: Boolean = false,
+    cacheMovingArtwork: Boolean = false,
+    downsampleWideBlur: Boolean = false,
     maxHeightPx: Float? = null,
     scrollLinkedTranslationYPx: Float = 0f,
     modifier: Modifier = Modifier,
@@ -235,9 +242,28 @@ fun AnimatedPanoramaBackdrop(
             .then(scrollLinkedModifier)
             .fillMaxSize()
     }
-    // The fade mask lives on the outer (screen-space) layer so the looping scale animation and the blur cannot
-    // push its transparent tail outside the clip bounds, which left a hard edge at the cover's bottom.
-    val backgroundModifier = backdropBoundsModifier
+    // Downsample only the filtered artwork. Text, chapter thumbnails and glass render at their own resolution.
+    val halfSizeBlur = downsampleWideBlur && prefs.downsampleEnabled && useRealtimeBlur &&
+        with(density) { realtimeBlurRadius.toPx() >= 4f }
+    val effectScale = if (halfSizeBlur) 0.5f else 1f
+    val filterBounds = if (halfSizeBlur) backdropBoundsModifier.halfSizePanorama() else backdropBoundsModifier
+    val blurModifier = if (useRealtimeBlur) {
+        Modifier.blur(realtimeBlurRadius * effectScale, BlurredEdgeTreatment.Rectangle)
+    } else Modifier
+    val motion = Modifier.graphicsLayer {
+        val backgroundScale = backgroundScaleState?.value ?: 1f
+        scaleX = backgroundScale
+        scaleY = backgroundScale
+        translationX = (backgroundTranslationXState?.value ?: 0f) * effectScale
+    }
+    // Move the already filtered layer on compact Details so the pan can reuse its blurred pixels.
+    val artworkModifier = if (cacheMovingArtwork) {
+        motion.then(blurModifier)
+    } else {
+        blurModifier.then(motion)
+    }
+    // Mask the fixed viewport after drawing the artwork. Zoom and pan cannot move the fade's bottom edge.
+    val backgroundModifier = filterBounds
         .graphicsLayer {
             alpha = resolvePanoramaContentAlpha(
                 contentAlpha = contentAlphaProvider?.invoke() ?: contentAlpha,
@@ -276,22 +302,7 @@ fun AnimatedPanoramaBackdrop(
                 Modifier
             },
         )
-        .then(
-            if (useRealtimeBlur) {
-                Modifier.blur(
-                    radius = realtimeBlurRadius,
-                    edgeTreatment = BlurredEdgeTreatment.Rectangle,
-                )
-            } else {
-                Modifier
-            },
-        )
-        .graphicsLayer {
-            val backgroundScale = backgroundScaleState?.value ?: 1f
-            scaleX = backgroundScale
-            scaleY = backgroundScale
-            translationX = backgroundTranslationXState?.value ?: 0f
-        }
+        .then(artworkModifier)
 
     if (!hasResolvedBackground && stablePlaceholderImage != null) {
         Image(
@@ -331,6 +342,27 @@ fun AnimatedPanoramaBackdrop(
                 ),
             ),
         )
+    }
+}
+
+private fun Modifier.halfSizePanorama(): Modifier = layout { measurable, constraints ->
+    fun half(pixels: Int) = if (pixels == Constraints.Infinity) pixels else (pixels + 1) / 2
+    val image = measurable.measure(
+        Constraints(
+            minWidth = half(constraints.minWidth),
+            maxWidth = half(constraints.maxWidth),
+            minHeight = half(constraints.minHeight),
+            maxHeight = half(constraints.maxHeight),
+        ),
+    )
+    val width = constraints.constrainWidth(image.width * 2)
+    val height = constraints.constrainHeight(image.height * 2)
+    layout(width, height) {
+        image.placeWithLayer(0, 0) {
+            transformOrigin = TransformOrigin(0f, 0f)
+            scaleX = width.toFloat() / image.width.coerceAtLeast(1)
+            scaleY = height.toFloat() / image.height.coerceAtLeast(1)
+        }
     }
 }
 

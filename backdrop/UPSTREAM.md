@@ -55,6 +55,9 @@ RuntimeEffect, shaders and render effects from the original Skiko implementation
    `HazePerformanceMode` presets: `PERFORMANCE` 0.5, `BALANCED` sqrt(0.625) ~= 0.79 (default),
    `QUALITY` 1 (full resolution). Nodes read it while resolving effects, so live surfaces
    re-resolve and redraw.
+   An individual backdrop can supply an `effectInputScale` multiplier. Android's compact chapter
+   sheet uses 0.5 on Performance and Balanced, and 1 on Quality for full-resolution glass.
+   Its foreground and the neighbouring dock stay at their usual resolution.
    Effects can set `BackdropEffectScope.requiresFullResolution` when a zero-radius region must meet
    unfiltered content. The immersive progressive blur uses this to avoid a resampling seam at its content edge.
 
@@ -75,6 +78,10 @@ RuntimeEffect, shaders and render effects from the original Skiko implementation
    back to `colorControls(saturation)` when the lens cannot run (API < 33, zero refraction). The
    old four-argument `lens` stays as a hidden overload. Kototoro's `SharedLiquidGlassSurface` and
    `SwipeableFilterChip` pass `saturation = 1.5f` instead of calling `vibrancy()` when a lens runs.
+
+   The compact chapter panel also opts into `BottomClippedBackdrop`. Its child keeps the
+   rounded outline clip with automatic compositing. Its filtered input covers the visible
+   height plus overscan in 128-texel increments. The full logical panel still defines the lens.
 
    Status for 3 and 4 (Android 17 device, iOS interface style, debug build, A/B against the same
    build without them, two interleaved rounds): bottom-tab switching GPU p99 17 -> 12-14 ms, p90
