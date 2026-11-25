@@ -12,7 +12,7 @@ collections = "1.5.0"
 # 2.5.3 X509_NAME_print crash (google/conscrypt#1268) is fixed upstream; 2.6.0+ aligns
 # ELF segments to 16 KB pages, required for Android 15+ 16 KB page-size devices.
 conscrypt = "2.7.0"
-composeBom = "2026.08.00"
+composeBom = "2026.11.01"
 glance = "1.1.1"
 constraintlayout = "2.2.1"
 cryptography = "0.6.0"
@@ -114,21 +114,15 @@ ireaderSourceApi = "1.5.1"
 [libraries]
 androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
 androidx-compose-ui = { group = "androidx.compose.ui", name = "ui" }
-# BlurRadiusSpec (spatially varying blur) landed in ui 1.13; the BOM still pins 1.12.x, so this override pulls the
-# newer ui for the immersive edge progressive blur. Revert to the BOM version once a BOM pins ui 1.13.x.
-androidx-compose-ui-progressive-blur = { group = "androidx.compose.ui", name = "ui", version = "1.13.0-rc01" }
 androidx-compose-ui-text-google-fonts = { group = "androidx.compose.ui", name = "ui-text-google-fonts" }
 androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
 androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
 androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
-# Phase D: M3 1.5 expressive theme/motion APIs. The Compose BOM still pins material3 1.4.0,
-# so this override pulls the newer library; revert the override once a BOM pins 1.5.x.
-androidx-compose-material3-expressive = { group = "androidx.compose.material3", name = "material3", version = "1.5.0-rc01" }
 androidx-compose-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
 # Shared (core-ui) Material3 for Android/desktop. CMP decoupled Material3 from the plugin after 1.9.0; 1.13.0-beta02
 # builds on CMP foundation/runtime 1.13.0-beta02 (same line as the 1.13.x plugin) and tracks androidx material3
-# 1.5.0-beta02, which has the same public API as the 1.5.0-rc01 the app pins above. Move the two together: the
-# 1.5 alphas and betas changed Slider and ToggleButtonDefaults in ways shared code cannot bridge.
+# 1.5.0-beta02, which shares the public API with the 1.5.0 provided by Compose BOM 2026.11.01. Move the two together:
+# the 1.5 alphas and betas changed Slider and ToggleButtonDefaults in ways shared code cannot bridge.
 jetbrains-compose-material3 = { group = "org.jetbrains.compose.material3", name = "material3", version = "1.13.0-beta02" }
 androidx-glance-appwidget = { module = "androidx.glance:glance-appwidget", version.ref = "glance" }
 androidx-navigation3-runtime = { group = "androidx.navigation3", name = "navigation3-runtime", version.ref = "navigation3" }
