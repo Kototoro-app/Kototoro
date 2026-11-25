@@ -25,8 +25,6 @@ import java.nio.FloatBuffer
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.ceil
-import kotlin.math.exp
-import kotlin.math.ln
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -96,40 +94,8 @@ internal fun decodeManga48pxCtc(
     classes: Int,
     dictionary: List<String>,
 ): PaddleCtcResult {
-    val text = StringBuilder()
-    var previousIndex = 0
-    var emittedLogProbabilitySum = 0f
-    var emittedCount = 0
-    for (timeStep in 0 until timeSteps) {
-        val timeStepOffset = offset + timeStep * classes
-        var bestIndex = 0
-        var bestLogit = Float.NEGATIVE_INFINITY
-        for (classIndex in 0 until classes) {
-            val logit = values[timeStepOffset + classIndex]
-            if (logit > bestLogit) {
-                bestIndex = classIndex
-                bestLogit = logit
-            }
-        }
-        if (bestIndex != 0 && bestIndex != previousIndex) {
-            var expSum = 0.0
-            for (classIndex in 0 until classes) {
-                expSum += exp((values[timeStepOffset + classIndex] - bestLogit).toDouble())
-            }
-            emittedLogProbabilitySum += -ln(expSum).toFloat()
-            emittedCount++
-            when (val character = dictionary.getOrNull(bestIndex)) {
-                "<SP>" -> text.append(' ')
-                null -> Unit
-                else -> text.append(character)
-            }
-        }
-        previousIndex = bestIndex
-    }
-    return PaddleCtcResult(
-        text = text.toString(),
-        confidence = if (emittedCount == 0) 0f else exp(emittedLogProbabilitySum / emittedCount),
-    )
+    val result = org.skepsun.kototoro.reader.core.decodeManga48pxCtc(values, offset, timeSteps, classes, dictionary)
+    return PaddleCtcResult(result.text, result.confidence)
 }
 
 @Singleton

@@ -1,5 +1,7 @@
 package org.skepsun.kototoro.reader.translate.data
 
+import org.skepsun.kototoro.reader.core.MangaOcrModels
+
 data class OnnxOfficialModel(
     val id: String,
     val title: String,
@@ -156,9 +158,9 @@ object OnnxOfficialModelCatalog {
             category = OnnxModelCategory.OCR_DETECTOR,
             files = listOf(
                 OnnxModelFile(
-                    fileName = "detect-20241225.onnx",
-                    downloadUrl = "https://huggingface.co/Skepsun/manga-translator-ui-onnx/resolve/main/detect-20241225.onnx",
-                    sha256 = "0875cca4fda3d3c29dbc9b8d22b1230a9240f2ee187c83cc5068ee2006332f97",
+                    fileName = MangaOcrModels.detector.name,
+                    downloadUrl = MangaOcrModels.detector.url,
+                    sha256 = MangaOcrModels.detector.sha256,
                 ),
             ),
             description = "DBNet ResNet34 detector used by manga-image-translator's default OCR pipeline.",
@@ -378,14 +380,14 @@ object OnnxOfficialModelCatalog {
             category = OnnxModelCategory.OCR_RECOGNIZER,
             files = listOf(
                 OnnxModelFile(
-                    fileName = "ocr-48px-ctc.onnx",
-                    downloadUrl = "https://huggingface.co/Skepsun/manga-translator-ui-onnx/resolve/main/ocr-48px-ctc.onnx",
-                    sha256 = "da8d4b2c3ea236ad0c741677da29b77360230aee3380675bc95d4c15dc452497",
+                    fileName = MangaOcrModels.recognizer.name,
+                    downloadUrl = MangaOcrModels.recognizer.url,
+                    sha256 = MangaOcrModels.recognizer.sha256,
                 ),
                 OnnxModelFile(
-                    fileName = "alphabet-all-v5.txt",
-                    downloadUrl = "https://huggingface.co/Skepsun/manga-translator-ui-onnx/resolve/main/alphabet-all-v5.txt",
-                    sha256 = "c1295ae1962e69e35b5b225a0405d1f3432e368c9941d23bfd3acda12654da33",
+                    fileName = MangaOcrModels.alphabet.name,
+                    downloadUrl = MangaOcrModels.alphabet.url,
+                    sha256 = MangaOcrModels.alphabet.sha256,
                 ),
             ),
             description = "Manga Translator 48px CTC recognizer for multilingual manga text.",

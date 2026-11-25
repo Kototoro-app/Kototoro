@@ -72,6 +72,7 @@ internal fun DesktopReaderOptionsPanel(
     onDismiss: () -> Unit,
     onOpenChapters: () -> Unit,
     onOpenSettings: () -> Unit,
+    translationOptions: (@Composable () -> Unit)? = null,
 ) {
     val settings = state.readerSettings
     val strings = remember { desktopReaderOptionsStrings() }
@@ -142,7 +143,9 @@ internal fun DesktopReaderOptionsPanel(
                 tabs = listOf(
                     ReaderOptionsTab(strings.tabLayout) { ReaderLayoutOptionsPage(options, callbacks, strings, features) },
                     ReaderOptionsTab(strings.tabDisplay) { ReaderDisplayOptionsPage(options, callbacks, strings, features) },
-                ),
+                ) + listOfNotNull(translationOptions?.let {
+                    ReaderOptionsTab(AndroidStrings["novel_reader_translation_section"], content = it)
+                }),
                 settingsDescription = strings.settings,
                 onOpenSettings = onOpenSettings,
                 dragModifier = dragModifier,

@@ -270,6 +270,7 @@ mlkit-translate = { module = "com.google.mlkit:translate", version.ref = "mlkitT
 mlkit-language-id = { module = "com.google.mlkit:language-id", version.ref = "mlkitLanguageId" }
 paddleocr4android = { module = "com.github.equationl.paddleocr4android:paddleocr4android", version.ref = "paddleocr4android" }
 onnxruntime-android = { module = "com.microsoft.onnxruntime:onnxruntime-android", version.ref = "onnxruntime" }
+onnxruntime-desktop = { module = "com.microsoft.onnxruntime:onnxruntime", version.ref = "onnxruntime" }
 opencv-android = { module = "org.opencv:opencv", version.ref = "opencv" }
 djl-tokenizers = { module = "ai.djl.huggingface:tokenizers", version.ref = "djlTokenizers" }
 djl-sentencepiece = { module = "ai.djl.sentencepiece:sentencepiece", version.ref = "djlSentencepiece" }

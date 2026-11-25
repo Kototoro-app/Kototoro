@@ -44,7 +44,30 @@ private enum class NovelPanel { CHAPTERS, SETTINGS, BOOKMARKS }
 @Composable
 internal fun DesktopNovelReader(controller: DesktopController, state: DesktopAppState, closing: Boolean,
     fullscreen: Boolean = false, onToggleFullscreen: (() -> Unit)? = null) {
-    val novel = state.novel ?: return
+    val original = state.novel ?: return
+    val bookId = state.content?.id
+    val translationSettings by controller.novelTranslation.settings.collectAsState()
+    val translationRevision by controller.novelTranslation.revision.collectAsState()
+    val paragraphs = remember(original.blocks) { desktopTranslationParagraphs(original.blocks) }
+    var translation by remember(bookId, original.chapter.id, translationSettings.target) {
+        mutableStateOf(DesktopChapterTranslation())
+    }
+    LaunchedEffect(bookId, original.chapter.id, translationSettings.target, translationRevision) {
+        translation = if (bookId == null) DesktopChapterTranslation() else withContext(Dispatchers.IO) {
+            runCatching { controller.novelTranslation.chapter(bookId, original.chapter.id, translationSettings.target) }
+                .getOrDefault(DesktopChapterTranslation())
+        }
+    }
+    var showTranslation by remember(bookId) { mutableStateOf(true) }
+    var bilingual by remember(bookId) { mutableStateOf(false) }
+    val novel = if (showTranslation && (translation.machine.isNotEmpty() || translation.edits.isNotEmpty())) {
+        val displayed = remember(original.blocks, paragraphs, translation, bilingual) {
+            desktopTranslatedBlocks(original.blocks, paragraphs, translation, bilingual)
+        }
+        original.copy(blocks = displayed)
+    } else {
+        original
+    }
     val settings = state.novelSettings
     val colors = settings.theme
     val enabled = !state.busy && !closing
@@ -202,7 +225,15 @@ internal fun DesktopNovelReader(controller: DesktopController, state: DesktopApp
                 when (selected) {
                     NovelPanel.CHAPTERS -> DesktopNovelChaptersPanel(controller, state, enabled, close)
                     NovelPanel.BOOKMARKS -> DesktopNovelBookmarksPanel(controller, state, enabled, close)
-                    NovelPanel.SETTINGS -> DesktopNovelOptionsPanel(controller, settings, fullscreen, onToggleFullscreen, close)
+                    NovelPanel.SETTINGS -> DesktopNovelOptionsPanel(
+                        controller, settings, fullscreen, onToggleFullscreen, close,
+                        translationOptions = state.content?.let { content ->
+                            {
+                                DesktopNovelTranslationOptions(controller, content, original, translation, paragraphs,
+                                    showTranslation, { showTranslation = it }, bilingual, { bilingual = it })
+                            }
+                        },
+                    )
                 }
             }
         }

@@ -19,7 +19,7 @@ import org.skepsun.kototoro.core.ui.settings.PreferenceChoice
  *
  * The rows write through [DesktopController.videoSettings], and the player reads them: the backdrop becomes the
  * letterbox colour around the video, the decoder mode becomes libmpv's `hwdec` pair, and the two opacities are applied
- * to the control bar. Android's AI settings row is left out because OCR and translation are not ported yet.
+ * to the control bar. Manga translation is configured from the reader.
  */
 @Composable
 internal fun DesktopPlaybackSettingsPage(controller: DesktopController, state: DesktopAppState) {

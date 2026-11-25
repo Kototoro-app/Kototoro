@@ -40,6 +40,15 @@ internal fun DesktopReader(controller: DesktopController, state: DesktopAppState
         if (fullscreen) onToggleFullscreen?.invoke()
         controller.backToDetails()
     }
+    val translationSettings by controller.novelTranslation.settings.collectAsState()
+    val translatedPages by controller.mangaTranslation.pages.collectAsState()
+    var showTranslation by remember(state.content?.id) { mutableStateOf(true) }
+    val displayState = remember(state, translatedPages, showTranslation, translationSettings.target) {
+        if (!showTranslation || translatedPages.isEmpty()) state
+        else state.copy(readerImages = state.readerImages.mapValues { (_, image) ->
+            translatedPages[image.path]?.takeIf { it.target == translationSettings.target }?.image ?: image
+        })
+    }
     val settings = state.readerSettings
     val continuous = settings.mode.isContinuous
     val horizontalStrip = settings.mode == DesktopReaderMode.CONTINUOUS_HORIZONTAL
@@ -100,10 +109,10 @@ internal fun DesktopReader(controller: DesktopController, state: DesktopAppState
             val onToggleControls: () -> Unit = { controlsVisible = !controlsVisible; panel = null; focus.requestFocus() }
             // Android's "show menu" action opens the reader options with the controls.
             val showMenu = { controlsVisible = true; panel = DesktopReaderPanel.OPTIONS }
-            if (continuous) DesktopScrollReader(controller, state, focus, closing, Modifier.fillMaxSize(),
+            if (continuous) DesktopScrollReader(controller, displayState, focus, closing, Modifier.fillMaxSize(),
                 onToggleControls = onToggleControls, autoScroll, showMenu, horizontal = horizontalStrip,
                 reversed = settings.continuousHorizontalReversed, controlsVisible = controlsVisible)
-            else DesktopReaderCanvas(controller, state, focus, enabled, Modifier.fillMaxSize(), controlsVisible,
+            else DesktopReaderCanvas(controller, displayState, focus, enabled, Modifier.fillMaxSize(), controlsVisible,
                 onToggleControls = onToggleControls, autoScroll, showMenu)
             DesktopReaderChrome(controller, state, controlsVisible, enabled, continuous, layout, autoScroll,
                 onBack = ::back, onChapters = { panel = DesktopReaderPanel.CHAPTERS },
@@ -115,7 +124,10 @@ internal fun DesktopReader(controller: DesktopController, state: DesktopAppState
                 DesktopReaderPanel.OPTIONS -> DesktopReaderOptionsPanel(controller, state, fullscreen,
                     onToggleFullscreen, autoScroll, onDismiss = { panel = null; focus.requestFocus() },
                     onOpenChapters = { panel = DesktopReaderPanel.CHAPTERS },
-                    onOpenSettings = { panel = DesktopReaderPanel.MORE })
+                    onOpenSettings = { panel = DesktopReaderPanel.MORE },
+                    translationOptions = {
+                        DesktopMangaTranslationOptions(controller, state, showTranslation, { showTranslation = it })
+                    })
                 DesktopReaderPanel.CHAPTERS -> DesktopReaderChaptersPanel(controller, state, enabled) {
                     panel = null; focus.requestFocus()
                 }

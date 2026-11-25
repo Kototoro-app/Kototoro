@@ -33,6 +33,7 @@ internal fun DesktopNovelOptionsPanel(
     fullscreen: Boolean,
     onToggleFullscreen: (() -> Unit)?,
     onDismiss: () -> Unit,
+    translationOptions: (@Composable () -> Unit)? = null,
 ) {
     val theme = settings.theme
     val fontSize = NovelReaderValueOption(
@@ -139,7 +140,9 @@ internal fun DesktopNovelOptionsPanel(
                             }
                         }
                     },
-                ),
+                ) + listOfNotNull(translationOptions?.let {
+                    ReaderOptionsTab(AndroidStrings["novel_reader_tab_translation_tools"], content = it)
+                }),
                 settingsDescription = "",
                 onOpenSettings = null,
                 dragModifier = dragModifier,

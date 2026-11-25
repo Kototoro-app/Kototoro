@@ -481,6 +481,12 @@ class DesktopController(
     val state = mutableState.asStateFlow()
     private val continuous = DesktopScrollOperations(mutableState, session, scope, gate)
     private val novelOperations = DesktopNovelOperations(mutableState, session, scope, gate)
+    internal val novelTranslation = DesktopNovelTranslation(session.storage.preferences)
+    internal val mangaTranslation = DesktopMangaTranslation(session.storage.paths.root.resolve("cache/manga-translation"))
+    internal val novelTranslationQueue = DesktopTranslationQueue(scope, novelTranslation) { content, chapter ->
+        desktopTranslationParagraphs(loadNovelBlocks(content, chapter).first)
+    }
+
     private val videoOperations = DesktopVideoOperations(mutableState, session, scope, gate)
     internal val downloads = DesktopDownloads(session.downloadStore, scope,
         { session.readerRevision(it.source.name) }, session::downloadPages, session::prepareDownload,
@@ -2365,15 +2371,9 @@ class DesktopController(
         val restoredId = progress?.let { recoverHistoryChapterId(false, it.chapterId, it.parentChapterId,
             it.percent, chapters.map { c -> c.id }) ?: it.chapterId }
         val selected = chapter ?: chapters.firstOrNull { it.id == restoredId } ?: firstChapterOfBranch(chapters)
-        val next = SourceChapterNavigation.adjacent(chapters, selected.id, true)?.url
-        val body = session.sources.getChapterContent(selected, next) ?: error(desktopText("error.noChapterText"))
-        val parsed = DesktopNovelHtml.parse(body.html, content.publicUrl.takeIf { it.startsWith("http") }.orEmpty())
-        require(parsed.isNotEmpty()) { desktopText("error.noChapterText") }
-        // Android's scope values for a rule are the book's title and the source name; the same two here.
+        val (blocks, images) = loadNovelBlocks(content, selected)
         val scopeValues = listOf(content.title, content.source.name)
         val bookRules = session.replaceRules.forBook(content.title, content.source.name)
-        val blocks = DesktopNovelTextRules.blocks(parsed,
-            DesktopNovelTextRules.forTarget(bookRules, ReplaceRule.Scope.CONTENT, scopeValues))
         val chapterTitles = DesktopNovelTextRules.titles(chapters.map { it.title.orEmpty() },
             DesktopNovelTextRules.forTarget(bookRules, ReplaceRule.Scope.TITLE, scopeValues))
         val start = if (bookmark != null) {
@@ -2385,7 +2385,7 @@ class DesktopController(
         beginReadingStop()
         mutableState.update { it.copy(screen = DesktopScreen.NOVEL, chapter = selected, pages = emptyList(),
             readerImages = emptyMap(), bookmarks = bookmarks,
-            novel = DesktopNovel(selected, blocks, body.images.associateBy { image -> image.url }, start,
+            novel = DesktopNovel(selected, blocks, images, start,
                 navigation = (it.novel?.navigation ?: 0) + 1,
                 chapterTitles = chapters.mapIndexedNotNull { index, value ->
                     chapterTitles[index].takeIf { it != value.title.orEmpty() }?.let { value.id to it }
@@ -2393,6 +2393,19 @@ class DesktopController(
                 bookmarkBlocks = novelBookmarkBlocks(content, selected, blocks, bookmarks))) }
         // Opening a chapter is itself reading it: record the starting position straight away.
         novelOperations.report(selected.id, start, start)
+    }
+
+    private suspend fun loadNovelBlocks(content: SourceContent, chapter: SourceChapter):
+        Pair<List<org.skepsun.kototoro.desktop.runtime.NovelBlock>, Map<String, SourceContentImage>> {
+        val next = SourceChapterNavigation.adjacent(content.chapters.orEmpty(), chapter.id, true)?.url
+        val body = session.sources.getChapterContent(chapter, next) ?: error(desktopText("error.noChapterText"))
+        val parsed = DesktopNovelHtml.parse(body.html, content.publicUrl.takeIf { it.startsWith("http") }.orEmpty())
+        require(parsed.isNotEmpty()) { desktopText("error.noChapterText") }
+        val scopeValues = listOf(content.title, content.source.name)
+        val bookRules = session.replaceRules.forBook(content.title, content.source.name)
+        val blocks = DesktopNovelTextRules.blocks(parsed,
+            DesktopNovelTextRules.forTarget(bookRules, ReplaceRule.Scope.CONTENT, scopeValues))
+        return blocks to body.images.associateBy { it.url }
     }
 
     /**

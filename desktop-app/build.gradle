@@ -425,6 +425,7 @@ dependencies {
     // The WebDAV sync protocol and its remote catalog/retention rules are shared with Android, not reimplemented here.
     implementation project(':core-net')
     implementation libs.ktor.client.java
+    implementation libs.onnxruntime.desktop
     implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:${libs.versions.coroutines.get()}"
     implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:${libs.versions.serialization.get()}"
     testImplementation 'org.junit.jupiter:junit-jupiter:5.8.2'
