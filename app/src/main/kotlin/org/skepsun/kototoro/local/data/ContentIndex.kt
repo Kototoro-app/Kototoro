@@ -14,6 +14,7 @@ import org.skepsun.kototoro.core.model.LocalNovelSource
 import org.skepsun.kototoro.core.model.LocalVideoSource
 import org.skepsun.kototoro.core.model.ContentSource as createContentSource
 import org.skepsun.kototoro.core.model.getContentType
+import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.core.model.looksLikeNovelUrl
 import org.skepsun.kototoro.core.model.looksLikeVideoUrl
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
@@ -35,6 +36,7 @@ import org.skepsun.kototoro.parsers.util.json.mapJSONToSet
 import org.skepsun.kototoro.parsers.util.json.toStringSet
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
 import org.skepsun.kototoro.parsers.util.toTitleCase
+import org.skepsun.kototoro.local.domain.model.isLocalChapterUrl
 import org.skepsun.kototoro.local.epub.normalizeEpubChapterUrl
 import java.io.File
 
@@ -90,7 +92,9 @@ class ContentIndex(source: String?) {
             val chaptersJson = json.optJSONObject(KEY_CHAPTERS) ?: JSONObject().also { json.put(KEY_CHAPTERS, it) }
             chapters.forEachIndexed { index, chapter ->
                 val chapterIdStr = chapter.id.toString()
+                val isLocalChapter = chapter.source.isLocal || chapter.url.isLocalChapterUrl()
                 if (!chaptersJson.has(chapterIdStr)) {
+                    if (!manga.isLocal && isLocalChapter) return@forEachIndexed
                     val jo = JSONObject()
                     jo.put(KEY_NUMBER, chapter.number)
                     jo.put(KEY_ORDER, index + 1)
@@ -110,14 +114,14 @@ class ContentIndex(source: String?) {
                     jo.put(KEY_NUMBER, chapter.number)
                     jo.put(KEY_ORDER, index + 1)
                     jo.put(KEY_VOLUME, chapter.volume)
-                    jo.put(KEY_URL, chapter.url)
+                    if (!isLocalChapter || jo.optString(KEY_URL).isLocalChapterUrl()) {
+                        jo.put(KEY_URL, chapter.url)
+                        jo.put(KEY_SOURCE, chapter.source.name)
+                    }
                     jo.put(KEY_NAME, chapter.title.orEmpty())
                     jo.put(KEY_UPLOAD_DATE, chapter.uploadDate)
                     jo.put(KEY_SCANLATOR, chapter.scanlator)
                     jo.put(KEY_BRANCH, chapter.branch)
-                    if (!jo.has(KEY_SOURCE)) {
-                        jo.put(KEY_SOURCE, chapter.source.name)
-                    }
                 }
             }
         }
@@ -244,7 +248,7 @@ class ContentIndex(source: String?) {
         val mangaSource = json.optString(KEY_SOURCE)
         val isPurelyLocal = mangaSource == LocalMangaSource.name || mangaSource == LocalNovelSource.name || mangaSource == org.skepsun.kototoro.core.model.LocalVideoSource.name
 
-        return if (isPurelyLocal) {
+        return if (isPurelyLocal || jo.optString(KEY_URL).isLocalChapterUrl()) {
             chapters.remove(idStr) != null
         } else {
             jo.remove(KEY_FILE)

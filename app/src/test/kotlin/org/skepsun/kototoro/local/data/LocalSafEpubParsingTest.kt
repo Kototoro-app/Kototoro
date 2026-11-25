@@ -97,7 +97,7 @@ class LocalSafEpubParsingTest {
         every { folder.isFile } returns false
         every { folder.isDirectory } returns true
         every { folder.listFiles() } returns arrayOf(child)
-        every { folder.findFile(any()) } returns null
+        every { folder.findFile(any()) } answers { child.takeIf { it.name == firstArg<String>() } }
         val index = mockk<UniFile>()
         every { folder.createFile(any()) } returns index
         every { index.openOutputStream() } answers { ByteArrayOutputStream() }
@@ -220,6 +220,7 @@ class LocalSafEpubParsingTest {
             every { document.name } returns name
             every { document.isFile } returns true
             every { document.isDirectory } returns false
+            every { document.exists() } answers { book.exists() }
             every { document.length() } returns book.length()
             every { document.lastModified() } returns book.lastModified()
             every { document.openInputStream() } answers { book.inputStream() }

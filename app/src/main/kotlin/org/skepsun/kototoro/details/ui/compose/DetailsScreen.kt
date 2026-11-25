@@ -642,6 +642,7 @@ private fun DetailsScreenContent(
         val sourceBindingsObserver = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 viewModel.refreshSourceBindings()
+                viewModel.refreshLocalChapters()
             }
         }
         lifecycleOwner.lifecycle.addObserver(sourceBindingsObserver)

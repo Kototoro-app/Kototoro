@@ -138,7 +138,7 @@ private suspend fun updateIndex(rootKeys: Set<String>) {
         }
     }
 
-    suspend fun delete(mangaId: Long) {
+    suspend fun delete(mangaId: Long) = mutex.withLock {
         db.getLocalContentIndexDao().delete(mangaId)
     }
 
@@ -152,7 +152,11 @@ private suspend fun updateIndex(rootKeys: Set<String>) {
     }
 
     private suspend fun upsert(manga: LocalContent): Long {
-        val stored = mangaDataRepository.storeContentAndReturn(manga.manga, replaceExisting = true)
+        // Local chapter URLs describe payloads on disk. Keep them out of the remote catalog.
+        val stored = mangaDataRepository.storeContentAndReturn(
+            manga.manga.copy(chapters = null),
+            replaceExisting = true,
+        )
         db.getLocalContentIndexDao().upsert(
             LocalContentIndexEntity(
                 mangaId = stored.id,

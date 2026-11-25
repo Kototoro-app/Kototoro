@@ -26,6 +26,7 @@ class LocalContentDirOutput(
     rootFile: UniFile,
     manga: Content,
     cacheDir: File,
+    updateContentInfo: Boolean = true,
 ) : LocalContentOutput(rootFile, cacheDir) {
 
     private data class ChapterOutput(val chapterId: Long, val zip: ZipOutput, val targetName: String)
@@ -35,7 +36,7 @@ class LocalContentDirOutput(
     private val mutex = Mutex()
 
     init {
-        if (!manga.isLocal) {
+        if (updateContentInfo && !manga.isLocal) {
             index.setContentInfo(manga)
         }
     }

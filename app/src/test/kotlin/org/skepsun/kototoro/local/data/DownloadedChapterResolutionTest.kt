@@ -3,13 +3,18 @@ package org.skepsun.kototoro.local.data
 import android.content.Context
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
+import com.github.tvbox.osc.base.App
+import com.hippo.unifile.UniFile
 import androidx.core.net.toUri
 import com.hippo.unifile.FakeSafDirUniFile
+import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkStatic
 import io.mockk.unmockkStatic
 import io.mockk.verify
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -24,8 +29,16 @@ import org.skepsun.kototoro.core.model.ContentSource
 import org.skepsun.kototoro.core.model.LocalMangaSource
 import org.skepsun.kototoro.core.model.LocalNovelSource
 import org.skepsun.kototoro.core.model.getContentType
+import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.core.model.looksLikeLocalNovelContent
 import org.skepsun.kototoro.core.model.looksLikeNovelUrl
+import org.skepsun.kototoro.details.data.ContentDetails
+import org.skepsun.kototoro.details.domain.DetailsInteractor
+import org.skepsun.kototoro.local.data.index.LocalContentIndex
+import org.skepsun.kototoro.local.domain.ContentLock
+import org.skepsun.kototoro.local.domain.model.LocalContent
+import org.skepsun.kototoro.details.ui.mapChapters
+import org.skepsun.kototoro.local.data.input.LocalContentParser
 import org.skepsun.kototoro.local.data.output.LocalContentDirOutput
 import org.skepsun.kototoro.local.data.output.createPreservingArchiveExtension
 import org.skepsun.kototoro.local.epub.EpubStorageManager
@@ -61,6 +74,185 @@ class DownloadedChapterResolutionTest {
         LocalPdfPages.clearPdfRenderers()
         unmockkStatic(Uri::class)
     }
+
+    @Test
+    fun `file and SAF parsers stop reporting externally deleted CBZs from polluted indexes`() = runBlocking {
+        val source = ContentSource("TEST_MANGA")
+        val chapters = (1L..3L).map { sampleChapter(it, source) }
+        val manga = sampleContent(42L, "Sample Manga", source, chapters)
+        val safRoot = FakeSafDirUniFile(Uri.parse("content://books/tree/1"), tempDir)
+        val index = ContentIndex(null).apply {
+            setContentInfo(manga.copy(chapters = null))
+            chapters.forEachIndexed { order, chapter ->
+                val name = "${chapter.id}.cbz"
+                val child = checkNotNull(safRoot.createFile(name))
+                writeArchive(File(tempDir, name), mapOf("001.jpg" to "page"))
+                val url = if (chapter.id == 1L) child.uri.toString() else chapter.url
+                addChapter(IndexedValue(order, chapter.copy(url = url)), name)
+            }
+        }
+        File(tempDir, "index.json").writeText(index.toString())
+        val parsers = listOf(LocalContentParser(tempDir), LocalContentParser(safRoot, tempDir))
+        for (parser in parsers) {
+            assertEquals(3, parser.getContent(withDetails = true).manga.chapters?.count { it.source.isLocal })
+        }
+
+        assertTrue(File(tempDir, "1.cbz").delete())
+        assertTrue(File(tempDir, "2.cbz").delete())
+        for (parser in parsers) {
+            val local = parser.getContent(withDetails = true)
+            val remaining = local.manga.chapters.orEmpty()
+            assertEquals(listOf(2L, 3L), remaining.map { it.id })
+            assertEquals(chapters[1].url, remaining.first().url)
+            val details = ContentDetails(manga).withLocalContent(local)
+            assertEquals(listOf(false, false, true), details.rows().map { it.isDownloaded })
+            assertEquals(listOf(3L), details.rows(downloadedOnly = true).map { it.chapter.id })
+            val cleared = details.withLocalContent(null)
+            assertEquals(listOf(false, false, false), cleared.rows().map { it.isDownloaded })
+            assertTrue(cleared.rows(downloadedOnly = true).isEmpty())
+        }
+    }
+
+    @Test
+    fun `single CBZ needs a matching page entry even when the chapter URL is local`() = runBlocking {
+        val source = ContentSource("TEST_MANGA")
+        val missing = sampleChapter(1L, source).copy(url = "file+zip:///books/book.cbz")
+        val present = sampleChapter(2L, source)
+        val manga = sampleContent(42L, "Sample Manga", source)
+        val index = ContentIndex(null).apply {
+            setContentInfo(manga)
+            addChapter(IndexedValue(0, missing), null)
+            addChapter(IndexedValue(1, present), null)
+        }
+        val archive = File(tempDir, "book.cbz")
+        writeArchive(
+            archive,
+            mapOf("index.json" to index.toString(), "00000000_00010000/" to "", "00000000_00020000.jpg" to "page"),
+        )
+        val local = LocalContentParser(archive).getContent(withDetails = true)
+        assertEquals(listOf(2L), local.manga.chapters?.map { it.id })
+        assertTrue(local.manga.chapters.orEmpty().single().source.isLocal)
+    }
+
+    @Test
+    fun `last chapter deletion removes multi CBZ directory and indexed path`() = runBlocking {
+        assertLastChapterCleanup(inDirectory = true)
+    }
+
+    @Test
+    fun `last chapter deletion removes single CBZ and indexed path`() = runBlocking {
+        assertLastChapterCleanup(inDirectory = false)
+    }
+
+    @Test
+    fun `last chapter cleanup retains unrelated files in the directory`() = runBlocking {
+        assertLastChapterCleanup(inDirectory = true, retainNotes = true)
+    }
+
+    private suspend fun assertLastChapterCleanup(inDirectory: Boolean, retainNotes: Boolean = false) {
+        val source = ContentSource("TEST_MANGA")
+        val chapter = sampleChapter(1L, source)
+        val manga = sampleContent(42L, "Sample Manga", source, listOf(chapter))
+        val root = File(tempDir, if (inDirectory) "book" else "book.cbz")
+        val index = ContentIndex(null).apply {
+            setContentInfo(manga)
+            addChapter(IndexedValue(0, chapter), if (inDirectory) "1.cbz" else null)
+            setCoverEntry("cover.jpg")
+        }
+        if (inDirectory) {
+            check(root.mkdir())
+            writeArchive(File(root, "1.cbz"), mapOf("001.jpg" to "page"))
+            File(root, "cover.jpg").writeText("cover")
+            File(root, "index.json").writeText(index.toString())
+            if (retainNotes) File(root, "notes.txt").writeText("personal notes")
+        } else {
+            writeArchive(root, mapOf(
+                "index.json" to index.toString(),
+                "cover.jpg" to "cover",
+                "00000000_00010000.jpg" to "page",
+            ))
+        }
+        val storage = checkNotNull(UniFile.fromFile(root))
+        val cached = LocalContent(manga, root, storage.uri)
+        val localIndex = mockk<LocalContentIndex>()
+        coEvery { localIndex.get(manga.id, false) } returns cached
+        coEvery { localIndex.delete(manga.id) } returns Unit
+        val changes = MutableSharedFlow<LocalContent?>(replay = 1)
+        val repository = LocalMangaRepository(mockk(), mockk(), localIndex, changes, mockk(), ContentLock(), mockk())
+        val previousApp = App.getInstance()
+        object : App() {
+            override fun getCacheDir() = tempDir
+        }
+        mockkStatic(UniFile::class)
+        every { UniFile.fromUri(any(), cached.toUri()) } returns storage
+        try {
+            repository.deleteChapters(manga, setOf(chapter.id))
+            if (retainNotes) {
+                assertEquals("personal notes", File(root, "notes.txt").readText())
+                assertFalse(File(root, "1.cbz").exists())
+            } else {
+                assertFalse(root.exists())
+            }
+            coVerify(exactly = 1) { localIndex.delete(manga.id) }
+            assertEquals(listOf<LocalContent?>(null), changes.replayCache)
+        } finally {
+            unmockkStatic(UniFile::class)
+            App::class.java.getDeclaredField("instance").apply { isAccessible = true }.set(null, previousApp)
+        }
+    }
+
+    @Test
+    fun `details applies fresh partial snapshot and clears the removed root`() = runBlocking {
+        val source = ContentSource("TEST_MANGA")
+        val remote = (1L..2L).map { sampleChapter(it, source) }
+        val manga = sampleContent(42L, "Sample Manga", source, remote)
+        val downloaded = remote.map { it.copy(url = "file:///books/${it.id}.cbz", source = LocalMangaSource) }
+        val local = LocalContent(manga.copy(chapters = downloaded), tempDir, Uri.fromFile(tempDir))
+        val repository = mockk<LocalMangaRepository>()
+        val interactor = DetailsInteractor(mockk(), mockk(), repository, mockk(), mockk(), emptySet())
+        val details = ContentDetails(manga).withLocalContent(local)
+        val partial = local.copy(manga = manga.copy(chapters = downloaded.drop(1)))
+
+        val updated = checkNotNull(interactor.updateLocal(details, partial))
+        assertEquals(listOf(false, true), updated.rows().map { it.isDownloaded })
+        coVerify(exactly = 0) { repository.readLocalContent(any()) }
+        coEvery { repository.readLocalContent(partial) } returns null
+        val cleared = checkNotNull(interactor.updateLocal(updated, null))
+        assertNull(cleared.local)
+        assertEquals(remote.map { it.url }, cleared.rows().map { it.chapter.url })
+        assertTrue(cleared.rows(downloadedOnly = true).isEmpty())
+    }
+
+    private fun writeArchive(file: File, entries: Map<String, String>) {
+        ZipOutputStream(file.outputStream()).use { zip ->
+            for ((path, value) in entries) {
+                zip.putNextEntry(ZipEntry(path))
+                zip.write(value.toByteArray())
+                zip.closeEntry()
+            }
+        }
+    }
+
+    private fun ContentDetails.rows(downloadedOnly: Boolean = false) = mapChapters(
+        currentChapterId = 0,
+        newCount = 0,
+        branch = null,
+        bookmarks = emptyList(),
+        isGrid = false,
+        isDownloadedOnly = downloadedOnly,
+    )
+
+    private fun sampleChapter(id: Long, source: ParserContentSource) = ContentChapter(
+        id = id,
+        title = "Chapter $id",
+        number = id.toFloat(),
+        volume = 0,
+        url = "https://example.org/ch/$id",
+        scanlator = null,
+        uploadDate = 0L,
+        branch = null,
+        source = source,
+    )
 
     @Test
     fun `extensionless file with PK zip header is recognized as zip archive`() {

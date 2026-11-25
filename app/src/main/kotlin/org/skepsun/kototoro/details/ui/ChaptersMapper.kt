@@ -17,17 +17,10 @@ import org.skepsun.kototoro.local.epub.ChapterMetadata
 import org.skepsun.kototoro.local.epub.ChapterType
 import org.skepsun.kototoro.parsers.model.ContentChapter
 import org.skepsun.kototoro.parsers.util.mapToSet
-import org.skepsun.kototoro.core.model.isLocal
+import org.skepsun.kototoro.core.model.getContentType
+import org.skepsun.kototoro.local.domain.model.isLocalChapterUrl
+import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.reader.ui.FULLY_READ_CHAPTER_ID
-
-/**
- * Checks if a chapter URL points to a local file (i.e. actually downloaded),
- * as opposed to still being a remote URL in index.json metadata.
- */
-private fun String.isLocalChapterUrl(): Boolean =
-    startsWith("file:") || startsWith("zip:") || startsWith("file+zip:") ||
-        startsWith("content+zip:") || startsWith("file+pdf:") || startsWith("content+pdf:") ||
-        startsWith("content:") || startsWith("epub:") || startsWith("localepub:")
 
 /**
  * Represents a group of chapters for UI display
@@ -61,6 +54,7 @@ fun ContentDetails.mapChapters(
     }
     val remoteChapters = chapters[resolvedBranch].orEmpty()
     val localChapters = local?.manga?.getChapters(resolvedBranch).orEmpty()
+        .filter { it.url.isLocalChapterUrl() }
     android.util.Log.d(
         "ChaptersMapper",
         "mapChapters: requestedBranch=$branch, resolvedBranch=$resolvedBranch, remoteCount=${remoteChapters.size}, localCount=${localChapters.size}, allBranches=${chapters.mapValues { it.value.size }}",
@@ -103,7 +97,9 @@ fun ContentDetails.mapChapters(
     }
     val readUpTo = chapterReadThrough(currentChapter?.toOrder(), furthestChapter?.toOrder())
 
-    if (!isDownloadedOnly || local?.manga?.chapters == null) {
+    val contentType = toContent().source.getContentType()
+    val usesVideoDownloadIndex = contentType == ContentType.VIDEO || contentType == ContentType.HENTAI_VIDEO
+    if (!isDownloadedOnly || (usesVideoDownloadIndex && local?.manga?.chapters == null)) {
         for ((index, chapter) in remoteChapters.withIndex()) {
             val localById = localMapById?.remove(chapter.id)
             val localByUrl = if (localById == null) {
@@ -125,7 +121,7 @@ fun ContentDetails.mapChapters(
                 isCurrent = chapter.id == currentChapterId || finalChapter.id == currentChapterId,
                 isUnread = isUnread,
                 isNew = isUnread && result.size >= newFrom,
-                isDownloaded = local != null && local.url.isLocalChapterUrl(),
+                isDownloaded = local != null,
                 isBookmarked = chapter.id in bookmarked || finalChapter.id in bookmarked,
                 isGrid = isGrid,
             )
@@ -137,7 +133,7 @@ fun ContentDetails.mapChapters(
                 isCurrent = chapter.id == currentChapterId,
                 isUnread = true,
                 isNew = false,
-                isDownloaded = chapter.source.isLocal || chapter.url.isLocalChapterUrl(),
+                isDownloaded = true,
                 isBookmarked = chapter.id in bookmarked,
                 isGrid = isGrid,
             )

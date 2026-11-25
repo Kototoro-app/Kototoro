@@ -1,7 +1,14 @@
 package org.skepsun.kototoro.local.data.output
 
+import android.net.Uri
 import com.hippo.unifile.UniFile
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.mockkStatic
+import io.mockk.unmockkStatic
 import kotlinx.coroutines.test.runTest
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
@@ -19,6 +26,23 @@ class LocalMangaDirOutputTest {
 
 	@TempDir
 	lateinit var root: File
+
+	@BeforeEach
+	fun setUp() {
+		mockkStatic(Uri::class)
+		every { Uri.fromFile(any()) } answers {
+			val path = firstArg<File>().toURI().toString()
+			mockk<Uri> {
+				every { scheme } returns "file"
+				every { toString() } returns path
+			}
+		}
+	}
+
+	@AfterEach
+	fun tearDown() {
+		unmockkStatic(Uri::class)
+	}
 
 	@Test
 	fun `deleting one chapter preserves other downloaded chapters`() = runTest {
@@ -43,6 +67,25 @@ class LocalMangaDirOutputTest {
 		val updatedIndex = ContentIndex(File(root, LocalContentOutput.ENTRY_NAME_INDEX).readText())
 		assertTrue(updatedIndex.getChapterFileName(chapters[0].id) == null)
 		assertTrue(updatedIndex.getChapterFileName(chapters[1].id) == secondFile.name)
+	}
+
+	@Test
+	fun `opening output with resolved chapters preserves remote URLs during deletion`() = runTest {
+		val chapters = listOf(chapter(1L), chapter(2L))
+		val manga = content(chapters)
+		writeIndex(manga, chapters.associateWith { "${it.id}.cbz" })
+		chapters.forEach { File(root, "${it.id}.cbz").writeText("chapter") }
+		val resolved = manga.copy(chapters = chapters.map { it.copy(url = "file:///manga/${it.id}.cbz") })
+
+		LocalContentDirOutput(checkNotNull(UniFile.fromFile(root)), resolved, root).use { output ->
+			output.deleteChapters(setOf(1L))
+			output.finish()
+		}
+
+		val index = readIndex()
+		assertEquals(chapters.map { it.url }, index.getContentInfo()?.chapters?.map { it.url })
+		assertNull(index.getChapterFileName(1L))
+		assertEquals("2.cbz", index.getChapterFileName(2L))
 	}
 
 	@Test

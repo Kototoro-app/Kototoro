@@ -13,6 +13,12 @@ import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentTag
 import java.io.File
 
+internal fun String.isLocalChapterUrl(): Boolean = when (substringBefore(':', "").lowercase()) {
+    "file", "zip", "cbz", "file+zip", "content", "content+zip",
+    "file+pdf", "content+pdf", "epub", "localepub" -> true
+    else -> false
+}
+
 data class LocalContent(
     val manga: Content,
     val file: File = manga.url.toUri().let { uri ->

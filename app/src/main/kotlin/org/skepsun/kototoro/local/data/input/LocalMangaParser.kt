@@ -26,6 +26,7 @@ import java.util.zip.ZipInputStream
 import org.skepsun.kototoro.core.model.LocalMangaSource
 import org.skepsun.kototoro.core.model.LocalNovelSource
 import org.skepsun.kototoro.core.model.LocalVideoSource
+import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.core.util.AlphanumComparator
 import org.skepsun.kototoro.core.util.ContentZipArchive
@@ -54,6 +55,7 @@ import org.skepsun.kototoro.local.epub.LocalEpubParser
 import org.skepsun.kototoro.local.epub.buildEpubChapterUrl
 import org.skepsun.kototoro.local.epub.parseEpubChapterIndex
 import org.skepsun.kototoro.local.domain.model.LocalContent
+import org.skepsun.kototoro.local.domain.model.isLocalChapterUrl
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentChapter
 import org.skepsun.kototoro.parsers.model.ContentPage
@@ -246,91 +248,60 @@ class LocalContentParser {
                         else -> org.skepsun.kototoro.core.model.LocalMangaSource
                     }
 
-                    val zipEntriesCache = lazy {
+                    val pagePaths by lazy {
                         fileSystem.listRecursively(rootPath)
-                            .filter { fileSystem.isRegularFile(it) }
-                            .map { it.name.substringBefore('.') }
+                            .filter { it != coverEntry && it.name.isChapterPageName() && fileSystem.isRegularFile(it) }
                             .toList()
                     }
-
+                    val isArchive = archive != null || rootFile.isZipArchive
                     val localCoverUrl = coverEntry?.let { buildChildUriString(it, resolve = true) }
                         ?: mangaInfo.coverUrl.takeIfLocalUrl()
                         ?: fileSystem.findFirstImageUrl(rootPath, recursive = true)
 
                     mangaInfo.copy(
-                    coverUrl = localCoverUrl ?: mangaInfo.coverUrl,
-                    largeCoverUrl = if (localCoverUrl != null) null else mangaInfo.largeCoverUrl,
-                    chapters = if (withDetails) {
-                        mangaInfo.chapters?.mapNotNull { c ->
-                            // 过滤掉隐藏的章节
-                            if (c.id in hiddenChapterIds) {
-                                return@mapNotNull null
-                            }
-
-                            val fileName = index.getChapterFileName(c.id)
-                            val path = fileName?.toPath()
-                            val epubChapterIndex = parseEpubChapterIndex(c.url)
-                            if (epubChapterIndex != null) {
-                                if (fileName != null && path != null && fileSystem.exists(rootPath / path)) {
-                                    val epubPath = File(rootFile, fileName).absolutePath
-                                    return@mapNotNull c.copy(
-                                        url = buildEpubChapterUrl(epubPath, epubChapterIndex),
-                                        source = resolvedLocalSource,
-                                    )
+                        coverUrl = localCoverUrl ?: mangaInfo.coverUrl,
+                        largeCoverUrl = if (localCoverUrl != null) null else mangaInfo.largeCoverUrl,
+                        chapters = mangaInfo.chapters?.mapNotNull { chapter ->
+                            if (chapter.id in hiddenChapterIds) return@mapNotNull null
+                            val fileName = index.getChapterFileName(chapter.id)
+                            val path = fileName?.let { name ->
+                                rootPath.resolveChapterPath(name)?.let { candidate ->
+                                    candidate.takeIf(fileSystem::exists)
+                                        ?: name.takeIf { it.endsWith(".cbz", ignoreCase = true) }
+                                            ?.dropLast(4)
+                                            ?.let { rootPath.resolveChapterPath(it) }
+                                            ?.takeIf(fileSystem::exists)
                                 }
-                                return@mapNotNull c
                             }
-                            if (path != null && fileSystem.exists(rootPath / path)) {
-                                // 已加载的本地章节
-                                    c.copy(url = buildChildUriString(path, resolve = false), source = resolvedLocalSource)
-                                } else if (fileName == null) {
-                                // 单个CBZ漫画场景，章节没有独立文件夹，但通过 entries 记录了页面
-                                val pattern = index.getChapterNamesPattern(c)
-                                if (zipEntriesCache.value.any { it.matches(pattern) }) {
-                                        c.copy(url = buildChildUriString("".toPath(), resolve = false), source = resolvedLocalSource)
-                                    } else {
-                                    c
+                            val epubChapterIndex = parseEpubChapterIndex(chapter.url)
+                            val hasPayload = when {
+                                path == null && fileName == null && isArchive -> {
+                                    val pattern = index.getChapterNamesPattern(chapter)
+                                    pagePaths.any { it.name.substringBeforeLast('.').matches(pattern) }
                                 }
-                            } else {
-                                // 未下载的在线章节（保留原始 URL 和 Source）
-                                c
-                            }
-                        }
-                    } else {
-                        // 如果不需要详情，也按索引过滤出实际存在的章节，并统一来源和URL
-                        mangaInfo.chapters?.mapNotNull { c ->
-                            if (c.id in hiddenChapterIds) {
-                                return@mapNotNull null
-                            }
-                            val fileName = index.getChapterFileName(c.id)
-                            val path = fileName?.toPath()
-                            val epubChapterIndex = parseEpubChapterIndex(c.url)
-                            if (epubChapterIndex != null) {
-                                if (fileName != null && path != null && fileSystem.exists(rootPath / path)) {
-                                    val epubPath = File(rootFile, fileName).absolutePath
-                                    return@mapNotNull c.copy(
-                                        url = buildEpubChapterUrl(epubPath, epubChapterIndex),
-                                        source = resolvedLocalSource,
-                                    )
+                                path == null -> false
+                                fileSystem.isRegularFile(path) -> true
+                                path == rootPath && !isArchive -> pagePaths.any { it.parent == rootPath }
+                                path == rootPath -> {
+                                    val pattern = index.getChapterNamesPattern(chapter)
+                                    pagePaths.any { it.name.substringBeforeLast('.').matches(pattern) } ||
+                                        (mangaInfo.chapters?.size == 1 && mangaInfo.isLocal && pagePaths.isNotEmpty())
                                 }
-                                return@mapNotNull c
+                                else -> pagePaths.any { it.segments.take(path.segments.size) == path.segments }
                             }
-                            if (path != null && fileSystem.exists(rootPath / path)) {
-                                    c.copy(url = buildChildUriString(path, resolve = false), source = resolvedLocalSource)
-                                } else if (fileName == null) {
-                                    val pattern = index.getChapterNamesPattern(c)
-                                    if (zipEntriesCache.value.any { it.matches(pattern) }) {
-                                        c.copy(url = buildChildUriString("".toPath(), resolve = false), source = resolvedLocalSource)
-                                    } else {
-                                    c
-                                }
-                            } else {
-                                // 如果不需要详情，通常是列表页，保留原始章节以显示进度条等
-                                c
+                            when {
+                                !hasPayload -> chapter.takeIf { !it.source.isLocal && !it.url.isLocalChapterUrl() }
+                                epubChapterIndex != null && path != null && !isArchive -> chapter.copy(
+                                    url = buildEpubChapterUrl(path.toString(), epubChapterIndex),
+                                    source = resolvedLocalSource,
+                                )
+                                else -> chapter.copy(
+                                    url = buildChildUriString(path ?: rootPath, resolve = false),
+                                    source = resolvedLocalSource,
+                                )
                             }
-                        }
-                    },
-                )
+                        },
+                    )
             } else {
                 val title = displayName.fileNameToTitle()
                 var inferedSource: org.skepsun.kototoro.parsers.model.ContentSource = org.skepsun.kototoro.core.model.LocalMangaSource
@@ -640,18 +611,30 @@ class LocalContentParser {
             info.chapters?.mapNotNull { chapter ->
                 if (chapter.id in index.getHiddenChapterIds()) return@mapNotNull null
                 val epubChapterIndex = parseEpubChapterIndex(chapter.url)
-                val child = index.getChapterFileName(chapter.id)?.let { relativePath ->
-                    file.resolveRelative(relativePath)
-                } ?: chapter.scanlator
+                val fileName = index.getChapterFileName(chapter.id)
+                val child = if (fileName != null) {
+                    file.resolveRelative(fileName)
+                } else chapter.scanlator
                     ?.takeIf { epubChapterIndex != null }
                     ?.let { epubFilesByTitle.value[it] }
-                if (child != null) {
+                val hasPayload = child != null && child.exists() && if (child.isDirectory) {
+                    if (fileName.isNullOrEmpty()) {
+                        child.listFiles().orEmpty().any { page ->
+                            page.isFile && page.name != index.getCoverEntry() && page.name.orEmpty().isChapterPageName()
+                        }
+                    } else {
+                        child.walkRelative().any { (_, page) -> page.isFile && page.name.orEmpty().isChapterPageName() }
+                    }
+                } else {
+                    child.isFile
+                }
+                if (child != null && hasPayload) {
                     val chapterUrl = epubChapterIndex?.let { chapterIndex ->
                         buildEpubChapterUrl(child.uri.buildUpon().fragment(null).build().toString(), chapterIndex)
-                    } ?: child.uri.withFragmentFrom(chapter.url.toUri()).toString()
+                    } ?: child.uri.toString()
                     chapter.copy(url = chapterUrl, source = localSource)
                 } else {
-                    chapter
+                    chapter.takeIf { !it.source.isLocal && !it.url.isLocalChapterUrl() }
                 }
             }
         } else {
@@ -894,6 +877,16 @@ class LocalContentParser {
             }
         }
     }
+
+    private fun Path.resolveChapterPath(relativePath: String): Path? {
+        if (relativePath.isEmpty()) return this
+        val path = relativePath.toPath()
+        if (path.isAbsolute || path.segments.any { it == "." || it == ".." }) return null
+        return this / path
+    }
+
+    private fun String.isChapterPageName(): Boolean =
+        isImageName() || endsWith(".html", true) || endsWith(".xhtml", true)
 
     private fun String.isImageName(): Boolean =
         MimeTypes.getMimeTypeFromExtension(this)?.isImage == true

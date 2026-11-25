@@ -167,13 +167,14 @@ class LocalContentZipOutput(
                     ZipFile(file).use { zip ->
                         val index = ContentIndex(zip.readText(zip.getEntry(ENTRY_NAME_INDEX)))
                         idsToRemove.forEach { id -> index.removeChapter(id) }
-                        val patterns = requireNotNull(index.getContentInfo()?.chapters) {
+                        val remainingChapters = requireNotNull(index.getContentInfo()?.chapters) {
                             "Corrupted content index in $file: no chapters found"
                         }
                             .filter { it.id !in idsToRemove }
-                            .map {
-                                index.getChapterNamesPattern(it)
-                            }
+                        val chapterPaths = remainingChapters.mapNotNull {
+                            index.getChapterFileName(it.id)?.takeIf(String::isNotEmpty)
+                        }
+                        val patterns = remainingChapters.map(index::getChapterNamesPattern)
                         val coverEntryName = index.getCoverEntry()
                         for (entry in zip.entries()) {
                             when {
@@ -190,8 +191,10 @@ class LocalContentZipOutput(
                                 }
 
                                 else -> {
-                                    val name = entry.name.substringBefore('.')
-                                    if (patterns.any { it.matches(name) }) {
+                                    val name = entry.name.substringAfterLast('/').substringBeforeLast('.')
+                                    if (chapterPaths.any { entry.name == it || entry.name.startsWith("$it/") } ||
+                                        patterns.any { it.matches(name) }
+                                    ) {
                                         subject.output.copyEntryFrom(zip, entry)
                                     }
                                 }

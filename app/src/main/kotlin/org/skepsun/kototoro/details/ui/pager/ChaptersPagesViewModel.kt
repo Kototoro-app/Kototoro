@@ -739,10 +739,7 @@ abstract class ChaptersPagesViewModel(
 
 
     protected open suspend fun onDownloadComplete(downloadedContent: LocalContent?) {
-        downloadedContent ?: return
-        mangaDetails.update {
-            interactor.updateLocal(it, downloadedContent)
-        }
+        mangaDetails.update { interactor.updateLocal(it, downloadedContent) }
     }
 
     private companion object {

@@ -7,6 +7,7 @@ import org.skepsun.kototoro.core.model.withOverride
 import org.skepsun.kototoro.core.ui.model.ContentOverride
 import org.skepsun.kototoro.core.util.ext.takeIfUsableImageUri
 import org.skepsun.kototoro.local.domain.model.LocalContent
+import org.skepsun.kototoro.local.domain.model.isLocalChapterUrl
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentChapter
 import org.skepsun.kototoro.parsers.model.ContentState
@@ -84,6 +85,15 @@ data class ContentDetails(
         return manga.source.getLocale()
     }
 
+    internal fun withLocalContent(content: LocalContent?): ContentDetails = if (isLocal) {
+        copy(
+            manga = (content?.manga ?: manga.copy(chapters = emptyList())).copy(id = id),
+            localContent = null,
+        )
+    } else {
+        copy(localContent = content)
+    }
+
     fun filterChapters(branch: String?) = copy(
         manga = manga.filterChapters(branch),
         localContent = localContent?.run {
@@ -105,16 +115,14 @@ data class ContentDetails(
             "ContentDetails",
             "mergeChapters: remoteCount=${chapters.size}, localCount=${localChapters.size}, remoteBranches=${chapters.groupBy { it.branch }.mapValues { it.value.size }}, localBranches=${localChapters.groupBy { it.branch }.mapValues { it.value.size }}",
         )
-        val localMap = if (localChapters.isNotEmpty()) {
-            localChapters.associateByTo(LinkedHashMap(localChapters.size)) { it.id }
-        } else {
-            null
-        }
-        val remainingLocalChapters = localMap?.values?.toMutableList() ?: mutableListOf()
+        val localMap = localChapters.asSequence()
+            .filter { it.url.isLocalChapterUrl() }
+            .associateByTo(LinkedHashMap(), ContentChapter::id)
+        val remainingLocalChapters = localMap.values.toMutableList()
         val result = ArrayList<ContentChapter>(chapters.size)
 
         for (chapter in chapters) {
-            var local = localMap?.remove(chapter.id)
+            var local = localMap.remove(chapter.id)
             if (local != null) {
                 remainingLocalChapters.remove(local)
             } else {
@@ -130,7 +138,7 @@ data class ContentDetails(
                 if (match != null) {
                     local = match
                     remainingLocalChapters.remove(match)
-                    localMap?.remove(match.id)
+                    localMap.remove(match.id)
                 }
             }
             result += if (local != null) {
@@ -140,9 +148,9 @@ data class ContentDetails(
             }
         }
 
-        if (remainingLocalChapters.isNotEmpty()) {
-            result.addAll(remainingLocalChapters)
-        }
+        result.addAll(remainingLocalChapters)
+        val visibleIds = result.mapTo(HashSet(), ContentChapter::id)
+        localChapters.filterTo(result) { !it.url.isLocalChapterUrl() && visibleIds.add(it.id) }
         if (BuildConfig.DEBUG) {
             android.util.Log.d(
                 "ContentDetails",

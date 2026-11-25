@@ -22,6 +22,8 @@ import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -655,6 +657,8 @@ class DetailsViewModel @Inject constructor(
 
     @Volatile
     private var baseLoadedDetails: ContentDetails? = null
+    private val localRefreshMutex = Mutex()
+    private var localRefreshVersion = 0L
     private val trackingMetadataCandidates = MutableStateFlow<List<TrackingMetadataCandidate>>(emptyList())
     private val selectedMetadataSource = MutableStateFlow<MetadataSourceSelection>(initialMetadataSourceSelection())
     private val cachedTrackingDetails = ConcurrentHashMap<String, org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteItemDetails>()
@@ -3941,6 +3945,7 @@ class DetailsViewModel @Inject constructor(
     }
 
     private fun doLoad(force: Boolean) = launchLoadingJob(Dispatchers.Default) {
+        val localVersionAtLoad = localRefreshMutex.withLock { localRefreshVersion }
         val resolvedIntent = currentLoadIntentOverride ?: intent
         val requestedMangaId = resolvedIntent.mangaId.takeIf { it != ContentIntent.ID_NONE }
         Log.i(
@@ -4000,9 +4005,17 @@ class DetailsViewModel @Inject constructor(
                     DETAILS_TRACE_TAG,
                     "load.apply details=${finalDetails.toContent().detailsTraceSummary()} selectedBranchAfter=${selectedBranch.value}",
                 )
-                baseLoadedDetails = finalDetails
                 activeStoredContentType = db.getMangaDao().find(finalDetails.id)?.manga?.contentType?.let(::parseStoredContentType)
-                syncDisplayedState()
+                localRefreshMutex.withLock {
+                    if (requestedMangaId != null && activeMangaIdFlow.value != requestedMangaId) return@collect
+                    val latest = baseLoadedDetails?.takeIf { it.id == finalDetails.id }
+                    baseLoadedDetails = if (localVersionAtLoad != localRefreshVersion && latest != null) {
+                        finalDetails.withLocalContent(latest.local)
+                    } else {
+                        finalDetails
+                    }
+                    syncDisplayedState()
+                }
                 trackingRepository.clearReadUpdates(finalDetails.id)
                 if (!isTrackingOriginSelectionPinned()) {
                     restorePersistedMetadataSourceSelection(finalDetails.id)
@@ -4187,10 +4200,32 @@ class DetailsViewModel @Inject constructor(
         }
     }
 
-    override suspend fun onDownloadComplete(downloadedContent: LocalContent?) {
-        super.onDownloadComplete(downloadedContent)
-        downloadedContent ?: return
-        baseLoadedDetails = interactor.updateLocal(baseLoadedDetails, downloadedContent)
+    fun refreshLocalChapters() {
+        val source = mangaDetails.value?.local?.manga?.source ?: return
+        val type = source.getContentType()
+        if (type == ContentType.MANGA || type == ContentType.HENTAI_MANGA) {
+            launchJob(Dispatchers.IO) { onDownloadComplete(null) }
+        }
+    }
+
+    override suspend fun onDownloadComplete(downloadedContent: LocalContent?) = localRefreshMutex.withLock {
+        while (true) {
+            val base = baseLoadedDetails
+            val displayed = mangaDetails.value
+            val updatedBase = interactor.updateLocal(base, downloadedContent)
+            val updatedDisplay = when {
+                displayed === base -> updatedBase
+                base != null && displayed?.id == base.id && updatedBase !== base ->
+                    displayed.withLocalContent(updatedBase?.local)
+                else -> interactor.updateLocal(displayed, downloadedContent)
+            }
+            if (baseLoadedDetails !== base || !mangaDetails.compareAndSet(displayed, updatedDisplay)) continue
+            if (updatedBase != base || updatedDisplay != displayed) {
+                baseLoadedDetails = updatedBase
+                localRefreshVersion++
+            }
+            return@withLock
+        }
     }
 
     fun translateTitleAndDescription(forceRefresh: Boolean = false) {

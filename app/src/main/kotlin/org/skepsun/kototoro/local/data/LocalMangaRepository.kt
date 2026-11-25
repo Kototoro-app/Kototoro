@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runInterruptible
+import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.db.entity.toContent
 import org.skepsun.kototoro.core.model.LocalMangaSource
@@ -32,9 +33,11 @@ import org.skepsun.kototoro.local.data.index.LocalContentIndex
 import org.skepsun.kototoro.local.data.input.LocalContentParser
 import org.skepsun.kototoro.local.data.importer.LocalImportSupport
 import org.skepsun.kototoro.local.data.output.LocalContentOutput
+import org.skepsun.kototoro.local.data.output.LocalContentOutput.Companion.ENTRY_NAME_INDEX
 import org.skepsun.kototoro.local.data.output.LocalContentUtil
 import org.skepsun.kototoro.local.domain.ContentLock
 import org.skepsun.kototoro.local.domain.model.LocalContent
+import org.skepsun.kototoro.local.domain.model.isLocalChapterUrl
 import org.skepsun.kototoro.parsers.model.ContentRating
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentChapter
@@ -249,7 +252,7 @@ class LocalMangaRepository @Inject constructor(
 
     suspend fun deleteChapters(manga: Content, ids: Set<Long>) = lock.withLock(manga) {
         val subject = if (manga.isLocal) {
-            org.skepsun.kototoro.local.domain.model.LocalContent(manga)
+            LocalContent(manga)
         } else {
             checkNotNull(findSavedContent(manga, withDetails = false)) {
                 "Content is not stored on local storage"
@@ -258,21 +261,31 @@ class LocalMangaRepository @Inject constructor(
         val root = checkNotNull(UniFile.fromUri(App.getInstance(), subject.toUri())) {
             "Cannot resolve local content URI: ${subject.toUri()}"
         }
+        var updated: LocalContent? = null
         try {
             LocalContentUtil(subject.manga, root, App.getInstance().cacheDir).deleteChapters(ids)
+            updated = readLocalContent(subject)
+            if (updated == null) {
+                try {
+                    runInterruptible(Dispatchers.IO) { root.deleteEmptyContentRoot() }
+                } finally {
+                    localContentIndex.delete(manga.id)
+                }
+            }
         } finally {
-            // Refresh the cached library entry after a partial failure too, so the details page
-            // stops offering chapters whose files were already removed.
-            val updated = runCatchingCancellable {
-                LocalContentParser(root, App.getInstance().cacheDir).getContent(
-                    withDetails = true,
-                    forceRefresh = true,
-                )
-            }.onFailure {
-                it.printStackTraceDebug()
-            }.getOrNull()
+            // A failed batch can still remove files. Revalidate the current root on invalidation.
             localStorageChanges.emit(updated)
         }
+    }
+
+    /** Re-read the exact storage location, including downloads whose title has since changed. */
+    suspend fun readLocalContent(content: LocalContent): LocalContent? = withContext(Dispatchers.IO) {
+        val uri = content.toUri()
+        val root = checkNotNull(UniFile.fromUri(App.getInstance(), uri)) { "Cannot resolve local content URI: $uri" }
+        if (!root.exists()) return@withContext null
+        val parsed = LocalContentParser(root, App.getInstance().cacheDir)
+            .getContent(withDetails = true, forceRefresh = true)
+        parsed.takeIf { it.manga.hasDownloadedChapters() }?.copy(storageUri = uri)
     }
 
     suspend fun getRemoteContent(localContent: Content): Content? {
@@ -393,7 +406,11 @@ class LocalMangaRepository @Inject constructor(
         for (file in files) {
             launch(dispatcher) {
                 runCatchingCancellable {
-                    LocalContentParser.getOrNull(file, App.getInstance().cacheDir)?.getContent(withDetails = false)
+                    val parser = LocalContentParser.getOrNull(file, App.getInstance().cacheDir)
+                    val indexedDirectory = file.isDirectory && file.findFile(ENTRY_NAME_INDEX) != null
+                    parser?.getContent(withDetails = indexedDirectory)?.takeIf {
+                        !indexedDirectory || it.manga.hasDownloadedChapters()
+                    }
                 }.onFailure { e ->
                     e.printStackTraceDebug()
                 }.onSuccess { m ->
@@ -456,4 +473,18 @@ class LocalMangaRepository @Inject constructor(
 
     private fun Collection<LocalContent>.unwrap(): List<Content> = map { it.manga }
 
+}
+
+private fun Content.hasDownloadedChapters(): Boolean = chapters.orEmpty().any { it.url.isLocalChapterUrl() }
+
+private fun UniFile.deleteEmptyContentRoot() {
+    if (!exists()) return
+    if (isDirectory) {
+        val children = listFiles() ?: return
+        val coverEntry = findFile(ENTRY_NAME_INDEX)?.openInputStream()?.bufferedReader()?.use {
+            ContentIndex(it.readText()).getCoverEntry()
+        }
+        if (children.any { !it.isFile || (it.name != ENTRY_NAME_INDEX && it.name != coverEntry) }) return
+    }
+    check(delete()) { "Cannot remove empty local content at $uri" }
 }

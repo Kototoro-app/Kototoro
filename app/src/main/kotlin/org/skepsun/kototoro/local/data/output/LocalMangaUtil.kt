@@ -1,6 +1,8 @@
 package org.skepsun.kototoro.local.data.output
 
 import com.hippo.unifile.UniFile
+import org.skepsun.kototoro.local.data.input.LocalContentParser
+import org.skepsun.kototoro.local.data.output.LocalContentOutput.Companion.ENTRY_NAME_INDEX
 import org.skepsun.kototoro.parsers.model.Content
 import java.io.File
 
@@ -11,8 +13,13 @@ class LocalContentUtil(
 ) {
 
     suspend fun deleteChapters(ids: Set<Long>) {
+        if (ids.isEmpty()) return
         if (file.isDirectory) {
-            LocalContentDirOutput(file, manga, cacheDir).use { output ->
+            if (file.findFile(ENTRY_NAME_INDEX) == null) {
+                LocalContentParser(file, cacheDir).getContent(withDetails = true)
+                checkNotNull(file.findFile(ENTRY_NAME_INDEX)) { "Cannot index chapters at ${file.uri}" }
+            }
+            LocalContentDirOutput(file, manga, cacheDir, updateContentInfo = false).use { output ->
                 try {
                     output.deleteChapters(ids)
                 } finally {
