@@ -107,9 +107,6 @@ data class AppearanceSettingsUiState(
     val isPagesTabEnabled: Boolean,
     val isDetailsTranslateButtonVisible: Boolean,
     val isModernDetailsDockEnabled: Boolean,
-    val detailsStyleManga: org.skepsun.kototoro.core.ui.compose.DetailsMediaStyle = org.skepsun.kototoro.core.ui.compose.DetailsMediaStyle.MANGA,
-    val detailsStyleNovel: org.skepsun.kototoro.core.ui.compose.DetailsMediaStyle = org.skepsun.kototoro.core.ui.compose.DetailsMediaStyle.MANGA,
-    val detailsStyleVideo: org.skepsun.kototoro.core.ui.compose.DetailsMediaStyle = org.skepsun.kototoro.core.ui.compose.DetailsMediaStyle.MANGA,
     val defaultDetailsTab: Int,
     val searchSuggestionTypes: Set<SearchSuggestionType>,
     val listToDetailsTransition: ListToDetailsTransition,
@@ -179,7 +176,6 @@ data class AppearanceSettingsOptions(
     val contentTypes: List<SettingsChoiceOption<String>>,
     val sourceTags: List<SettingsChoiceOption<String>>,
     val screenshotsPolicies: List<SettingsChoiceOption<ScreenshotsPolicy>>,
-    val detailsStyles: List<SettingsChoiceOption<org.skepsun.kototoro.core.ui.compose.DetailsMediaStyle>> = emptyList(),
 )
 
 enum class AppearanceSettingsPage {
@@ -244,9 +240,6 @@ fun AppearanceSettingsScreen(
     onPagesTabEnabledChange: (Boolean) -> Unit,
     onDetailsTranslateButtonVisibleChange: (Boolean) -> Unit,
     onModernDetailsDockEnabledChange: (Boolean) -> Unit,
-    onDetailsStyleMangaChange: (org.skepsun.kototoro.core.ui.compose.DetailsMediaStyle) -> Unit = {},
-    onDetailsStyleNovelChange: (org.skepsun.kototoro.core.ui.compose.DetailsMediaStyle) -> Unit = {},
-    onDetailsStyleVideoChange: (org.skepsun.kototoro.core.ui.compose.DetailsMediaStyle) -> Unit = {},
     onDefaultDetailsTabChange: (Int) -> Unit,
     onSearchSuggestionTypesChange: (Set<SearchSuggestionType>) -> Unit,
     onNavConfigClick: () -> Unit,
@@ -783,35 +776,6 @@ fun AppearanceSettingsScreen(
                         summary = stringResource(R.string.modern_details_dock_summary),
                         onCheckedChange = onModernDetailsDockEnabledChange,
                     )
-                }
-                if (options.detailsStyles.isNotEmpty()) {
-                    item {
-                        SettingsChoicePreference(
-                            title = stringResource(R.string.pref_details_style_manga),
-                            iconRes = R.drawable.ic_images,
-                            value = state.detailsStyleManga,
-                            options = options.detailsStyles,
-                            onValueChange = onDetailsStyleMangaChange,
-                        )
-                    }
-                    item {
-                        SettingsChoicePreference(
-                            title = stringResource(R.string.pref_details_style_novel),
-                            iconRes = R.drawable.ic_content_novel,
-                            value = state.detailsStyleNovel,
-                            options = options.detailsStyles,
-                            onValueChange = onDetailsStyleNovelChange,
-                        )
-                    }
-                    item {
-                        SettingsChoicePreference(
-                            title = stringResource(R.string.pref_details_style_video),
-                            iconRes = R.drawable.ic_play,
-                            value = state.detailsStyleVideo,
-                            options = options.detailsStyles,
-                            onValueChange = onDetailsStyleVideoChange,
-                        )
-                    }
                 }
             }
         }

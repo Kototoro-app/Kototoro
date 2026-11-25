@@ -260,18 +260,6 @@ internal fun DesktopMorePanel(controller: DesktopController, enabled: Boolean, o
                 state.language?.let { tag -> DesktopLanguages.bundled.firstOrNull { it.tag == tag }?.nativeName ?: tag }
                     ?: desktopText("more.languageSystem"),
                 enabled, { dialog = DesktopMoreDialog.LANGUAGE }, testTag = "language")
-            SettingsRowDivider()
-            SettingsValueRow(AndroidStrings["pref_details_style_manga"], null,
-                detailsStyleLabel(state.detailsStyleManga), enabled,
-                { dialog = DesktopMoreDialog.DETAILS_STYLE_MANGA }, testTag = "details-style-manga")
-            SettingsRowDivider()
-            SettingsValueRow(AndroidStrings["pref_details_style_novel"], null,
-                detailsStyleLabel(state.detailsStyleNovel), enabled,
-                { dialog = DesktopMoreDialog.DETAILS_STYLE_NOVEL }, testTag = "details-style-novel")
-            SettingsRowDivider()
-            SettingsValueRow(AndroidStrings["pref_details_style_video"], null,
-                detailsStyleLabel(state.detailsStyleVideo), enabled,
-                { dialog = DesktopMoreDialog.DETAILS_STYLE_VIDEO }, testTag = "details-style-video")
         }
         DesktopTrackerSettings(controller, state, enabled)
         DesktopAppUpdateSection(controller, state, enabled, onExitRequest)
@@ -345,48 +333,6 @@ internal fun DesktopMorePanel(controller: DesktopController, enabled: Boolean, o
             onPick = { tag -> controller.language(tag.takeUnless { it == "system" }); dialog = null },
             onDismiss = { dialog = null },
         )
-        DesktopMoreDialog.DETAILS_STYLE_MANGA -> DesktopChoiceSettingsDialog(
-            title = AndroidStrings["pref_details_style_manga"],
-            summary = null,
-            bodyTag = "details-style-manga-dialog",
-            optionTagPrefix = "details-style-manga",
-            options = DetailsMediaStyle.entries.map { detailsStyleLabel(it) to it.name },
-            selected = state.detailsStyleManga.name,
-            enabled = enabled,
-            onPick = { name ->
-                controller.detailsStyle(DetailsMediaStyle.MANGA, DetailsMediaStyle.valueOf(name))
-                dialog = null
-            },
-            onDismiss = { dialog = null },
-        )
-        DesktopMoreDialog.DETAILS_STYLE_NOVEL -> DesktopChoiceSettingsDialog(
-            title = AndroidStrings["pref_details_style_novel"],
-            summary = null,
-            bodyTag = "details-style-novel-dialog",
-            optionTagPrefix = "details-style-novel",
-            options = DetailsMediaStyle.entries.map { detailsStyleLabel(it) to it.name },
-            selected = state.detailsStyleNovel.name,
-            enabled = enabled,
-            onPick = { name ->
-                controller.detailsStyle(DetailsMediaStyle.NOVEL, DetailsMediaStyle.valueOf(name))
-                dialog = null
-            },
-            onDismiss = { dialog = null },
-        )
-        DesktopMoreDialog.DETAILS_STYLE_VIDEO -> DesktopChoiceSettingsDialog(
-            title = AndroidStrings["pref_details_style_video"],
-            summary = null,
-            bodyTag = "details-style-video-dialog",
-            optionTagPrefix = "details-style-video",
-            options = DetailsMediaStyle.entries.map { detailsStyleLabel(it) to it.name },
-            selected = state.detailsStyleVideo.name,
-            enabled = enabled,
-            onPick = { name ->
-                controller.detailsStyle(DetailsMediaStyle.VIDEO, DetailsMediaStyle.valueOf(name))
-                dialog = null
-            },
-            onDismiss = { dialog = null },
-        )
         null -> Unit
     }
 }
@@ -396,9 +342,6 @@ private enum class DesktopMoreDialog {
     THEME,
     INTERFACE_STYLE,
     LANGUAGE,
-    DETAILS_STYLE_MANGA,
-    DETAILS_STYLE_NOVEL,
-    DETAILS_STYLE_VIDEO,
 }
 
 /** "iOS · 分组 — 跟随系统 · iOS 风格": the preset's name plus the two values it writes, so the dialog previews it. */
@@ -410,26 +353,14 @@ private fun visualPresetLabel(preset: VisualPreset): String {
     return "${desktopText(preset.titleKey)} — $theme · $style"
 }
 
-private fun detailsStyleLabel(style: DetailsMediaStyle): String = when (style) {
-    DetailsMediaStyle.MANGA -> AndroidStrings["details_style_manga"]
-    DetailsMediaStyle.NOVEL -> AndroidStrings["details_style_novel"]
-    DetailsMediaStyle.VIDEO -> AndroidStrings["details_style_video"]
-}
-
-private fun DesktopAppState.detailsStyleFor(contentType: String?): DetailsMediaStyle = when (contentType) {
-    "VIDEO", "HENTAI_VIDEO" -> detailsStyleVideo
-    "NOVEL", "HENTAI_NOVEL" -> detailsStyleNovel
-    else -> detailsStyleManga
-}
 
 
 /** Android tablet details keep artwork/metadata separate from the independently scrolling chapter list. */
 @Composable
 internal fun DesktopTabletDetails(controller: DesktopController, state: DesktopAppState) {
     val content = state.content ?: return
-    val preferredStyle = state.detailsStyleFor(content.source.contentType)
-    val mediaStylePolicy = remember(content.source.contentType, preferredStyle) {
-        detailsMediaStylePolicy(content.source.contentType, preferredStyle)
+    val mediaStylePolicy = remember(content.source.contentType) {
+        detailsMediaStylePolicy(content.source.contentType)
     }
     val initialVideoGrid = remember(content.id, content.chapters, state.chapterBranch, mediaStylePolicy) {
         if (!mediaStylePolicy.useInlineEpisodePreview) {
@@ -449,7 +380,6 @@ internal fun DesktopTabletDetails(controller: DesktopController, state: DesktopA
             content = content,
             cache = controller.session.covers,
             modifier = Modifier.matchParentSize(),
-            styleOverride = preferredStyle,
         )
         val expanded = tabletLayoutClass(LocalDesktopWindowWidth.current.value.toInt(), true) == TabletLayoutClass.EXPANDED
         val summary: @Composable (Modifier) -> Unit = { modifier ->

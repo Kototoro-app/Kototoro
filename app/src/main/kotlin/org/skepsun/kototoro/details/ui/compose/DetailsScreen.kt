@@ -380,19 +380,7 @@ private fun DetailsScreenContent(
     val initialContent = remember { PendingDetailsNavigation.lastContent() }
     val content = mangaDetails?.toContent() ?: initialContent
     val contentType = resolvedMetadataContentType
-    val detailsStyleManga by settings.observeAsState(AppSettings.KEY_DETAILS_STYLE_MANGA) { detailsStyleManga }
-    val detailsStyleNovel by settings.observeAsState(AppSettings.KEY_DETAILS_STYLE_NOVEL) { detailsStyleNovel }
-    val detailsStyleVideo by settings.observeAsState(AppSettings.KEY_DETAILS_STYLE_VIDEO) { detailsStyleVideo }
-    val preferredDetailsStyle = remember(contentType, detailsStyleManga, detailsStyleNovel, detailsStyleVideo) {
-        when (contentType) {
-            ContentType.VIDEO, ContentType.HENTAI_VIDEO -> detailsStyleVideo
-            ContentType.NOVEL, ContentType.HENTAI_NOVEL -> detailsStyleNovel
-            else -> detailsStyleManga
-        }
-    }
-    val mediaStylePolicy = remember(contentType, preferredDetailsStyle) {
-        detailsMediaStylePolicy(contentType?.name, preferredDetailsStyle)
-    }
+    val mediaStylePolicy = remember(contentType) { detailsMediaStylePolicy(contentType?.name) }
     val chapters by viewModel.chapters.collectAsStateWithLifecycle(initialValue = emptyList())
     val selectedBranch by viewModel.selectedBranch.collectAsStateWithLifecycle(initialValue = null)
     LaunchedEffect(

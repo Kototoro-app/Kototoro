@@ -220,37 +220,24 @@ class SharedDetailsComponentsTest {
         }
 
     @Test
-    fun `details media style policies keep bookmarks tab enabled for video and differentiate novel`() {
-        val defaultVideoPolicy = detailsMediaStylePolicy("VIDEO")
-        val defaultNovelPolicy = detailsMediaStylePolicy("NOVEL")
-        val defaultMangaPolicy = detailsMediaStylePolicy("MANGA")
-
-        assertEquals(DetailsMediaStyle.MANGA, defaultVideoPolicy.style)
-        assertFalse(defaultVideoPolicy.showPagesTab)
-        assertTrue(defaultVideoPolicy.showBookmarksTab)
-
-        assertEquals(DetailsMediaStyle.MANGA, defaultNovelPolicy.style)
-        assertFalse(defaultNovelPolicy.showPagesTab)
-        assertTrue(defaultNovelPolicy.showBookmarksTab)
-
-        assertEquals(DetailsMediaStyle.MANGA, defaultMangaPolicy.style)
-        assertTrue(defaultMangaPolicy.showPagesTab)
-        assertTrue(defaultMangaPolicy.showBookmarksTab)
-
-        val videoPolicy = detailsMediaStylePolicy("VIDEO", DetailsMediaStyle.VIDEO)
-        val novelPolicy = detailsMediaStylePolicy("NOVEL", DetailsMediaStyle.NOVEL)
-        val mangaPolicy = detailsMediaStylePolicy("MANGA", DetailsMediaStyle.MANGA)
+    fun `details media style policies follow the content type and keep bookmarks for every type`() {
+        val videoPolicy = detailsMediaStylePolicy("VIDEO")
+        val novelPolicy = detailsMediaStylePolicy("NOVEL")
+        val mangaPolicy = detailsMediaStylePolicy("MANGA")
 
         assertEquals(DetailsMediaStyle.VIDEO, videoPolicy.style)
+        assertFalse(videoPolicy.showPagesTab)
         assertTrue(videoPolicy.showBookmarksTab)
         assertTrue(videoPolicy.useVideoHeroBackdrop)
         assertTrue(videoPolicy.useCenteredHeroHeader)
 
         assertEquals(DetailsMediaStyle.NOVEL, novelPolicy.style)
+        assertFalse(novelPolicy.showPagesTab)
         assertTrue(novelPolicy.showBookmarksTab)
         assertFalse(novelPolicy.useVideoHeroBackdrop)
 
         assertEquals(DetailsMediaStyle.MANGA, mangaPolicy.style)
+        assertTrue(mangaPolicy.showPagesTab)
         assertTrue(mangaPolicy.showBookmarksTab)
     }
 

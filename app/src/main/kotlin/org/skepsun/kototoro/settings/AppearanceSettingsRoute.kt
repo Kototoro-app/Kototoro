@@ -211,12 +211,6 @@ fun AppearanceSettingsRoute(
         settings.observeAsState(AppSettings.KEY_DETAILS_TRANSLATE_BUTTON) { isDetailsTranslateButtonVisible }.value
     val isModernDetailsDockEnabled =
         settings.observeAsState(AppSettings.KEY_MODERN_DETAILS_DOCK) { isModernDetailsDockEnabled }.value
-    val detailsStyleManga =
-        settings.observeAsState(AppSettings.KEY_DETAILS_STYLE_MANGA) { detailsStyleManga }.value
-    val detailsStyleNovel =
-        settings.observeAsState(AppSettings.KEY_DETAILS_STYLE_NOVEL) { detailsStyleNovel }.value
-    val detailsStyleVideo =
-        settings.observeAsState(AppSettings.KEY_DETAILS_STYLE_VIDEO) { detailsStyleVideo }.value
     val defaultDetailsTab =
         settings.observeAsState(AppSettings.KEY_PAGES_TAB, AppSettings.KEY_DETAILS_TAB) { defaultDetailsTab }.value
     val searchSuggestionTypes =
@@ -334,20 +328,6 @@ fun AppearanceSettingsRoute(
             label = context.getString(R.string.pref_list_to_details_transition_legacy),
         ),
     )
-    val detailsStyleOptions = listOf(
-        SettingsChoiceOption(
-            value = org.skepsun.kototoro.core.ui.compose.DetailsMediaStyle.MANGA,
-            label = context.getString(R.string.details_style_manga),
-        ),
-        SettingsChoiceOption(
-            value = org.skepsun.kototoro.core.ui.compose.DetailsMediaStyle.NOVEL,
-            label = context.getString(R.string.details_style_novel),
-        ),
-        SettingsChoiceOption(
-            value = org.skepsun.kototoro.core.ui.compose.DetailsMediaStyle.VIDEO,
-            label = context.getString(R.string.details_style_video),
-        ),
-    )
 
     val backgroundStyleOptions = coordinator.buildBackgroundStyleOptions()
     val effectiveBackgroundStyle = backgroundStyle.takeIf { selected ->
@@ -408,7 +388,6 @@ fun AppearanceSettingsRoute(
         contentTypes = coordinator.buildContentTypeOptions(),
         sourceTags = coordinator.buildSourceTagOptions(),
         screenshotsPolicies = coordinator.buildScreenshotsPolicyOptions(),
-        detailsStyles = detailsStyleOptions,
     )
 
     val uiState = AppearanceSettingsUiState(
@@ -465,9 +444,6 @@ fun AppearanceSettingsRoute(
         isPagesTabEnabled = isPagesTabEnabled,
         isDetailsTranslateButtonVisible = isDetailsTranslateButtonVisible,
         isModernDetailsDockEnabled = isModernDetailsDockEnabled,
-        detailsStyleManga = detailsStyleManga,
-        detailsStyleNovel = detailsStyleNovel,
-        detailsStyleVideo = detailsStyleVideo,
         defaultDetailsTab = defaultDetailsTab,
         searchSuggestionTypes = searchSuggestionTypes,
         listToDetailsTransition = listToDetailsTransition,
@@ -569,9 +545,6 @@ fun AppearanceSettingsRoute(
         onPagesTabEnabledChange = { settings.isPagesTabEnabled = it },
         onDetailsTranslateButtonVisibleChange = { settings.isDetailsTranslateButtonVisible = it },
         onModernDetailsDockEnabledChange = { settings.isModernDetailsDockEnabled = it },
-        onDetailsStyleMangaChange = { settings.detailsStyleManga = it },
-        onDetailsStyleNovelChange = { settings.detailsStyleNovel = it },
-        onDetailsStyleVideoChange = { settings.detailsStyleVideo = it },
         onDefaultDetailsTabChange = { settings.defaultDetailsTab = it },
         onSearchSuggestionTypesChange = { settings.searchSuggestionTypes = it },
         onNavConfigClick = onOpenNavConfig,

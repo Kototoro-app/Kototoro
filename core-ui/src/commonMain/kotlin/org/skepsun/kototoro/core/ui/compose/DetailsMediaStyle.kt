@@ -3,7 +3,7 @@ package org.skepsun.kototoro.core.ui.compose
 import androidx.compose.runtime.Immutable
 
 /**
- * Distinct presentation style for the three primary media families.
+ * Distinct presentation for the three primary media families, chosen by the content type.
  * Android and desktop share these style decisions so Manga, Novel and Video details keep coherent visual identities.
  */
 enum class DetailsMediaStyle {
@@ -12,29 +12,12 @@ enum class DetailsMediaStyle {
     VIDEO,
 }
 
-/** Parses a persisted [DetailsMediaStyle] name, returning `null` when unrecognized or unset. */
-fun parseDetailsMediaStyleOrNull(raw: String?): DetailsMediaStyle? =
-    DetailsMediaStyle.entries.firstOrNull { it.name == raw }
-
-/** Resolves the underlying media family for the given content type name. */
+/** Resolves the media family, and with it the details presentation, for the given content type name. */
 fun resolveMediaFamily(contentTypeName: String?): DetailsMediaStyle = when (contentTypeName) {
     "VIDEO", "HENTAI_VIDEO" -> DetailsMediaStyle.VIDEO
     "NOVEL", "HENTAI_NOVEL" -> DetailsMediaStyle.NOVEL
     else -> DetailsMediaStyle.MANGA
 }
-
-/** Resolves the dedicated presentation style tailored specifically for this media family. */
-fun resolveDedicatedDetailsMediaStyle(contentTypeName: String?): DetailsMediaStyle =
-    resolveMediaFamily(contentTypeName)
-
-/**
- * Resolves [DetailsMediaStyle] for a content type, defaulting to the original classic style ([DetailsMediaStyle.MANGA])
- * unless overridden by user preference.
- */
-fun resolveDetailsMediaStyle(
-    contentTypeName: String?,
-    overrideStyle: DetailsMediaStyle? = null,
-): DetailsMediaStyle = overrideStyle ?: DetailsMediaStyle.MANGA
 
 /** Shared layout & visual weighting policy derived from [DetailsMediaStyle]. */
 @Immutable
@@ -50,16 +33,13 @@ data class DetailsMediaStylePolicy(
     val synopsisLineHeightScale: Float,
 )
 
-fun detailsMediaStylePolicy(
-    contentTypeName: String?,
-    styleOverride: DetailsMediaStyle? = null,
-): DetailsMediaStylePolicy {
-    val actualKind = resolveMediaFamily(contentTypeName)
-    val style = resolveDetailsMediaStyle(contentTypeName, styleOverride)
-    return detailsMediaStylePolicy(style).copy(
-        showPagesTab = actualKind == DetailsMediaStyle.MANGA,
-    )
-}
+/**
+ * The details presentation for a content type. It follows the content type alone: the per-type style choice was
+ * removed, so a video is always shown as a video and a novel as a book (the panorama switch still decides whether a
+ * video gets the centred cinema header).
+ */
+fun detailsMediaStylePolicy(contentTypeName: String?): DetailsMediaStylePolicy =
+    detailsMediaStylePolicy(resolveMediaFamily(contentTypeName))
 
 fun detailsMediaStylePolicy(style: DetailsMediaStyle): DetailsMediaStylePolicy = when (style) {
     DetailsMediaStyle.VIDEO -> DetailsMediaStylePolicy(

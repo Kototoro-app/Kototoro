@@ -224,12 +224,6 @@ data class DesktopAppState(
     val screen: DesktopScreen = DesktopScreen.EXPLORE,
     val appearance: DesktopAppearance = DesktopAppearance.SYSTEM,
     val interfaceStyle: DesktopInterfaceStyle = DesktopInterfaceStyle.MATERIAL,
-    val detailsStyleManga: org.skepsun.kototoro.core.ui.compose.DetailsMediaStyle =
-        org.skepsun.kototoro.core.ui.compose.DetailsMediaStyle.MANGA,
-    val detailsStyleNovel: org.skepsun.kototoro.core.ui.compose.DetailsMediaStyle =
-        org.skepsun.kototoro.core.ui.compose.DetailsMediaStyle.MANGA,
-    val detailsStyleVideo: org.skepsun.kototoro.core.ui.compose.DetailsMediaStyle =
-        org.skepsun.kototoro.core.ui.compose.DetailsMediaStyle.MANGA,
     /** The saved interface language tag; null follows the system language. */
     val language: String? = null,
     /**
@@ -478,15 +472,6 @@ class DesktopController(
         interfaceStyle = DesktopInterfaceStyle.entries.firstOrNull {
             it.name == (appearancePreferences.snapshot()["interface_style"] as? SourcePreferenceValue.Text)?.value
         } ?: DesktopInterfaceStyle.MATERIAL,
-        detailsStyleManga = org.skepsun.kototoro.core.ui.compose.parseDetailsMediaStyleOrNull(
-            (appearancePreferences.snapshot()["details_style_manga"] as? SourcePreferenceValue.Text)?.value,
-        ) ?: org.skepsun.kototoro.core.ui.compose.DetailsMediaStyle.MANGA,
-        detailsStyleNovel = org.skepsun.kototoro.core.ui.compose.parseDetailsMediaStyleOrNull(
-            (appearancePreferences.snapshot()["details_style_novel"] as? SourcePreferenceValue.Text)?.value,
-        ) ?: org.skepsun.kototoro.core.ui.compose.DetailsMediaStyle.MANGA,
-        detailsStyleVideo = org.skepsun.kototoro.core.ui.compose.parseDetailsMediaStyleOrNull(
-            (appearancePreferences.snapshot()["details_style_video"] as? SourcePreferenceValue.Text)?.value,
-        ) ?: org.skepsun.kototoro.core.ui.compose.DetailsMediaStyle.MANGA,
         language = restoredLanguage(),
         disabledSources = session.disabledSources(),
         sourceNsfwOverrides = session.sourceNsfwOverrides(),
@@ -877,27 +862,6 @@ class DesktopController(
                 visualPresetUndo = null,
                 message = desktopText("visualPreset.undone"),
             )
-        }
-    }
-
-    internal fun detailsStyle(
-        kind: org.skepsun.kototoro.core.ui.compose.DetailsMediaStyle,
-        style: org.skepsun.kototoro.core.ui.compose.DetailsMediaStyle,
-    ) = action {
-        val key = when (kind) {
-            org.skepsun.kototoro.core.ui.compose.DetailsMediaStyle.MANGA -> "details_style_manga"
-            org.skepsun.kototoro.core.ui.compose.DetailsMediaStyle.NOVEL -> "details_style_novel"
-            org.skepsun.kototoro.core.ui.compose.DetailsMediaStyle.VIDEO -> "details_style_video"
-        }
-        check(appearancePreferences.edit(SourcePreferenceEdit(changes = mapOf(
-            key to SourcePreferenceValue.Text(style.name),
-        )))) { desktopText("settings.appearanceSaveFailed") }
-        mutableState.update {
-            when (kind) {
-                org.skepsun.kototoro.core.ui.compose.DetailsMediaStyle.MANGA -> it.copy(detailsStyleManga = style)
-                org.skepsun.kototoro.core.ui.compose.DetailsMediaStyle.NOVEL -> it.copy(detailsStyleNovel = style)
-                org.skepsun.kototoro.core.ui.compose.DetailsMediaStyle.VIDEO -> it.copy(detailsStyleVideo = style)
-            }
         }
     }
 

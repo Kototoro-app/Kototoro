@@ -24,7 +24,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.jetbrains.skia.Image as SkiaImage
 import org.skepsun.kototoro.core.ui.buttons.TextButton
-import org.skepsun.kototoro.core.ui.compose.DetailsMediaStyle
 import org.skepsun.kototoro.core.source.SourceContent
 import org.skepsun.kototoro.core.ui.compose.VideoHeroBackdropLayer
 import org.skepsun.kototoro.core.ui.compose.detailsMediaStylePolicy
@@ -80,11 +79,10 @@ internal fun DesktopArtworkBackground(
     content: SourceContent,
     cache: DesktopCovers,
     modifier: Modifier,
-    styleOverride: DetailsMediaStyle? = null,
 ) {
     val image = rememberDesktopCover(content, cache, large = true).bitmap
-    val mediaStylePolicy = remember(content.source.contentType, styleOverride) {
-        detailsMediaStylePolicy(content.source.contentType, styleOverride)
+    val mediaStylePolicy = remember(content.source.contentType) {
+        detailsMediaStylePolicy(content.source.contentType)
     }
     val dominantKey = remember(content.source.name, content.url, content.coverUrl, content.largeCoverUrl) {
         "${content.source.name}\n${content.url}\n${content.largeCoverUrl ?: content.coverUrl.orEmpty()}"
