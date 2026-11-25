@@ -1411,6 +1411,10 @@ struct SourceReaderView: View {
     @Namespace private var chrome
     @State private var panel: ReaderPanel?
     @State private var controls = true
+    /// The progress slider is being dragged.
+    @State private var scrubbing = false
+    /// The chapter button whose chapter is loading: -1 previous, 1 next.
+    @State private var movingChapter: Int?
     @State private var export: ReaderPNG?
     @State private var exporting = false
     @State private var cropping = false
@@ -1828,14 +1832,17 @@ struct SourceReaderView: View {
                     HStack(spacing: 12) {
                         Spacer()
                         ForEach(floatingActions, id: \.self) { action in
+                            // Only a switched-on action takes the accent, so the colour reads as its state.
+                            let active = isActive(action)
                             Button {
                                 if action == "auto" { model.autoScroll.toggle() } else { moreAction(action) }
                             } label: {
                                 Image(systemName: action == "bookmark" && model.isBookmarked ? "bookmark.fill" : ReaderMorePanel.actionSymbol(action))
                                     .frame(width: controlDiameter, height: controlDiameter)
+                                    .foregroundStyle(active ? Color.white : Color.primary)
                             }
                                 .buttonStyle(.plain)
-                                .glassEffect(.regular.tint(.accentColor).interactive(), in: .circle)
+                                .glassEffect(active ? .regular.tint(.accentColor).interactive() : .regular.interactive(), in: .circle)
                                 .accessibilityLabel(ReaderMorePanel.actionTitle(action))
                                 .accessibilityIdentifier("reader.\(action)")
                                 .accessibilityValue(action == "bookmark" ? (model.isBookmarked ? "已添加" : "未添加") : "")
@@ -1849,18 +1856,63 @@ struct SourceReaderView: View {
         }
     }
 
-    private var progressBar: some View {
-        HStack(spacing: 20) {
-            Button("上一章", systemImage: "backward.end.fill") {
-                if let chapter = model.previousChapter { Task { await model.moveChapter(chapter) } }
+    /// "page / total" over the slider's thumb. The thumb's centre runs half a thumb in from each end of the track.
+    private var scrubBubble: some View {
+        GeometryReader { geometry in
+            let last = max(1, model.pages.count - 1)
+            let inset: CGFloat = 14
+            let x = inset + (geometry.size.width - 2 * inset) * CGFloat(min(model.index, last)) / CGFloat(last)
+            Text("\(model.index + 1) / \(model.pages.count)")
+                .font(.footnote.weight(.semibold).monospacedDigit())
+                .padding(.horizontal, 12).padding(.vertical, 6)
+                .glassEffect(.regular, in: .capsule)
+                .fixedSize()
+                .position(x: x, y: -30)
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+    private func isActive(_ action: String) -> Bool {
+        switch action {
+        case "bookmark": model.isBookmarked
+        case "auto": model.autoScroll
+        case "translate": model.translator.enabled
+        default: false
+        }
+    }
+
+    /// A chapter button; while its chapter loads it spins in place of the glyph.
+    private func chapterButton(_ title: LocalizedStringKey, symbol: String, direction: Int,
+                               target: IosSourceChapter?, identifier: String) -> some View {
+        Button {
+            guard let target else { return }
+            movingChapter = direction
+            Task {
+                await model.moveChapter(target)
+                movingChapter = nil
             }
-            .labelStyle(.iconOnly).buttonStyle(.glass).buttonBorderShape(.circle).controlSize(.large)
-            .frame(width: controlDiameter, height: controlDiameter)
-            .disabled(model.previousChapter == nil || model.isLoadingPages)
-            .accessibilityIdentifier("reader.previousChapter")
+        } label: {
+            if movingChapter == direction {
+                ProgressView().accessibilityLabel(title)
+            } else {
+                Label(title, systemImage: symbol)
+            }
+        }
+        .labelStyle(.iconOnly).buttonStyle(.glass).buttonBorderShape(.circle).controlSize(.large)
+        .frame(width: controlDiameter, height: controlDiameter)
+        .disabled(target == nil || model.isLoadingPages)
+        .accessibilityIdentifier(identifier)
+    }
+
+    private var progressBar: some View {
+        // The same 12 pt rhythm as the floating actions above and the space between the rows.
+        HStack(spacing: 12) {
+            chapterButton("上一章", symbol: "backward.end.fill", direction: -1,
+                          target: model.previousChapter, identifier: "reader.previousChapter")
             HStack(spacing: 8) {
                 Text("\(model.pages.isEmpty ? 0 : model.index + 1)")
-                    .font(.caption.monospacedDigit()).fixedSize()
+                    .font(.subheadline.weight(.semibold).monospacedDigit()).fixedSize()
                     .accessibilityLabel("当前页码")
                     .accessibilityValue("\(model.pages.isEmpty ? 0 : model.index + 1)")
                     .accessibilityIdentifier("reader.currentPage")
@@ -1870,13 +1922,21 @@ struct SourceReaderView: View {
                         model.userScrolled()
                         model.jump(to: Int(value.rounded()))
                     }), in: 0...Double(max(1, model.pages.count - 1)), step: 1,
-                    onEditingChanged: { editing in if !editing { Task { await model.persist() } } })
+                    onEditingChanged: { editing in
+                        scrubbing = editing
+                        if !editing { Task { await model.persist() } }
+                    })
                     .disabled(model.pages.count <= 1 || model.isLoadingPages)
                     .accessibilityLabel("阅读进度")
                     .accessibilityValue("第 \(model.pages.isEmpty ? 0 : model.index + 1) / \(model.pages.count) 页")
                     .accessibilityIdentifier("reader.progress")
+                    // While dragging, the page under the thumb rides above it and each page step ticks.
+                    .overlay(alignment: .topLeading) {
+                        if scrubbing { scrubBubble }
+                    }
+                    .sensoryFeedback(.selection, trigger: model.index) { _, _ in scrubbing }
                 Text("\(model.pages.count)")
-                    .font(.caption.monospacedDigit()).fixedSize()
+                    .font(.caption.monospacedDigit()).foregroundStyle(.secondary).fixedSize()
                     .accessibilityLabel("总页码")
                     .accessibilityValue("\(model.pages.count)")
                     .accessibilityIdentifier("reader.totalPages")
@@ -1886,13 +1946,8 @@ struct SourceReaderView: View {
             .glassEffect(.regular, in: .capsule)
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("reader.progressControl")
-            Button("下一章", systemImage: "forward.end.fill") {
-                if let chapter = model.nextChapter { Task { await model.moveChapter(chapter) } }
-            }
-            .labelStyle(.iconOnly).buttonStyle(.glass).buttonBorderShape(.circle).controlSize(.large)
-            .frame(width: controlDiameter, height: controlDiameter)
-            .disabled(model.nextChapter == nil || model.isLoadingPages)
-            .accessibilityIdentifier("reader.nextChapter")
+            chapterButton("下一章", symbol: "forward.end.fill", direction: 1,
+                          target: model.nextChapter, identifier: "reader.nextChapter")
         }
         .font(.subheadline)
     }
