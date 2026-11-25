@@ -1,6 +1,9 @@
 package org.skepsun.kototoro.details.ui.compose
 
 
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.TextButton
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -21,11 +24,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentWidth
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
-import com.kyant.shapes.Capsule
-import com.kyant.shapes.RoundedRectangle
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -74,12 +73,8 @@ import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.core.ui.compose.rememberResolvedSourceTitle
 import org.skepsun.kototoro.core.ui.compose.sharedCoverMemoryCacheKey
-import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
-import org.skepsun.kototoro.core.ui.glass.GlassSurface
-import org.skepsun.kototoro.core.ui.glass.LiquidGlassSurface
 import org.skepsun.kototoro.core.ui.glass.rememberGlassSurfaceColors
-import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.main.ui.compose.GlassDropdownMenu
@@ -99,66 +94,7 @@ import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingStatus
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
-import java.util.Locale
 import kotlin.math.roundToInt
-
-@Composable
-internal fun DetailsInfoPanelSurface(
-    panoramaEnabled: Boolean,
-    modifier: Modifier = Modifier,
-    content: @Composable () -> Unit,
-) {
-    DetailsReadableSurface(
-        panoramaEnabled = panoramaEnabled,
-        modifier = modifier,
-        content = content,
-    )
-}
-
-@Composable
-internal fun DetailsReadableSurface(
-    panoramaEnabled: Boolean,
-    modifier: Modifier = Modifier,
-    content: @Composable () -> Unit,
-) {
-    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
-    val shape = RoundedRectangle(LocalInterfaceStyleTokens.current.groupCornerRadius)
-    if (isIosStyle) {
-        LiquidGlassSurface(
-            modifier = modifier,
-            style = GlassDefaults.regularStyle().copy(
-                containerAlpha = 0.88f,
-                borderAlpha = 0.18f,
-            ),
-            shape = shape,
-            componentRole = GlassComponentRole.ContentOverlay,
-            // Large static info panel: no always-on edge highlight, brightens
-            // only while the user is pressing it.
-            highlightOnIdle = false,
-        ) {
-            content()
-        }
-    } else {
-        Surface(
-            modifier = modifier,
-            shape = shape,
-            color = if (panoramaEnabled) {
-                MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.90f)
-            } else {
-                MaterialTheme.colorScheme.surfaceContainer
-            },
-            contentColor = MaterialTheme.colorScheme.onSurface,
-            border = BorderStroke(
-                1.dp,
-                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.34f),
-            ),
-            tonalElevation = 0.dp,
-            shadowElevation = 0.dp,
-        ) {
-            content()
-        }
-    }
-}
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -355,138 +291,80 @@ private fun SourceSummaryIcon(
     }
 }
 
+/**
+ * A possible tracker match, offered as one line under the metadata strip rather than a card of its own: it is a
+ * one-off prompt, so it should not weigh as much as the page's content. Tapping the text opens the candidate.
+ */
 @Composable
-internal fun TrackingSuggestionCard(
+internal fun TrackingSuggestionRow(
     match: org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteMatchResult,
     onBindClick: () -> Unit,
     onOpenClick: () -> Unit,
     onIgnoreClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    val expressive = LocalMaterialExpressiveComponentsEnabled.current
-    val defaultLocale = Locale.getDefault()
-    val confidenceLabel = String.format(defaultLocale, "%.0f%%", match.confidence * 100f)
-    val cardContent: @Composable () -> Unit = {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(
-                    painter = rememberSafePainter(match.service.iconResId),
-                    contentDescription = null,
-                    tint = Color.Unspecified,
-                    modifier = Modifier.size(18.dp),
-                )
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
-                ) {
-                    Text(
-                        text = stringResource(R.string.details_tracking_suggestion_title),
-                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                    Text(
-                        text = stringResource(
-                            R.string.details_tracking_suggestion_summary,
-                            stringResource(match.service.titleResId),
-                            match.title,
-                        ),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                Surface(
-                    shape = RoundedCornerShape(999.dp),
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
-                ) {
-                    Text(
-                        text = confidenceLabel,
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                    )
-                }
-            }
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                SuggestionChip(
-                    onClick = onBindClick,
-                    shape = RoundedCornerShape(if (expressive) 999.dp else 8.dp),
-                    label = { Text(stringResource(R.string.tracking_bind_suggestion_action)) },
-                    icon = {
-                        Icon(
-                            imageVector = Icons.Filled.Check,
-                            contentDescription = null,
-                        )
-                    },
-                    colors = SuggestionChipDefaults.suggestionChipColors(
-                        containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
-                        labelColor = MaterialTheme.colorScheme.primary,
-                    ),
-                    modifier = Modifier.tvChipRing(RoundedCornerShape(if (expressive) 999.dp else 8.dp)),
-                )
-                SuggestionChip(
-                    onClick = onOpenClick,
-                    shape = RoundedCornerShape(if (expressive) 999.dp else 8.dp),
-                    label = { Text(stringResource(R.string.details_tracking_suggestion_view)) },
-                    colors = SuggestionChipDefaults.suggestionChipColors(
-                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.42f),
-                    ),
-                    border = SuggestionChipDefaults.suggestionChipBorder(
-                        enabled = true,
-                        borderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
-                    ),
-                    modifier = Modifier.tvChipRing(RoundedCornerShape(if (expressive) 999.dp else 8.dp)),
-                )
-                SuggestionChip(
-                    onClick = onIgnoreClick,
-                    shape = RoundedCornerShape(if (expressive) 999.dp else 8.dp),
-                    label = { Text(stringResource(R.string.details_tracking_suggestion_ignore)) },
-                    colors = SuggestionChipDefaults.suggestionChipColors(
-                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.42f),
-                    ),
-                    border = SuggestionChipDefaults.suggestionChipBorder(
-                        enabled = true,
-                        borderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
-                    ),
-                    modifier = Modifier.tvChipRing(RoundedCornerShape(if (expressive) 999.dp else 8.dp)),
-                )
-            }
-        }
-    }
-    GlassSurface(
-        modifier = Modifier.fillMaxWidth(),
-        style = GlassDefaults.subtleStyle().copy(
-            containerAlpha = 0.78f,
-            borderAlpha = if (expressive) 0.26f else 0.22f,
-        ),
-        shape = if (expressive) Capsule() else RoundedRectangle(22.dp),
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        cardContent()
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .clip(RoundedCornerShape(8.dp))
+                .tvFocusable(shape = RoundedCornerShape(8.dp), addFocusTarget = false)
+                .clickable(onClick = onOpenClick)
+                .padding(vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Icon(
+                painter = rememberSafePainter(match.service.iconResId),
+                contentDescription = null,
+                tint = Color.Unspecified,
+                modifier = Modifier.size(18.dp),
+            )
+            Text(
+                text = stringResource(
+                    R.string.details_tracking_suggestion_summary,
+                    stringResource(match.service.titleResId),
+                    match.title,
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        TextButton(
+            onClick = onBindClick,
+            modifier = Modifier.tvFocusable(shape = RoundedCornerShape(999.dp), addFocusTarget = false),
+        ) {
+            Text(stringResource(R.string.tracking_bind_suggestion_action))
+        }
+        IconButton(
+            onClick = onIgnoreClick,
+            modifier = Modifier
+                .size(40.dp)
+                .tvFocusable(shape = RoundedCornerShape(999.dp), addFocusTarget = false),
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Close,
+                contentDescription = stringResource(R.string.details_tracking_suggestion_ignore),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp),
+            )
+        }
     }
 }
 
 @Composable
-internal fun RatingStatusChip(
-    rating: Float,
-    canEditRating: Boolean,
+internal fun ReadingStatusChip(
     status: ScrobblingStatus,
     scrobblingStatuses: Array<String>,
     linkedTrackingItems: List<LinkedTrackingItemUiModel>,
-    onUpdateRating: (Float) -> Unit,
     onUpdateStatus: (ScrobblingStatus) -> Unit,
     chipHeight: androidx.compose.ui.unit.Dp = 32.dp,
 ) {
@@ -515,17 +393,6 @@ internal fun RatingStatusChip(
                 horizontalArrangement = Arrangement.spacedBy(7.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                CompactRatingChip(
-                    rating = rating,
-                    enabled = canEditRating,
-                    onRatingChanged = onUpdateRating,
-                )
-                Box(
-                    modifier = Modifier
-                        .width(1.dp)
-                        .height(18.dp)
-                        .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.24f)),
-                )
                 Row(
                     modifier = Modifier
                         .focusRequester(statusAnchorFocus)
@@ -570,94 +437,6 @@ internal fun RatingStatusChip(
                         onUpdateStatus(candidate)
                     },
                     leadingIcon = if (status == candidate) {
-                        {
-                            Icon(
-                                imageVector = Icons.Default.Check,
-                                contentDescription = null,
-                            )
-                        }
-                    } else {
-                        null
-                    },
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun CompactRatingChip(
-    rating: Float,
-    enabled: Boolean,
-    onRatingChanged: (Float) -> Unit,
-) {
-    val context = LocalContext.current
-    var expanded by remember { mutableStateOf(false) }
-    var menuAnchorBounds by remember { mutableStateOf<Rect?>(null) }
-    val ratingAnchorFocus = remember { FocusRequester() }
-    val score = (rating.coerceIn(0f, 1f) * 10f).roundToInt()
-    val contentAlpha = if (score > 0) 1f else 0.62f
-    Box(
-        modifier = Modifier.onGloballyPositioned { menuAnchorBounds = it.boundsInRoot() },
-    ) {
-        Row(
-            modifier = Modifier
-                .focusRequester(ratingAnchorFocus)
-                .clip(RoundedCornerShape(999.dp))
-                .tvFocusable(shape = RoundedCornerShape(999.dp), addFocusTarget = false)
-                .clickable {
-                    if (enabled) {
-                        expanded = true
-                    } else {
-                        Toast.makeText(
-                            context,
-                            R.string.details_rating_requires_tracking,
-                            Toast.LENGTH_SHORT,
-                        ).show()
-                    }
-                }
-                .padding(horizontal = 2.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                imageVector = Icons.Filled.Star,
-                contentDescription = null,
-                tint = if (score > 0) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onSurface
-                }.copy(alpha = if (enabled) contentAlpha else 0.45f),
-                modifier = Modifier.size(15.dp),
-            )
-            Text(
-                text = score.toString(),
-                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                color = if (enabled) {
-                    MaterialTheme.colorScheme.onSurface
-                } else {
-                    MaterialTheme.colorScheme.onSurface
-                }.copy(alpha = contentAlpha),
-                maxLines = 1,
-            )
-        }
-        GlassDropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false },
-            shape = RoundedCornerShape(24.dp),
-            style = GlassDefaults.subtleStyle(),
-            useRootOverlay = LocalInterfaceStyle.current == InterfaceStyle.IOS,
-            anchorBounds = menuAnchorBounds,
-            anchorFocusRequester = ratingAnchorFocus,
-        ) {
-            (0..10).forEach { candidate ->
-                CompactDropdownMenuItem(
-                    text = { Text(candidate.toString()) },
-                    onClick = {
-                        expanded = false
-                        onRatingChanged(candidate / 10f)
-                    },
-                    leadingIcon = if (candidate == score) {
                         {
                             Icon(
                                 imageVector = Icons.Default.Check,

@@ -1,5 +1,11 @@
 package org.skepsun.kototoro.community.ui
 
+import androidx.compose.runtime.Immutable
+import androidx.compose.material3.FilterChip
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import org.skepsun.kototoro.core.ui.compose.DetailsSectionHeader
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -88,6 +94,8 @@ fun CommunityRatingCard(
     container: @Composable (@Composable () -> Unit) -> Unit,
     modifier: Modifier = Modifier,
     railPadding: Dp = 0.dp,
+    /** Inside [container]; a host that draws no container passes its page padding instead. */
+    contentPadding: PaddingValues = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
     /** A long press on a similar work: where else it can be looked for. */
     onShowSources: ((id: String, title: String) -> Unit)? = null,
 ) {
@@ -98,15 +106,10 @@ fun CommunityRatingCard(
         Column(
             modifier = modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 14.dp)
+                .padding(contentPadding)
                 .testTag("community-rating"),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = uiString("community_rating_title"),
-                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                    modifier = Modifier.weight(1f),
-                )
+            DetailsSectionHeader(title = uiString("community_rating_title")) {
                 // The index's count lags by up to a run; the list reads the relays and shows what exists now.
                 CommentsPill(count = state.comments, onClick = onOpenComments)
             }
@@ -381,6 +384,8 @@ private fun CommunityRatingDialog(
     current: Int?,
     onRate: (Int) -> Unit,
     onWithdraw: () -> Unit,
+    /** Off when the rating is not going to the community, whose publicity the note is about. */
+    showPublicNote: Boolean = true,
     onDismiss: () -> Unit,
 ) {
     var selected by remember(current) { mutableStateOf(current) }
@@ -399,12 +404,14 @@ private fun CommunityRatingDialog(
                     style = if (selected == null) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.titleMedium,
                     color = if (selected == null) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
                 )
-                Text(
-                    text = uiString("community_rating_public_note"),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 8.dp),
-                )
+                if (showPublicNote) {
+                    Text(
+                        text = uiString("community_rating_public_note"),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
             }
         },
         confirmButton = {
@@ -450,4 +457,189 @@ fun communityRefusalText(refusal: CommunityRatingRefusal?): String? = when (refu
     CommunityRatingRefusal.NO_IDENTITY -> uiString("community_rating_no_identity")
     CommunityRatingRefusal.NO_KEYS -> uiString("community_rating_no_keys")
     CommunityRatingRefusal.DISABLED, null -> null
+}
+
+/** A score the reader does not set: the source's own rating or a tracker's average, shown as a row under the overview. */
+@Immutable
+data class DetailsScoreRow(
+    val key: String,
+    val label: String,
+    val value: String,
+    val icon: (@Composable () -> Unit)? = null,
+)
+
+/** Somewhere the reader's one rating is sent: the community or a bound tracker. All are on until the reader says not. */
+@Immutable
+data class RatingSyncTarget(
+    val key: String,
+    val label: String,
+    val selected: Boolean,
+)
+
+/**
+ * The details page's single rating section: the community's score and spread when the community is on ([community]
+ * non-null), the other scores the work has ([scores]), then the reader's own rating, set once and sent to every
+ * selected [syncTargets] entry. The host converts the 1–10 score to each tracker's scale and draws no panel around
+ * it; [onRate] and [onWithdraw] go to the selected targets only.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun DetailsRatingSection(
+    community: CommunityRatingUiState?,
+    scores: List<DetailsScoreRow>,
+    myRating: Int?,
+    isPublishing: Boolean,
+    syncTargets: List<RatingSyncTarget>,
+    onToggleSyncTarget: (String) -> Unit,
+    onRate: (Int) -> Unit,
+    onWithdraw: () -> Unit,
+    onOpenComments: () -> Unit,
+    onOpenWork: (id: String, title: String) -> Unit,
+    modifier: Modifier = Modifier,
+    contentPadding: PaddingValues = PaddingValues(0.dp),
+    railPadding: Dp = 0.dp,
+    onShowSources: ((id: String, title: String) -> Unit)? = null,
+    communityTargetKey: String? = null,
+) {
+    var showDialog by rememberSaveable { mutableStateOf(false) }
+    val anySelected = syncTargets.any { it.selected }
+    val communityBlocked = community != null && (community.refusal != null || community.isLoading)
+    val canRate = syncTargets.isNotEmpty() && anySelected && !(communityBlocked && syncTargets.all { it.key == communityTargetKey })
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(contentPadding)
+            .testTag("details-rating"),
+    ) {
+        DetailsSectionHeader(title = uiString("rating")) {
+            if (community != null) CommentsPill(count = community.comments, onClick = onOpenComments)
+        }
+        if (community != null) {
+            ScoreOverview(
+                rating = community.rating,
+                isLoading = community.isLoading,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+            freshRatingsText(community)?.let { text ->
+                Text(
+                    text = text,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 8.dp).testTag("community-rating-fresh"),
+                )
+            }
+        }
+        if (scores.isNotEmpty()) {
+            Column(modifier = Modifier.padding(top = if (community != null) 8.dp else 0.dp)) {
+                scores.forEach { row ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(40.dp)
+                            .testTag("details-rating-score:${row.key}"),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        row.icon?.invoke()
+                        Text(
+                            text = row.label,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Text(
+                            text = row.value,
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                }
+            }
+        }
+        HorizontalDivider(
+            modifier = Modifier.padding(vertical = 12.dp),
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+        )
+        MyRatingRow(
+            myStars = myRating,
+            canRate = canRate,
+            isPublishing = isPublishing,
+            onRate = { showDialog = true },
+        )
+        if (syncTargets.isEmpty()) {
+            Text(
+                text = uiString("details_rating_unavailable"),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 6.dp),
+            )
+        } else {
+            FlowRow(
+                modifier = Modifier.padding(top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                itemVerticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = uiString("details_rating_sync_to"),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                syncTargets.forEach { target ->
+                    FilterChip(
+                        selected = target.selected,
+                        onClick = { onToggleSyncTarget(target.key) },
+                        label = { Text(target.label) },
+                        modifier = Modifier.testTag("details-rating-sync:${target.key}"),
+                    )
+                }
+            }
+        }
+        community?.let { communityRefusalText(it.refusal) }?.let { text ->
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 6.dp),
+            )
+        }
+    }
+
+    val similar = community?.similar.orEmpty().filter { !it.title.isNullOrBlank() }
+    if (similar.isNotEmpty()) {
+        CommunityWorksRail(
+            title = uiString("community_similar_title"),
+            cards = similar.map { work ->
+                CommunityWorkCard(
+                    work.id,
+                    work.title.orEmpty(),
+                    if (work.coRaters > 0) uiString("community_similar_supporting", work.coRaters)
+                    else uiString("community_similar_tags", work.sharedTags),
+                    score = null,
+                )
+            },
+            onOpen = { onOpenWork(it.key, it.title) },
+            onLongOpen = onShowSources?.let { show -> { show(it.key, it.title) } },
+            horizontalPadding = railPadding,
+            modifier = Modifier.padding(vertical = 6.dp),
+            testTag = "community-similar",
+        )
+    }
+
+    if (showDialog) {
+        CommunityRatingDialog(
+            current = myRating,
+            onRate = { stars ->
+                showDialog = false
+                onRate(stars)
+            },
+            onWithdraw = {
+                showDialog = false
+                onWithdraw()
+            },
+            onDismiss = { showDialog = false },
+            showPublicNote = syncTargets.any { it.selected && it.key == communityTargetKey },
+        )
+    }
 }

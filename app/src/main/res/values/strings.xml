@@ -4431,6 +4431,8 @@
     <string name="community_rating_fresh_mine">Your rating will count after the next index update</string>
     <string name="community_rating_fresh_with_mine">%1$d new ratings, yours included, will count after the next index update</string>
     <string name="community_rating_your">Your rating</string>
+    <string name="details_rating_sync_to">Sync to</string>
+    <string name="details_rating_unavailable">Turn on the community or bind a tracker to rate this work</string>
     <string name="community_rating_tap_stars">Tap a star; the left half gives half a star</string>
     <string name="community_rating_level_1">Poor</string>
     <string name="community_rating_level_2">Weak</string>

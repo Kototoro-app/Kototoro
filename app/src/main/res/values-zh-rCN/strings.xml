@@ -4393,6 +4393,8 @@
     <string name="community_rating_fresh_mine">你的评分将在下次索引更新后计入</string>
     <string name="community_rating_fresh_with_mine">包括你的评分在内，%1$d 条新评分将在下次索引更新后计入</string>
     <string name="community_rating_your">我的评分</string>
+    <string name="details_rating_sync_to">同步到</string>
+    <string name="details_rating_unavailable">开启社区或绑定追踪平台后即可评分</string>
     <string name="community_rating_tap_stars">点按星星评分，点左半边为半星</string>
     <string name="community_rating_level_1">很差</string>
     <string name="community_rating_level_2">较差</string>

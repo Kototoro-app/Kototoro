@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.core.ui.chapters
 
+import org.skepsun.kototoro.core.ui.compose.DetailsSectionHeader
 import org.skepsun.kototoro.core.ui.chips.choicePillPosition
 import org.skepsun.kototoro.core.ui.chips.CompactChoicePill
 import androidx.compose.foundation.BorderStroke
@@ -124,17 +125,9 @@ fun VideoEpisodePreviewSection(
             .testTag("video-episode-preview"),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        DetailsSectionHeader(
+            title = uiString("details_episodes"),
         ) {
-            Text(
-                text = uiString("details_episodes"),
-                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f),
-            )
             if (onToggleReverse != null && totalCount > 1) {
                 IconButton(
                     onClick = onToggleReverse,

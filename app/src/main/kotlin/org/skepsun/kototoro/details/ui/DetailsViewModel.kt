@@ -3792,11 +3792,15 @@ class DetailsViewModel @Inject constructor(
         }
     }
 
-    fun updateUnifiedRating(rating: Float) {
+    fun updateUnifiedRating(rating: Float) = updateTrackerRating(rating, services = null)
+
+    /** Sends [rating] (0–1) to the bound trackers among [services], or to every bound tracker when it is null. */
+    fun updateTrackerRating(rating: Float, services: Set<ScrobblerService>?) {
         launchJob(Dispatchers.Default) {
             val currentMangaId = resolveCurrentLocalMangaId() ?: return@launchJob
             linkedTrackingItems.value.forEach { linked ->
                 if (!linked.hasScrobblingBinding) return@forEach
+                if (services != null && linked.service !in services) return@forEach
                 val scrobbler = scrobblers.firstOrNull {
                     it.scrobblerService == linked.service && it.isEnabled
                 } ?: return@forEach

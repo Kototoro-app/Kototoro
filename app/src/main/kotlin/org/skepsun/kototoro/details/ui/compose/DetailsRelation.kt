@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.details.ui.compose
 
 
+import org.skepsun.kototoro.core.ui.compose.DetailsSectionHeader
 import org.skepsun.kototoro.core.ui.buttons.IconButton
 import org.skepsun.kototoro.list.ui.compose.ContentRailSection
 import androidx.compose.foundation.background
@@ -142,46 +143,11 @@ private fun EntityRelationSectionHeader(
     section: EntityRelationSection,
     horizontalPadding: Dp,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = horizontalPadding),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        section.titleRes?.let { titleRes ->
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
-            ) {
-                Icon(
-                    painter = rememberSafePainter(entityRelationSectionIconRes(titleRes)),
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier
-                        .padding(10.dp)
-                        .size(18.dp),
-                )
-            }
-        }
-        Text(
-            text = section.titleRes?.let { stringResource(it) } ?: section.title.orEmpty(),
-            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.weight(1f),
-        )
-        Surface(
-            shape = RoundedCornerShape(999.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f),
-        ) {
-            Text(
-                text = section.items.size.toString(),
-                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-            )
-        }
-    }
+    DetailsSectionHeader(
+        title = section.titleRes?.let { stringResource(it) } ?: section.title.orEmpty(),
+        count = section.items.size,
+        modifier = Modifier.padding(horizontal = horizontalPadding),
+    )
 }
 
 @Composable
@@ -414,18 +380,6 @@ private fun DetailsRelationItemCard(
             }
         }
     }
-}
-
-private fun entityRelationSectionIconRes(titleRes: Int): Int = when (titleRes) {
-    R.string.entity_graph_section_characters -> R.drawable.ic_user
-    R.string.entity_graph_section_creators -> R.drawable.ic_auto_fix
-    R.string.entity_graph_section_parent_work -> R.drawable.ic_content_manga
-    R.string.entity_graph_section_voice_actors -> R.drawable.ic_voice_input
-    R.string.entity_graph_section_created_works -> R.drawable.ic_content_manga
-    R.string.entity_graph_section_voiced_characters -> R.drawable.ic_user
-    R.string.entity_graph_section_voiced_works -> R.drawable.ic_content_manga
-    R.string.entity_graph_section_related_entities -> R.drawable.ic_select_group
-    else -> R.drawable.ic_select_group
 }
 
 private fun entityRelationTypeLabelRes(type: org.skepsun.kototoro.tracking.discovery.domain.EntityType): Int = when (type) {

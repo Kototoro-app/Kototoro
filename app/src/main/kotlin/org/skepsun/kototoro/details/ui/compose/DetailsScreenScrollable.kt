@@ -1,5 +1,13 @@
 package org.skepsun.kototoro.details.ui.compose
 
+import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
+import org.skepsun.kototoro.community.ui.formatCommunityScore
+import org.skepsun.kototoro.community.ui.CommunityRatingViewModel
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import org.skepsun.kototoro.core.ui.compose.DetailsSectionDivider
 import android.os.Build
 import android.util.Log
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -83,7 +91,6 @@ import coil3.request.ImageRequest
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.community.domain.CommunityExternalRef
 import org.skepsun.kototoro.community.domain.CommunityExternalService
-import org.skepsun.kototoro.community.ui.CommunityRatingSection
 import org.skepsun.kototoro.core.model.LocalMangaSource
 import org.skepsun.kototoro.core.model.appUrl
 import org.skepsun.kototoro.core.model.getLocalizedTitle
@@ -125,6 +132,7 @@ import org.skepsun.kototoro.core.ui.chapters.VideoEpisodePreviewItem
 import org.skepsun.kototoro.core.ui.chapters.VideoEpisodePreviewSection
 import org.skepsun.kototoro.core.ui.chapters.VideoLineOption
 import org.skepsun.kototoro.core.ui.chapters.stripEpisodeLinePrefix
+import org.skepsun.kototoro.core.ui.compose.DetailsMediaStyle
 import org.skepsun.kototoro.core.ui.compose.DetailsMediaStylePolicy
 import org.skepsun.kototoro.core.ui.compose.detailsMediaStylePolicy
 import org.skepsun.kototoro.details.ui.compose.pane.DetailsPaneHost
@@ -209,6 +217,7 @@ internal fun DetailsScrollableContent(
     onUpdateLinkedTrackingStatus: (org.skepsun.kototoro.details.ui.model.LinkedTrackingItemUiModel, ScrobblingStatus) -> Unit,
     onUpdateReadingStatus: (ScrobblingStatus) -> Unit,
     onUpdateUnifiedRating: (Float) -> Unit,
+    onUpdateTrackerRating: (Float, Set<ScrobblerService>) -> Unit = { _, _ -> },
     onEntityClick: (EntityRelationItem) -> Unit,
     onActionClick: (DetailsAction) -> Unit,
     sharedElementKey: String? = null,
@@ -271,6 +280,26 @@ internal fun DetailsScrollableContent(
             }
             currentItem?.let { stripEpisodeLinePrefix(it.getTitle(context.resources), selectedBranch) }
         }
+        val communityContent = remember(mangaDetails) { mangaDetails?.toContent() }
+        val communityTrackerRefs = remember(linkedTrackingItems) {
+            linkedTrackingItems.mapNotNull { item ->
+                CommunityExternalService.of(item.service.name)?.let { CommunityExternalRef(it, item.remoteId) }
+            }
+        }
+        // One instance for the meta strip's score and the rating section further down.
+        val communityViewModel = hiltViewModel<CommunityRatingViewModel>(
+            key = "community-rating-${communityContent?.id ?: 0L}",
+        )
+        LaunchedEffect(communityContent, communityTrackerRefs) {
+            communityContent?.let { communityViewModel.bind(it, communityTrackerRefs) }
+        }
+        val communityState = communityViewModel.state.collectAsStateWithLifecycle().value
+        val sourceScore = remember(communityContent?.hasRating, communityContent?.rating) {
+            communityContent?.takeIf { it.hasRating }
+                ?.let { String.format(java.util.Locale.getDefault(), "%.1f", it.rating * 10f) }
+        }
+        val ratingBringIntoView = remember { BringIntoViewRequester() }
+        val ratingScope = rememberCoroutineScope()
         DetailsHeader(
             mangaDetails = mangaDetails,
             localSize = localSize,
@@ -349,6 +378,12 @@ internal fun DetailsScrollableContent(
             onUpdateLinkedTrackingStatus = onUpdateLinkedTrackingStatus,
             onUpdateReadingStatus = onUpdateReadingStatus,
             onUpdateUnifiedRating = onUpdateUnifiedRating,
+            metaRatingValue = communityState?.rating?.let { formatCommunityScore(it.mean) } ?: sourceScore,
+            onMetaRatingClick = if (communityContent != null && !preferLightweightFirstFrame) {
+                { ratingScope.launch { ratingBringIntoView.bringIntoView() } }
+            } else {
+                null
+            },
             onRemoveLinkedTracking = { match -> onActionClick(DetailsAction.RemoveTrackingMatch(match)) },
             onBindTrackingSuggestion = { match -> onActionClick(DetailsAction.BindTrackingMatch(match)) },
             onOpenTrackingSuggestion = { match ->
@@ -359,29 +394,6 @@ internal fun DetailsScrollableContent(
                 onActionClick(DetailsAction.ManageTrackingBinding(match.service, match.remoteId, match.title, match.url))
             },
         )
-        val communityContent = remember(mangaDetails) { mangaDetails?.toContent() }
-        if (!preferLightweightFirstFrame && communityContent != null) {
-            val trackerRefs = remember(linkedTrackingItems) {
-                linkedTrackingItems.mapNotNull { item ->
-                    CommunityExternalService.of(item.service.name)?.let { CommunityExternalRef(it, item.remoteId) }
-                }
-            }
-            CommunityRatingSection(
-                content = communityContent,
-                trackerRefs = trackerRefs,
-                container = { row ->
-                    DetailsReadableSurface(
-                        panoramaEnabled = settings.isPanoramaCoverEnabled,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = outerHorizontalPadding, vertical = 6.dp),
-                    ) { row() }
-                },
-                railPadding = outerHorizontalPadding,
-                onSearchTitle = { title -> onActionClick(DetailsAction.SearchTitleEverywhere(title)) },
-                onOpenContent = { content -> onActionClick(DetailsAction.OpenContent(content)) },
-            )
-        }
         if (!preferLightweightFirstFrame &&
             mediaStylePolicy.useInlineEpisodePreview &&
             !isWideAdaptiveLayout &&
@@ -409,24 +421,52 @@ internal fun DetailsScrollableContent(
                     )
                 }
             }
-            DetailsReadableSurface(
-                panoramaEnabled = settings.isPanoramaCoverEnabled,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = outerHorizontalPadding, vertical = 6.dp),
-            ) {
-                VideoEpisodePreviewSection(
-                    episodes = previewItems,
-                    totalCount = chapters.size.coerceAtLeast(historyInfo.totalChapters),
-                    lines = lineOptions,
-                    isReversed = isChaptersReversed,
-                    onSelectLine = onSelectBranch,
-                    onToggleReverse = onToggleChaptersReversed,
-                    onShowAllClick = { onActionClick(DetailsAction.ToggleList) },
-                    onEpisodeClick = { episode -> onOpenChapter(episode.id) },
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                )
-            }
+            DetailsSectionDivider(
+                horizontalPadding = outerHorizontalPadding,
+                modifier = Modifier.padding(top = 12.dp),
+            )
+            VideoEpisodePreviewSection(
+                episodes = previewItems,
+                totalCount = chapters.size.coerceAtLeast(historyInfo.totalChapters),
+                lines = lineOptions,
+                isReversed = isChaptersReversed,
+                onSelectLine = onSelectBranch,
+                onToggleReverse = onToggleChaptersReversed,
+                onShowAllClick = { onActionClick(DetailsAction.ToggleList) },
+                onEpisodeClick = { episode -> onOpenChapter(episode.id) },
+                modifier = Modifier.padding(horizontal = outerHorizontalPadding, vertical = 12.dp),
+            )
+        }
+        if (!preferLightweightFirstFrame &&
+            mediaStylePolicy.style == DetailsMediaStyle.NOVEL &&
+            !isWideAdaptiveLayout &&
+            isWorkActionEnabled &&
+            chapters.isNotEmpty()
+        ) {
+            NovelCatalogSection(
+                chapters = chapters,
+                totalCount = chapters.size.coerceAtLeast(historyInfo.totalChapters),
+                isReversed = isChaptersReversed,
+                horizontalPadding = outerHorizontalPadding,
+                onOpenChapter = onOpenChapter,
+                onShowAll = { onActionClick(DetailsAction.ToggleList) },
+            )
+        }
+        if (!preferLightweightFirstFrame && communityContent != null) {
+            DetailsRatingHost(
+                content = communityContent,
+                community = communityState,
+                communityViewModel = communityViewModel,
+                trackerRefs = communityTrackerRefs,
+                sourceScore = sourceScore,
+                linkedTrackingItems = linkedTrackingItems,
+                trackerRating = unifiedRating,
+                onUpdateTrackerRating = onUpdateTrackerRating,
+                horizontalPadding = outerHorizontalPadding,
+                onSearchTitle = { title -> onActionClick(DetailsAction.SearchTitleEverywhere(title)) },
+                onOpenContent = { content -> onActionClick(DetailsAction.OpenContent(content)) },
+                modifier = Modifier.bringIntoViewRequester(ratingBringIntoView),
+            )
         }
         if (!preferLightweightFirstFrame && relatedContent.isNotEmpty()) {
             DetailsRelatedContentSection(

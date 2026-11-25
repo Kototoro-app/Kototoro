@@ -1,13 +1,14 @@
 package org.skepsun.kototoro.details.ui.compose
 
 
+import org.skepsun.kototoro.core.ui.compose.DetailsSectionHeader
+import org.skepsun.kototoro.core.ui.compose.DetailsSectionDivider
+import org.skepsun.kototoro.core.ui.compose.DetailsMetaStrip
+import org.skepsun.kototoro.core.ui.compose.DetailsMetaItem
 import org.skepsun.kototoro.core.ui.compose.ExpandableDescriptionText
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
-import androidx.compose.ui.graphics.vector.rememberVectorPainter
-import org.skepsun.kototoro.core.ui.compose.DetailsMetadataEntry
-import org.skepsun.kototoro.core.ui.compose.DetailsMetadataGrid
 import android.text.format.Formatter
 import android.widget.Toast
 import androidx.compose.animation.animateContentSize
@@ -50,11 +51,8 @@ import org.skepsun.kototoro.core.ui.compose.DetailsTagChip
 import org.skepsun.kototoro.core.ui.compose.DetailsMediaStyle
 import org.skepsun.kototoro.core.ui.compose.DetailsMediaStylePolicy
 import org.skepsun.kototoro.core.ui.compose.DetailsTagChips
-import org.skepsun.kototoro.core.ui.compose.NovelCatalogEntryRow
 import org.skepsun.kototoro.core.ui.compose.NovelEditorialSynopsisBody
 import org.skepsun.kototoro.core.ui.compose.NovelHeroHeaderContent
-import org.skepsun.kototoro.core.ui.compose.NovelMetricItem
-import org.skepsun.kototoro.core.ui.compose.NovelMetricsStrip
 import org.skepsun.kototoro.core.ui.compose.VideoHeroHeaderContent
 import org.skepsun.kototoro.core.ui.compose.detailsMediaStylePolicy
 import androidx.compose.ui.draw.clip
@@ -85,7 +83,6 @@ import org.skepsun.kototoro.core.model.titleResId
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.core.model.FavouriteCategory
-import org.skepsun.kototoro.core.ui.compose.KototoroLinearProgressIndicator
 import org.skepsun.kototoro.core.ui.compose.sharedCoverMemoryCacheKey
 import org.skepsun.kototoro.core.ui.compose.AppLayoutTokens
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
@@ -191,6 +188,9 @@ fun DetailsHeader(
     onUpdateLinkedTrackingStatus: (LinkedTrackingItemUiModel, ScrobblingStatus) -> Unit,
     onUpdateReadingStatus: (ScrobblingStatus) -> Unit,
     onUpdateUnifiedRating: (Float) -> Unit,
+    /** The score the meta strip leads with (the community mean when known), and where tapping it scrolls. */
+    metaRatingValue: String? = null,
+    onMetaRatingClick: (() -> Unit)? = null,
     onRemoveLinkedTracking: (org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteMatchResult) -> Unit,
     onBindTrackingSuggestion: (org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteMatchResult) -> Unit,
     onOpenTrackingSuggestion: (org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteMatchResult) -> Unit,
@@ -369,55 +369,47 @@ fun DetailsHeader(
     }
     val isNsfw = content?.isNsfw() == true
     val renderCinemaHero = mediaStylePolicy.useCenteredHeroHeader && panoramaEnabled
-    val infoItems: List<DetailsInfoItem> = buildList {
-        content?.let {
+    val authorClick: (() -> Unit)? = primaryAuthor?.let { name -> { onAuthorClick(name) } }
+    val metaItems: List<DetailsMetaItem> = buildList {
+        (metaRatingValue ?: ratingLabel)?.let { rating ->
             add(
-                DetailsInfoItem(
-                    label = stringResource(R.string.author),
-                    value = author,
-                    iconRes = R.drawable.ic_info_outline,
-                    valueMuted = !hasKnownAuthor,
-                    onClick = if (primaryAuthor != null) {
-                        { onAuthorClick(primaryAuthor) }
-                    } else {
-                        null
-                    },
+                DetailsMetaItem(
+                    value = "$rating \u2605",
+                    label = stringResource(R.string.rating),
+                    onClick = onMetaRatingClick,
                 ),
             )
         }
-        if (!renderCinemaHero) add(
-            DetailsInfoItem(
-                label = stringResource(R.string.state),
-                value = state?.let { stringResource(it.titleResId) } ?: stringResource(R.string.unknown),
-                iconRes = state?.iconResId ?: R.drawable.ic_info_outline,
-                valueMuted = state == null,
-            ),
-        )
-        add(
-            DetailsInfoItem(
-                label = stringResource(readingLanguageLabelRes),
-                value = languageSummary,
-                iconRes = R.drawable.ic_language,
-                valueMuted = originalLanguage.isBlank() && readingLanguage.isBlank(),
-            ),
-        )
-        if (!renderCinemaHero) add(
-            DetailsInfoItem(
-                label = stringResource(R.string.chapters),
-                value = chapterProgressLabel,
-                iconRes = R.drawable.ic_book_page,
-                onClick = onOpenChapters,
-                showNavigationIndicator = true,
-            ),
-        )
-        if (localContent != null || localSize > 0L) {
+        // The cinema hero already says the status and episode count in its own metadata line.
+        if (!renderCinemaHero) {
             add(
-                DetailsInfoItem(
-                    label = stringResource(R.string.on_device),
-                    value = onDeviceSizeLabel ?: "-",
-                    iconRes = R.drawable.ic_storage,
+                DetailsMetaItem(
+                    value = state?.let { stringResource(it.titleResId) } ?: stringResource(R.string.unknown),
+                    label = stringResource(R.string.state),
+                    valueMuted = state == null,
                 ),
             )
+            add(
+                DetailsMetaItem(
+                    value = historyInfo.totalChapters.takeIf { it > 0 }?.toString() ?: "-",
+                    label = stringResource(R.string.chapters),
+                    onClick = onOpenChapters,
+                ),
+            )
+        }
+        // A novel's header already names the author under the title.
+        if (content != null && mediaStylePolicy.style != DetailsMediaStyle.NOVEL) {
+            add(
+                DetailsMetaItem(
+                    value = author,
+                    label = stringResource(R.string.author),
+                    onClick = authorClick,
+                    valueMuted = !hasKnownAuthor,
+                ),
+            )
+        }
+        if (localContent != null || localSize > 0L) {
+            add(DetailsMetaItem(value = onDeviceSizeLabel ?: "-", label = stringResource(R.string.on_device)))
         }
     }
 
@@ -524,13 +516,10 @@ fun DetailsHeader(
                             buttonSize = 36.dp,
                             iconSize = 18.dp,
                         )
-                        RatingStatusChip(
-                            rating = unifiedRating,
-                            canEditRating = canEditUnifiedRating,
+                        ReadingStatusChip(
                             status = readingStatus,
                             scrobblingStatuses = scrobblingStatuses,
                             linkedTrackingItems = linkedTrackingItems,
-                            onUpdateRating = onUpdateUnifiedRating,
                             onUpdateStatus = onUpdateReadingStatus,
                             chipHeight = 36.dp,
                         )
@@ -574,7 +563,7 @@ fun DetailsHeader(
                         ownerKey = content?.url,
                         coverUrl = currentCoverUrl,
                         sharedElementKey = sharedElementKey,
-                        topBadgeText = ratingLabel,
+                        topBadgeText = null,
                         topBadgeIconRes = R.drawable.ic_star_small,
                         isBookCover = true,
                         onClick = { onCoverClick(currentCoverUrl) },
@@ -684,13 +673,10 @@ fun DetailsHeader(
                             buttonSize = 32.dp,
                             iconSize = 17.dp,
                         )
-                        RatingStatusChip(
-                            rating = unifiedRating,
-                            canEditRating = canEditUnifiedRating,
+                        ReadingStatusChip(
                             status = readingStatus,
                             scrobblingStatuses = scrobblingStatuses,
                             linkedTrackingItems = linkedTrackingItems,
-                            onUpdateRating = onUpdateUnifiedRating,
                             onUpdateStatus = onUpdateReadingStatus,
                         )
                     }
@@ -710,7 +696,7 @@ fun DetailsHeader(
                 ownerKey = content?.url,
                 coverUrl = currentCoverUrl,
                 sharedElementKey = sharedElementKey,
-                topBadgeText = ratingLabel,
+                topBadgeText = null,
                 topBadgeIconRes = R.drawable.ic_star_small,
                 onClick = { onCoverClick(currentCoverUrl) },
                 onState = { state ->
@@ -878,13 +864,10 @@ fun DetailsHeader(
                         )
                     }
                     if (showWorkActions) {
-                        RatingStatusChip(
-                            rating = unifiedRating,
-                            canEditRating = canEditUnifiedRating,
+                        ReadingStatusChip(
                             status = readingStatus,
                             scrobblingStatuses = scrobblingStatuses,
                             linkedTrackingItems = linkedTrackingItems,
-                            onUpdateRating = onUpdateUnifiedRating,
                             onUpdateStatus = onUpdateReadingStatus,
                         )
                     }
@@ -893,111 +876,23 @@ fun DetailsHeader(
         }
         }
 
-        val showProgress = historyInfo.history != null && historyInfo.percent > 0f
-        val showStandaloneProgress = showProgress && !renderCinemaHero
-        val showInfoCard = infoItems.isNotEmpty() || showStandaloneProgress
-        if (mediaStylePolicy.style == DetailsMediaStyle.NOVEL && !renderCinemaHero) {
-            val novelMetrics = listOfNotNull(
-                NovelMetricItem(
-                    label = stringResource(R.string.chapters),
-                    value = if (historyInfo.totalChapters > 0) "${historyInfo.totalChapters}" else chapterProgressLabel,
-                    subtitle = stateLabel,
-                    onClick = onOpenChapters,
-                ),
-                NovelMetricItem(
-                    label = stringResource(R.string.details_my_reading),
-                    value = if (showProgress) progressLabel else stringResource(R.string.details_not_started),
-                    subtitle = if (historyInfo.currentChapter >= 0 && historyInfo.totalChapters > 0) {
-                        "${historyInfo.currentChapter + 1}/${historyInfo.totalChapters}"
-                    } else {
-                        null
-                    },
-                ),
-                onDeviceSizeLabel?.takeIf { it.isNotBlank() }?.let { sizeLabel ->
-                    NovelMetricItem(
-                        label = stringResource(R.string.on_device),
-                        value = sizeLabel,
-                    )
-                },
-                ratingLabel?.takeIf { it.isNotBlank() }?.let { rating ->
-                    NovelMetricItem(
-                        label = stringResource(R.string.rating),
-                        value = "$rating ★",
-                    )
-                },
-            )
-            NovelMetricsStrip(
-                items = novelMetrics,
+        // The cinema hero carries its own metadata line, so a video with the panorama on has no strip.
+        if (!renderCinemaHero && metaItems.isNotEmpty()) {
+            DetailsMetaStrip(
+                items = metaItems,
+                contentColor = if (panoramaEnabled) immersiveTitleColor else MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier
                     .fillMaxWidth()
+                    .padding(top = 4.dp)
                     .onGloballyPositioned { coordinates ->
                         val bounds = coordinates.boundsInRoot()
                         onInfoCardBoundsSync(bounds.top, bounds.bottom)
                     },
             )
-        } else if (showInfoCard) {
-            DetailsInfoPanelSurface(
-                panoramaEnabled = panoramaEnabled,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .onGloballyPositioned { coordinates ->
-                        val bounds = coordinates.boundsInRoot()
-                        if (!renderCinemaHero) onInfoCardBoundsSync(bounds.top, bounds.bottom)
-                    },
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth(),
-                ) {
-                    if (infoItems.isNotEmpty()) {
-                        val navigationIcon = rememberVectorPainter(Icons.AutoMirrored.Filled.KeyboardArrowRight)
-                        DetailsMetadataGrid(
-                            entries = infoItems.map { item ->
-                                DetailsMetadataEntry(
-                                    label = item.label,
-                                    value = item.value,
-                                    icon = item.iconRes?.let { rememberSafePainter(it) },
-                                    valueMuted = item.valueMuted,
-                                    onClick = item.onClick,
-                                    navigationIcon = navigationIcon.takeIf { item.showNavigationIndicator },
-                                )
-                            },
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
-                        )
-                    }
-                    if (showStandaloneProgress) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(start = 12.dp, end = 12.dp, top = if (infoItems.isNotEmpty()) 0.dp else 8.dp, bottom = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            KototoroLinearProgressIndicator(
-                                progress = { historyInfo.percent.coerceIn(0f, 1f) },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(3.dp)
-                                    .clip(RoundedCornerShape(999.dp)),
-                            )
-                            Text(
-                                text = progressLabel,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = if (panoramaEnabled) {
-                                immersiveTitleColor
-                            } else {
-                                MaterialTheme.colorScheme.onSurface
-                            },
-                                maxLines = 1,
-                            )
-                        }
-                    }
-                }
-            }
         }
 
         visibleTrackingSuggestion?.let { suggestion ->
-            TrackingSuggestionCard(
+            TrackingSuggestionRow(
                 match = suggestion,
                 onBindClick = { onBindTrackingSuggestion(suggestion) },
                 onOpenClick = { onOpenTrackingSuggestion(suggestion) },
@@ -1005,92 +900,58 @@ fun DetailsHeader(
             )
         }
 
-        DetailsReadableSurface(
-            panoramaEnabled = panoramaEnabled,
+        DetailsSectionDivider(horizontalPadding = 0.dp, modifier = Modifier.padding(top = 4.dp))
+        Column(
             modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             val isNovelStyle = mediaStylePolicy.style == DetailsMediaStyle.NOVEL
-            Column(
-                modifier = Modifier.padding(
-                    horizontal = if (isNovelStyle) 14.dp else 12.dp,
-                    vertical = if (isNovelStyle) 14.dp else 10.dp,
-                ),
-                verticalArrangement = Arrangement.spacedBy(if (isNovelStyle) 10.dp else 8.dp),
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = stringResource(R.string.description),
-                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.weight(1f),
+            DetailsSectionHeader(title = stringResource(R.string.description)) {
+                if (hasSupplementalMetadataDescription) {
+                    DetailsViewToggle(
+                        isSupplementalMetadataSelected = isSupplementalMetadataSelected,
+                        onSelect = { isSupplementalMetadataSelected = it },
                     )
-                    if (hasSupplementalMetadataDescription) {
-                        DetailsViewToggle(
-                            isSupplementalMetadataSelected = isSupplementalMetadataSelected,
-                            onSelect = { isSupplementalMetadataSelected = it },
+                }
+            }
+            if (isSupplementalMetadataSelected && hasSupplementalMetadataDescription) {
+                SupplementalMetadataDescription(properties = visibleSupplementalMetadataProperties)
+            } else {
+                SelectionContainer(
+                    // 同上：简介的选区容器在电视上同样是看不见的停靠点。
+                    modifier = Modifier.focusProperties {
+                        if (isTvPresentation) canFocus = false
+                    },
+                ) {
+                    if (isNovelStyle) {
+                        NovelEditorialSynopsisBody(
+                            text = descriptionForDisplay,
+                            expanded = isDescriptionExpanded,
+                            onExpandedChange = { isDescriptionExpanded = it },
+                            collapsedMaxLines = collapsedDescriptionMaxLines,
+                        )
+                    } else {
+                        ExpandableDescriptionText(
+                            text = descriptionForDisplay,
+                            expanded = isDescriptionExpanded,
+                            onExpandedChange = { isDescriptionExpanded = it },
+                            collapsedMaxLines = collapsedDescriptionMaxLines,
                         )
                     }
                 }
-                if (isSupplementalMetadataSelected && hasSupplementalMetadataDescription) {
-                    SupplementalMetadataDescription(properties = visibleSupplementalMetadataProperties)
-                } else {
-                    SelectionContainer(
-                        // 同上：简介的选区容器在电视上同样是看不见的停靠点。
-                        modifier = Modifier.focusProperties {
-                            if (isTvPresentation) canFocus = false
-                        },
-                    ) {
-                        if (isNovelStyle) {
-                            NovelEditorialSynopsisBody(
-                                text = descriptionForDisplay,
-                                expanded = isDescriptionExpanded,
-                                onExpandedChange = { isDescriptionExpanded = it },
-                                collapsedMaxLines = collapsedDescriptionMaxLines,
-                            )
-                        } else {
-                            ExpandableDescriptionText(
-                                text = descriptionForDisplay,
-                                expanded = isDescriptionExpanded,
-                                onExpandedChange = { isDescriptionExpanded = it },
-                                collapsedMaxLines = collapsedDescriptionMaxLines,
-                            )
-                        }
-                    }
-                }
+            }
+            if (!content?.tags.isNullOrEmpty()) {
+                DetailsTagChips(
+                    tags = content?.tags.orEmpty().map { tag ->
+                        DetailsTagChip(tag, tag.title, highlighted = isSensitiveDetailsTag(tag))
+                    },
+                    onTagClick = onTagClick,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
             }
         }
 
-        if (mediaStylePolicy.style == DetailsMediaStyle.NOVEL && !renderCinemaHero) {
-            val contentChapters = content?.chapters
-            NovelCatalogEntryRow(
-                title = stringResource(R.string.details_view_catalog),
-                subtitle = when {
-                    historyInfo.totalChapters > 0 -> stringResource(R.string.novel_chapters_count, historyInfo.totalChapters)
-                    contentChapters != null && contentChapters.isNotEmpty() -> stringResource(R.string.novel_chapters_count, contentChapters.size)
-                    chapterProgressLabel != "-" -> chapterProgressLabel
-                    else -> null
-                },
-                onClick = onOpenChapters,
-                trailingIcon = {
-                    androidx.compose.material3.Icon(
-                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                },
-            )
-        }
 
-        if (!content?.tags.isNullOrEmpty()) {
-            DetailsTagChips(
-                tags = content?.tags.orEmpty().map { tag ->
-                    DetailsTagChip(tag, tag.title, highlighted = isSensitiveDetailsTag(tag))
-                },
-                onTagClick = onTagClick,
-            )
-        }
     }
 }
 

@@ -599,15 +599,6 @@ fun DetailsHeroBadge(
     }
 }
 
-data class DetailsInfoItem(
-    val label: String,
-    val value: String,
-    @DrawableRes val iconRes: Int? = null,
-    val valueMuted: Boolean = false,
-    val onClick: (() -> Unit)? = null,
-    val showNavigationIndicator: Boolean = false,
-)
-
 data class DetailsHeroBadgeSpec(
     val text: String,
     @DrawableRes val iconRes: Int? = null,

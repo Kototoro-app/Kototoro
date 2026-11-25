@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.list.ui.compose
 
+import org.skepsun.kototoro.core.ui.compose.DetailsSectionHeader
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -39,18 +40,12 @@ fun ContentRailSection(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Row(
+        DetailsSectionHeader(
+            title = title,
+            count = count,
             modifier = Modifier.padding(horizontal = horizontalPadding),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            titleTrailing?.invoke()
-        }
+            trailing = titleTrailing?.let { trailing -> { trailing() } },
+        )
         LazyRow(
             modifier = railModifier.then(
                 if (LocalUiPresentationConfig.current.isTv) Modifier.focusGroup() else Modifier,

@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.community.ui
 
+import org.skepsun.kototoro.core.ui.compose.DetailsSectionHeader
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.focusGroup
@@ -66,18 +67,11 @@ fun CommunityWorksRail(
     testTag: String = "community-rail",
 ) {
     Column(modifier = modifier.fillMaxWidth().testTag(testTag)) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = horizontalPadding).height(40.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f),
-            )
-            titleTrailing?.invoke()
-        }
+        DetailsSectionHeader(
+            title = title,
+            modifier = Modifier.padding(horizontal = horizontalPadding),
+            trailing = titleTrailing?.let { trailing -> { trailing() } },
+        )
         note?.let { text ->
             Text(
                 text = text,

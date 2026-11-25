@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.details.ui.compose
 
 
+import kotlin.math.roundToInt
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -86,7 +87,7 @@ internal fun resolveReadActionLabel(
         ContentType.VIDEO, ContentType.HENTAI_VIDEO -> R.string._continue_play
         else -> R.string._continue
     }
-    return stringResource(
+    val label = stringResource(
         when {
             isChaptersLoading -> R.string.loading_
             historyInfo.isIncognitoMode -> R.string.incognito
@@ -94,6 +95,9 @@ internal fun resolveReadActionLabel(
             else -> defaultReadRes
         },
     )
+    // The details page no longer draws a progress bar; the continue button carries how far the reader got.
+    val percent = (historyInfo.percent * 100f).roundToInt()
+    return if (!isChaptersLoading && historyInfo.canContinue && percent in 1..99) "$label \u00B7 $percent%" else label
 }
 
 @Composable
