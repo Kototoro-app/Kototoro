@@ -480,20 +480,8 @@ dependencies {
 	def composeBom = platform(libs.androidx.compose.bom)
 	implementation composeBom
 	implementation libs.androidx.compose.ui
-	// Explicit ui 1.13.0-rc01 wins over the BOM-pinned 1.12.x: BlurRadiusSpec drives the immersive edge blur.
-	implementation libs.androidx.compose.ui.progressive.blur
 	implementation libs.androidx.compose.ui.text.google.fonts
-	// Phase D: explicit 1.5.0-rc01 wins over the BOM-pinned material3 1.4.0 for the whole app.
-	implementation libs.androidx.compose.material3.expressive
-	// core-ui's Compose Multiplatform 1.13 beta asks for foundation/animation 1.13.0-beta02; keep them on the same
-	// release candidate as ui and runtime above.
-	constraints {
-		implementation 'androidx.compose.foundation:foundation:1.13.0-rc01'
-		implementation 'androidx.compose.foundation:foundation-layout:1.13.0-rc01'
-		implementation 'androidx.compose.animation:animation:1.13.0-rc01'
-		implementation 'androidx.compose.animation:animation-core:1.13.0-rc01'
-		implementation 'androidx.compose.material:material-ripple:1.13.0-rc01'
-	}
+	implementation libs.androidx.compose.material3
 	implementation libs.androidx.compose.material.icons.extended
 	implementation libs.androidx.glance.appwidget
 	implementation libs.androidx.navigation3.runtime
