@@ -25,6 +25,9 @@ class IosTrackingProgress internal constructor(internal val value: TrackingEntry
     val note: String get() = value.note
 }
 
+/** A tracker the work is bound to with a connected account: somewhere the details page's one rating can go. */
+class IosTrackingRatingTarget internal constructor(val service: Int, val title: String, val score: Float)
+
 class IosTrackingCollectionItem internal constructor(value: TrackingCollectionItem) {
     val item = IosTrackingItem(value.item)
     val progress = value.entry.progress
@@ -111,6 +114,29 @@ class IosTrackingAccounts internal constructor(private val library: IosLibrary, 
         SourceTracking(library.database).bind(content.value, item.value.toEntity(), useMetadata = false)
         save(content, item.service, updated)
         IosTrackingProgress(updated, true)
+    }
+
+    /** The trackers this work is bound to on an account the reader has connected, with the score last saved (0–10). */
+    @Throws(Exception::class)
+    suspend fun ratingTargets(content: IosSourceContent): List<IosTrackingRatingTarget> {
+        val services = mutex.withLock { sessions.keys.sorted() }
+        return services.mapNotNull { service ->
+            library.database.getScrobblingDao().findByLocalManga(service, content.value.id)?.let { stored ->
+                IosTrackingRatingTarget(service, trackingSiteTitle(service), stored.rating * 10f)
+            }
+        }
+    }
+
+    /** Sets only the score (0–10, 0 clears it) on the bound entry; its status, progress and note stay as they are. */
+    @Throws(Exception::class)
+    suspend fun rate(content: IosSourceContent, service: Int, score: Float): Boolean = authenticated(service) { session ->
+        val stored = library.database.getScrobblingDao().findByLocalManga(service, content.value.id)
+            ?: return@authenticated false
+        val kind = accountKind(content.mediaKind, stored.mediaType)
+        val remote = api.entry(session, stored.targetId, kind) ?: return@authenticated false
+        val updated = api.update(session, kind, remote.copy(score = score.coerceIn(0f, 10f)), true)
+        save(content, service, updated)
+        true
     }
 
     /** Read from the same stored chapter identity as the reader; never infer progress from a title string. */

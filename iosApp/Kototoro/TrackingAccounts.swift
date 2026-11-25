@@ -117,6 +117,23 @@ final class TrackingAccountsModel: NSObject, ObservableObject, ASWebAuthenticati
         } catch { try? await persist(item.service); throw error }
     }
 
+    /// The trackers this work is bound to on a connected account, where the details page's rating is also sent.
+    func ratingTargets(content: IosSourceContent, tracking: IosTracking?) async -> [IosTrackingRatingTarget] {
+        await prepare(tracking)
+        guard let api else { return [] }
+        return (try? await api.ratingTargets(content: content)) ?? []
+    }
+
+    /// Writes only the score (0–10) to one bound tracker, keeping the entry's status and progress.
+    func rate(content: IosSourceContent, service: Int32, score: Float) async throws {
+        guard let api else { throw TrackingError.message(String(localized: "请先连接账号")) }
+        do {
+            _ = try await api.rate(content: content, service: service, score: score)
+            try await persist(service)
+            revision += 1
+        } catch { try? await persist(service); throw error }
+    }
+
     func collection(service: Int32, kind: String, status: String, page: Int32) async throws -> [IosTrackingCollectionItem] {
         guard let api else { throw TrackingError.message(String(localized: "请先连接账号")) }
         do {

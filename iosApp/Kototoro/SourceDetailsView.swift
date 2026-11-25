@@ -415,8 +415,14 @@ struct SourceDetailsView: View {
                 chapterPreview(details)
                 if !model.isVideo && !bookmarks.isEmpty { bookmarkPreview(details) }
                 // After the chapters, as on Android: the community's view of the work, then what is related to it.
-                if communityEnabled, let community = library.library?.community, !shownContent.isNsfw {
-                    CommunityDetailsSection(community: community, content: details)
+                let community = communityEnabled && !shownContent.isNsfw ? library.library?.community : nil
+                if community != nil || shownContent.rating > 0 || !library.trackingAccounts.accounts.isEmpty {
+                    DetailsRatingSection(
+                        community: community, content: details,
+                        sourceTitle: sources.source(named: shownContent.sourceName)?.title,
+                        sourceScore: shownContent.rating > 0 ? Double(shownContent.rating) * 10 : nil,
+                        tracking: library.library?.tracking, trackingModel: library.trackingAccounts
+                    )
                 }
                 relatedSection
             }
@@ -625,8 +631,8 @@ struct SourceDetailsView: View {
                     coverRow(shown)
                     primaryPlayRow
                         .onScrollVisibilityChange(threshold: 0.01) { headerReadVisible = $0 }
-                    infoCard(shown)
-                    summaryCard(shown)
+                    metaStrip(shown)
+                    summaryContent(shown, showHeader: true)
                 }
                 TrackingSyncBanner(content: model.details ?? model.content, tracking: library.library?.tracking,
                                    model: library.trackingAccounts)
@@ -709,19 +715,8 @@ struct SourceDetailsView: View {
             }
             .anchorPreference(key: DetailsCoverBoundsKey.self, value: .bounds) { $0 }
 
-            if let resume = resume, resume.progress > 0 {
-                HStack(spacing: 8) {
-                    ProgressView(value: Double(resume.progress))
-                        .tint(Color.accentColor)
-                    Text("\(Int(resume.progress * 100))%")
-                        .font(.caption2.weight(.medium))
-                        .foregroundStyle(.secondary)
-                }
-            }
-
             GlassEffectContainer(spacing: 10) {
                 HStack(spacing: 10) {
-                    ratingBadge(shown)
                     favouriteButton
                     copyTitleButton(shown)
                 }
@@ -781,7 +776,6 @@ struct SourceDetailsView: View {
                     HStack(spacing: 8) {
                         copyTitleButton(shown)
                         favouriteButton
-                        ratingBadge(shown)
                     }
                 }
             }
@@ -901,16 +895,6 @@ struct SourceDetailsView: View {
         .accessibilityIdentifier("details.favourite")
     }
 
-    @ViewBuilder
-    private func ratingBadge(_ shown: IosSourceContent) -> some View {
-        if shown.rating > 0 {
-            Label(String(format: "%.1f", Double(shown.rating) * 5), systemImage: "star.fill")
-                .font(.caption.weight(.semibold)).foregroundStyle(.orange)
-                .padding(.horizontal, 8).padding(.vertical, 5)
-                .background(Color.orange.opacity(0.12), in: .capsule)
-        }
-    }
-
     private func authorItem(_ shown: IosSourceContent) -> some View {
         Group {
             if !shown.authors.isEmpty {
@@ -955,46 +939,92 @@ struct SourceDetailsView: View {
         }
     }
 
-    /// Author, state, kind and chapters in two columns; every item is a `DetailsInfoLabelStyle` label, so icons share
-    /// one size, column width and rendering.
-    private func infoCard(_ shown: IosSourceContent) -> some View {
-        VStack(spacing: 10) {
-            Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 10) {
-                GridRow {
-                    authorItem(shown).frame(maxWidth: .infinity, alignment: .leading)
-                    stateItem(shown).frame(maxWidth: .infinity, alignment: .leading)
+    /// Rating, status, chapters and author as one row of columns split by hairlines (the App Store's information
+    /// strip) in place of a boxed grid. Reading progress is on the read button.
+    private func hasSummary(_ shown: IosSourceContent) -> Bool {
+        !(shown.summary.map(Self.plainText) ?? "").isEmpty || !shown.tags.isEmpty
+    }
+
+    private func metaStrip(_ shown: IosSourceContent) -> some View {
+        let listed = model.isVideo ? model.visibleChapters : model.chapters
+        // Top-aligned so a column without a detail line keeps its caption on the others' baseline.
+        return HStack(alignment: .top, spacing: 0) {
+            if shown.rating > 0 {
+                metaColumn("评分", value: (Double(shown.rating) * 10).formatted(.number.precision(.fractionLength(1)))) {
+                    CommunityStars(value: Double(shown.rating) * 5, size: 9)
                 }
-                GridRow {
-                    Label(Self.mediaKindTitle(shownContent.mediaKind), systemImage: Self.mediaKindSymbol(shownContent.mediaKind))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    chapterInfo.frame(maxWidth: .infinity, alignment: .leading)
-                }
+                metaDivider
+            }
+            metaColumn("状态", value: shown.state.map(Self.stateTitle) ?? String(localized: "未知")) {
                 if let timeLeft {
-                    GridRow {
-                        // Android's estimated time left (shared rule; manga only).
-                        Label(timeLeft, systemImage: "clock")
-                            .foregroundStyle(.secondary)
-                            .gridCellColumns(2)
-                            .accessibilityIdentifier("details.timeLeft")
+                    Text(timeLeft).accessibilityIdentifier("details.timeLeft")
+                }
+            }
+            metaDivider
+            Button { showingAllChapters = true } label: {
+                metaColumn(model.isVideo ? "剧集" : "章节", value: listed.isEmpty ? "-" : String(listed.count)) {
+                    Image(systemName: "chevron.right").imageScale(.small)
+                }
+            }
+            .buttonStyle(.plain)
+            .disabled(listed.isEmpty)
+            .accessibilityIdentifier("details.meta.chapters")
+            metaDivider
+            authorColumn(shown)
+        }
+        .padding(.vertical, 10)
+        .overlay(alignment: .top) { Divider() }
+        .overlay(alignment: .bottom) { Divider() }
+    }
+
+    private var metaDivider: some View {
+        Divider().frame(height: 36)
+    }
+
+    private func metaColumn<Detail: View>(_ caption: LocalizedStringKey, value: String,
+                                          @ViewBuilder detail: () -> Detail) -> some View {
+        VStack(spacing: 3) {
+            Text(caption).font(.caption2).foregroundStyle(.secondary)
+            Text(verbatim: value)
+                .font(.headline)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            detail()
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 4)
+        .contentShape(.rect)
+    }
+
+    @ViewBuilder
+    private func authorColumn(_ shown: IosSourceContent) -> some View {
+        let value = shown.authors.isEmpty ? String(localized: "佚名") : shown.authors.joined(separator: String(localized: "、"))
+        if shown.authors.isEmpty {
+            metaColumn("作者", value: value) { EmptyView() }
+        } else {
+            Menu {
+                ForEach(shown.authors, id: \.self) { author in
+                    Section(author) {
+                        Button("在当前源搜索【\(author)】") {
+                            if let src = sources.source(named: shown.sourceName) {
+                                destinationBrowse = src
+                                browseInitialQuery = author
+                            }
+                        }
+                        Button("在全部源搜索【\(author)】") {
+                            destinationGlobalSearchQuery = author
+                        }
                     }
                 }
+            } label: {
+                metaColumn("作者", value: value) { EmptyView() }
             }
-            .labelStyle(DetailsInfoLabelStyle())
-            .font(.subheadline)
-
-            if let resume = resume, resume.progress > 0 {
-                HStack(spacing: 8) {
-                    ProgressView(value: Double(resume.progress))
-                        .tint(Color.accentColor)
-                    Text("\(Int(resume.progress * 100))%")
-                        .font(.caption2.weight(.medium))
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.top, 2)
-            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("details.meta.author")
         }
-        .padding(16)
-        .modifier(DetailsContentPanel())
     }
 
     /// Android's header shows the same reading progress as `currentChapter + 1 / total` (`0/N` before the first
@@ -1044,16 +1074,6 @@ struct SourceDetailsView: View {
     }
 
     @ViewBuilder
-    private func summaryCard(_ shown: IosSourceContent) -> some View {
-        let summary = shown.summary.map(Self.plainText) ?? ""
-        if !summary.isEmpty || !shown.tags.isEmpty {
-            summaryContent(shown, showHeader: true)
-                .padding(16)
-                .modifier(DetailsContentPanel())
-        }
-    }
-
-    @ViewBuilder
     private func summaryContent(_ shown: IosSourceContent, showHeader: Bool) -> some View {
         let summary = shown.summary.map(Self.plainText) ?? ""
         let hasSummary = !summary.isEmpty
@@ -1061,7 +1081,7 @@ struct SourceDetailsView: View {
             VStack(alignment: .leading, spacing: 10) {
                 if showHeader {
                     Text("简介")
-                        .font(.subheadline.weight(.bold))
+                        .font(.title3.weight(.bold))
                         .foregroundStyle(.primary)
                 }
 
@@ -1131,8 +1151,9 @@ struct SourceDetailsView: View {
         if !model.related.isEmpty {
             Section {
                 VStack(alignment: .leading, spacing: 10) {
+                    Divider()
                     Text("相关推荐")
-                        .font(.subheadline.weight(.bold))
+                        .font(.title3.weight(.bold))
                         .foregroundStyle(.primary)
 
                     ScrollView(.horizontal, showsIndicators: false) {
@@ -1192,6 +1213,11 @@ struct SourceDetailsView: View {
                     if let chapter = resumeChapter() {
                         Text(chapter.title).font(.caption).opacity(0.85)
                     }
+                    // The details page draws no progress bar; the button says how far the reader got.
+                    if let resume, resume.progress > 0.005, resume.progress < 0.995 {
+                        Text(verbatim: "\(Int((resume.progress * 100).rounded()))%")
+                            .font(.caption.weight(.semibold)).monospacedDigit().opacity(0.85)
+                    }
                 }
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)
@@ -1217,7 +1243,7 @@ struct SourceDetailsView: View {
                                                  limit: model.isVideo ? 8 : 5)
         let content = VStack(alignment: .leading, spacing: model.isVideo ? 10 : 12) {
             HStack(spacing: 12) {
-                Text(model.isVideo ? "剧集" : "章节").font(.headline)
+                Text(model.isVideo ? "剧集" : "章节").font(.title3.weight(.bold))
                 if model.isVideo && model.lines.count > 1 {
                     Picker("线路", selection: $model.selectedLine) {
                         ForEach(model.lines, id: \.self) { Text($0 ?? String(localized: "默认")).tag($0) }
@@ -1303,14 +1329,12 @@ struct SourceDetailsView: View {
         }
         return Section {
             Group {
-                if model.isVideo {
+                VStack(alignment: .leading, spacing: 12) {
+                    // The meta strip already ends in a rule; repeat it only when the synopsis sits between them.
+                    if hasSummary(shownContent) { Divider() }
                     content
-                        .padding(.vertical, 6)
-                } else {
-                    content
-                        .padding(16)
-                        .modifier(DetailsContentPanel())
                 }
+                .padding(.vertical, 6)
             }
             .listRowBackground(Color.clear)
             .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 10, trailing: 0))
@@ -1357,8 +1381,6 @@ struct SourceDetailsView: View {
                             BookmarkPreviewLabel(runtime: model.runtime, content: details, bookmark: bookmark,
                                                  chapter: model.chapters.first { $0.id == bookmark.chapterId })
                                 .frame(width: 220, alignment: .leading)
-                                .padding(12)
-                                .modifier(DetailsContentPanel(cornerRadius: 16))
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("details.bookmark.\(bookmark.id)")
@@ -1485,27 +1507,6 @@ struct SourceDetailsView: View {
 }
 
 /// Content stays on standard material; Liquid Glass is reserved for the controls above it.
-struct DetailsContentPanel: ViewModifier {
-    var cornerRadius: CGFloat = 22
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-    @Environment(\.colorSchemeContrast) private var contrast
-
-    func body(content: Content) -> some View {
-        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-        content
-            .background {
-                if reduceTransparency {
-                    shape.fill(Color(uiColor: .secondarySystemGroupedBackground))
-                } else {
-                    shape.fill(.regularMaterial)
-                }
-            }
-            .overlay {
-                shape.strokeBorder(Color.primary.opacity(contrast == .increased ? 0.2 : 0.06), lineWidth: 0.5)
-            }
-    }
-}
-
 /// An item of the details info card: the icon at the text's size in a fixed column, secondary unless the item colors
 /// it (the state), so every item's icon has the same size, alignment and weight.
 struct DetailsInfoLabelStyle: LabelStyle {

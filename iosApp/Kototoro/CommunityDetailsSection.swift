@@ -2,71 +2,157 @@ import KototoroShared
 import Security
 import SwiftUI
 
-/// The community card on a work's details: the same material panel as the chapter and bookmark panels, titled
-/// in-panel with its comments entry on the trailing side, then the score and the reader's own rating.
-struct CommunityDetailsSection: View {
-    let community: IosCommunityDetails
+/// The details page's one rating section, drawn without a panel: the community's score while the community is on, the
+/// source's own score, then the reader's single rating. That rating goes to the community and to every tracker the
+/// work is bound to unless the reader turns one off under 同步到; trackers take the same 0–10 scale as the stars.
+struct DetailsRatingSection: View {
+    /// Nil while the community is off or the work is adult; the section then rates on trackers only.
+    let community: IosCommunityDetails?
     let content: IosSourceContent
+    let sourceTitle: String?
+    /// The source's score on a 0–10 scale.
+    let sourceScore: Double?
+    let tracking: IosTracking?
+    @ObservedObject var trackingModel: TrackingAccountsModel
     @State private var overview: IosCommunityOverview?
     @State private var unavailable = false
     @State private var loading = true
     @State private var showingComments = false
-    @State private var showingRating = false
-    @State private var myRating: Int32 = 0
+    @State private var sheet: RatingSheet?
+    @State private var communityStars: Int32 = 0
+    @State private var trackers: [IosTrackingRatingTarget] = []
+    @State private var deselected: Set<String> = []
+    @State private var failure: String?
+
+    private enum RatingSheet: Identifiable {
+        case community, trackers
+        var id: Self { self }
+    }
+
+    private struct Target: Identifiable {
+        let id: String
+        let title: String
+    }
+
+    private static let communityKey = "community"
+
+    private var targets: [Target] {
+        (community != nil ? [Target(id: Self.communityKey, title: String(localized: "社区"))] : [])
+            + trackers.map { Target(id: String($0.service), title: $0.title) }
+    }
+    private var selectedTrackers: [IosTrackingRatingTarget] {
+        trackers.filter { !deselected.contains(String($0.service)) }
+    }
+    private var sendsToCommunity: Bool {
+        community != nil && overview != nil && !deselected.contains(Self.communityKey)
+    }
+    private var canRate: Bool { sendsToCommunity || !selectedTrackers.isEmpty }
+    /// The community rating when there is one, else the first bound tracker's score.
+    private var myRating: Int32 {
+        communityStars > 0 ? communityStars : Int32((trackers.first { $0.score > 0 }?.score ?? 0).rounded())
+    }
 
     var body: some View {
         Section {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 12) {
-                    Text("社区评分").font(.headline)
+                    Text("评分").font(.title3.weight(.bold))
                     Spacer(minLength: 0)
                     if let overview { commentsButton(count: Int(overview.commentCount)) }
                 }
-                if loading {
-                    Label { Text("正在读取社区评分…") } icon: { ProgressView() }
-                        .font(.subheadline).foregroundStyle(.secondary)
-                } else if unavailable {
-                    Label("暂时无法读取社区评分", systemImage: "exclamationmark.circle")
-                        .font(.subheadline).foregroundStyle(.secondary)
-                } else if let overview {
-                    CommunityRatingSummaryRow(overview: overview)
-                        .accessibilityIdentifier("details.community.rating")
-                    Divider()
-                    myRatingRow
+                if community != nil {
+                    if loading {
+                        Label { Text("正在读取社区评分…") } icon: { ProgressView() }
+                            .font(.subheadline).foregroundStyle(.secondary)
+                    } else if unavailable {
+                        Label("暂时无法读取社区评分", systemImage: "exclamationmark.circle")
+                            .font(.subheadline).foregroundStyle(.secondary)
+                    } else if let overview {
+                        CommunityRatingSummaryRow(overview: overview)
+                            .accessibilityIdentifier("details.community.rating")
+                    }
+                }
+                if let sourceTitle, let sourceScore {
+                    LabeledContent {
+                        Text(sourceScore.formatted(.number.precision(.fractionLength(1))))
+                            .font(.subheadline.weight(.semibold)).monospacedDigit().foregroundStyle(.primary)
+                    } label: {
+                        Text(verbatim: sourceTitle).font(.subheadline)
+                    }
+                    .accessibilityIdentifier("details.rating.source")
+                }
+                Divider()
+                myRatingRow
+                if targets.isEmpty {
+                    Text("开启社区或绑定追踪平台后即可评分").font(.footnote).foregroundStyle(.secondary)
+                } else {
+                    syncRow
+                }
+                if let failure {
+                    Text(failure).font(.footnote).foregroundStyle(.red)
                 }
             }
-            .padding(16)
-            .modifier(DetailsContentPanel())
+            .padding(.vertical, 6)
             .listRowBackground(Color.clear)
             .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 10, trailing: 0))
         }
         .listRowSeparator(.hidden)
-        .task(id: content.contentKey + "|" + content.title) {
-            loading = true
-            unavailable = false
-            overview = nil
-            do {
-                let result = try await community.overview(content: content)
-                guard !Task.isCancelled else { return }
-                overview = result
-                myRating = (try? await community.myRating(content: content))?.int32Value ?? 0
-            } catch {
-                guard !Task.isCancelled else { return }
-                unavailable = true
-            }
-            loading = false
-        }
+        .task(id: content.contentKey + "|" + content.title) { await load() }
         .sheet(isPresented: $showingComments) {
-            CommunityCommentsView(community: community, content: content)
+            if let community { CommunityCommentsView(community: community, content: content) }
         }
-        .sheet(isPresented: $showingRating, onDismiss: {
-            Task { myRating = (try? await community.myRating(content: content))?.int32Value ?? 0 }
-        }) {
-            CommunityRatingView(community: community, content: content, stars: myRating > 0 ? myRating : 0)
+        .sheet(item: $sheet, onDismiss: { Task { await reloadMine() } }) { sheet in
+            switch sheet {
+            case .community:
+                if let community {
+                    CommunityRatingView(community: community, content: content, stars: myRating) { stars in
+                        await sendToTrackers(stars)
+                    }
+                }
+            case .trackers:
+                TrackerRatingView(stars: myRating) { stars in await sendToTrackers(stars) }
+            }
         }
     }
 
-    /// The panel's trailing action, styled like the chapter panel's “全部 N 集”.
+    private func load() async {
+        loading = true
+        unavailable = false
+        overview = nil
+        failure = nil
+        trackers = await trackingModel.ratingTargets(content: content, tracking: tracking)
+        guard let community else { loading = false; return }
+        do {
+            let result = try await community.overview(content: content)
+            guard !Task.isCancelled else { return }
+            overview = result
+            communityStars = (try? await community.myRating(content: content))?.int32Value ?? 0
+        } catch {
+            guard !Task.isCancelled else { return }
+            unavailable = true
+        }
+        loading = false
+    }
+
+    private func reloadMine() async {
+        if let community { communityStars = (try? await community.myRating(content: content))?.int32Value ?? 0 }
+        trackers = await trackingModel.ratingTargets(content: content, tracking: tracking)
+    }
+
+    /// Sends the score to each selected tracker; a failure is reported under the section, the rest still go out.
+    private func sendToTrackers(_ stars: Int32) async {
+        var failed: [String] = []
+        for target in selectedTrackers {
+            do {
+                try await trackingModel.rate(content: content, service: target.service, score: Float(stars))
+            } catch {
+                failed.append("\(target.title)：\(error.localizedDescription)")
+            }
+        }
+        failure = failed.isEmpty ? nil : String(localized: "评分未同步。") + failed.joined(separator: "；")
+    }
+
+    /// The panel's trailing action, styled like the chapter section's “全部 N 集”.
     private func commentsButton(count: Int) -> some View {
         Button { showingComments = true } label: {
             HStack(spacing: 4) {
@@ -87,7 +173,7 @@ struct CommunityDetailsSection: View {
         .accessibilityIdentifier("details.community.comments")
     }
 
-    /// The reader's own rating, and the capsule that opens the picker.
+    /// The reader's one rating, and the capsule that opens the picker.
     private var myRatingRow: some View {
         HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
@@ -101,12 +187,90 @@ struct CommunityDetailsSection: View {
                 }
             }
             Spacer(minLength: 0)
-            Button(myRating > 0 ? "修改" : "评分") { showingRating = true }
+            Button(myRating > 0 ? "修改" : "评分") { sheet = sendsToCommunity ? .community : .trackers }
                 .buttonStyle(.bordered)
                 .buttonBorderShape(.capsule)
                 .controlSize(.small)
+                .disabled(!canRate)
                 .accessibilityIdentifier("details.community.rate")
         }
+    }
+
+    /// Where the rating goes: every target starts on; a menu of toggles turns one off for this visit.
+    private var syncRow: some View {
+        let chosen = targets.filter { !deselected.contains($0.id) }.map(\.title)
+        return Menu {
+            ForEach(targets) { target in
+                Toggle(target.title, isOn: Binding(
+                    get: { !deselected.contains(target.id) },
+                    set: { on in if on { deselected.remove(target.id) } else { deselected.insert(target.id) } }
+                ))
+            }
+        } label: {
+            LabeledContent {
+                HStack(spacing: 4) {
+                    Text(chosen.isEmpty ? String(localized: "不同步") : chosen.joined(separator: String(localized: "、")))
+                        .lineLimit(1)
+                    Image(systemName: "chevron.up.chevron.down").font(.caption2.weight(.semibold))
+                }
+                .foregroundStyle(.secondary)
+            } label: {
+                Text("同步到").foregroundStyle(.primary)
+            }
+            .font(.subheadline)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("details.rating.syncTargets")
+    }
+}
+
+/// The rating picker when the score goes to trackers only: no community identity is involved, so a plain sheet.
+private struct TrackerRatingView: View {
+    @Environment(\.dismiss) private var dismiss
+    @State var stars: Int32
+    let save: (Int32) async -> Void
+    @State private var saving = false
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    VStack(spacing: 6) {
+                        CommunityStarPicker(stars: $stars)
+                        if stars > 0 {
+                            HStack(spacing: 0) {
+                                Text(verbatim: "\(stars) / 10 · ")
+                                Text(communityRatingLevel(stars))
+                            }
+                            .font(.headline)
+                        } else {
+                            Text("点按星星评分，点左半边为半星").font(.subheadline).foregroundStyle(.secondary)
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 6)
+                }
+            }
+            .navigationTitle("作品评分").navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("保存") {
+                        Task {
+                            saving = true
+                            await save(stars)
+                            saving = false
+                            dismiss()
+                        }
+                    }
+                    .disabled(stars == 0 || saving)
+                    .accessibilityIdentifier("details.rating.save")
+                }
+            }
+            .interactiveDismissDisabled(saving)
+        }
+        .presentationDetents([.medium])
     }
 }
 
@@ -329,12 +493,18 @@ private struct CommunityRatingView: View {
     let community: IosCommunityDetails
     let content: IosSourceContent
     @State var stars: Int32
+    /// After the community took the rating: the same score goes to the selected trackers.
+    var onPublished: (Int32) async -> Void = { _ in }
 
     var body: some View {
         CommunityPublishingForm(
             title: "作品评分", community: community, publishTitle: "公开发布评分",
             publishIdentifier: "details.community.publishRating", canPublish: stars > 0,
-            operation: { try await community.rate(content: content, stars: stars, identity: $0) }
+            operation: { identity in
+                let result = try await community.rate(content: content, stars: stars, identity: identity)
+                await onPublished(stars)
+                return result
+            }
         ) {
             VStack(spacing: 6) {
                 CommunityStarPicker(stars: $stars)
