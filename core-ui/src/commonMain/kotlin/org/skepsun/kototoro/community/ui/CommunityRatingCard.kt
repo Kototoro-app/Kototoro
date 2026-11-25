@@ -460,6 +460,27 @@ fun communityRefusalText(refusal: CommunityRatingRefusal?): String? = when (refu
 }
 
 /** A score the reader does not set: the source's own rating or a tracker's average, shown as a row under the overview. */
+@Composable
+private fun EmptyRatingRow(canRate: Boolean, isPublishing: Boolean, onRate: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = uiString("community_rating_be_first"),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f).testTag("community-rating-empty"),
+        )
+        when {
+            isPublishing -> CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+            canRate -> FilledTonalButton(onClick = onRate, modifier = Modifier.testTag("community-rating-rate")) {
+                Text(uiString("community_rating_rate"))
+            }
+        }
+    }
+}
+
 @Immutable
 data class DetailsScoreRow(
     val key: String,
@@ -505,6 +526,10 @@ fun DetailsRatingSection(
     val anySelected = syncTargets.any { it.selected }
     val communityBlocked = community != null && (community.refusal != null || community.isLoading)
     val canRate = syncTargets.isNotEmpty() && anySelected && !(communityBlocked && syncTargets.all { it.key == communityTargetKey })
+    // Nothing to show yet (no ratings anywhere, none from the reader): one line instead of a big empty score block
+    // with a second row of stars, so the chapters stay near the top of the page.
+    val compactEmpty = community != null && community.rating == null && !community.isLoading &&
+        scores.isEmpty() && myRating == null && freshRatingsText(community) == null
 
     Column(
         modifier = modifier
@@ -515,7 +540,7 @@ fun DetailsRatingSection(
         DetailsSectionHeader(title = uiString("rating")) {
             if (community != null) CommentsPill(count = community.comments, onClick = onOpenComments)
         }
-        if (community != null) {
+        if (community != null && !compactEmpty) {
             ScoreOverview(
                 rating = community.rating,
                 isLoading = community.isLoading,
@@ -558,16 +583,20 @@ fun DetailsRatingSection(
                 }
             }
         }
-        HorizontalDivider(
-            modifier = Modifier.padding(vertical = 12.dp),
-            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-        )
-        MyRatingRow(
-            myStars = myRating,
-            canRate = canRate,
-            isPublishing = isPublishing,
-            onRate = { showDialog = true },
-        )
+        if (compactEmpty) {
+            EmptyRatingRow(canRate = canRate, isPublishing = isPublishing, onRate = { showDialog = true })
+        } else {
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = 12.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+            )
+            MyRatingRow(
+                myStars = myRating,
+                canRate = canRate,
+                isPublishing = isPublishing,
+                onRate = { showDialog = true },
+            )
+        }
         if (syncTargets.isEmpty()) {
             Text(
                 text = uiString("details_rating_unavailable"),
