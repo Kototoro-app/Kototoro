@@ -116,6 +116,8 @@ internal fun DetailsOverflowMenu(
     isEditOverrideAvailable: Boolean,
     isShortcutSupported: Boolean,
     isNsfw: Boolean,
+    novelAutoDownloadEnabled: Boolean = false,
+    onToggleNovelAutoDownload: (() -> Unit)? = null,
     onDeleteLocalRequest: () -> Unit,
     onActionClick: (DetailsAction) -> Unit,
 ) {
@@ -177,6 +179,20 @@ internal fun DetailsOverflowMenu(
                                 DetailsAction.Translate
                             },
                         )
+                    },
+                )
+            }
+            if (onToggleNovelAutoDownload != null) {
+                CompactDropdownMenuItem(
+                    text = {
+                        val label = if (novelAutoDownloadEnabled) R.string.novel_auto_download_disable
+                        else R.string.novel_auto_download_enable
+                        Text(stringResource(label))
+                    },
+                    leadingIcon = { DetailsMenuIcon(R.drawable.ic_download) },
+                    onClick = {
+                        expanded = false
+                        onToggleNovelAutoDownload()
                     },
                 )
             }

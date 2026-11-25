@@ -195,6 +195,7 @@ class DownloadWorker @AssistedInject constructor(
     private val novelContentLoader: NovelContentLoader,
     private val superResolutionManager: ReaderSuperResolutionManager,
     private val chapterTranslationStore: ChapterTranslationStore,
+    private val queuePreferences: DownloadQueuePreferences,
 ) : CoroutineWorker(appContext, params) {
 
     private data class DownloadExecutionContext(
@@ -289,7 +290,7 @@ class DownloadWorker @AssistedInject constructor(
                 "chapters=${executionContext.executionManga.chapters?.size ?: 0} taskChapters=${task.executionChapterIds?.size ?: -1}",
         )
 
-        ActiveDownloadRegistry.register(id, isPaused = task.isPaused)
+        queuePreferences.registerActive(id, task.isPaused)
 
         val pausingHandle = PausingHandle()
         if (task.isPaused) {
@@ -362,6 +363,7 @@ class DownloadWorker @AssistedInject constructor(
                     }
                 }
             }
+            queuePreferences.remove(id)
             Result.success(currentState.toWorkData())
         } catch (_: CancellationException) {
             withContext(NonCancellable) {
@@ -391,6 +393,7 @@ class DownloadWorker @AssistedInject constructor(
                 ).toWorkData(),
             )
         } finally {
+            queuePreferences.resetAcquired(id)
             ActiveDownloadRegistry.unregister(id)
             try {
                 applicationContext.unregisterReceiver(pausingReceiver)
@@ -600,30 +603,53 @@ class DownloadWorker @AssistedInject constructor(
             "translateContentImpl start: mangaId=${context.displayMangaId} chapters=${chapters.size} " +
                 "pair=${languagePair.first}->${languagePair.second}",
         )
+        val isNovel = contentType == ContentType.NOVEL || contentType == ContentType.HENTAI_NOVEL
+        val requestedIds = task.executionChapterIds?.toList().orEmpty()
+        val referencesById = task.executionChapterRefs.orEmpty().associateBy { it.id }
+        val queued = LinkedHashMap<Long, ContentChapter>()
+        for (chapter in chapters.map { it.value }) {
+            val queueId = requestedIds.firstOrNull { it == chapter.id }
+                ?: requestedIds.firstOrNull { key ->
+                    key !in queued && referencesById[key]?.let { chapterExecutionIdentityMatches(it, chapter) } == true
+                }
+                ?: chapter.id
+            queued[queueId] = chapter
+        }
+        val queueIds = (requestedIds + queued.keys).distinct().filter(queued::containsKey)
         mangaLock.withLock(storedContent) {
-            when (contentType) {
-                ContentType.NOVEL, ContentType.HENTAI_NOVEL -> {
-                    if (forceRetranslation) {
-                        // "Translate again" must not hand back the paragraphs cached by the previous run.
-                        novelTranslationProcessor.clearCache()
-                    }
-                    translateNovelChapters(context, workContent, task, chapters, languagePair)
+            if (isNovel && forceRetranslation) novelTranslationProcessor.clearCache()
+            val novelRepo = if (isNovel) {
+                mangaRepositoryFactory.createWithDiagnostics(workContent.source).requireAvailableRepository(
+                    tag = "DownloadWorker",
+                    prefix = "translateNovelParagraphs_repository_unavailable",
+                ) { "Translation source ${workContent.source.name} is not available" }
+            } else {
+                null
+            }
+            var completed = 0
+            while (true) {
+                checkIsPaused()
+                val chapterId = queuePreferences.acquireNext(id, queueIds) ?: break
+                val chapter = queued.getValue(chapterId)
+                val total = completed + 1 + queuePreferences.pending(id, queueIds).size
+                publishState(currentState.copy(currentChapterTitle = chapter.title))
+                if (novelRepo != null) {
+                    val novelLanguages = settings.readerTranslationSourceLanguage to settings.readerTranslationTargetLanguage
+                    translateNovelParagraphs(novelRepo, workContent, chapter, completed, total, novelLanguages)
+                    chapterTranslationStore.markPrepared(
+                        mangaId = context.displayMangaId,
+                        chapterId = chapter.id,
+                        key = settings.resolveChapterTranslationKey(
+                            sourceLang = languagePair.first,
+                            targetLang = languagePair.second,
+                        ),
+                        pages = 0,
+                    )
+                } else {
+                    translateMangaChapter(context, chapter, completed, total, languagePair, forceRetranslation)
                 }
-
-                else -> {
-                    for ((chapterIndex, chapter) in chapters.withIndex()) {
-                        checkIsPaused()
-                        translateMangaChapter(
-                            context = context,
-                            chapter = chapter.value,
-                            chapterIndex = chapterIndex,
-                            totalChapters = chapters.size,
-                            languagePair = languagePair,
-                            forceRefresh = forceRetranslation,
-                        )
-                        publishTranslationChapterState(chapterIndex, chapters.size)
-                    }
-                }
+                publishTranslationChapterState(completed, total)
+                completed++
             }
         }
         publishState(
@@ -665,29 +691,6 @@ class DownloadWorker @AssistedInject constructor(
             task = task,
             excludedIds = downloadedChapterIds,
         )
-    }
-
-    private suspend fun translateNovelChapters(
-        context: DownloadExecutionContext,
-        manga: Content,
-        task: DownloadTask,
-        chapters: List<IndexedValue<ContentChapter>>,
-        languagePair: Pair<String, String>,
-    ) {
-        prepareNovelTranslation(manga, task)
-        for ((chapterIndex, chapter) in chapters.withIndex()) {
-            checkIsPaused()
-            chapterTranslationStore.markPrepared(
-                mangaId = context.displayMangaId,
-                chapterId = chapter.value.id,
-                key = settings.resolveChapterTranslationKey(
-                    sourceLang = languagePair.first,
-                    targetLang = languagePair.second,
-                ),
-                pages = 0,
-            )
-            publishTranslationChapterState(chapterIndex, chapters.size)
-        }
     }
 
     private suspend fun translateMangaChapter(
@@ -899,50 +902,49 @@ class DownloadWorker @AssistedInject constructor(
             tag = "DownloadWorker",
             prefix = "prepareNovelTranslation_repository_unavailable",
         ) { "Prepare translation source ${manga.source.name} is not available" }
-        val sourceLang = settings.readerTranslationSourceLanguage
-        val targetLang = settings.readerTranslationTargetLanguage
-        val displayMode = NovelReaderSettings.load(applicationContext).translationDisplayMode
+        val languages = settings.readerTranslationSourceLanguage to settings.readerTranslationTargetLanguage
         for ((chapterIndex, chapter) in chapters.withIndex()) {
             checkIsPaused()
-            val content = novelContentLoader.loadChapterContent(
-                repository = repo,
-                chapter = chapter.value,
-            )
-            val totalParagraphs = NovelParagraphSplitter.split(content)
-                .count { it.type == NovelParagraphType.TEXT && it.originalText.isNotBlank() }
-                .coerceAtLeast(1)
-            novelTranslationProcessor.translateChapterFlow(
-                chapterIndex = chapterIndex,
-                content = content,
-                sourceLang = sourceLang,
-                targetLang = targetLang,
-                displayMode = displayMode,
-                bookKey = "${manga.source.name}:${manga.id}",
-            ).collect { translation ->
-                checkIsPaused()
-                val translatedCount = translation.translations.size.coerceAtMost(totalParagraphs)
-                publishState(
-                    currentState.copy(
-                        totalChapters = chapters.size,
-                        currentChapter = chapterIndex,
-                        totalPages = totalParagraphs,
-                        currentPage = translatedCount.coerceAtLeast(1) - 1,
-                        isIndeterminate = false,
-                        eta = -1L,
-                        isStuck = false,
-                        downloadedChapters = if (translation.isComplete) chapterIndex + 1 else chapterIndex,
-                    ),
-                )
-            }
+            translateNovelParagraphs(repo, manga, chapter.value, chapterIndex, chapters.size, languages)
         }
-        publishState(
-            currentState.copy(
-                isIndeterminate = false,
-                eta = -1L,
-                isStuck = false,
-                isCompleted = true,
-            ),
-        )
+        publishState(currentState.copy(isIndeterminate = false, eta = -1L, isStuck = false, isCompleted = true))
+    }
+
+    private suspend fun translateNovelParagraphs(
+        repository: ContentRepository,
+        manga: Content,
+        chapter: ContentChapter,
+        chapterIndex: Int,
+        totalChapters: Int,
+        languages: Pair<String, String>,
+    ) {
+        val content = novelContentLoader.loadChapterContent(repository = repository, chapter = chapter)
+        val totalParagraphs = NovelParagraphSplitter.split(content)
+            .count { it.type == NovelParagraphType.TEXT && it.originalText.isNotBlank() }
+            .coerceAtLeast(1)
+        novelTranslationProcessor.translateChapterFlow(
+            chapterIndex = chapterIndex,
+            content = content,
+            sourceLang = languages.first,
+            targetLang = languages.second,
+            displayMode = NovelReaderSettings.load(applicationContext).translationDisplayMode,
+            bookKey = "${manga.source.name}:${manga.id}",
+        ).collect { translation ->
+            checkIsPaused()
+            val translatedCount = translation.translations.size.coerceAtMost(totalParagraphs)
+            publishState(
+                currentState.copy(
+                    totalChapters = totalChapters,
+                    currentChapter = chapterIndex,
+                    totalPages = totalParagraphs,
+                    currentPage = translatedCount.coerceAtLeast(1) - 1,
+                    isIndeterminate = false,
+                    eta = -1L,
+                    isStuck = false,
+                    downloadedChapters = if (translation.isComplete) chapterIndex + 1 else chapterIndex,
+                ),
+            )
+        }
     }
 
     /**
@@ -3159,6 +3161,7 @@ class DownloadWorker @AssistedInject constructor(
         @ApplicationContext private val context: Context,
         private val mangaDataRepository: ContentDataRepository,
         private val workManager: WorkManager,
+        private val queuePreferences: DownloadQueuePreferences,
     ) {
         private val scheduleMutex = Mutex()
 
@@ -3191,6 +3194,7 @@ class DownloadWorker @AssistedInject constructor(
 
         suspend fun cancel(id: UUID) {
             workManager.cancelWorkById(id).await()
+            queuePreferences.remove(id)
         }
 
         /**
@@ -3205,7 +3209,7 @@ class DownloadWorker @AssistedInject constructor(
                 if (work.state.isFinished) continue
                 val task = workManager.getWorkInputData(work.id)?.let { DownloadTask(it) } ?: continue
                 if (task.kind == DownloadTaskKind.TRANSLATE) continue
-                workManager.cancelWorkById(work.id).await()
+                cancel(work.id)
             }
         }
 
@@ -3226,19 +3230,20 @@ class DownloadWorker @AssistedInject constructor(
         )
 
         suspend fun delete(id: UUID) {
-            workManager.cancelWorkById(id).await()
+            cancel(id)
             workManager.deleteWorks(listOf(id))
         }
 
         suspend fun delete(ids: Collection<UUID>) {
             val wm = workManager
-            ids.forEach { id -> wm.cancelWorkById(id).await() }
+            ids.forEach { id -> cancel(id) }
             workManager.deleteWorks(ids)
         }
 
         suspend fun removeCompleted() {
             val finishedWorks = workManager.awaitFinishedWorkInfosByTag(TAG)
             workManager.deleteWorks(finishedWorks.mapToSet { it.id })
+            finishedWorks.forEach { queuePreferences.remove(it.id) }
         }
 
         suspend fun updateConstraints(allowMeteredNetwork: Boolean) {
@@ -3279,7 +3284,7 @@ class DownloadWorker @AssistedInject constructor(
                 val task = workManager.getWorkInputData(work.id)?.let { DownloadTask(it) } ?: continue
                 if (task.kind != DownloadTaskKind.TRANSLATE) continue
                 if (task.executionMangaId != mangaId && task.displayMangaId != mangaId) continue
-                workManager.cancelWorkById(work.id).await()
+                cancel(work.id)
             }
         }
 

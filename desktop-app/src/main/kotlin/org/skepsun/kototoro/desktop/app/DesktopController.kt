@@ -3046,6 +3046,7 @@ class DesktopController(
         if (!session.downloadPreferences.save(settings)) {
             mutableState.update { it.copy(error = desktopText("error.downloadSettingsInMemory")) }
         }
+        downloads.refreshDownloadLimit()
     }
 
     /** Android's nav configuration screen: the rail reads [navSettings] and always appends 更多 after it. */

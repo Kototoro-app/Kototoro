@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.desktop.app
 
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -13,6 +14,12 @@ import org.junit.jupiter.api.Test
 import java.util.concurrent.atomic.AtomicInteger
 
 class DesktopDownloadConcurrencyTest {
+    private suspend fun <T> DesktopDownloadSlots.withSlot(block: suspend () -> T): T {
+        val key = java.util.UUID.randomUUID().toString()
+        enqueue(key)
+        return withSlot(key, block)
+    }
+
     @Test
     fun `the series cap admits exactly as many chapters as it allows`() = runBlocking<Unit> {
         val inside = AtomicInteger(0)
@@ -69,6 +76,33 @@ class DesktopDownloadConcurrencyTest {
         holder.join()
         // The slot is free again: a later chapter gets through instead of waiting forever.
         withTimeout(2000) { slots.withSlot { } }
+    }
+
+    @Test
+    fun `priority applies to the next available slot without interrupting the current transfer`() = runBlocking<Unit> {
+        val slots = DesktopDownloadSlots { 1 }
+        val order = mutableListOf<String>()
+        val releaseActive = CompletableDeferred<Unit>()
+        slots.enqueue("active")
+        val active = launch(start = CoroutineStart.UNDISPATCHED) {
+            slots.withSlot("active") {
+                order += "active"
+                releaseActive.await()
+            }
+        }
+        val queued = listOf("first", "second").map { key ->
+            slots.enqueue(key)
+            launch(start = CoroutineStart.UNDISPATCHED) { slots.withSlot(key) { order += key } }
+        }
+
+        assertEquals(true, slots.togglePriority("second"))
+        assertEquals(listOf("active"), order)
+        releaseActive.complete(Unit)
+        withTimeout(2000) {
+            active.join()
+            queued.forEach { it.join() }
+        }
+        assertEquals(listOf("active", "second", "first"), order)
     }
 
     @Test

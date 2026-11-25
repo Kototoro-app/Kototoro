@@ -91,7 +91,13 @@ class TrackingSnapshotTest {
             StoredContentIdentityResolver(db),
             settings,
         )
-        repository = TrackingRepository(db, settings, progressUpdateUseCase, contentRepository)
+        repository = TrackingRepository(
+            db,
+            settings,
+            NovelAutoDownloadPreferences(ApplicationProvider.getApplicationContext()),
+            progressUpdateUseCase,
+            contentRepository,
+        )
     }
 
     @After

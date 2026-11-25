@@ -52,6 +52,8 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.exceptions.CloudFlareException
 import org.skepsun.kototoro.core.exceptions.resolve.CaptchaHandler
 import org.skepsun.kototoro.core.model.ids
+import org.skepsun.kototoro.tracker.domain.NovelAutoDownloadPreferences
+import org.skepsun.kototoro.tracker.domain.canAutoDownloadNovelUpdates
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.TrackerDownloadStrategy
@@ -119,6 +121,7 @@ class TrackWorker @AssistedInject constructor(
     private val captchaHandler: CaptchaHandler,
     private val notificationHelper: TrackerNotificationHelper,
     private val settings: AppSettings,
+    private val novelAutoDownload: NovelAutoDownloadPreferences,
     private val getTracksUseCase: GetTracksUseCase,
     private val checkNewChaptersUseCase: CheckNewChaptersUseCase,
     private val workManager: WorkManager,
@@ -375,38 +378,40 @@ class TrackWorker @AssistedInject constructor(
         if (!mangaUpdates.isValid || mangaUpdates.newChapters.isEmpty()) {
             return
         }
-        when (settings.trackerDownloadStrategy) {
-            TrackerDownloadStrategy.DISABLED -> Unit
-            TrackerDownloadStrategy.DOWNLOADED -> {
-                val downloadSeed = resolveAutoDownloadSeed(mangaUpdates)
-                val localRepository = localRepositoryLazy.get()
-                val localContent = downloadSeed.displayManga
-                    ?.let { localRepository.findSavedContent(it) }
-                    ?: localRepository.findSavedContent(downloadSeed.executionManga)
-                if (localContent != null) {
-                    val storedExecutionManga = contentDataRepository.storeContentAndReturn(
-                        downloadSeed.executionManga,
-                        replaceExisting = true,
-                    )
-                    val storedDisplayManga = downloadSeed.displayManga?.let { displayManga ->
-                        contentDataRepository.storeContentAndReturn(displayManga, replaceExisting = false)
-                    }
-                    val displayMangaId = storedDisplayManga?.id ?: storedExecutionManga.id
-                    val task = DownloadTask.createExecutionTask(
-                        executionMangaId = storedExecutionManga.id,
-                        displayMangaId = displayMangaId,
-                        isPaused = false,
-                        isSilent = false,
-                        executionChapterIds = mangaUpdates.newChapters.ids().toLongArray(),
-                        executionChapterRefs = mangaUpdates.newChapters.map(ExecutionChapterRef::fromChapter),
-                        destination = null,
-                        format = null,
-                        allowMeteredNetwork = settings.allowDownloadOnMeteredNetwork != TriStateOption.DISABLED,
-                    )
-                    downloadSchedulerLazy.get().schedule(setOf(storedExecutionManga to task))
-                }
-            }
+        val policy = if (mangaUpdates.manga.canAutoDownloadNovelUpdates()) {
+            novelAutoDownload.policies.value[mangaUpdates.anchorMangaId]
+        } else {
+            null
         }
+        if (policy == false || (policy == null && settings.trackerDownloadStrategy == TrackerDownloadStrategy.DISABLED)) {
+            return
+        }
+        val downloadSeed = resolveAutoDownloadSeed(mangaUpdates)
+        if (policy == null) {
+            val localRepository = localRepositoryLazy.get()
+            val localContent = downloadSeed.displayManga?.let { localRepository.findSavedContent(it) }
+                ?: localRepository.findSavedContent(downloadSeed.executionManga)
+            if (localContent == null) return
+        }
+        val storedExecutionManga = contentDataRepository.storeContentAndReturn(
+            downloadSeed.executionManga,
+            replaceExisting = true,
+        )
+        val storedDisplayManga = downloadSeed.displayManga?.let {
+            contentDataRepository.storeContentAndReturn(it, replaceExisting = false)
+        }
+        val task = DownloadTask.createExecutionTask(
+            executionMangaId = storedExecutionManga.id,
+            displayMangaId = storedDisplayManga?.id ?: storedExecutionManga.id,
+            isPaused = false,
+            isSilent = false,
+            executionChapterIds = mangaUpdates.newChapters.ids().toLongArray(),
+            executionChapterRefs = mangaUpdates.newChapters.map(ExecutionChapterRef::fromChapter),
+            destination = null,
+            format = null,
+            allowMeteredNetwork = settings.allowDownloadOnMeteredNetwork != TriStateOption.DISABLED,
+        )
+        downloadSchedulerLazy.get().schedule(setOf(storedExecutionManga to task))
     }
 
     private suspend fun resolveAutoDownloadSeed(mangaUpdates: MangaUpdates.Success): AutoDownloadSeed {

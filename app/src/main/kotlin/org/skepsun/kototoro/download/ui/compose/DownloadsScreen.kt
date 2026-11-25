@@ -44,6 +44,9 @@ import org.skepsun.kototoro.core.ui.downloads.DownloadQueueCard
 import org.skepsun.kototoro.core.ui.downloads.DownloadQueueChapterUiModel
 import org.skepsun.kototoro.core.ui.downloads.DownloadQueueItemUiModel
 import org.skepsun.kototoro.core.ui.downloads.DownloadQueueStatus
+import org.skepsun.kototoro.core.ui.downloads.QueuedTranslationChapter
+import org.skepsun.kototoro.core.ui.downloads.TranslationQueueChaptersDialog
+import org.skepsun.kototoro.download.ui.worker.DownloadTaskKind
 import org.skepsun.kototoro.core.ui.downloads.downloadQueueBatchState
 import org.skepsun.kototoro.core.ui.text.uiString
 import org.skepsun.kototoro.core.nav.AppRouter
@@ -67,6 +70,32 @@ fun AppDownloadsRoute(
     viewModel: DownloadsViewModel = hiltViewModel(),
 ) {
     val items by viewModel.items.collectAsStateWithLifecycle(emptyList())
+    val queueRevision by viewModel.queueRevisions.collectAsStateWithLifecycle()
+    var translationQueueId by remember { mutableStateOf<java.util.UUID?>(null) }
+    val translationWork = items.filterIsInstance<DownloadItemModel>()
+        .firstOrNull { it.id == translationQueueId && !it.workState.isFinished }
+    if (translationWork != null) {
+        val chapters by produceState<List<QueuedTranslationChapter>?>(null, translationWork.id) {
+            value = viewModel.translationQueueChapters(translationWork)
+        }
+        chapters?.let { allChapters ->
+            val pending = remember(translationWork.id, allChapters, queueRevision) {
+                viewModel.pendingTranslationChapters(translationWork.id, allChapters)
+            }
+            TranslationQueueChaptersDialog(
+                title = stringResource(R.string.translation_queue_pending_chapters),
+                chapters = pending,
+                emptyLabel = stringResource(R.string.translation_queue_no_pending_chapters),
+                closeLabel = stringResource(R.string.close),
+                moveUpLabel = stringResource(R.string.move_up),
+                moveDownLabel = stringResource(R.string.move_down),
+                cancelLabel = stringResource(R.string.cancel),
+                onMove = { chapter, delta -> viewModel.moveTranslationChapter(translationWork.id, allChapters, chapter, delta) },
+                onCancel = { chapter -> viewModel.cancelTranslationChapter(translationWork.id, allChapters, chapter) },
+                onDismiss = { translationQueueId = null },
+            )
+        }
+    }
     val hasActiveWorks by viewModel.hasActiveWorks.collectAsStateWithLifecycle(false)
     val hasPausedWorks by viewModel.hasPausedWorks.collectAsStateWithLifecycle(false)
     val hasCancellableWorks by viewModel.hasCancellableWorks.collectAsStateWithLifecycle(false)
@@ -291,6 +320,13 @@ fun AppDownloadsRoute(
                             onPauseClick = { viewModel.pause(setOf(item.id.mostSignificantBits)) },
                             onResumeClick = { viewModel.resume(setOf(item.id.mostSignificantBits)) },
                             onCancelClick = { viewModel.cancel(setOf(item.id.mostSignificantBits)) },
+                            onManageTranslation = if (item.taskKind == DownloadTaskKind.TRANSLATE && !item.workState.isFinished) {
+                                { translationQueueId = item.id }
+                            } else null,
+                            onTogglePriority = if (item.taskKind == DownloadTaskKind.DOWNLOAD && !item.workState.isFinished) {
+                                { viewModel.togglePriority(item.id) }
+                            } else null,
+                            prioritized = remember(item.id, queueRevision) { viewModel.isPrioritized(item.id) },
                         )
                     }
                 }
@@ -309,6 +345,9 @@ private fun DownloadItemRow(
     onPauseClick: () -> Unit,
     onResumeClick: () -> Unit,
     onCancelClick: () -> Unit,
+    onManageTranslation: (() -> Unit)?,
+    onTogglePriority: (() -> Unit)?,
+    prioritized: Boolean,
 ) {
     val context = LocalContext.current
     val chapters = item.chapters.collectAsStateWithLifecycle().value.orEmpty()
@@ -354,6 +393,14 @@ private fun DownloadItemRow(
         )
         else -> Unit
     }
+    if (onManageTranslation != null) actions += DownloadQueueAction(
+        label = stringResource(R.string.translation_queue_pending_chapters),
+        onClick = onManageTranslation,
+    )
+    if (onTogglePriority != null) actions += DownloadQueueAction(
+        label = stringResource(if (prioritized) R.string.download_clear_priority else R.string.download_prioritize),
+        onClick = onTogglePriority,
+    )
     DownloadQueueCard(
         item = DownloadQueueItemUiModel(
             key = item.id.toString(),

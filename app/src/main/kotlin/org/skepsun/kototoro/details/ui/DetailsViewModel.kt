@@ -55,6 +55,9 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.details.ui.model.LinkedTrackingItemUiModel
 import org.skepsun.kototoro.bookmarks.domain.BookmarksRepository
 import org.skepsun.kototoro.tracker.domain.TrackingRepository
+import org.skepsun.kototoro.tracker.domain.NovelAutoDownloadPreferences
+import org.skepsun.kototoro.tracker.domain.canAutoDownloadNovelUpdates
+import org.skepsun.kototoro.tracker.work.TrackWorker
 import org.skepsun.kototoro.core.model.ContentSource
 import org.skepsun.kototoro.core.model.ContentSourceInfo
 import org.skepsun.kototoro.core.model.getContentType
@@ -366,6 +369,8 @@ class DetailsViewModel @Inject constructor(
     private val trackingSiteDiscoveryService: org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteDiscoveryService,
     private val sourceTypeIdentifier: SourceTypeIdentifier,
     private val trackingRepository: TrackingRepository,
+    private val novelAutoDownload: NovelAutoDownloadPreferences,
+    private val trackingScheduler: TrackWorker.Scheduler,
     private val spaceContentPolicy: SpaceContentPolicy,
     private val spaceBrowseScope: SpaceBrowseScope,
     private val categoryDisplayPreferences: FavouriteCategoryDisplayPreferences,
@@ -3911,6 +3916,18 @@ class DetailsViewModel @Inject constructor(
             } else {
                 favouritesRepository.removeFromCategory(categoryId, listOf(content.id))
             }
+        }
+    }
+
+    val novelAutoDownloadPolicies = novelAutoDownload.policies
+
+    fun toggleNovelAutoDownload(content: Content) {
+        if (!content.canAutoDownloadNovelUpdates()) return
+        launchJob(Dispatchers.IO) {
+            val stored = dataRepository.storeContentAndReturn(content, replaceExisting = false)
+            novelAutoDownload.toggle(stored.id)
+            trackingRepository.updateTracks()
+            if (settings.isTrackerEnabled) trackingScheduler.schedule()
         }
     }
 

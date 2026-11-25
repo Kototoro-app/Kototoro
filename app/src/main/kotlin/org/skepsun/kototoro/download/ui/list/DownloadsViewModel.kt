@@ -35,6 +35,9 @@ import org.skepsun.kototoro.core.util.ext.isEmpty
 import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.download.domain.DownloadState
 import org.skepsun.kototoro.download.ui.list.chapters.DownloadChapter
+import org.skepsun.kototoro.download.ui.worker.DownloadQueuePreferences
+import org.skepsun.kototoro.download.ui.worker.DownloadTaskKind
+import org.skepsun.kototoro.core.ui.downloads.QueuedTranslationChapter
 import org.skepsun.kototoro.download.ui.worker.DownloadTask
 import org.skepsun.kototoro.download.ui.worker.DownloadWorker
 import org.skepsun.kototoro.list.ui.model.EmptyState
@@ -58,6 +61,7 @@ class DownloadsViewModel @Inject constructor(
     private val mangaRepositoryFactory: ContentRepository.Factory,
     @LocalStorageChanges private val localStorageChanges: MutableSharedFlow<LocalContent?>,
     private val localContentRepository: LocalMangaRepository,
+    private val queuePreferences: DownloadQueuePreferences,
 ) : BaseViewModel() {
 
     private val mangaCache = LongSparseArray<Content>()
@@ -72,6 +76,41 @@ class DownloadsViewModel @Inject constructor(
         list.toDownloadsList(exp)
     }.withErrorHandling()
         .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, null)
+
+    val queueRevisions = queuePreferences.revisions
+
+    suspend fun translationQueueChapters(item: DownloadItemModel): List<QueuedTranslationChapter> {
+        val task = workScheduler.getTask(item.id)?.takeIf { it.kind == DownloadTaskKind.TRANSLATE }
+            ?: return emptyList()
+        val chapters = item.executionManga?.chapters.orEmpty().associateBy { it.id }
+        val refs = task.executionChapterRefs.orEmpty().associateBy { it.id }
+        val ids = task.executionChapterIds?.toList() ?: chapters.keys.toList()
+        return ids.map { id ->
+            val chapter = chapters[id]
+            val ref = refs[id]
+            val title = chapter?.title ?: ref?.title ?: chapter?.numberString() ?: ref?.number?.toString()
+            QueuedTranslationChapter(id, title ?: id.toString())
+        }
+    }
+
+    fun pendingTranslationChapters(workId: UUID, chapters: List<QueuedTranslationChapter>): List<QueuedTranslationChapter> {
+        val byId = chapters.associateBy(QueuedTranslationChapter::id)
+        return queuePreferences.pending(workId, byId.keys.toList()).map(byId::getValue)
+    }
+
+    fun moveTranslationChapter(workId: UUID, chapters: List<QueuedTranslationChapter>, chapterId: Long, delta: Int) {
+        queuePreferences.move(workId, chapters.map(QueuedTranslationChapter::id), chapterId, delta)
+    }
+
+    fun cancelTranslationChapter(workId: UUID, chapters: List<QueuedTranslationChapter>, chapterId: Long) {
+        queuePreferences.cancel(workId, chapters.map(QueuedTranslationChapter::id), chapterId)
+    }
+
+    fun isPrioritized(workId: UUID): Boolean = queuePreferences.isPrioritized(workId)
+
+    fun togglePriority(workId: UUID) {
+        queuePreferences.setPrioritized(workId, !queuePreferences.isPrioritized(workId))
+    }
 
     val onActionDone = MutableEventFlow<ReversibleAction>()
 
@@ -424,12 +463,20 @@ class DownloadsViewModel @Inject constructor(
             "DownloadsViewModel",
             "retryWork: requeue workId=${work.id} mangaId=${task.executionMangaId} title=${manga.title}",
         )
+        val chapterIds = if (task.kind == DownloadTaskKind.TRANSLATE) {
+            val originalIds = task.executionChapterIds?.toList() ?: manga.chapters.orEmpty().map { it.id }
+            val configured = queuePreferences.configured(work.id, originalIds)
+            if (configured.isEmpty()) return false
+            configured.toLongArray()
+        } else {
+            task.executionChapterIds
+        }
         val newTask = DownloadTask.createExecutionTask(
             executionMangaId = task.executionMangaId,
             displayMangaId = displayMangaId,
             isPaused = false,
             isSilent = task.isSilent,
-            executionChapterIds = task.executionChapterIds,
+            executionChapterIds = chapterIds,
             executionChapterRefs = task.executionChapterRefs,
             destination = task.destination,
             format = task.format,
@@ -437,6 +484,7 @@ class DownloadsViewModel @Inject constructor(
             allowMeteredNetwork = task.allowMeteredNetwork,
             preferredQuality = task.preferredQuality,
             kind = task.kind,
+            isRetranslation = task.isRetranslation,
         )
         workScheduler.delete(work.id)
         workScheduler.schedule(listOf(manga to newTask))

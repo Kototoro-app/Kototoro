@@ -77,6 +77,16 @@ class ChapterSnapshotTest {
     }
 
     @Test
+    fun `track cleanup retains a work explicitly enabled for automatic downloads`() = withDb { db ->
+        db.work()
+        db.getTracksDao().gc(protectedIds = listOf(1L))
+        assertEquals(listOf(1L), db.getTracksDao().findAllIds().toList())
+
+        db.getTracksDao().gc()
+        assertEquals(emptyList<Long>(), db.getTracksDao().findAllIds().toList())
+    }
+
+    @Test
     fun `appended and inserted chapters are recorded and move the track to the end`() = withDb { db ->
         db.work()
         db.store((1..5).map { chapter(it.toFloat()) })

@@ -159,6 +159,7 @@ import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.model.ContentTag
 import org.skepsun.kototoro.parsers.model.ContentType
+import org.skepsun.kototoro.tracker.domain.canAutoDownloadNovelUpdates
 import org.skepsun.kototoro.space.domain.SpaceId
 import org.skepsun.kototoro.space.ui.SpaceSwitcherIcon
 import org.skepsun.kototoro.reader.ui.PageSaveHelper
@@ -379,6 +380,9 @@ private fun DetailsScreenContent(
     val downloadDialogViewModel: DownloadDialogViewModel = hiltViewModel()
     val initialContent = remember { PendingDetailsNavigation.lastContent() }
     val content = mangaDetails?.toContent() ?: initialContent
+    val autoDownloadNovel = mangaDetails?.local?.manga?.takeIf { it.canAutoDownloadNovelUpdates() }
+        ?: content?.takeIf { it.canAutoDownloadNovelUpdates() }
+    val novelAutoDownloadPolicies by viewModel.novelAutoDownloadPolicies.collectAsStateWithLifecycle()
     val contentType = resolvedMetadataContentType
     val mediaStylePolicy = remember(contentType) { detailsMediaStylePolicy(contentType?.name) }
     val chapters by viewModel.chapters.collectAsStateWithLifecycle(initialValue = emptyList())
@@ -1390,6 +1394,10 @@ private fun DetailsScreenContent(
                                         isEditOverrideAvailable = isWorkActionEnabled && content != null,
                                         isShortcutSupported = isWorkActionEnabled && isShortcutSupported && content != null,
                                         isNsfw = content?.isNsfw() == true,
+                                        novelAutoDownloadEnabled = novelAutoDownloadPolicies[autoDownloadNovel?.id] == true,
+                                        onToggleNovelAutoDownload = autoDownloadNovel?.takeIf { isWorkActionEnabled }?.let { novel ->
+                                            { viewModel.toggleNovelAutoDownload(novel) }
+                                        },
                                         onDeleteLocalRequest = { handleActionClick(DetailsAction.DeleteLocal) },
                                         onActionClick = { action ->
                                             when (action) {

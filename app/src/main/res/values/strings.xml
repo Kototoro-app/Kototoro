@@ -3836,6 +3836,10 @@
     <string name="novel_reader_palette_section">Reading palette</string>
     <string name="novel_reader_display_mode">Display mode</string>
     <string name="novel_reader_typography_section">Typography</string>
+    <string name="novel_auto_download_enable">Automatically download new chapters</string>
+    <string name="novel_auto_download_disable">Stop automatically downloading new chapters</string>
+    <string name="download_prioritize">Prioritize</string>
+    <string name="download_clear_priority">Normal priority</string>
     <string name="novel_reader_translation_section">Translation</string>
     <string name="novel_reader_translation_enabled">Translate text</string>
     <string name="novel_reader_translation_start">Start translation</string>

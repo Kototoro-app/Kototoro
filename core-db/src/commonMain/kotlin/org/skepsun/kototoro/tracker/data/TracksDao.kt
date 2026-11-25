@@ -185,7 +185,7 @@ abstract class TracksDao : MangaQueryBuilder.ConditionCallback {
     @Query(
         """
         DELETE FROM tracks
-        WHERE manga_id NOT IN (
+        WHERE manga_id NOT IN (:protectedIds) AND manga_id NOT IN (
             SELECT manga_id
             FROM history
             WHERE deleted_at = 0
@@ -201,7 +201,7 @@ abstract class TracksDao : MangaQueryBuilder.ConditionCallback {
         )
         """,
     )
-    abstract suspend fun gc()
+    abstract suspend fun gc(protectedIds: List<Long> = emptyList())
 
     @Upsert
     abstract suspend fun upsert(entity: TrackEntity)

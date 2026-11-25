@@ -3583,6 +3583,10 @@
     <string name="novel_reader_palette_section">阅读配色</string>
     <string name="novel_reader_display_mode">显示模式</string>
     <string name="novel_reader_typography_section">排版</string>
+    <string name="novel_auto_download_enable">开启自动下载新章</string>
+    <string name="novel_auto_download_disable">关闭自动下载新章</string>
+    <string name="download_prioritize">提高优先级</string>
+    <string name="download_clear_priority">恢复普通优先级</string>
     <string name="novel_reader_translation_section">翻译</string>
     <string name="novel_reader_translation_enabled">翻译正文</string>
     <string name="novel_reader_translation_start">开始翻译</string>

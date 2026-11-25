@@ -58,6 +58,7 @@ internal fun summarizeFavouriteTracks(tracks: List<TrackEntity>): FavouriteUpdat
 class TrackingRepository @Inject constructor(
     private val db: MangaDatabase,
     private val settings: AppSettings,
+    private val novelAutoDownload: NovelAutoDownloadPreferences,
     private val progressUpdateUseCase: ProgressUpdateUseCase,
     private val contentDataRepository: ContentDataRepository,
 ) {
@@ -313,7 +314,7 @@ class TrackingRepository @Inject constructor(
     }
 
     suspend fun gc() = db.withTransaction {
-        db.getTracksDao().gc()
+        db.getTracksDao().gc(novelAutoDownload.enabledIds())
         db.getTrackLogsDao().deleteOrphans()
         db.getTrackScheduleDao().gc()
         db.clearUnrecordedTrackCounters()
@@ -394,7 +395,7 @@ class TrackingRepository @Inject constructor(
     }
 
     private suspend fun currentTrackAnchorIds(): List<Long> {
-        val ids = LinkedHashSet<Long>()
+        val ids = LinkedHashSet(novelAutoDownload.enabledIds())
         if (AppSettings.TRACK_HISTORY in settings.trackSources) {
             ids += db.getHistoryDao().findActiveMangaIds()
         }

@@ -6,49 +6,62 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-/**
- * Admits chapters into the queue up to the series cap the download settings ask for.
- *
- * Android's `DownloadWorker` runs `downloadMaxActiveSeries` series at once and serialises inside a series; the Windows
- * queue used to run every chapter under one mutex. The limit is read on each admission, so raising it on the settings
- * page lets the next queued chapter start without a restart, and `null` (the "no limit" choice) admits immediately.
- * A waiter that is cancelled simply stops waiting: it never holds a permit it did not use.
- */
+/** Admits queued chapters up to the configured limit, giving prioritized chapters the next free slot. */
 internal class DesktopDownloadSlots(private val limit: () -> Int?) {
-    private val mutex = Mutex()
-    private val running = MutableStateFlow(0)
+    private val waiting = linkedMapOf<String, Boolean>()
+    private val running = mutableSetOf<String>()
+    private val revisions = MutableStateFlow(0L)
 
-    suspend fun <T> withSlot(block: suspend () -> T): T {
-        admit()
+    @Synchronized
+    fun enqueue(key: String) {
+        waiting[key] = false
+        refresh()
+    }
+
+    @Synchronized
+    fun togglePriority(key: String): Boolean? {
+        val prioritized = waiting[key]?.not() ?: return null
+        waiting[key] = prioritized
+        refresh()
+        return prioritized
+    }
+
+    @Synchronized
+    fun remove(key: String) {
+        if (waiting.remove(key) != null || running.remove(key)) refresh()
+    }
+
+    @Synchronized
+    fun refresh() {
+        revisions.value++
+    }
+
+    suspend fun <T> withSlot(key: String, block: suspend () -> T): T {
         try {
-            return block()
+            while (true) {
+                val revision = revisions.value
+                if (tryAdmit(key)) return block()
+                revisions.first { it != revision }
+            }
         } finally {
-            release()
+            remove(key)
         }
     }
 
-    private suspend fun admit() {
-        while (true) {
-            val admitted = mutex.withLock {
-                val maximum = limit()
-                if (maximum == null || running.value < maximum) {
-                    running.value += 1
-                    true
-                } else {
-                    false
-                }
-            }
-            if (admitted) return
-            // Every release publishes a new count, and the predicate is re-read with the current limit.
-            running.first { count ->
-                val maximum = limit()
-                maximum == null || count < maximum
-            }
+    @Synchronized
+    private fun tryAdmit(key: String): Boolean {
+        if (key !in waiting) return false
+        val maximum = limit()
+        if (maximum != null) {
+            val freeSlots = maximum - running.size
+            if (freeSlots <= 0) return false
+            val next = waiting.entries.sortedByDescending { it.value }.take(freeSlots)
+            if (next.none { it.key == key }) return false
         }
-    }
-
-    private suspend fun release() {
-        mutex.withLock { running.value -= 1 }
+        waiting.remove(key)
+        running.add(key)
+        refresh()
+        return true
     }
 }
 

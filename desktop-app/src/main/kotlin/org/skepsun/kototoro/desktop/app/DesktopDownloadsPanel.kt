@@ -170,6 +170,11 @@ private fun downloadRowActions(
 ): List<DownloadQueueAction> {
     val key = item.key
     val actions = mutableListOf<DownloadQueueAction>()
+    if (item.status == DesktopDownloadStatus.QUEUED) {
+        val label = if (item.prioritized) "download_clear_priority" else "download_prioritize"
+        actions += DownloadQueueAction(AndroidStrings[label], { controller.downloads.togglePriority(key) },
+            enabled = !closing, tag = "download-priority:$key")
+    }
     if (item.status.isActive) {
         actions += DownloadQueueAction(desktopText("downloads.pause"), { controller.downloads.pause(key) },
             enabled = !closing, tag = "download-pause:$key")

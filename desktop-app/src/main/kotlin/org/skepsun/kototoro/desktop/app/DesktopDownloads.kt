@@ -23,6 +23,7 @@ internal data class DesktopDownloadState(
     val record: SourceChapterDownload,
     val status: DesktopDownloadStatus,
     val error: String? = null,
+    val prioritized: Boolean = false,
 ) {
     val key: String get() = DesktopDownloadStore.key(record.contentId, record.chapter)
 }
@@ -124,8 +125,9 @@ internal class DesktopDownloads(
         val initial = previous ?: SourceChapterDownload(contentId, chapter, revision(chapter), contentTitle = contentTitle)
         store.save(initial)
         publish(DesktopDownloadState(initial, DesktopDownloadStatus.QUEUED))
+        slots.enqueue(key)
         val job = scope.launch(start = CoroutineStart.LAZY) {
-            slots.withSlot {
+            slots.withSlot(key) {
                 var record = initial
                 try {
                     val currentRevision = revision(chapter)
@@ -161,15 +163,31 @@ internal class DesktopDownloads(
             synchronized(this) {
                 if (jobs[key] === job) {
                     jobs.remove(key)
+                    slots.remove(key)
                     mutableState.update { list -> list.map {
                         if (it.key == key && it.status in setOf(DesktopDownloadStatus.QUEUED, DesktopDownloadStatus.DOWNLOADING))
-                            it.copy(status = DesktopDownloadStatus.PAUSED) else it
+                            it.copy(status = DesktopDownloadStatus.PAUSED, prioritized = false) else it
                     } }
                 }
             }
         }
         job.start()
         return job
+    }
+
+    fun refreshDownloadLimit() = slots.refresh()
+
+    fun togglePriority(key: String) {
+        val prioritized = slots.togglePriority(key) ?: return
+        mutableState.update { list ->
+            list.map { item ->
+                if (item.key == key && item.status == DesktopDownloadStatus.QUEUED) {
+                    item.copy(prioritized = prioritized)
+                } else {
+                    item
+                }
+            }
+        }
     }
 
     @Synchronized
