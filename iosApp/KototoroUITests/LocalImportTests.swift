@@ -2091,7 +2091,10 @@ final class LocalImportTests: XCTestCase {
         attach("横向反向缩放与书签恢复")
         app.buttons["reader.more"].tap()
         app.segmentedControls.buttons["快捷"].tap()
-        app.buttons["切换方向"].tap()
+        // The quick tab's page-turning control carries the strip's direction while the horizontal strip is on.
+        let quickDirection = app.switches["reader.quick.horizontalReversed"]
+        XCTAssertTrue(quickDirection.waitForExistence(timeout: 5), app.debugDescription)
+        quickDirection.switches.firstMatch.tap()
         app.segmentedControls.buttons["布局"].tap()
         let direction = app.switches["reader.option.horizontalReversed"]
         XCTAssertTrue(direction.waitForExistence(timeout: 5), app.debugDescription)
