@@ -2834,7 +2834,7 @@ final class LocalImportTests: XCTestCase {
         wait(for: [toggled], timeout: 10)
         attach("小说底部进度与悬浮按钮")
         app.buttons["novel.floating.chapters"].tap()
-        XCTAssertTrue(app.navigationBars["目录与书签"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.descendants(matching: .any)["novel.chapterPanel"].waitForExistence(timeout: 10))
         app.buttons["关闭"].firstMatch.tap()
         app.buttons["novel.floating.typography"].tap()
         XCTAssertTrue(app.navigationBars["阅读设置"].waitForExistence(timeout: 10))
