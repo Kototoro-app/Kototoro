@@ -24,6 +24,7 @@ data class DictionaryRule(
 data class DictPair(
     val original: String,
     val translation: String,
+    val excluded: Boolean = false,
 )
 
 @Serializable

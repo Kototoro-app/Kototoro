@@ -3583,10 +3583,23 @@
     <string name="novel_reader_palette_section">阅读配色</string>
     <string name="novel_reader_display_mode">显示模式</string>
     <string name="novel_reader_typography_section">排版</string>
+    <string name="reader_translation_bubble_unavailable">气泡编辑需要分步 OCR 翻译生成的文本。若本页使用旧缓存，可先重试本页。</string>
+    <string name="reader_translation_edit_bubble">编辑气泡识别文本</string>
+    <string name="reader_translation_retranslate_bubble">重译此气泡</string>
+    <string name="reader_translation_bubble_failed">无法重译此气泡。</string>
+    <string name="translation_queue_pending_chapters">待翻译章节</string>
+    <string name="translation_queue_no_pending_chapters">没有等待翻译的章节。</string>
     <string name="novel_auto_download_enable">开启自动下载新章</string>
     <string name="novel_auto_download_disable">关闭自动下载新章</string>
     <string name="download_prioritize">提高优先级</string>
     <string name="download_clear_priority">恢复普通优先级</string>
+    <string name="novel_translation_previous_paragraph">上一段</string>
+    <string name="novel_translation_next_paragraph">下一段</string>
+    <string name="novel_translation_edit_paragraphs">编辑章节译文</string>
+    <string name="novel_translation_edit_paragraph_at">编辑第 %1$d 段（共 %2$d 段）</string>
+    <string name="novel_translation_edit_requires_translation">请先翻译本章。</string>
+    <string name="novel_translation_edit_glossary">本书翻译术语表</string>
+    <string name="novel_translation_glossary_format">每行填写一组术语，格式为「原文 = 译文」。</string>
     <string name="novel_reader_translation_section">翻译</string>
     <string name="novel_reader_translation_enabled">翻译正文</string>
     <string name="novel_reader_translation_start">开始翻译</string>

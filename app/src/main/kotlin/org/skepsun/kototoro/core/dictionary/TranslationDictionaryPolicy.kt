@@ -7,6 +7,7 @@ object TranslationDictionaryPolicy {
         if (normalizedText.isBlank()) return emptyList()
         return pairs
             .asSequence()
+            .filterNot(DictPair::excluded)
             .mapNotNull { pair ->
                 val original = pair.original.trim()
                 val translation = pair.translation.trim()
@@ -27,12 +28,18 @@ object TranslationDictionaryPolicy {
             val translation = pair.translation.trim()
             if (original.isBlank() || translation.isBlank()) return
             if (seen.add(normalize(original))) {
-                result += DictPair(original, translation)
+                result += pair.copy(original = original, translation = translation)
             }
         }
         existing.forEach(::append)
         discovered.forEach(::append)
         return result
+    }
+
+    fun applyManualEdits(current: List<DictPair>, edited: List<DictPair>): List<DictPair> {
+        val active = mergeDiscovered(emptyList(), edited)
+        val removed = current.map { it.copy(excluded = true) }
+        return mergeDiscovered(active, removed)
     }
 
     private fun normalize(value: String): String = value.trim().lowercase()

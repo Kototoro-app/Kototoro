@@ -528,6 +528,20 @@ class ReaderViewModel @Inject constructor(
         }
     }
 
+    internal suspend fun editableBubbleTexts(pageId: Long): List<String> = enhancementController.editableBubbleTexts(pageId)
+
+    internal fun retranslateBubble(pageId: Long, index: Int, expectedText: String, originalText: String) {
+        launchJob(Dispatchers.Default) {
+            if (!enhancementController.retranslateBubble(pageId, index, expectedText, originalText)) {
+                onShowToast.call(R.string.reader_translation_bubble_failed)
+                return@launchJob
+            }
+            pageLoader.invalidateTask(pageId)
+            markPageForReload(pageId)
+            rebuildPages()
+        }
+    }
+
     fun getCurrentChapterTranslationTaskSnapshots(): List<TranslationPageTaskSnapshot> {
         val pages = getCurrentChapterPages().orEmpty()
         return pages.mapIndexed { index, page ->

@@ -32,6 +32,8 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.key
 import androidx.compose.runtime.setValue
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
@@ -47,6 +49,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.core.graphics.ColorUtils
 import androidx.core.content.FileProvider
+import androidx.core.app.ShareCompat
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
@@ -135,6 +138,10 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import org.skepsun.kototoro.reader.novel.compose.NovelChromeTheme
 import org.skepsun.kototoro.reader.novel.NovelReaderThemePreset
 import org.skepsun.kototoro.reader.novel.compose.ComposeNovelReaderOptionsSheet
+import org.skepsun.kototoro.reader.novel.compose.TranslationTextEditorDialog
+import org.skepsun.kototoro.core.dictionary.DictPair
+import org.skepsun.kototoro.parsers.util.runCatchingCancellable
+import org.skepsun.kototoro.core.dictionary.TranslationDictionaryRepository
 import org.skepsun.kototoro.reader.novel.compose.NovelReaderBottomChrome
 import org.skepsun.kototoro.reader.novel.compose.NovelReaderChromeCallbacks
 import org.skepsun.kototoro.reader.novel.compose.NovelReaderTopChrome
@@ -254,6 +261,12 @@ class NovelReaderActivity :
 
     @Inject
     lateinit var translationProcessor: NovelTranslationProcessor
+
+    @Inject
+    lateinit var translationCorrections: NovelTranslationCorrections
+
+    @Inject
+    lateinit var translationDictionary: TranslationDictionaryRepository
 
     @Inject
     lateinit var spaceSwitcherDelegate: SpaceSwitcherDelegate
@@ -385,6 +398,11 @@ class NovelReaderActivity :
     // Translation state
     private var translationJob: Job? = null
     private val chapterTranslations = SparseArray<NovelChapterTranslation>()
+    private val machineTranslations = SparseArray<NovelChapterTranslation>()
+    private var translationEditor by mutableStateOf<Int?>(null)
+    private var translationEditorRevision by mutableStateOf(0)
+    private var glossaryDraft by mutableStateOf<String?>(null)
+    private var glossarySaving by mutableStateOf(false)
 
     override val readerMode: ReaderMode?
         get() = ReaderMode.STANDARD
@@ -1074,6 +1092,8 @@ class NovelReaderActivity :
                                     autoScrollActive = state.autoScroll.active,
                                     onTts = callbacks.onTts,
                                     onClearTranslationCache = callbacks.onClearTranslationCache,
+                                    onEditTranslation = ::openTranslationEditor,
+                                    onEditGlossary = ::openGlossaryEditor,
                                     eInkMode = isEInkModeEnabled,
                                 )
                             }
@@ -1189,6 +1209,7 @@ class NovelReaderActivity :
                                 },
                             )
                         }
+                        NovelTranslationEditors()
                         novelAiAskTarget?.let { target ->
                             AlertDialog(
                                 onDismissRequest = ::dismissNovelAiAsk,
@@ -1605,6 +1626,7 @@ class NovelReaderActivity :
         val targetLang = settings.readerTranslationTargetLanguage
         val displayMode = readerSettings.translationDisplayMode
         val chapterIndex = currentChapterIndex
+        val correctionScope = translationCorrectionScope(chapterIndex) ?: return
         val totalParagraphs = NovelParagraphSplitter.split(content)
             .count { it.type == NovelParagraphType.TEXT && it.originalText.isNotBlank() }
         android.util.Log.d("NovelReaderActivity", "Starting translation: chapter=$chapterIndex, source=$sourceLang, target=$targetLang, mode=$displayMode")
@@ -1626,8 +1648,8 @@ class NovelReaderActivity :
                     bookKey = "${manga.source.name}:${manga.id}",
                 ).collect { translation ->
                     android.util.Log.d("NovelReaderActivity", "Translation progress: complete=${translation.isComplete}, translations=${translation.translations.size}")
-                    chapterTranslations.put(translation.chapterIndex, translation)
-                    applyTranslationToViews(translation)
+                    machineTranslations.put(chapterIndex, translation)
+                    publishCorrectedTranslation(correctionScope, translation)
                     val translatedCount = translation.translations.size
                     if (translation.isComplete) {
                         if (translatedCount == 0) {
@@ -1699,6 +1721,8 @@ class NovelReaderActivity :
         translationJob?.cancel()
         translationJob = null
         chapterTranslations.clear()
+        machineTranslations.clear()
+        translationEditor = null
     }
 
     /**
@@ -1710,12 +1734,152 @@ class NovelReaderActivity :
         clearTranslation()
     }
 
-    private fun applyTranslationToViews(translation: NovelChapterTranslation) {
-        composeReaderViewModel.publishTranslation(translation)
-        val isScrollMode = readerSettings.readingMode == ReadingMode.SCROLL
-        if (isScrollMode) {
+    private fun translationBookKey() = "${manga.source.name}:${manga.id}"
+
+    private fun translationCorrectionScope(chapterIndex: Int): String? {
+        val chapter = chapters.getOrNull(chapterIndex) ?: return null
+        return "${translationBookKey()}:${chapter.id}:${settings.readerTranslationTargetLanguage}"
+    }
+
+    private fun publishCorrectedTranslation(scope: String, translation: NovelChapterTranslation) {
+        val display = translationCorrections.apply(scope, translation)
+        chapterTranslations.put(display.chapterIndex, display)
+        if (display.chapterIndex == currentChapterIndex) composeReaderViewModel.publishTranslation(display)
+    }
+
+    private fun openTranslationEditor() {
+        val chapterIndex = currentChapterIndex
+        if (machineTranslations[chapterIndex]?.isComplete == true) {
+            translationEditor = chapterIndex
         } else {
-            if (translation.chapterIndex == currentChapterIndex) {
+            showReaderMessage(getString(R.string.novel_translation_edit_requires_translation), 2200L)
+        }
+    }
+
+    private fun openGlossaryEditor() {
+        val bookKey = translationBookKey()
+        lifecycleScope.launch {
+            runCatchingCancellable { translationDictionary.get(bookKey) }.onSuccess { dictionary ->
+                if (bookKey == translationBookKey()) {
+                    glossaryDraft = dictionary.pairs.filterNot(DictPair::excluded)
+                        .joinToString("\n") { "${it.original} = ${it.translation}" }
+                }
+            }.onFailure { showReaderMessage(getString(R.string.error), 2400L) }
+        }
+    }
+
+    private fun saveGlossary(pairs: List<DictPair>) {
+        val bookKey = translationBookKey()
+        glossarySaving = true
+        lifecycleScope.launch {
+            try {
+                runCatchingCancellable { translationDictionary.replace(bookKey, pairs) }.onSuccess {
+                    glossaryDraft = null
+                    if (readerSettings.isTranslationEnabled && bookKey == translationBookKey()) startTranslation()
+                }.onFailure { showReaderMessage(getString(R.string.error), 2400L) }
+            } finally {
+                glossarySaving = false
+            }
+        }
+    }
+
+    @androidx.compose.runtime.Composable
+    private fun NovelTranslationEditors() {
+        glossaryDraft?.let { draft ->
+            val pairs = draft.lineSequence().filter(String::isNotBlank).map { line ->
+                val parts = line.split("=", limit = 2).map(String::trim)
+                if (parts.size == 2 && parts.all(String::isNotEmpty)) DictPair(parts[0], parts[1]) else null
+            }.toList()
+            TranslationTextEditorDialog(
+                title = getString(R.string.novel_translation_edit_glossary),
+                value = draft,
+                onValueChange = { if (!glossarySaving) glossaryDraft = it },
+                saveLabel = getString(R.string.save),
+                dismissLabel = getString(R.string.cancel),
+                canSave = !glossarySaving && pairs.none { it == null },
+                header = { Text(getString(R.string.novel_translation_glossary_format)) },
+                onSave = { saveGlossary(pairs.filterNotNull()) },
+                onDismiss = { if (!glossarySaving) glossaryDraft = null },
+            )
+        }
+        val chapterIndex = translationEditor ?: return
+        val machine = machineTranslations[chapterIndex] ?: return
+        val display = remember(chapterIndex, translationEditorRevision) { chapterTranslations[chapterIndex] } ?: return
+        val scope = translationCorrectionScope(chapterIndex) ?: return
+        val paragraphs = remember(machine.paragraphs) {
+            machine.paragraphs.filter { it.type == NovelParagraphType.TEXT && it.originalText.isNotBlank() }
+        }
+        if (paragraphs.isEmpty()) return
+        var position by remember(chapterIndex) { mutableStateOf(0) }
+        val paragraph = paragraphs.getOrNull(position) ?: return
+        val originalTranslation = machine.translations[paragraph.index]
+        key(position) {
+            var draft by remember { mutableStateOf(display.translations[paragraph.index].orEmpty()) }
+            TranslationTextEditorDialog(
+                title = getString(R.string.novel_translation_edit_paragraph_at, position + 1, paragraphs.size),
+                value = draft,
+                onValueChange = { draft = it },
+                saveLabel = getString(R.string.save),
+                dismissLabel = getString(R.string.cancel),
+                canSave = draft.isNotBlank() && draft.trim() != display.translations[paragraph.index],
+                header = { Text(paragraph.originalText) },
+                actions = {
+                    FlowRow {
+                        val hasUnsavedEdit = draft != display.translations[paragraph.index].orEmpty()
+                        TvTextButton(onClick = { position-- }, enabled = position > 0 && !hasUnsavedEdit) {
+                            Text(getString(R.string.novel_translation_previous_paragraph))
+                        }
+                        TvTextButton(onClick = { position++ }, enabled = position < paragraphs.lastIndex && !hasUnsavedEdit) {
+                            Text(getString(R.string.novel_translation_next_paragraph))
+                        }
+                        TvTextButton(
+                            onClick = {
+                                translationCorrections.set(scope, paragraphs, paragraph.index, null)
+                                publishCorrectedTranslation(scope, machine)
+                                translationEditorRevision++
+                                draft = originalTranslation.orEmpty()
+                            },
+                            enabled = display.translations[paragraph.index] != originalTranslation,
+                        ) { Text(getString(R.string.restore)) }
+                        TvTextButton(onClick = { exportChapterTranslation(display) }) {
+                            Text(getString(R.string.export))
+                        }
+                    }
+                },
+                onSave = {
+                    translationCorrections.set(scope, paragraphs, paragraph.index, draft.trim())
+                    publishCorrectedTranslation(scope, machine)
+                    translationEditorRevision++
+                    draft = draft.trim()
+                },
+                onDismiss = { translationEditor = null },
+            )
+        }
+    }
+
+    private fun exportChapterTranslation(translation: NovelChapterTranslation) {
+        val chapterTitle = chapters.getOrNull(translation.chapterIndex)?.title.orEmpty()
+        val body = translation.paragraphs.filter { it.type == NovelParagraphType.TEXT }
+            .joinToString("\n\n") { translation.translations[it.index] ?: it.originalText }
+        lifecycleScope.launch {
+            try {
+                val file = withContext(Dispatchers.IO) {
+                    java.io.File.createTempFile("translation-", ".txt", cacheDir).apply {
+                        writeText(chapterTitle + "\n\n" + body)
+                    }
+                }
+                val uri = FileProvider.getUriForFile(
+                    this@NovelReaderActivity, "${BuildConfig.APPLICATION_ID}.files", file,
+                )
+                ShareCompat.IntentBuilder(this@NovelReaderActivity)
+                    .setType("text/plain")
+                    .setStream(uri)
+                    .setSubject(chapterTitle)
+                    .startChooser()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                showReaderMessage(e.localizedMessage ?: getString(R.string.error), 2400L)
             }
         }
     }

@@ -70,6 +70,20 @@ class NovelDocumentTest {
 	}
 
 	@Test
+	fun keepsRepeatedParagraphTranslationsIndependent() {
+		val source = "Repeated paragraph\n\nRepeated paragraph"
+		val translation = NovelChapterTranslation(
+			chapterIndex = 0,
+			paragraphs = NovelParagraphSplitter.split(source),
+			translations = mapOf(0 to "Machine translation", 1 to "Edited translation"),
+			displayMode = NovelTranslationDisplayMode.BILINGUAL,
+		)
+
+		val blocks = buildNovelDocument(source, translation).filterIsInstance<NovelDocumentBlock.Text>()
+		assertEquals(listOf("Machine translation", "Edited translation"), blocks.map { it.translation })
+	}
+
+	@Test
 	fun keepsInlineImagePathsWithTheirParagraphTokens() {
 		val block = assertIs<NovelDocumentBlock.Text>(
 			buildNovelDocument("Before <img src=\"https://example.com/inline.jpg\"> after").single(),

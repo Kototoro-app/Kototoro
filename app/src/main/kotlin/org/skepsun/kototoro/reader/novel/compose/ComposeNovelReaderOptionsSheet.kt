@@ -79,6 +79,8 @@ internal fun ComposeNovelReaderOptionsSheet(
     autoScrollActive: Boolean = false,
     onTts: () -> Unit,
     onClearTranslationCache: () -> Unit,
+    onEditTranslation: (() -> Unit)? = null,
+    onEditGlossary: (() -> Unit)? = null,
     eInkMode: Boolean = false,
 ) {
     fun update(transform: NovelReaderSettings.() -> NovelReaderSettings) {
@@ -112,6 +114,8 @@ internal fun ComposeNovelReaderOptionsSheet(
                 dragModifier = dragModifier,
                 onToggleTranslation = onToggleTranslation,
                 onClearTranslationCache = onClearTranslationCache,
+                onEditTranslation = onEditTranslation?.let { edit -> { onDismiss(); edit() } },
+                onEditGlossary = onEditGlossary?.let { edit -> { onDismiss(); edit() } },
                 replaceRulesEnabled = replaceRulesEnabled,
                 onToggleReplaceRules = onToggleReplaceRules,
                 onShowReplaceRules = { onShowReplaceRules(); onDismiss() },
@@ -205,6 +209,8 @@ private fun NovelDetailTabs(
     dragModifier: Modifier,
     onToggleTranslation: () -> Unit,
     onClearTranslationCache: () -> Unit,
+    onEditTranslation: (() -> Unit)?,
+    onEditGlossary: (() -> Unit)?,
     replaceRulesEnabled: Boolean,
     onToggleReplaceRules: () -> Unit,
     onShowReplaceRules: () -> Unit,
@@ -224,6 +230,8 @@ private fun NovelDetailTabs(
                     update = update,
                     onToggleTranslation = onToggleTranslation,
                     onClearTranslationCache = onClearTranslationCache,
+                    onEditTranslation = onEditTranslation,
+                    onEditGlossary = onEditGlossary,
                     replaceRulesEnabled = replaceRulesEnabled,
                     onToggleReplaceRules = onToggleReplaceRules,
                     onShowReplaceRules = onShowReplaceRules,
@@ -360,6 +368,8 @@ private fun NovelTranslationToolsPage(
     update: NovelSettingsUpdate,
     onToggleTranslation: () -> Unit,
     onClearTranslationCache: () -> Unit,
+    onEditTranslation: (() -> Unit)?,
+    onEditGlossary: (() -> Unit)?,
     replaceRulesEnabled: Boolean,
     onToggleReplaceRules: () -> Unit,
     onShowReplaceRules: () -> Unit,
@@ -403,6 +413,16 @@ private fun NovelTranslationToolsPage(
     }
     item {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (onEditTranslation != null) {
+                FilledTonalButton(onClick = onEditTranslation, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.novel_translation_edit_paragraphs))
+                }
+            }
+            if (onEditGlossary != null) {
+                FilledTonalButton(onClick = onEditGlossary, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.novel_translation_edit_glossary))
+                }
+            }
             FilledTonalButton(
                 onClick = onToggleTranslation,
                 modifier = Modifier.fillMaxWidth().tvFocusable(addFocusTarget = false),

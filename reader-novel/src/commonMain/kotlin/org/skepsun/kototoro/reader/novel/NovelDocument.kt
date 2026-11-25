@@ -53,7 +53,8 @@ fun buildNovelDocument(
     val parsed = parseNovelImages(content)
     val translationsByOriginal = translation
         ?.paragraphs
-        ?.associate { paragraph -> paragraph.originalText to translation.translations[paragraph.index] }
+        ?.groupBy({ it.originalText }, { translation.translations[it.index] })
+        ?.mapValues { (_, translations) -> ArrayDeque(translations) }
         .orEmpty()
     val displayMode = translation?.displayMode ?: NovelTranslationDisplayMode.TRANSLATION_ONLY
 
@@ -77,7 +78,7 @@ fun buildNovelDocument(
                 NovelDocumentBlock.Text(
                     key = "text-${paragraph.index}",
                     original = paragraph.originalText,
-                    translation = translationsByOriginal[paragraph.originalText],
+                    translation = translationsByOriginal[paragraph.originalText]?.removeFirstOrNull(),
                     displayMode = displayMode,
                     inlineImages = parsed.inlineImagePaths.mapIndexedNotNull { index, path ->
                         val token = "[INLINE_IMAGE_$index]"

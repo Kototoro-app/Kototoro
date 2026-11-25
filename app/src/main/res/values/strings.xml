@@ -3836,10 +3836,23 @@
     <string name="novel_reader_palette_section">Reading palette</string>
     <string name="novel_reader_display_mode">Display mode</string>
     <string name="novel_reader_typography_section">Typography</string>
+    <string name="reader_translation_bubble_unavailable">Bubble editing needs text from the OCR pipeline. Retry this page if it was translated before bubble editing was available.</string>
+    <string name="reader_translation_edit_bubble">Edit recognized bubble text</string>
+    <string name="reader_translation_retranslate_bubble">Retranslate bubble</string>
+    <string name="reader_translation_bubble_failed">Could not retranslate this bubble.</string>
+    <string name="translation_queue_pending_chapters">Queued chapters</string>
+    <string name="translation_queue_no_pending_chapters">No chapters are waiting to be translated.</string>
     <string name="novel_auto_download_enable">Automatically download new chapters</string>
     <string name="novel_auto_download_disable">Stop automatically downloading new chapters</string>
     <string name="download_prioritize">Prioritize</string>
     <string name="download_clear_priority">Normal priority</string>
+    <string name="novel_translation_previous_paragraph">Previous paragraph</string>
+    <string name="novel_translation_next_paragraph">Next paragraph</string>
+    <string name="novel_translation_edit_paragraphs">Edit chapter translation</string>
+    <string name="novel_translation_edit_paragraph_at">Edit paragraph %1$d of %2$d</string>
+    <string name="novel_translation_edit_requires_translation">Translate this chapter before editing it.</string>
+    <string name="novel_translation_edit_glossary">Book translation glossary</string>
+    <string name="novel_translation_glossary_format">Enter one term per line in the form original = translation.</string>
     <string name="novel_reader_translation_section">Translation</string>
     <string name="novel_reader_translation_enabled">Translate text</string>
     <string name="novel_reader_translation_start">Start translation</string>

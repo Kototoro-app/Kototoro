@@ -18,6 +18,7 @@ import android.os.SystemClock
 import androidx.annotation.WorkerThread
 import androidx.collection.LruCache
 import androidx.collection.LongSparseArray
+import androidx.core.content.edit
 import androidx.core.net.toFile
 import androidx.core.net.toUri
 import eu.kanade.tachiyomi.network.await
@@ -38,6 +39,7 @@ import org.skepsun.kototoro.core.prefs.ReaderTranslationMode
 import org.skepsun.kototoro.core.prefs.ReaderTranslationPipelineMode
 import org.skepsun.kototoro.core.util.ext.isFileUri
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
+import org.skepsun.kototoro.parsers.util.runCatchingCancellable
 import org.skepsun.kototoro.core.util.ext.toMimeTypeOrNull
 import org.skepsun.kototoro.local.data.LocalStorageCache
 import org.skepsun.kototoro.local.data.PageCache
@@ -62,6 +64,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withContext
+import okio.Buffer
 import okio.source
 import java.io.File
 import java.security.MessageDigest
@@ -109,6 +112,83 @@ class ReaderPageTranslationProcessor @Inject constructor(
     }
     private val pageStateLock = Any()
     private val renderedSourceMap = LruCache<String, String>(512)
+    private val editingPages = LruCache<Long, EditableTranslationPage>(24)
+    private val viewedRenderKeys = LruCache<Long, String>(128)
+    private val bubbleEdits = context.getSharedPreferences("reader_bubble_edits", Context.MODE_PRIVATE)
+
+    internal suspend fun editableBubbleTexts(pageId: Long): List<String> {
+        val key = viewedRenderKeys[pageId] ?: return emptyList()
+        val snapshot = editingPages[pageId]?.takeIf { it.renderKey == key } ?: run {
+            val editedKey = bubbleEdits.getString(pageId.toString(), null)?.takeIf { it.startsWith("$key:bubble-edit:") }
+            val stored = withContext(Dispatchers.IO) {
+                val path = cache[editablePageKey(pageId, editedKey ?: key)] ?: return@withContext null
+                runCatching { EditableTranslationPage.decode(path.readText()) }.getOrNull()
+            } ?: return emptyList()
+            synchronized(pageStateLock) {
+                if (viewedRenderKeys[pageId] != key) return emptyList()
+                editingPages[pageId]?.takeIf { it.renderKey == key } ?: stored.also { editingPages.put(pageId, it) }
+            }
+        }
+        return snapshot.inputs.map(BubbleInput::sourceText)
+    }
+
+    internal suspend fun retranslateBubble(pageId: Long, index: Int, expectedText: String, originalText: String): Boolean {
+        val snapshot = editingPages[pageId] ?: return false
+        val bubble = snapshot.inputs.getOrNull(index)?.takeIf { it.sourceText == expectedText } ?: return false
+        val correction = originalText.trim().takeIf(String::isNotEmpty) ?: return false
+        return processingSemaphore.withPermit {
+            if (editingPages[pageId] !== snapshot || viewedRenderKeys[pageId] != snapshot.renderKey) {
+                return@withPermit false
+            }
+            val translation = translationCoordinator.translateBlocksCached(
+                texts = listOf(correction),
+                sourceLang = snapshot.sourceLang,
+                targetLang = snapshot.targetLang,
+                useCache = false,
+            )[correction]?.takeIf(String::isNotBlank) ?: return@withPermit false
+            val inputs = snapshot.inputs.toMutableList().apply { this[index] = bubble.copy(sourceText = correction) }
+            val corrections = snapshot.corrections + (index to translation)
+            val editedKey = "${snapshot.renderKey}:bubble-edit:${java.util.UUID.randomUUID()}"
+            renderChapterPage(
+                pageId = pageId,
+                localUri = snapshot.localUri,
+                renderCacheKey = editedKey,
+                bubbleInputs = inputs,
+                translatedMap = snapshot.machineTranslations,
+                targetLang = snapshot.targetLang,
+                bubbleTranslations = corrections,
+            ) ?: return@withPermit false
+            val updated = snapshot.copy(inputs = inputs, corrections = corrections)
+            saveEditablePage(pageId, updated, editedKey)
+            synchronized(pageStateLock) {
+                if (editingPages[pageId] !== snapshot || viewedRenderKeys[pageId] != snapshot.renderKey) return@synchronized false
+                bubbleEdits.edit { putString(pageId.toString(), editedKey) }
+                editingPages.put(pageId, updated)
+                true
+            }
+        }
+    }
+
+    private suspend fun rememberEditablePage(pageId: Long, snapshot: EditableTranslationPage) {
+        saveEditablePage(pageId, snapshot)
+        synchronized(pageStateLock) {
+            bubbleEdits.edit { remove(pageId.toString()) }
+            editingPages.put(pageId, snapshot)
+            viewedRenderKeys.put(pageId, snapshot.renderKey)
+        }
+    }
+
+    private suspend fun saveEditablePage(
+        pageId: Long,
+        snapshot: EditableTranslationPage,
+        key: String = snapshot.renderKey,
+    ) {
+        runCatchingCancellable {
+            cache.set(editablePageKey(pageId, key), Buffer().writeUtf8(snapshot.encode()), null)
+        }.onFailure { Log.w(LOG_TAG, "Could not cache bubble data for page $pageId", it) }
+    }
+
+    private fun editablePageKey(pageId: Long, renderKey: String): String = "$renderKey:bubbles:$pageId"
     private val pageRenderEpochs = LongSparseArray<Int>()
     private val loggingPageId = ThreadLocal<Long?>()
     private val automaticRecognizerLanguage = ThreadLocal<String?>()
@@ -215,6 +295,9 @@ class ReaderPageTranslationProcessor @Inject constructor(
         debugLogStore.clearAll()
         synchronized(pageStateLock) {
             pageRenderEpochs.clear()
+            editingPages.evictAll()
+            viewedRenderKeys.evictAll()
+            bubbleEdits.edit { clear() }
         }
         renderCacheEpoch += 1
         log { "translation caches cleared epoch=$renderCacheEpoch" }
@@ -223,6 +306,9 @@ class ReaderPageTranslationProcessor @Inject constructor(
     fun clearPageCaches(pageId: Long) {
         debugLogStore.clearPage(pageId)
         synchronized(pageStateLock) {
+            editingPages.remove(pageId)
+            viewedRenderKeys.remove(pageId)
+            bubbleEdits.edit { remove(pageId.toString()) }
             val current = pageRenderEpochs[pageId] ?: 0
             pageRenderEpochs.put(pageId, current + 1)
         }
@@ -251,7 +337,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
             targetLang = targetLang,
             autoRecognizerLanguage = normalizedAutoRecognizerLanguage,
         )
-        return findRendered(keys)?.toUri()?.also {
+        return findRendered(keys, page.id)?.toUri()?.also {
             appendPageLog(page.id, "metric.render_cache.hit=1")
             rememberRenderedSource(it, sourceUri)
         }
@@ -295,7 +381,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
             autoRecognizerLanguage = normalizedAutoRecognizerLanguage,
         )
         val renderCacheKey = keys.writeKey
-        findRendered(keys)?.let {
+        findRendered(keys, page.id)?.let {
             Log.d(LOG_TAG, "process debug: render cache hit before start page=${page.id}")
             return it.toUri().also { rendered ->
                 rememberRenderedSource(rendered, localUri)
@@ -323,7 +409,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
             permitSemaphore.withPermit {
                 Log.d(LOG_TAG, "process debug: permit acquired page=${page.id}")
                 appendPageLog(page.id, processStartLog)
-                findRendered(keys)?.let {
+                findRendered(keys, page.id)?.let {
                     appendPageLog(page.id, "metric.render_cache.hit=1")
                     Log.d(LOG_TAG, "process debug: render cache hit after permit page=${page.id}")
                     return@withPermit it.toUri().also { rendered ->
@@ -491,7 +577,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
                 autoRecognizerLanguage = normalizedAutoRecognizerLanguage,
             )
             val renderCacheKey = keys.writeKey
-            val cached = if (forceRefresh) null else findRendered(keys)
+            val cached = if (forceRefresh) null else findRendered(keys, pageId)
             if (cached != null) {
                 cachedPageIds += pageId
                 rememberRenderedSource(cached.toUri(), localUri)
@@ -581,6 +667,12 @@ class ReaderPageTranslationProcessor @Inject constructor(
             if (output == null) {
                 failedPageIds += work.page.id
             } else {
+                rememberEditablePage(
+                    work.page.id,
+                    EditableTranslationPage(
+                        work.localUri, work.renderCacheKey, work.sourceLang, targetLang, work.bubbleInputs, translatedMap,
+                    ),
+                )
                 renderedPageIds += work.page.id
             }
         }
@@ -650,6 +742,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
         bubbleInputs: List<BubbleInput>,
         translatedMap: Map<String, String>,
         targetLang: String,
+        bubbleTranslations: Map<Int, String> = emptyMap(),
     ): Uri? {
         val sourceBitmap = runInterruptible(Dispatchers.IO) {
             BitmapDecoderCompat.decode(localUri.toFile())
@@ -669,6 +762,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
                 translatedMap = translatedMap,
                 targetLang = targetLang,
                 bitmap = bitmap,
+                bubbleTranslations = bubbleTranslations,
             )
             val preparedBubbles = renderPreparation.preparedBubbles
             if (preparedBubbles.isEmpty()) {
@@ -848,6 +942,10 @@ class ReaderPageTranslationProcessor @Inject constructor(
             rememberRenderedSource(output, sourceUri)
             renderDurationMs = SystemClock.elapsedRealtime() - renderStartMs
             processResult = "rendered"
+            rememberEditablePage(
+                pageId,
+                EditableTranslationPage(sourceUri, renderCacheKey, sourceLang, targetLang, bubbleInputs, translatedMap),
+            )
             bitmap.recycle()
             return output
         } finally {
@@ -3894,9 +3992,27 @@ class ReaderPageTranslationProcessor @Inject constructor(
         return RenderedCacheKeys(primary = primary, legacy = legacy)
     }
 
-    private suspend fun findRendered(keys: RenderedCacheKeys): File? {
-        keys.primary?.let { key -> cache[key]?.let { return it } }
-        return cache[keys.legacy]
+    private suspend fun findRendered(keys: RenderedCacheKeys, pageId: Long): File? {
+        val edit = bubbleEdits.getString(pageId.toString(), null)
+        if (edit != null && edit.startsWith("${keys.writeKey}:bubble-edit:")) {
+            cache[edit]?.let {
+                noteViewedRenderKey(pageId, keys.writeKey)
+                return it
+            }
+        }
+        keys.primary?.let { key ->
+            cache[key]?.let {
+                noteViewedRenderKey(pageId, key)
+                return it
+            }
+        }
+        return cache[keys.legacy]?.also { noteViewedRenderKey(pageId, keys.legacy) }
+    }
+
+    private fun noteViewedRenderKey(pageId: Long, key: String) {
+        synchronized(pageStateLock) {
+            if (viewedRenderKeys.put(pageId, key) != key) editingPages.remove(pageId)
+        }
     }
 
     /**

@@ -31,34 +31,31 @@ class TranslationDictionaryRepository @Inject constructor(
 
     suspend fun mergeDiscoveredPairs(bookKey: String, discovered: List<DictPair>): BookDictionary =
         withContext(Dispatchers.IO) {
-            val current = get(bookKey)
-            val merged = TranslationDictionaryPolicy.mergeDiscovered(current.pairs, discovered)
-            val result = current.copy(pairs = merged, updatedAt = System.currentTimeMillis())
             database.withTransaction {
-                dao.upsert(
-                    TranslationDictionaryEntity(
-                        bookKey = result.bookKey,
-                        pairsJson = json.encodeToString(ListSerializer(DictPair.serializer()), result.pairs),
-                        updatedAt = result.updatedAt,
-                    ),
-                )
+                val current = get(bookKey)
+                save(bookKey, TranslationDictionaryPolicy.mergeDiscovered(current.pairs, discovered))
             }
-            result
         }
 
     suspend fun replace(bookKey: String, pairs: List<DictPair>): BookDictionary =
         withContext(Dispatchers.IO) {
-            val normalized = TranslationDictionaryPolicy.mergeDiscovered(emptyList(), pairs)
-            val result = BookDictionary(bookKey, normalized, System.currentTimeMillis())
-            dao.upsert(
-                TranslationDictionaryEntity(
-                    bookKey = result.bookKey,
-                    pairsJson = json.encodeToString(ListSerializer(DictPair.serializer()), result.pairs),
-                    updatedAt = result.updatedAt,
-                ),
-            )
-            result
+            database.withTransaction {
+                val current = get(bookKey)
+                save(bookKey, TranslationDictionaryPolicy.applyManualEdits(current.pairs, pairs))
+            }
         }
+
+    private suspend fun save(bookKey: String, pairs: List<DictPair>): BookDictionary {
+        val result = BookDictionary(bookKey, pairs, System.currentTimeMillis())
+        dao.upsert(
+            TranslationDictionaryEntity(
+                bookKey = result.bookKey,
+                pairsJson = json.encodeToString(ListSerializer(DictPair.serializer()), result.pairs),
+                updatedAt = result.updatedAt,
+            ),
+        )
+        return result
+    }
 
     suspend fun delete(bookKey: String) = withContext(Dispatchers.IO) {
         dao.delete(bookKey)

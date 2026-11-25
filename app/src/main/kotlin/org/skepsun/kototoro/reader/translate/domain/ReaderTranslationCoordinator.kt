@@ -88,10 +88,12 @@ internal class ReaderTranslationCoordinator(
         onDiscoveredPairs: suspend (List<DictPair>) -> Unit = {},
         batchLimit: Int = maxOpenAiBatchSize,
         charBudgetPerBatch: Int = Int.MAX_VALUE,
+        useCache: Boolean = true,
     ): Map<String, String> {
         if (texts.isEmpty()) return emptyMap()
         val uniqueTexts = texts.distinct()
         val glossarySignature = glossary
+            .filterNot(DictPair::excluded)
             .map { "${it.original.trim()}=${it.translation.trim()}" }
             .filter { it != "=" }
             .joinToString(";")
@@ -102,7 +104,7 @@ internal class ReaderTranslationCoordinator(
 
         for (text in uniqueTexts) {
             val key = cacheKey(text)
-            val cached = textCache[key]
+            val cached = if (useCache) textCache[key] else null
             if (!cached.isNullOrBlank()) {
                 val sanitized = sanitizeTranslation(cached)
                 if (sanitized.isNotBlank()) {
@@ -157,7 +159,7 @@ internal class ReaderTranslationCoordinator(
                         val sanitized = sanitizeTranslation(onnxText)
                         if (isAcceptableTranslation(text, sanitized, sourceLang, targetLang)) {
                             translated[text] = sanitized
-                            textCache[cacheKey(text)] = sanitized
+                            if (useCache) textCache[cacheKey(text)] = sanitized
                             log { "translate onnx hit src=${oneLine(text, 140)} out=${oneLine(sanitized, 140)}" }
                             android.util.Log.d("ReaderTranslationCoordinator", "translateBlocksCached: ONNX accepted")
                         } else {
@@ -206,7 +208,7 @@ internal class ReaderTranslationCoordinator(
                         val sanitized = sanitizeTranslation(raw)
                         if (isAcceptableTranslation(text, sanitized, sourceLang, targetLang)) {
                             translated[text] = sanitized
-                            textCache[cacheKey(text)] = sanitized
+                            if (useCache) textCache[cacheKey(text)] = sanitized
                             log { "translate local hit src=${oneLine(text, 140)} out=${oneLine(sanitized, 140)}" }
                         } else {
                             log { "translate local rejected src=${oneLine(text, 140)} out=${oneLine(sanitized, 140)}" }
@@ -234,7 +236,6 @@ internal class ReaderTranslationCoordinator(
                     sourceLang = resolvedSourceLang,
                     targetLang = targetLang,
                     glossary = glossary,
-                    cacheSuffix = glossarySignature,
                     batchLimit = batchLimit,
                     charBudgetPerBatch = charBudgetPerBatch,
                 )
@@ -248,7 +249,7 @@ internal class ReaderTranslationCoordinator(
                         val sanitized = sanitizeTranslation(apiText)
                         if (sanitized.isNotBlank()) {
                             translated[text] = sanitized
-                            textCache[cacheKey(text)] = sanitized
+                            if (useCache) textCache[cacheKey(text)] = sanitized
                             log { "translate api hit src=${oneLine(text, 140)} out=${oneLine(sanitized, 140)}" }
                         } else {
                             log { "translate api rejected src=${oneLine(text, 140)} out=${oneLine(sanitized, 140)}" }
@@ -334,7 +335,6 @@ internal class ReaderTranslationCoordinator(
         sourceLang: String,
         targetLang: String,
         glossary: List<DictPair>,
-        cacheSuffix: String,
         batchLimit: Int,
         charBudgetPerBatch: Int,
     ): ApiBatchResult {
@@ -348,7 +348,7 @@ internal class ReaderTranslationCoordinator(
         } else {
             val map = LinkedHashMap<String, String>(texts.size)
             for (text in texts) {
-                map[text] = translateByApi(text, sourceLang, targetLang, cacheSuffix)
+                map[text] = translateByApi(text, sourceLang, targetLang)
             }
             ApiBatchResult(map)
         }
@@ -730,7 +730,6 @@ internal class ReaderTranslationCoordinator(
         text: String,
         sourceLang: String,
         targetLang: String,
-        cacheSuffix: String,
     ): String {
         val endpoint = resolveTranslationApiEndpoint()
         if (endpoint.isBlank()) {
@@ -762,11 +761,6 @@ internal class ReaderTranslationCoordinator(
             val body = resp.body.readJsonTextUtf8()
             val sanitized = sanitizeTranslation(body)
             log { "api raw reply=${oneLine(body, 300)} sanitized=${oneLine(sanitized, 140)} src=${oneLine(text, 140)}" }
-            if (sanitized.isNotBlank()) {
-                val cacheKey = buildTextCacheKey(text, sourceLang, targetLang) +
-                    cacheSuffix.takeIf { it.isNotBlank() }?.let { "|dict=$it" }.orEmpty()
-                textCache[cacheKey] = sanitized
-            }
             return sanitized
         }
     }

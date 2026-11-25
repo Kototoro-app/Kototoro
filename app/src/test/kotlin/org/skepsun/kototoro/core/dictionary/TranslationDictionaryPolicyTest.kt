@@ -51,4 +51,16 @@ class TranslationDictionaryPolicyTest {
             merged,
         )
     }
+    @Test
+    fun `manual replacements win and removed terms stay out of future prompts`() {
+        val existing = listOf(DictPair("Alice", "爱丽丝"), DictPair("Bob", "鲍勃"))
+        val edited = TranslationDictionaryPolicy.applyManualEdits(existing, listOf(DictPair("Alice", "艾莉丝")))
+        val afterDiscovery = TranslationDictionaryPolicy.mergeDiscovered(edited, existing)
+
+        assertEquals(
+            listOf(DictPair("Alice", "艾莉丝")),
+            TranslationDictionaryPolicy.selectRelevant("Alice and Bob", afterDiscovery),
+        )
+    }
+
 }

@@ -108,6 +108,11 @@ class ReaderPageEnhancementController @Inject constructor(
 
     fun getTranslationDebugLog(pageId: Long): String = translationProcessor.getPageDebugLog(pageId)
 
+    internal suspend fun editableBubbleTexts(pageId: Long): List<String> = translationProcessor.editableBubbleTexts(pageId)
+
+    internal suspend fun retranslateBubble(pageId: Long, index: Int, expectedText: String, originalText: String): Boolean =
+        translationProcessor.retranslateBubble(pageId, index, expectedText, originalText)
+
     suspend fun resolveDisplayVariant(
         page: ContentPage,
         currentUri: Uri,

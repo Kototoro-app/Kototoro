@@ -19,6 +19,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -33,6 +34,7 @@ import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.adaptive.tvChipRing
 import org.skepsun.kototoro.core.util.ext.copyToClipboard
 import org.skepsun.kototoro.reader.domain.TranslationLayerState
+import org.skepsun.kototoro.reader.novel.compose.TranslationTextEditorDialog
 import org.skepsun.kototoro.reader.ui.ReaderViewModel
 import org.skepsun.kototoro.reader.ui.TranslationTaskBenchmarkFormatter
 
@@ -144,8 +146,31 @@ internal fun ComposeTranslationTaskPanelContent(
     }
 
     detail?.let { snapshot ->
-        TranslationTaskDetailDialog(
+        val bubbleTexts by produceState(emptyList(), snapshot.pageId, version) {
+            value = viewModel.editableBubbleTexts(snapshot.pageId)
+        }
+        var bubbleIndex by remember(snapshot.pageId) { mutableStateOf<Int?>(null) }
+        val index = bubbleIndex
+        if (index != null && index in bubbleTexts.indices) {
+            val original = remember(snapshot.pageId, index) { bubbleTexts[index] }
+            var draft by remember(snapshot.pageId, index) { mutableStateOf(original) }
+            TranslationTextEditorDialog(
+                title = stringResource(R.string.reader_translation_edit_bubble),
+                value = draft,
+                onValueChange = { draft = it },
+                saveLabel = stringResource(R.string.reader_translation_retranslate_bubble),
+                dismissLabel = stringResource(R.string.cancel),
+                onSave = {
+                    viewModel.retranslateBubble(snapshot.pageId, index, original, draft)
+                    detail = null
+                },
+                onDismiss = { bubbleIndex = null },
+                canSave = draft.isNotBlank(),
+            )
+        } else TranslationTaskDetailDialog(
             snapshot = snapshot,
+            bubbleTexts = bubbleTexts,
+            onBubbleSelected = { bubbleIndex = it },
             onDismiss = { detail = null },
             onRetry = {
                 viewModel.retryTranslationForPage(snapshot.pageId)
@@ -242,6 +267,8 @@ private fun TranslationTaskRow(
 @Composable
 private fun TranslationTaskDetailDialog(
     snapshot: ReaderViewModel.TranslationPageTaskSnapshot,
+    bubbleTexts: List<String>,
+    onBubbleSelected: (Int) -> Unit,
     onDismiss: () -> Unit,
     onRetry: () -> Unit,
 ) {
@@ -261,6 +288,16 @@ private fun TranslationTaskDetailDialog(
         title = { Text(title) },
         text = {
             LazyColumn(modifier = Modifier.heightIn(max = 480.dp)) {
+                if (bubbleTexts.isNotEmpty()) {
+                    item { Text(stringResource(R.string.reader_translation_edit_bubble)) }
+                    items(bubbleTexts.size) { index ->
+                        TvTextButton(onClick = { onBubbleSelected(index) }) {
+                            Text("${index + 1}. ${bubbleTexts[index]}")
+                        }
+                    }
+                } else if (snapshot.state == TranslationLayerState.READY) {
+                    item { Text(stringResource(R.string.reader_translation_bubble_unavailable)) }
+                }
                 item { Text(message) }
             }
         },

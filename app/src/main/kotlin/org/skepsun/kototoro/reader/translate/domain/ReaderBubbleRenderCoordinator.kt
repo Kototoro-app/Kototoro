@@ -20,11 +20,12 @@ internal class ReaderBubbleRenderCoordinator(
         translatedMap: Map<String, String>,
         targetLang: String,
         bitmap: Bitmap,
+        bubbleTranslations: Map<Int, String> = emptyMap(),
     ): BubbleRenderPreparationResult {
         val preparedBubbles = mutableListOf<PreparedBubble>()
         var nonEmptyTranslatedCount = 0
-        for (bubble in bubbleInputs) {
-            val translated = translatedMap[bubble.sourceText].orEmpty().trim()
+        for ((index, bubble) in bubbleInputs.withIndex()) {
+            val translated = (bubbleTranslations[index] ?: translatedMap[bubble.sourceText]).orEmpty().trim()
             log {
                 "bubble translate src=${oneLine(bubble.sourceText, 140)} out=${oneLine(translated, 140)} box=${bubble.rect}"
             }
