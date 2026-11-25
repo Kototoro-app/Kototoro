@@ -596,7 +596,7 @@ private enum NovelReaderAction: String, CaseIterable, Identifiable {
 
 struct NovelReaderView: View {
     private enum ReaderSheet: String, Identifiable {
-        case chapters, settings, downloads, search
+        case settings, downloads, search
         var id: String { rawValue }
     }
     @EnvironmentObject private var library: LibraryModel
@@ -629,6 +629,9 @@ struct NovelReaderView: View {
     @State private var downloadError: String?
     @State private var chromeHidden = false
     @State private var showingMore = false
+    /// The contents and bookmarks panel, grown in place of the top controls as the more panel is.
+    @State private var showingChapters = false
+    @State private var chapterQuery = ""
     @State private var moreTab = 0
     @State private var scrubPosition: Double?
     @State private var isScrubbing = false
@@ -683,7 +686,7 @@ struct NovelReaderView: View {
         .toolbar(.hidden, for: .tabBar)
         // The top controls live in the system navigation bar, as on the details page, so they sit where its controls
         // do and the bar hands its back button over when the reader is popped. The more panel takes the top instead.
-        .toolbar(!chromeHidden && !showingMore ? .visible : .hidden, for: .navigationBar)
+        .toolbar(!chromeHidden && !panelOpen ? .visible : .hidden, for: .navigationBar)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .principal) {
@@ -704,7 +707,6 @@ struct NovelReaderView: View {
         .persistentSystemOverlays(chromeHidden ? .hidden : .automatic)
         .sheet(item: $activeSheet) { sheet in
             switch sheet {
-            case .chapters: navigationSheet
             case .settings: NovelReaderSettingsSheet()
             case .downloads: ReaderDownloadsSheet()
             case .search:
@@ -743,7 +745,9 @@ struct NovelReaderView: View {
                 }
             }
         }
-        .onChange(of: model.chapter.id) { _, _ in showingMore = false; scrubPosition = nil; isScrubbing = false }
+        .onChange(of: model.chapter.id) { _, _ in
+            showingMore = false; showingChapters = false; scrubPosition = nil; isScrubbing = false
+        }
         .translationTask(model.translationConfiguration) { session in await model.translate(using: session) }
         .onChange(of: replaceRulesRevision) { _, _ in
             // Edited rules apply to the open chapter at the line being read.
@@ -762,7 +766,14 @@ struct NovelReaderView: View {
         withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.18)) {
             chromeHidden.toggle()
             showingMore = false
+            showingChapters = false
         }
+    }
+
+    private var panelOpen: Bool { showingMore || showingChapters }
+
+    private func closePanels() {
+        withAnimation(reduceMotion ? nil : .snappy(duration: 0.25)) { showingMore = false; showingChapters = false }
     }
 
     private func perform(_ action: NovelReaderAction) {
@@ -772,7 +783,9 @@ struct NovelReaderView: View {
         case .speak:
             showingMore = false
             if model.speech.isActive { model.speech.togglePause() } else { model.startSpeech(from: model.visibleIndex) }
-        case .chapters: showingMore = false; activeSheet = .chapters
+        case .chapters:
+            chapterQuery = ""
+            withAnimation(reduceMotion ? nil : .snappy(duration: 0.25)) { showingMore = false; showingChapters = true }
         case .typography: showingMore = false; activeSheet = .settings
         case .downloads: showingMore = false; activeSheet = .downloads
         }
@@ -782,28 +795,35 @@ struct NovelReaderView: View {
         GlassEffectContainer(spacing: 8) {
             VStack(spacing: 12) {
                 if showingMore {
-                    morePanel.frame(maxHeight: min(400, max(100, height - 88)))
+                    morePanel.frame(maxHeight: min(460, max(100, height - 88)))
+                        .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .topTrailing)))
+                } else if showingChapters {
+                    chapterPanel.frame(height: min(540, max(240, height - 170)))
+                        .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .top)))
                 }
                 Spacer(minLength: 0)
                 let actions = NovelReaderAction.selected(floatingActions)
-                if !showingMore, model.translationEnabled, let status = model.translationStatus.text {
+                if !panelOpen, model.translationEnabled, let status = model.translationStatus.text {
                     Label(status, systemImage: "translate")
                         .font(.caption).lineLimit(2)
                         .padding(.horizontal, 12).padding(.vertical, 8)
                         .glassEffect(.regular, in: .capsule)
                         .accessibilityIdentifier("novel.translationStatus")
                 }
-                if !showingMore && !actions.isEmpty {
+                if !panelOpen && !actions.isEmpty {
                     HStack(spacing: 12) {
                         Spacer()
                         ForEach(actions) { action in
+                            // Only a switched-on action takes the accent, as in the manga reader.
+                            let active = action == .bookmark && model.isBookmarked
+                                || action == .translate && model.translationEnabled
+                                || action == .speak && model.speech.isActive
                             Button { perform(action) } label: {
                                 Image(systemName: action == .bookmark && model.isBookmarked ? "bookmark.fill" : action.symbol)
                                     .frame(width: 44, height: 44)
-                                    .foregroundStyle(action == .translate && model.translationEnabled ? Color.white : Color.primary)
+                                    .foregroundStyle(active ? Color.white : Color.primary)
                             }.buttonStyle(.plain)
-                                .glassEffect(.regular.tint(action == .translate && model.translationEnabled
-                                                           ? Color.accentColor : Color.accentColor.opacity(0.35)).interactive(),
+                                .glassEffect(active ? .regular.tint(.accentColor).interactive() : .regular.interactive(),
                                              in: .circle)
                                 .disabled(action == .bookmark && (model.blocks.isEmpty || model.isLoading))
                                 .accessibilityLabel(action.title)
@@ -813,7 +833,7 @@ struct NovelReaderView: View {
                         }
                     }
                 }
-                if !showingMore {
+                if !panelOpen {
                     NovelSpeechBarIfActive(speech: model.speech) { model.skipSpeech($0) }
                 }
                 progressControl
@@ -862,7 +882,7 @@ struct NovelReaderView: View {
             HStack {
                 Text("更多").font(.headline)
                 Spacer()
-                Button("收起", systemImage: "xmark") { showingMore = false }
+                Button("收起", systemImage: "xmark") { closePanels() }
                     .labelStyle(.iconOnly).buttonStyle(.borderless).accessibilityIdentifier("novel.panel.close")
             }.padding(16)
             Divider()
@@ -872,41 +892,47 @@ struct NovelReaderView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     if moreTab == 0 {
-                        Text(model.content.title).font(.subheadline).foregroundStyle(.secondary)
-                        Button(model.isBookmarked ? "取消书签" : "添加书签",
-                               systemImage: model.isBookmarked ? "bookmark.fill" : "bookmark") { perform(.bookmark) }
-                            .disabled(model.blocks.isEmpty || model.isLoading)
-                            .accessibilityIdentifier("novel.bookmark")
+                        let unavailable = model.blocks.isEmpty || model.isLoading
                         // A selection is highlighted from its menu; this marks the whole paragraph being read.
                         let marked = !model.lineHighlights(model.visibleIndex).isEmpty
-                        Button(marked ? "取消本段划线" : "划线当前段", systemImage: "highlighter") {
-                            Task { await model.toggleLineMarking(model.visibleIndex) }
+                        LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible())], spacing: 8) {
+                            PanelToggleTile(title: model.isBookmarked ? String(localized: "取消书签") : String(localized: "添加书签"),
+                                            symbol: model.isBookmarked ? "bookmark.fill" : "bookmark",
+                                            isOn: model.isBookmarked) { perform(.bookmark) }
+                                .disabled(unavailable)
+                                .accessibilityIdentifier("novel.bookmark")
+                            PanelToggleTile(title: String(localized: "朗读"),
+                                            symbol: model.speech.isActive ? "speaker.wave.2.fill" : "speaker.wave.2",
+                                            isOn: model.speech.isActive) { perform(.speak) }
+                                .disabled(unavailable)
+                                .accessibilityIdentifier("novel.speak")
+                            PanelToggleTile(title: model.translationEnabled ? String(localized: "显示原文") : String(localized: "翻译本章"),
+                                            symbol: "translate", isOn: model.translationEnabled) { perform(.translate) }
+                                .disabled(unavailable)
+                                .accessibilityIdentifier("novel.translate")
+                            PanelToggleTile(title: marked ? String(localized: "取消本段划线") : String(localized: "划线当前段"),
+                                            symbol: "highlighter", isOn: marked) {
+                                Task { await model.toggleLineMarking(model.visibleIndex) }
+                            }
+                            .disabled(unavailable)
+                            .accessibilityIdentifier("novel.markParagraph")
                         }
-                        .disabled(model.blocks.isEmpty || model.isLoading)
-                        .accessibilityIdentifier("novel.markParagraph")
-                        Button("搜索本章", systemImage: "magnifyingglass") { showingMore = false; activeSheet = .search }
-                            .disabled(model.blocks.isEmpty || model.isLoading)
-                            .accessibilityIdentifier("novel.search")
-                        Button("朗读", systemImage: "speaker.wave.2") { perform(.speak) }
-                            .disabled(model.blocks.isEmpty || model.isLoading)
-                            .accessibilityIdentifier("novel.speak")
-                        Button(model.translationEnabled ? "显示原文" : "翻译本章", systemImage: "translate") {
-                            perform(.translate)
-                        }
-                        .disabled(model.blocks.isEmpty || model.isLoading)
-                        .accessibilityIdentifier("novel.translate")
                         if model.translationEnabled, let status = model.translationStatus.text {
-                            Text(status).font(.caption).foregroundStyle(.secondary)
+                            Text(status).font(.caption).foregroundStyle(.secondary).padding(.horizontal, 4)
                         }
-                        Button("阅读设置", systemImage: "textformat.size") { perform(.typography) }
-                            .accessibilityIdentifier("novel.typography")
-                        // Imported files are already on the device.
-                        if !model.runtime.isLocal(content: model.content) {
-                            downloadMenu
-                            if let status = downloadStatus { Text(status).font(.caption).foregroundStyle(.secondary) }
+                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 4), spacing: 14) {
+                            PanelActionButton(title: String(localized: "搜索本章"), symbol: "magnifyingglass") {
+                                showingMore = false; activeSheet = .search
+                            }
+                            .disabled(unavailable)
+                            .accessibilityIdentifier("novel.search")
+                            PanelActionButton(title: String(localized: "阅读设置"), symbol: "textformat.size") { perform(.typography) }
+                                .accessibilityIdentifier("novel.typography")
+                            // Imported files are already on the device.
+                            if !model.runtime.isLocal(content: model.content) { downloadMenu }
+                            PanelActionButton(title: String(localized: "下载队列"), symbol: "list.bullet.rectangle") { perform(.downloads) }
+                                .accessibilityIdentifier("novel.downloads")
                         }
-                        Button("下载队列", systemImage: "arrow.down.circle") { perform(.downloads) }
-                            .accessibilityIdentifier("novel.downloads")
                     } else {
                         ForEach(NovelReaderAction.allCases) { action in
                             Toggle(action.title, isOn: Binding(
@@ -922,7 +948,7 @@ struct NovelReaderView: View {
                         Text("所选悬浮按钮显示在进度条上方，随阅读控件一起收起。可全部关闭，设置自动保存。")
                             .font(.caption).foregroundStyle(.secondary)
                     }
-                }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
+                }.padding(.horizontal, 12).padding(.vertical, 14).frame(maxWidth: .infinity, alignment: .leading)
             }
         }.glassEffect(.regular, in: .rect(cornerRadius: 28))
             .accessibilityElement(children: .contain)
@@ -1035,8 +1061,14 @@ struct NovelReaderView: View {
                 .accessibilityIdentifier("novel.download.all")
             }
         } label: {
-            Label("下载", systemImage: "arrow.down.circle")
+            // The full state heads the menu; under the glyph only a short one fits.
+            PanelActionLabel(title: String(localized: "下载"), symbol: "arrow.down.circle",
+                             status: ReaderDownloads.isDownloaded(content: model.content, chapter: model.chapter)
+                                 ? String(localized: "已下载")
+                                 : downloads.entry(content: model.content, chapter: model.chapter)?.status)
         }
+        .buttonStyle(.plain)
+        .accessibilityLabel("下载")
         .accessibilityIdentifier("novel.download")
     }
 
@@ -1064,21 +1096,33 @@ struct NovelReaderView: View {
     }
 
     private func chapterRow(_ item: IosSourceChapter) -> some View {
-        Button {
-            activeSheet = nil
+        let current = item.id == model.chapter.id
+        return Button {
+            closePanels()
             Task { await model.move(to: item) }
         } label: {
-            HStack {
-                Text(item.title)
-                Spacer()
+            HStack(spacing: 10) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(item.title).font(current ? .body.weight(.semibold) : .body).lineLimit(2)
+                    if current {
+                        Text("正在阅读 · \(Int((model.progress * 100).rounded()))%").font(.caption).foregroundStyle(.tint)
+                    }
+                }
+                Spacer(minLength: 4)
                 // A book's chapters share their download, whose state the group shows.
                 if model.content.bookOf(chapter: item) == nil, let offline = ChapterOfflineMark.of(model.content, item) {
-                    Image(systemName: offline.icon).foregroundStyle(.secondary).accessibilityLabel(offline.label)
+                    Image(systemName: offline.icon).font(.caption).foregroundStyle(.secondary).accessibilityLabel(offline.label)
                 }
-                if item.id == model.chapter.id { Image(systemName: "book.fill") }
             }
+            .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
+            .contentShape(.rect)
         }
+        .buttonStyle(.plain)
+        .listRowBackground(current ? RoundedRectangle(cornerRadius: 12, style: .continuous)
+            .fill(Color.accentColor.opacity(0.16)).padding(.horizontal, 8) : nil)
+        .listRowSeparator(current ? .hidden : .automatic)
         .id(item.id)
+        .accessibilityAddTraits(current ? .isSelected : [])
         .accessibilityIdentifier("novel.chapter.\(item.id)")
         .swipeActions {
             if !model.runtime.isLocal(content: model.content),
@@ -1088,19 +1132,31 @@ struct NovelReaderView: View {
         }
     }
 
-    private var navigationSheet: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                Picker("内容", selection: $sheetTab) {
-                    Text("章节").tag(0)
-                    Text("书签").tag(1)
-                }
-                .pickerStyle(.segmented)
-                .padding(12)
-                if sheetTab == 0 {
-                    // A downloaded book gathers its chapters under the download, as Android groups EPUB volumes.
-                    ScrollViewReader { proxy in
-                        List {
+    /// Contents and bookmarks in a glass panel grown in place of the top controls, as the manga reader's directory is.
+    /// The rows stay a List, for the downloaded books' groups and the swipe to download.
+    private var chapterPanel: some View {
+        let query = chapterQuery.trimmingCharacters(in: .whitespaces)
+        return VStack(spacing: 10) {
+            HStack {
+                Text("目录与书签").font(.headline)
+                Spacer()
+                Button("关闭", systemImage: "xmark") { closePanels() }
+                    .labelStyle(.iconOnly).buttonStyle(.borderless)
+                    .accessibilityIdentifier("novel.chapterPanel.close")
+            }
+            .padding(.horizontal, 16).padding(.top, 14)
+            Picker("内容", selection: $sheetTab) {
+                Text("章节").tag(0)
+                Text(model.bookmarks.isEmpty ? String(localized: "书签") : String(localized: "书签 \(model.bookmarks.count)")).tag(1)
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal, 12)
+            if sheetTab == 0 {
+                PanelSearchField(prompt: "搜索章节", text: $chapterQuery).padding(.horizontal, 12)
+                ScrollViewReader { proxy in
+                    List {
+                        if query.isEmpty {
+                            // A downloaded book gathers its chapters under the download, as Android groups EPUB volumes.
                             ForEach(ChapterRow.rows(model.content.chapters, in: model.content)) { row in
                                 switch row {
                                 case .chapter(let item): chapterRow(item)
@@ -1113,46 +1169,57 @@ struct NovelReaderView: View {
                                     } label: {
                                         ChapterBookLabel(book: book, count: chapters.count)
                                     }
+                                    .listRowBackground(Color.clear)
                                     .accessibilityIdentifier("novel.book.\(book.id)")
                                 }
                             }
-                        }
-                        .task {
-                            if let book = model.content.bookOf(chapter: model.chapter) { collapsedBooks.remove(book.id) }
-                            await Task.yield()
-                            proxy.scrollTo(model.chapter.id, anchor: .center)
+                        } else {
+                            let found = model.content.chapters.filter { $0.title.localizedCaseInsensitiveContains(query) }
+                            if found.isEmpty {
+                                ContentUnavailableView.search(text: query).listRowBackground(Color.clear)
+                            }
+                            ForEach(found, id: \.id) { chapterRow($0) }
                         }
                     }
-                } else if model.bookmarks.isEmpty {
-                    ContentUnavailableView("暂无书签", systemImage: "bookmark")
-                } else {
-                    List {
-                        ForEach(model.bookmarks, id: \.id) { bookmark in
-                            Button {
-                                activeSheet = nil
-                                Task {
-                                    if bookmark.chapterId != model.chapter.id,
-                                       let target = model.content.chapters.first(where: { $0.id == bookmark.chapterId }) {
-                                        await model.move(to: target)
-                                    }
-                                    await model.jump(to: model.index(of: bookmark))
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
+                    .task {
+                        if let book = model.content.bookOf(chapter: model.chapter) { collapsedBooks.remove(book.id) }
+                        await Task.yield()
+                        proxy.scrollTo(model.chapter.id, anchor: .center)
+                    }
+                }
+            } else if model.bookmarks.isEmpty {
+                ContentUnavailableView("暂无书签", systemImage: "bookmark").frame(maxHeight: .infinity)
+            } else {
+                List {
+                    ForEach(model.bookmarks, id: \.id) { bookmark in
+                        Button {
+                            closePanels()
+                            Task {
+                                if bookmark.chapterId != model.chapter.id,
+                                   let target = model.content.chapters.first(where: { $0.id == bookmark.chapterId }) {
+                                    await model.move(to: target)
                                 }
-                            } label: {
-                                BookmarkPreviewLabel(runtime: model.runtime, content: model.content, bookmark: bookmark,
-                                                     chapter: model.content.chapters.first { $0.id == bookmark.chapterId })
+                                await model.jump(to: model.index(of: bookmark))
                             }
-                            .swipeActions {
-                                Button("删除", role: .destructive) { Task { await model.removeBookmark(bookmark) } }
-                            }
+                        } label: {
+                            BookmarkPreviewLabel(runtime: model.runtime, content: model.content, bookmark: bookmark,
+                                                 chapter: model.content.chapters.first { $0.id == bookmark.chapterId })
+                        }
+                        .listRowBackground(Color.clear)
+                        .swipeActions {
+                            Button("删除", role: .destructive) { Task { await model.removeBookmark(bookmark) } }
                         }
                     }
                 }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
             }
-            .navigationTitle("目录与书签")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("关闭") { activeSheet = nil } } }
         }
-        .presentationDetents([.medium, .large])
+        .glassEffect(.regular, in: .rect(cornerRadius: 28))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("novel.chapterPanel")
     }
 
 }

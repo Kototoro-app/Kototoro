@@ -2091,7 +2091,10 @@ final class LocalImportTests: XCTestCase {
         attach("横向反向缩放与书签恢复")
         app.buttons["reader.more"].tap()
         app.segmentedControls.buttons["快捷"].tap()
-        app.buttons["切换方向"].tap()
+        // The quick tab's page-turning control carries the strip's direction while the horizontal strip is on.
+        let quickDirection = app.switches["reader.quick.horizontalReversed"]
+        XCTAssertTrue(quickDirection.waitForExistence(timeout: 5), app.debugDescription)
+        quickDirection.switches.firstMatch.tap()
         app.segmentedControls.buttons["布局"].tap()
         let direction = app.switches["reader.option.horizontalReversed"]
         XCTAssertTrue(direction.waitForExistence(timeout: 5), app.debugDescription)
@@ -2831,7 +2834,7 @@ final class LocalImportTests: XCTestCase {
         wait(for: [toggled], timeout: 10)
         attach("小说底部进度与悬浮按钮")
         app.buttons["novel.floating.chapters"].tap()
-        XCTAssertTrue(app.navigationBars["目录与书签"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.descendants(matching: .any)["novel.chapterPanel"].waitForExistence(timeout: 10))
         app.buttons["关闭"].firstMatch.tap()
         app.buttons["novel.floating.typography"].tap()
         XCTAssertTrue(app.navigationBars["阅读设置"].waitForExistence(timeout: 10))

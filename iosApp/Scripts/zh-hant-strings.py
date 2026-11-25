@@ -59,12 +59,25 @@ OVERRIDES = {
     "型別": "類型",
     "賬號": "帳號",
 }
+# OpenCC's s2t maps some Traditional characters to older variants that s2twp
+# itself does not produce (社群 -> 社羣). Those variants are folded back before
+# `check` compares, so a value in current Taiwan usage is not reported as
+# Simplified.
+S2T_VARIANTS = {
+    "羣": "群",
+}
 FORMAT_SPECIFIER = re.compile(r"%(?:\d+\$)?[-+ 0#]*\d*(?:\.\d+)?(?:hh|h|ll|l|q|z|t|j)?[@dDiuUxXoOfFeEgGcCsSpaA%]")
 
 
 def apply_overrides(value: str) -> str:
     for source, target in OVERRIDES.items():
         value = value.replace(source, target)
+    return value
+
+
+def fold_s2t_variants(value: str) -> str:
+    for variant, common in S2T_VARIANTS.items():
+        value = value.replace(variant, common)
     return value
 
 
@@ -171,7 +184,7 @@ def check() -> int:
             if unit.get("state") != "translated":
                 problems.append(f"{rel}: {key!r} zh-Hant state is {unit.get('state')!r}")
             traditional = s2t.convert(value)
-            if traditional != value:
+            if fold_s2t_variants(traditional) != value:
                 problems.append(
                     f"{rel}: {key!r} zh-Hant value still contains Simplified text "
                     f"({value!r} converts to {traditional!r})"
