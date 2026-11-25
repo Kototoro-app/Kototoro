@@ -27,6 +27,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -34,6 +35,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -187,6 +189,20 @@ fun CommunityRatingCard(
     }
 }
 
+/** The rating section's action button: a compact tonal button, so it does not outweigh the score beside it. */
+@Composable
+private fun RateButton(text: String, onClick: () -> Unit) {
+    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 32.dp) {
+        FilledTonalButton(
+            onClick = onClick,
+            modifier = Modifier.height(32.dp).testTag("community-rating-rate"),
+            contentPadding = PaddingValues(horizontal = 14.dp),
+        ) {
+            Text(text, style = MaterialTheme.typography.labelLarge)
+        }
+    }
+}
+
 @Composable
 private fun CommentsPill(count: Int, onClick: () -> Unit) {
     Surface(
@@ -197,11 +213,11 @@ private fun CommentsPill(count: Int, onClick: () -> Unit) {
         modifier = Modifier.testTag("community-comments-open"),
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Icon(ReaderPanelIcons.Comment, contentDescription = null, modifier = Modifier.size(16.dp))
+            Icon(ReaderPanelIcons.Comment, contentDescription = null, modifier = Modifier.size(14.dp))
             Text(
                 text = if (count > 0) uiString("community_comments_count", count) else uiString("community_comments"),
                 style = MaterialTheme.typography.labelLarge,
@@ -319,9 +335,10 @@ private fun MyRatingRow(myStars: Int?, canRate: Boolean, isPublishing: Boolean, 
         }
         when {
             isPublishing -> CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-            canRate -> FilledTonalButton(onClick = onRate, modifier = Modifier.testTag("community-rating-rate")) {
-                Text(if (myStars != null) uiString("edit") else uiString("community_rating_rate"))
-            }
+            canRate -> RateButton(
+                text = if (myStars != null) uiString("edit") else uiString("community_rating_rate"),
+                onClick = onRate,
+            )
         }
     }
 }
@@ -460,6 +477,25 @@ fun communityRefusalText(refusal: CommunityRatingRefusal?): String? = when (refu
 }
 
 /** A score the reader does not set: the source's own rating or a tracker's average, shown as a row under the overview. */
+@Composable
+private fun EmptyRatingRow(canRate: Boolean, isPublishing: Boolean, onRate: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = uiString("community_rating_be_first"),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f).testTag("community-rating-empty"),
+        )
+        when {
+            isPublishing -> CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+            canRate -> RateButton(text = uiString("community_rating_rate"), onClick = onRate)
+        }
+    }
+}
+
 @Immutable
 data class DetailsScoreRow(
     val key: String,
@@ -505,6 +541,10 @@ fun DetailsRatingSection(
     val anySelected = syncTargets.any { it.selected }
     val communityBlocked = community != null && (community.refusal != null || community.isLoading)
     val canRate = syncTargets.isNotEmpty() && anySelected && !(communityBlocked && syncTargets.all { it.key == communityTargetKey })
+    // Nothing to show yet (no ratings anywhere, none from the reader): one line instead of a big empty score block
+    // with a second row of stars, so the chapters stay near the top of the page.
+    val compactEmpty = community != null && community.rating == null && !community.isLoading &&
+        scores.isEmpty() && myRating == null && freshRatingsText(community) == null
 
     Column(
         modifier = modifier
@@ -515,7 +555,7 @@ fun DetailsRatingSection(
         DetailsSectionHeader(title = uiString("rating")) {
             if (community != null) CommentsPill(count = community.comments, onClick = onOpenComments)
         }
-        if (community != null) {
+        if (community != null && !compactEmpty) {
             ScoreOverview(
                 rating = community.rating,
                 isLoading = community.isLoading,
@@ -558,16 +598,20 @@ fun DetailsRatingSection(
                 }
             }
         }
-        HorizontalDivider(
-            modifier = Modifier.padding(vertical = 12.dp),
-            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-        )
-        MyRatingRow(
-            myStars = myRating,
-            canRate = canRate,
-            isPublishing = isPublishing,
-            onRate = { showDialog = true },
-        )
+        if (compactEmpty) {
+            EmptyRatingRow(canRate = canRate, isPublishing = isPublishing, onRate = { showDialog = true })
+        } else {
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = 12.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+            )
+            MyRatingRow(
+                myStars = myRating,
+                canRate = canRate,
+                isPublishing = isPublishing,
+                onRate = { showDialog = true },
+            )
+        }
         if (syncTargets.isEmpty()) {
             Text(
                 text = uiString("details_rating_unavailable"),

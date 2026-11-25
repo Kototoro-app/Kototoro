@@ -443,12 +443,11 @@ internal fun DetailsScrollableContent(
             isWorkActionEnabled &&
             chapters.isNotEmpty()
         ) {
-            NovelCatalogSection(
+            NovelCatalogSummary(
                 chapters = chapters,
                 totalCount = chapters.size.coerceAtLeast(historyInfo.totalChapters),
                 isReversed = isChaptersReversed,
                 horizontalPadding = outerHorizontalPadding,
-                onOpenChapter = onOpenChapter,
                 onShowAll = { onActionClick(DetailsAction.ToggleList) },
             )
         }

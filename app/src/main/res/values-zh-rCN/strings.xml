@@ -4161,6 +4161,7 @@
     <string name="details_no_episodes">暂无剧集</string>
     <string name="details_cover">封面</string>
     <string name="details_view_catalog">查看目录</string>
+    <string name="details_catalog_updated_to">更新至 %1$s</string>
     <string name="details_my_reading">我的阅读</string>
     <string name="details_not_started">未开始</string>
     <string name="backup_orphan_review_title">备份需要处理</string>

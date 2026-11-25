@@ -235,22 +235,10 @@ fun AnimatedPanoramaBackdrop(
             .then(scrollLinkedModifier)
             .fillMaxSize()
     }
+    // The fade mask lives on the outer (screen-space) layer so the looping scale animation and the blur cannot
+    // push its transparent tail outside the clip bounds, which left a hard edge at the cover's bottom.
     val backgroundModifier = backdropBoundsModifier
-        .then(
-            if (useRealtimeBlur) {
-                Modifier.blur(
-                    radius = realtimeBlurRadius,
-                    edgeTreatment = BlurredEdgeTreatment.Rectangle,
-                )
-            } else {
-                Modifier
-            },
-        )
         .graphicsLayer {
-            val backgroundScale = backgroundScaleState?.value ?: 1f
-            scaleX = backgroundScale
-            scaleY = backgroundScale
-            translationX = backgroundTranslationXState?.value ?: 0f
             alpha = resolvePanoramaContentAlpha(
                 contentAlpha = contentAlphaProvider?.invoke() ?: contentAlpha,
                 topOpacityPercent = prefs.topOpacityPercent,
@@ -266,15 +254,18 @@ fun AnimatedPanoramaBackdrop(
                 Modifier.drawWithCache {
                     val fadeStart = resolvePanoramaFadeStart(panoramaTransitionRangeFactor)
                     val fadeLength = PanoramaFadeEnd - fadeStart
+                    // Smoothstep-eased stops: a piecewise-linear ramp leaves visible kinks at the bottom edge.
                     val alphaMask = Brush.verticalGradient(
-                        colorStops = arrayOf(
-                            0f to Color.White,
-                            fadeStart to Color.White,
-                            (fadeStart + fadeLength * 0.35f) to Color.White.copy(alpha = 0.82f),
-                            (fadeStart + fadeLength * 0.70f) to Color.White.copy(alpha = 0.28f),
-                            PanoramaFadeEnd to Color.Transparent,
-                            1f to Color.Transparent,
-                        ),
+                        colorStops = Array(PanoramaFadeSteps + 2) { index ->
+                            when (index) {
+                                0 -> 0f to Color.White
+                                else -> {
+                                    val t = (index - 1) / PanoramaFadeSteps.toFloat()
+                                    val eased = t * t * (3f - 2f * t)
+                                    (fadeStart + fadeLength * t) to Color.White.copy(alpha = 1f - eased)
+                                }
+                            }
+                        },
                     )
                     onDrawWithContent {
                         drawContent()
@@ -285,6 +276,22 @@ fun AnimatedPanoramaBackdrop(
                 Modifier
             },
         )
+        .then(
+            if (useRealtimeBlur) {
+                Modifier.blur(
+                    radius = realtimeBlurRadius,
+                    edgeTreatment = BlurredEdgeTreatment.Rectangle,
+                )
+            } else {
+                Modifier
+            },
+        )
+        .graphicsLayer {
+            val backgroundScale = backgroundScaleState?.value ?: 1f
+            scaleX = backgroundScale
+            scaleY = backgroundScale
+            translationX = backgroundTranslationXState?.value ?: 0f
+        }
 
     if (!hasResolvedBackground && stablePlaceholderImage != null) {
         Image(
@@ -340,5 +347,6 @@ internal fun resolvePanoramaContentAlpha(contentAlpha: Float, topOpacityPercent:
 
 private const val PanoramaFadeStartMin = 0.18f
 private const val PanoramaFadeStartMax = 0.82f
-private const val PanoramaFadeEnd = 0.96f
+private const val PanoramaFadeEnd = 1f
+private const val PanoramaFadeSteps = 16
 private const val HomeHeroBottomScrimAlpha = 0.10f
