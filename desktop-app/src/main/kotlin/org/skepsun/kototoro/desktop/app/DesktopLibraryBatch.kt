@@ -79,9 +79,8 @@ internal fun DesktopLibrarySelectionBar(
                 SelectionAction.PIN -> androidx.compose.ui.res.painterResource(
                     if (allPinned) "icons/ic_unpin.svg" else "icons/ic_pin.svg")
                 SelectionAction.SAVE -> androidx.compose.ui.res.painterResource("icons/ic_download.svg")
-                SelectionAction.REMOVE -> if (history) androidx.compose.ui.graphics.vector.rememberVectorPainter(
+                SelectionAction.REMOVE -> androidx.compose.ui.graphics.vector.rememberVectorPainter(
                     org.skepsun.kototoro.reader.ui.compose.design.ReaderPanelIcons.Delete)
-                    else androidx.compose.ui.res.painterResource("icons/ic_heart_outline.svg")
                 else -> null
             }
             SelectionToolbarItem(action, title, icon, enabled = action != SelectionAction.MIGRATE || count == 1,

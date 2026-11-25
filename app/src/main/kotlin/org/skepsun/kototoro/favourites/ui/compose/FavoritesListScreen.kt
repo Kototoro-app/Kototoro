@@ -145,7 +145,6 @@ fun KototoroFavoritesListScreen(
             SelectionAction.REMOVE,
             SelectionAction.SAVE,
         ),
-        removeSelectionActionIconRes = R.drawable.ic_heart_outline,
         removeSelectionActionTitleRes = R.string.remove_from_favourites,
         onTopBarOverrideChanged = onTopBarOverrideChanged,
         onFilterRailOverrideChanged = {},
