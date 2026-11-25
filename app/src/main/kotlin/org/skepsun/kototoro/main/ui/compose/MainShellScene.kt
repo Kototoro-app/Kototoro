@@ -40,6 +40,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import dagger.hilt.android.EntryPointAccessors
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.compose.runtime.State
@@ -274,6 +275,12 @@ fun MainShellScene(
         }
     }
 
+    // The shell's own lifecycle owner, pinned for the chrome below. After a details push/pop the
+    // chrome group re-entered composition reading the popped details entry's lifecycle owner
+    // (navigation3 provides one per entry) instead of this one. That owner is DESTROYED, so every
+    // collectAsStateWithLifecycle in the chrome stopped: the bottom nav kept highlighting the page
+    // it was opened from while the pages kept switching.
+    val shellLifecycleOwner = LocalLifecycleOwner.current
     Box(modifier = modifier) {
         val useLiquidGlass = LocalInterfaceStyle.current == InterfaceStyle.IOS
         RouteLiquidGlassBackdrop(
@@ -346,7 +353,10 @@ fun MainShellScene(
                         )
                     }
                 }
-                CompositionLocalProvider(LocalImmersiveEdgeBackdrop provides edgeBackdrop) {
+                CompositionLocalProvider(
+                    LocalImmersiveEdgeBackdrop provides edgeBackdrop,
+                    LocalLifecycleOwner provides shellLifecycleOwner,
+                ) {
                     Box(Modifier.fillMaxSize().padding(horizontalCutoutPadding)) {
                         mainShellChrome()
                     }
