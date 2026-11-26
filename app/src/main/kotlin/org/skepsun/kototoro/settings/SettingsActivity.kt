@@ -242,6 +242,9 @@ class SettingsActivity :
     lateinit var suggestionsScheduler: SuggestionsWorker.Scheduler
 
     @Inject
+    lateinit var suggestionRepository: org.skepsun.kototoro.suggestions.domain.SuggestionRepository
+
+    @Inject
     lateinit var contentSourcesRepository: ContentSourcesRepository
 
     @Inject
@@ -1287,6 +1290,7 @@ class SettingsActivity :
                     settings = kototoroAppSettings,
                     suggestionsScheduler = suggestionsScheduler,
                     contentSourcesRepository = contentSourcesRepository,
+                    suggestionRepository = suggestionRepository,
                     excludeTagsFlow = suggestionsExcludeTagsFlow,
                     preferredTagsFlow = suggestionsPreferredTagsFlow,
                 )

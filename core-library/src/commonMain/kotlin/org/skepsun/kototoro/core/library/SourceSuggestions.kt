@@ -3,7 +3,9 @@ package org.skepsun.kototoro.core.library
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import org.skepsun.kototoro.core.source.CONTENT_TYPE_HENTAI_PREFIX
 import org.skepsun.kototoro.core.source.SourceContent
+import org.skepsun.kototoro.core.source.isNsfw
 import org.skepsun.kototoro.core.source.SourceFilter
 import org.skepsun.kototoro.core.source.SourceRef
 import org.skepsun.kototoro.core.source.SourceRuntime
@@ -20,6 +22,8 @@ data class SourceSuggestionPreferences(
     val globalTagBlacklist: Set<String> = emptySet(),
     val languageOnly: Boolean = false,
     val systemLanguage: String = "en",
+    /** Whether a source's share of the suggestions follows how much of the library came from it. */
+    val weighSourcesByUse: Boolean = true,
 )
 
 /** Applies current preferences to cached rows too, including rows generated before the preferences changed. */
@@ -48,16 +52,14 @@ class SourceSuggestions(
 ) {
     /**
      * @param library what the reader has read and saved, see [SourceLibrary.libraryWorks]
-     * @param ages when each suggestion still on the list was first put there, see [SourceLibrary.suggestionAges]
-     * @param seed what the part of the list that rotates is drawn with; the same seed gives the same list
+     * @param seed picks which of the reader's genres each source is asked for; the same seed asks the same things
      */
     suspend fun generate(
         library: List<LibraryWork>,
         sources: List<SourceRef>,
         preferences: SourceSuggestionPreferences,
         now: Long,
-        ages: Map<Long, Long> = emptyMap(),
-        seed: Long = suggestionRotationSeed(now),
+        seed: Long = 0L,
         community: (suspend (List<SourceContent>) -> SourceSuggestionCommunity)? = null,
     ): SourceSuggestionResult {
         // An empty library still gets the sources' popular and new lists; there is just no taste to ask for yet.
@@ -70,7 +72,11 @@ class SourceSuggestions(
             it.name in preferences.excludedSources ||
                 (preferences.languageOnly && !preferences.language.accepts(it.locale, preferences.systemLanguage)) ||
                 (preferences.excludeNsfw && it.contentType.startsWith("HENTAI_"))
-        }.sortedByDescending { preferences.language.accepts(it.locale, preferences.systemLanguage) }) { source ->
+        }.sortedWith(
+            compareByDescending<SourceRef> { preferences.language.accepts(it.locale, preferences.systemLanguage) }
+                // The ones the reader reads from first: when the run is cut off, the ones they never opened go.
+                .thenByDescending { if (preferences.weighSourcesByUse) profile.useOf(it.name) else 0 },
+        )) { source ->
             val descriptor = runtime.describe(source.name)
             val orders = descriptor.sortOrders
             val available = try {
@@ -80,7 +86,8 @@ class SourceSuggestions(
             } catch (_: Exception) {
                 emptySet()
             }
-            val queries = profile.planQueries(source.name, seed, orders, available, { it.title },
+            val taste = profile.forDomain(source.contentType.startsWith(CONTENT_TYPE_HENTAI_PREFIX))
+            val queries = taste.planQueries(source.name, seed, orders, available, { it.title },
                 { blacklist.containsTitle(it.title) }, matches, limits)
             var answered = false
             val found = queries.flatMap { query ->
@@ -120,7 +127,7 @@ class SourceSuggestions(
                     // Only what was asked for by taste is picked by taste; the other lists keep the source's order
                     fit = { candidate ->
                         if (candidate.direction != SuggestionDirection.TASTE) 0.0
-                        else profile.affinity(suggestionTagKeys(candidate.item.tags.map { tag -> tag.title }))
+                        else taste.affinity(suggestionTagKeys(candidate.item.tags.map { tag -> tag.title }))
                     },
                 )
             }
@@ -135,13 +142,11 @@ class SourceSuggestions(
             source = { it.source.name },
             titles = { listOf(it.title) + it.altTitles },
             tags = { it.tags.map { tag -> tag.title } },
-            now = now,
-            seed = seed,
-            firstSuggestedAt = { ages[it.id] },
             preferredSources = preferences.preferredSources - preferences.excludedSources,
             languagePriority = { preferences.language.accepts(it.source.locale, preferences.systemLanguage) },
+            isAdult = { it.isNsfw },
+            weighSources = preferences.weighSourcesByUse,
             limits = limits,
-            groupOf = { SuggestionOrigins.groupOf(it.source.contentType, it.tags.map { tag -> tag.title }, it.source.locale) },
             quality = { item ->
                 val rating = extra?.ratings?.get(item.id)
                 SuggestionQuality.of(item.rating, rating?.score, rating?.weight)

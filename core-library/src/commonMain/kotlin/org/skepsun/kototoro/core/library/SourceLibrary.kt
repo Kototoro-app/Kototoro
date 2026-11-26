@@ -538,6 +538,7 @@ class SourceLibrary(
                 id = row.manga.id,
                 source = row.manga.source,
                 contentType = row.manga.contentType,
+                isAdult = row.manga.isNsfw,
             )
         } + saved.filterNot { it.manga.id in readIds }.map { row ->
             LibraryWork(
@@ -547,6 +548,7 @@ class SourceLibrary(
                 id = row.manga.id,
                 source = row.manga.source,
                 contentType = row.manga.contentType,
+                isAdult = row.manga.isNsfw,
             )
         }
     }

@@ -63,11 +63,22 @@
     <string name="various_languages">多语言</string>
     <string name="search_chapters">查找章节</string>
     <string name="suggestions_excluded_genres">屏蔽类别</string> <string name="suggestions_preferred_genres">偏好类别</string>
+    <string name="suggestions_weigh_sources">按使用情况分配来源份额</string>
+    <string name="suggestions_weigh_sources_summary">你读得多的来源在推荐里拿到更多名额，没打开过作品的来源更少</string>
+    <string name="suggestions_source_usage">来源使用情况</string>
+    <string name="suggestions_source_usage_summary">各来源占你书库的比例，以及它们在推荐里的名额倍数</string>
+    <string name="suggestions_source_usage_total">来自 %2$d 个来源的 %1$d 部作品</string>
+    <string name="suggestions_source_usage_unit">部作品</string>
+    <string name="suggestions_source_usage_works">%1$d 部</string>
+    <string name="suggestions_source_usage_hint">×N 表示该来源在每轮推荐里拿到的名额；没打开过作品的来源是 ×0.5</string>
+    <string name="suggestions_source_usage_off">按使用情况分配已关闭：所有来源名额相同</string>
+    <string name="suggestions_source_usage_empty">还没有阅读记录</string>
+    <string name="suggestions_source_usage_equal">书库不足 20 部，所有来源名额相同</string>
+    <string name="suggestions_interval">更新频率</string>
+    <string name="suggestions_interval_summary">推荐在后台重新生成的频率</string>
+    <string name="suggestions_interval_hours">每 %1$d 小时</string>
+    <string name="suggestions_interval_manual">仅手动更新</string>
     <string name="suggestions_preferred_sources">偏好源</string>
-    <string name="suggestions_favourite_sources">收藏源优先</string>
-    <string name="suggestions_favourite_sources_summary">优先展示你收藏的作品所在源的推荐</string>
-    <string name="suggestions_popular_sources">热门源优先</string>
-    <string name="suggestions_popular_sources_summary">在偏好源之外，优先展示 EverythingMoe 榜单上排名靠前的源</string>
     <string name="suggestions_preferred_sources_summary">优先展示所选源的推荐作品</string>
     <string name="suggestions_excluded_sources">排除源</string>
     <string name="suggestions_excluded_sources_summary">不从所选源获取推荐作品</string>

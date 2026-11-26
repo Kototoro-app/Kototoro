@@ -52,6 +52,7 @@ fun SuggestionsSettingsScreen(
     sourceOptions: List<SuggestionSourceOption>,
     preferredSources: Set<String>,
     excludedSources: Set<String>,
+    sourceUsage: SuggestionSourceUsage,
     onExcludeTagsChanged: (String) -> Unit,
     onPreferredTagsChanged: (String) -> Unit,
     onPreferredSourcesChanged: (Set<String>) -> Unit,
@@ -59,12 +60,14 @@ fun SuggestionsSettingsScreen(
 ) {
     val isEnabled by settings.observeAsState(AppSettings.KEY_SUGGESTIONS) { isSuggestionsEnabled }
     val isWifiOnly by settings.observeAsState(AppSettings.KEY_SUGGESTIONS_WIFI_ONLY) { isSuggestionsWiFiOnly }
-    val favouriteSourcesFirst by settings.observeAsState(AppSettings.KEY_SUGGESTIONS_FAVOURITE_SOURCES) {
-        isSuggestionsFavouriteSourcesFirst
+    val weighSources by settings.observeAsState(AppSettings.KEY_SUGGESTIONS_WEIGH_SOURCES) {
+        isSuggestionsWeighSourcesByUse
     }
-    val popularSourcesFirst by settings.observeAsState(AppSettings.KEY_SUGGESTIONS_POPULAR_SOURCES) {
-        isSuggestionsPopularSourcesFirst
+    val intervalHours by settings.observeAsState(AppSettings.KEY_SUGGESTIONS_INTERVAL_HOURS) {
+        suggestionsUpdateIntervalHours
     }
+    val excludeNsfw by settings.observeAsState(AppSettings.KEY_SUGGESTIONS_EXCLUDE_NSFW) { isSuggestionsExcludeNsfw }
+    var showUsage by remember { mutableStateOf(false) }
     val includeDisabledSources by settings.observeAsState(AppSettings.KEY_SUGGESTIONS_DISABLED_SOURCES) {
         isSuggestionsIncludeDisabledSources
     }
@@ -78,6 +81,9 @@ fun SuggestionsSettingsScreen(
         org.skepsun.kototoro.suggestions.domain.SuggestionLanguage.ONLY_PREFERENCE_KEY,
     ) { suggestionsLanguageOnly }
 
+    if (showUsage) {
+        SuggestionSourceUsageDialog(sourceUsage, weighSources, onDismiss = { showUsage = false })
+    }
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background,
@@ -111,6 +117,36 @@ fun SuggestionsSettingsScreen(
                         onCheckedChange = { checked ->
                             settings.prefs.edit().putBoolean(AppSettings.KEY_SUGGESTIONS_WIFI_ONLY, checked).apply()
                         },
+                    )
+                }
+                item {
+                    SettingsChoicePreference(
+                        title = stringResource(R.string.suggestions_interval),
+                        iconRes = R.drawable.ic_schedule,
+                        summary = stringResource(R.string.suggestions_interval_summary),
+                        value = intervalHours,
+                        options = listOf(6, 12, 24, 0).let { hours ->
+                            // A value set elsewhere stays listed so the row never shows nothing selected.
+                            (hours + intervalHours).distinct().map { h ->
+                                SettingsChoiceOption(
+                                    h,
+                                    if (h > 0) stringResource(R.string.suggestions_interval_hours, h)
+                                    else stringResource(R.string.suggestions_interval_manual),
+                                )
+                            }
+                        },
+                        enabled = isEnabled,
+                        onValueChange = { settings.suggestionsUpdateIntervalHours = it },
+                    )
+                }
+                item {
+                    SettingsSwitchPreference(
+                        title = stringResource(R.string.disable_suggestions_nsfw),
+                        iconRes = R.drawable.ic_nsfw,
+                        summary = stringResource(R.string.disable_suggestions_nsfw_summary),
+                        checked = excludeNsfw,
+                        enabled = isEnabled,
+                        onCheckedChange = { settings.isSuggestionsExcludeNsfw = it },
                     )
                 }
                 item {
@@ -174,26 +210,20 @@ fun SuggestionsSettingsScreen(
                 }
                 item {
                     SettingsSwitchPreference(
-                        title = stringResource(R.string.suggestions_favourite_sources),
+                        title = stringResource(R.string.suggestions_weigh_sources),
                         iconRes = R.drawable.ic_star_small,
-                        summary = stringResource(R.string.suggestions_favourite_sources_summary),
-                        checked = favouriteSourcesFirst,
+                        summary = stringResource(R.string.suggestions_weigh_sources_summary),
+                        checked = weighSources,
                         enabled = isEnabled,
-                        onCheckedChange = { checked ->
-                            settings.isSuggestionsFavouriteSourcesFirst = checked
-                        },
+                        onCheckedChange = { checked -> settings.isSuggestionsWeighSourcesByUse = checked },
                     )
                 }
                 item {
-                    SettingsSwitchPreference(
-                        title = stringResource(R.string.suggestions_popular_sources),
-                        iconRes = R.drawable.ic_star_small,
-                        summary = stringResource(R.string.suggestions_popular_sources_summary),
-                        checked = popularSourcesFirst,
-                        enabled = isEnabled,
-                        onCheckedChange = { checked ->
-                            settings.isSuggestionsPopularSourcesFirst = checked
-                        },
+                    SettingsActionPreference(
+                        title = stringResource(R.string.suggestions_source_usage),
+                        summary = stringResource(R.string.suggestions_source_usage_summary),
+                        iconRes = R.drawable.ic_manga_source,
+                        onClick = { showUsage = true },
                     )
                 }
                 item {
@@ -434,7 +464,7 @@ internal fun filterSuggestionSourceOptions(
 
 private fun <T> Set<T>.toggled(value: T): Set<T> = if (value in this) this - value else this + value
 
-private val SourceType.titleResId: Int
+internal val SourceType.titleResId: Int
     get() = when (this) {
         SourceType.NATIVE -> R.string.source_type_native
         SourceType.JSON_LEGADO -> R.string.source_type_legado

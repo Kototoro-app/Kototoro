@@ -43,12 +43,3 @@ object SuggestionQuality {
     fun of(sourceRating: Float?, communityScore: Double? = null, communityWeight: Double? = null): Double =
         fromCommunity(communityScore, communityWeight) ?: fromSourceRating(sourceRating)
 }
-
-/**
- * Which list the rotation draws today. Stable for a day, so the page is not a different shuffle every time it opens,
- * and different after each refresh the reader asks for, since that is what asking for one means.
- */
-fun suggestionRotationSeed(now: Long, refreshAt: Long = 0): Long {
-    val day = now / (24L * 60 * 60 * 1000)
-    return (day * 1_000_003L) xor refreshAt
-}

@@ -34,9 +34,10 @@ class WorkScheduleManager @Inject constructor(
             )
 
             AppSettings.KEY_SUGGESTIONS,
-            AppSettings.KEY_SUGGESTIONS_WIFI_ONLY -> updateWorker(
+            AppSettings.KEY_SUGGESTIONS_WIFI_ONLY,
+            AppSettings.KEY_SUGGESTIONS_INTERVAL_HOURS -> updateWorker(
                 scheduler = suggestionScheduler,
-                isEnabled = settings.isSuggestionsEnabled,
+                isEnabled = settings.isSuggestionsEnabled && settings.suggestionsUpdateIntervalHours > 0,
                 force = key != AppSettings.KEY_SUGGESTIONS,
             )
         }
@@ -46,7 +47,11 @@ class WorkScheduleManager @Inject constructor(
         settings.subscribe(this)
         processLifecycleScope.launch(Dispatchers.Default) {
             updateWorkerImpl(trackerScheduler, settings.isTrackerEnabled, true) // always force due to adaptive interval
-            updateWorkerImpl(suggestionScheduler, settings.isSuggestionsEnabled, false)
+            updateWorkerImpl(
+                suggestionScheduler,
+                settings.isSuggestionsEnabled && settings.suggestionsUpdateIntervalHours > 0,
+                false,
+            )
             if (settings.isBackupWebDavUploadEnabled && googleDriveSyncSettings.isSyncEnabled) {
                 googleDriveSyncSettings.isSyncEnabled = false
             }

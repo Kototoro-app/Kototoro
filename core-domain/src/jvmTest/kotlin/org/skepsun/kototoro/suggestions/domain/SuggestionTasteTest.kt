@@ -24,7 +24,7 @@ class SuggestionTasteTest {
         data class Item(val id: Long, val title: String, val locale: String)
         val items = listOf(Item(1, "Same story", "en"), Item(2, "Same story", "zh"), Item(3, "Other story", "en"))
         val result = rankSuggestions(items.mapIndexed { i, it -> SuggestionCandidate(it, SuggestionDirection.POPULAR, null, i) },
-            SuggestionProfile.of(emptyList(), now), { it.id }, { it.locale }, { listOf(it.title) }, { emptyList() }, now,
+            SuggestionProfile.of(emptyList(), now), { it.id }, { it.locale }, { listOf(it.title) }, { emptyList() },
             languagePriority = { it.locale == "zh" })
         assertEquals(listOf(2L, 3L), result.map { it.item.id })
     }
@@ -122,6 +122,58 @@ class SuggestionTasteTest {
 	}
 
 	@Test
+	fun `a source is asked for the best of the reader's tags that it offers, not of their first ten`() {
+		val exact: SuggestionTagMatcher = { a, b -> a.equals(b, ignoreCase = true) }
+		val specific = (1..30).map { "niche$it" }
+		val library = (1..20).map { read("Work $it", "Romance", *specific.toTypedArray()) }
+		val profile = SuggestionProfile.of(library, now)
+		val queries = profile.planQueries("plain", 1, listOf("POPULARITY", "NEWEST"), listOf("Romance", "Horror"), { it },
+			{ false }, exact)
+		assertEquals(SuggestionDirection.TASTE, queries.first().direction)
+		assertEquals("Romance", queries.first().tag, "the only tag of theirs the source offers")
+	}
+
+	@Test
+	fun `a gallery namespace does not make a different tag, and facts about the release are no taste`() {
+		val plain = suggestionTagKeys("big breasts")
+		assertEquals(setOf("raw:big breasts"), plain)
+		assertEquals(plain, suggestionTagKeys("tag: Big Breasts"))
+		assertEquals(plain, suggestionTagKeys("female: big  breasts"))
+		assertEquals(plain, suggestionTagKeys("  Big Breasts "))
+		assertEquals(suggestionTagKeys("Romance"), suggestionTagKeys("tag: romance"), "also when the catalogue knows it")
+		for (fact in listOf("artist: someone", "group: a circle", "language: english", "parody: original", "character: x")) {
+			assertTrue(suggestionTagKeys(fact).isEmpty(), fact)
+		}
+		assertEquals(setOf("raw:re:zero"), suggestionTagKeys("Re:Zero"), "a colon that is not a namespace stays")
+	}
+
+	@Test
+	fun `what is liked among adult works is not asked of ordinary sources, nor scored for ordinary works`() {
+		val library = (1..10).map { read("Plain $it", "plainone", "plaintwo") } +
+			(1..10).map { read("Adult $it", "adultone", "adulttwo").copy(isAdult = true) }
+		val profile = SuggestionProfile.of(library, now)
+		val ordinary = profile.forDomain(adult = false)
+		val adult = profile.forDomain(adult = true)
+		assertTrue("raw:plainone" in ordinary.taste && "raw:adultone" !in ordinary.taste)
+		assertTrue("raw:adultone" in adult.taste && "raw:plainone" !in adult.taste)
+		assertEquals(0.0, ordinary.affinity(setOf("raw:adultone")), "no part of the ordinary taste")
+		assertTrue(adult.affinity(setOf("raw:adultone")) > 0.0)
+		assertTrue(ordinary.queryTags().none { it.startsWith("adult") })
+		assertTrue(profile.knows(listOf("Adult 1")) && ordinary.knows(listOf("Adult 1")), "but it knows every work on the shelves")
+	}
+
+	@Test
+	fun `a library of one kind, or with nothing read of the other, has one taste`() {
+		val onlyOrdinary = SuggestionProfile.of((1..5).map { read("Plain $it", "plainone") }, now)
+		assertTrue(onlyOrdinary.forDomain(adult = true) === onlyOrdinary, "no adult taste: ask with the whole")
+		val oneKindRead = SuggestionProfile.of(
+			(1..5).map { read("Plain $it", "plainone") } + read("Saved adult", "x", percent = 0f, daysAgo = 90).copy(isAdult = true),
+			now,
+		)
+		assertTrue("raw:plainone" in oneKindRead.forDomain(adult = true).taste, "an adult work that was left says nothing: fall back")
+	}
+
+	@Test
 	fun `works under a shared name are one candidate`() {
 		data class Item(val id: Int, val titles: List<String>)
 		val groups = mergeByTitle(
@@ -132,20 +184,7 @@ class SuggestionTasteTest {
 	}
 
 	@Test
-	fun `rotation keeps the head and the same seed, and mostly follows the scores`() {
-		val sorted = (0 until 60).toList()
-		val score = { index: Int -> 1.0 / (1 + index) }
-		val rotated = rotateRanked(sorted, score, seed = 7, stable = 8)
-		assertEquals(sorted.take(8), rotated.take(8))
-		assertEquals(sorted.toSet(), rotated.toSet())
-		assertEquals(rotated, rotateRanked(sorted, score, seed = 7, stable = 8))
-		assertTrue(rotated != rotateRanked(sorted, score, seed = 8, stable = 8))
-		assertTrue(rotated.subList(8, 20).average() < rotated.subList(48, 60).average(), "better matches still come first")
-		assertEquals(listOf(1, 2), rotateRanked(listOf(1, 2), { 1.0 }, seed = 1, stable = 8))
-	}
-
-	@Test
-	fun `ranking leaves out the shelves, merges sources, follows taste and lets stale suggestions sink`() {
+	fun `ranking leaves out the shelves, merges sources, follows taste and deals the sources out in turn`() {
 		data class Item(val id: Long, val source: String, val title: String, val tags: List<String>)
 		val profile = SuggestionProfile.of(listOf(read("Owned", "villainess", "romance"), read("Other", "villainess")), now)
 		val items = listOf(
@@ -154,24 +193,23 @@ class SuggestionTasteTest {
 			Item(3, "a", "Fit", listOf("villainess")),
 			Item(4, "b", "FIT", listOf("romance")),
 			Item(5, "b", "Unknown", emptyList()),
-			Item(6, "b", "Stale", listOf("villainess")),
-			Item(6, "b", "Stale", listOf("villainess")),
+			Item(6, "b", "Match", listOf("villainess")),
+			Item(6, "b", "Match", listOf("villainess")),
 		)
-		fun rank(limits: SuggestionLimits = SuggestionLimits(maxResults = 4), preferred: Set<String> = emptySet()) =
+		fun rank(preferred: Set<String> = emptySet()) =
 			rankSuggestions(items.mapIndexed { rank, item -> SuggestionCandidate(item, SuggestionDirection.TASTE, "raw:villainess", rank) },
-				profile, { it.id }, { it.source }, { listOf(it.title) }, { it.tags }, now = now,
-				firstSuggestedAt = { if (it.id == 6L) now - 10 * day else null }, preferredSources = preferred, limits = limits)
+				profile, { it.id }, { it.source }, { listOf(it.title) }, { it.tags }, preferredSources = preferred,
+				limits = SuggestionLimits(maxResults = 4))
 		val ranked = rank()
-		assertEquals(listOf(3L, 2L, 6L, 5L), ranked.map { it.item.id },
-			"owned work gone, 3 and 4 merged, and ten days unopened puts 6 below a weaker match")
+		assertEquals(listOf(3L, 6L, 2L, 5L), ranked.map { it.item.id },
+			"owned work gone, 3 and 4 merged, and each source's best comes up in turn")
 		assertEquals(listOf(1f, .75f, .5f, .25f), ranked.map { it.relevance })
-		assertEquals(listOf(4L, 6L, 5L, 2L), rank(preferred = setOf("b")).map { it.item.id },
-			"preferred sources first, and a merged work opens on the preferred one")
-		assertEquals(listOf(3L, 6L), rank(SuggestionLimits(maxResults = 4, maxResultsPerSource = 1)).map { it.item.id })
+		assertEquals(listOf(6L, 4L, 2L, 5L), rank(preferred = setOf("b")).map { it.item.id },
+			"a preferred source takes two places a round, and a merged work opens on the preferred one")
 	}
 
 	@Test
-	fun `a source is asked for a taste and one wider list, and says what each answer is for`() {
+	fun `a source is asked for a taste and its newest list, and says what each answer is for`() {
 		val exact: SuggestionTagMatcher = { a, b -> a.equals(b, ignoreCase = true) }
 		val profile = SuggestionProfile.of(listOf(read("One", "Romance"), read("Two", "Romance", "Comedy")), now)
 		fun plan(name: String, orders: List<String>, tags: List<String>, seed: Long = 1) =
@@ -179,26 +217,18 @@ class SuggestionTasteTest {
 		val orders = listOf("UPDATED", "POPULARITY", "NEWEST")
 		val tags = listOf("恋爱", "Horror", "Blocked", "Ecchi", "Gore")
 		val plans = (0 until 60).map { plan("source$it", orders, tags) }
-		assertTrue(plans.all { it.size == 2 })
-		assertTrue(plans.all { it[0] == SuggestionQuery(SuggestionDirection.TASTE, "POPULARITY", "恋爱", "genre.romance") },
-			"what is popular in the genre they read, under the source's own name for it")
-		assertEquals(
-			setOf(
-				SuggestionQuery(SuggestionDirection.POPULAR, "POPULARITY"),
-				SuggestionQuery(SuggestionDirection.NEW, "NEWEST"),
-				SuggestionQuery(SuggestionDirection.EXPLORE, "POPULARITY", "Horror", "genre.horror"),
-			),
-			plans.map { it[1] }.toSet(),
-			"between them the sources cover every direction, and never explore what is blocked, adult or a warning",
-		)
+		assertTrue(plans.all {
+			it == listOf(
+				SuggestionQuery(SuggestionDirection.TASTE, "POPULARITY", "恋爱", "genre.romance"),
+				SuggestionQuery<String>(SuggestionDirection.NEW, "NEWEST"),
+			)
+		}, "what is popular in the genre they read, under the source's own name for it, and what is new")
 		assertEquals(plan("a", orders, tags), plan("a", orders, tags))
-		val cold = (0 until 60).map {
-			SuggestionProfile.of(emptyList(), now).planQueries("source$it", 1, orders, tags, { tag -> tag }, { tag -> tag == "Blocked" }, exact)
-		}
-		assertTrue(cold.all { it.size == 1 && it[0].direction != SuggestionDirection.TASTE },
-			"an empty library asks every source for one wider list and no taste")
-		assertEquals(setOf(SuggestionDirection.POPULAR, SuggestionDirection.NEW, SuggestionDirection.EXPLORE),
-			cold.map { it[0].direction }.toSet())
+		val cold = SuggestionProfile.of(emptyList(), now).planQueries("source", 1, orders, tags, { tag -> tag }, { tag -> tag == "Blocked" }, exact)
+		assertEquals(
+			listOf(SuggestionQuery<String>(SuggestionDirection.POPULAR, "POPULARITY"), SuggestionQuery<String>(SuggestionDirection.NEW, "NEWEST")),
+			cold, "an empty library asks for the popular and the new list and no taste",
+		)
 		assertEquals(listOf(SuggestionQuery<String>(SuggestionDirection.NEW, "UPDATED")), plan("bare", listOf("UPDATED"), emptyList()))
 		assertEquals(listOf(SuggestionQuery<String>(SuggestionDirection.POPULAR, "ALPHABETICAL")), plan("odd", listOf("ALPHABETICAL"), emptyList()))
 		assertEquals("恐怖", suggestionReasonLabel("genre.horror", "zh"))
@@ -208,29 +238,44 @@ class SuggestionTasteTest {
 		assertEquals(SuggestionDirection.NEW, SuggestionDirection.of("NEW"))
 	}
 
+	/** Diagnostic: can sources that offer ordinary genre tags be asked for the reader's taste? Prints counts only. */
 	@Test
-	fun `directions are dealt into one list in proportion and each keeps its own order`() {
-		data class Item(val id: Long, val source: String, val tags: List<String> = emptyList())
-		val profile = SuggestionProfile.of(listOf(read("One", "liked"), read("Two", "liked")), now)
-		fun list(direction: SuggestionDirection, base: Long, source: String, tags: List<String> = emptyList()) =
-			(0L until 30L).map { SuggestionCandidate(Item(base + it, source, tags), direction, null, it.toInt()) }
-		val candidates = list(SuggestionDirection.POPULAR, 200, "p") + list(SuggestionDirection.NEW, 300, "n") +
-			list(SuggestionDirection.EXPLORE, 400, "e") + list(SuggestionDirection.TASTE, 100, "t", listOf("liked")) +
-			// The same work on a wider list as well: it stays what it was found as by taste
-			SuggestionCandidate(Item(100, "t", listOf("liked")), SuggestionDirection.POPULAR, null, 0)
-		val ranked = rankSuggestions(candidates, profile, { it.id }, { it.source }, { listOf("title ${it.id}") }, { it.tags },
-			now = now, limits = SuggestionLimits(maxResults = 20, maxResultsPerSource = 30, stableHead = 100))
-		assertEquals(mapOf(SuggestionDirection.TASTE to 10, SuggestionDirection.POPULAR to 4, SuggestionDirection.NEW to 4,
-			SuggestionDirection.EXPLORE to 2), ranked.groupingBy { it.direction }.eachCount())
-		assertEquals(SuggestionDirection.TASTE, ranked.first().direction)
-		assertEquals(setOf(SuggestionDirection.TASTE, SuggestionDirection.POPULAR, SuggestionDirection.NEW, SuggestionDirection.EXPLORE),
-			ranked.take(8).map { it.direction }.toSet(), "the mix shows every direction early")
-		assertEquals(listOf(200L, 201L, 202L, 203L), ranked.filter { it.direction == SuggestionDirection.POPULAR }.map { it.item.id },
-			"a wider list keeps the order the source gave it")
-		assertEquals(ranked.map { it.relevance }.sortedDescending(), ranked.map { it.relevance })
-		val short = rankSuggestions(list(SuggestionDirection.NEW, 300, "n"), profile, { it.id }, { it.source },
-			{ listOf("title ${it.id}") }, { it.tags }, now = now, limits = SuggestionLimits(maxResults = 5))
-		assertEquals(5, short.size, "a direction with nothing to offer leaves its share to the others")
+	@EnabledIfSystemProperty(named = "suggestionEvalBackup", matches = ".+")
+	fun `diagnose taste queries on a real backup`() {
+		val (library, now) = SuggestionHoldout.readBackup(File(System.getProperty("suggestionEvalBackup")))
+		val whole = SuggestionProfile.of(library, now)
+		val offered = org.skepsun.kototoro.core.model.TagTaxonomy.tags
+			.filter { it.id.startsWith("genre.") }.map { it.englishLabel }
+		val exact: SuggestionTagMatcher = { a, b -> a.equals(b, ignoreCase = true) }
+		println("works ${library.size}: adult ${library.count { it.isAdult }}, ordinary ${library.count { !it.isAdult }}")
+		for ((name, profile) in listOf("whole" to whole, "ordinary" to whole.forDomain(false), "adult" to whole.forDomain(true))) {
+			val top = profile.taste.entries.sortedByDescending { it.value }.take(10).map { it.key.substringBefore(':').substringBefore('.') }
+			val found = (0 until 20).count { pick ->
+				profile.pickQueryTag(offered, { it }, { false }, exact, pick / 20.0, 50) != null
+			}
+			println("$name: ${profile.taste.size} taste keys, top 10 by share are of kinds ${top.groupingBy { it }.eachCount()}; " +
+				"a source offering ${offered.size} ordinary genres is asked for a taste in $found/20 picks")
+		}
+	}
+
+	/** Diagnostic: how much of the reader's tag weight the taxonomy knows, and what stripping namespaces would add. */
+	@Test
+	@EnabledIfSystemProperty(named = "suggestionEvalBackup", matches = ".+")
+	fun `diagnose tag coverage on a real backup`() {
+		val (library, now) = SuggestionHoldout.readBackup(File(System.getProperty("suggestionEvalBackup")))
+		val namespace = Regex("^(tag|female|male|mixed|other|parody|character|artist|group|language|cosplayer|category|reclass):\\s*")
+		val ordinary = library.filterNot { it.contentType?.startsWith("HENTAI") == true }
+		println("works ${library.size}, of ordinary content ${ordinary.size}")
+		val titles = ordinary.flatMap { it.tags }
+		val counts = titles.groupingBy { it }.eachCount()
+		val total = counts.values.sum().toDouble()
+		fun known(title: String) = org.skepsun.kototoro.core.model.TagTaxonomy.resolve(title).isNotEmpty()
+		val knownNow = counts.filterKeys(::known).values.sum() / total
+		val stripped = counts.entries.groupBy({ namespace.replaceFirst(it.key.trim().lowercase(), "").trim() }, { it.value }).mapValues { it.value.sum() }
+		val knownAfter = stripped.filterKeys(::known).values.sum() / total
+		val metadata = counts.filterKeys { namespace.find(it.trim().lowercase())?.groupValues?.get(1) in setOf("artist", "group", "language", "parody", "character", "cosplayer") }.values.sum() / total
+		println("distinct tag spellings ${counts.size}, after stripping namespaces ${stripped.size}")
+		println("share of tag uses the taxonomy knows: now %.1f%%, after stripping %.1f%%; namespaces that are not taste (artist, group, language, parody, character): %.1f%%".format(knownNow * 100, knownAfter * 100, metadata * 100))
 	}
 
 	@Test
@@ -257,6 +302,7 @@ class SuggestionTasteTest {
 			"legacy seed tags" to SuggestionHoldout.Legacy,
 			"taste profile" to SuggestionHoldout.Profile,
 			"taste profile + rarity" to SuggestionHoldout.ProfileWithRarity,
+			"plain share + rarity" to SuggestionHoldout.PlainShare,
 		)) {
 			val result = SuggestionHoldout.evaluate(library, now, scorer = scorer)
 			println("%-24s AUC %.3f  (%d engaged, %d dropped, %d pairs)".format(name, result.auc, result.engaged, result.dropped, result.pairs))

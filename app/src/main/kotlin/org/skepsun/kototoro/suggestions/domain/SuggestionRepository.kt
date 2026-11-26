@@ -105,10 +105,6 @@ class SuggestionRepository @Inject constructor(
         return observeAll().first().map { it.source }.filter(accepts).mostFrequent(limit)
     }
 
-    /** When each stored suggestion was first put on the list it is still on. */
-    suspend fun getAges(): Map<Long, Long> =
-        db.getSuggestionDao().findAll().associate { it.mangaId to it.createdAt }
-
     /**
      * The library as evidence of taste: history most recently read first, then what was saved and never opened.
      * Same rows as the shared `SourceLibrary.libraryWorks`.
@@ -129,6 +125,7 @@ class SuggestionRepository @Inject constructor(
                 id = row.manga.id,
                 source = row.manga.source,
                 contentType = row.manga.contentType,
+                isAdult = row.manga.isNsfw,
             )
         } + saved.filterNot { it.manga.id in readIds }.map { row ->
             LibraryWork(
@@ -138,6 +135,7 @@ class SuggestionRepository @Inject constructor(
                 id = row.manga.id,
                 source = row.manga.source,
                 contentType = row.manga.contentType,
+                isAdult = row.manga.isNsfw,
             )
         }
     }
