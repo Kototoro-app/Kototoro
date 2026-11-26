@@ -1,8 +1,12 @@
 package org.skepsun.kototoro.core.ui.compose
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
@@ -88,10 +92,14 @@ data class DetailsMetaItem(
     val valueMuted: Boolean = false,
 )
 
+/** Narrowest a [DetailsMetaStrip] column may get before the strip scrolls instead of squeezing it further. */
+private val MetaColumnMinWidth = 80.dp
+
 /**
  * The work's facts as one borderless row of columns split by hairlines (rating, status, chapters, author…), in place
  * of a boxed metadata grid. A linked column's label ends in a chevron. [contentColor] lets an immersive header keep
- * the strip on its own text colour.
+ * the strip on its own text colour. Columns share the width evenly; when that would leave them under
+ * [MetaColumnMinWidth] they keep that width and the strip scrolls sideways.
  */
 @Composable
 fun DetailsMetaStrip(
@@ -101,10 +109,32 @@ fun DetailsMetaStrip(
     secondaryColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
 ) {
     if (items.isEmpty()) return
+    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
+        val scrolls = maxWidth < MetaColumnMinWidth * items.size
+        DetailsMetaStripRow(
+            items = items,
+            columnModifier = { if (scrolls) Modifier.width(MetaColumnMinWidth) else Modifier.weight(1f) },
+            contentColor = contentColor,
+            secondaryColor = secondaryColor,
+            modifier = if (scrolls) {
+                Modifier.horizontalScroll(rememberScrollState())
+            } else {
+                Modifier.fillMaxWidth()
+            },
+        )
+    }
+}
+
+@Composable
+private fun DetailsMetaStripRow(
+    items: List<DetailsMetaItem>,
+    columnModifier: RowScope.() -> Modifier,
+    contentColor: Color,
+    secondaryColor: Color,
+    modifier: Modifier,
+) {
     Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(IntrinsicSize.Min),
+        modifier = modifier.height(IntrinsicSize.Min),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         items.forEachIndexed { index, item ->
@@ -116,8 +146,7 @@ fun DetailsMetaStrip(
             }
             val shape = RoundedCornerShape(8.dp)
             Column(
-                modifier = Modifier
-                    .weight(1f)
+                modifier = columnModifier()
                     .clip(shape)
                     .then(
                         if (item.onClick != null) {

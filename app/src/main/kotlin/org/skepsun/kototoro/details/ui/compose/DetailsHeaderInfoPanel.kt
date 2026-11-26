@@ -53,6 +53,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -355,6 +356,55 @@ internal fun TrackingSuggestionRow(
                 contentDescription = stringResource(R.string.details_tracking_suggestion_ignore),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(18.dp),
+            )
+        }
+    }
+}
+
+/**
+ * The work's score as a pill beside the reading status: a star and the value. [onClick], when set, takes the reader
+ * to the rating section below, which holds the breakdown and their own rating.
+ */
+@Composable
+internal fun DetailsRatingChip(
+    rating: String,
+    onClick: (() -> Unit)?,
+    chipHeight: androidx.compose.ui.unit.Dp = 32.dp,
+) {
+    val shape = RoundedCornerShape(999.dp)
+    Surface(
+        modifier = Modifier
+            .height(chipHeight)
+            .clip(shape)
+            .then(
+                if (onClick != null) {
+                    Modifier
+                        .tvFocusable(shape = shape, addFocusTarget = false)
+                        .clickable(onClick = onClick)
+                } else {
+                    Modifier
+                },
+            ),
+        shape = shape,
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.55f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.18f)),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Star,
+                contentDescription = stringResource(R.string.rating),
+                tint = colorResource(R.color.common_yellow),
+                modifier = Modifier.size(15.dp),
+            )
+            Text(
+                text = rating,
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
             )
         }
     }
