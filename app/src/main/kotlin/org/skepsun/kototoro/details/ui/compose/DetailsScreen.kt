@@ -23,6 +23,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -77,6 +79,7 @@ import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -1464,6 +1467,18 @@ private fun DetailsScreenContent(
                                     }
                                 },
                             ) { paddingValues ->
+                                val layoutDirection = LocalLayoutDirection.current
+                                // Let the initial space below the floating toolbar scroll away with the summary.
+                                val summaryPadding = if (isIosStyle) {
+                                    PaddingValues(
+                                        start = paddingValues.calculateStartPadding(layoutDirection),
+                                        end = paddingValues.calculateEndPadding(layoutDirection),
+                                        bottom = paddingValues.calculateBottomPadding(),
+                                    )
+                                } else {
+                                    paddingValues
+                                }
+                                val toolbarSpacing = if (isIosStyle) paddingValues.calculateTopPadding() else 0.dp
                                 KototoroPullToRefreshBox(
                                     isRefreshing = isLoading,
                                     onRefresh = { viewModel.reload() },
@@ -1481,9 +1496,9 @@ private fun DetailsScreenContent(
                                     DetailsScrollableContent(
                                         modifier = Modifier.fillMaxSize(),
                                         scrollState = landscapeLeftScrollState,
-                                        contentPadding = paddingValues,
+                                        contentPadding = summaryPadding,
                                         outerHorizontalPadding = 0.dp,
-                                        headerTopSpacing = landscapeHeaderTopSpacing,
+                                        headerTopSpacing = landscapeHeaderTopSpacing + toolbarSpacing,
                                         bottomSpacerHeight = 40.dp,
                                         preferLightweightFirstFrame = false,
                                         mangaDetails = mangaDetails,
