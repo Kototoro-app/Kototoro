@@ -98,15 +98,11 @@ internal fun DesktopRecommendations(controller: DesktopController, state: Deskto
         }
         SettingsSectionHeader(desktopText("settings.suggestionsSources"))
         SettingsGroup {
-            SettingsSwitchRow(AndroidStrings["suggestions_favourite_sources"],
-                AndroidStrings["suggestions_favourite_sources_summary"], settings.favouriteSourcesFirst, enabled,
-                { controller.suggestionSettings(settings.copy(favouriteSourcesFirst = it)) },
-                testTag = "settings-suggestions-favourite-sources")
+            SettingsSwitchRow(AndroidStrings["suggestions_weigh_sources"],
+                AndroidStrings["suggestions_weigh_sources_summary"], settings.weighSourcesByUse, enabled,
+                { controller.suggestionSettings(settings.copy(weighSourcesByUse = it)) },
+                testTag = "settings-suggestions-weigh-sources")
             SettingsRowDivider()
-            SettingsSwitchRow(AndroidStrings["suggestions_popular_sources"],
-                AndroidStrings["suggestions_popular_sources_summary"], settings.popularSourcesFirst, enabled,
-                { controller.suggestionSettings(settings.copy(popularSourcesFirst = it)) },
-                testTag = "settings-suggestions-popular-sources")
             SettingsRowDivider()
             // Android shows the chosen names in the preference summary (three, then "+N"), not in a value label.
             val preferredEmpty = AndroidStrings["suggestions_preferred_sources_summary"]

@@ -2,6 +2,7 @@ package org.skepsun.kototoro.community.ui
 
 import org.skepsun.kototoro.core.ui.compose.DetailsSectionHeader
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
@@ -27,6 +28,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -44,6 +47,8 @@ data class CommunityWorkCard(
     val supportingText: String?,
     /** The community score out of 10, drawn as a badge when known. */
     val score: Double? = null,
+    /** A platform model for the work's cover when a source of the reader's has it; drawn by the rail's `coverContent`. */
+    val cover: Any? = null,
 )
 
 /**
@@ -65,6 +70,8 @@ fun CommunityWorksRail(
     note: String? = null,
     emptyText: String? = null,
     testTag: String = "community-rail",
+    /** Draws a card's [CommunityWorkCard.cover] as its background; without it every card stays a plain tile. */
+    coverContent: (@Composable (cover: Any, modifier: Modifier) -> Unit)? = null,
 ) {
     Column(modifier = modifier.fillMaxWidth().testTag(testTag)) {
         DetailsSectionHeader(
@@ -98,7 +105,8 @@ fun CommunityWorksRail(
         ) {
             itemsIndexed(cards, key = { _, card -> card.key }) { index, card ->
                 CommunityWorkTile(card, rank = if (ranked) index + 1 else null, onClick = { onOpen(card) },
-                    onLongClick = onLongOpen?.let { { it(card) } }, testTag = "$testTag-item")
+                    onLongClick = onLongOpen?.let { { it(card) } }, testTag = "$testTag-item",
+                    coverContent = coverContent)
             }
         }
     }
@@ -112,14 +120,28 @@ private fun CommunityWorkTile(
     onClick: () -> Unit,
     onLongClick: (() -> Unit)?,
     testTag: String,
+    coverContent: (@Composable (cover: Any, modifier: Modifier) -> Unit)? = null,
 ) {
     val colors = MaterialTheme.colorScheme
+    val cover = card.cover?.takeIf { coverContent != null }
+    // Over a cover the text sits on a dark scrim, so it is light whatever the theme.
+    val primaryText = if (cover != null) Color.White else colors.onSurface
+    val secondaryText = if (cover != null) Color.White.copy(alpha = 0.78f) else colors.onSurfaceVariant
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = colors.surfaceContainerHigh,
         modifier = Modifier.width(156.dp).height(108.dp).clip(RoundedCornerShape(16.dp))
             .combinedClickable(onClick = onClick, onLongClick = onLongClick).testTag(testTag),
     ) {
+        Box {
+        if (cover != null && coverContent != null) {
+            coverContent(cover, Modifier.matchParentSize())
+            Box(
+                Modifier.matchParentSize().background(
+                    Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.35f), Color.Black.copy(alpha = 0.8f))),
+                ),
+            )
+        }
         Column(modifier = Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (rank != null) {
@@ -139,11 +161,12 @@ private fun CommunityWorkTile(
                     }
                 }
                 Spacer(modifier = Modifier.weight(1f))
-                card.score?.let { score -> CommunityScoreBadge(score) }
+                card.score?.let { score -> CommunityScoreBadge(score, contentColor = primaryText) }
             }
             Text(
                 text = card.title,
                 style = MaterialTheme.typography.titleSmall,
+                color = primaryText,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(top = 6.dp),
@@ -153,18 +176,19 @@ private fun CommunityWorkTile(
                 Text(
                     text = text,
                     style = MaterialTheme.typography.labelSmall,
-                    color = colors.onSurfaceVariant,
+                    color = secondaryText,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
+        }
         }
     }
 }
 
 /** A star and a score out of 10, the way every community surface shows a rating. */
 @Composable
-fun CommunityScoreBadge(score: Double, modifier: Modifier = Modifier) {
+fun CommunityScoreBadge(score: Double, modifier: Modifier = Modifier, contentColor: Color = Color.Unspecified) {
     Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
         Icon(
             imageVector = SettingsMaterialIcons.Star,
@@ -175,7 +199,7 @@ fun CommunityScoreBadge(score: Double, modifier: Modifier = Modifier) {
         Text(
             text = formatCommunityScore(score),
             style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-            color = MaterialTheme.colorScheme.onSurface,
+            color = if (contentColor == Color.Unspecified) MaterialTheme.colorScheme.onSurface else contentColor,
             modifier = Modifier.padding(start = 2.dp),
         )
     }

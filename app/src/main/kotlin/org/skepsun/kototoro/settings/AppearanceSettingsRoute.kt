@@ -256,6 +256,7 @@ fun AppearanceSettingsRoute(
     val customGlassPresets = rememberGlassCustomPresets(settings)
     val nextCustomPresetName = stringResource(R.string.pref_glass_custom_preset_name, customGlassPresets.size + 1)
     val isNavBarPinned = settings.observeAsState(AppSettings.KEY_NAV_PINNED) { isNavBarPinned }.value
+    val startupPage = settings.observeAsState(AppSettings.KEY_STARTUP_PAGE) { startupPage }.value
     val isNavLabelsVisible = settings.observeAsState(AppSettings.KEY_NAV_LABELS) { isNavLabelsVisible }.value
     val isNavLabelsAlwaysVisible =
         settings.observeAsState(AppSettings.KEY_NAV_LABELS_ALWAYS_VISIBLE) { isNavLabelsAlwaysVisible }.value
@@ -384,6 +385,7 @@ fun AppearanceSettingsRoute(
         searchSuggestionTypes = coordinator.buildSearchSuggestionTypeOptions(),
         listToDetailsTransitionOptions = listToDetailsTransitionOptions,
         navIndicatorStyleOptions = coordinator.buildNavIndicatorStyleOptions(),
+        startupPageOptions = coordinator.buildStartupPageOptions(mainNavItems),
         languagePresets = languagePresetOptions,
         contentTypes = coordinator.buildContentTypeOptions(),
         sourceTags = coordinator.buildSourceTagOptions(),
@@ -456,6 +458,7 @@ fun AppearanceSettingsRoute(
         hiddenSourceTag = hiddenSourceTag,
         isMainFabEnabled = isMainFabEnabled,
         isNavBarPinned = isNavBarPinned,
+        startupPage = startupPage,
         isNavLabelsVisible = isNavLabelsVisible,
         isNavLabelsAlwaysVisible = isNavLabelsAlwaysVisible,
         isNavFloating = isNavFloating,
@@ -561,6 +564,7 @@ fun AppearanceSettingsRoute(
         },
         onMainFabChange = { settings.isMainFabEnabled = it },
         onNavPinnedChange = { settings.isNavBarPinned = it },
+        onStartupPageChange = { settings.startupPage = it },
         onNavLabelsVisibleChange = {
             settings.isNavLabelsVisible = it
             if (!it) settings.isNavLabelsAlwaysVisible = false
@@ -853,6 +857,11 @@ private class AppearanceSettingsCoordinator(
         return ListMode.entries.mapIndexed { index, value ->
             SettingsChoiceOption(value = value, label = labels[index])
         }
+    }
+
+    fun buildStartupPageOptions(items: List<NavItem>): List<SettingsChoiceOption<String>> = buildList {
+        add(SettingsChoiceOption(AppSettings.STARTUP_PAGE_RESTORE, context.getString(R.string.startup_page_restore)))
+        items.forEach { add(SettingsChoiceOption(it.name, context.getString(it.title))) }
     }
 
     fun buildNavIndicatorStyleOptions(): List<SettingsChoiceOption<NavIndicatorStyle>> {

@@ -24,10 +24,8 @@ import org.skepsun.kototoro.suggestions.domain.SuggestionLimits
 import org.skepsun.kototoro.suggestions.domain.SuggestionProfile
 import org.skepsun.kototoro.suggestions.domain.SuggestionTagBlacklist
 import org.skepsun.kototoro.suggestions.domain.parseSuggestionTags
-import org.skepsun.kototoro.suggestions.domain.suggestionRotationSeed
 import org.skepsun.kototoro.suggestions.domain.suggestionTagsMatch
 import org.skepsun.kototoro.tracking.discovery.PublicTrackingSite
-import kotlin.random.Random
 
 data class IosSuggestionSettings(
     val excludeNsfw: Boolean,
@@ -91,14 +89,15 @@ class IosSuggestions internal constructor(
                 val limits = SuggestionLimits()
                 val works = library.records.libraryWorks(limits.libraryHistory)
                 val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
-                val seed = suggestionRotationSeed(now, refreshAt = if (manual) now else 0L)
-                val candidates = sources.filterNot { it.kind == "local" }.sortedBy { it.name }.shuffled(Random(seed))
+                // A manual refresh asks the sources for different genres than the last run did; every other run repeats them.
+                val seed = if (manual) now else 0L
+                val candidates = sources.filterNot { it.kind == "local" }.sortedBy { it.name }
                     .map { SourceRef(it.name, it.locale, it.contentType) }
                 val preferences = settings.preferences()
                 val safeSourceNames = sources.filterNot { it.isAdult }.mapTo(HashSet()) { it.name }
                 val communitySources = candidates.filter { it.name in safeSourceNames }
                 val result = SourceSuggestions(runtime.runtime, ::suggestionTagsMatch)
-                    .generate(works, candidates, preferences, now, library.records.suggestionAges(), seed = seed,
+                    .generate(works, candidates, preferences, now, seed = seed,
                         community = if (!settings.communityEnabled) null else { raw ->
                             community(runtime.runtime, works, communitySources, preferences, now, raw)
                         })

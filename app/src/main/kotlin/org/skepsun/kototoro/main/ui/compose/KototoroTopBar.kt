@@ -572,11 +572,13 @@ fun KototoroTopBar(
                         actionButtons()
                     }
                 } else {
+                    // A lone button fills the capsule exactly; the side padding would make it wider than tall.
+                    val isLoneButton = !isContentTypeFilterVisible && !isSourceTagFilterVisible
                     Row(
                         modifier = Modifier
                             .widthIn(min = topBarControlHeight)
                             .height(topBarControlHeight)
-                            .padding(start = 2.dp, end = 2.dp),
+                            .padding(horizontal = if (isLoneButton) 0.dp else 2.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(2.dp),
                     ) {

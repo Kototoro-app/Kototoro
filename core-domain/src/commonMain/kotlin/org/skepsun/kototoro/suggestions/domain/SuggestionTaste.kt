@@ -31,6 +31,8 @@ data class LibraryWork(
     val source: String? = null,
     /** Content type name (MANGA, NOVEL, …), null when not known; community keys need the medium it implies. */
     val contentType: String? = null,
+    /** Whether it is adult content, by the one rule the app shares for it; its tags are taste for adult sources only. */
+    val isAdult: Boolean = false,
 )
 
 /**
@@ -39,15 +41,29 @@ data class LibraryWork(
  * and yield no key.
  */
 fun suggestionTagKeys(title: String): Set<String> {
-    val known = TagTaxonomy.resolve(title)
+    val namespace = TAG_NAMESPACE.find(title.trim().lowercase())?.groupValues?.get(1)
+    // Gallery sites file tags under a namespace ("female: x", "tag: x"): it is the same tag as a plain "x". What is not
+    // a tag at all (who drew it, which group scanlated it, what language it is in, which work it parodies) is no taste.
+    if (namespace in METADATA_NAMESPACES) return emptySet()
+    val text = if (namespace in TAG_NAMESPACES) title.substring(title.indexOf(':') + 1).trim() else title
+    val known = TagTaxonomy.resolve(text)
     if (known.isNotEmpty()) {
         return known.mapNotNullTo(LinkedHashSet(known.size)) { tag ->
             tag.id.takeUnless { tag.category == TaxonomyCategory.FORMAT }
         }
     }
-    val raw = TagTaxonomy.normalize(title)
+    val raw = TagTaxonomy.normalize(text).replace(WHITESPACE, " ")
     return if (raw.isEmpty()) emptySet() else setOf(TagTitleBlacklist.RAW_TAG_PREFIX + raw)
 }
+
+private val TAG_NAMESPACE = Regex("^([a-z]+):")
+private val WHITESPACE = Regex("\\s+")
+
+/** Namespaces gallery sites put in front of a tag that is about the work: the tag is what follows. */
+private val TAG_NAMESPACES = setOf("tag", "female", "male", "mixed", "other", "category", "reclass")
+
+/** Namespaces of facts about the release, not about what the work is like. */
+private val METADATA_NAMESPACES = setOf("artist", "group", "language", "parody", "character", "cosplayer")
 
 fun suggestionTagKeys(titles: Collection<String>): Set<String> = titles.flatMapTo(LinkedHashSet()) { suggestionTagKeys(it) }
 
@@ -79,7 +95,8 @@ class TagRarity private constructor(private val works: Int, private val counts: 
 
 /**
  * The reader's taste: each tag's share of the library by weight, and every title already on the shelves.
- * Build one with [SuggestionProfile.of].
+ * Build one with [SuggestionProfile.of]. What the reader likes in adult works says little about what to ask an ordinary
+ * source for and the other way round, so when the library has both kinds each has its own taste, see [forDomain].
  */
 class SuggestionProfile internal constructor(
     /** Tag key to its share of the library's weight, in 0..1. */
@@ -88,9 +105,46 @@ class SuggestionProfile internal constructor(
     private val knownIds: Set<Long>,
     private val spellings: Map<String, List<String>>,
     private val pinned: List<String>,
+    private val ordinaryTaste: SuggestionProfile? = null,
+    private val adultTaste: SuggestionProfile? = null,
+    /** Works on the shelves per source name: opening or keeping a work is a sign of liking the source it came from. */
+    private val sourceUse: Map<String, Int> = emptyMap(),
 ) {
 
     val isEmpty: Boolean get() = taste.isEmpty()
+
+    /** How many works of the library came from [source]. */
+    fun useOf(source: String): Int = sourceUse[source] ?: 0
+
+    /** Every source the library has works from, the one it has most of first, with how many. */
+    fun sourceUsage(): List<Pair<String, Int>> = sourceUse.entries.sortedByDescending { it.value }.map { it.key to it.value }
+
+    /** Whether the library is big enough for [sourceWeight] to tell sources apart. */
+    val weighsSources: Boolean get() = sourceUse.values.sum() >= MIN_WORKS_FOR_SOURCE_WEIGHT
+
+    /**
+     * How many places in turn a source gets when suggestions are dealt out, from how much of the library came from it:
+     * a source the reader reads a lot gets more, one they never opened a work of gets half as many as one they barely
+     * use. Equal for all while the library is too small to say.
+     */
+    fun sourceWeight(source: String): Double {
+        if (!weighsSources) return 1.0
+        val total = sourceUse.values.sum()
+        val share = useOf(source).toDouble() / total
+        return when {
+            share >= HEAVY_SOURCE_SHARE -> 3.0
+            share >= REGULAR_SOURCE_SHARE -> 2.0
+            share > 0.0 -> 1.0
+            else -> 0.5
+        }
+    }
+
+    /**
+     * The taste to ask for, and score, [adult] works by: what the reader likes among works of that kind. A library of
+     * only one kind, or with nothing read of the other, has no separate taste for it and this is the whole taste.
+     */
+    fun forDomain(adult: Boolean): SuggestionProfile =
+        (if (adult) adultTaste else ordinaryTaste)?.takeUnless { it.isEmpty } ?: this
 
     /** Whether a work is already in the library: the same entry, or its title or any other name it goes by. */
     fun knows(id: Long, titles: Collection<String>): Boolean = id in knownIds || knows(titles)
@@ -209,14 +263,24 @@ class SuggestionProfile internal constructor(
          * @param pinnedTags tags the reader asked for outright, counted as much as their strongest taste
          */
         fun of(library: List<LibraryWork>, now: Long, pinnedTags: Collection<String> = emptyList()): SuggestionProfile {
+            val whole = build(library, library, now, pinnedTags)
+            val adult = library.filter { it.isAdult }
+            val ordinary = library.filterNot { it.isAdult }
+            if (adult.isEmpty() || ordinary.isEmpty()) return whole
+            return whole.withTastes(ordinary = build(ordinary, library, now, pinnedTags), adult = build(adult, library, now, pinnedTags))
+        }
+
+        /** The taste of [taste] works, knowing every one of [shelves]. */
+        private fun build(taste: List<LibraryWork>, shelves: List<LibraryWork>, now: Long, pinnedTags: Collection<String>): SuggestionProfile {
+            val library = taste
             val weights = HashMap<String, Double>()
             val spellings = HashMap<String, HashMap<String, Double>>()
-            val known = HashSet<String>(library.size * 2)
-            val knownIds = library.mapNotNullTo(HashSet(library.size * 2)) { work -> work.id.takeIf { it != 0L } }
+            val known = HashSet<String>(shelves.size * 2)
+            val knownIds = shelves.mapNotNullTo(HashSet(shelves.size * 2)) { work -> work.id.takeIf { it != 0L } }
+            shelves.forEach { work -> work.titles.forEach { title -> suggestionTitleKey(title).takeIf { it.isNotEmpty() }?.let(known::add) } }
             var total = 0.0
             var read = 0
             for (work in library) {
-                work.titles.forEach { title -> suggestionTitleKey(title).takeIf { it.isNotEmpty() }?.let(known::add) }
                 val weight = weightOf(work, if (work.lastReadAt > 0L) read++ else null, now)
                 if (weight <= 0.0) continue
                 total += weight
@@ -241,8 +305,21 @@ class SuggestionProfile internal constructor(
                 knownIds = knownIds,
                 spellings = spellings.mapValues { (_, titles) -> titles.entries.sortedByDescending { it.value }.map { it.key } },
                 pinned = pinned,
+                sourceUse = shelves.mapNotNull { it.source }.groupingBy { it }.eachCount(),
             )
         }
+
+        /** A source with at least this share of the library, or this share, is read a lot or regularly. */
+        private const val HEAVY_SOURCE_SHARE = 0.08
+        private const val REGULAR_SOURCE_SHARE = 0.02
+
+        /** Fewer works than this say nothing about which sources the reader likes. */
+        private const val MIN_WORKS_FOR_SOURCE_WEIGHT = 20
+
+        private fun SuggestionProfile.withTastes(ordinary: SuggestionProfile, adult: SuggestionProfile) = SuggestionProfile(
+            taste = taste, knownTitles = knownTitles, knownIds = knownIds, spellings = spellings,
+            pinned = pinned, ordinaryTaste = ordinary, adultTaste = adult, sourceUse = sourceUse,
+        )
 
         /**
          * How much one work says about the reader. Reading most of something says more than opening it, time spent

@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.jsonsource.SourceTypeIdentifier
+import org.skepsun.kototoro.core.model.ContentSource
 import org.skepsun.kototoro.core.model.getContentType
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsState
@@ -26,6 +27,10 @@ import org.skepsun.kototoro.core.model.getTitle
 import org.skepsun.kototoro.explore.data.ContentSourcesRepository
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.settings.compose.SuggestionSourceOption
+import org.skepsun.kototoro.settings.compose.SuggestionSourceUsage
+import org.skepsun.kototoro.settings.compose.SuggestionSourceUsageRow
+import org.skepsun.kototoro.suggestions.domain.SuggestionLimits
+import org.skepsun.kototoro.suggestions.domain.SuggestionProfile
 import org.skepsun.kototoro.settings.compose.SuggestionsSettingsScreen
 import org.skepsun.kototoro.suggestions.domain.SuggestionRepository
 import org.skepsun.kototoro.suggestions.ui.SuggestionsWorker
@@ -36,6 +41,7 @@ fun SuggestionsSettingsRoute(
     settings: AppSettings,
     suggestionsScheduler: SuggestionsWorker.Scheduler,
     contentSourcesRepository: ContentSourcesRepository,
+    suggestionRepository: SuggestionRepository,
     excludeTagsFlow: MutableStateFlow<String>,
     preferredTagsFlow: MutableStateFlow<String>,
 ) {
@@ -53,6 +59,7 @@ fun SuggestionsSettingsRoute(
                         key == AppSettings.KEY_SUGGESTIONS_PREFERRED_TAGS ||
                         key == AppSettings.KEY_SUGGESTIONS_PREFERRED_SOURCES ||
                         key == AppSettings.KEY_SUGGESTIONS_EXCLUDED_SOURCES ||
+                        key == AppSettings.KEY_SUGGESTIONS_WEIGH_SOURCES ||
                         key == AppSettings.KEY_SUGGESTIONS_EXCLUDE_NSFW
                     )
             ) {
@@ -86,6 +93,30 @@ fun SuggestionsSettingsRoute(
                 .sortedBy { it.title.lowercase() }
         }
     }
+    val sourceUsage by produceState(SuggestionSourceUsage(), suggestionRepository, contentSourcesRepository, context) {
+        value = kotlinx.coroutines.withContext(Dispatchers.IO) {
+            val profile = SuggestionProfile.of(
+                suggestionRepository.getLibraryWorks(SuggestionLimits().libraryHistory),
+                System.currentTimeMillis(),
+            )
+            val usage = profile.sourceUsage()
+            val total = usage.sumOf { it.second }.coerceAtLeast(1)
+            SuggestionSourceUsage(
+                rows = usage.take(30).map { (name, works) ->
+                    SuggestionSourceUsageRow(
+                        source = ContentSource(name),
+                        type = sourceTypeIdentifier.getSourceType(name),
+                        works = works,
+                        share = works.toFloat() / total,
+                        weight = profile.sourceWeight(name),
+                    )
+                },
+                totalWorks = usage.sumOf { it.second },
+                sourceCount = usage.size,
+                equalShares = !profile.weighsSources,
+            )
+        }
+    }
     val preferredSources by settings.observeAsState(AppSettings.KEY_SUGGESTIONS_PREFERRED_SOURCES) {
         suggestionsPreferredSources
     }
@@ -99,6 +130,7 @@ fun SuggestionsSettingsRoute(
         sourceOptions = sourceOptions,
         preferredSources = preferredSources,
         excludedSources = excludedSources,
+        sourceUsage = sourceUsage,
         onExcludeTagsChanged = { value ->
             settings.prefs.edit().putString(AppSettings.KEY_SUGGESTIONS_EXCLUDE_TAGS, value).apply()
         },
@@ -113,3 +145,4 @@ fun SuggestionsSettingsRoute(
         },
     )
 }
+

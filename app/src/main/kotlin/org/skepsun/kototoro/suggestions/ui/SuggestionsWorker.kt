@@ -76,10 +76,7 @@ import org.skepsun.kototoro.parsers.util.runCatchingCancellable
 import org.skepsun.kototoro.parsers.util.sizeOrZero
 import org.skepsun.kototoro.settings.work.PeriodicWorkScheduler
 import org.skepsun.kototoro.suggestions.domain.ContentSuggestion
-import org.skepsun.kototoro.suggestions.domain.PopularSourceProbe
-import org.skepsun.kototoro.suggestions.domain.PopularSources
 import org.skepsun.kototoro.suggestions.domain.SuggestionCursors
-import org.skepsun.kototoro.suggestions.domain.SuggestionOrigins
 import org.skepsun.kototoro.suggestions.domain.SuggestionRepository
 import org.skepsun.kototoro.suggestions.domain.SuggestionQuality
 import org.skepsun.kototoro.suggestions.domain.TagsBlacklist
@@ -93,7 +90,6 @@ import org.skepsun.kototoro.suggestions.domain.rankSuggestions
 import org.skepsun.kototoro.suggestions.domain.SuggestionLimits
 import org.skepsun.kototoro.suggestions.domain.SuggestionProfile
 import org.skepsun.kototoro.suggestions.domain.LibraryWork
-import org.skepsun.kototoro.suggestions.domain.suggestionRotationSeed
 import org.skepsun.kototoro.suggestions.domain.suggestionTagKeys
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
@@ -123,7 +119,12 @@ class SuggestionsWorker @AssistedInject constructor(
             suggestionRepository.clear()
             return Result.success()
         }
-        val count = doWorkImpl(append = inputData.getBoolean(DATA_APPEND, false))
+        val append = inputData.getBoolean(DATA_APPEND, false)
+        // The periodic run and a retry leave a list that is still fresh alone; asking for one (or changing what is
+        // wanted) rebuilds it at once, and so does loading further.
+        val requested = inputData.getLong(DATA_REFRESH_AT, 0L) != 0L
+        if (!append && !requested && isFresh()) return Result.success(workDataOf(DATA_COUNT to 0))
+        val count = doWorkImpl(append)
         if (count < 0) return Result.retry()
         val outputData = workDataOf(DATA_COUNT to count)
         return Result.success(outputData)
@@ -190,31 +191,39 @@ class SuggestionsWorker @AssistedInject constructor(
         }
     }
 
+    /** A list is fresh until an hour before the next scheduled rebuild, so a periodic run does not redo it early. */
+    private suspend fun isFresh(): Boolean {
+        val hours = appSettings.suggestionsUpdateIntervalHours.takeIf { it > 0 }
+            ?: org.skepsun.kototoro.suggestions.domain.SUGGESTIONS_INTERVAL_HOURS
+        val freshFor = TimeUnit.HOURS.toMillis((hours - 1).coerceAtLeast(1).toLong())
+        return System.currentTimeMillis() - appSettings.suggestionsGeneratedAt < freshFor && suggestionRepository.count() > 0
+    }
+
     /** [append] loads further pages of every source and adds them below the stored list instead of replacing it. */
     private suspend fun doWorkImpl(append: Boolean): Int {
         if (append && suggestionRepository.count() >= MAX_STORED) return 0
         val library = suggestionRepository.getLibraryWorks(SuggestionLimits().libraryHistory)
         val now = System.currentTimeMillis()
-        val refreshAt = inputData.getLong(DATA_REFRESH_AT, 0L)
-        val rotationSeed = suggestionRotationSeed(refreshAt.takeIf { it != 0L } ?: now, refreshAt)
-        val seed = if (append) appSettings.suggestionsRotationSeed.takeIf { it != 0L } ?: rotationSeed else rotationSeed
-        val sources = getSources(seed)
+        // Only a requested refresh asks the sources for other genres than the last run did.
+        val seed = inputData.getLong(DATA_REFRESH_AT, 0L).takeIf { it != 0L } ?: appSettings.suggestionsRotationSeed
+        val sources = getSources()
         // An empty library still gets the sources' popular and new lists; there is just no taste to ask for yet.
         if (sources.isEmpty()) return 0
         val tagsBlacklist = TagsBlacklist(appSettings.suggestionsTagsBlacklist, TAG_EQ_THRESHOLD)
         val globalTagBlacklist = GlobalTagBlacklist(appSettings.globalTagBlacklist)
         // The taste profile, scoring and ranking are shared with the other hosts (core-domain SuggestionRules).
         val profile = SuggestionProfile.of(library, now, appSettings.suggestionsTagsWhitelist)
-        val ages = suggestionRepository.getAges()
         val answered = java.util.concurrent.atomic.AtomicInteger()
         val answeredSources = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
         val cursors = if (append) SuggestionCursors.parse(appSettings.suggestionsCursors) else null
         val stored = if (append) suggestionRepository.knownIds() else emptySet()
 
         val rawResults = collectSourceResults(
+            // Only so many are fetched at once and a slow run is cut off: the sources the reader reads from come first,
+            // so what is lost is the ones they never opened a work of.
             sources = sources.filterNot {
                 it.isNsfw() && (appSettings.isSuggestionsExcludeNsfw || appSettings.isNsfwContentDisabled)
-            },
+            }.sortedByDescending { if (appSettings.isSuggestionsWeighSourcesByUse) profile.useOf(it.name) else 0 },
         ) { source ->
             getList(source, tagsBlacklist, profile, seed, cursors?.get(source.name) ?: cursors?.let { SuggestionCursors.START }, stored) {
                 answered.incrementAndGet()
@@ -224,15 +233,7 @@ class SuggestionsWorker @AssistedInject constructor(
         // Keep the last usable cache and retry when every source failed.
         if (answered.get() == 0) return if (append) 0 else -1
         val candidates = rawResults.filterNot { it.item in globalTagBlacklist || it.item.id in stored }
-        val preferredSources = PopularSources.preferred(
-            popularFirst = appSettings.isSuggestionsPopularSourcesFirst,
-            picked = appSettings.suggestionsPreferredSources,
-            excluded = appSettings.suggestionsExcludedSources,
-            sources = sources.map { PopularSourceProbe(it.name, it.getTitle(applicationContext)) },
-            favourites = if (appSettings.isSuggestionsFavouriteSourcesFirst) {
-                PopularSources.favouriteSources(library)
-            } else emptySet(),
-        )
+        val preferredSources = appSettings.suggestionsPreferredSources - appSettings.suggestionsExcludedSources
         val community = if (!append && appSettings.isCommunityEnabled) {
             communityCandidates(library, sources, preferredSources, candidates.map { it.item }) { item ->
                 !item.isNsfw() && item !in tagsBlacklist && item !in globalTagBlacklist &&
@@ -248,16 +249,12 @@ class SuggestionsWorker @AssistedInject constructor(
             source = { it.source.name },
             titles = { listOf(it.title) + it.altTitles },
             tags = { manga -> manga.tags.map { it.title } },
-            now = now,
-            seed = seed,
-            firstSuggestedAt = { ages[it.id] },
             preferredSources = preferredSources,
             languagePriority = {
                 appSettings.suggestionsLanguage.accepts(it.source.getLocale()?.toLanguageTag(), java.util.Locale.getDefault().language)
             },
-            groupOf = {
-                SuggestionOrigins.groupOf(it.source.getContentType().name, it.tags.map { tag -> tag.title }, it.source.getLocale()?.toLanguageTag())
-            },
+            isAdult = { it.isNsfw() },
+            weighSources = appSettings.isSuggestionsWeighSourcesByUse,
             limits = if (append) SuggestionLimits(maxResults = APPEND_BATCH) else SuggestionLimits(),
             quality = { item ->
                 val rating = ratings[item.id]
@@ -273,6 +270,7 @@ class SuggestionsWorker @AssistedInject constructor(
         }
         suggestionRepository.replace(suggestions)
         appSettings.suggestionsRotationSeed = seed
+        appSettings.suggestionsGeneratedAt = now
         appSettings.suggestionsCursors = emptySet()
         if (appSettings.isSuggestionsNotificationAvailable
             && applicationContext.checkNotificationPermission(MANGA_CHANNEL_ID)
@@ -344,12 +342,12 @@ class SuggestionsWorker @AssistedInject constructor(
         )
     }
 
-    private suspend fun getSources(seed: Long): List<ContentSource> {
+    private suspend fun getSources(): List<ContentSource> {
         val sources = if (appSettings.isSuggestionsIncludeDisabledSources) {
             sourcesRepository.getAllAvailableSourcesForActiveTvBoxRepository().sortedBy { it.name }
-                .shuffled(Random(seed)).sortedWith(compareBy(nullsLast(LocaleComparator())) { it.getLocale() })
+                .sortedWith(compareBy(nullsLast(LocaleComparator())) { it.getLocale() })
         } else {
-            sourcesRepository.getEnabledSources().sortedBy { it.name }.shuffled(Random(seed))
+            sourcesRepository.getEnabledSources().sortedBy { it.name }
         }
         val excludedSources = appSettings.suggestionsExcludedSources
         return sources.filterNot {
@@ -370,7 +368,8 @@ class SuggestionsWorker @AssistedInject constructor(
         onAnswered: () -> Unit,
     ): List<SuggestionCandidate<Content>> = runCatchingCancellable {
         val repository = mangaRepositoryFactory.create(source)
-        val queries = profile.planQueries(
+        val taste = profile.forDomain(source.isNsfw())
+        val queries = taste.planQueries(
             sourceName = source.name,
             seed = seed,
             availableOrders = repository.sortOrders.map { it.name },
@@ -424,7 +423,7 @@ class SuggestionsWorker @AssistedInject constructor(
                     if (candidate.direction != SuggestionDirection.TASTE) {
                         0.0
                     } else {
-                        profile.affinity(suggestionTagKeys(candidate.item.tags.map { it.title }))
+                        taste.affinity(suggestionTagKeys(candidate.item.tags.map { it.title }))
                     }
                 },
             )
@@ -542,10 +541,13 @@ class SuggestionsWorker @AssistedInject constructor(
     ) : PeriodicWorkScheduler {
 
         override suspend fun schedule() {
-            val request = PeriodicWorkRequestBuilder<SuggestionsWorker>(
-                org.skepsun.kototoro.suggestions.domain.SUGGESTIONS_INTERVAL_HOURS.toLong(),
-                TimeUnit.HOURS,
-            )
+            val hours = settings.suggestionsUpdateIntervalHours
+            if (hours <= 0) {
+                // Only when asked: nothing runs in the background.
+                unschedule()
+                return
+            }
+            val request = PeriodicWorkRequestBuilder<SuggestionsWorker>(hours.toLong(), TimeUnit.HOURS)
                 .setConstraints(createConstraints())
                 .addTag(TAG)
                 .setBackoffCriteria(BackoffPolicy.LINEAR, 1, TimeUnit.HOURS)

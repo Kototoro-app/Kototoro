@@ -37,6 +37,10 @@ internal object SuggestionHoldout {
 	private const val DROPPED_PERCENT = 0.1f
 	private const val DROPPED_AFTER_MS = 21L * 24 * 60 * 60 * 1000
 
+	/**
+	 * Read through against opened and left. Opening a work is itself a sign of interest, and one left may only be kept
+	 * for later, so this measures what the reader finishes, not what they like: use it with that in mind.
+	 */
 	fun outcomeOf(work: LibraryWork, now: Long): Outcome {
 		val percent = work.percent ?: return Outcome.OTHER
 		return when {
@@ -96,6 +100,17 @@ internal object SuggestionHoldout {
 		keys.map { profile.affinity(it, rarity) }
 	}
 
+	/** What [ProfileWithRarity] was before broad tags were discounted: each tag counted by its plain share. */
+	val PlainShare = Scorer { rest, hidden, now ->
+		val profile = SuggestionProfile.of(rest, now)
+		val keys = hidden.map { suggestionTagKeys(it.tags) }
+		val rarity = TagRarity.of(keys)
+		keys.map { tags ->
+			if (tags.isEmpty() || profile.taste.isEmpty()) 0.0
+			else tags.sumOf { key -> (profile.taste[key] ?: 0.0) * rarity(key) } / kotlin.math.sqrt(tags.size.toDouble())
+		}
+	}
+
 	/**
 	 * A Kototoro backup (`*.bk.zip`) as a library, most recently read first, and the time it was taken: the latest
 	 * reading in it, so that "left for three weeks" means what it meant then.
@@ -116,6 +131,11 @@ internal object SuggestionHoldout {
 				percent = history?.get("percent")?.jsonPrimitive?.floatOrNull?.takeIf { it in 0f..1f },
 				chapters = history?.get("chapters")?.jsonPrimitive?.intOrNull ?: 0,
 				lastReadAt = history?.long("updated_at") ?: 0L,
+				source = manga["source"]?.jsonPrimitive?.takeIf { it.isString }?.content,
+				contentType = manga["content_type"]?.jsonPrimitive?.takeIf { it.isString }?.content,
+				isAdult = manga["nsfw"]?.jsonPrimitive?.booleanOrNull == true ||
+					manga["content_rating"]?.jsonPrimitive?.content == "ADULT" ||
+					manga["content_type"]?.jsonPrimitive?.content?.startsWith("HENTAI_") == true,
 			)
 		}
 

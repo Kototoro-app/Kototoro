@@ -1,8 +1,7 @@
 package org.skepsun.kototoro.suggestions.domain
 
 import org.skepsun.kototoro.core.model.TagTaxonomy
-import org.skepsun.kototoro.core.model.TaxonomyCategory
-import kotlin.random.Random
+
 
 /*
  * Suggestions come in directions: more of what the reader likes, what is popular, what is new, and something they
@@ -21,7 +20,7 @@ enum class SuggestionDirection {
     /** Only just listed by a source. */
     NEW,
 
-    /** Popular in a genre the reader has not read; the reason is that genre's tag key. */
+    /** Popular in a genre the reader has not read; no longer generated, kept for suggestions stored before. */
     EXPLORE,
 
     COMMUNITY,
@@ -56,16 +55,17 @@ data class SuggestionCandidate<T>(
 private val PopularOrders = listOf("POPULARITY_MONTH", "POPULARITY_WEEK", "POPULARITY", "POPULARITY_YEAR", "RATING")
 private val NewOrders = listOf("NEWEST", "ADDED", "UPDATED")
 
-/** What a genre the reader has not tried may be: what a work is about, not who it is for or what it warns of. */
-private val ExploreCategories = setOf(
-    TaxonomyCategory.GENRE, TaxonomyCategory.THEME, TaxonomyCategory.SETTING, TaxonomyCategory.NARRATIVE,
-    TaxonomyCategory.ELEMENT,
-)
+/**
+ * How many of the reader's tags a source is looked through for. A source offers its own few tags, so what it can be
+ * asked for is the best of the reader's tags it has, not the best of their first ten: a library full of very specific
+ * tags would otherwise have nothing in common with the plain genres most sources list, and ask them nothing.
+ */
+private const val QUERY_TAG_POOL = 50
 
 /**
- * What to ask one source this time: a genre the reader likes when the source offers one, and one wider list, which
- * of popular, new and unexplored changing with the source and the [seed]. Two requests at most, so that a source is
- * not asked for every direction every time while all of them are covered between the sources.
+ * What to ask one source: a list of a genre the reader likes when the source offers one (otherwise its plain popular
+ * list), and its newest list. Which of the reader's genres a source is asked for depends on the source and the [seed]
+ * only, so between them the sources cover what the reader likes and the same seed asks the same thing every time.
  */
 fun <T> SuggestionProfile.planQueries(
     sourceName: String,
@@ -81,27 +81,12 @@ fun <T> SuggestionProfile.planQueries(
     val popular = PopularOrders.firstOrNull { it in availableOrders }
     val newest = NewOrders.firstOrNull { it in availableOrders }
     val order = popular ?: pickSuggestionSortOrder(availableOrders)
-    val taste = pickQuery(availableTags, title, isBlacklisted, matches, pick, limits.seedTags)
+    val taste = pickQuery(availableTags, title, isBlacklisted, matches, pick, QUERY_TAG_POOL)
         ?.let { (tag, key) -> SuggestionQuery(SuggestionDirection.TASTE, order, tag, key) }
-    val wider = buildList {
-        if (popular != null) add(SuggestionQuery<T>(SuggestionDirection.POPULAR, popular))
-        if (newest != null) add(SuggestionQuery<T>(SuggestionDirection.NEW, newest))
-        val unexplored = availableTags.filterNot(isBlacklisted).mapNotNull { tag ->
-            val known = TagTaxonomy.resolve(title(tag))
-            val key = known.firstOrNull { it.category in ExploreCategories && it.id !in this@planQueries.taste }?.id
-            if (key == null || known.any {
-                it.adult || it.sensitive || it.id == "genre.ecchi" || it.category !in ExploreCategories
-            }) null
-                else tag to key
-        }.distinctBy { it.second }
-        if (popular != null && unexplored.isNotEmpty()) {
-            val (tag, key) = unexplored[Random(seed xor sourceName.hashCode().toLong()).nextInt(unexplored.size)]
-            add(SuggestionQuery(SuggestionDirection.EXPLORE, popular, tag, key))
-        }
-    }
-    val broad = if (wider.isEmpty()) SuggestionQuery<T>(SuggestionDirection.POPULAR, order)
-        else wider[(pick * wider.size).toInt().coerceAtMost(wider.lastIndex)]
-    return listOfNotNull(taste, broad)
+    // A source that only lists what is new has nothing popular to offer: its one list is the new one.
+    val broad = SuggestionQuery<T>(if (popular == null && order in NewOrders) SuggestionDirection.NEW else SuggestionDirection.POPULAR, order)
+    val fresh = newest?.takeIf { it != broad.order }?.let { SuggestionQuery<T>(SuggestionDirection.NEW, it) }
+    return listOfNotNull(taste ?: broad, fresh ?: broad.takeIf { taste != null })
 }
 
 /** A title for a suggestion's reason: the catalogue's label in the reader's language, or the tag as it was spelled. */

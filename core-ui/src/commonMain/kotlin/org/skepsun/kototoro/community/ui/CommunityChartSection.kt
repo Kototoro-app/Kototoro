@@ -21,6 +21,8 @@ data class CommunitySuggestionsUiState(
     val entries: List<CommunityChartEntry> = emptyList(),
     /** No chart has entries in any window yet, so [entries] lists every rated work rather than a ranking. */
     val isFallback: Boolean = false,
+    /** Cover models by work id, for the works a source of the reader's was found for; filled in after the chart. */
+    val covers: Map<String, Any> = emptyMap(),
 ) {
     companion object {
         val WINDOWS = listOf("week", "month", CommunityHighlights.WINDOW_ALL)
@@ -40,6 +42,8 @@ fun CommunityChartSection(
     horizontalPadding: Dp = 0.dp,
     /** A long press on a work: where else it can be looked for. */
     onShowSources: ((id: String, title: String) -> Unit)? = null,
+    /** Draws a work's cover model from [CommunitySuggestionsUiState.covers] as its card background. */
+    coverContent: (@Composable (cover: Any, modifier: Modifier) -> Unit)? = null,
 ) {
     if (!state.isLoaded || (state.isFallback && state.entries.isEmpty())) return
     CommunityWorksRail(
@@ -50,6 +54,7 @@ fun CommunityChartSection(
                 title = entry.title.orEmpty(),
                 supportingText = uiString("community_rating_count", entry.count),
                 score = entry.displayScore,
+                cover = state.covers[entry.id],
             )
         },
         onOpen = { onOpenWork(it.key, it.title) },
@@ -83,5 +88,6 @@ fun CommunityChartSection(
         },
         modifier = modifier.padding(vertical = 6.dp),
         testTag = "community-popular",
+        coverContent = coverContent,
     )
 }

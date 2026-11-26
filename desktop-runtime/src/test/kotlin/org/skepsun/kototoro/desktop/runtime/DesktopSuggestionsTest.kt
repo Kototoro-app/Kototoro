@@ -110,8 +110,9 @@ class DesktopSuggestionsTest {
             val library = DesktopLibrary(runtime.database) { null }
             library.addFavourite(work(1, manga, "Romance"))
             val suggestions = DesktopSuggestions(library, FakeRuntime(), sourceOrder = { it },
-                limits = SuggestionLimits(maxResults = 4, maxResultsPerSource = 2))
-            suggestions.refresh(listOf(manga, novels).map(::listing))
+                limits = SuggestionLimits(maxResults = 4))
+            suggestions.refresh(listOf(manga, novels).map(::listing),
+                DesktopSuggestionSettings(weighSourcesByUse = false))
             val sources = suggestions.suggestions().map { it.source.name }
             assertEquals(4, sources.size)
             assertEquals(2, sources.count { it == manga.name })

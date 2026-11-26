@@ -32,6 +32,7 @@ internal class KototoroAppPrefs internal constructor(
     val isTabletNavBarOnLeft: State<Boolean>,
     val isTabletNavLabelsVisible: State<Boolean>,
     val mainNavItems: State<List<NavItem>>,
+    val startupPage: State<String>,
     val isMainFabEnabled: State<Boolean>,
     val sidekickPosition: State<SpaceSwitcherPosition>,
     val globalFavoritesSortOrder: State<ListSortOrder>,
@@ -116,6 +117,7 @@ internal fun rememberKototoroAppPrefs(appSettings: AppSettings): KototoroAppPref
         isTabletNavLabelsVisible
     }
     val mainNavItems = appSettings.observeAsState(AppSettings.KEY_NAV_MAIN) { mainNavItems }
+    val startupPage = appSettings.observeAsState(AppSettings.KEY_STARTUP_PAGE) { startupPage }
     val isMainFabEnabled = appSettings.observeAsState(AppSettings.KEY_MAIN_FAB) { isMainFabEnabled }
     val sidekickPosition = appSettings.observeAsState(AppSettings.KEY_SPACE_SWITCHER_POSITION) {
         spaceSwitcherPosition
@@ -147,6 +149,7 @@ internal fun rememberKototoroAppPrefs(appSettings: AppSettings): KototoroAppPref
         isTabletNavBarOnLeft = isTabletNavBarOnLeft,
         isTabletNavLabelsVisible = isTabletNavLabelsVisible,
         mainNavItems = mainNavItems,
+        startupPage = startupPage,
         isMainFabEnabled = isMainFabEnabled,
         sidekickPosition = sidekickPosition,
         globalFavoritesSortOrder = globalFavoritesSortOrder,

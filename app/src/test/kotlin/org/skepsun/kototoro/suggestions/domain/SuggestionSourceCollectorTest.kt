@@ -48,27 +48,16 @@ class SuggestionSourceCollectorTest {
     }
 
     @Test
-    fun `stops at the raw result cap and cancels remaining sources`() = runTest {
-        var cancelled = false
+    fun `keeps every source that answers however many answered before it`() = runTest {
         val result = collectSourceResults(
-            sources = listOf("fast", "slow"),
-            maxParallelism = 2,
-            maxRawResults = 2,
+            sources = listOf("a", "b", "c"),
+            maxParallelism = 3,
             sourceTimeoutMillis = 5_000,
             globalTimeoutMillis = 5_000,
-        ) { source ->
-            if (source == "slow") {
-                try {
-                    awaitCancellation()
-                } finally {
-                    cancelled = true
-                }
-            }
-            listOf(1, 2, 3)
-        }
+        ) { source -> List(300) { "$source$it" } }
 
-        assertEquals(listOf(1, 2), result)
-        assertTrue(cancelled)
+        assertEquals(900, result.size)
+        assertEquals(setOf("a", "b", "c"), result.mapTo(HashSet()) { it.take(1) })
     }
 
     @Test

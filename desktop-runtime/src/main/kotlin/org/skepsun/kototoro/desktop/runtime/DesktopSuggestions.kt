@@ -8,14 +8,10 @@ import org.skepsun.kototoro.core.source.SourceListing
 import org.skepsun.kototoro.core.source.SourcePreferenceValue
 import org.skepsun.kototoro.core.source.SourceRuntime
 import org.skepsun.kototoro.parsers.util.almostEquals
-import org.skepsun.kototoro.suggestions.domain.PopularSourceProbe
-import org.skepsun.kototoro.suggestions.domain.PopularSources
 import org.skepsun.kototoro.suggestions.domain.SUGGESTION_TAG_THRESHOLD
 import org.skepsun.kototoro.suggestions.domain.SuggestionLimits
 import org.skepsun.kototoro.suggestions.domain.SuggestionTagMatcher
 import org.skepsun.kototoro.suggestions.domain.parseSuggestionTags
-import org.skepsun.kototoro.suggestions.domain.suggestionRotationSeed
-import kotlin.random.Random
 
 /** Windows counterparts of Android's suggestion settings, stored under Android's keys and defaults. */
 data class DesktopSuggestionSettings(
@@ -34,14 +30,12 @@ data class DesktopSuggestionSettings(
     val language: org.skepsun.kototoro.suggestions.domain.SuggestionLanguage =
         org.skepsun.kototoro.suggestions.domain.SuggestionLanguage.SYSTEM,
     val languageOnly: Boolean = false,
-    /** `suggestions_popular_sources`: sources on the EverythingMoe rankings go first, beside [preferredSources]. */
-    val popularSourcesFirst: Boolean = true,
-    /** `suggestions_favourite_sources`: the sources the reader's saved works come from go first. */
-    val favouriteSourcesFirst: Boolean = true,
+    /** `suggestions_weigh_sources`: a source's share of the suggestions follows how much of the library came from it. */
+    val weighSourcesByUse: Boolean = true,
 ) {
     fun preferences(globalTagBlacklist: Set<String> = emptySet()) = SourceSuggestionPreferences(
         excludeNsfw, tagBlacklist, tagWhitelist, preferredSources, excludedSources, language, globalTagBlacklist,
-        languageOnly, java.util.Locale.getDefault().language,
+        languageOnly, java.util.Locale.getDefault().language, weighSourcesByUse,
     )
 
     fun toPreferences(): Map<String, SourcePreferenceValue?> = mapOf(
@@ -56,8 +50,7 @@ data class DesktopSuggestionSettings(
         KEY_NOTIFICATIONS to SourcePreferenceValue.Toggle(notifications),
         org.skepsun.kototoro.suggestions.domain.SuggestionLanguage.PREFERENCE_KEY to SourcePreferenceValue.Text(language.name),
         org.skepsun.kototoro.suggestions.domain.SuggestionLanguage.ONLY_PREFERENCE_KEY to SourcePreferenceValue.Toggle(languageOnly),
-        KEY_POPULAR_SOURCES to SourcePreferenceValue.Toggle(popularSourcesFirst),
-        KEY_FAVOURITE_SOURCES to SourcePreferenceValue.Toggle(favouriteSourcesFirst),
+        KEY_WEIGH_SOURCES to SourcePreferenceValue.Toggle(weighSourcesByUse),
     )
 
     companion object {
@@ -67,8 +60,7 @@ data class DesktopSuggestionSettings(
         const val KEY_PREFERRED_TAGS = "suggestions_preferred_tags"
         const val KEY_PREFERRED_SOURCES = "suggestions_preferred_sources"
         const val KEY_EXCLUDED_SOURCES = "suggestions_excluded_sources"
-        const val KEY_POPULAR_SOURCES = "suggestions_popular_sources"
-        const val KEY_FAVOURITE_SOURCES = "suggestions_favourite_sources"
+        const val KEY_WEIGH_SOURCES = "suggestions_weigh_sources"
         const val KEY_WIFI_ONLY = "suggestions_wifi"
         const val KEY_DISABLED_SOURCES = "suggestions_disabled_sources"
         const val KEY_NOTIFICATIONS = "suggestions_notifications"
@@ -88,8 +80,7 @@ data class DesktopSuggestionSettings(
             ),
             languageOnly = (values[org.skepsun.kototoro.suggestions.domain.SuggestionLanguage.ONLY_PREFERENCE_KEY]
                 as? SourcePreferenceValue.Toggle)?.value ?: false,
-            popularSourcesFirst = (values[KEY_POPULAR_SOURCES] as? SourcePreferenceValue.Toggle)?.value ?: true,
-            favouriteSourcesFirst = (values[KEY_FAVOURITE_SOURCES] as? SourcePreferenceValue.Toggle)?.value ?: true,
+            weighSourcesByUse = (values[KEY_WEIGH_SOURCES] as? SourcePreferenceValue.Toggle)?.value ?: true,
         )
     }
 }
@@ -158,18 +149,16 @@ class DesktopSuggestions(
         }
         if (eligible.isEmpty()) return 0
         val time = now()
-        val seed = suggestionRotationSeed(time, refreshAt = if (manual) time else 0L)
-        val candidates = sourceOrder?.invoke(eligible) ?: eligible.sortedBy { it.source.name }.shuffled(Random(seed))
-        val preferences = settings.copy(preferredSources = PopularSources.preferred(settings.popularSourcesFirst,
-            settings.preferredSources, settings.excludedSources, candidates.map {
-                PopularSourceProbe(it.source.name, it.displayName, it.siteUrl)
-            }, if (settings.favouriteSourcesFirst) PopularSources.favouriteSources(works) else emptySet()))
+        // A manual refresh asks the sources for different genres than the last run did; every other run repeats them.
+        val seed = if (manual) time else 0L
+        val candidates = sourceOrder?.invoke(eligible) ?: eligible.sortedBy { it.source.name }
+        val preferences = settings.copy(preferredSources = settings.preferredSources - settings.excludedSources)
             .preferences(globalTagBlacklist)
         // Community picks are looked up only in sources that are not adult, whatever the reader's own nsfw choice.
         val safeSources = candidates.filterNot { it.isNsfwSource(nsfwOverrides) }.map { it.source }
         val service = community()?.takeIf { it.isEnabled }
         val result = SourceSuggestions(runtime, matcher, limits).generate(works, candidates.map { it.source },
-            preferences, time, library.suggestionAges(), seed = seed,
+            preferences, time, seed = seed,
             community = service?.let { { raw ->
                 it.suggestionCandidates(runtime, works, safeSources, preferences, time, raw,
                     library.suggestions(limits.maxResults))
