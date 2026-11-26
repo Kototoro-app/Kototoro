@@ -37,12 +37,25 @@ data class IosSuggestionSettings(
     val languageOnly: Boolean = false,
     val systemLanguage: String = "en",
     val communityEnabled: Boolean = false,
+    /** `suggestions_weigh_sources`: a source's share of the suggestions follows how much of the library came from it. */
+    val weighSourcesByUse: Boolean = true,
 ) {
     internal fun preferences() = SourceSuggestionPreferences(excludeNsfw, parseSuggestionTags(excludedTags),
         parseSuggestionTags(preferredTags), preferredSources.toSet(), excludedSources.toSet(),
         org.skepsun.kototoro.suggestions.domain.SuggestionLanguage.of(language),
-        languageOnly = languageOnly, systemLanguage = systemLanguage)
+        languageOnly = languageOnly, systemLanguage = systemLanguage, weighSourcesByUse = weighSourcesByUse)
 }
+
+/** One source's place in the library: how many works came from it, their share, and the places it gets in turn. */
+data class IosSuggestionSourceUsage(val name: String, val works: Int, val share: Double, val weight: Double)
+
+/** What the library says about the sources; [equalShares] while it is too small to tell them apart. */
+data class IosSuggestionUsage(
+    val rows: List<IosSuggestionSourceUsage>,
+    val totalWorks: Int,
+    val sourceCount: Int,
+    val equalShares: Boolean,
+)
 
 /** Uses the same suggestions table and ranking as Android; Swift owns opt-in and foreground scheduling. */
 class IosSuggestions internal constructor(
@@ -73,6 +86,23 @@ class IosSuggestions internal constructor(
             if (!settings.communityEnabled && reason?.first == SuggestionDirection.COMMUNITY) return@mapNotNull null
             IosSourceContent(content, suggestionDirection = reason?.first?.name ?: "TASTE", suggestionReason = reason?.second)
         }
+    }
+
+    /** The same reading of the library as Android's source usage panel: the 30 sources it has most works from. */
+    @Throws(Exception::class)
+    suspend fun sourceUsage(): IosSuggestionUsage {
+        val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
+        val profile = SuggestionProfile.of(library.records.libraryWorks(SuggestionLimits().libraryHistory), now)
+        val usage = profile.sourceUsage()
+        val total = usage.sumOf { it.second }
+        return IosSuggestionUsage(
+            rows = usage.take(30).map { (name, works) ->
+                IosSuggestionSourceUsage(name, works, works.toDouble() / total.coerceAtLeast(1), profile.sourceWeight(name))
+            },
+            totalWorks = total,
+            sourceCount = usage.size,
+            equalShares = !profile.weighsSources,
+        )
     }
 
     @Throws(Exception::class)

@@ -1,3 +1,4 @@
+import Charts
 import KototoroShared
 import SwiftUI
 
@@ -12,6 +13,8 @@ struct SuggestionsView: View {
     @AppStorage("suggestions_exclude_tags") private var excludedTags = ""
     @AppStorage("suggestions_preferred_sources") private var preferredSources = ""
     @AppStorage("suggestions_excluded_sources") private var excludedSources = ""
+    @AppStorage("suggestions_weigh_sources") private var weighSources = true
+    @AppStorage("suggestions_interval_hours") private var intervalHours = 6
     @AppStorage("sources.showAdult") private var showAdult = false
     @AppStorage(ContentSpace.key) private var space = ""
     @AppStorage(ContentSpace.enabledKey) private var spacesEnabled = true
@@ -39,12 +42,13 @@ struct SuggestionsView: View {
                               preferredSources: SourceFilterOption.decode(preferredSources).sorted(),
                               excludedSources: SourceFilterOption.decode(excludedSources).sorted(),
                               language: recommendationLanguage, languageOnly: recommendationLanguageOnly,
-                              systemLanguage: Locale.current.language.languageCode?.identifier ?? "en", communityEnabled: communityEnabled)
+                              systemLanguage: Locale.current.language.languageCode?.identifier ?? "en", communityEnabled: communityEnabled,
+                              weighSourcesByUse: weighSources)
     }
     private var configuration: String {
         // JSON avoids collisions between user-entered tags and source identities; the timestamp is persistent.
         let values = [String(!showAdult || excludeAdult), preferredTags, excludedTags, preferredSources, excludedSources,
-                      recommendationLanguage, String(recommendationLanguageOnly), String(communityEnabled)]
+                      recommendationLanguage, String(recommendationLanguageOnly), String(communityEnabled), String(weighSources)]
             + candidates.map { "\($0.name)|\($0.contentType)" }.sorted()
         return String(decoding: (try? JSONEncoder().encode(values)) ?? Data(), as: UTF8.self)
     }
@@ -194,7 +198,9 @@ struct SuggestionsView: View {
                 (!settings.excludeNsfw || !$0.isAdult) }
             guard !allowed.isEmpty else { return }
             let config = configuration
-            let expired = Date().timeIntervalSince1970 - updatedAt > 6 * 60 * 60
+            // Like Android, a list stays fresh until an hour before the next scheduled rebuild; 0 rebuilds only when asked.
+            let expired = intervalHours > 0 &&
+                Date().timeIntervalSince1970 - updatedAt > Double(max(intervalHours - 1, 1)) * 60 * 60
             guard force || config != savedConfiguration || expired else { return }
             loading = true
             let cancellation = IosCancellation()
@@ -235,11 +241,15 @@ private struct SuggestionPreferencesView: View {
     @AppStorage("suggestions_exclude_tags") private var excludedTags = ""
     @AppStorage("suggestions_preferred_sources") private var preferredSources = ""
     @AppStorage("suggestions_excluded_sources") private var excludedSources = ""
+    @AppStorage("suggestions_weigh_sources") private var weighSources = true
+    @AppStorage("suggestions_interval_hours") private var intervalHours = 6
     @State private var draftCommunity = false
     @State private var draftEnabled = false
     @State private var draftExcludeAdult = false
     @State private var draftLanguage = "SYSTEM"
     @State private var draftLanguageOnly = false
+    @State private var draftWeighSources = true
+    @State private var draftInterval = 6
     @State private var preferred = ""
     @State private var excluded = ""
     @State private var sourceChoices: [String: String] = [:]
@@ -261,7 +271,7 @@ private struct SuggestionPreferencesView: View {
                     Toggle("排除成人内容", isOn: $draftExcludeAdult)
                     Toggle("开启社区评分、评论与推荐", isOn: $draftCommunity).accessibilityIdentifier("suggestions.community")
                 } footer: {
-                    Text("进入推荐时先显示缓存，超过六小时或偏好、可用来源变化时重新生成。可在推荐页下拉刷新。社区推荐读取公开索引，书库匹配在本机完成；匹配来源时仅搜索推荐作品标题。")
+                    Text("进入推荐时先显示缓存，超过更新间隔或偏好、可用来源变化时重新生成。可在推荐页下拉刷新。社区推荐读取公开索引，书库匹配在本机完成；匹配来源时仅搜索推荐作品标题。")
                 }
                 Section {
                     Picker("优先语言", selection: $draftLanguage) {
@@ -290,7 +300,29 @@ private struct SuggestionPreferencesView: View {
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                     }.accessibilityIdentifier("suggestions.sources")
-                } header: { Text("推荐来源") } footer: { Text("仅从已启用的在线来源生成推荐，并均衡不同来源的作品数量。") }
+                    Toggle("按使用量分配来源名额", isOn: $draftWeighSources)
+                        .accessibilityIdentifier("suggestions.weighSources")
+                    NavigationLink {
+                        SuggestionSourceUsageView(weighing: draftWeighSources)
+                    } label: {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("来源使用情况")
+                            Text("各来源占你书库的比例，以及它们在推荐里的名额倍数")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                    }.accessibilityIdentifier("suggestions.sourceUsage")
+                } header: { Text("推荐来源") } footer: {
+                    Text("仅从已启用的在线来源生成推荐。开启后，来源获得的名额随书库中来自它的作品比例增减，常读的来源优先获取；关闭则各来源均分。")
+                }
+                Section {
+                    Picker("更新频率", selection: $draftInterval) {
+                        Text("6 小时").tag(6)
+                        Text("12 小时").tag(12)
+                        Text("1 天").tag(24)
+                        Text("3 天").tag(72)
+                        Text("仅手动刷新").tag(0)
+                    }.accessibilityIdentifier("suggestions.interval")
+                } footer: { Text("打开推荐页时，超过该间隔才会重新生成；也可随时下拉刷新。") }
             }
             .navigationTitle("推荐偏好")
             .navigationBarTitleDisplayMode(.inline)
@@ -300,6 +332,7 @@ private struct SuggestionPreferencesView: View {
                     Button("保存") {
                         enabled = draftEnabled; excludeAdult = draftExcludeAdult
                         communityEnabled = draftCommunity
+                        weighSources = draftWeighSources; intervalHours = draftInterval
                         recommendationLanguage = draftLanguage
                         recommendationLanguageOnly = draftLanguageOnly && draftLanguage != "ALL"
                         preferredTags = preferred; excludedTags = excluded
@@ -316,6 +349,7 @@ private struct SuggestionPreferencesView: View {
                 initialized = true
                 draftEnabled = enabled; draftExcludeAdult = excludeAdult
                 draftCommunity = communityEnabled
+                draftWeighSources = weighSources; draftInterval = intervalHours
                 draftLanguage = recommendationLanguage; draftLanguageOnly = recommendationLanguageOnly
                 preferred = preferredTags; excluded = excludedTags
                 for name in SourceFilterOption.decode(preferredSources) { sourceChoices[name] = "preferred" }
@@ -461,5 +495,113 @@ private struct SuggestionSourcesView: View {
 
     private func clearFilters() {
         mediaKind = ""; ecosystem = ""; language = ""; choice = ""
+    }
+}
+
+/// Shows how much of the library came from each source and the places it is dealt in the suggestions.
+private struct SuggestionSourceUsageView: View {
+    let weighing: Bool
+    @EnvironmentObject private var library: LibraryModel
+    @EnvironmentObject private var sources: SourcesModel
+    @State private var usage: IosSuggestionUsage?
+    @State private var failure: String?
+
+    /// How many sources get a slice of their own in the chart; the rest are one more.
+    private let chartSlices = 5
+    private var showWeights: Bool { weighing && !(usage?.equalShares ?? true) }
+
+    var body: some View {
+        List {
+            if let usage {
+                if usage.rows.isEmpty {
+                    ContentUnavailableView("还没有阅读记录", systemImage: "books.vertical")
+                        .listRowBackground(Color.clear)
+                } else {
+                    Section {
+                        chart(usage).frame(height: 200).listRowBackground(Color.clear)
+                    } footer: {
+                        Text("来自 \(Int(usage.sourceCount)) 个来源的 \(Int(usage.totalWorks)) 部作品")
+                    }
+                    Section {
+                        ForEach(Array(usage.rows.enumerated()), id: \.element.name) { index, row in
+                            usageRow(row, index: index)
+                        }
+                    } footer: {
+                        if showWeights {
+                            Text("×N 表示该来源在每轮推荐里拿到的名额；没打开过作品的来源是 ×0.5")
+                        } else if weighing {
+                            Text("书库不足 20 部，所有来源名额相同")
+                        } else {
+                            Text("按使用情况分配已关闭：所有来源名额相同")
+                        }
+                    }
+                }
+            } else if let failure {
+                ContentUnavailableView("无法读取来源使用情况", systemImage: "exclamationmark.triangle",
+                                       description: Text(failure))
+            } else {
+                ProgressView().frame(maxWidth: .infinity).listRowBackground(Color.clear)
+            }
+        }
+        .navigationTitle("来源使用情况")
+        .navigationBarTitleDisplayMode(.inline)
+        .task(id: library.recordsRevision) {
+            guard let database = library.library else { return }
+            do { usage = try await database.suggestions.sourceUsage() } catch { failure = error.localizedDescription }
+        }
+    }
+
+    private func catalogue(_ name: String) -> IosSource? { sources.sources.first { $0.name == name } }
+
+    private func chart(_ usage: IosSuggestionUsage) -> some View {
+        let named = Array(usage.rows.prefix(chartSlices))
+        let rest = Int(usage.totalWorks) - named.reduce(0) { $0 + Int($1.works) }
+        return Chart {
+            ForEach(named, id: \.name) { row in
+                SectorMark(angle: .value("作品", Int(row.works)), innerRadius: .ratio(0.62), angularInset: 1.5)
+                    .cornerRadius(4).foregroundStyle(by: .value("来源", title(row)))
+            }
+            if rest > 0 {
+                SectorMark(angle: .value("作品", rest), innerRadius: .ratio(0.62), angularInset: 1.5)
+                    .cornerRadius(4).foregroundStyle(.gray.opacity(0.5))
+            }
+        }
+        .chartLegend(.hidden)
+        .chartBackground { _ in
+            VStack {
+                Text("\(usage.totalWorks)").font(.title.weight(.semibold))
+                Text("部作品").font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .accessibilityIdentifier("suggestions.sourceUsage.chart")
+    }
+
+    private func title(_ row: IosSuggestionSourceUsage) -> String { catalogue(row.name)?.title ?? row.name }
+
+    private func usageRow(_ row: IosSuggestionSourceUsage, index: Int) -> some View {
+        let source = catalogue(row.name)
+        return HStack(spacing: 12) {
+            if let source { SourceIcon(runtime: sources.runtime, source: source, size: 36) }
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title(row)).lineLimit(1)
+                HStack(spacing: 6) {
+                    if let source {
+                        Text(SourcesModel.ecosystems.first { $0.id == SourceFilterOption.ecosystemKey(source) }?.title
+                             ?? source.ecosystem)
+                    }
+                    Text("\(Int(row.works)) 部")
+                }.font(.caption).foregroundStyle(.secondary)
+                ProgressView(value: row.share).tint(index < chartSlices ? .accentColor : .gray)
+            }
+            VStack(alignment: .trailing, spacing: 3) {
+                Text("\(max(Int((row.share * 100).rounded()), row.share > 0 ? 1 : 0))%").font(.headline)
+                if showWeights {
+                    Text("×\(row.weight.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(row.weight)) : String(row.weight))")
+                        .font(.caption2.weight(.semibold)).padding(.horizontal, 7).padding(.vertical, 1)
+                        .background(.tint.opacity(row.weight >= 3 ? 0.3 : 0.15), in: Capsule())
+                }
+            }
+        }
+        .accessibilityElement(children: .combine)
     }
 }
