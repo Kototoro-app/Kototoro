@@ -577,58 +577,54 @@ private fun MainShellTopLevelEntryContent(
                 }
             }
 
-            RouteLiquidGlassBackdrop(
-                ownerKey = "details:${key.mangaId}",
-                active = true,
-            ) {
-                Box(modifier = Modifier.fillMaxSize()) {
-                    CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides animatedVisibilityScope) {
-                        val pendingContent = remember { PendingDetailsNavigation.lastContent() }
-                        val pendingSharedKey = remember { PendingDetailsNavigation.lastSharedElementKey() }
-                        val mangaDetails by detailsViewModel.mangaDetails.collectAsStateWithLifecycle()
-                        val sharedKey = remember(pendingSharedKey, mangaDetails, pendingContent) {
-                            pendingSharedKey ?: run {
-                                val content = mangaDetails?.toContent() ?: pendingContent
-                                content?.let { c ->
-                                    contentCoverSharedKey(c.source.name, c.coverUrl.orEmpty())
-                                }
+            // Shell chrome samples MainRouteScene. Details supplies its own glass sources to its controls.
+            Box(modifier = Modifier.fillMaxSize()) {
+                CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides animatedVisibilityScope) {
+                    val pendingContent = remember { PendingDetailsNavigation.lastContent() }
+                    val pendingSharedKey = remember { PendingDetailsNavigation.lastSharedElementKey() }
+                    val mangaDetails by detailsViewModel.mangaDetails.collectAsStateWithLifecycle()
+                    val sharedKey = remember(pendingSharedKey, mangaDetails, pendingContent) {
+                        pendingSharedKey ?: run {
+                            val content = mangaDetails?.toContent() ?: pendingContent
+                            content?.let { c ->
+                                contentCoverSharedKey(c.source.name, c.coverUrl.orEmpty())
                             }
                         }
-                        DetailsScreen(
-                            viewModel = detailsViewModel,
-                            pagesViewModel = pagesViewModel,
-                            bookmarksViewModel = bookmarksViewModel,
-                            settings = entryPoint.settings(),
-                            appRouter = appRouter,
-                            pageSaveHelper = effectivePageSaveHelper,
-                            onBackClick = {
-                                onDetailsReturnTransitionRequested()
-                                mainNavState.pop()
-                            },
-                            activeSpaceId = null,
-                            onSpaceSwitcherClick = {},
-                            onBottomPanelStateChanged = onDetailsBottomPanelStateChanged,
-                            sharedElementKey = sharedKey,
-                            onActionClick = { action ->
-                                handleDetailsAction(
-                                    action = action,
-                                    appRouter = appRouter,
-                                    viewModel = detailsViewModel,
-                                    appShortcutManager = entryPoint.appShortcutManager(),
-                                    coroutineScope = detailsCoroutineScope,
-                                    snackbarHost = rootView,
-                                    overrideEditLauncher = overrideEditLauncher,
-                                    onOpenSourceList = { source, filter, sortOrder ->
-                                        mainNavigator.openContentList(source, filter, sortOrder)
-                                    },
-                                    onFinish = {
-                                        onDetailsReturnTransitionRequested()
-                                        mainNavState.pop()
-                                    },
-                                )
-                            },
-                        )
                     }
+                    DetailsScreen(
+                        viewModel = detailsViewModel,
+                        pagesViewModel = pagesViewModel,
+                        bookmarksViewModel = bookmarksViewModel,
+                        settings = entryPoint.settings(),
+                        appRouter = appRouter,
+                        pageSaveHelper = effectivePageSaveHelper,
+                        onBackClick = {
+                            onDetailsReturnTransitionRequested()
+                            mainNavState.pop()
+                        },
+                        activeSpaceId = null,
+                        onSpaceSwitcherClick = {},
+                        onBottomPanelStateChanged = onDetailsBottomPanelStateChanged,
+                        sharedElementKey = sharedKey,
+                        onActionClick = { action ->
+                            handleDetailsAction(
+                                action = action,
+                                appRouter = appRouter,
+                                viewModel = detailsViewModel,
+                                appShortcutManager = entryPoint.appShortcutManager(),
+                                coroutineScope = detailsCoroutineScope,
+                                snackbarHost = rootView,
+                                overrideEditLauncher = overrideEditLauncher,
+                                onOpenSourceList = { source, filter, sortOrder ->
+                                    mainNavigator.openContentList(source, filter, sortOrder)
+                                },
+                                onFinish = {
+                                    onDetailsReturnTransitionRequested()
+                                    mainNavState.pop()
+                                },
+                            )
+                        },
+                    )
                 }
             }
         }

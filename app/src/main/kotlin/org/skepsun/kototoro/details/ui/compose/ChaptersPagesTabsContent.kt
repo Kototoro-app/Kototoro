@@ -285,9 +285,20 @@ fun ChaptersPagesTabsContent(
     }
 }
 
-private enum class ChapterPanelMode {
+internal enum class ChapterPanelMode {
     METADATA,
     READING,
+}
+
+internal fun resolveChapterPanelMode(
+    chosenModeName: String?,
+    hasReadingSource: Boolean,
+    hasMetadataSource: Boolean,
+): ChapterPanelMode = when {
+    !hasMetadataSource -> ChapterPanelMode.READING
+    chosenModeName == ChapterPanelMode.METADATA.name -> ChapterPanelMode.METADATA
+    chosenModeName == ChapterPanelMode.READING.name || hasReadingSource -> ChapterPanelMode.READING
+    else -> ChapterPanelMode.METADATA
 }
 
 @Composable
@@ -311,22 +322,19 @@ private fun DetailsChapterPanels(
     isMergeRepeatedChapters: Boolean,
     dragModifier: Modifier,
 ) {
-    val availableModes = remember(metadataChapterTabs, readingChapterTabs) {
+    val hasMetadataSource = metadataChapterTabs.isNotEmpty()
+    val availableModes = remember(hasMetadataSource) {
         buildList {
-            if (metadataChapterTabs.isNotEmpty()) {
+            if (hasMetadataSource) {
                 add(ChapterPanelMode.METADATA)
             }
             add(ChapterPanelMode.READING)
         }
     }
-    var selectedModeName by rememberSaveable { mutableStateOf(availableModes.first().name) }
-    val selectedMode = availableModes.firstOrNull { it.name == selectedModeName } ?: availableModes.first()
-
-    LaunchedEffect(availableModes) {
-        if (availableModes.none { it.name == selectedModeName }) {
-            selectedModeName = availableModes.first().name
-        }
-    }
+    // Save only a user's choice. A pager first measured after metadata arrives must
+    // open the same source as one measured while the title is still loading.
+    var chosenModeName by rememberSaveable { mutableStateOf<String?>(null) }
+    val selectedMode = resolveChapterPanelMode(chosenModeName, readingChapterTabs.isNotEmpty(), hasMetadataSource)
     // Without a reading source the work's own kind decides, which the metadata chapters carry.
     val isPlayback = remember(readingChapterTabs, metadataChapterTabs, contentType) {
         val readingContentType = (readingChapterTabs.firstOrNull { it.isSelected } ?: readingChapterTabs.firstOrNull())
@@ -347,7 +355,7 @@ private fun DetailsChapterPanels(
                 availableModes = availableModes,
                 selectedMode = selectedMode,
                 readingChapterTitleRes = readingChapterTitleRes,
-                onSelectMode = { selectedModeName = it.name },
+                onSelectMode = { chosenModeName = it.name },
                 dragModifier = dragModifier,
             )
         }

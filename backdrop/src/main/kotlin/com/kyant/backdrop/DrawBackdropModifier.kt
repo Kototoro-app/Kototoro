@@ -4,8 +4,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.neverEqualPolicy
+import androidx.compose.runtime.referentialEqualityPolicy
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.GraphicsLayerScope
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawscope.ContentDrawScope
@@ -238,7 +240,7 @@ private class DrawBackdropElement(
 }
 
 private class DrawBackdropNode(
-    var backdrop: Backdrop,
+    backdrop: Backdrop,
     var shapeProvider: ShapeProvider,
     var effects: BackdropEffectScope.() -> Unit,
     var layerBlock: (GraphicsLayerScope.() -> Unit)?,
@@ -248,6 +250,9 @@ private class DrawBackdropNode(
     var onDrawSurface: (DrawScope.() -> Unit)?,
     var onDrawFront: (DrawScope.() -> Unit)?
 ) : LayoutModifierNode, DrawModifierNode, GlobalPositionAwareModifierNode, ObserverModifierNode, Modifier.Node() {
+
+    // The placed layer observes this read and updates compositing when the source switches clipping modes.
+    var backdrop by mutableStateOf(backdrop, referentialEqualityPolicy())
 
     private val effectScope =
         object : BackdropEffectScopeImpl() {
@@ -260,7 +265,8 @@ private class DrawBackdropNode(
     private val layoutLayerBlock: GraphicsLayerScope.() -> Unit = {
         clip = true
         shape = shapeProvider.shape
-        compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen
+        // The chapter grid uses ordinary source-over drawing and only needs the outline clip.
+        compositingStrategy = if (backdrop is BottomClippedBackdrop) CompositingStrategy.Auto else CompositingStrategy.Offscreen
     }
 
     private var layoutCoordinates: LayoutCoordinates? by mutableStateOf(null, neverEqualPolicy())
@@ -323,11 +329,18 @@ private class DrawBackdropNode(
             val padding = padding
             val scale = resolutionScale
 
+            val fullHeight = ceil(size.height / scale).toInt()
+            val viewport = (backdrop as? BottomClippedBackdrop)?.visibleHeightPx
+            // Keep the real shape for the lens. Only shorten the filtered input texture.
+            // Leave one texture tile for filter taps below the viewport and grow in whole tiles.
+            val height = if (viewport != null && viewport < size.height) {
+                ((ceil(viewport / scale / 128f).toInt() + 1) * 128).coerceAtMost(fullHeight)
+            } else fullHeight
             recordLayer(
                 layer,
                 size = IntSize(
                     ceil(size.width / scale).toInt() + padding.toInt() * 2,
-                    ceil(size.height / scale).toInt() + padding.toInt() * 2
+                    height + padding.toInt() * 2
                 ),
                 block = recordBackdropBlock
             )
@@ -426,7 +439,7 @@ private class DrawBackdropNode(
 
         effectScope.apply(effects)
         val wantedScale = if (effectScope.renderEffect != null && !effectScope.requiresFullResolution) {
-            1f / BackdropQuality.inputScale.coerceIn(0.25f, 1f)
+            1f / (BackdropQuality.inputScale * backdrop.effectInputScale).coerceIn(0.25f, 1f)
         } else {
             1f
         }
