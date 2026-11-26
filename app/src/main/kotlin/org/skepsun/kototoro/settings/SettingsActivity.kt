@@ -503,6 +503,7 @@ class SettingsActivity :
                 imageOpacity = backgroundArtwork.imageOpacity,
                 overlayStrength = backgroundArtwork.overlayStrength,
                 blurRadius = backgroundArtwork.blurRadius,
+                prepareStaticBlur = false,
             ) {
                 SettingsAdaptiveShell(
                     isTwoPane = isMasterDetails,

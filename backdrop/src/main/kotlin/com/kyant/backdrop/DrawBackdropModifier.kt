@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.neverEqualPolicy
+import androidx.compose.runtime.referentialEqualityPolicy
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.CompositingStrategy
@@ -239,7 +240,7 @@ private class DrawBackdropElement(
 }
 
 private class DrawBackdropNode(
-    var backdrop: Backdrop,
+    backdrop: Backdrop,
     var shapeProvider: ShapeProvider,
     var effects: BackdropEffectScope.() -> Unit,
     var layerBlock: (GraphicsLayerScope.() -> Unit)?,
@@ -249,6 +250,9 @@ private class DrawBackdropNode(
     var onDrawSurface: (DrawScope.() -> Unit)?,
     var onDrawFront: (DrawScope.() -> Unit)?
 ) : LayoutModifierNode, DrawModifierNode, GlobalPositionAwareModifierNode, ObserverModifierNode, Modifier.Node() {
+
+    // The placed layer observes this read and updates compositing when the source switches clipping modes.
+    var backdrop by mutableStateOf(backdrop, referentialEqualityPolicy())
 
     private val effectScope =
         object : BackdropEffectScopeImpl() {

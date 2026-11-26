@@ -67,7 +67,8 @@ internal fun shouldCacheCompactSummary(
     bottomPanelGlass: Boolean,
     modernDock: Boolean,
     expansionProgress: Float,
-): Boolean = captureEdge || (modernDock && bottomBarGlass) ||
+    toolbarGlass: Boolean,
+): Boolean = captureEdge || (toolbarGlass && expansionProgress < 1f) || (modernDock && bottomBarGlass) ||
     (bottomPanelGlass && (!modernDock || compactChapterPanelReveal(expansionProgress) > 0f))
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -163,11 +164,12 @@ internal fun DetailsPaneContent(
     }
     val bottomBarGlassPrefs = rememberDetailsBottomBarGlassPrefs()
     val dockBackdrop = LocalLiquidGlassBackdrop.current
-    val panelBackdrop = remember(dockBackdrop, showCollapsedHandle, detailsPaneState) {
+    val panelTopPaddingPx = if (isModernDetailsDockEnabled) with(density) { modernPanelTopPadding.roundToPx() } else 0
+    val panelBackdrop = remember(dockBackdrop, showCollapsedHandle, detailsPaneState, panelTopPaddingPx) {
         if (showCollapsedHandle && dockBackdrop != null) {
             // Read quality while resolving the effect so an open sheet follows preference changes.
             object : Backdrop by dockBackdrop, BottomClippedBackdrop {
-                override val visibleHeightPx get() = detailsPaneState.visibleHeightPx
+                override val visibleHeightPx get() = (detailsPaneState.visibleHeightPx - panelTopPaddingPx).coerceAtLeast(0f)
                 override val effectInputScale get() = chapterPanelEffectInputScale(BackdropQuality.inputScale)
             }
         } else {

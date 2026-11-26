@@ -19,19 +19,20 @@ class DetailsPaneGlassPolicyTest {
     fun `the compact summary needs a visible glass consumer`() {
         for (modern in listOf(true, false)) {
             for (expansion in listOf(0f, 0.5f, 1f)) {
-                assertFalse(shouldCacheCompactSummary(false, false, false, modern, expansion))
-                assertTrue(shouldCacheCompactSummary(true, false, false, modern, expansion))
+                assertFalse(shouldCacheCompactSummary(false, false, false, modern, expansion, toolbarGlass = false))
+                assertTrue(shouldCacheCompactSummary(true, false, false, modern, expansion, toolbarGlass = false))
+                assertEquals(expansion < 1f, shouldCacheCompactSummary(false, false, false, modern, expansion, toolbarGlass = true))
             }
         }
     }
 
     @Test
     fun `modern pills and sheet sample the summary independently`() {
-        assertTrue(shouldCacheCompactSummary(false, true, false, modernDock = true, expansionProgress = 0f))
-        assertFalse(shouldCacheCompactSummary(false, false, true, modernDock = true, expansionProgress = 0.05f))
-        assertTrue(shouldCacheCompactSummary(false, false, true, modernDock = true, expansionProgress = 0.5f))
-        assertTrue(shouldCacheCompactSummary(false, false, true, modernDock = false, expansionProgress = 0f))
-        assertFalse(shouldCacheCompactSummary(false, true, false, modernDock = false, expansionProgress = 0f))
+        assertTrue(shouldCacheCompactSummary(false, true, false, true, 0f, toolbarGlass = false))
+        assertFalse(shouldCacheCompactSummary(false, false, true, true, 0.05f, toolbarGlass = false))
+        assertTrue(shouldCacheCompactSummary(false, false, true, true, 0.5f, toolbarGlass = false))
+        assertTrue(shouldCacheCompactSummary(false, false, true, false, 0f, toolbarGlass = false))
+        assertFalse(shouldCacheCompactSummary(false, true, false, false, 0f, toolbarGlass = false))
     }
 
     @Test

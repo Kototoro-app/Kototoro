@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -17,17 +19,21 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalGraphicsContext
 import androidx.compose.ui.unit.IntSize
 import coil3.BitmapImage
+import coil3.SingletonImageLoader
+import coil3.asImage
+import coil3.compose.AsyncImagePainter
 import coil3.compose.rememberAsyncImagePainter
+import coil3.memory.MemoryCache
 import coil3.request.ImageRequest
-import coil3.request.allowConversionToBitmap
 import coil3.request.crossfade
-import coil3.request.transformations
 import coil3.size.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.ColorMatrix
@@ -38,11 +44,15 @@ import org.skepsun.kototoro.core.ui.theme.forStyle
 import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
 import org.skepsun.kototoro.core.ui.theme.isDarkTheme
 import org.skepsun.kototoro.core.util.ext.mangaExtra
+import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
 import org.skepsun.kototoro.parsers.model.Content
+import org.skepsun.kototoro.parsers.util.runCatchingCancellable
+import kotlinx.coroutines.delay
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 
 internal val DynamicArtworkRequestSize = Size(width = 1280, height = 1280)
+private const val ArtworkBlurSettleMillis = 300L
 
 @Composable
 fun DynamicArtworkBackdrop(
@@ -52,6 +62,7 @@ fun DynamicArtworkBackdrop(
     overlayStrength: Float = 1f,
     blurRadius: Float = 35f,
     modifier: Modifier = Modifier,
+    prepareStaticBlur: Boolean = true,
     children: @Composable BoxScope.() -> Unit,
 ) {
     val backgroundStyle = LocalBackgroundStyle.current
@@ -127,6 +138,7 @@ fun DynamicArtworkBackdrop(
                     blurRadius = blurRadius,
                     opacity = imageOpacity,
                     colorFilter = backdropColorFilter,
+                    prepareStaticBlur = prepareStaticBlur,
                 )
                 Box(
                     modifier = Modifier
@@ -144,35 +156,28 @@ fun DynamicArtworkBackdrop(
 }
 
 @Composable
-private fun PageArtworkImage(request: ImageRequest, blurRadius: Float, opacity: Float, colorFilter: ColorFilter) {
+private fun PageArtworkImage(
+    request: ImageRequest,
+    blurRadius: Float,
+    opacity: Float,
+    colorFilter: ColorFilter,
+    prepareStaticBlur: Boolean,
+) {
+    // Keep the source painter alive across radius and viewport changes so it can draw the live preview immediately.
+    val source = rememberAsyncImagePainter(request)
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        val viewport = IntSize(constraints.maxWidth, constraints.maxHeight)
-        val graphicsContext = LocalGraphicsContext.current
-        val blur = remember(graphicsContext, viewport, blurRadius) {
-            if (Build.VERSION.SDK_INT >= 31 && blurRadius > 0f && viewport.width > 0 && viewport.height > 0 &&
-                constraints.hasBoundedWidth && constraints.hasBoundedHeight
-            ) PageArtworkBlur(graphicsContext, viewport, blurRadius) else null
-        }
-        var useOriginal by remember(request, blur) { mutableStateOf(false) }
-        val prepareBitmap = blur != null && !useOriginal
-        val model = remember(request, blur, useOriginal) {
-            if (blur == null || useOriginal) request else request.newBuilder()
-                .allowConversionToBitmap(false)
-                .transformations(blur)
-                .build()
-        }
-        var hasPreparedBitmap by remember(model) { mutableStateOf(false) }
-        val painter = rememberAsyncImagePainter(
-            model = model,
-            onSuccess = { hasPreparedBitmap = prepareBitmap && it.result.image is BitmapImage },
-            onError = { if (prepareBitmap) useOriginal = true },
-        )
-        // Animated drawables keep the live filter. Static artwork is already blurred at display scale.
-        val liveEffect = remember(hasPreparedBitmap, blurRadius) {
-            if (!hasPreparedBitmap && blurRadius > 0f) BlurEffect(blurRadius, blurRadius) else null
+        val prepared = if (
+            prepareStaticBlur && Build.VERSION.SDK_INT >= 31 && blurRadius > 0f &&
+            constraints.hasBoundedWidth && constraints.hasBoundedHeight &&
+            constraints.maxWidth > 0 && constraints.maxHeight > 0
+        ) {
+            rememberPreparedPageArtwork(source, IntSize(constraints.maxWidth, constraints.maxHeight), blurRadius)
+        } else null
+        val liveEffect = remember(prepared == null, blurRadius) {
+            if (prepared == null && blurRadius > 0f) BlurEffect(blurRadius, blurRadius) else null
         }
         Image(
-            painter = painter,
+            painter = prepared ?: source,
             contentDescription = null,
             contentScale = ContentScale.Crop,
             colorFilter = colorFilter,
@@ -182,4 +187,28 @@ private fun PageArtworkImage(request: ImageRequest, blurRadius: Float, opacity: 
             },
         )
     }
+}
+
+@Composable
+private fun rememberPreparedPageArtwork(source: AsyncImagePainter, viewport: IntSize, radius: Float): BitmapPainter? {
+    val state by source.state.collectAsState()
+    val result = (state as? AsyncImagePainter.State.Success)?.result ?: return null
+    val bitmap = result.image as? BitmapImage ?: return null // Animated artwork keeps the original painter.
+    val graphics = LocalGraphicsContext.current
+    val blur = remember(graphics, viewport, radius) { PageArtworkBlur(graphics, viewport, radius) }
+    val cache = SingletonImageLoader.get(LocalContext.current).memoryCache
+    val key = remember(result, blur) { result.memoryCacheKey?.let(blur::cacheKey) }
+    var image by remember(bitmap, cache, key, blur) {
+        mutableStateOf(key?.let { cache?.get(it)?.image as? BitmapImage })
+    }
+    LaunchedEffect(bitmap, cache, key, blur) {
+        if (image != null) return@LaunchedEffect
+        // A resize can span many frames. Only snapshot the final viewport after it settles.
+        delay(ArtworkBlurSettleMillis)
+        val snapshot = runCatchingCancellable { blur.render(bitmap.bitmap).asImage() }
+            .onFailure { it.printStackTraceDebug() }.getOrNull() ?: return@LaunchedEffect
+        if (key != null && cache != null) cache[key] = MemoryCache.Value(snapshot)
+        image = snapshot
+    }
+    return remember(image) { image?.let { BitmapPainter(it.bitmap.asImageBitmap()) } }
 }

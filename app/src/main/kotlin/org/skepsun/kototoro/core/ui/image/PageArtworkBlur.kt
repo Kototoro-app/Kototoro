@@ -9,8 +9,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
-import coil3.size.Size
-import coil3.transform.Transformation
+import coil3.memory.MemoryCache
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
@@ -20,10 +19,13 @@ internal class PageArtworkBlur(
     private val graphicsContext: GraphicsContext,
     private val viewport: IntSize,
     private val radiusPx: Float,
-) : Transformation() {
-    override val cacheKey = "page-artwork-blur-v1:${viewport.width}x${viewport.height}:$radiusPx"
+) {
+    fun cacheKey(source: MemoryCache.Key) = MemoryCache.Key(
+        source.key,
+        source.extras + ("kototoro:page-artwork-blur" to "${viewport.width}x${viewport.height}:$radiusPx"),
+    )
 
-    override suspend fun transform(input: Bitmap, size: Size): Bitmap = withContext(Dispatchers.Main.immediate) {
+    suspend fun render(input: Bitmap): Bitmap = withContext(Dispatchers.Main.immediate) {
         val layer = graphicsContext.createGraphicsLayer()
         try {
             val image = input.asImageBitmap()

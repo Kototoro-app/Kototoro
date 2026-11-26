@@ -1065,17 +1065,19 @@ private fun DetailsScreenContent(
     val detailsBackgroundBackdrop = if (isIosStyle) rememberLayerBackdrop() else null
     val detailsEdgeBlurRadius = if (effectiveGlassPrefs.isTopImmersiveEdgeEnabled) immersiveEdgeBlurRadius() else 0.dp
     val captureDetailsEdge = detailsEdgeBlurRadius > 0.dp && edgeVisible
-    val compactDockGlass = if (
-        !isWideAdaptiveLayout && isWorkDetails && isIosStyle && effectiveGlassPrefs.isGlassEffectEnabled
-    ) {
+    val compactGlass = if (!isWideAdaptiveLayout && isIosStyle && effectiveGlassPrefs.isGlassEffectEnabled) {
         LocalGlassTuning.current ?: remember { emptyGlassTuningState() }
     } else null
-    val bottomBarGlass = compactDockGlass?.isOn(GlassTuningScope.BOTTOM_BAR, GlassTuningParam.GLASS_ENABLED) == true
-    val bottomPanelGlass = compactDockGlass?.isOn(GlassTuningScope.BOTTOM_PANEL, GlassTuningParam.GLASS_ENABLED) == true
+    // The floating toolbar uses the PillControl material on every Details page, including pages without a chapter dock.
+    val toolbarGlass = compactPaneAnchor != CompactDetailsPaneAnchor.Full &&
+        compactGlass?.isOn(GlassTuningScope.PILL_CONTROL, GlassTuningParam.GLASS_ENABLED) == true
+    val dockGlass = compactGlass.takeIf { isWorkDetails }
+    val bottomBarGlass = dockGlass?.isOn(GlassTuningScope.BOTTOM_BAR, GlassTuningParam.GLASS_ENABLED) == true
+    val bottomPanelGlass = dockGlass?.isOn(GlassTuningScope.BOTTOM_PANEL, GlassTuningParam.GLASS_ENABLED) == true
     val captureSummary = if (isWideAdaptiveLayout) {
         isIosStyle
     } else {
-        compactDockGlass != null || captureDetailsEdge
+        toolbarGlass || bottomBarGlass || bottomPanelGlass || captureDetailsEdge
     }
     val detailsContentBackdrop = if (captureSummary) rememberLayerBackdrop() else null
     // The compact dock floats over the scrolling content, so its glass samples that content as well as the background.
@@ -1718,6 +1720,7 @@ private fun DetailsScreenContent(
                                         // The collapsed pills and the moving sheet have separate glass settings.
                                         val cacheSummary = isIosStyle && shouldCacheCompactSummary(
                                             captureEdge = captureDetailsEdge,
+                                            toolbarGlass = toolbarGlass,
                                             bottomBarGlass = bottomBarGlass,
                                             bottomPanelGlass = bottomPanelGlass,
                                             modernDock = isModernDetailsDockEnabled,
