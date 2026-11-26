@@ -371,6 +371,11 @@ struct SourceDetailsView: View {
     @AppStorage("details.chapterOrder") private var chapterOrder = "source"
     @AppStorage(TagFilterStore.warningsKey) private var tagWarnings = true
     @State private var headerReadVisible = true
+    /// Set by the header's rating button to scroll the rating section into view.
+    @State private var ratingScrollRequest: UUID?
+    /// Reported by the rating section; preferred over the source's score in the header, as on Android.
+    @State private var communityScore: Double?
+    private static let ratingSectionID = "details.ratingSection"
     /// Opened from "continue reading": go straight on with the chapter being read, once.
     private let autoResume: Bool
     @State private var resumed = false
@@ -389,6 +394,16 @@ struct SourceDetailsView: View {
     }
 
     var body: some View {
+        ScrollViewReader { proxy in
+            detailsList
+                .onChange(of: ratingScrollRequest) { _, request in
+                    guard request != nil else { return }
+                    withAnimation(.snappy) { proxy.scrollTo(Self.ratingSectionID, anchor: .top) }
+                }
+        }
+    }
+
+    private var detailsList: some View {
         List {
             header
             if let recordError { Text(recordError).foregroundStyle(.red) }
@@ -421,8 +436,10 @@ struct SourceDetailsView: View {
                         community: community, content: details,
                         sourceTitle: sources.source(named: shownContent.sourceName)?.title,
                         sourceScore: shownContent.rating > 0 ? Double(shownContent.rating) * 10 : nil,
-                        tracking: library.library?.tracking, trackingModel: library.trackingAccounts
+                        tracking: library.library?.tracking, trackingModel: library.trackingAccounts,
+                        onCommunityScore: { communityScore = $0 }
                     )
+                    .id(Self.ratingSectionID)
                 }
                 relatedSection
             }
@@ -776,6 +793,7 @@ struct SourceDetailsView: View {
                     HStack(spacing: 8) {
                         copyTitleButton(shown)
                         favouriteButton
+                        ratingButton(shown)
                     }
                 }
             }
@@ -873,6 +891,28 @@ struct SourceDetailsView: View {
         .tint(.primary)
     }
 
+    /// The score beside the quick actions, as on Android: the community's mean once the rating section has read it,
+    /// else the source's own. The section below has the breakdown and the reader's own rating, so a tap scrolls there.
+    @ViewBuilder
+    private func ratingButton(_ shown: IosSourceContent) -> some View {
+        if let score = communityScore ?? (shown.rating > 0 ? Double(shown.rating) * 10 : nil) {
+            let value = score.formatted(.number.precision(.fractionLength(1)))
+            Button { ratingScrollRequest = UUID() } label: {
+                Label {
+                    Text(verbatim: value).monospacedDigit()
+                } icon: {
+                    Image(systemName: "star.fill").foregroundStyle(.yellow)
+                }
+                .font(.subheadline.weight(.semibold))
+            }
+            .buttonStyle(.glass)
+            .buttonBorderShape(.capsule)
+            .tint(.primary)
+            .accessibilityLabel("评分 \(value)")
+            .accessibilityIdentifier("details.rating")
+        }
+    }
+
     private var favouriteButton: some View {
         // The header is one list row, and a row keeps a single context menu (the tags' one won, so
         // a long press here never offered categories). A menu with a primary action is the control's
@@ -939,8 +979,8 @@ struct SourceDetailsView: View {
         }
     }
 
-    /// Rating, status, chapters and author as one row of columns split by hairlines (the App Store's information
-    /// strip) in place of a boxed grid. Reading progress is on the read button.
+    /// Status, chapters (with how far in), author and language as one row of columns split by hairlines (the App
+    /// Store's information strip) in place of a boxed grid. The score is beside the quick actions.
     private func hasSummary(_ shown: IosSourceContent) -> Bool {
         !(shown.summary.map(Self.plainText) ?? "").isEmpty || !shown.tags.isEmpty
     }
@@ -948,13 +988,15 @@ struct SourceDetailsView: View {
     private func metaStrip(_ shown: IosSourceContent) -> some View {
         let listed = model.isVideo ? model.visibleChapters : model.chapters
         // Top-aligned so a column without a detail line keeps its caption on the others' baseline.
-        return HStack(alignment: .top, spacing: 0) {
-            if shown.rating > 0 {
-                metaColumn("评分", value: (Double(shown.rating) * 10).formatted(.number.precision(.fractionLength(1)))) {
-                    CommunityStars(value: Double(shown.rating) * 5, size: 9)
-                }
-                metaDivider
+        // Once reading has started the column says how far in (Android's `current/total`), not only how many.
+        let readChapter = resume.flatMap { position in listed.firstIndex { $0.id == position.chapterId } }
+        let chaptersValue = listed.isEmpty ? "-" : readChapter.map { "\($0 + 1)/\(listed.count)" } ?? String(listed.count)
+        let language = sources.source(named: shown.sourceName)
+            .flatMap { source in
+                Locale.current.localizedString(forLanguageCode: source.locale)
+                    .flatMap { $0.lowercased() == source.locale.lowercased() ? nil : $0 }
             }
+        return HStack(alignment: .top, spacing: 0) {
             metaColumn("状态", value: shown.state.map(Self.stateTitle) ?? String(localized: "未知")) {
                 if let timeLeft {
                     Text(timeLeft).accessibilityIdentifier("details.timeLeft")
@@ -962,7 +1004,7 @@ struct SourceDetailsView: View {
             }
             metaDivider
             Button { showingAllChapters = true } label: {
-                metaColumn(model.isVideo ? "剧集" : "章节", value: listed.isEmpty ? "-" : String(listed.count)) {
+                metaColumn(model.isVideo ? "剧集" : "章节", value: chaptersValue) {
                     Image(systemName: "chevron.right").imageScale(.small)
                 }
             }
@@ -971,6 +1013,11 @@ struct SourceDetailsView: View {
             .accessibilityIdentifier("details.meta.chapters")
             metaDivider
             authorColumn(shown)
+            // The source's language; a multi-language or unknown source has no column rather than a "-".
+            if let language {
+                metaDivider
+                metaColumn("语言", value: language) { EmptyView() }
+            }
         }
         .padding(.vertical, 10)
         .overlay(alignment: .top) { Divider() }
