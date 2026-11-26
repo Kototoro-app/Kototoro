@@ -1948,16 +1948,13 @@ private fun DetailsScreenContent(
                     edge = ImmersiveEdge.TOP,
                 )
             }
-            if (isWideAdaptiveLayout || compactPaneAnchor != CompactDetailsPaneAnchor.Full) {
+            // This overlay belongs to the compact branch. The wide summary Scaffold owns its toolbar.
+            if (compactPaneAnchor != CompactDetailsPaneAnchor.Full) {
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopCenter)
                         .graphicsLayer {
-                            alpha = if (isWideAdaptiveLayout) {
-                                1f
-                            } else {
-                                (1f - compactSheetExpansionProgressProvider()).coerceIn(0f, 1f)
-                            }
+                            alpha = (1f - compactSheetExpansionProgressProvider()).coerceIn(0f, 1f)
                         },
                 ) {
                     // Reuse the dock's combined backdrop so scrolled cards can refract through these controls.
