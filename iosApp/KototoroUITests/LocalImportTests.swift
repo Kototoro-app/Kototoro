@@ -2464,15 +2464,20 @@ final class LocalImportTests: XCTestCase {
     func testTimeLeftShowsForComicsOnly() throws {
         importFile(source: "LOCAL", file: "fixture_reader_chapters", reuse: true)
         XCTAssertTrue(app.staticTexts["details.title"].waitForExistence(timeout: 30), app.debugDescription)
-        let left = app.staticTexts["details.timeLeft"]
-        XCTAssertTrue(left.waitForExistence(timeout: 15), app.debugDescription)
-        XCTAssertTrue(left.label.hasPrefix("剩余约"), left.label)
+        // The estimate sits under the chapter count, inside the button that opens the list, so it is read from the
+        // button's combined label.
+        let chapters = app.buttons["details.meta.chapters"]
+        XCTAssertTrue(chapters.waitForExistence(timeout: 15), app.debugDescription)
+        let shown = NSPredicate(format: "label CONTAINS %@", "剩余约")
+        expectation(for: shown, evaluatedWith: chapters)
+        waitForExpectations(timeout: 15)
         attach("剩余时间")
         app.terminate()
         app.launch()
         importFile(source: "LOCAL_NOVEL", file: "fixture_novel_controls", reuse: true)
         XCTAssertTrue(app.staticTexts["details.title"].waitForExistence(timeout: 30), app.debugDescription)
-        XCTAssertFalse(left.waitForExistence(timeout: 5), "Novels get no page-based estimate")
+        XCTAssertTrue(chapters.waitForExistence(timeout: 15), app.debugDescription)
+        XCTAssertFalse(chapters.label.contains("剩余约"), "Novels get no page-based estimate: \(chapters.label)")
     }
 
     /// "划线当前段" highlights the paragraph being read, it shows in the work's notes, and removing it works.

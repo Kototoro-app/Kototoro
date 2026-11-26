@@ -86,7 +86,15 @@ struct DetailsRatingSection: View {
                 Divider()
                 myRatingRow
                 if targets.isEmpty {
-                    Text("开启社区或绑定追踪平台后即可评分").font(.footnote).foregroundStyle(.secondary)
+                    Group {
+                        // Adult works never go to the community, so turning it on would not help.
+                        if content.isNsfw {
+                            Text("成人作品不参与社区评分，绑定追踪平台后即可评分")
+                        } else {
+                            Text("开启社区或绑定追踪平台后即可评分")
+                        }
+                    }
+                    .font(.footnote).foregroundStyle(.secondary)
                 } else {
                     syncRow
                 }

@@ -30192,6 +30192,38 @@
           }
         }
       }
+    },
+    "开启社区或绑定追踪平台后即可评分": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turn on the community or bind a tracker to rate"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "開啟社群或繫結追蹤平臺後即可評分"
+          }
+        }
+      }
+    },
+    "成人作品不参与社区评分，绑定追踪平台后即可评分": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adult works are not rated in the community; bind a tracker to rate"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "成人作品不參與社群評分，繫結追蹤平臺後即可評分"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

@@ -430,17 +430,17 @@ struct SourceDetailsView: View {
                 chapterPreview(details)
                 if !model.isVideo && !bookmarks.isEmpty { bookmarkPreview(details) }
                 // After the chapters, as on Android: the community's view of the work, then what is related to it.
+                // Always present: with nothing to show yet it still says how to rate, instead of vanishing on adult
+                // works or before the community or a tracker is set up.
                 let community = communityEnabled && !shownContent.isNsfw ? library.library?.community : nil
-                if community != nil || shownContent.rating > 0 || !library.trackingAccounts.accounts.isEmpty {
-                    DetailsRatingSection(
-                        community: community, content: details,
-                        sourceTitle: sources.source(named: shownContent.sourceName)?.title,
-                        sourceScore: shownContent.rating > 0 ? Double(shownContent.rating) * 10 : nil,
-                        tracking: library.library?.tracking, trackingModel: library.trackingAccounts,
-                        onCommunityScore: { communityScore = $0 }
-                    )
-                    .id(Self.ratingSectionID)
-                }
+                DetailsRatingSection(
+                    community: community, content: details,
+                    sourceTitle: sources.source(named: shownContent.sourceName)?.title,
+                    sourceScore: shownContent.rating > 0 ? Double(shownContent.rating) * 10 : nil,
+                    tracking: library.library?.tracking, trackingModel: library.trackingAccounts,
+                    onCommunityScore: { communityScore = $0 }
+                )
+                .id(Self.ratingSectionID)
                 relatedSection
             }
         }
@@ -997,15 +997,15 @@ struct SourceDetailsView: View {
                     .flatMap { $0.lowercased() == source.locale.lowercased() ? nil : $0 }
             }
         return HStack(alignment: .top, spacing: 0) {
-            metaColumn("状态", value: shown.state.map(Self.stateTitle) ?? String(localized: "未知")) {
-                if let timeLeft {
-                    Text(timeLeft).accessibilityIdentifier("details.timeLeft")
-                }
-            }
+            metaColumn("状态", value: shown.state.map(Self.stateTitle) ?? String(localized: "未知")) { EmptyView() }
             metaDivider
+            // The chevron marks the caption as the way into the chapter list; the line under the count is how much is
+            // left of it.
             Button { showingAllChapters = true } label: {
-                metaColumn(model.isVideo ? "剧集" : "章节", value: chaptersValue) {
-                    Image(systemName: "chevron.right").imageScale(.small)
+                metaColumn(model.isVideo ? "剧集" : "章节", value: chaptersValue, opensList: true) {
+                    if let timeLeft {
+                        Text(timeLeft).accessibilityIdentifier("details.timeLeft")
+                    }
                 }
             }
             .buttonStyle(.plain)
@@ -1028,13 +1028,22 @@ struct SourceDetailsView: View {
         Divider().frame(height: 36)
     }
 
-    private func metaColumn<Detail: View>(_ caption: LocalizedStringKey, value: String,
+    /// [valueLines] lets a long value such as several authors wrap under its caption before it shrinks.
+    private func metaColumn<Detail: View>(_ caption: LocalizedStringKey, value: String, opensList: Bool = false,
+                                          valueLines: Int = 1,
                                           @ViewBuilder detail: () -> Detail) -> some View {
         VStack(spacing: 3) {
-            Text(caption).font(.caption2).foregroundStyle(.secondary)
+            HStack(spacing: 2) {
+                Text(caption)
+                if opensList {
+                    Image(systemName: "chevron.right").imageScale(.small).fontWeight(.semibold)
+                }
+            }
+            .font(.caption2).foregroundStyle(.secondary)
             Text(verbatim: value)
                 .font(.headline)
-                .lineLimit(1)
+                .lineLimit(valueLines)
+                .multilineTextAlignment(.center)
                 .minimumScaleFactor(0.7)
             detail()
                 .font(.caption2)
@@ -1067,7 +1076,7 @@ struct SourceDetailsView: View {
                     }
                 }
             } label: {
-                metaColumn("作者", value: value) { EmptyView() }
+                metaColumn("作者", value: value, valueLines: 2) { EmptyView() }
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("details.meta.author")
