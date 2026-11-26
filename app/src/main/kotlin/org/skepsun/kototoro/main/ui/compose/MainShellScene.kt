@@ -1255,13 +1255,17 @@ internal fun SuggestionsTopLevelRouteContent(
     var suggestionsContextualTopBarOverride by remember { mutableStateOf<TopBarOverrideState?>(null) }
     var suggestionsFilterRailOverride by remember { mutableStateOf<CompactFilterRailOverrideState?>(null) }
 
+    // Read the states here, not inside SideEffect: reads in the effect are not observed, so the
+    // selection bar emitted by the list on long-press would never be forwarded to the top chrome.
+    val filterRailState = suggestionsFilterRailOverride
+    val contextualState = suggestionsContextualTopBarOverride
     SideEffect {
         onExploreSourceSelectionTopBarChanged(
             RouteScopedTopBarOverrideState(
                 TOP_BAR_OWNER_SUGGESTIONS,
                 LayeredTopBarOverrideState(
-                    filterRailState = suggestionsFilterRailOverride,
-                    contextualOverrideState = suggestionsContextualTopBarOverride,
+                    filterRailState = filterRailState,
+                    contextualOverrideState = contextualState,
                 ),
             ),
         )

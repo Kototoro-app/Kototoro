@@ -498,6 +498,11 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         get() = prefs.getBoolean(KEY_MAIN_FAB, true)
         set(value) = prefs.edit { putBoolean(KEY_MAIN_FAB, value) }
 
+    /** [STARTUP_PAGE_RESTORE] reopens the last page; otherwise the [NavItem] name of the page to start on. */
+    var startupPage: String
+        get() = prefs.getString(KEY_STARTUP_PAGE, null)?.takeIf { it.isNotEmpty() } ?: STARTUP_PAGE_RESTORE
+        set(value) = prefs.edit { putString(KEY_STARTUP_PAGE, value) }
+
     /**
      * How the selected item is highlighted in the floating navigation bar. This
      * is the single source of truth folded out of the two mutually exclusive
@@ -3580,6 +3585,8 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_GLOBAL_TAG_BLACKLIST = "global_tag_blacklist"
         const val KEY_RELATED_MANGA = "related_manga"
         const val KEY_NAV_MAIN = "nav_main"
+        const val KEY_STARTUP_PAGE = "startup_page"
+        const val STARTUP_PAGE_RESTORE = "RESTORE"
         const val KEY_NAV_MAIN_LEGACY_THREE_MIGRATED = "nav_main_legacy_three_migrated"
         const val KEY_NAV_LABELS = "nav_labels"
         const val KEY_NAV_LABELS_ALWAYS_VISIBLE = "nav_labels_always_visible"

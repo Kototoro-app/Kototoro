@@ -120,6 +120,7 @@ data class AppearanceSettingsUiState(
     val isMainFabEnabled: Boolean,
     val navigationGroupSummary: String,
     val isNavBarPinned: Boolean,
+    val startupPage: String,
     val isNavLabelsVisible: Boolean,
     val isNavLabelsAlwaysVisible: Boolean,
     val isNavFloating: Boolean,
@@ -172,6 +173,7 @@ data class AppearanceSettingsOptions(
     val searchSuggestionTypes: List<SettingsChoiceOption<SearchSuggestionType>>,
     val listToDetailsTransitionOptions: List<SettingsChoiceOption<ListToDetailsTransition>>,
     val navIndicatorStyleOptions: List<SettingsChoiceOption<NavIndicatorStyle>>,
+    val startupPageOptions: List<SettingsChoiceOption<String>>,
     val languagePresets: List<SettingsChoiceOption<String>>,
     val contentTypes: List<SettingsChoiceOption<String>>,
     val sourceTags: List<SettingsChoiceOption<String>>,
@@ -252,6 +254,7 @@ fun AppearanceSettingsScreen(
     onHiddenSourceTagChange: (Set<String>) -> Unit,
     onMainFabChange: (Boolean) -> Unit,
     onNavPinnedChange: (Boolean) -> Unit,
+    onStartupPageChange: (String) -> Unit,
     onNavLabelsVisibleChange: (Boolean) -> Unit,
     onNavLabelsAlwaysVisibleChange: (Boolean) -> Unit,
     onNavFloatingChange: (Boolean) -> Unit,
@@ -357,6 +360,7 @@ fun AppearanceSettingsScreen(
                 options = options,
                 onNavConfigClick = onNavConfigClick,
                 onNavPinnedChange = onNavPinnedChange,
+                onStartupPageChange = onStartupPageChange,
                 onNavLabelsVisibleChange = onNavLabelsVisibleChange,
                 onNavLabelsAlwaysVisibleChange = onNavLabelsAlwaysVisibleChange,
                 onNavFloatingChange = onNavFloatingChange,
@@ -1357,6 +1361,7 @@ private fun AppearanceNavigationSettingsScreen(
     options: AppearanceSettingsOptions,
     onNavConfigClick: () -> Unit,
     onNavPinnedChange: (Boolean) -> Unit,
+    onStartupPageChange: (String) -> Unit,
     onNavLabelsVisibleChange: (Boolean) -> Unit,
     onNavLabelsAlwaysVisibleChange: (Boolean) -> Unit,
     onNavFloatingChange: (Boolean) -> Unit,
@@ -1375,6 +1380,16 @@ private fun AppearanceNavigationSettingsScreen(
             iconRes = R.drawable.ic_home,
             summary = state.navSummary,
             onClick = onNavConfigClick,
+        )
+    }
+    item {
+        SettingsChoicePreference(
+            title = stringResource(R.string.pref_startup_page),
+            iconRes = R.drawable.ic_home,
+            value = state.startupPage,
+            options = options.startupPageOptions,
+            summary = stringResource(R.string.pref_startup_page_summary),
+            onValueChange = onStartupPageChange,
         )
     }
     item {

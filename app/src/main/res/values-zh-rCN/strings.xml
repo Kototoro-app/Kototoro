@@ -860,6 +860,9 @@
     <string name="color_light">浅色</string>
     <string name="search_hint">输入作品标题、类别或内容源名称</string>
     <string name="main_screen_sections">主页底部导航栏</string>
+    <string name="pref_startup_page">启动页面</string>
+    <string name="pref_startup_page_summary">应用启动时打开的页面</string>
+    <string name="startup_page_restore">恢复上次页面</string>
     <string name="advanced">高级</string>
     <string name="color_dark">深色</string>
     <string name="too_many_requests_message">请求次数过多，请稍后重试</string>

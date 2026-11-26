@@ -1428,6 +1428,9 @@
     <string name="on_device">On device</string>
     <string name="directories">Directories</string>
     <string name="main_screen_sections">Main screen sections</string>
+    <string name="pref_startup_page">Startup page</string>
+    <string name="pref_startup_page_summary">Which page opens when the app starts</string>
+    <string name="startup_page_restore">Restore last page</string>
     <string name="items_limit_exceeded">No more items can be added</string>
     <string name="to_top">To top</string>
     <string name="moved_to_top">Moved to top</string>

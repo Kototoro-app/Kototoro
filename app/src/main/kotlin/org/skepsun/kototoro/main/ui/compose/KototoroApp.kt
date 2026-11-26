@@ -552,8 +552,16 @@ fun KototoroApp(
         !spaceUiState.switcherEnabled
     val effectiveSourceTagFilterVisible = isSourceTagFilterVisible && isSourceTagFilterVisibleSetting
 
-    val initialTopLevel = remember(mainNavItems) {
-        topLevelKeyForBottomNavItem(mainNavItems.firstOrNull()?.id ?: org.skepsun.kototoro.R.id.nav_home)
+    val startupPage by prefs.startupPage
+    // A fixed startup page wins over the saved navigation session; it only applies while that page
+    // is still one of the configured main destinations.
+    val fixedStartupItem = remember(startupPage, mainNavItems) {
+        mainNavItems.firstOrNull { it.name == startupPage }
+    }
+    val initialTopLevel = remember(mainNavItems, fixedStartupItem) {
+        topLevelKeyForBottomNavItem(
+            (fixedStartupItem ?: mainNavItems.firstOrNull())?.id ?: org.skepsun.kototoro.R.id.nav_home,
+        )
     }
     val spaceNavigationStates = rememberSpaceNavigationStates(
         initialTopLevel = initialTopLevel,
@@ -678,6 +686,7 @@ fun KototoroApp(
         spaceNavigationStates = spaceNavigationStates,
         navigationSpaceId = navigationSpaceId,
         initialTopLevel = initialTopLevel,
+        restoreSavedSession = fixedStartupItem == null,
         restoredSpaceIds = restoredSpaceIds,
         databaseRestoredSpaceIds = databaseRestoredSpaceIds,
         rootRestoredSpaceIds = rootRestoredSpaceIds,
@@ -1814,6 +1823,7 @@ private fun KototoroAppSpaceSessionEffects(
     spaceNavigationStates: org.skepsun.kototoro.main.ui.navigation3.SpaceNavigationStates,
     navigationSpaceId: SpaceId,
     initialTopLevel: TopLevelNavKey,
+    restoreSavedSession: Boolean,
     restoredSpaceIds: MutableMap<SpaceId, Boolean>,
     databaseRestoredSpaceIds: MutableMap<SpaceId, Boolean>,
     rootRestoredSpaceIds: MutableMap<SpaceId, Boolean>,
@@ -1848,7 +1858,7 @@ private fun KototoroAppSpaceSessionEffects(
             if (restoredSpaceIds[context.id] == true) return@forEach
             val state = spaceNavigationStates[context.id].mainNavState
             val session = spaceNavigationSessionUiState.sessions[context.id]
-            if (session != null && state.isInitialState(initialTopLevel)) {
+            if (restoreSavedSession && session != null && state.isInitialState(initialTopLevel)) {
                 state.restoreFromSpaceSession(session)
                 databaseRestoredSpaceIds[context.id] = true
             }

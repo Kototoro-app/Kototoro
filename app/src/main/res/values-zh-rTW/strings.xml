@@ -468,6 +468,9 @@
     <string name="description">描述</string>
     <string name="reader_zoom_buttons">顯示縮放按鈕</string>
     <string name="main_screen_sections">主畫面欄目</string>
+    <string name="pref_startup_page">啟動頁面</string>
+    <string name="pref_startup_page_summary">應用啟動時開啟的頁面</string>
+    <string name="startup_page_restore">恢復上次頁面</string>
     <string name="advanced">進階</string>
     <string name="color_dark">深色</string>
     <string name="too_many_requests_message">請求次數太多。請稍後再試</string>
