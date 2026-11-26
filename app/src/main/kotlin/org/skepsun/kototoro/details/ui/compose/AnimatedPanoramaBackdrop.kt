@@ -24,10 +24,8 @@ import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
@@ -115,7 +113,7 @@ fun AnimatedPanoramaBackdrop(
     onLoadError: (() -> Unit)? = null,
     fadeToBackground: Boolean = false,
     cacheMovingArtwork: Boolean = false,
-    downsampleWideBlur: Boolean = false,
+    downsampleBlur: Boolean = false,
     maxHeightPx: Float? = null,
     scrollLinkedTranslationYPx: Float = 0f,
     modifier: Modifier = Modifier,
@@ -221,7 +219,10 @@ fun AnimatedPanoramaBackdrop(
     }
     var lastResolvedImage by remember { mutableStateOf<Image?>(null) }
     val stablePlaceholderImage = placeholderImage ?: lastResolvedImage
-    val placeholderPainter = rememberDrawablePainter(stablePlaceholderImage?.asDrawable(context.resources))
+    val placeholderDrawable = remember(stablePlaceholderImage, context.resources) {
+        stablePlaceholderImage?.asDrawable(context.resources)
+    }
+    val placeholderPainter = rememberDrawablePainter(placeholderDrawable)
     var hasResolvedBackground by remember(backgroundRequest) { mutableStateOf(false) }
     val boundedMaxHeightPx = maxHeightPx?.takeIf { it.isFinite() }
     val scrollLinkedModifier = if (scrollLinkedTranslationYPx.isFinite() && scrollLinkedTranslationYPx != 0f) {
@@ -236,17 +237,15 @@ fun AnimatedPanoramaBackdrop(
             .then(scrollLinkedModifier)
             .fillMaxWidth()
             .height(with(density) { boundedMaxHeightPx.coerceAtLeast(1f).toDp() })
-            .clipToBounds()
     } else {
         modifier
             .then(scrollLinkedModifier)
             .fillMaxSize()
     }
     // Downsample only the filtered artwork. Text, chapter thumbnails and glass render at their own resolution.
-    val halfSizeBlur = downsampleWideBlur && prefs.downsampleEnabled && useRealtimeBlur &&
+    val halfSizeBlur = downsampleBlur && prefs.downsampleEnabled && useRealtimeBlur &&
         with(density) { realtimeBlurRadius.toPx() >= 4f }
     val effectScale = if (halfSizeBlur) 0.5f else 1f
-    val filterBounds = if (halfSizeBlur) backdropBoundsModifier.halfSizePanorama() else backdropBoundsModifier
     val blurModifier = if (useRealtimeBlur) {
         Modifier.blur(realtimeBlurRadius * effectScale, BlurredEdgeTreatment.Rectangle)
     } else Modifier
@@ -262,74 +261,64 @@ fun AnimatedPanoramaBackdrop(
     } else {
         blurModifier.then(motion)
     }
-    // Mask the fixed viewport after drawing the artwork. Zoom and pan cannot move the fade's bottom edge.
-    val backgroundModifier = filterBounds
-        .graphicsLayer {
+    val viewportBounds = if (boundedMaxHeightPx != null || fadeToBackground) {
+        backdropBoundsModifier.clipToBounds()
+    } else backdropBoundsModifier
+    val viewportModifier = if (fadeToBackground) {
+        // Details paints this same opaque color underneath. Blending it over the artwork gives
+        // the same fade as masking the artwork's alpha, without an offscreen mask for glass to replay.
+        viewportBounds.drawWithCache {
+            val fade = Brush.verticalGradient(
+                colorStops = panoramaFadeStops(backgroundColor, panoramaTransitionRangeFactor),
+            )
+            onDrawWithContent {
+                val opacity = resolvePanoramaContentAlpha(
+                    contentAlphaProvider?.invoke() ?: contentAlpha,
+                    prefs.topOpacityPercent,
+                )
+                if (opacity > 0f) {
+                    drawContent()
+                    drawRect(fade)
+                    if (opacity < 1f) drawRect(backgroundColor, alpha = 1f - opacity)
+                }
+            }
+        }
+    } else {
+        viewportBounds.graphicsLayer {
             alpha = resolvePanoramaContentAlpha(
                 contentAlpha = contentAlphaProvider?.invoke() ?: contentAlpha,
                 topOpacityPercent = prefs.topOpacityPercent,
             )
-            compositingStrategy = if (fadeToBackground) {
-                CompositingStrategy.Offscreen
-            } else {
-                CompositingStrategy.Auto
-            }
         }
-        .then(
-            if (fadeToBackground) {
-                Modifier.drawWithCache {
-                    val fadeStart = resolvePanoramaFadeStart(panoramaTransitionRangeFactor)
-                    val fadeLength = PanoramaFadeEnd - fadeStart
-                    // Smoothstep-eased stops: a piecewise-linear ramp leaves visible kinks at the bottom edge.
-                    val alphaMask = Brush.verticalGradient(
-                        colorStops = Array(PanoramaFadeSteps + 2) { index ->
-                            when (index) {
-                                0 -> 0f to Color.White
-                                else -> {
-                                    val t = (index - 1) / PanoramaFadeSteps.toFloat()
-                                    val eased = t * t * (3f - 2f * t)
-                                    (fadeStart + fadeLength * t) to Color.White.copy(alpha = 1f - eased)
-                                }
-                            }
-                        },
-                    )
-                    onDrawWithContent {
-                        drawContent()
-                        drawRect(alphaMask, blendMode = BlendMode.DstIn)
-                    }
-                }
-            } else {
-                Modifier
-            },
-        )
-        .then(artworkModifier)
-
-    if (!hasResolvedBackground && stablePlaceholderImage != null) {
-        Image(
-            painter = placeholderPainter,
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = backgroundModifier,
-        )
     }
+    val filterBounds = if (halfSizeBlur) viewportModifier.halfSizePanorama() else viewportModifier
+    Box(modifier = filterBounds.then(artworkModifier)) {
+        if (!hasResolvedBackground && stablePlaceholderImage != null) {
+            Image(
+                painter = placeholderPainter,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.matchParentSize(),
+            )
+        }
 
-    if (normalizedModel != null) {
-        AsyncImage(
-            model = backgroundRequest,
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = backgroundModifier,
-            onSuccess = { state ->
-                lastResolvedImage = state.result.image
-                hasResolvedBackground = true
-            },
-            onError = {
-                // Keep an already-resolved placeholder visible when the panorama request fails,
-                // otherwise the backdrop flashes once and then collapses to a blank surface.
-                hasResolvedBackground = stablePlaceholderImage == null
-                onLoadError?.invoke()
-            },
-        )
+        if (normalizedModel != null) {
+            AsyncImage(
+                model = backgroundRequest,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.matchParentSize(),
+                onSuccess = { state ->
+                    lastResolvedImage = state.result.image
+                    hasResolvedBackground = true
+                },
+                onError = {
+                    // Keep the last usable artwork visible if loading the replacement fails.
+                    hasResolvedBackground = stablePlaceholderImage == null
+                    onLoadError?.invoke()
+                },
+            )
+        }
     }
     if (!fadeToBackground) {
         Box(
@@ -369,6 +358,19 @@ private fun Modifier.halfSizePanorama(): Modifier = layout { measurable, constra
 internal fun resolvePanoramaFadeStart(transitionRange: Float): Float {
     val normalizedRange = transitionRange.coerceIn(0f, 1f)
     return PanoramaFadeStartMax - (PanoramaFadeStartMax - PanoramaFadeStartMin) * normalizedRange
+}
+
+internal fun panoramaFadeStops(pageColor: Color, transitionRange: Float): Array<Pair<Float, Color>> {
+    val start = resolvePanoramaFadeStart(transitionRange)
+    return Array(PanoramaFadeSteps + 2) { index ->
+        if (index == 0) {
+            0f to pageColor.copy(alpha = 0f)
+        } else {
+            val t = (index - 1) / PanoramaFadeSteps.toFloat()
+            val eased = t * t * (3f - 2f * t)
+            (start + (PanoramaFadeEnd - start) * t) to pageColor.copy(alpha = eased)
+        }
+    }
 }
 
 internal fun resolvePanoramaContentAlpha(contentAlpha: Float, topOpacityPercent: Int): Float {

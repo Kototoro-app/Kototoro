@@ -1060,16 +1060,9 @@ private fun DetailsScreenContent(
         animationSpec = tween(durationMillis = 350),
         label = "detailsDominantBackgroundColor",
     )
-    val detailsBackdropBackground = detailsBackgroundColor
     val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
-    val detailsBackgroundBackdrop = if (isIosStyle) {
-        rememberLayerBackdrop {
-            drawRect(detailsBackdropBackground)
-            drawContent()
-        }
-    } else {
-        null
-    }
+    // The captured Box already paints the animated page color beneath the panorama.
+    val detailsBackgroundBackdrop = if (isIosStyle) rememberLayerBackdrop() else null
     val detailsEdgeBlurRadius = if (effectiveGlassPrefs.isTopImmersiveEdgeEnabled) immersiveEdgeBlurRadius() else 0.dp
     val captureDetailsEdge = detailsEdgeBlurRadius > 0.dp && edgeVisible
     val compactDockGlass = if (
@@ -1092,10 +1085,7 @@ private fun DetailsScreenContent(
         detailsBackgroundBackdrop
     }
     val detailsEdgeBackgroundLayer = detailsBackgroundBackdrop ?: if (captureDetailsEdge) {
-        rememberLayerBackdrop {
-            drawRect(detailsBackdropBackground)
-            drawContent()
-        }
+        rememberLayerBackdrop()
     } else {
         null
     }
@@ -1279,7 +1269,7 @@ private fun DetailsScreenContent(
                                 },
                                 fadeToBackground = true,
                                 cacheMovingArtwork = isIosStyle && !isWideAdaptiveLayout,
-                                downsampleWideBlur = isWideAdaptiveLayout,
+                                downsampleBlur = isWideAdaptiveLayout || isIosStyle,
                                 maxHeightPx = panoramaMaxHeightPx,
                                 scrollLinkedTranslationYPx = panoramaScrollLinkedTranslationPx,
                                 modifier = Modifier,
