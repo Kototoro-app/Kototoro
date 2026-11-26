@@ -223,12 +223,6 @@ fun DetailsHeader(
         ?.getDisplayName(defaultLocale)
         ?.replaceFirstChar { if (it.isLowerCase()) it.titlecase(defaultLocale) else it.toString() }
         .orEmpty()
-    val languageSummary = when {
-        originalLanguage.isBlank() && readingLanguage.isBlank() -> stringResource(R.string.unknown)
-        originalLanguage.isBlank() -> readingLanguage
-        readingLanguage.isBlank() || readingLanguage == originalLanguage -> originalLanguage
-        else -> "$originalLanguage -> $readingLanguage"
-    }
     val chapterProgressLabel = when {
         historyInfo.totalChapters > 0 && historyInfo.currentChapter >= 0 -> "${historyInfo.currentChapter + 1}/${historyInfo.totalChapters}"
         historyInfo.totalChapters > 0 -> "0/${historyInfo.totalChapters}"
@@ -270,11 +264,6 @@ fun DetailsHeader(
         ContentType.VIDEO,
         ContentType.HENTAI_VIDEO -> R.string.details_playback_source
         else -> R.string.details_reading_source
-    }
-    val readingLanguageLabelRes = when (resolvedContentType) {
-        ContentType.VIDEO,
-        ContentType.HENTAI_VIDEO -> R.string.details_playback_language_short
-        else -> R.string.details_reading_language_short
     }
     val metadataDisplayModel = metadataSourceOption?.resolveDisplayModel(
         role = DetailsSourceRole.METADATA,
@@ -370,16 +359,9 @@ fun DetailsHeader(
     val isNsfw = content?.isNsfw() == true
     val renderCinemaHero = mediaStylePolicy.useCenteredHeroHeader && panoramaEnabled
     val authorClick: (() -> Unit)? = primaryAuthor?.let { name -> { onAuthorClick(name) } }
+    // The score sits with the header's actions; the rating section below has the breakdown.
+    val headerRating = metaRatingValue ?: ratingLabel
     val metaItems: List<DetailsMetaItem> = buildList {
-        (metaRatingValue ?: ratingLabel)?.let { rating ->
-            add(
-                DetailsMetaItem(
-                    value = "$rating \u2605",
-                    label = stringResource(R.string.rating),
-                    onClick = onMetaRatingClick,
-                ),
-            )
-        }
         // The cinema hero already says the status and episode count in its own metadata line.
         if (!renderCinemaHero) {
             add(
@@ -391,7 +373,12 @@ fun DetailsHeader(
             )
             add(
                 DetailsMetaItem(
-                    value = historyInfo.totalChapters.takeIf { it > 0 }?.toString() ?: "-",
+                    // Once reading has started the column says how far in, not only how many.
+                    value = if (historyInfo.history != null) {
+                        chapterProgressLabel
+                    } else {
+                        historyInfo.totalChapters.takeIf { it > 0 }?.toString() ?: "-"
+                    },
                     label = stringResource(R.string.chapters),
                     onClick = onOpenChapters,
                 ),
@@ -407,6 +394,10 @@ fun DetailsHeader(
                     valueMuted = !hasKnownAuthor,
                 ),
             )
+        }
+        // The language being read in, else the work's own; an unknown language is left out rather than shown as "-".
+        readingLanguage.ifBlank { originalLanguage }.takeIf { it.isNotBlank() }?.let { language ->
+            add(DetailsMetaItem(value = language, label = stringResource(R.string.language)))
         }
         if (localContent != null || localSize > 0L) {
             add(DetailsMetaItem(value = onDeviceSizeLabel ?: "-", label = stringResource(R.string.on_device)))
@@ -870,6 +861,9 @@ fun DetailsHeader(
                             linkedTrackingItems = linkedTrackingItems,
                             onUpdateStatus = onUpdateReadingStatus,
                         )
+                    }
+                    headerRating?.let { rating ->
+                        DetailsRatingChip(rating = rating, onClick = onMetaRatingClick)
                     }
                 }
             }

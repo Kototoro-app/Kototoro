@@ -14,6 +14,8 @@ struct DetailsRatingSection: View {
     let sourceScore: Double?
     let tracking: IosTracking?
     @ObservedObject var trackingModel: TrackingAccountsModel
+    /// The community's mean (0–10) once read, nil while unread, without ratings or unavailable; the header shows it.
+    var onCommunityScore: (Double?) -> Void = { _ in }
     @State private var overview: IosCommunityOverview?
     @State private var unavailable = false
     @State private var loading = true
@@ -119,6 +121,7 @@ struct DetailsRatingSection: View {
         loading = true
         unavailable = false
         overview = nil
+        onCommunityScore(nil)
         failure = nil
         trackers = await trackingModel.ratingTargets(content: content, tracking: tracking)
         guard let community else { loading = false; return }
@@ -126,6 +129,7 @@ struct DetailsRatingSection: View {
             let result = try await community.overview(content: content)
             guard !Task.isCancelled else { return }
             overview = result
+            onCommunityScore(result.flatMap { $0.ratingCount > 0 ? $0.score?.doubleValue : nil })
             communityStars = (try? await community.myRating(content: content))?.int32Value ?? 0
         } catch {
             guard !Task.isCancelled else { return }
