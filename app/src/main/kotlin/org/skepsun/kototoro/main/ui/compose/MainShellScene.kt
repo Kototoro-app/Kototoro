@@ -1335,7 +1335,7 @@ internal fun SuggestionsTopLevelRouteContent(
             showScrollbar = true,
             sharedElementInstanceKey = "main_suggestions",
             isContentTypeFilterVisible = false,
-            isSourceTagFilterVisible = false,
+            isSourceTagFilterVisible = true,
             onNavigateToDetails = { _, content, sharedKey ->
                 navigateToDetailsWithContent(content, sharedKey)
             },
