@@ -875,7 +875,11 @@ tasks.withType(Test).configureEach {
     // The UI tests assert the text the app ships in Chinese, so the language is pinned instead of following the
     // machine's locale (`--lang`/DesktopStrings.pin); without this, the same tests fail on an English CI machine.
     systemProperty 'kototoro.desktop.locale', 'zh-CN'
-    systemProperty 'kototoro.desktop.test.classpath', sourceSets.test.runtimeClasspath.asPath
+    // Only the probes that relaunch the app read this. The distribution tests launch the packaged image instead, and on
+    // Windows the whole classpath as a -D argument pushes their worker past the 32K command-line limit.
+    if (!name.endsWith('DistributionTest')) {
+        systemProperty 'kototoro.desktop.test.classpath', sourceSets.test.runtimeClasspath.asPath
+    }
     systemProperty 'kototoro.desktop.fixture.jar', project(':mihon-desktop-compat').layout.buildDirectory.file('fixtures/offline-desktop-fixture.jar').get().asFile
     systemProperty 'kototoro.desktop.challenge.fixture.jar', project(':mihon-desktop-compat').layout.buildDirectory.file('fixtures/interactive-desktop-fixture.jar').get().asFile
     systemProperty 'kototoro.desktop.reader.fixture.jar', project(':mihon-desktop-compat').layout.buildDirectory.file('fixtures/reader-desktop-fixture.jar').get().asFile
