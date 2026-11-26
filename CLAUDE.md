@@ -832,6 +832,7 @@ GitHub Release 正文按最近版本（如 v2.4.0）的固定格式手写，CI �
 - `docs/architecture/media3-video-player-migration-plan-2026-08.md` - media3 视频播放器迁移计划
 - `docs/architecture/toolchain-upgrade-plan-2026-08.md` - 工具链升级计划
 - `docs/architecture/ncnn-super-resolution.md` - 超分辨率实现
+- `docs/architecture/local-recommendation-research-2026-11.md` - 本地推荐重写与评估/模型调研记录
 - `docs/unified_source_management.md` - 源管理 UI 重构方案（草案）
 - `.github/RELEASE_GUIDE.md` - 发布指南
 
