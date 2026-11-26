@@ -1457,7 +1457,7 @@ private fun DetailsScreenContent(
                                 snackbarHost = { KototoroSnackbarHost(snackbarHostState) },
                                 topBar = {
                                     CompositionLocalProvider(
-                                        LocalLiquidGlassBackdrop provides detailsContentBackdrop,
+                                        LocalLiquidGlassBackdrop provides detailsDockBackdrop,
                                         LocalLiquidGlassLayerBackdrop provides detailsContentBackdrop,
                                     ) {
                                         commonTopBar()
@@ -1945,7 +1945,10 @@ private fun DetailsScreenContent(
                             }
                         },
                 ) {
-                    commonTopBar()
+                    // Reuse the dock's combined backdrop so scrolled cards can refract through these controls.
+                    CompositionLocalProvider(LocalLiquidGlassBackdrop provides detailsDockBackdrop) {
+                        commonTopBar()
+                    }
                 }
             }
             }
