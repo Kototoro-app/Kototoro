@@ -37,6 +37,8 @@ import org.skepsun.kototoro.parsers.network.CloudFlareHelper
 import org.skepsun.kototoro.sync.google.data.GoogleDriveSyncApi
 import org.skepsun.kototoro.sync.google.data.GoogleDriveSyncAuth
 import org.skepsun.kototoro.sync.google.data.GoogleDriveSyncSettings
+import org.skepsun.kototoro.sync.google.data.applySyncStats
+import org.skepsun.kototoro.sync.google.data.dumpSyncStats
 import org.skepsun.kototoro.sync.google.data.model.GoogleDriveSyncSnapshot
 import org.skepsun.kototoro.sync.google.data.model.MAX_SYNC_PACKAGE_SIZE_BYTES
 import org.skepsun.kototoro.sync.google.data.model.SyncContent
@@ -48,7 +50,6 @@ import org.skepsun.kototoro.sync.google.data.model.SyncFeedState
 import org.skepsun.kototoro.sync.google.data.model.SyncHistory
 import org.skepsun.kototoro.sync.google.data.model.SyncJsonSource
 import org.skepsun.kototoro.sync.google.data.model.SyncSourceState
-import org.skepsun.kototoro.sync.google.data.model.SyncStats
 import org.skepsun.kototoro.sync.google.data.model.SyncTrack
 import org.skepsun.kototoro.sync.google.data.model.SyncTrackLog
 import org.skepsun.kototoro.favourites.data.FavouriteEntity
@@ -407,7 +408,7 @@ class GoogleDriveSyncRepository @Inject constructor(
         val logs = database.getTrackLogsDao().dump()
         val history = database.getHistoryDao().findAllEntriesIncludingDeleted()
         val favourites = database.getFavouritesDao().findAllEntriesIncludingDeleted()
-        val stats = database.getStatsDao().dump().toList()
+        val stats = database.dumpSyncStats()
         val categories = database.getFavouriteCategoriesDao().dump()
         val contentIds = (
             tracks.map { it.mangaId } +
@@ -427,7 +428,7 @@ class GoogleDriveSyncRepository @Inject constructor(
             categories = categories.map(::SyncFavouriteCategory),
             history = history.map(::SyncHistory),
             favourites = favourites.map(::SyncFavourite),
-            stats = stats.map(::SyncStats),
+            stats = stats,
             feed = SyncFeedState(
                 tracks = tracks.map(::SyncTrack),
                 logs = logs.map(::SyncTrackLog),
@@ -495,7 +496,7 @@ class GoogleDriveSyncRepository @Inject constructor(
                     norm.stats.forEach { remote ->
                         val localMangaId = contentImport.localIdOf(remote.mangaId) ?: return@forEach
                         if (!database.getMangaDao().contains(localMangaId)) return@forEach
-                        database.getStatsDao().upsert(remote.toEntity(localMangaId))
+                        database.applySyncStats(remote, localMangaId)
                     }
                 }
 

@@ -74,6 +74,32 @@ class IosGoogleDriveSyncTest {
     }
 
     @Test
+    fun androidReadingSessionsArriveWithTheirDurationsAndGoBackUnchanged() = runBlocking {
+        withLibrary { library ->
+            val original = IosGoogleDriveSync.decode(ANDROID.encodeToByteArray())
+            val id = original.content.single().id
+            fun remote(endAt: Long) = GoogleDriveSyncSnapshot(deviceId = "android", content = original.content,
+                categories = original.categories, favourites = original.favourites,
+                stats = listOf(SyncStats(id, 1_000, endAt - 1_000, 4,
+                    SyncReadingSession(endAt, 31, 0, 0, 32, 5, 0, 0.1f, 0.4f))))
+            val store = LibraryDriveSync(library.database)
+            store.merge(remote(9_000), "ios", 10_000)
+            val session = assertNotNull(library.database.getReadingRecordDao().findAtStart(id, 1_000))
+            assertEquals(9_000L, session.endAt)
+            assertEquals(32L, session.endChapterId)
+            // A stale copy never rewinds the session; a later checkpoint extends it in place.
+            store.merge(remote(5_000), "ios", 11_000)
+            assertEquals(9_000L, library.database.getReadingRecordDao().findAtStart(id, 1_000)?.endAt)
+            val upload = store.merge(remote(12_000), "ios", 12_000)
+            assertEquals(1, library.database.getReadingRecordDao().findSessions(id).size)
+            val sent = upload.stats.single()
+            assertEquals(12_000L, sent.session?.endAt)
+            assertEquals(11_000L, sent.duration)
+            assertEquals(0.4f, sent.session?.endPercent)
+        }
+    }
+
+    @Test
     fun recordsBadgeCountsUnseenWorksInsteadOfPendingChapters() = runBlocking {
         withLibrary { library ->
             val original = IosGoogleDriveSync.decode(ANDROID.encodeToByteArray())

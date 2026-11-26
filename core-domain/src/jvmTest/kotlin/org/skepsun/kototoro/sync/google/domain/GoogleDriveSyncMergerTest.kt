@@ -9,6 +9,8 @@ import org.skepsun.kototoro.sync.google.data.model.SyncFavourite
 import org.skepsun.kototoro.sync.google.data.model.SyncFavouriteCategory
 import org.skepsun.kototoro.sync.google.data.model.SyncFeedState
 import org.skepsun.kototoro.sync.google.data.model.SyncHistory
+import org.skepsun.kototoro.sync.google.data.model.SyncReadingSession
+import org.skepsun.kototoro.sync.google.data.model.SyncStats
 import org.skepsun.kototoro.sync.google.data.model.SyncSourceState
 import org.skepsun.kototoro.sync.google.data.model.SyncTrackLog
 import org.skepsun.kototoro.sync.google.data.model.SyncTrack
@@ -38,6 +40,25 @@ class GoogleDriveSyncMergerTest {
                 assertEquals(log.chapterMetadata, repeated.feed.logs.single().chapterMetadata)
                 assertEquals(false, repeated.feed.logs.single().isUnread)
             }
+    }
+
+    @Test
+    fun `stats keep the session that ended later and never lose one to a copy without it`() {
+        fun session(endAt: Long) = SyncReadingSession(endAt, 10, 0, 0, 10, 4, 0, 0f, 0.5f)
+        val bare = GoogleDriveSyncSnapshot(stats = listOf(SyncStats(1, 100, 900, 5)))
+        val early = GoogleDriveSyncSnapshot(stats = listOf(SyncStats(1, 100, 400, 2, session(500))))
+        val late = GoogleDriveSyncSnapshot(stats = listOf(SyncStats(1, 100, 600, 3, session(700))))
+        for ((local, remote) in listOf(early to late, late to early)) {
+            val merged = GoogleDriveSyncMerger.mergeSnapshots(local, remote).stats.single()
+            assertEquals(700L, merged.session?.endAt)
+            assertEquals(600L, merged.duration)
+        }
+        for ((local, remote) in listOf(bare to early, early to bare)) {
+            val merged = GoogleDriveSyncMerger.mergeSnapshots(local, remote).stats.single()
+            assertEquals(500L, merged.session?.endAt)
+            assertEquals(900L, merged.duration)
+            assertEquals(5, merged.pages)
+        }
     }
 
     @Test

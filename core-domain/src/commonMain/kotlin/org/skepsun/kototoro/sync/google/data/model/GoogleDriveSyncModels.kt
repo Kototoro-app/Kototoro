@@ -13,6 +13,7 @@ import org.skepsun.kototoro.extensions.repo.ExternalExtensionType
 import org.skepsun.kototoro.favourites.data.FavouriteCategoryEntity
 import org.skepsun.kototoro.favourites.data.FavouriteEntity
 import org.skepsun.kototoro.history.data.HistoryEntity
+import org.skepsun.kototoro.readingrecord.data.ReadingRecordEntity
 import org.skepsun.kototoro.stats.data.StatsEntity
 import org.skepsun.kototoro.tracker.data.TrackEntity
 import org.skepsun.kototoro.tracker.data.TrackLogEntity
@@ -325,12 +326,15 @@ class SyncStats(
     @SerialName("started_at") val startedAt: Long,
     @SerialName("duration") val duration: Long,
     @SerialName("pages") val pages: Int,
+    // Optional, as in backups: older readers keep the duration and ignore where the session started and ended.
+    @SerialName("session") val session: SyncReadingSession? = null,
 ) {
-    constructor(entity: StatsEntity) : this(
+    constructor(entity: StatsEntity, session: ReadingRecordEntity? = null) : this(
         mangaId = entity.mangaId,
         startedAt = entity.startedAt,
-        duration = entity.duration,
+        duration = if (session == null) entity.duration else maxOf(entity.duration, session.endAt - session.startAt),
         pages = entity.pages,
+        session = session?.let(::SyncReadingSession),
     )
 
     fun toEntity(targetMangaId: Long = mangaId) = StatsEntity(
@@ -339,6 +343,28 @@ class SyncStats(
         duration = duration,
         pages = pages,
     )
+}
+
+/** A reading session keyed by its work and [SyncStats.startedAt], with the fields of a backup's session. */
+@Serializable
+class SyncReadingSession(
+    @SerialName("end_at") val endAt: Long,
+    @SerialName("start_chapter_id") val startChapterId: Long,
+    @SerialName("start_page") val startPage: Int,
+    @SerialName("start_scroll") val startScroll: Int,
+    @SerialName("end_chapter_id") val endChapterId: Long,
+    @SerialName("end_page") val endPage: Int,
+    @SerialName("end_scroll") val endScroll: Int,
+    @SerialName("start_percent") val startPercent: Float,
+    @SerialName("end_percent") val endPercent: Float,
+) {
+    constructor(value: ReadingRecordEntity) : this(value.endAt, value.startChapterId, value.startPage,
+        value.startScroll, value.endChapterId, value.endPage, value.endScroll, value.startPercent, value.endPercent)
+
+    fun toEntity(mangaId: Long, startedAt: Long) = ReadingRecordEntity(mangaId = mangaId,
+        startAt = startedAt, endAt = endAt, startChapterId = startChapterId, startPage = startPage,
+        startScroll = startScroll, endChapterId = endChapterId, endPage = endPage, endScroll = endScroll,
+        startPercent = startPercent, endPercent = endPercent)
 }
 
 @Serializable

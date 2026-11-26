@@ -4,6 +4,8 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.skepsun.kototoro.sync.google.domain.GoogleDriveSyncMerger
 
@@ -57,6 +59,24 @@ class GoogleDriveSyncWireFormatTest {
         val decoded = json.decodeFromString(GoogleDriveSyncSnapshot.serializer(), encoded)
         assertEquals(1L, decoded.history.single().mangaId)
         assertEquals(3L, decoded.history.single().updatedAt)
+    }
+
+    @Test
+    fun `stats carry their session in the backup field names and read without one`() {
+        val session = SyncReadingSession(500, 10, 1, 2, 11, 3, 4, 0.25f, 0.75f)
+        val encoded = json.encodeToString(GoogleDriveSyncSnapshot.serializer(),
+            GoogleDriveSyncSnapshot(stats = listOf(SyncStats(1, 100, 400, 2, session))))
+        val row = json.parseToJsonElement(encoded).jsonObject.getValue("stats").toString()
+        listOf("\"session\"", "\"end_at\"", "\"start_chapter_id\"", "\"end_scroll\"", "\"end_percent\"").forEach {
+            assertTrue(it in row, it)
+        }
+        val decoded = json.decodeFromString(GoogleDriveSyncSnapshot.serializer(), encoded).stats.single().session!!
+        assertEquals(11L, decoded.endChapterId)
+        assertEquals(0.75f, decoded.endPercent)
+        // Snapshots written before sessions were synced keep decoding.
+        val older = json.decodeFromString(GoogleDriveSyncSnapshot.serializer(),
+            """{"stats":[{"manga_id":1,"started_at":100,"duration":400,"pages":2}]}""")
+        assertNull(older.stats.single().session)
     }
 
     @Test

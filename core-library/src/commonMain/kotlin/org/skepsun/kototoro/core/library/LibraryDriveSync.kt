@@ -2,11 +2,12 @@ package org.skepsun.kototoro.core.library
 
 import androidx.room.immediateTransaction
 import androidx.room.useWriterConnection
-import kotlinx.coroutines.flow.toList
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.db.entity.MangaEntity
 import org.skepsun.kototoro.core.db.entity.MangaSourceEntity
 import org.skepsun.kototoro.parsers.network.CloudFlareProtection
+import org.skepsun.kototoro.sync.google.data.applySyncStats
+import org.skepsun.kototoro.sync.google.data.dumpSyncStats
 import org.skepsun.kototoro.sync.google.data.model.*
 import org.skepsun.kototoro.sync.google.domain.SyncContentStore
 import org.skepsun.kototoro.sync.google.domain.importSyncContent
@@ -30,7 +31,7 @@ class LibraryDriveSync(private val database: MangaDatabase, private val sourceEd
             if (snapshot != null && sourceEdits != null) applySourceStates(snapshot.sourceStates, sourceEdits, applied)
             val history = database.getHistoryDao().findAllEntriesIncludingDeleted()
             val favourites = database.getFavouritesDao().findAllEntriesIncludingDeleted()
-            val stats = database.getStatsDao().dump().toList()
+            val stats = database.dumpSyncStats()
             val tracks = database.getTracksDao().dump()
             val logs = database.getTrackLogsDao().dump()
             val ids = (history.map { it.mangaId } + favourites.map { it.mangaId } + stats.map { it.mangaId } +
@@ -42,7 +43,7 @@ class LibraryDriveSync(private val database: MangaDatabase, private val sourceEd
                 categories = database.getFavouriteCategoriesDao().dump().map(::SyncFavouriteCategory),
                 history = history.map(::SyncHistory),
                 favourites = favourites.map(::SyncFavourite),
-                stats = stats.map(::SyncStats),
+                stats = stats,
                 feed = SyncFeedState(tracks.map(::SyncTrack), logs.map(::SyncTrackLog)),
                 config = snapshot?.config,
                 repositories = snapshot?.repositories.orEmpty(),
@@ -120,9 +121,7 @@ class LibraryDriveSync(private val database: MangaDatabase, private val sourceEd
         }
         for (remote in snapshot.stats) {
             val id = imported.localIdOf(remote.mangaId) ?: continue
-            if (database.getMangaDao().contains(id) && database.getStatsDao().find(id, remote.startedAt) == null) {
-                database.getStatsDao().upsert(remote.toEntity(id))
-            }
+            if (database.getMangaDao().contains(id)) database.applySyncStats(remote, id)
         }
         for (remote in snapshot.feed.tracks) {
             val id = imported.localIdOf(remote.mangaId) ?: continue

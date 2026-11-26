@@ -123,12 +123,22 @@ object GoogleDriveSyncMerger {
             }
             .sortedByDescending { it.updatedAt }
 
-        // 5. Stats: deduplicate by (mangaId, startedAt)
+        // 5. Stats: deduplicate by (mangaId, startedAt). A session is checkpointed while it runs, so the copy
+        // that ended later is the more complete one; a copy without a session never removes one.
         val compactStats = norm.stats
             .map { it.withMangaId(it.mangaId.toSurvivorId()) }
             .groupBy { it.mangaId to it.startedAt }
             .values
-            .map { it.first() }
+            .map { copies ->
+                val first = copies.first()
+                if (copies.size == 1) first else SyncStats(
+                    mangaId = first.mangaId,
+                    startedAt = first.startedAt,
+                    duration = copies.maxOf { it.duration },
+                    pages = copies.maxOf { it.pages },
+                    session = copies.mapNotNull { it.session }.maxByOrNull { it.endAt },
+                )
+            }
             .sortedBy { it.startedAt }
 
         // 6. Tracks: merge tracks by mangaId
@@ -230,6 +240,7 @@ object GoogleDriveSyncMerger {
         startedAt = startedAt,
         duration = duration,
         pages = pages,
+        session = session,
     )
 
     private fun SyncTrack.withMangaId(id: Long) = if (id == mangaId) this else SyncTrack(
