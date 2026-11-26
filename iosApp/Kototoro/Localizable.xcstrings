@@ -16328,40 +16328,6 @@
         }
       }
     },
-    "旧版播放统计": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Legacy playback statistics"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "舊版播放統計"
-          }
-        }
-      }
-    },
-    "旧版阅读统计": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Legacy reading statistics"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "舊版閱讀統計"
-          }
-        }
-      }
-    },
     "时间轴": {
       "localizations": {
         "en": {

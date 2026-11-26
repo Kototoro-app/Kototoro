@@ -160,16 +160,19 @@ class IosStatistics internal constructor(private val owner: IosLibrary) {
                     val timestamp = minOf(now, dayEnd, latest?.endAt ?: legacyEnd ?: (day.startedAt + 1)) - 1
                     // Videos are played, not read.
                     val video = work.content.mediaKind == "VIDEO"
-                    val detail = latest?.let { chapters[it.mangaId to it.endChapterId] }
+                    // Drive sync carries Android's durations without their sessions, so a day can have time but no
+                    // chapter. Its last day still ends where history does, as on Android.
+                    val recent = history[work.content.value.id]
+                        ?.takeIf { !work.hasTimedStats || it.updatedAt in day.startedAt until dayEnd }
+                    val detail = (latest?.let { chapters[it.mangaId to it.endChapterId] }
+                        ?: recent?.let { chapters[it.mangaId to it.chapterId] })
                         ?.let { localChapterTitle(it.source, it.title, it.sourceData) }
-                        ?: if (!work.hasTimedStats) work.chapterTitle
-                        else localized(if (video) "旧版播放统计" else "旧版阅读统计")
                     timeline += IosTimelineEvent("read-${work.content.id}-${day.date}", work.content,
                         if (!work.hasTimedStats) work.updatedAt else timestamp, false,
                         detail?.takeIf(String::isNotBlank) ?: localized(if (video) "播放记录" else "阅读记录"),
                         day.duration, dailySessions.size,
-                        latest != null || (!work.hasTimedStats && work.hasProgress),
-                        latest?.endPercent ?: if (!work.hasTimedStats) work.progress else 0f)
+                        latest != null || recent != null,
+                        latest?.endPercent ?: recent?.percent ?: 0f)
                 }
             }
             org.skepsun.kototoro.tracker.domain.dailyUpdateGroups(logs, zone).forEach { group -> contents[group.mangaId]?.let { content ->

@@ -251,6 +251,27 @@ class IosStatisticsTest {
         } finally { library.close() }
     }
 
+    @Test
+    fun syncedDurationsWithoutSessionsEndWhereHistoryDoes() = withDirectory { directory ->
+        val library = IosLibrary("$directory/library.db")
+        val content = work(1)
+        val now = Clock.System.now().toEpochMilliseconds() - 60_000
+        try {
+            library.saveDetails(content)
+            // Drive sync delivers Android's reading as duration rows next to its history, never as sessions.
+            library.database.getStatsDao().upsert(StatsEntity(1, now - 3 * 86_400_000L, 10_000, 3))
+            library.database.getStatsDao().upsert(StatsEntity(1, now, 10_000, 3))
+            library.recordPosition(content, content.chapters.single(), 1, 3, 0f)
+            val reads = library.statistics.snapshot("ALL", "ALL", "", null).timeline
+                .filter { !it.isUpdate }.sortedByDescending { it.timestamp }
+            assertEquals(2, reads.size)
+            assertEquals("第一话", reads[0].detail)
+            assertTrue(reads[0].hasProgress)
+            assertNotEquals("第一话", reads[1].detail)
+            assertFalse(reads[1].hasProgress)
+        } finally { library.close() }
+    }
+
     private fun updateSource(details: (SourceContent) -> SourceContent) = IosSources(object : IosSourceTransport {
         override fun exchange(requestJson: String): String {
             val request = SourceProtocolJson.decodeFromString<SourceRequest>(requestJson)
