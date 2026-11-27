@@ -125,6 +125,8 @@ internal fun buildDiscoveryFeedRowSubtitle(
 @Composable
 internal fun DiscoveryFeedPage(
     uiState: DiscoveryFeedUiState,
+    /** False while the page is only peeking in during a swipe: rows load once it settles on screen. */
+    isActive: Boolean = true,
     sourcesByName: Map<String, ContentSource>,
     contentPadding: PaddingValues,
     posterStyle: CompactPosterCardStyle,
@@ -161,7 +163,8 @@ internal fun DiscoveryFeedPage(
     }
 
     // Trigger lazy loading when rows scroll into viewport.
-    LaunchedEffect(listState) {
+    LaunchedEffect(listState, isActive) {
+        if (!isActive) return@LaunchedEffect
         snapshotFlow {
             listState.layoutInfo.visibleItemsInfo
                 .mapNotNull { info ->
@@ -182,7 +185,8 @@ internal fun DiscoveryFeedPage(
 
     // Also trigger loads for visible rows whose state reset back to Idle (e.g. returning to Discovery
     // after cancellation or newly added rows entering the initial viewport).
-    LaunchedEffect(visibleRowIds, uiState.visibleRows, uiState.rowStates) {
+    LaunchedEffect(isActive, visibleRowIds, uiState.visibleRows, uiState.rowStates) {
+        if (!isActive) return@LaunchedEffect
         visibleRowIds.forEach { rowId ->
             if (uiState.stateOf(rowId) is DiscoveryFeedRowState.Idle) {
                 onRowVisible(rowId)
@@ -475,7 +479,10 @@ private fun DiscoveryFeedLoadedRowCarousel(
 
     LazyRow(
         state = rowListState,
-        modifier = if (isTvPresentation) Modifier.fillMaxWidth().focusGroup() else Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .keepHorizontalScrollInside()
+            .then(if (isTvPresentation) Modifier.focusGroup() else Modifier),
         contentPadding = PaddingValues(horizontal = CompactTopBarHorizontalPadding),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {

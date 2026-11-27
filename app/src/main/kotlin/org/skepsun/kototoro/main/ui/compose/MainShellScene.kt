@@ -93,6 +93,8 @@ import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ExplorePage
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.prefs.ListToDetailsTransition
 import org.skepsun.kototoro.core.prefs.observeAsState
@@ -751,9 +753,13 @@ internal fun BrowseTopLevelRouteContent(
     val settings = remember(context.applicationContext) {
         AppSettings(context.applicationContext)
     }
-    val selectedExplorePage by settings.observeAsState(
+    val savedExplorePage by settings.observeAsState(
         AppSettings.KEY_EXPLORE_PAGE,
     ) { explorePage }
+    val explorePagerState = rememberPagerState(initialPage = savedExplorePage.ordinal) { ExplorePage.entries.size }
+    // The top bar follows the page under the finger; loading, cancelling and saving wait for it to settle.
+    val selectedExplorePage = explorePageAt(explorePagerState.currentPage)
+    val settledExplorePage = explorePageAt(explorePagerState.settledPage)
     val browseGridScale by settings.observeAsState(
         AppSettings.KEY_GRID_SIZE,
         AppSettings.gridSizeKeyOf(org.skepsun.kototoro.list.ui.ListDisplaySection.BROWSE),
@@ -777,11 +783,18 @@ internal fun BrowseTopLevelRouteContent(
     }
 
     // Cancel in-flight Discovery Feed requests when switching away from Discovery or leaving Explore.
-    LaunchedEffect(selectedExplorePage, discoveryFeedViewModel) {
-        if (selectedExplorePage != org.skepsun.kototoro.core.prefs.ExplorePage.DISCOVERY) {
+    LaunchedEffect(settledExplorePage, discoveryFeedViewModel) {
+        if (settledExplorePage != ExplorePage.DISCOVERY) {
             discoveryFeedViewModel.cancelInFlightLoads()
         } else {
             sourceSelectionTopBarState = null
+        }
+        explorePageToPersist(explorePagerState.settledPage, settings.explorePage)?.let { settings.explorePage = it }
+    }
+    // The setting can also change elsewhere (backup restore); follow it while the pager is idle.
+    LaunchedEffect(savedExplorePage) {
+        if (!explorePagerState.isScrollInProgress && explorePagerState.settledPage != savedExplorePage.ordinal) {
+            explorePagerState.scrollToPage(savedExplorePage.ordinal)
         }
     }
 
@@ -873,22 +886,19 @@ internal fun BrowseTopLevelRouteContent(
                 TopBarSegmentedSwitcherItem(
                     id = org.skepsun.kototoro.core.prefs.ExplorePage.SOURCES.name,
                     title = sourcesPageLabel,
+                    iconRes = org.skepsun.kototoro.R.drawable.ic_manga_source,
                 ),
                 TopBarSegmentedSwitcherItem(
                     id = org.skepsun.kototoro.core.prefs.ExplorePage.DISCOVERY.name,
                     title = discoveryPageLabel,
+                    iconRes = org.skepsun.kototoro.R.drawable.ic_explore_normal,
                 ),
             ),
-            selectedItemId = selectedExplorePage.name,
+            selectedItemId = exploreSwitcherSelectedId(explorePagerState.currentPage),
+            selectionPosition = { explorePagerState.currentPage + explorePagerState.currentPageOffsetFraction },
             onItemSelected = { selectedId ->
-                val nextPage = org.skepsun.kototoro.core.prefs.ExplorePage.entries
-                    .firstOrNull { it.name == selectedId }
-                    ?: org.skepsun.kototoro.core.prefs.ExplorePage.SOURCES
-                if (nextPage != selectedExplorePage) {
-                    if (selectedExplorePage == org.skepsun.kototoro.core.prefs.ExplorePage.DISCOVERY) {
-                        discoveryFeedViewModel.cancelInFlightLoads()
-                    }
-                    settings.explorePage = nextPage
+                explorePagerTargetFor(selectedId, explorePagerState.targetPage)?.let { page ->
+                    coroutineScope.launch { explorePagerState.animateScrollToPage(page) }
                 }
             },
             hideSourceFilters = selectedExplorePage == org.skepsun.kototoro.core.prefs.ExplorePage.DISCOVERY,
@@ -1023,62 +1033,74 @@ internal fun BrowseTopLevelRouteContent(
     }
 
     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides animatedVisibilityScope) {
-        when (selectedExplorePage) {
-            org.skepsun.kototoro.core.prefs.ExplorePage.SOURCES -> {
-                KototoroExploreHostRoute(
-                    appRouter = appRouter,
-                    contentPadding = contentPadding,
-                    exploreViewModel = exploreViewModel,
-                    discoverViewModel = discoverViewModel,
-                    onSourceSelectionTopBarChanged = { selectionState ->
-                        sourceSelectionTopBarState = selectionState
-                    },
-                    onNavigateToDetails = navigateToDetailsWithOrigin,
-                    onOpenSourceList = { source ->
-                        mainNavigator.openContentList(source, null, null)
-                    },
-                )
-            }
+        // Swiping between Sources and Discover. Each feed row keeps its own horizontal drags (see
+        // keepHorizontalScrollInside), so only drags outside the rows turn the page. Off-screen pages
+        // are disposed and come back from saved state (scroll positions) and the view models (rows).
+        HorizontalPager(
+            state = explorePagerState,
+            key = { page -> explorePageAt(page).name },
+            // Source multi-select owns the top bar; keep it on its page.
+            userScrollEnabled = sourceSelectionTopBarState == null,
+            modifier = Modifier.fillMaxSize(),
+        ) { page ->
+            when (explorePageAt(page)) {
+                org.skepsun.kototoro.core.prefs.ExplorePage.SOURCES -> {
+                    KototoroExploreHostRoute(
+                        appRouter = appRouter,
+                        contentPadding = contentPadding,
+                        exploreViewModel = exploreViewModel,
+                        discoverViewModel = discoverViewModel,
+                        onSourceSelectionTopBarChanged = { selectionState ->
+                            sourceSelectionTopBarState = selectionState
+                        },
+                        onNavigateToDetails = navigateToDetailsWithOrigin,
+                        onOpenSourceList = { source ->
+                            mainNavigator.openContentList(source, null, null)
+                        },
+                    )
+                }
 
-            org.skepsun.kototoro.core.prefs.ExplorePage.DISCOVERY -> {
-                org.skepsun.kototoro.explore.ui.compose.DiscoveryFeedPage(
-                    uiState = discoveryFeedUiState,
-                    sourcesByName = discoveryFeedSourcesByName,
-                    contentPadding = contentPadding,
-                    posterStyle = discoveryPosterStyle,
-                    gridScale = browseGridScale,
-                    cardUiPrefs = discoveryCardUiPrefs,
-                    onRowVisible = discoveryFeedViewModel::onRowVisible,
-                    onRetryRow = discoveryFeedViewModel::retryRow,
-                    onRefreshAll = discoveryFeedViewModel::refreshAll,
-                    onContentClick = navigateToDetailsWithContent,
-                    onRowHeaderClick = { row ->
-                        val source = discoveryFeedSourcesByName[row.sourceName] ?: return@DiscoveryFeedPage
-                        coroutineScope.launch {
-                            val savedFilter = row.savedFilterId?.let { id ->
-                                discoveryFeedViewModel.findSavedFilter(source, id)
+                org.skepsun.kototoro.core.prefs.ExplorePage.DISCOVERY -> {
+                    org.skepsun.kototoro.explore.ui.compose.DiscoveryFeedPage(
+                        uiState = discoveryFeedUiState,
+                        sourcesByName = discoveryFeedSourcesByName,
+                        contentPadding = contentPadding,
+                        posterStyle = discoveryPosterStyle,
+                        gridScale = browseGridScale,
+                        cardUiPrefs = discoveryCardUiPrefs,
+                        isActive = settledExplorePage == ExplorePage.DISCOVERY,
+                        onRowVisible = discoveryFeedViewModel::onRowVisible,
+                        onRetryRow = discoveryFeedViewModel::retryRow,
+                        onRefreshAll = discoveryFeedViewModel::refreshAll,
+                        onContentClick = navigateToDetailsWithContent,
+                        onRowHeaderClick = { row ->
+                            val source = discoveryFeedSourcesByName[row.sourceName] ?: return@DiscoveryFeedPage
+                            coroutineScope.launch {
+                                val savedFilter = row.savedFilterId?.let { id ->
+                                    discoveryFeedViewModel.findSavedFilter(source, id)
+                                }
+                                val query = row.normalizedQuery
+                                val filter = when {
+                                    savedFilter != null -> savedFilter.filter
+                                    query != null -> ContentListFilter(query = query)
+                                    else -> null
+                                }
+                                mainNavigator.openContentList(source, filter, null)
                             }
-                            val query = row.normalizedQuery
-                            val filter = when {
-                                savedFilter != null -> savedFilter.filter
-                                query != null -> ContentListFilter(query = query)
-                                else -> null
-                            }
-                            mainNavigator.openContentList(source, filter, null)
-                        }
-                    },
-                    onEditRowClick = { row ->
-                        editingFeedRowId = row.id
-                        showFeedRowEditorSheet = true
-                    },
-                    onAddRowClick = {
-                        editingFeedRowId = null
-                        showFeedRowEditorSheet = true
-                    },
-                    onManageRowsClick = {
-                        showManageFeedRowsSheet = true
-                    },
-                )
+                        },
+                        onEditRowClick = { row ->
+                            editingFeedRowId = row.id
+                            showFeedRowEditorSheet = true
+                        },
+                        onAddRowClick = {
+                            editingFeedRowId = null
+                            showFeedRowEditorSheet = true
+                        },
+                        onManageRowsClick = {
+                            showManageFeedRowsSheet = true
+                        },
+                    )
+                }
             }
         }
     }

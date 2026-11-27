@@ -56,7 +56,9 @@ fun List<CompactFilterRailItem>.selectedFirst(): List<CompactFilterRailItem> {
 
 data class TopBarSegmentedSwitcherItem(
     val id: String,
+    /** Label, or the content description and tooltip when [iconRes] is set. */
     val title: String,
+    val iconRes: Int? = null,
 )
 
 data class TopBarSegmentedAction(
@@ -72,6 +74,11 @@ data class TopBarSegmentedSwitcherState(
     val onItemSelected: (String) -> Unit,
     val hideSourceFilters: Boolean = false,
     val leadingExtraActions: List<TopBarSegmentedAction> = emptyList(),
+    /**
+     * Fractional index for the highlight (e.g. a pager's page + offset), read at layout time so it
+     * tracks a swipe frame by frame; null animates to [selectedItemId] instead.
+     */
+    val selectionPosition: (() -> Float)? = null,
 ) : TopBarOverrideState
 
 data class LayeredTopBarOverrideState(

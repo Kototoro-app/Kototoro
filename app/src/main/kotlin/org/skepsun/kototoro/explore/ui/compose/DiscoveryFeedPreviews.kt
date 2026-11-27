@@ -9,12 +9,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -25,6 +27,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.ExplorePage
@@ -45,6 +48,7 @@ import org.skepsun.kototoro.explore.ui.DiscoveryFeedUiState
 import org.skepsun.kototoro.list.domain.ReadingProgress
 import org.skepsun.kototoro.list.ui.compose.ContentCardUiPrefs
 import org.skepsun.kototoro.list.ui.model.ContentGridModel
+import org.skepsun.kototoro.main.ui.compose.ExploreBelowBarSwitcherInset
 import org.skepsun.kototoro.main.ui.compose.KototoroTopBar
 import org.skepsun.kototoro.main.ui.compose.TopBarSegmentedAction
 import org.skepsun.kototoro.main.ui.compose.TopBarSegmentedSwitcherItem
@@ -117,6 +121,7 @@ private val previewLightColorScheme = lightColorScheme(
 
 @Composable
 private fun DiscoveryFeedPreviewTheme(
+    dark: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val style = InterfaceStyle.MATERIAL_3_EXPRESSIVE
@@ -133,7 +138,7 @@ private fun DiscoveryFeedPreviewTheme(
         ),
     ) {
         MaterialTheme(
-            colorScheme = previewLightColorScheme,
+            colorScheme = if (dark) darkColorScheme() else previewLightColorScheme,
             content = content,
         )
     }
@@ -149,10 +154,12 @@ private fun PreviewExploreTopBarOverlay(
             TopBarSegmentedSwitcherItem(
                 id = ExplorePage.SOURCES.name,
                 title = stringResource(R.string.explore_page_sources),
+                iconRes = R.drawable.ic_manga_source,
             ),
             TopBarSegmentedSwitcherItem(
                 id = ExplorePage.DISCOVERY.name,
                 title = stringResource(R.string.explore_page_discovery),
+                iconRes = R.drawable.ic_explore_normal,
             ),
         ),
         selectedItemId = selectedPage.name,
@@ -189,9 +196,20 @@ private fun PreviewExploreTopBarOverlay(
     locale = "zh-rCN",
 )
 @Composable
-internal fun ExploreSourcesFloatingSwitcherPreview() {
-    DiscoveryFeedPreviewTheme {
-        val topInset = LocalInterfaceStyleTokens.current.mainTopBarHeight
+internal fun ExploreSourcesFloatingSwitcherPreview() = ExploreSourcesPreviewContent()
+
+@Preview(name = "Explore Sources · dark", widthDp = 412, heightDp = 820, locale = "zh-rCN")
+@Composable
+internal fun ExploreSourcesDarkPreview() = ExploreSourcesPreviewContent(dark = true)
+
+@Preview(name = "Explore Sources · scrolled", widthDp = 412, heightDp = 820, locale = "zh-rCN")
+@Composable
+internal fun ExploreSourcesScrolledPreview() = ExploreSourcesPreviewContent(scrolledBy = 96.dp)
+
+@Composable
+private fun ExploreSourcesPreviewContent(dark: Boolean = false, scrolledBy: Dp = 0.dp) {
+    DiscoveryFeedPreviewTheme(dark = dark) {
+        val topInset = LocalInterfaceStyleTokens.current.mainTopBarHeight + ExploreBelowBarSwitcherInset
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -200,6 +218,7 @@ internal fun ExploreSourcesFloatingSwitcherPreview() {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
+                    .offset(y = -scrolledBy)
                     .padding(top = topInset + 12.dp, start = CompactTopBarHorizontalPadding, end = CompactTopBarHorizontalPadding),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
@@ -213,6 +232,8 @@ internal fun ExploreSourcesFloatingSwitcherPreview() {
                     listOf("MangaDex", "拷贝漫画", "哔哩哔哩漫画"),
                     listOf("动漫之家", "轻小说文库", "AniList"),
                     listOf("Bangumi", "NHentai", "Pixiv"),
+                    listOf("Komga", "Kavita", "Suwayomi"),
+                    listOf("MangaPlus", "Webtoons", "Tapas"),
                 )
                 demoSources.forEach { row ->
                     Row(
@@ -280,7 +301,7 @@ internal fun ExploreSourcesFloatingSwitcherPreview() {
 @Composable
 internal fun ExploreDiscoveryEmptyPreview() {
     DiscoveryFeedPreviewTheme {
-        val topInset = LocalInterfaceStyleTokens.current.mainTopBarHeight
+        val topInset = LocalInterfaceStyleTokens.current.mainTopBarHeight + ExploreBelowBarSwitcherInset
         Box(modifier = Modifier.fillMaxSize()) {
             DiscoveryFeedPage(
                 uiState = DiscoveryFeedUiState(),
@@ -314,9 +335,16 @@ internal fun ExploreDiscoveryEmptyPreview() {
     locale = "zh-rCN",
 )
 @Composable
-internal fun ExploreDiscoveryPopulatedPreview() {
-    DiscoveryFeedPreviewTheme {
-        val topInset = LocalInterfaceStyleTokens.current.mainTopBarHeight
+internal fun ExploreDiscoveryPopulatedPreview() = ExploreDiscoveryPopulatedContent()
+
+@Preview(name = "Explore Discovery · dark", widthDp = 412, heightDp = 860, locale = "zh-rCN")
+@Composable
+internal fun ExploreDiscoveryPopulatedDarkPreview() = ExploreDiscoveryPopulatedContent(dark = true)
+
+@Composable
+private fun ExploreDiscoveryPopulatedContent(dark: Boolean = false) {
+    DiscoveryFeedPreviewTheme(dark = dark) {
+        val topInset = LocalInterfaceStyleTokens.current.mainTopBarHeight + ExploreBelowBarSwitcherInset
         val srcMangaDex = PreviewSource(name = "MangaDex", locale = "en")
         val srcCopyManga = PreviewSource(name = "拷贝漫画", locale = "zh")
         val srcLightNovel = PreviewSource(name = "轻小说文库", locale = "zh", contentType = ContentType.NOVEL)

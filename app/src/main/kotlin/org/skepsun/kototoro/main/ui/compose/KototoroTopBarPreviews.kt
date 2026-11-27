@@ -11,6 +11,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
+import org.skepsun.kototoro.core.prefs.TopBarStyle
 import org.skepsun.kototoro.core.ui.glass.GlassPrefs
 import org.skepsun.kototoro.core.ui.glass.LocalGlassPrefs
 import org.skepsun.kototoro.core.ui.text.LocalUiStrings
@@ -48,10 +49,21 @@ private fun ExploreSegmentedTopBarPreview(discovery: Boolean) {
         KototoroTopBar(
             query = "",
             titleRes = R.string.explore,
+            // The switcher sits in the bar only with the compact style; the long search pill pushes
+            // it below the bar (see DiscoveryFeedPreviews).
+            topBarStyle = TopBarStyle.COMPACT,
             segmentedSwitcherState = TopBarSegmentedSwitcherState(
                 items = listOf(
-                    TopBarSegmentedSwitcherItem("SOURCES", stringResource(R.string.explore_page_sources)),
-                    TopBarSegmentedSwitcherItem("DISCOVERY", stringResource(R.string.explore_page_discovery)),
+                    TopBarSegmentedSwitcherItem(
+                        "SOURCES",
+                        stringResource(R.string.explore_page_sources),
+                        R.drawable.ic_manga_source,
+                    ),
+                    TopBarSegmentedSwitcherItem(
+                        "DISCOVERY",
+                        stringResource(R.string.explore_page_discovery),
+                        R.drawable.ic_explore_normal,
+                    ),
                 ),
                 selectedItemId = if (discovery) "DISCOVERY" else "SOURCES",
                 onItemSelected = {},
@@ -73,21 +85,37 @@ private fun ExploreSegmentedTopBarPreview(discovery: Boolean) {
     }
 }
 
-@Preview(name = "Explore sources 412dp", widthDp = 412, heightDp = 120, locale = "zh-rCN")
+@Preview(name = "Explore sources 412dp zh-rCN", widthDp = 412, heightDp = 120, locale = "zh-rCN")
 @Composable
-internal fun ExploreSourcesTopBar412Preview() = ExploreSegmentedTopBarPreview(discovery = false)
+internal fun ExploreSourcesTopBar412ZhPreview() = ExploreSegmentedTopBarPreview(discovery = false)
 
-@Preview(name = "Explore discovery 412dp", widthDp = 412, heightDp = 120, locale = "zh-rCN")
+@Preview(name = "Explore discovery 412dp zh-rCN", widthDp = 412, heightDp = 120, locale = "zh-rCN")
 @Composable
-internal fun ExploreDiscoveryTopBar412Preview() = ExploreSegmentedTopBarPreview(discovery = true)
+internal fun ExploreDiscoveryTopBar412ZhPreview() = ExploreSegmentedTopBarPreview(discovery = true)
 
-@Preview(name = "Explore sources 360dp", widthDp = 360, heightDp = 120, locale = "en")
+@Preview(name = "Explore sources 412dp en", widthDp = 412, heightDp = 120, locale = "en")
 @Composable
-internal fun ExploreSourcesTopBar360Preview() = ExploreSegmentedTopBarPreview(discovery = false)
+internal fun ExploreSourcesTopBar412EnPreview() = ExploreSegmentedTopBarPreview(discovery = false)
 
-@Preview(name = "Explore discovery 360dp", widthDp = 360, heightDp = 120, locale = "en")
+@Preview(name = "Explore discovery 412dp en", widthDp = 412, heightDp = 120, locale = "en")
 @Composable
-internal fun ExploreDiscoveryTopBar360Preview() = ExploreSegmentedTopBarPreview(discovery = true)
+internal fun ExploreDiscoveryTopBar412EnPreview() = ExploreSegmentedTopBarPreview(discovery = true)
+
+@Preview(name = "Explore sources 360dp zh-rCN", widthDp = 360, heightDp = 120, locale = "zh-rCN")
+@Composable
+internal fun ExploreSourcesTopBar360ZhPreview() = ExploreSegmentedTopBarPreview(discovery = false)
+
+@Preview(name = "Explore discovery 360dp zh-rCN", widthDp = 360, heightDp = 120, locale = "zh-rCN")
+@Composable
+internal fun ExploreDiscoveryTopBar360ZhPreview() = ExploreSegmentedTopBarPreview(discovery = true)
+
+@Preview(name = "Explore sources 360dp en", widthDp = 360, heightDp = 120, locale = "en")
+@Composable
+internal fun ExploreSourcesTopBar360EnPreview() = ExploreSegmentedTopBarPreview(discovery = false)
+
+@Preview(name = "Explore discovery 360dp en", widthDp = 360, heightDp = 120, locale = "en")
+@Composable
+internal fun ExploreDiscoveryTopBar360EnPreview() = ExploreSegmentedTopBarPreview(discovery = true)
 
 @Preview(name = "Library top bar", widthDp = 412, heightDp = 120, locale = "zh-rCN")
 @Composable

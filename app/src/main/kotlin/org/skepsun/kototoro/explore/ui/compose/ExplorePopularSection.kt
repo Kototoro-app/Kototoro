@@ -106,7 +106,9 @@ internal fun TrackingCategoryRow(
         val railAnimationFactor = rememberRailAnimationFactor()
         LazyRow(
             state = rowState,
-            modifier = if (isTvPresentation) Modifier.focusGroup() else Modifier,
+            modifier = Modifier
+                .keepHorizontalScrollInside()
+                .then(if (isTvPresentation) Modifier.focusGroup() else Modifier),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             contentPadding = PaddingValues(horizontal = 2.dp),
         ) {
