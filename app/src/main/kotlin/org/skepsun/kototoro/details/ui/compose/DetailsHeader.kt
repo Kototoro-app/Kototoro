@@ -359,7 +359,7 @@ fun DetailsHeader(
     val isNsfw = content?.isNsfw() == true
     val renderCinemaHero = mediaStylePolicy.useCenteredHeroHeader && panoramaEnabled
     val authorClick: (() -> Unit)? = primaryAuthor?.let { name -> { onAuthorClick(name) } }
-    // The score sits with the header's actions; the rating section below has the breakdown.
+    // The score sits on the cover badge; the rating section below has the breakdown.
     val headerRating = metaRatingValue ?: ratingLabel
     val metaItems: List<DetailsMetaItem> = buildList {
         // The cinema hero already says the status and episode count in its own metadata line.
@@ -687,8 +687,10 @@ fun DetailsHeader(
                 ownerKey = content?.url,
                 coverUrl = currentCoverUrl,
                 sharedElementKey = sharedElementKey,
-                topBadgeText = null,
+                // The score rides on the cover so the action row under the title stays short enough to fit (#761).
+                topBadgeText = headerRating,
                 topBadgeIconRes = R.drawable.ic_star_small,
+                onTopBadgeClick = onMetaRatingClick,
                 onClick = { onCoverClick(currentCoverUrl) },
                 onState = { state ->
                     if (state is coil3.compose.AsyncImagePainter.State.Error) {
@@ -711,12 +713,18 @@ fun DetailsHeader(
                     },
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                // Copy sits at the title's top end instead of in the action row, which ran out of width (#761).
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.Top,
+                ) {
                 SelectionContainer(
                     modifier = Modifier
                         // `SelectionContainer` 自己就是一个没有环的焦点目标（键盘选区要能拿到焦点），
                         // 遥控器从顶栏往下按会先掉进它，画面上的环凭空消失。电视上没有鼠标选区，直接跳过。
                         .focusProperties { if (isTvPresentation) canFocus = false }
-                        .fillMaxWidth(),
+                        .weight(1f),
                 ) {
                     Text(
                         text = titleForDisplay,
@@ -771,6 +779,18 @@ fun DetailsHeader(
                             }
                         },
                     )
+                }
+                DetailsHeaderIconButton(
+                    iconRes = R.drawable.ic_copy,
+                    onClick = {
+                        context.copyToClipboard(displayTitle, displayTitle)
+                        Toast.makeText(context, R.string.details_title_copied, Toast.LENGTH_SHORT).show()
+                    },
+                    contentDescription = stringResource(R.string.details_copy_title),
+                    modifier = Modifier.padding(top = 2.dp),
+                    buttonSize = 26.dp,
+                    iconSize = 14.dp,
+                )
                 }
                 if (alternateTitlesText.isNotEmpty()) {
                     Text(
@@ -835,16 +855,6 @@ fun DetailsHeader(
                         .horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    DetailsHeaderIconButton(
-                        iconRes = R.drawable.ic_copy,
-                        onClick = {
-                            context.copyToClipboard(displayTitle, displayTitle)
-                            Toast.makeText(context, R.string.details_title_copied, Toast.LENGTH_SHORT).show()
-                        },
-                        contentDescription = stringResource(R.string.details_copy_title),
-                        buttonSize = 32.dp,
-                        iconSize = 17.dp,
-                    )
                     if (showWorkActions) {
                         DetailsHeaderIconButton(
                             iconRes = if (isFavourite) R.drawable.ic_heart else R.drawable.ic_heart_outline,
@@ -861,9 +871,6 @@ fun DetailsHeader(
                             linkedTrackingItems = linkedTrackingItems,
                             onUpdateStatus = onUpdateReadingStatus,
                         )
-                    }
-                    headerRating?.let { rating ->
-                        DetailsRatingChip(rating = rating, onClick = onMetaRatingClick)
                     }
                 }
             }

@@ -80,6 +80,7 @@ fun DetailsCoverFrame(
     sharedElementKey: String? = null,
     topBadgeText: String? = null,
     @DrawableRes topBadgeIconRes: Int? = null,
+    onTopBadgeClick: (() -> Unit)? = null,
     onClick: (() -> Unit)?,
     modifier: Modifier = Modifier,
     isBookCover: Boolean = false,
@@ -267,11 +268,22 @@ fun DetailsCoverFrame(
                 } else {
                     Color.White
                 }
+                val badgeShape = RoundedCornerShape(12.dp)
                 Surface(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(8.dp),
-                    shape = RoundedCornerShape(12.dp),
+                        .padding(8.dp)
+                        .then(
+                            if (onTopBadgeClick != null) {
+                                Modifier
+                                    .clip(badgeShape)
+                                    .tvFocusable(shape = badgeShape, addFocusTarget = false)
+                                    .clickable(onClick = onTopBadgeClick)
+                            } else {
+                                Modifier
+                            },
+                        ),
+                    shape = badgeShape,
                     color = badgeContainerColor,
                     contentColor = badgeContentColor,
                     tonalElevation = 0.dp,
