@@ -18,21 +18,25 @@ import okio.Path.Companion.toPath
 import okio.buffer
 import okio.use
 import org.skepsun.kototoro.backups.domain.BackupSection
+import org.skepsun.kototoro.backups.external.DEFAULT_MAX_USAGI_BACKUP_ENTRY_BYTES
 import org.skepsun.kototoro.backups.external.ExternalBackupApp
 import org.skepsun.kototoro.backups.external.ExternalBackupPayload
 import org.skepsun.kototoro.backups.external.ExternalImportTransaction
 import org.skepsun.kototoro.backups.external.ExternalLibraryImport
 import org.skepsun.kototoro.backups.external.ExternalSourceCandidate
 import org.skepsun.kototoro.backups.external.ExternalSourceKind
+import org.skepsun.kototoro.backups.external.USAGI_BACKUP_APP_ID
 import org.skepsun.kototoro.backups.external.VeneraBackupDecoding
 import org.skepsun.kototoro.backups.external.VeneraDatabase
 import org.skepsun.kototoro.backups.external.decodeMihonOrAniyomiBackupAutoDetect
+import org.skepsun.kototoro.backups.external.decodeUsagiBackupSections
+import org.skepsun.kototoro.backups.external.usagiBackupEntryName
 import kotlin.random.Random
 
 /** Another app's backup, decoded and counted; nothing is written until [IosLibrary.importExternalBackup]. */
 class IosExternalBackupPreview internal constructor(
     internal val payload: ExternalBackupPayload,
-    /** Mihon, Aniyomi or Venera. */
+    /** Mihon, Aniyomi, Venera or Usagi. */
     val app: String,
     val filename: String,
 ) {
@@ -68,8 +72,13 @@ internal class IosExternalBackupService(private val library: IosLibrary) {
             source.request(4) && source.readByte() == 'P'.code.toByte() && source.readByte() == 'K'.code.toByte()
         }
         if (isZip) {
-            val bytes = readFile(path, BackupZipReader.MAX_ARCHIVE_BYTES)
-            IosExternalBackupPreview(decodeVenera(bytes), "Venera", filename)
+            val zip = BackupZipReader.parse(readFile(path, BackupZipReader.MAX_ARCHIVE_BYTES), strict = false)
+            val sections = usagiSections(zip)
+            if (sections != null) {
+                IosExternalBackupPreview(decodeUsagiBackupSections(sections), "Usagi", filename)
+            } else {
+                IosExternalBackupPreview(decodeVenera(zip), "Venera", filename)
+            }
         } else {
             val decoded = try {
                 decodeMihonOrAniyomiBackupAutoDetect(
@@ -78,7 +87,7 @@ internal class IosExternalBackupService(private val library: IosLibrary) {
                 )
             } catch (_: EOFException) {
                 null
-            } ?: throw IllegalArgumentException(localized("无法识别的备份文件：支持 Kototoro/Kotatsu、Mihon/Tachiyomi、Aniyomi 和 Venera 备份"))
+            } ?: throw IllegalArgumentException(localized("无法识别的备份文件：支持 Kototoro/Kotatsu、Mihon/Tachiyomi、Aniyomi、Venera 和 Usagi 备份"))
             IosExternalBackupPreview(
                 payload = decoded.payload,
                 app = if (decoded.app == ExternalBackupApp.ANIYOMI) "Aniyomi" else "Mihon",
@@ -122,9 +131,26 @@ internal class IosExternalBackupService(private val library: IosLibrary) {
             ExternalSourceCandidate(source.name, source.title, kind))
     }
 
+    /**
+     * Usagi's imported sections when the ZIP is a Usagi backup, identified by `app_id` in `index`;
+     * null otherwise. Each entry is bounded by the same 64 MiB per-entry limit as Android (#747).
+     */
+    private fun usagiSections(zip: BackupZipReader): Map<String, String>? {
+        val sections = LinkedHashMap<String, String>()
+        for (entry in zip.entries) {
+            val name = usagiBackupEntryName(entry.name) ?: continue
+            if (name in sections) continue
+            require(entry.size <= DEFAULT_MAX_USAGI_BACKUP_ENTRY_BYTES) {
+                localized("Usagi 备份单节超过 64 MiB 限制")
+            }
+            sections[name] = zip.read(entry).decodeToString()
+        }
+        val index = sections["index"] ?: return null
+        return sections.takeIf { index.contains(USAGI_BACKUP_APP_ID) }
+    }
+
     /** Venera's databases are copied out of the ZIP and read with the bundled SQLite, then removed again. */
-    private fun decodeVenera(bytes: ByteArray): ExternalBackupPayload {
-        val zip = BackupZipReader.parse(bytes, strict = false)
+    private fun decodeVenera(zip: BackupZipReader): ExternalBackupPayload {
         val directory = FileSystem.SYSTEM_TEMPORARY_DIRECTORY / "venera-${Random.nextLong().toULong()}"
         FileSystem.SYSTEM.createDirectories(directory)
         val connections = mutableMapOf<String, SQLiteConnection>()

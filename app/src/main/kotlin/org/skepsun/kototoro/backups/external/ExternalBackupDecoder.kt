@@ -8,9 +8,13 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import okio.BufferedSource
 import okio.buffer
 import okio.source
+import org.skepsun.kototoro.core.util.LibArchiveUtils
+import org.skepsun.kototoro.core.util.readEntryBytes
 import java.io.File
 import java.io.IOException
+import java.util.zip.ZipException
 import java.util.zip.ZipFile
+import java.util.zip.ZipInputStream
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -32,7 +36,38 @@ class ExternalBackupDecoder @Inject constructor(
                     decodeVeneraBackup(bytes)
                 }.getOrNull()
             }
+            ExternalBackupApp.USAGI -> decodeUsagiBackup(uri)
         } ?: throw UnsupportedExternalBackupException("Unsupported ${app.name} backup format")
+    }
+
+    /**
+     * Reads only the sections the import needs out of the Usagi ZIP, each one bounded by
+     * [LibArchiveUtils.DEFAULT_MAX_ENTRY_BYTES] (the 64 MiB limit from #747), then hands the JSON
+     * text to the shared [decodeUsagiBackupSections] rules.
+     */
+    private fun decodeUsagiBackup(uri: Uri): ExternalBackupPayload {
+        val inputStream = context.contentResolver.openInputStream(uri)
+            ?: throw IOException("Unable to open backup file")
+        val sections = LinkedHashMap<String, String>()
+        try {
+            ZipInputStream(inputStream.buffered()).use { zip ->
+                while (true) {
+                    val entry = zip.nextEntry ?: break
+                    if (entry.isDirectory) continue
+                    val section = usagiBackupEntryName(entry.name) ?: continue
+                    if (section in sections) continue
+                    sections[section] = zip.readEntryBytes(
+                        path = entry.name,
+                        maxBytes = LibArchiveUtils.DEFAULT_MAX_ENTRY_BYTES,
+                    ).decodeToString()
+                }
+            }
+        } catch (e: ZipException) {
+            throw UnsupportedExternalBackupException("Not a Usagi backup: ${e.message}")
+        } finally {
+            inputStream.close()
+        }
+        return decodeUsagiBackupSections(sections)
     }
 
     private inline fun <T> openBackupSource(uri: Uri, block: (BufferedSource) -> T): T {

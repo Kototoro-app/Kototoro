@@ -4,4 +4,5 @@ enum class ExternalBackupApp {
     MIHON,
     VENERA,
     ANIYOMI,
+    USAGI,
 }
