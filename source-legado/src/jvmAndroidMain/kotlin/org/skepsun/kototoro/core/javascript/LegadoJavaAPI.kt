@@ -28,6 +28,8 @@ import org.skepsun.kototoro.core.parser.legado.AnalyzeByJSoup
 import org.skepsun.kototoro.core.parser.legado.AnalyzeByJsonPath
 import org.skepsun.kototoro.core.parser.legado.LegadoRequestPlanBuilder
 import org.skepsun.kototoro.core.parser.legado.runtime.LegadoJsEvaluator
+import org.skepsun.kototoro.core.util.checkArchiveEntryDeclaredSize
+import org.skepsun.kototoro.core.util.copyEntryTo
 import java.net.URL
 import java.net.URLDecoder
 import java.net.URLEncoder
@@ -2127,7 +2129,9 @@ class LegadoJavaAPI(
                     val entry = zipInput.nextEntry ?: break
                     if (entry.name == path) {
                         output.reset()
-                        zipInput.copyTo(output)
+                        // The source-supplied archive can hold a zip bomb, so the copy is bounded (#738).
+                        checkArchiveEntryDeclaredSize(entry.name, entry.size)
+                        zipInput.copyEntryTo(output, entry.name)
                         return@runCatching output.toByteArray()
                     }
                 }
