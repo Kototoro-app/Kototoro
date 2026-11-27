@@ -3192,6 +3192,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_EXPLORE_HIDE_EMPTY_SOURCES = "explore_hide_empty_sources"
         const val KEY_EXPLORE_PAGE = "explore_page"
         const val KEY_DISCOVERY_FEED_ROWS = "discovery_feed_rows"
+        const val KEY_DISCOVERY_FEED_HIDE_IN_LIBRARY = "discovery_feed_hide_in_library"
         const val KEY_ACTIVE_TVBOX_REPOSITORY = "active_tvbox_repository"
 
         const val TRACK_HISTORY = "history"

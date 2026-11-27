@@ -4480,6 +4480,12 @@
     <string name="discovery_feed_manage_rows">管理内容行</string>
     <string name="discovery_feed_row_load_failed">加载该内容行失败</string>
     <string name="discovery_feed_row_empty">暂无内容</string>
+    <string name="discovery_feed_row_all_in_library">这一行的作品都已在书库中</string>
+    <string name="discovery_feed_hide_in_library">隐藏已在书库的作品</string>
+    <string name="discovery_feed_show_in_library">显示已在书库的作品</string>
+    <string name="discovery_feed_bulk_added">已将 %1$d 部作品加入书库</string>
+    <string name="discovery_feed_bulk_added_skipped">已将 %1$d 部作品加入书库，跳过 %2$d 部已在书库的作品</string>
+    <string name="discovery_feed_bulk_all_in_library">所选的 %1$d 部作品都已在书库中</string>
     <string name="discovery_feed_row_hidden_badge">已隐藏</string>
     <string name="discovery_feed_saved_filter_badge">已保存筛选器</string>
     <string name="discovery_feed_source_label">图源</string>

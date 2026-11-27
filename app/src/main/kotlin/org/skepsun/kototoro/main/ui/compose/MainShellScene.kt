@@ -786,6 +786,7 @@ internal fun BrowseTopLevelRouteContent(
     LaunchedEffect(settledExplorePage, discoveryFeedViewModel) {
         if (settledExplorePage != ExplorePage.DISCOVERY) {
             discoveryFeedViewModel.cancelInFlightLoads()
+            discoveryFeedViewModel.clearSelection()
         } else {
             sourceSelectionTopBarState = null
         }
@@ -874,6 +875,44 @@ internal fun BrowseTopLevelRouteContent(
         )
     }
 
+    val feedSelectionTopBarState = org.skepsun.kototoro.explore.ui.compose.discoveryFeedSelectionTopBarState(
+        uiState = discoveryFeedUiState,
+        onClearSelection = discoveryFeedViewModel::clearSelection,
+        onActionClick = { action ->
+            when (action) {
+                SelectionAction.SELECT_ALL -> discoveryFeedViewModel.selectAllInCurrentRow()
+                SelectionAction.FAVOURITE -> coroutineScope.launch {
+                    val plan = discoveryFeedViewModel.planBulkAddToLibrary()
+                    if (plan.toAdd.isEmpty()) {
+                        org.skepsun.kototoro.explore.ui.compose.discoveryFeedBulkAddPlanMessage(plan)?.let { message ->
+                            android.widget.Toast.makeText(
+                                context,
+                                context.getString(message.resId, *message.args.toTypedArray()),
+                                android.widget.Toast.LENGTH_SHORT,
+                            ).show()
+                        }
+                        discoveryFeedViewModel.clearSelection()
+                        return@launch
+                    }
+                    appRouter.showFavoriteDialog(plan.toAdd) {
+                        coroutineScope.launch {
+                            val result = discoveryFeedViewModel.completeBulkAddToLibrary(plan)
+                            org.skepsun.kototoro.explore.ui.compose.discoveryFeedBulkAddResultMessage(result)
+                                ?.let { message ->
+                                    android.widget.Toast.makeText(
+                                        context,
+                                        context.getString(message.resId, *message.args.toTypedArray()),
+                                        android.widget.Toast.LENGTH_SHORT,
+                                    ).show()
+                                }
+                        }
+                    }
+                }
+                else -> Unit
+            }
+        },
+    )
+
     val sourcesPageLabel = stringResource(org.skepsun.kototoro.R.string.explore_page_sources)
     val discoveryPageLabel = stringResource(org.skepsun.kototoro.R.string.explore_page_discovery)
     val segmentedSwitcherState = remember(
@@ -929,7 +968,7 @@ internal fun BrowseTopLevelRouteContent(
                     contextualOverrideState = if (selectedExplorePage == org.skepsun.kototoro.core.prefs.ExplorePage.SOURCES) {
                         sourceSelectionTopBarState
                     } else {
-                        null
+                        feedSelectionTopBarState
                     },
                     keepTopBarPinned = true,
                 ),
@@ -943,7 +982,13 @@ internal fun BrowseTopLevelRouteContent(
         }
     }
 
-    DisposableEffect(ownerRoute, exploreViewModel, isEmptySourcesHidden, selectedExplorePage) {
+    DisposableEffect(
+        ownerRoute,
+        exploreViewModel,
+        isEmptySourcesHidden,
+        selectedExplorePage,
+        discoveryFeedUiState.hideInLibrary,
+    ) {
         val actions = if (selectedExplorePage == org.skepsun.kototoro.core.prefs.ExplorePage.DISCOVERY) {
             listOf(
                 KototoroTopBarMenuAction(
@@ -958,6 +1003,21 @@ internal fun BrowseTopLevelRouteContent(
                     org.skepsun.kototoro.R.drawable.ic_reorder_handle,
                 ) {
                     showManageFeedRowsSheet = true
+                },
+                if (discoveryFeedUiState.hideInLibrary) {
+                    KototoroTopBarMenuAction(
+                        org.skepsun.kototoro.R.string.discovery_feed_show_in_library,
+                        org.skepsun.kototoro.R.drawable.ic_eye,
+                    ) {
+                        discoveryFeedViewModel.setHideInLibrary(false)
+                    }
+                } else {
+                    KototoroTopBarMenuAction(
+                        org.skepsun.kototoro.R.string.discovery_feed_hide_in_library,
+                        org.skepsun.kototoro.R.drawable.ic_eye_off,
+                    ) {
+                        discoveryFeedViewModel.setHideInLibrary(true)
+                    }
                 },
             )
         } else {
@@ -1039,8 +1099,11 @@ internal fun BrowseTopLevelRouteContent(
         HorizontalPager(
             state = explorePagerState,
             key = { page -> explorePageAt(page).name },
-            // Source multi-select owns the top bar; keep it on its page.
-            userScrollEnabled = sourceSelectionTopBarState == null,
+            // Multi-select on either page owns the top bar; keep it on its page.
+            userScrollEnabled = explorePagerUserScrollEnabled(
+                sourceSelectionActive = sourceSelectionTopBarState != null,
+                feedSelectionActive = discoveryFeedUiState.isSelectionMode,
+            ),
             modifier = Modifier.fillMaxSize(),
         ) { page ->
             when (explorePageAt(page)) {
@@ -1096,6 +1159,10 @@ internal fun BrowseTopLevelRouteContent(
                             editingFeedRowId = null
                             showFeedRowEditorSheet = true
                         },
+                        onToggleSelection = { rowId, content ->
+                            discoveryFeedViewModel.toggleSelection(rowId, content.id)
+                        },
+                        onClearSelection = discoveryFeedViewModel::clearSelection,
                         onManageRowsClick = {
                             showManageFeedRowsSheet = true
                         },

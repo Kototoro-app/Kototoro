@@ -157,6 +157,24 @@ class DiscoveryFeedConfigRepository internal constructor(
         true
     }
 
+    /** Whether rows leave out works that are already in the library (favourited in any category). */
+    fun isHideInLibrary(): Boolean = prefs.getBoolean(KEY_HIDE_IN_LIBRARY, false)
+
+    fun setHideInLibrary(hide: Boolean) {
+        prefs.edit {
+            putBoolean(KEY_HIDE_IN_LIBRARY, hide)
+        }
+    }
+
+    fun observeHideInLibrary(): Flow<Boolean> = flow {
+        emit(isHideInLibrary())
+        prefs.observeChanges().collect { changedKey ->
+            if (changedKey == null || changedKey == KEY_HIDE_IN_LIBRARY) {
+                emit(isHideInLibrary())
+            }
+        }
+    }.distinctUntilChanged()
+
     internal fun encodeRows(rows: List<DiscoveryFeedRow>): String {
         return json.encodeToString(ROW_LIST_SERIALIZER, rows)
     }
@@ -194,6 +212,7 @@ class DiscoveryFeedConfigRepository internal constructor(
 
     companion object {
         const val KEY_ROWS = AppSettings.KEY_DISCOVERY_FEED_ROWS
+        const val KEY_HIDE_IN_LIBRARY = AppSettings.KEY_DISCOVERY_FEED_HIDE_IN_LIBRARY
 
         private val ROW_LIST_SERIALIZER = ListSerializer(DiscoveryFeedRow.serializer())
 
