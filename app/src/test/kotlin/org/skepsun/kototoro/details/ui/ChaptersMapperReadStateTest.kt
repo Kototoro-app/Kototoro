@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.details.ui
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.skepsun.kototoro.details.data.ContentDetails
 import org.skepsun.kototoro.details.ui.model.ChapterListItem
@@ -36,6 +37,25 @@ class ChaptersMapperReadStateTest {
     }
 
     @Test
+    fun `dimming changes brightness without changing read state or new badges`() {
+        for (type in listOf(ContentType.MANGA, ContentType.NOVEL, ContentType.VIDEO)) {
+            val details = details(type, downloaded = true)
+            for (grid in listOf(false, true)) {
+                for (downloadedOnly in listOf(false, true)) {
+                    val dimmed = details.map(1L, 5L, grid, downloadedOnly, newCount = 2)
+                    val brightened = details.map(1L, 5L, grid, downloadedOnly, keepDimmed = false, newCount = 2)
+                    assertEquals(listOf(6L), brightened.unreadIds())
+                    assertEquals(dimmed.map { it.flags }, brightened.map { it.flags })
+                    assertEquals(if (downloadedOnly) emptyList() else listOf(6L), brightened.filter { it.isNew }.map { it.chapter.id })
+                    assertEquals((1L..5L).toList(), dimmed.filter { it.isDimmed }.map { it.chapter.id })
+                    assertEquals(listOf(1L), brightened.filter { it.isDimmed }.map { it.chapter.id })
+                    assertEquals(1L, brightened.single { it.isCurrent }.chapter.id)
+                }
+            }
+        }
+    }
+
+    @Test
     fun `downloaded reading chapters use the same cutoff`() {
         val details = details(ContentType.MANGA, downloaded = true)
         assertEquals(listOf(6L), details.map(current = 5, furthest = 5, downloadedOnly = true).unreadIds())
@@ -55,9 +75,17 @@ class ChaptersMapperReadStateTest {
     fun `completed history stays dim in both modes`() {
         val details = details(ContentType.MANGA, downloaded = true)
         for (furthest in listOf(6L, 0L)) {
-            val completed = details.map(current = FULLY_READ_CHAPTER_ID, furthest = furthest, downloadedOnly = true)
-            assertEquals(6, completed.size)
-            assertEquals(emptyList<Long>(), completed.unreadIds())
+            for (keepDimmed in listOf(false, true)) {
+                val completed = details.map(
+                    current = FULLY_READ_CHAPTER_ID,
+                    furthest = furthest,
+                    downloadedOnly = true,
+                    keepDimmed = keepDimmed,
+                )
+                assertEquals(6, completed.size)
+                assertEquals(emptyList<Long>(), completed.unreadIds())
+                assertTrue(completed.all { it.isDimmed })
+            }
         }
     }
 
@@ -111,14 +139,17 @@ class ChaptersMapperReadStateTest {
         furthest: Long,
         grid: Boolean = false,
         downloadedOnly: Boolean = false,
+        keepDimmed: Boolean = true,
+        newCount: Int = 0,
     ) = mapChapters(
         currentChapterId = current,
         furthestChapterId = furthest,
-        newCount = 0,
+        newCount = newCount,
         branch = null,
         bookmarks = emptyList(),
         isGrid = grid,
         isDownloadedOnly = downloadedOnly,
+        keepReadChaptersDimmed = keepDimmed,
     )
 
     private fun List<ChapterListItem>.unreadIds() = filter { it.isUnread }.map { it.chapter.id }

@@ -2361,12 +2361,8 @@ class DetailsViewModel @Inject constructor(
         .withErrorHandling()
         .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, null)
 
-    private val furthestReadSync: StateFlow<Long> = combine(
-        history,
-        settings.observeAsFlow(AppSettings.KEY_KEEP_READ_CHAPTERS_DIMMED) { this.keepReadChaptersDimmed },
-    ) { record, keepReadChaptersDimmed ->
-        if (keepReadChaptersDimmed) record?.furthestChapterId ?: 0L else 0L
-    }
+    private val furthestReadSync: StateFlow<Long> = history
+        .map { it?.furthestChapterId ?: 0L }
         .distinctUntilChanged()
         .onEach { furthestReadChapterId.value = it }
         .withErrorHandling()

@@ -44,6 +44,7 @@ fun ContentDetails.mapChapters(
     isDownloadedOnly: Boolean,
     shareProgressAcrossBranches: Boolean = false,
     furthestChapterId: Long = 0L,
+    keepReadChaptersDimmed: Boolean = true,
 ): List<ChapterListItem> {
     val resolvedBranch = when {
         branch == null -> null
@@ -96,11 +97,13 @@ fun ContentDetails.mapChapters(
             ?: localChapters.find { it.id == id }
             ?: if (shareProgressAcrossBranches) allChapters.find { it.id == id } else null
     }
-    val readUpTo = chapterReadThrough(currentChapter?.toOrder(), furthestChapter?.toOrder())
+    val currentOrder = currentChapter?.toOrder()
+    val readUpTo = chapterReadThrough(currentOrder, furthestChapter?.toOrder())
+    val dimUpTo = if (keepReadChaptersDimmed) readUpTo else currentOrder
 
-    fun isChapterUnread(chapter: ContentChapter, requireKnownOrder: Boolean = false): Boolean {
+    fun isChapterUnread(chapter: ContentChapter, cutoff: ChapterOrder?, requireKnownOrder: Boolean = false): Boolean {
         if (currentChapterId == FULLY_READ_CHAPTER_ID) return false
-        val cutoff = readUpTo ?: return true
+        if (cutoff == null) return true
         if (requireKnownOrder && (chapter.number == 0f || cutoff.number == 0f)) {
             if (chapter.id == currentChapterId || chapter.id == cutoff.id) return false
             // Imported downloads can lack numbering. Only distinct, known volumes establish order in this case.
@@ -121,7 +124,8 @@ fun ContentDetails.mapChapters(
             }
             val local = localById ?: localByUrl
             val finalChapter = local ?: chapter
-            val isUnread = isChapterUnread(chapter)
+            val isUnread = isChapterUnread(chapter, readUpTo)
+            val isDimmed = if (dimUpTo === readUpTo) !isUnread else !isChapterUnread(chapter, dimUpTo)
 
             result += finalChapter.toListItem(
                 isCurrent = chapter.id == currentChapterId || finalChapter.id == currentChapterId,
@@ -130,18 +134,26 @@ fun ContentDetails.mapChapters(
                 isDownloaded = local != null,
                 isBookmarked = chapter.id in bookmarked || finalChapter.id in bookmarked,
                 isGrid = isGrid,
+                isDimmed = isDimmed,
             )
         }
     }
     if (!localMapById.isNullOrEmpty()) {
         for (chapter in localMapById.values) {
+            val isUnread = isChapterUnread(chapter, readUpTo, requireKnownOrder = true)
+            val isDimmed = if (dimUpTo === readUpTo) {
+                !isUnread
+            } else {
+                !isChapterUnread(chapter, dimUpTo, requireKnownOrder = true)
+            }
             result += chapter.toListItem(
                 isCurrent = chapter.id == currentChapterId,
-                isUnread = isChapterUnread(chapter, requireKnownOrder = true),
+                isUnread = isUnread,
                 isNew = false,
                 isDownloaded = true,
                 isBookmarked = chapter.id in bookmarked,
                 isGrid = isGrid,
+                isDimmed = isDimmed,
             )
         }
     }

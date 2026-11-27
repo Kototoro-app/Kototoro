@@ -241,7 +241,7 @@ private fun ChapterListItem.cardData(): ChapterCardData {
         title = getTitle(context.resources),
         description = listOfNotNull(description, statsText).joinToString(" • ").ifEmpty { null },
         isCurrent = isCurrent,
-        isUnread = isUnread,
+        isUnread = !isDimmed,
         isBookmarked = isBookmarked,
         isDownloaded = isDownloaded,
         isNew = isNew,

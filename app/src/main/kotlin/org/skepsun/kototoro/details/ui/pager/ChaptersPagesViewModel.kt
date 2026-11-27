@@ -31,6 +31,7 @@ import org.skepsun.kototoro.core.model.getPreferredBranch
 import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.core.model.toChipModel
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.prefs.observeAsFlow
 import org.skepsun.kototoro.core.prefs.observeAsStateFlow
 import org.skepsun.kototoro.core.ui.BaseViewModel
 import org.skepsun.kototoro.core.ui.chapters.chapterBranchOptions
@@ -92,7 +93,7 @@ abstract class ChaptersPagesViewModel(
     val mangaDetails = MutableStateFlow<ContentDetails?>(null)
     val readingState = MutableStateFlow<ReaderState?>(null)
 
-    /** Furthest stored chapter to include when dimming entries, or 0 when unavailable or disabled. */
+    /** Furthest chapter in saved history, or 0 when unavailable. */
     val furthestReadChapterId = MutableStateFlow(0L)
 
     data class QualityProbeResult(val snapshot: Set<Long>, val qualities: List<String>)
@@ -136,6 +137,10 @@ abstract class ChaptersPagesViewModel(
         key = AppSettings.KEY_HIDE_READ_CHAPTERS,
         valueProducer = { isHideReadChapters },
     )
+
+    private val keepReadChaptersDimmed = settings.observeAsFlow(AppSettings.KEY_KEEP_READ_CHAPTERS_DIMMED) {
+        this.keepReadChaptersDimmed
+    }
 
     val isMergeRepeatedChapters = settings.observeAsStateFlow(
         scope = viewModelScope + Dispatchers.Default,
@@ -310,8 +315,8 @@ abstract class ChaptersPagesViewModel(
 
     private val baseChaptersFlow = combine(
         chapterSourceDetails,
-        combine(readingState, furthestReadChapterId) { state, furthest ->
-            ReadMarks(current = state?.chapterId ?: 0L, furthest = furthest)
+        combine(readingState, furthestReadChapterId, keepReadChaptersDimmed) { state, furthest, keepDimmed ->
+            ReadMarks(current = state?.chapterId ?: 0L, furthest = furthest, keepDimmed = keepDimmed)
         }.distinctUntilChanged(),
         selectedBranch,
         newChaptersCount,
@@ -336,6 +341,7 @@ abstract class ChaptersPagesViewModel(
                         isGrid = grid,
                         isDownloadedOnly = downloadedOnly,
                         shareProgressAcrossBranches = true,
+                        keepReadChaptersDimmed = marks.keepDimmed,
                     )
                 }
             } else {
@@ -347,6 +353,7 @@ abstract class ChaptersPagesViewModel(
                     bookmarks = bookmarks,
                     isGrid = grid,
                     isDownloadedOnly = downloadedOnly,
+                    keepReadChaptersDimmed = marks.keepDimmed,
                 )
             }
         } else {
@@ -358,6 +365,7 @@ abstract class ChaptersPagesViewModel(
                 bookmarks = bookmarks,
                 isGrid = grid,
                 isDownloadedOnly = downloadedOnly,
+                keepReadChaptersDimmed = marks.keepDimmed,
             )
         }
         expandEpubChaptersIfNeeded(baseChapters)
@@ -771,7 +779,7 @@ internal fun List<ChapterListItem>.mergeRepeated(): List<ChapterListItem> {
         if (groupList.size == 1) {
             groupList.first()
         } else {
-            groupList.maxWithOrNull(
+            groupList.firstOrNull { it.isCurrent } ?: groupList.maxWithOrNull(
                 compareBy<ChapterListItem> { it.chapter.uploadDate }
                     .thenBy { it.isDownloaded }
                     .thenBy { it.chapter.scanlator?.isNotBlank() == true }
@@ -781,4 +789,4 @@ internal fun List<ChapterListItem>.mergeRepeated(): List<ChapterListItem> {
     }
 }
 
-private data class ReadMarks(val current: Long, val furthest: Long)
+private data class ReadMarks(val current: Long, val furthest: Long, val keepDimmed: Boolean)
