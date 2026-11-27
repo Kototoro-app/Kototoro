@@ -1719,6 +1719,10 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         get() = prefs.getBoolean(KEY_HIDE_READ_CHAPTERS, false)
         set(value) = prefs.edit { putBoolean(KEY_HIDE_READ_CHAPTERS, value) }
 
+    var keepReadChaptersDimmed: Boolean
+        get() = prefs.getBoolean(KEY_KEEP_READ_CHAPTERS_DIMMED, true)
+        set(value) = prefs.edit { putBoolean(KEY_KEEP_READ_CHAPTERS_DIMMED, value) }
+
     var isMergeRepeatedChapters: Boolean
         get() = prefs.getBoolean(KEY_MERGE_REPEATED_CHAPTERS, false)
         set(value) = prefs.edit { putBoolean(KEY_MERGE_REPEATED_CHAPTERS, value) }
@@ -3289,6 +3293,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_REVERSE_CHAPTERS = "reverse_chapters"
         const val KEY_GRID_VIEW_CHAPTERS = "grid_view_chapters"
         const val KEY_HIDE_READ_CHAPTERS = "hide_read_chapters"
+        const val KEY_KEEP_READ_CHAPTERS_DIMMED = "keep_read_chapters_dimmed"
         const val KEY_MERGE_REPEATED_CHAPTERS = "merge_repeated_chapters"
         const val KEY_CHAPTER_DOWNLOAD_BUTTON = "chapter_download_button"
         const val KEY_CHAPTER_TRANSLATE_BUTTON = "chapter_translate_button"

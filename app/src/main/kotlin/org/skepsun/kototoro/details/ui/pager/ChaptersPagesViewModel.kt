@@ -92,7 +92,7 @@ abstract class ChaptersPagesViewModel(
     val mangaDetails = MutableStateFlow<ContentDetails?>(null)
     val readingState = MutableStateFlow<ReaderState?>(null)
 
-    /** Furthest chapter ever read (0 when not recorded); unlike [readingState] it does not follow reopened chapters. */
+    /** Furthest stored chapter to include when dimming entries, or 0 when unavailable or disabled. */
     val furthestReadChapterId = MutableStateFlow(0L)
 
     data class QualityProbeResult(val snapshot: Set<Long>, val qualities: List<String>)
