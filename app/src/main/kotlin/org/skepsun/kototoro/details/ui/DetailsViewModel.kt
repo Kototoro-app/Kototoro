@@ -600,15 +600,17 @@ class DetailsViewModel @Inject constructor(
         isChaptersReversed,
         isChaptersInGridView,
         isHideReadChapters,
+        isKeepReadChaptersDimmed,
         isMergeRepeatedChapters,
         showMergeRepeatedChapters,
         isDownloadedOnly,
         emptyReason,
-    ) { isChaptersReversed, isChaptersInGridView, isHideReadChapters, isMergeRepeatedChapters, showMergeRepeatedChapters, isDownloadedOnly, emptyReason ->
+    ) { isChaptersReversed, isChaptersInGridView, isHideReadChapters, isKeepReadChaptersDimmed, isMergeRepeatedChapters, showMergeRepeatedChapters, isDownloadedOnly, emptyReason ->
         ChaptersPaneControlsUiState(
             isChaptersReversed = isChaptersReversed,
             isChaptersInGridView = isChaptersInGridView,
             isHideReadChapters = isHideReadChapters,
+            isKeepReadChaptersDimmed = isKeepReadChaptersDimmed,
             isMergeRepeatedChapters = isMergeRepeatedChapters,
             showMergeRepeatedChapters = showMergeRepeatedChapters,
             isDownloadedOnly = isDownloadedOnly,

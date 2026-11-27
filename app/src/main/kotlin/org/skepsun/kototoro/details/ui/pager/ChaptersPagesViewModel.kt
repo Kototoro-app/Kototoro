@@ -31,7 +31,6 @@ import org.skepsun.kototoro.core.model.getPreferredBranch
 import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.core.model.toChipModel
 import org.skepsun.kototoro.core.prefs.AppSettings
-import org.skepsun.kototoro.core.prefs.observeAsFlow
 import org.skepsun.kototoro.core.prefs.observeAsStateFlow
 import org.skepsun.kototoro.core.ui.BaseViewModel
 import org.skepsun.kototoro.core.ui.chapters.chapterBranchOptions
@@ -138,9 +137,11 @@ abstract class ChaptersPagesViewModel(
         valueProducer = { isHideReadChapters },
     )
 
-    private val keepReadChaptersDimmed = settings.observeAsFlow(AppSettings.KEY_KEEP_READ_CHAPTERS_DIMMED) {
-        this.keepReadChaptersDimmed
-    }
+    val isKeepReadChaptersDimmed = settings.observeAsStateFlow(
+        scope = viewModelScope + Dispatchers.Default,
+        key = AppSettings.KEY_KEEP_READ_CHAPTERS_DIMMED,
+        valueProducer = { keepReadChaptersDimmed },
+    )
 
     val isMergeRepeatedChapters = settings.observeAsStateFlow(
         scope = viewModelScope + Dispatchers.Default,
@@ -315,7 +316,7 @@ abstract class ChaptersPagesViewModel(
 
     private val baseChaptersFlow = combine(
         chapterSourceDetails,
-        combine(readingState, furthestReadChapterId, keepReadChaptersDimmed) { state, furthest, keepDimmed ->
+        combine(readingState, furthestReadChapterId, isKeepReadChaptersDimmed) { state, furthest, keepDimmed ->
             ReadMarks(current = state?.chapterId ?: 0L, furthest = furthest, keepDimmed = keepDimmed)
         }.distinctUntilChanged(),
         selectedBranch,
@@ -476,6 +477,10 @@ abstract class ChaptersPagesViewModel(
 
     fun setHideReadChapters(newValue: Boolean) {
         settings.isHideReadChapters = newValue
+    }
+
+    fun setKeepReadChaptersDimmed(newValue: Boolean) {
+        settings.keepReadChaptersDimmed = newValue
     }
 
     fun setMergeRepeatedChapters(newValue: Boolean) {

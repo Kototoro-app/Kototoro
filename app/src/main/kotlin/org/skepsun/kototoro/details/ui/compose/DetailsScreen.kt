@@ -339,6 +339,7 @@ private fun DetailsScreenContent(
     val isChaptersReversed = chaptersPaneControlsUiState.isChaptersReversed
     val isChaptersInGridView = chaptersPaneControlsUiState.isChaptersInGridView
     val isHideReadChapters = chaptersPaneControlsUiState.isHideReadChapters
+    val isKeepReadChaptersDimmed = chaptersPaneControlsUiState.isKeepReadChaptersDimmed
     val isMergeRepeatedChapters = chaptersPaneControlsUiState.isMergeRepeatedChapters
     val showMergeRepeatedChapters = chaptersPaneControlsUiState.showMergeRepeatedChapters
     val isDownloadedOnly = chaptersPaneControlsUiState.isDownloadedOnly
@@ -1670,6 +1671,7 @@ private fun DetailsScreenContent(
                                     isChaptersReversed = isChaptersReversed,
                                     isChaptersInGridView = isChaptersInGridView,
                                     isHideReadChapters = isHideReadChapters,
+                                    isKeepReadChaptersDimmed = isKeepReadChaptersDimmed,
                                     isMergeRepeatedChapters = isMergeRepeatedChapters,
                                     showMergeRepeatedChapters = showMergeRepeatedChapters,
                                     isDownloadedOnly = isDownloadedOnly,
@@ -1683,6 +1685,7 @@ private fun DetailsScreenContent(
                                     onToggleChaptersReversed = { viewModel.setChaptersReversed(!isChaptersReversed) },
                                     onToggleChaptersGrid = { viewModel.setChaptersInGridView(!isChaptersInGridView) },
                                     onToggleHideReadChapters = { viewModel.setHideReadChapters(!isHideReadChapters) },
+                                    onToggleKeepReadChaptersDimmed = { viewModel.setKeepReadChaptersDimmed(!isKeepReadChaptersDimmed) },
                                     onToggleMergeRepeatedChapters = { viewModel.setMergeRepeatedChapters(!isMergeRepeatedChapters) },
                                     onToggleDownloadedOnly = { viewModel.isDownloadedOnly.value = !isDownloadedOnly },
                                     onPageGridSizeChange = updatePageGridSize,
@@ -1905,6 +1908,7 @@ private fun DetailsScreenContent(
                             isChaptersReversed = isChaptersReversed,
                             isChaptersInGridView = isChaptersInGridView,
                             isHideReadChapters = isHideReadChapters,
+                            isKeepReadChaptersDimmed = isKeepReadChaptersDimmed,
                             isMergeRepeatedChapters = isMergeRepeatedChapters,
                             showMergeRepeatedChapters = showMergeRepeatedChapters,
                             isDownloadedOnly = isDownloadedOnly,
@@ -1918,6 +1922,7 @@ private fun DetailsScreenContent(
                             onToggleChaptersReversed = { viewModel.setChaptersReversed(!isChaptersReversed) },
                             onToggleChaptersGrid = { viewModel.setChaptersInGridView(!isChaptersInGridView) },
                             onToggleHideReadChapters = { viewModel.setHideReadChapters(!isHideReadChapters) },
+                            onToggleKeepReadChaptersDimmed = { viewModel.setKeepReadChaptersDimmed(!isKeepReadChaptersDimmed) },
                             onToggleMergeRepeatedChapters = { viewModel.setMergeRepeatedChapters(!isMergeRepeatedChapters) },
                             onToggleDownloadedOnly = { viewModel.isDownloadedOnly.value = !isDownloadedOnly },
                             onPageGridSizeChange = updatePageGridSize,

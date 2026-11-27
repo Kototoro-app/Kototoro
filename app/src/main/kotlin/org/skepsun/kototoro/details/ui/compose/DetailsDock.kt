@@ -73,7 +73,6 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.boundsInRoot
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
@@ -89,9 +88,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import org.skepsun.kototoro.R
-import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
-import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.prefs.rememberChapterRowActionPrefs
 import org.skepsun.kototoro.core.ui.compose.KototoroMotion
 import org.skepsun.kototoro.core.ui.compose.KototoroSlider
@@ -129,6 +126,7 @@ internal fun DetailsPaneActionsRow(
     isChaptersReversed: Boolean,
     isChaptersInGridView: Boolean,
     isHideReadChapters: Boolean,
+    isKeepReadChaptersDimmed: Boolean,
     isMergeRepeatedChapters: Boolean,
     showMergeRepeatedChapters: Boolean,
     isDownloadedOnly: Boolean,
@@ -141,6 +139,7 @@ internal fun DetailsPaneActionsRow(
     onToggleChaptersReversed: () -> Unit,
     onToggleChaptersGrid: () -> Unit,
     onToggleHideReadChapters: () -> Unit,
+    onToggleKeepReadChaptersDimmed: () -> Unit,
     onToggleMergeRepeatedChapters: () -> Unit,
     onToggleDownloadedOnly: () -> Unit,
     onPageGridSizeChange: (Float) -> Unit,
@@ -510,6 +509,7 @@ internal fun DetailsPaneActionsRow(
                                         isChaptersReversed = isChaptersReversed,
                                         isChaptersInGridView = isChaptersInGridView,
                                         isHideReadChapters = isHideReadChapters,
+                                        isKeepReadChaptersDimmed = isKeepReadChaptersDimmed,
                                         isVideo = isVideo,
                                         isMergeRepeatedChapters = isMergeRepeatedChapters,
                                         showMergeRepeatedChapters = showMergeRepeatedChapters,
@@ -519,6 +519,7 @@ internal fun DetailsPaneActionsRow(
                                         onToggleChaptersReversed = onToggleChaptersReversed,
                                         onToggleChaptersGrid = onToggleChaptersGrid,
                                         onToggleHideReadChapters = onToggleHideReadChapters,
+                                        onToggleKeepReadChaptersDimmed = onToggleKeepReadChaptersDimmed,
                                         onToggleMergeRepeatedChapters = onToggleMergeRepeatedChapters,
                                         onToggleDownloadedOnly = onToggleDownloadedOnly,
                                         onShowGridSizeControls = detailsPaneState::showGridSizeControls,
@@ -557,6 +558,7 @@ internal fun DetailsPaneActionsRow(
                                         isChaptersReversed = isChaptersReversed,
                                         isChaptersInGridView = isChaptersInGridView,
                                         isHideReadChapters = isHideReadChapters,
+                                        isKeepReadChaptersDimmed = isKeepReadChaptersDimmed,
                                         isVideo = isVideo,
                                         isMergeRepeatedChapters = isMergeRepeatedChapters,
                                         showMergeRepeatedChapters = showMergeRepeatedChapters,
@@ -566,6 +568,7 @@ internal fun DetailsPaneActionsRow(
                                         onToggleChaptersReversed = onToggleChaptersReversed,
                                         onToggleChaptersGrid = onToggleChaptersGrid,
                                         onToggleHideReadChapters = onToggleHideReadChapters,
+                                        onToggleKeepReadChaptersDimmed = onToggleKeepReadChaptersDimmed,
                                         onToggleMergeRepeatedChapters = onToggleMergeRepeatedChapters,
                                         onToggleDownloadedOnly = onToggleDownloadedOnly,
                                         onShowGridSizeControls = detailsPaneState::showGridSizeControls,
@@ -982,6 +985,7 @@ private fun ExpandedPaneUtilityDock(
     isChaptersReversed: Boolean,
     isChaptersInGridView: Boolean,
     isHideReadChapters: Boolean,
+    isKeepReadChaptersDimmed: Boolean,
     isVideo: Boolean,
     isMergeRepeatedChapters: Boolean,
     showMergeRepeatedChapters: Boolean,
@@ -991,6 +995,7 @@ private fun ExpandedPaneUtilityDock(
     onToggleChaptersReversed: () -> Unit,
     onToggleChaptersGrid: () -> Unit,
     onToggleHideReadChapters: () -> Unit,
+    onToggleKeepReadChaptersDimmed: () -> Unit,
     onToggleMergeRepeatedChapters: () -> Unit,
     onToggleDownloadedOnly: () -> Unit,
     onShowGridSizeControls: () -> Unit,
@@ -1083,11 +1088,6 @@ private fun ExpandedPaneUtilityDock(
                             onToggleHideReadChapters()
                         },
                     )
-                    val context = LocalContext.current.applicationContext
-                    val settings = remember(context) { AppSettings(context) }
-                    val keepReadChaptersDimmed by settings.observeAsState(AppSettings.KEY_KEEP_READ_CHAPTERS_DIMMED) {
-                        this.keepReadChaptersDimmed
-                    }
                     val keepDimmedLabel = if (isVideo) {
                         R.string.keep_watched_episodes_dimmed
                     } else {
@@ -1097,13 +1097,13 @@ private fun ExpandedPaneUtilityDock(
                         text = { Text(stringResource(keepDimmedLabel)) },
                         modifier = Modifier.semantics {
                             role = Role.Checkbox
-                            toggleableState = ToggleableState(keepReadChaptersDimmed)
+                            toggleableState = ToggleableState(isKeepReadChaptersDimmed)
                         },
                         leadingIcon = { DetailsMenuIcon(R.drawable.ic_history) },
-                        trailingIcon = { MenuSelectionIndicator(selected = keepReadChaptersDimmed) },
+                        trailingIcon = { MenuSelectionIndicator(selected = isKeepReadChaptersDimmed) },
                         onClick = {
                             expanded = false
-                            settings.keepReadChaptersDimmed = !keepReadChaptersDimmed
+                            onToggleKeepReadChaptersDimmed()
                         },
                     )
                     if (showMergeRepeatedChapters) {

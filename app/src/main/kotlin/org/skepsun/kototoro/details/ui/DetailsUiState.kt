@@ -158,6 +158,7 @@ data class ChaptersPaneControlsUiState(
     val isChaptersReversed: Boolean = false,
     val isChaptersInGridView: Boolean = false,
     val isHideReadChapters: Boolean = false,
+    val isKeepReadChaptersDimmed: Boolean = true,
     val isMergeRepeatedChapters: Boolean = false,
     val showMergeRepeatedChapters: Boolean = false,
     val isDownloadedOnly: Boolean = false,
