@@ -13,6 +13,7 @@ import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.util.ifNullOrEmpty
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
+import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingStatus
 
 sealed class ContentListModel : ListModel {
 
@@ -22,6 +23,9 @@ sealed class ContentListModel : ListModel {
     open val isPinned: Boolean = false
     open val metadataTrackingService: ScrobblerService? = null
     open val scoreText: String? = null
+
+    /** Persisted (or progress-derived) reading status, drawn by the `reading_status` corner badge. */
+    open val readingStatus: ScrobblingStatus? = null
 
     open val id: Long
         get() = manga.id

@@ -85,6 +85,8 @@ import org.skepsun.kototoro.core.ui.compose.rememberHorizontalRailScrollIntensit
 import org.skepsun.kototoro.core.ui.compose.rememberDeferredContentCoverBounds
 import org.skepsun.kototoro.list.ui.compose.contentListSharedElementKey
 import org.skepsun.kototoro.list.domain.ReadingProgress
+import org.skepsun.kototoro.list.domain.deriveReadingStatus
+import org.skepsun.kototoro.list.ui.compose.ContentCardCorner
 import org.skepsun.kototoro.list.ui.compose.ContentCardCornerBadges
 import org.skepsun.kototoro.list.ui.compose.ContentCardCoverProgressIndicator
 import org.skepsun.kototoro.list.ui.compose.KototoroContentCardGrid
@@ -443,6 +445,7 @@ private fun HomeListRailRowItem(
                     progress = item.progress,
                     isFavorite = false,
                     isSaved = false,
+                    readingStatus = deriveReadingStatus(null, item.progress),
                 )
             }
             val effectiveTopRightBadges = remember(cardUiPrefs.badgesTopRight, item.counter, badgeModel.scoreText) {
@@ -462,6 +465,7 @@ private fun HomeListRailRowItem(
                 corner = Alignment.TopStart,
                 cardRadius = coverRadius,
                 metrics = badgeMetrics,
+                progressStyle = cardUiPrefs.cardProgressStyle,
                 modifier = Modifier
                     .align(Alignment.TopStart)
                     .padding(start = badgePadding, top = badgePadding),
@@ -472,6 +476,7 @@ private fun HomeListRailRowItem(
                 corner = Alignment.TopEnd,
                 cardRadius = coverRadius,
                 metrics = badgeMetrics,
+                progressStyle = cardUiPrefs.cardProgressStyle,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(end = badgePadding, top = badgePadding),
@@ -482,6 +487,7 @@ private fun HomeListRailRowItem(
                 corner = Alignment.BottomStart,
                 cardRadius = coverRadius,
                 metrics = badgeMetrics,
+                progressStyle = cardUiPrefs.cardProgressStyle,
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .padding(start = badgePadding, bottom = badgePadding + bottomBadgeOffset),
@@ -492,6 +498,7 @@ private fun HomeListRailRowItem(
                 corner = Alignment.BottomEnd,
                 cardRadius = coverRadius,
                 metrics = badgeMetrics,
+                progressStyle = cardUiPrefs.cardProgressStyle,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(end = badgePadding, bottom = badgePadding + bottomBadgeOffset),
@@ -507,7 +514,13 @@ private fun HomeListRailRowItem(
                 }
                 CardProgressStyle.CIRCULAR_BADGE -> {
                     val hasBottomRightBadge = remember(cardUiPrefs.badgesBottomRight, badgeModel) {
-                        hasVisibleCardBadges(cardUiPrefs.badgesBottomRight, badgeModel, null)
+                        hasVisibleCardBadges(
+                            badges = cardUiPrefs.badgesBottomRight,
+                            item = badgeModel,
+                            sourceMetadata = null,
+                            progressStyle = cardUiPrefs.cardProgressStyle,
+                            corner = ContentCardCorner.BOTTOM_END,
+                        )
                     }
                     ContentCardCoverProgressIndicator(
                         progress = item.progress,
@@ -541,6 +554,7 @@ private fun HomeCoverRowItem(
             progress = item.progress,
             isFavorite = false,
             isSaved = false,
+            readingStatus = deriveReadingStatus(null, item.progress),
         )
     }
     // The grid card registers its shared element with

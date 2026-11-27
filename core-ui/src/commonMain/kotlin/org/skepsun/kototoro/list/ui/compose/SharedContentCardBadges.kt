@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -160,6 +161,25 @@ fun ContentCardNsfwBadge(
     },
 ) { colors ->
     ContentCardBadgeText(label, colors.content, metrics)
+}
+
+/**
+ * A corner badge for the work's reading status (reading / re-reading / on hold / dropped /
+ * finished). The host resolves the icon and the accessible name; the tint follows the other
+ * accent badges.
+ */
+@Composable
+fun ContentCardReadingStatusBadge(
+    icon: Painter,
+    contentDescription: String?,
+    metrics: ContentCardBadgeMetrics = ContentCardBadgeMetrics(),
+) {
+    Icon(
+        painter = icon,
+        contentDescription = contentDescription,
+        tint = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.size(metrics.iconSize),
+    )
 }
 
 /** The 4dp bar along the cover's bottom edge; green once the work is completed. */
