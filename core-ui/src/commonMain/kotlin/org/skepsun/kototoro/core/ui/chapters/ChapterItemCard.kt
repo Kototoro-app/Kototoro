@@ -169,10 +169,16 @@ fun ChapterGridCard(
     thumbnail: (@Composable BoxScope.() -> Unit)? = null,
     /** Width over height of [thumbnail]: 16:9 for episode artwork, portrait for a chapter's first page. */
     thumbnailAspectRatio: Float = EPISODE_THUMBNAIL_ASPECT_RATIO,
+    highlightCurrent: Boolean = false,
 ) {
-    val titleColor = if (item.isUnread) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
+    val isCurrentHighlighted = highlightCurrent && item.isCurrent
+    val titleColor = when {
+        isCurrentHighlighted -> MaterialTheme.colorScheme.primary
+        item.isUnread -> MaterialTheme.colorScheme.onSurface
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
     Column(
-        modifier = modifier.fillMaxWidth().alpha(if (item.isUnread) 1f else .6f)
+        modifier = modifier.fillMaxWidth().alpha(if (item.isUnread || isCurrentHighlighted) 1f else .6f)
             .then(focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier)
             .then(focusModifier)
             .combinedClickable(enabled = enabled, onClick = onClick, onLongClick = onLongClick)
@@ -187,6 +193,7 @@ fun ChapterGridCard(
         // A thumbnail covers the container colour, so selection also needs the bookmark cards' thick border.
         border = when {
             isSelected -> BorderStroke(4.dp, MaterialTheme.colorScheme.primary)
+            isCurrentHighlighted -> BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
             !item.isUnread -> null
             else -> CardDefaults.outlinedCardBorder()
         },

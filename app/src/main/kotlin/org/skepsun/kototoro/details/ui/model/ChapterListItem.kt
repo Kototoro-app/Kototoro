@@ -17,6 +17,7 @@ data class ChapterListItem(
     val isTranslationStale: Boolean = false,
     /** Fraction of the chapter already translated; null when no translation has started. */
     val translationProgress: Float? = null,
+    val isDimmed: Boolean = (flags and FLAG_UNREAD) == 0.toByte(),
 ) : ListModel {
 
     private var cachedTitle: String? = null
@@ -100,6 +101,7 @@ data class ChapterListItem(
         if (previousState !is ChapterListItem) {
             return super.getChangePayload(previousState)
         }
+        if (isDimmed != previousState.isDimmed) return null
         return if (chapter == previousState.chapter && flags != previousState.flags) {
             flags
         } else if (

@@ -73,9 +73,15 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -83,7 +89,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
+import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.prefs.rememberChapterRowActionPrefs
 import org.skepsun.kototoro.core.ui.compose.KototoroMotion
 import org.skepsun.kototoro.core.ui.compose.KototoroSlider
@@ -151,10 +159,8 @@ internal fun DetailsPaneActionsRow(
     val isChapterSearchVisible = detailsPaneState.isChapterSearchVisible
     val chapterSelectionState = detailsPaneState.chapterSelectionState
     val paneOpacityProgress = easedOpacityProgress(sheetExpansionProgress)
-    val showPagesTab = contentType != ContentType.VIDEO &&
-        contentType != ContentType.HENTAI_VIDEO &&
-        contentType != ContentType.NOVEL &&
-        contentType != ContentType.HENTAI_NOVEL
+    val isVideo = contentType == ContentType.VIDEO || contentType == ContentType.HENTAI_VIDEO
+    val showPagesTab = !isVideo && contentType != ContentType.NOVEL && contentType != ContentType.HENTAI_NOVEL
     val showBookmarksTab = true
     val compactModernDock = isModernDockEnabled && isModernDockCompact
     val showAllDockTabs = !compactModernDock
@@ -504,6 +510,7 @@ internal fun DetailsPaneActionsRow(
                                         isChaptersReversed = isChaptersReversed,
                                         isChaptersInGridView = isChaptersInGridView,
                                         isHideReadChapters = isHideReadChapters,
+                                        isVideo = isVideo,
                                         isMergeRepeatedChapters = isMergeRepeatedChapters,
                                         showMergeRepeatedChapters = showMergeRepeatedChapters,
                                         isDownloadedOnly = isDownloadedOnly,
@@ -550,6 +557,7 @@ internal fun DetailsPaneActionsRow(
                                         isChaptersReversed = isChaptersReversed,
                                         isChaptersInGridView = isChaptersInGridView,
                                         isHideReadChapters = isHideReadChapters,
+                                        isVideo = isVideo,
                                         isMergeRepeatedChapters = isMergeRepeatedChapters,
                                         showMergeRepeatedChapters = showMergeRepeatedChapters,
                                         isDownloadedOnly = isDownloadedOnly,
@@ -974,6 +982,7 @@ private fun ExpandedPaneUtilityDock(
     isChaptersReversed: Boolean,
     isChaptersInGridView: Boolean,
     isHideReadChapters: Boolean,
+    isVideo: Boolean,
     isMergeRepeatedChapters: Boolean,
     showMergeRepeatedChapters: Boolean,
     isDownloadedOnly: Boolean,
@@ -1072,6 +1081,29 @@ private fun ExpandedPaneUtilityDock(
                         onClick = {
                             expanded = false
                             onToggleHideReadChapters()
+                        },
+                    )
+                    val context = LocalContext.current.applicationContext
+                    val settings = remember(context) { AppSettings(context) }
+                    val keepReadChaptersDimmed by settings.observeAsState(AppSettings.KEY_KEEP_READ_CHAPTERS_DIMMED) {
+                        this.keepReadChaptersDimmed
+                    }
+                    val keepDimmedLabel = if (isVideo) {
+                        R.string.keep_watched_episodes_dimmed
+                    } else {
+                        R.string.keep_read_chapters_dimmed
+                    }
+                    CompactDropdownMenuItem(
+                        text = { Text(stringResource(keepDimmedLabel)) },
+                        modifier = Modifier.semantics {
+                            role = Role.Checkbox
+                            toggleableState = ToggleableState(keepReadChaptersDimmed)
+                        },
+                        leadingIcon = { DetailsMenuIcon(R.drawable.ic_history) },
+                        trailingIcon = { MenuSelectionIndicator(selected = keepReadChaptersDimmed) },
+                        onClick = {
+                            expanded = false
+                            settings.keepReadChaptersDimmed = !keepReadChaptersDimmed
                         },
                     )
                     if (showMergeRepeatedChapters) {

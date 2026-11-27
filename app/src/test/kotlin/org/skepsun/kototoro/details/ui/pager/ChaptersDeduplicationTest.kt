@@ -62,6 +62,15 @@ class ChaptersDeduplicationTest : StringSpec({
         merged.map { it.chapter.id } shouldBe listOf(1L, 2L)
     }
 
+    "should keep the current copy of a repeated chapter even when another copy is newer" {
+        val current = createChapter(1, 1f, "Chapter 1", branch = "BranchA", uploadDate = 1000L)
+        val newer = createChapter(2, 1f, "Chapter 1", branch = "BranchB", uploadDate = 2000L)
+        val item = ChapterListItem(current, flags = ChapterListItem.FLAG_CURRENT)
+        val merged = listOf(item, ChapterListItem(newer, flags = 0)).mergeRepeated()
+
+        merged shouldBe listOf(item)
+    }
+
     "should deduplicate unnumbered chapters based on name exact matching" {
         val ch1 = createChapter(id = 1, number = 0f, title = "Special Extra", uploadDate = 1000L)
         val ch2 = createChapter(id = 2, number = 0f, title = "Special Extra ", uploadDate = 2000L) // trimmed matches

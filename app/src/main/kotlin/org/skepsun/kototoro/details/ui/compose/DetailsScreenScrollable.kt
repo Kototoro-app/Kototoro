@@ -408,7 +408,7 @@ internal fun DetailsScrollableContent(
                         title = stripEpisodeLinePrefix(item.getTitle(context.resources), selectedBranch),
                         subtitle = item.description,
                         isCurrent = item.isCurrent,
-                        isWatched = !item.isUnread && !item.isCurrent,
+                        isWatched = item.isDimmed && !item.isCurrent,
                     )
                 }
             }

@@ -16,6 +16,7 @@ fun ContentChapter.toListItem(
     isDownloaded: Boolean,
     isBookmarked: Boolean,
     isGrid: Boolean,
+    isDimmed: Boolean = !isUnread,
 ): ChapterListItem {
     var flags: Byte = 0
     if (isCurrent) flags = flags or FLAG_CURRENT
@@ -27,5 +28,6 @@ fun ContentChapter.toListItem(
     return ChapterListItem(
         chapter = this,
         flags = flags,
+        isDimmed = isDimmed,
     )
 }

@@ -44,6 +44,7 @@ fun ContentDetails.mapChapters(
     isDownloadedOnly: Boolean,
     shareProgressAcrossBranches: Boolean = false,
     furthestChapterId: Long = 0L,
+    keepReadChaptersDimmed: Boolean = true,
 ): List<ChapterListItem> {
     val resolvedBranch = when {
         branch == null -> null
@@ -86,21 +87,33 @@ fun ContentDetails.mapChapters(
         null
     }
 
+    val contentType = toContent().source.getContentType()
+    val isVideo = contentType == ContentType.VIDEO || contentType == ContentType.HENTAI_VIDEO
     val currentChapter = remoteChapters.find { it.id == currentChapterId }
         ?: localChapters.find { it.id == currentChapterId }
         ?: if (shareProgressAcrossBranches) allChapters.find { it.id == currentChapterId } else null
-    // Reopening an earlier chapter moves the current one back; chapters already read further on stay read.
     val furthestChapter = furthestChapterId.takeIf { it != 0L }?.let { id ->
         remoteChapters.find { it.id == id }
             ?: localChapters.find { it.id == id }
             ?: if (shareProgressAcrossBranches) allChapters.find { it.id == id } else null
     }
-    val readUpTo = chapterReadThrough(currentChapter?.toOrder(), furthestChapter?.toOrder())
+    val currentOrder = currentChapter?.toOrder()
+    val readUpTo = chapterReadThrough(currentOrder, furthestChapter?.toOrder())
+    val dimUpTo = if (keepReadChaptersDimmed) readUpTo else currentOrder
 
-    val contentType = toContent().source.getContentType()
-    val usesVideoDownloadIndex = contentType == ContentType.VIDEO || contentType == ContentType.HENTAI_VIDEO
-    if (!isDownloadedOnly || (usesVideoDownloadIndex && local?.manga?.chapters == null)) {
-        for ((index, chapter) in remoteChapters.withIndex()) {
+    fun isChapterUnread(chapter: ContentChapter, cutoff: ChapterOrder?, requireKnownOrder: Boolean = false): Boolean {
+        if (currentChapterId == FULLY_READ_CHAPTER_ID) return false
+        if (cutoff == null) return true
+        if (requireKnownOrder && (chapter.number == 0f || cutoff.number == 0f)) {
+            if (chapter.id == currentChapterId || chapter.id == cutoff.id) return false
+            // Imported downloads can lack numbering. Only distinct, known volumes establish order in this case.
+            if (chapter.volume <= 0 || cutoff.volume <= 0 || chapter.volume == cutoff.volume) return true
+        }
+        return chapterIsAfter(chapter.number, chapter.volume, cutoff.number, cutoff.volume)
+    }
+
+    if (!isDownloadedOnly || (isVideo && local?.manga?.chapters == null)) {
+        for (chapter in remoteChapters) {
             val localById = localMapById?.remove(chapter.id)
             val localByUrl = if (localById == null) {
                 localMapByUrl?.remove(chapter.url)?.also {
@@ -111,11 +124,8 @@ fun ContentDetails.mapChapters(
             }
             val local = localById ?: localByUrl
             val finalChapter = local ?: chapter
-            val isUnread = when {
-                currentChapterId == FULLY_READ_CHAPTER_ID -> false
-                readUpTo != null -> chapterIsAfter(chapter.number, chapter.volume, readUpTo.number, readUpTo.volume)
-                else -> true
-            }
+            val isUnread = isChapterUnread(chapter, readUpTo)
+            val isDimmed = if (dimUpTo === readUpTo) !isUnread else !isChapterUnread(chapter, dimUpTo)
 
             result += finalChapter.toListItem(
                 isCurrent = chapter.id == currentChapterId || finalChapter.id == currentChapterId,
@@ -124,18 +134,26 @@ fun ContentDetails.mapChapters(
                 isDownloaded = local != null,
                 isBookmarked = chapter.id in bookmarked || finalChapter.id in bookmarked,
                 isGrid = isGrid,
+                isDimmed = isDimmed,
             )
         }
     }
     if (!localMapById.isNullOrEmpty()) {
         for (chapter in localMapById.values) {
+            val isUnread = isChapterUnread(chapter, readUpTo, requireKnownOrder = true)
+            val isDimmed = if (dimUpTo === readUpTo) {
+                !isUnread
+            } else {
+                !isChapterUnread(chapter, dimUpTo, requireKnownOrder = true)
+            }
             result += chapter.toListItem(
                 isCurrent = chapter.id == currentChapterId,
-                isUnread = true,
+                isUnread = isUnread,
                 isNew = false,
                 isDownloaded = true,
                 isBookmarked = chapter.id in bookmarked,
                 isGrid = isGrid,
+                isDimmed = isDimmed,
             )
         }
     }
@@ -148,10 +166,6 @@ fun ContentDetails.mapChapters(
 }
 
 private fun ContentChapter.toOrder() = ChapterOrder(id, number, volume)
-
-private fun ContentChapter.isAfter(current: ContentChapter): Boolean {
-    return org.skepsun.kototoro.core.ui.chapters.chapterIsAfter(number, volume, current.number, current.volume)
-}
 
 /** A lone "Unknown volume" header says nothing; only group when some chapter has a volume or group name. */
 internal fun shouldShowVolumeHeaders(chapters: List<ContentChapter>): Boolean =
