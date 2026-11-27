@@ -91,8 +91,11 @@ import org.skepsun.kototoro.core.ui.glass.LocalGlassPrefs
 import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
+import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.prefs.ExplorePage
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.prefs.ListToDetailsTransition
+import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.compose.KototoroLoadingIndicator
 import org.skepsun.kototoro.core.ui.compose.contentCoverSharedKey
 import org.skepsun.kototoro.core.ui.compose.resolveSourceTitleForUi
@@ -416,6 +419,7 @@ private fun MainShellTopLevelEntryContent(
             ownerRoute = TOP_BAR_OWNER_DISCOVER,
             onExploreSourceSelectionTopBarChanged = onExploreSourceSelectionTopBarChanged,
             onContextualMenuActionsChanged = onContextualMenuActionsChanged,
+            navigateToDetailsWithContent = navigateToDetailsWithContent,
             navigateToDetailsWithOrigin = navigateToDetailsWithOrigin,
         )
         org.skepsun.kototoro.main.ui.navigation3.HistoryNavKey -> HistoryTopLevelRouteContent(
@@ -445,6 +449,7 @@ private fun MainShellTopLevelEntryContent(
             ownerRoute = TOP_BAR_OWNER_EXPLORE,
             onExploreSourceSelectionTopBarChanged = onExploreSourceSelectionTopBarChanged,
             onContextualMenuActionsChanged = onContextualMenuActionsChanged,
+            navigateToDetailsWithContent = navigateToDetailsWithContent,
             navigateToDetailsWithOrigin = navigateToDetailsWithOrigin,
         )
         org.skepsun.kototoro.main.ui.navigation3.FeedNavKey -> FeedTopLevelRouteContent(
@@ -727,16 +732,71 @@ internal fun BrowseTopLevelRouteContent(
     ownerRoute: String,
     onExploreSourceSelectionTopBarChanged: (TopBarOverrideState?) -> Unit,
     onContextualMenuActionsChanged: (RouteScopedTopBarMenuActions) -> Unit,
+    navigateToDetailsWithContent: (Content, String?) -> Unit,
     navigateToDetailsWithOrigin: (org.skepsun.kototoro.details.ui.model.DetailsOrigin, String?) -> Unit,
 ) {
     val exploreViewModel = spaceBoundHiltViewModel<org.skepsun.kototoro.explore.ui.ExploreViewModel>("explore")
     val discoverViewModel = spaceBoundHiltViewModel<org.skepsun.kototoro.discover.ui.DiscoverViewModel>("discover")
+    val discoveryFeedViewModel = hiltViewModel<org.skepsun.kototoro.explore.ui.DiscoveryFeedViewModel>()
     val selectedGroupTab by exploreViewModel.currentGroupTab.collectAsStateWithLifecycle()
     val selectedSourceTags by exploreViewModel.currentSourceTags.collectAsStateWithLifecycle()
     val isEmptySourcesHidden by exploreViewModel.isEmptySourcesHidden.collectAsStateWithLifecycle()
+    val discoveryFeedUiState by discoveryFeedViewModel.uiState.collectAsStateWithLifecycle()
+    val discoveryFeedSources by discoveryFeedViewModel.availableSources.collectAsStateWithLifecycle()
+    val discoveryFeedSourcesByName = remember(discoveryFeedSources) {
+        discoveryFeedSources.associateBy { it.name }
+    }
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val settings = remember(context.applicationContext) {
+        AppSettings(context.applicationContext)
+    }
+    val selectedExplorePage by settings.observeAsState(
+        AppSettings.KEY_EXPLORE_PAGE,
+    ) { explorePage }
+    val browseGridScale by settings.observeAsState(
+        AppSettings.KEY_GRID_SIZE,
+        AppSettings.gridSizeKeyOf(org.skepsun.kototoro.list.ui.ListDisplaySection.BROWSE),
+    ) {
+        gridSizeOf(org.skepsun.kototoro.list.ui.ListDisplaySection.BROWSE) / 100f
+    }
+    val discoveryPosterStyle = remember(browseGridScale) {
+        org.skepsun.kototoro.core.ui.compose.compactPosterRailCardStyle(browseGridScale)
+    }
+    val discoveryCardUiPrefs = org.skepsun.kototoro.list.ui.compose.rememberContentCardUiPrefs(settings)
+
     val coroutineScope = rememberCoroutineScope()
     var sourceOrder by remember { mutableStateOf<List<org.skepsun.kototoro.core.ui.compose.ReorderItem>?>(null) }
     var loadingOrder by remember { mutableStateOf(false) }
+    var sourceSelectionTopBarState by remember { mutableStateOf<ExploreSourceSelectionTopBarState?>(null) }
+    var showManageFeedRowsSheet by rememberSaveable { mutableStateOf(false) }
+    var showFeedRowEditorSheet by rememberSaveable { mutableStateOf(false) }
+    var editingFeedRowId by rememberSaveable { mutableStateOf<String?>(null) }
+    val editingFeedRow = remember(editingFeedRowId, discoveryFeedUiState.allRows) {
+        editingFeedRowId?.let { id -> discoveryFeedUiState.allRows.firstOrNull { it.id == id } }
+    }
+
+    // Cancel in-flight Discovery Feed requests when switching away from Discovery or leaving Explore.
+    LaunchedEffect(selectedExplorePage, discoveryFeedViewModel) {
+        if (selectedExplorePage != org.skepsun.kototoro.core.prefs.ExplorePage.DISCOVERY) {
+            discoveryFeedViewModel.cancelInFlightLoads()
+        } else {
+            sourceSelectionTopBarState = null
+        }
+    }
+
+    DisposableEffect(discoveryFeedViewModel, lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) {
+                discoveryFeedViewModel.cancelInFlightLoads()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            discoveryFeedViewModel.cancelInFlightLoads()
+        }
+    }
 
     sourceOrder?.let { items ->
         org.skepsun.kototoro.core.ui.compose.ReorderDialog(
@@ -746,49 +806,192 @@ internal fun BrowseTopLevelRouteContent(
         )
     }
 
-    DisposableEffect(ownerRoute, exploreViewModel, isEmptySourcesHidden) {
-        onContextualMenuActionsChanged(
-            RouteScopedTopBarMenuActions(
-                ownerRoute,
-                listOf(
-                    KototoroTopBarMenuAction(
-                        org.skepsun.kototoro.R.string.reorder,
-                        org.skepsun.kototoro.R.drawable.ic_reorder_handle,
-                    ) {
-                        if (!loadingOrder) {
-                            loadingOrder = true
-                            coroutineScope.launch {
-                                try {
-                                    sourceOrder = exploreViewModel.loadSourceOrder()
-                                } catch (e: kotlinx.coroutines.CancellationException) {
-                                    throw e
-                                } catch (e: Exception) {
-                                    // ignore
-                                } finally {
-                                    loadingOrder = false
-                                }
-                            }
-                        }
-                    },
-                    // No "manage sources" action here: the menu's own "Extension management" entry
-                    // already opens that page, and a second row with another name for it only made
-                    // the menu longer.
-                    KototoroTopBarMenuAction(
-                        if (isEmptySourcesHidden) {
-                            org.skepsun.kototoro.R.string.show_empty_sources
-                        } else {
-                            org.skepsun.kototoro.R.string.hide_empty_sources
-                        },
-                        if (isEmptySourcesHidden) {
-                            org.skepsun.kototoro.R.drawable.ic_eye
-                        } else {
-                            org.skepsun.kototoro.R.drawable.ic_eye_off
-                        },
-                    ) {
-                        exploreViewModel.setEmptySourcesHidden(!isEmptySourcesHidden)
-                    },
+    if (showManageFeedRowsSheet) {
+        org.skepsun.kototoro.explore.ui.compose.DiscoveryFeedManageRowsSheet(
+            rows = discoveryFeedUiState.allRows,
+            sourcesByName = discoveryFeedSourcesByName,
+            onDismissRequest = { showManageFeedRowsSheet = false },
+            onAddRowClick = {
+                showManageFeedRowsSheet = false
+                editingFeedRowId = null
+                showFeedRowEditorSheet = true
+            },
+            onEditRowClick = { row ->
+                showManageFeedRowsSheet = false
+                editingFeedRowId = row.id
+                showFeedRowEditorSheet = true
+            },
+            onMoveRowUp = discoveryFeedViewModel::moveRowUp,
+            onMoveRowDown = discoveryFeedViewModel::moveRowDown,
+            onToggleRowHidden = discoveryFeedViewModel::toggleRowHidden,
+            onDeleteRow = discoveryFeedViewModel::deleteRow,
+        )
+    }
+
+    if (showFeedRowEditorSheet) {
+        org.skepsun.kototoro.explore.ui.compose.DiscoveryFeedRowEditorSheet(
+            editingRow = editingFeedRow,
+            availableSources = discoveryFeedSources,
+            loadSavedFilters = discoveryFeedViewModel::getSavedFilters,
+            onDismissRequest = {
+                showFeedRowEditorSheet = false
+                editingFeedRowId = null
+            },
+            onSave = { sourceName, displayName, savedFilterId, query ->
+                val targetRow = editingFeedRow
+                if (targetRow == null) {
+                    discoveryFeedViewModel.addRow(
+                        sourceName = sourceName,
+                        displayName = displayName,
+                        savedFilterId = savedFilterId,
+                        query = query,
+                    )
+                } else {
+                    discoveryFeedViewModel.updateRow(
+                        rowId = targetRow.id,
+                        displayName = displayName,
+                        savedFilterId = savedFilterId,
+                        query = query,
+                        sourceName = sourceName,
+                    )
+                }
+                showFeedRowEditorSheet = false
+                editingFeedRowId = null
+            },
+        )
+    }
+
+    val sourcesPageLabel = stringResource(org.skepsun.kototoro.R.string.explore_page_sources)
+    val discoveryPageLabel = stringResource(org.skepsun.kototoro.R.string.explore_page_discovery)
+    val segmentedSwitcherState = remember(
+        selectedExplorePage,
+        sourcesPageLabel,
+        discoveryPageLabel,
+    ) {
+        TopBarSegmentedSwitcherState(
+            items = listOf(
+                TopBarSegmentedSwitcherItem(
+                    id = org.skepsun.kototoro.core.prefs.ExplorePage.SOURCES.name,
+                    title = sourcesPageLabel,
+                ),
+                TopBarSegmentedSwitcherItem(
+                    id = org.skepsun.kototoro.core.prefs.ExplorePage.DISCOVERY.name,
+                    title = discoveryPageLabel,
                 ),
             ),
+            selectedItemId = selectedExplorePage.name,
+            onItemSelected = { selectedId ->
+                val nextPage = org.skepsun.kototoro.core.prefs.ExplorePage.entries
+                    .firstOrNull { it.name == selectedId }
+                    ?: org.skepsun.kototoro.core.prefs.ExplorePage.SOURCES
+                if (nextPage != selectedExplorePage) {
+                    if (selectedExplorePage == org.skepsun.kototoro.core.prefs.ExplorePage.DISCOVERY) {
+                        discoveryFeedViewModel.cancelInFlightLoads()
+                    }
+                    settings.explorePage = nextPage
+                }
+            },
+            hideSourceFilters = selectedExplorePage == org.skepsun.kototoro.core.prefs.ExplorePage.DISCOVERY,
+            leadingExtraActions = if (selectedExplorePage == org.skepsun.kototoro.core.prefs.ExplorePage.DISCOVERY) {
+                listOf(
+                    TopBarSegmentedAction(
+                        id = "discovery_add_row",
+                        iconRes = org.skepsun.kototoro.R.drawable.ic_add,
+                        contentDescriptionRes = org.skepsun.kototoro.R.string.discovery_feed_add_row,
+                        onClick = {
+                            editingFeedRowId = null
+                            showFeedRowEditorSheet = true
+                        },
+                    ),
+                )
+            } else {
+                emptyList()
+            },
+        )
+    }
+
+    SideEffect {
+        onExploreSourceSelectionTopBarChanged(
+            RouteScopedTopBarOverrideState(
+                ownerRoute = ownerRoute,
+                state = LayeredTopBarOverrideState(
+                    segmentedSwitcherState = segmentedSwitcherState,
+                    contextualOverrideState = if (selectedExplorePage == org.skepsun.kototoro.core.prefs.ExplorePage.SOURCES) {
+                        sourceSelectionTopBarState
+                    } else {
+                        null
+                    },
+                    keepTopBarPinned = true,
+                ),
+            ),
+        )
+    }
+
+    DisposableEffect(ownerRoute) {
+        onDispose {
+            onExploreSourceSelectionTopBarChanged(RouteScopedTopBarOverrideState(ownerRoute, null))
+        }
+    }
+
+    DisposableEffect(ownerRoute, exploreViewModel, isEmptySourcesHidden, selectedExplorePage) {
+        val actions = if (selectedExplorePage == org.skepsun.kototoro.core.prefs.ExplorePage.DISCOVERY) {
+            listOf(
+                KototoroTopBarMenuAction(
+                    org.skepsun.kototoro.R.string.discovery_feed_add_row,
+                    org.skepsun.kototoro.R.drawable.ic_add,
+                ) {
+                    editingFeedRowId = null
+                    showFeedRowEditorSheet = true
+                },
+                KototoroTopBarMenuAction(
+                    org.skepsun.kototoro.R.string.discovery_feed_manage_rows,
+                    org.skepsun.kototoro.R.drawable.ic_reorder_handle,
+                ) {
+                    showManageFeedRowsSheet = true
+                },
+            )
+        } else {
+            listOf(
+                KototoroTopBarMenuAction(
+                    org.skepsun.kototoro.R.string.reorder,
+                    org.skepsun.kototoro.R.drawable.ic_reorder_handle,
+                ) {
+                    if (!loadingOrder) {
+                        loadingOrder = true
+                        coroutineScope.launch {
+                            try {
+                                sourceOrder = exploreViewModel.loadSourceOrder()
+                            } catch (e: kotlinx.coroutines.CancellationException) {
+                                throw e
+                            } catch (e: Exception) {
+                                // ignore
+                            } finally {
+                                loadingOrder = false
+                            }
+                        }
+                    }
+                },
+                // No "manage sources" action here: the menu's own "Extension management" entry
+                // already opens that page, and a second row with another name for it only made
+                // the menu longer.
+                KototoroTopBarMenuAction(
+                    if (isEmptySourcesHidden) {
+                        org.skepsun.kototoro.R.string.show_empty_sources
+                    } else {
+                        org.skepsun.kototoro.R.string.hide_empty_sources
+                    },
+                    if (isEmptySourcesHidden) {
+                        org.skepsun.kototoro.R.drawable.ic_eye
+                    } else {
+                        org.skepsun.kototoro.R.drawable.ic_eye_off
+                    },
+                ) {
+                    exploreViewModel.setEmptySourcesHidden(!isEmptySourcesHidden)
+                },
+            )
+        }
+        onContextualMenuActionsChanged(
+            RouteScopedTopBarMenuActions(ownerRoute, actions),
         )
         onDispose {
             onContextualMenuActionsChanged(RouteScopedTopBarMenuActions(ownerRoute, emptyList()))
@@ -820,21 +1023,64 @@ internal fun BrowseTopLevelRouteContent(
     }
 
     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides animatedVisibilityScope) {
-        KototoroExploreHostRoute(
-            appRouter = appRouter,
-            contentPadding = contentPadding,
-            exploreViewModel = exploreViewModel,
-            discoverViewModel = discoverViewModel,
-            onSourceSelectionTopBarChanged = {
-                onExploreSourceSelectionTopBarChanged(
-                    RouteScopedTopBarOverrideState(ownerRoute, it),
+        when (selectedExplorePage) {
+            org.skepsun.kototoro.core.prefs.ExplorePage.SOURCES -> {
+                KototoroExploreHostRoute(
+                    appRouter = appRouter,
+                    contentPadding = contentPadding,
+                    exploreViewModel = exploreViewModel,
+                    discoverViewModel = discoverViewModel,
+                    onSourceSelectionTopBarChanged = { selectionState ->
+                        sourceSelectionTopBarState = selectionState
+                    },
+                    onNavigateToDetails = navigateToDetailsWithOrigin,
+                    onOpenSourceList = { source ->
+                        mainNavigator.openContentList(source, null, null)
+                    },
                 )
-            },
-            onNavigateToDetails = navigateToDetailsWithOrigin,
-            onOpenSourceList = { source ->
-                mainNavigator.openContentList(source, null, null)
-            },
-        )
+            }
+
+            org.skepsun.kototoro.core.prefs.ExplorePage.DISCOVERY -> {
+                org.skepsun.kototoro.explore.ui.compose.DiscoveryFeedPage(
+                    uiState = discoveryFeedUiState,
+                    sourcesByName = discoveryFeedSourcesByName,
+                    contentPadding = contentPadding,
+                    posterStyle = discoveryPosterStyle,
+                    gridScale = browseGridScale,
+                    cardUiPrefs = discoveryCardUiPrefs,
+                    onRowVisible = discoveryFeedViewModel::onRowVisible,
+                    onRetryRow = discoveryFeedViewModel::retryRow,
+                    onRefreshAll = discoveryFeedViewModel::refreshAll,
+                    onContentClick = navigateToDetailsWithContent,
+                    onRowHeaderClick = { row ->
+                        val source = discoveryFeedSourcesByName[row.sourceName] ?: return@DiscoveryFeedPage
+                        coroutineScope.launch {
+                            val savedFilter = row.savedFilterId?.let { id ->
+                                discoveryFeedViewModel.findSavedFilter(source, id)
+                            }
+                            val query = row.normalizedQuery
+                            val filter = when {
+                                savedFilter != null -> savedFilter.filter
+                                query != null -> ContentListFilter(query = query)
+                                else -> null
+                            }
+                            mainNavigator.openContentList(source, filter, null)
+                        }
+                    },
+                    onEditRowClick = { row ->
+                        editingFeedRowId = row.id
+                        showFeedRowEditorSheet = true
+                    },
+                    onAddRowClick = {
+                        editingFeedRowId = null
+                        showFeedRowEditorSheet = true
+                    },
+                    onManageRowsClick = {
+                        showManageFeedRowsSheet = true
+                    },
+                )
+            }
+        }
     }
 }
 

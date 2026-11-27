@@ -89,6 +89,7 @@ internal fun BoxScope.MainTopChrome(
     onManageLanguagePresets: () -> Unit,
     reserveCompactTabsRail: Boolean,
     topTabsOverrideState: CompactTabsTopBarOverrideState?,
+    topSegmentedSwitcherState: TopBarSegmentedSwitcherState? = null,
     topFilterRailOverrideState: CompactFilterRailOverrideState?,
     selectedContentType: ContentType?,
     enabledContentTypes: Set<ContentType>,
@@ -139,7 +140,11 @@ internal fun BoxScope.MainTopChrome(
         .graphicsLayer { alpha = chromeAlpha }
         .onGloballyPositioned { coords -> onTopBarHeightMeasured(coords.size.height) }
 
-    if (effectiveTopBarOverrideState != null && effectiveTopBarOverrideState !is CompactTabsTopBarOverrideState) {
+    if (
+        effectiveTopBarOverrideState != null &&
+        effectiveTopBarOverrideState !is CompactTabsTopBarOverrideState &&
+        effectiveTopBarOverrideState !is TopBarSegmentedSwitcherState
+    ) {
         MainSelectionTopChrome(
             effectiveTopBarOverrideState = effectiveTopBarOverrideState,
             modifier = topChromeModifier,
@@ -169,6 +174,7 @@ internal fun BoxScope.MainTopChrome(
                 onLanguagePresetSelected = onLanguagePresetSelected,
                 onManageLanguagePresets = onManageLanguagePresets,
                 compactTabsState = topTabsOverrideState,
+                segmentedSwitcherState = topSegmentedSwitcherState,
                 filterRailState = topFilterRailOverrideState,
                 selectedContentType = selectedContentType,
                 enabledContentTypes = enabledContentTypes,
@@ -354,6 +360,7 @@ private fun MainSelectionTopChrome(
         }
 
         is CompactTabsTopBarOverrideState -> Unit
+        is TopBarSegmentedSwitcherState -> Unit
         is LayeredTopBarOverrideState -> Unit
     }
 }

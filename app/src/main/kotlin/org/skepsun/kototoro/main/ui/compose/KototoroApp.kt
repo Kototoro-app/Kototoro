@@ -902,6 +902,8 @@ fun KototoroApp(
         ?: globalTopBarOverrideState
     val layeredTopBarOverrideState = resolvedTopBarOverrideState as? LayeredTopBarOverrideState
     val topTabsOverrideState = layeredTopBarOverrideState?.tabsState ?: (resolvedTopBarOverrideState as? CompactTabsTopBarOverrideState)
+    val topSegmentedSwitcherState = layeredTopBarOverrideState?.segmentedSwitcherState
+        ?: (resolvedTopBarOverrideState as? TopBarSegmentedSwitcherState)
     val topFilterRailOverrideState = layeredTopBarOverrideState?.filterRailState
     val effectiveTopBarOverrideState = if (layeredTopBarOverrideState != null) {
         layeredTopBarOverrideState.contextualOverrideState
@@ -911,7 +913,9 @@ fun KototoroApp(
     val hasSelectionTopChrome =
         effectiveTopBarOverrideState is ExploreSourceSelectionTopBarState ||
             effectiveTopBarOverrideState is ContentSelectionTopBarOverrideState
-    val shouldUseMaterialTopBarScroll = shouldShowChrome && !hasSelectionTopChrome
+    val shouldKeepTopBarPinned = layeredTopBarOverrideState?.keepTopBarPinned == true ||
+        topSegmentedSwitcherState != null
+    val shouldUseMaterialTopBarScroll = shouldShowChrome && !hasSelectionTopChrome && !shouldKeepTopBarPinned
     val isChromeOffsetFromCurrentDestination =
         offsetDestinationRoute == currentDestinationRoute && offsetDestinationOwnerKey == currentTopBarOwnerKey
     val shouldRevealChromeForFocus = presentationConfig.isTv && isChromeFocused
@@ -1309,6 +1313,7 @@ fun KototoroApp(
                         onManageLanguagePresets = onManageLanguagePresets,
                         reserveCompactTabsRail = isFavoritesRoute && favoritesTabsPosition == FavoritesTabsPosition.BOTTOM_RAIL,
                         topTabsOverrideState = topTabsOverrideState,
+                        topSegmentedSwitcherState = topSegmentedSwitcherState,
                         topFilterRailOverrideState = topFilterRailOverrideState,
                         topBarStyle = topBarStyle,
                         favoritesTabsPosition = favoritesTabsPosition,
