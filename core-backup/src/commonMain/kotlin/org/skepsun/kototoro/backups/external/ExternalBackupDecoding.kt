@@ -66,7 +66,8 @@ fun readExternalBackupBytes(
  * Streams top-level protobuf records directly from [source] (transparently un-gzipping it) without
  * buffering the entire decompressed archive or full object graph in memory.
  *
- * Returns null when [app] is [ExternalBackupApp.VENERA] or when the protobuf wire stream is malformed.
+ * Returns null when [app] is [ExternalBackupApp.VENERA] or [ExternalBackupApp.USAGI], or when the protobuf
+ * wire stream is malformed.
  * Rejects JSON backups with [UnsupportedExternalBackupException], oversized streams/records with
  * [ExternalBackupTooLargeException], and propagates underlying I/O or gzip errors.
  * Takes ownership of [source] and closes it on success or failure.
@@ -79,14 +80,14 @@ fun decodeMihonOrAniyomiBackup(
 ): ExternalBackupPayload? {
     var decoded = source
     try {
-        if (app == ExternalBackupApp.VENERA) {
+        if (app == ExternalBackupApp.VENERA || app == ExternalBackupApp.USAGI) {
             return null
         }
         decoded = openExternalBackupSource(source, maxBytes)
         val mode = when (app) {
             ExternalBackupApp.MIHON -> ProtobufDecodeMode.MIHON
             ExternalBackupApp.ANIYOMI -> ProtobufDecodeMode.ANIYOMI
-            ExternalBackupApp.VENERA -> return null
+            ExternalBackupApp.VENERA, ExternalBackupApp.USAGI -> return null
         }
         return decodeMihonOrAniyomiProtobuf(decoded, mode, maxRecordBytes)?.payload
     } finally {
@@ -125,7 +126,7 @@ fun decodeMihonOrAniyomiBackup(
     val mode = when (app) {
         ExternalBackupApp.MIHON -> ProtobufDecodeMode.MIHON
         ExternalBackupApp.ANIYOMI -> ProtobufDecodeMode.ANIYOMI
-        ExternalBackupApp.VENERA -> return null
+        ExternalBackupApp.VENERA, ExternalBackupApp.USAGI -> return null
     }
     return decodeMihonOrAniyomiProtobuf(Buffer().write(bytes), mode, maxRecordBytes)?.payload
 }

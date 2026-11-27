@@ -1333,6 +1333,8 @@
     <string name="import_backup_aniyomi_family_summary">Aniyomi、Anikku 或 Animiru 漫畫與動畫備份。</string>
     <string name="import_backup_venera">Venera</string>
     <string name="import_backup_venera_summary">Venera ZIP 備份。</string>
+    <string name="import_backup_usagi">Usagi</string>
+    <string name="import_backup_usagi_summary">Usagi ZIP 備份：收藏及其分類和閱讀歷史。書籤、追蹤和統計資料不會匯入。</string>
     <string name="import_compatible_backup">匯入相容備份</string>
     <string name="import_compatible_backup_summary">選擇來源應用程式類型後，再選擇對應的備份檔案。</string>
     <string name="import_button">導入</string>

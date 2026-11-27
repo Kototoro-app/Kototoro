@@ -1219,8 +1219,10 @@
     <string name="import_backup_aniyomi_family_summary">Aniyomi, Anikku, or Animiru manga and anime backup.</string>
     <string name="import_backup_venera">Venera</string>
     <string name="import_backup_venera_summary">Venera ZIP backup.</string>
+    <string name="import_backup_usagi">Usagi</string>
+    <string name="import_backup_usagi_summary">Usagi ZIP backup: favourites with their categories and reading history. Bookmarks, tracking and statistics are not imported.</string>
     <string name="import_compatible_backup">Import from other apps</string>
-    <string name="import_compatible_backup_summary">Import a backup from Mihon, Aniyomi or Venera.</string>
+    <string name="import_compatible_backup_summary">Import a backup from Mihon, Aniyomi, Venera or Usagi.</string>
     <string name="supported_apps">Supported apps</string>
     <string name="import_backup_supported_apps_summary">Mihon, Komikku, Aniyomi, Anikku, Animiru, Venera</string>
     <string name="import_backup_scope_summary">This version restores favorites, history, and imported reading progress metadata.</string>

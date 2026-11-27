@@ -548,6 +548,11 @@ private enum class BackupImportTarget(
         R.string.import_backup_venera_summary,
         ExternalBackupApp.VENERA,
     ),
+    USAGI(
+        R.string.import_backup_usagi,
+        R.string.import_backup_usagi_summary,
+        ExternalBackupApp.USAGI,
+    ),
 }
 
 @Composable

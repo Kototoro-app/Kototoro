@@ -77,10 +77,10 @@ class ExternalLibraryImport(
                         failedRecords += record.toFailedRecord()
                         continue
                     }
-                    is SourceResolveResult.UnmatchedExtensionSource -> {
-                        // The extension for this source is not installed: import anyway with
-                        // the verbatim key (same as before), but track it for the summary and
-                        // register a source_origins row so the UI can label it later.
+                    is SourceResolveResult.UninstalledSource -> {
+                        // The source is not installed: import anyway with the verbatim key (same as
+                        // before), but track it for the summary; extension keys also get a
+                        // source_origins row so the UI can label them later.
                         uninstalledSources.getOrPut(result.record.sourceName) {
                             UninstalledSourceAggregator(
                                 contentType = result.record.contentType.name,
@@ -202,6 +202,9 @@ class ExternalLibraryImport(
         if (uninstalledSources.isEmpty()) return
         val dao = database.getSourceOriginsDao()
         for ((sourceKey, aggregator) in uninstalledSources) {
+            // Only extension keys are real source_origins rows; a native source that is merely
+            // missing stays a plain summary entry (Usagi stores Kototoro's own source names).
+            if (!sourceKey.startsWith("MIHON_") && !sourceKey.startsWith("ANIYOMI_")) continue
             val existing = dao.getByKey(sourceKey)
             val displayName = aggregator.displayName ?: existing?.displayName
             dao.upsert(
@@ -294,8 +297,11 @@ class ExternalLibraryImport(
                 }
                 return when {
                     isInstalledExtensionSource(record.sourceName) -> SourceResolveResult.Resolved(record)
-                    else -> SourceResolveResult.UnmatchedExtensionSource(record)
+                    else -> SourceResolveResult.UninstalledSource(record)
                 }
+            }
+            if (record.app == ExternalBackupApp.USAGI) {
+                return resolveUsagiSource(record)
             }
             if (record.app != ExternalBackupApp.VENERA) {
                 return SourceResolveResult.Resolved(record)
@@ -329,6 +335,27 @@ class ExternalLibraryImport(
                 else -> null
             } ?: return SourceResolveResult.Unmatched
             return SourceResolveResult.Resolved(record.copy(sourceName = resolved.sourceName))
+        }
+
+        /**
+         * Usagi stores Kototoro's own source names, so a record binds to the installed source of
+         * that name (by key, then by title). An unknown name still imports verbatim and is
+         * reported as an uninstalled source, like an uninstalled Mihon extension.
+         */
+        private suspend fun resolveUsagiSource(record: ExternalBackupContentRecord): SourceResolveResult {
+            val name = record.sourceName.trim()
+            if (name.isEmpty()) return SourceResolveResult.Unmatched
+            val candidates = candidates()
+            val exact = candidates.filter { it.sourceName == name }.distinctBy { it.sourceName }
+            if (exact.size == 1) {
+                return SourceResolveResult.Resolved(record.copy(sourceName = exact.single().sourceName))
+            }
+            val normalized = normalizeSourceName(name)
+            val byName = candidates.filter { it.normalizedName == normalized }.distinctBy { it.sourceName }
+            if (byName.size == 1) {
+                return SourceResolveResult.Resolved(record.copy(sourceName = byName.single().sourceName))
+            }
+            return SourceResolveResult.UninstalledSource(record)
         }
 
         private suspend fun resolveNativeSource(
@@ -403,11 +430,11 @@ class ExternalLibraryImport(
         data object Unmatched : SourceResolveResult
 
         /**
-         * A `MIHON_<id>` / `ANIYOMI_<id>` source whose extension is not installed and which
-         * could not be remapped to a native parser source. The record still imports with the
-         * verbatim key; the import reports it and registers a `source_origins` row.
+         * A `MIHON_<id>` / `ANIYOMI_<id>` extension, or a Usagi source name, that is not installed
+         * and could not be remapped. The record still imports with the verbatim key; the import
+         * reports it as an uninstalled source.
          */
-        data class UnmatchedExtensionSource(val record: ExternalBackupContentRecord) : SourceResolveResult
+        data class UninstalledSource(val record: ExternalBackupContentRecord) : SourceResolveResult
     }
 
     private sealed interface FixedSourceResolveResult {

@@ -118,6 +118,62 @@ class ExternalLibraryImportProgressTest {
         return rows.values.toList()
     }
 
+    @Test
+    fun `Usagi sources bind to the installed source and report the ones that are missing`() = runTest {
+        val record = ExternalBackupContentRecord(
+            app = ExternalBackupApp.USAGI,
+            sourceName = "MANGA_DEX",
+            contentType = ContentType.MANGA,
+            url = "/manga/usagi",
+            title = "Usagi work",
+            authors = null,
+            description = null,
+            tags = emptyList(),
+            coverUrl = null,
+            publicUrl = "https://example.org/manga/usagi",
+            state = null,
+            isFavorite = true,
+            favoriteTimestamp = 1_700_000_000_000L,
+            favoriteCategoryOrders = emptyList(),
+            chaptersCount = 0,
+            readEntriesCount = 0,
+            progressPercent = null,
+            historyChapterUrl = null,
+            historyTimestamp = null,
+        )
+        suspend fun import(installed: Boolean): ExternalBackupImportSummary {
+            val database = mockk<MangaDatabase>(relaxed = true)
+            coEvery { database.getFavouriteCategoriesDao().findAll() } returns emptyList()
+            coEvery { database.getFavouriteCategoriesDao().insert(any()) } returns 1L
+            return ExternalLibraryImport(
+                database = database,
+                catalog = {
+                    if (installed) {
+                        listOf(ExternalSourceCandidate("MANGA_DEX", "MangaDex", ExternalSourceKind.NATIVE))
+                    } else {
+                        emptyList()
+                    }
+                },
+                transaction = object : ExternalImportTransaction {
+                    override suspend fun <R> run(block: suspend () -> R): R = block()
+                },
+                defaultCategoryTitle = "Favourites",
+                now = { 1_700_000_200_000L },
+            ).import(ExternalBackupPayload(records = listOf(record)))
+        }
+
+        val installedSummary = import(installed = true)
+        assertEquals(1, installedSummary.favoritesImported)
+        assertEquals(0, installedSummary.failedCount)
+        assertEquals(emptyList<ExternalBackupUninstalledSource>(), installedSummary.uninstalledSources)
+
+        // A Usagi source that is not installed still imports, but is reported like an uninstalled extension.
+        val missingSummary = import(installed = false)
+        assertEquals(1, missingSummary.favoritesImported)
+        assertEquals(0, missingSummary.failedCount)
+        assertEquals(listOf("MANGA_DEX"), missingSummary.uninstalledSources.map { it.sourceKey })
+    }
+
     private fun payload(mangaUrls: List<String> = listOf("/manga/first")): ExternalBackupPayload {
         val backup = MihonBackup(
             backupManga = mangaUrls.map { mangaUrl ->
