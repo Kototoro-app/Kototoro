@@ -351,8 +351,11 @@ class PageLoader @Inject constructor(
             tasks.clear()
         }
         enhancementController.cancelAllTranslationTasks()
-        srManager.release()
+        // Cancel and join every in-flight load before releasing the engines: releasing under a running
+        // processImage would free the native engine mid-tile. release() is now suspend and runs in
+        // NonCancellable, so it completes even if this scope is being torn down.
         loaderScope.cancelChildrenAndJoin()
+        srManager.release()
         if (clearCache) {
             cache.clear()
         }

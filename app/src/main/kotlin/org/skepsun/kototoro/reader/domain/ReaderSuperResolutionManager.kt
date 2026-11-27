@@ -13,12 +13,11 @@ import androidx.documentfile.provider.DocumentFile
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.isActive
-import kotlinx.coroutines.GlobalScope
 import okio.ByteString.Companion.encodeUtf8
 import org.skepsun.kototoro.core.util.ContentZipArchive
 import org.skepsun.kototoro.core.util.ext.isContentZipUri
@@ -388,13 +387,11 @@ class ReaderSuperResolutionManager @Inject constructor(
         }
     }
 
-    fun release() {
-        GlobalScope.launch(Dispatchers.IO) {
-            engineMutex.withLock {
-                releaseEngines()
-                activeModelId = null
-                consecutiveFailures = 0
-            }
+    suspend fun release() = withContext(Dispatchers.IO + NonCancellable) {
+        engineMutex.withLock {
+            releaseEngines()
+            activeModelId = null
+            consecutiveFailures = 0
         }
     }
 
