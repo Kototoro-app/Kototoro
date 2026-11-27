@@ -34,6 +34,7 @@ class SuggestionRepositoryVisibilityTest {
             every { suggestionsExcludedSources } returns emptySet()
             every { isSuggestionsExcludeNsfw } returns false
             every { isNsfwContentDisabled } returns false
+            every { isCommunityEnabled } returns false
         }
         val row = SuggestionWithContent(
             SuggestionEntity(1, 1f, 1),
@@ -67,6 +68,18 @@ class SuggestionRepositoryVisibilityTest {
                 excluded = setOf("Romance")
                 assertEquals(2L, SuggestionRepository(database, settings).observeAll(1, emptySet()).first().single().id,
                     "apply visibility before the home rail limit so allowed cached rows are not lost")
+                val community = other.copy(
+                    suggestion = SuggestionEntity(2, .5f, 1, direction = SuggestionDirection.COMMUNITY.name),
+                    manga = other.manga.copy(id = 3),
+                )
+                every { dao.observeAll(any(), any(), any(), any()) } answers {
+                    flowOf(listOf(community).take(firstArg()))
+                }
+                assertTrue(SuggestionRepository(database, settings).observeAll(1, emptySet()).first().isEmpty(),
+                    "community rows stay hidden while community suggestions are off")
+                every { settings.isCommunityEnabled } returns true
+                assertEquals(3L, SuggestionRepository(database, settings).observeAll(1, emptySet()).first().single().id,
+                    "community rows show once community suggestions are on")
             }
         } finally { channel.cancel() }
     }
