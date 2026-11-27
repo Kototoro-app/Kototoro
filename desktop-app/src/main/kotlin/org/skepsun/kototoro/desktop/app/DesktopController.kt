@@ -1969,6 +1969,7 @@ class DesktopController(
     }
 
     internal fun suggestionSettings(settings: org.skepsun.kototoro.desktop.runtime.DesktopSuggestionSettings) {
+        val previous = state.value.suggestionSettings
         mutableState.update {
             it.copy(
                 suggestionSettings = settings,
@@ -1980,6 +1981,9 @@ class DesktopController(
         if (!backgroundPreferences.edit(SourcePreferenceEdit(changes = settings.toPreferences()))) {
             mutableState.update { it.copy(error = desktopText("settings.suggestionsSaveFailed")) }
         }
+        // Other choices only hide cached works, but the adult filter decides which works fill the stored list: hiding
+        // them would leave it short until the next scheduled run, as Android rebuilds on this switch.
+        if (settings.enabled && previous.enabled && settings.excludeNsfw != previous.excludeNsfw) refreshSuggestions()
     }
 
     internal fun trackerSettings(settings: org.skepsun.kototoro.desktop.runtime.DesktopTrackerSettings) {

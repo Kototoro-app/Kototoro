@@ -66,6 +66,10 @@ class SourceSuggestions(
         val profile = SuggestionProfile.of(library, now, preferences.tagWhitelist)
         val blacklist = SuggestionTagBlacklist(preferences.tagBlacklist, matches)
         val global = org.skepsun.kototoro.core.model.TagTitleBlacklist(preferences.globalTagBlacklist)
+        // Works the run would drop anyway: they must not count as what a page still offers.
+        fun SourceContent.isExcluded() =
+            (preferences.excludeNsfw && (contentRating == "ADULT" || source.contentType.startsWith("HENTAI_"))) ||
+                blacklist.containsAny(tags.map { tag -> tag.title }) || global.containsAnyTitle(tags.map { tag -> tag.title })
         val lock = Mutex()
         var successful = 0
         val raw = collectSourceResults(sources.filterNot {
@@ -100,8 +104,9 @@ class SourceSuggestions(
                     return@flatMap emptyList()
                 }
                 answered = true
-                // A reader with a big library already has the top of any list: one page further when little is left.
-                val fresh = first.count { !profile.knows(it.id, listOf(it.title) + it.altTitles) }
+                // A reader with a big library already has the top of any list, and a list mostly of filtered works
+                // offers little either: one page further when little usable is left.
+                val fresh = first.count { !it.isExcluded() && !profile.knows(it.id, listOf(it.title) + it.altTitles) }
                 val list = if (first.isNotEmpty() && fresh < limits.maxSourceResults / 2) {
                     first + try {
                         val offset = if (descriptor.pagingMode == SourcePagingMode.PAGE_INDEX) 1 else first.size
@@ -117,12 +122,7 @@ class SourceSuggestions(
                         .filterNot { profile.knows(it.item.id, listOf(it.item.title) + it.item.altTitles) },
                     title = { it.item.title },
                     hasAddress = { it.item.url.isNotBlank() || it.item.publicUrl.isNotBlank() },
-                    excluded = {
-                        (preferences.excludeNsfw && (it.item.contentRating == "ADULT" ||
-                            it.item.source.contentType.startsWith("HENTAI_"))) ||
-                            blacklist.containsAny(it.item.tags.map { tag -> tag.title }) ||
-                            global.containsAnyTitle(it.item.tags.map { tag -> tag.title })
-                    },
+                    excluded = { it.item.isExcluded() },
                     limits = limits,
                     // Only what was asked for by taste is picked by taste; the other lists keep the source's order
                     fit = { candidate ->

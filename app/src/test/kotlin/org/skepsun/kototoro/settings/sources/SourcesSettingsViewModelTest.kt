@@ -99,6 +99,9 @@ class SourcesSettingsViewModelTest {
         val context = mockk<Context>(relaxed = true)
         every { context.filesDir } returns filesDir
         every { context.packageManager } returns manager
-        return SourcesSettingsViewModel(repository, context, mockk<AppSettings>(relaxed = true))
+        return SourcesSettingsViewModel(
+            repository, context, mockk<AppSettings>(relaxed = true),
+            mockk<org.skepsun.kototoro.suggestions.ui.SuggestionsWorker.Scheduler>(relaxed = true),
+        )
     }
 }

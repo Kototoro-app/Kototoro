@@ -31,6 +31,7 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.BaseViewModel
 import org.skepsun.kototoro.core.util.ext.call
 import org.skepsun.kototoro.explore.data.ContentSourcesRepository
+import org.skepsun.kototoro.suggestions.ui.SuggestionsWorker
 import javax.inject.Inject
 
 @HiltViewModel
@@ -38,7 +39,17 @@ class SourcesSettingsViewModel @Inject constructor(
     private val sourcesRepository: ContentSourcesRepository,
     @ApplicationContext private val context: Context,
     private val settings: AppSettings,
+    private val suggestionsScheduler: SuggestionsWorker.Scheduler,
 ) : BaseViewModel() {
+
+    /**
+     * The adult filters here also decide what the suggestions worker stores. The stored list only hides what the new
+     * choice excludes, so rebuild it now instead of leaving it short until the next scheduled run.
+     */
+    fun rebuildSuggestions() {
+        if (!settings.isSuggestionsEnabled) return
+        launchJob(Dispatchers.Default) { suggestionsScheduler.startNow() }
+    }
 
     suspend fun loadSourceOrder(): List<org.skepsun.kototoro.core.ui.compose.ReorderItem> =
         sourcesRepository.loadSourceOrder()

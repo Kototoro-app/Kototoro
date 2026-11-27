@@ -383,6 +383,10 @@ class SuggestionsWorker @AssistedInject constructor(
         val excludeNsfw = appSettings.isSuggestionsExcludeNsfw || appSettings.isNsfwContentDisabled
         val limit = SuggestionLimits().maxSourceResults
         fun Content.isKnown() = id in stored || profile.knows(id, listOf(title) + altTitles)
+        // Works the run would drop anyway: they must not count as what a page still offers.
+        fun Content.isExcluded() = (excludeNsfw && isNsfw()) ||
+            (blacklist.isNotEmpty() && this in blacklist) ||
+            (!globalTagBlacklist.isEmpty && this in globalTagBlacklist)
         // A full refresh reads the top of each list; incremental loading continues [cursor] pages further.
         val pageIndexed = repository.listPagingMode == ContentRepository.ListPagingMode.PAGE_INDEX
         val firstOffset = when {
@@ -398,8 +402,9 @@ class SuggestionsWorker @AssistedInject constructor(
                 .onSuccess { onAnswered() }
                 .onFailure { onSourceFailure(it) }
                 .getOrDefault(emptyList())
-            // A reader with a big library already has the top of any list: one page further when little is left.
-            val next = if (first.isNotEmpty() && first.count { !it.isKnown() } < limit / 2) {
+            // A reader with a big library already has the top of any list, and a list mostly of filtered works offers
+            // little either: one page further when little usable is left.
+            val next = if (first.isNotEmpty() && first.count { !it.isKnown() && !it.isExcluded() } < limit / 2) {
                 val offset = if (pageIndexed) firstOffset + 1 else firstOffset + first.size
                 runCatchingCancellable { repository.getList(offset = offset, order = order, filter = filter) }
                     .getOrDefault(emptyList())
@@ -412,12 +417,7 @@ class SuggestionsWorker @AssistedInject constructor(
                     .filterNot { it.item.isKnown() },
                 title = { it.item.title },
                 hasAddress = { it.item.url.isNotBlank() || it.item.publicUrl.isNotBlank() },
-                excluded = { candidate ->
-                    val manga = candidate.item
-                    (excludeNsfw && manga.isNsfw()) ||
-                        (blacklist.isNotEmpty() && manga in blacklist) ||
-                        (!globalTagBlacklist.isEmpty && manga in globalTagBlacklist)
-                },
+                excluded = { it.item.isExcluded() },
                 // Only what was asked for by taste is picked by taste; the other lists keep the source's order
                 fit = { candidate ->
                     if (candidate.direction != SuggestionDirection.TASTE) {

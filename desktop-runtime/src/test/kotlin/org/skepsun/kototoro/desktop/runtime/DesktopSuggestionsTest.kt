@@ -180,4 +180,31 @@ class DesktopSuggestionsTest {
             assertEquals(listOf(101L), generator.suggestions().map { it.id })
         }
     }
+
+    @Test
+    fun `a first page of filtered works asks one page further`() = runBlocking<Unit> {
+        DesktopRuntime.open(directory).use { runtime ->
+            val library = DesktopLibrary(runtime.database) { null }
+            val base = FakeRuntime()
+            val offsets = mutableListOf<Int>()
+            // A general source whose top list is all adult works: with the adult filter on, nothing on it is usable.
+            val mixed = object : SourceRuntime by base {
+                override suspend fun describe(sourceName: String) =
+                    base.describe(sourceName).copy(pagingMode = SourcePagingMode.PAGE_INDEX)
+
+                override suspend fun getList(sourceName: String, offset: Int, order: String?, filter: SourceFilter?): List<SourceContent> {
+                    offsets += offset
+                    return when (offset) {
+                        0 -> (1L..30L).map { work(it, manga).copy(contentRating = "ADULT") }
+                        1 -> listOf(work(101, manga))
+                        else -> error("Skipped a page: $offset")
+                    }
+                }
+            }
+            val generator = DesktopSuggestions(library, mixed, now = { 42L }, sourceOrder = { it })
+            assertEquals(1, generator.refresh(listOf(listing(manga)), DesktopSuggestionSettings(excludeNsfw = true)))
+            assertTrue(1 in offsets, "the filtered page alone must not end the list: $offsets")
+            assertEquals(listOf(101L), generator.suggestions().map { it.id })
+        }
+    }
 }

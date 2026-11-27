@@ -199,6 +199,10 @@ fun SourcesSettingsRoute(
             if (hideFromBookmarks != isBookmarksExcludeNsfw) {
                 settings.isBookmarksExcludeNsfw = hideFromBookmarks
             }
+            // Both choices decide which works the suggestions worker keeps.
+            if (hideFromSuggestions != isSuggestionsExcludeNsfw || hideFromSourcesAndBrowse != isNsfwContentDisabled) {
+                viewModel.rebuildSuggestions()
+            }
         },
         onIncognitoModeForNsfwChange = { settings.incognitoModeForNsfw = it },
         onGlobalTagBlacklistClick = onGlobalTagBlacklistClick,
