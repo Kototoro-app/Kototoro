@@ -1058,6 +1058,8 @@
     <string name="details_translate_button_visible">在詳情頁顯示翻譯按鈕</string>
     <string name="details_translate_button_visible_summary">當翻譯可用時，在作品詳情頁顯示翻譯操作按鈕</string>
     <string name="modern_details_dock">現代詳細資訊 Dock</string>
+    <string name="details_summary_cards">顯示詳細資訊摘要卡片</string>
+    <string name="details_summary_cards_summary">使用圓角卡片顯示作品的基本資訊和簡介</string>
     <string name="modern_details_dock_summary">使用選取狀態更清晰、主要操作更突出的現代底欄</string>
     <string name="details_translate_title_and_description_hint">翻譯標題和描述</string>
     <string name="disable_captcha_auto_solve">禁用自動人機驗證</string>

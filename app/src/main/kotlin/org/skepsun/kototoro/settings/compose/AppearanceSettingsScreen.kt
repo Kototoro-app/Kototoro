@@ -102,6 +102,7 @@ data class AppearanceSettingsUiState(
     val badgesBottomRight: Set<String>,
     val mangaListBadges: Set<String>, // Keep for compatibility if needed, but we will use the others
     val isDescriptionExpanded: Boolean,
+    val isDetailsSummaryCardsEnabled: Boolean,
     val isPanoramaCoverEnabled: Boolean,
     val panoramaCoverSummary: String,
     val isPagesTabEnabled: Boolean,
@@ -237,6 +238,7 @@ fun AppearanceSettingsScreen(
     onBadgesBottomRightChange: (Set<String>) -> Unit,
     onMangaListBadgesChange: (Set<String>) -> Unit,
     onDescriptionExpandedChange: (Boolean) -> Unit,
+    onDetailsSummaryCardsEnabledChange: (Boolean) -> Unit,
     onPanoramaCoverEnabledChange: (Boolean) -> Unit,
     onPanoramaSettingsClick: () -> Unit,
     onPagesTabEnabledChange: (Boolean) -> Unit,
@@ -762,6 +764,15 @@ fun AppearanceSettingsScreen(
             SettingsPreferenceGroup(
                 title = stringResource(R.string.appearance_group_details_visual),
             ) {
+                item {
+                    SettingsSwitchPreference(
+                        title = stringResource(R.string.details_summary_cards),
+                        summary = stringResource(R.string.details_summary_cards_summary),
+                        iconRes = R.drawable.ic_list_detailed,
+                        checked = state.isDetailsSummaryCardsEnabled,
+                        onCheckedChange = onDetailsSummaryCardsEnabledChange,
+                    )
+                }
                 item {
                     SettingsSplitSwitchPreference(
                         title = stringResource(R.string.pref_panorama_cover),

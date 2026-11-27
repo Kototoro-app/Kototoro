@@ -685,6 +685,10 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         get() = !prefs.getBoolean(KEY_COLLAPSE_DESCRIPTION, true)
         set(value) = prefs.edit { putBoolean(KEY_COLLAPSE_DESCRIPTION, !value) }
 
+    var isDetailsSummaryCardsEnabled: Boolean
+        get() = prefs.getBoolean(KEY_DETAILS_SUMMARY_CARDS, false)
+        set(value) = prefs.edit { putBoolean(KEY_DETAILS_SUMMARY_CARDS, value) }
+
     var isPanoramaCoverEnabled: Boolean
         get() = prefs.getBoolean(KEY_PANORAMA_ENABLED, true)
         set(value) = prefs.edit { putBoolean(KEY_PANORAMA_ENABLED, value) }
@@ -3737,6 +3741,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_ANIYOMI_EXTENSIONS = "aniyomi_extensions"
         const val KEY_QUICK_FILTER = "quick_filter"
         const val KEY_COLLAPSE_DESCRIPTION = "description_collapse"
+        const val KEY_DETAILS_SUMMARY_CARDS = "details_summary_cards"
         const val KEY_PANORAMA_ENABLED = "panorama_enabled"
         const val KEY_PANORAMA_BLUR = "panorama_blur"
         const val KEY_PANORAMA_TRANSITION_INTENSITY = "panorama_transition_intensity"
