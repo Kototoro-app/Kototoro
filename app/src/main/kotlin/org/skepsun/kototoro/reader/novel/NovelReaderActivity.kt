@@ -4,7 +4,6 @@ import android.content.Intent
 import android.content.ContentValues
 import android.content.res.Configuration
 import android.graphics.Bitmap
-import android.net.Uri
 import android.os.Bundle
 import android.os.SystemClock
 import android.provider.MediaStore
@@ -64,7 +63,6 @@ import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.core.model.getLocalizedTitle
@@ -77,7 +75,6 @@ import org.skepsun.kototoro.core.util.ext.isTextEbookChapter
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.core.model.isLocal
-import org.skepsun.kototoro.core.model.parcelable.ParcelableContent
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.nav.ContentIntent
 import org.skepsun.kototoro.core.parser.ContentRepository
@@ -105,7 +102,6 @@ import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassLayerBackdrop
 import org.skepsun.kototoro.local.epub.EpubError
 import org.skepsun.kototoro.local.epub.EpubException
 import org.skepsun.kototoro.local.epub.buildEpubChapterUrl
-import org.skepsun.kototoro.local.epub.resolveLocalEpubFile
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.core.util.ext.getParcelableExtraCompat
@@ -371,6 +367,14 @@ class NovelReaderActivity :
     private var originalContent: Content? = null  // Store original for online fallback
     private lateinit var readerSettings: NovelReaderSettings
     private lateinit var epubInternalChapterLoader: EpubInternalChapterLoader
+    private var initialWorkTitle: String = ""
+    private var contentInitJob: Job? = null
+    private var replaceRulesObservationJob: Job? = null
+
+    private val isContentInitialized: Boolean
+        get() = ::manga.isInitialized && ::repository.isInitialized
+
+    private fun currentWorkTitle(): String = if (::manga.isInitialized) manga.title else initialWorkTitle
 
     private var chapters: List<ContentChapter> = emptyList()
     private var displayChapters: List<ContentChapter> = emptyList()
@@ -622,70 +626,78 @@ class NovelReaderActivity :
             .onEach(::setKeepScreenOn)
             .launchIn(lifecycleScope)
 
-        val parcelable = intent.getParcelableExtraCompat<ParcelableContent>(AppRouter.KEY_MANGA)
-        val mangaSeed = runBlocking {
-            contentDataRepository.resolveIntent(ContentIntent(intent), withChapters = true)
-        } ?: parcelable?.manga
-        if (mangaSeed == null) {
-            finish()
-            return
-        }
+        // 进入当前小说时显式清空上一轮阅读会话中的翻译状态，
+        // 但不清理长期翻译缓存。
+        resetTranslationSession()
 
-        // Save original manga for online fallback（若当前是本地 URI，尝试从 index.json 恢复对应的远端信息以获得原始 URL）
-        val isContentSeedLocalUrl = mangaSeed.url.let { it.startsWith("file://") || it.startsWith("zip://") || it.startsWith("cbz://") || it.startsWith("local://") }
-        val maybeRemote = runCatching {
-            runBlocking {
-                if (isContentSeedLocalUrl) localContentRepository.getRemoteContent(mangaSeed) else null
-            }
-        }.getOrNull()
-        originalContent = maybeRemote ?: mangaSeed
+        epubInternalChapterLoader = EpubInternalChapterLoader(
+            context = this,
+            epubFileManager = epubFileManager,
+            epubChapterMappingDao = epubChapterMappingDao,
+            epubContentCache = epubContentCache,
+        )
 
-        val local = runCatching {
-            runBlocking {
-                localContentRepository.findSavedContent(mangaSeed, withDetails = true)
-            }
-        }.getOrNull()
-        manga = local?.manga ?: mangaSeed
+        val contentIntent = ContentIntent(intent)
+        val fallbackManga = contentIntent.manga
+        initialWorkTitle = fallbackManga?.title.orEmpty()
 
-        // 如果是从历史记录进入（可能 URL 是 local 但 source 已修正）或者来源是 Unknown，
-        // 尝试修正为原始来源以支持在线跳转，并确保有远程 URL 可用
-        if ((manga.source.name.startsWith("LOCAL") || manga.source == org.skepsun.kototoro.core.model.UnknownContentSource)
-            && originalContent != null) {
-            manga = manga.copy(source = originalContent!!.source, url = originalContent!!.url)
-            android.util.Log.d("NovelReaderActivity", "Fixed manga source to ${manga.source.name} and URL to ${manga.url}")
-        }
-        if (local != null && (manga.chapters.isNullOrEmpty())) {
-            // 某些情况下索引未带章节，兜底从本地解析一遍
-            runCatching {
-                manga = runBlocking { localContentRepository.getDetails(manga) }
-                android.util.Log.d(
-                    "NovelReaderActivity",
-                    "Refetched local details, chapters=${manga.chapters?.size ?: 0}",
-                )
-            }.onFailure {
-                android.util.Log.w("NovelReaderActivity", "Failed to refetch local details", it)
-            }
-            // 再次兜底：直接用 LocalContentParser 解析目录/CBZ
-            if (manga.chapters.isNullOrEmpty()) {
-                runCatching {
-                    val uri = Uri.parse(manga.url)
-                    val localTarget = resolveLocalEpubFile(
-                        manga.url,
-                        uri.path.takeIf { uri.fragment == null && '?' !in manga.url },
-                    )
-                    val parser = localTarget?.let(org.skepsun.kototoro.local.data.input.LocalContentParser::getOrNull)
-                    if (parser != null) {
-                        manga = runBlocking { parser.getContent(withDetails = true).manga }
-                        android.util.Log.d(
-                            "NovelReaderActivity",
-                            "Parsed chapters via LocalContentParser fallback, count=${manga.chapters?.size ?: 0}",
-                        )
-                    }
-                }.onFailure {
-                    android.util.Log.w("NovelReaderActivity", "Fallback parse failed", it)
+        spaceSwitcherDelegate.bind(
+            activity = this,
+            snackbarAnchor = contentRoot,
+            origin = SpaceSwitchOrigin.NOVEL_READER,
+            availabilityProvider = {
+                if (isContentInitialized) {
+                    SpaceSwitchAvailability.SAVE_AND_SWITCH
+                } else {
+                    SpaceSwitchAvailability.UNAVAILABLE
                 }
-            }
+            },
+            progressFlusher = SpaceProgressFlusher { flushForSpaceSwitch() },
+        )
+        spaceSwitcherDelegate.setControlsVisible(isUiVisible)
+
+        if (initialWorkTitle.isNotEmpty()) {
+            title = initialWorkTitle
+            supportActionBar?.title = initialWorkTitle
         }
+
+        applyReaderPalette()
+        applyReaderBrightness(readerSettings)
+
+        updateDualPageMode()
+        updateFullscreenMode()
+        updateReadingStatusVisibility()
+
+        applyInitialUiVisibility()
+        showLoading(true)
+
+        setupComposeContent()
+
+        contentInitJob?.cancel()
+        contentInitJob = lifecycleScope.launch {
+            val resolved = withContext(Dispatchers.IO) {
+                resolveNovelReaderContent(
+                    contentIntent = contentIntent,
+                    fallbackManga = fallbackManga,
+                    contentDataRepository = contentDataRepository,
+                    localContentRepository = localContentRepository,
+                )
+            }
+            if (isFinishing || isDestroyed) {
+                return@launch
+            }
+            if (resolved == null) {
+                showLoading(false)
+                finish()
+                return@launch
+            }
+            onContentResolved(resolved)
+        }
+    }
+
+    private fun onContentResolved(resolved: ResolvedNovelContent) {
+        originalContent = resolved.originalContent
+        manga = resolved.manga
 
         replaceRulesEnabled = novelBookPreferences.areReplaceRulesEnabled(manga)
         disabledReplaceRuleIds = novelBookPreferences.getDisabledReplaceRuleIds(manga)
@@ -704,60 +716,36 @@ class NovelReaderActivity :
             disabledRuleIds = disabledReplaceRuleIds,
         )
 
-        // 进入当前小说时显式清空上一轮阅读会话中的翻译状态，
-        // 但不清理长期翻译缓存。
-        resetTranslationSession()
-
         repository = mangaRepositoryFactory.create(manga.source)
-        if (local != null) {
+        if (resolved.isLocal) {
             android.util.Log.d("NovelReaderActivity", "Using local manga for reading: ${manga.title}")
         }
-        epubInternalChapterLoader = EpubInternalChapterLoader(
-            context = this,
-            epubFileManager = epubFileManager,
-            epubChapterMappingDao = epubChapterMappingDao,
-            epubContentCache = epubContentCache
-        )
 
-        android.util.Log.d("NovelReaderActivity", "=== onCreate ===")
+        android.util.Log.d("NovelReaderActivity", "=== onCreate (resolved) ===")
         android.util.Log.d("NovelReaderActivity", "Content: id=${manga.id}, title=${manga.title}")
         android.util.Log.d("NovelReaderActivity", "Content has chapters: ${manga.chapters != null}, count: ${manga.chapters?.size ?: 0}")
         android.util.Log.d("NovelReaderActivity", "Repository type: ${repository.javaClass.simpleName}")
 
-        spaceSwitcherDelegate.bind(
-            activity = this,
-            snackbarAnchor = contentRoot,
-            origin = SpaceSwitchOrigin.NOVEL_READER,
-            availabilityProvider = { SpaceSwitchAvailability.SAVE_AND_SWITCH },
-            progressFlusher = SpaceProgressFlusher { flushForSpaceSwitch() },
-        )
-        spaceSwitcherDelegate.setControlsVisible(isUiVisible)
-
         // 设置标题为小说名称
         title = manga.title
         supportActionBar?.title = manga.title
+        composeReaderViewModel.publishChrome(
+            controlsVisible = isUiVisible,
+            workTitle = currentWorkTitle(),
+        )
+        spaceSwitcherDelegate.invalidateAvailability()
         observeReplaceRules()
         setupImageHeaders()
-        setupComposeContent()
-
-        applyReaderPalette()
-        applyReaderBrightness(readerSettings)
-
-        applyReadingModeToggles()
-
-        updateDualPageMode()
-        updateFullscreenMode()
-        updateReadingStatusVisibility()
-
-        applyInitialUiVisibility()
 
         loadChapters()
     }
 
     private fun setupImageHeaders() {
         imageHeadersProvider = { imageUrl ->
-            val source = manga.source
-            if (source.name == "BILINOVEL") {
+            val source = if (::manga.isInitialized) manga.source else null
+            if (source == null) {
+                null
+            } else if (source.name == "BILINOVEL") {
                 mapOf(
                     "Referer" to "https://www.bilinovel.com/",
                     "Origin" to "https://www.bilinovel.com",
@@ -842,8 +830,8 @@ class NovelReaderActivity :
             onDismissTools = ::onToolsPanelDismissed,
             onShowSettings = { composeReaderViewModel.showSettings(readerSettings) },
             onShowChapters = ::showChaptersSheet,
-            onShowReplaceRules = composeReaderViewModel::showReplaceRules,
-            onShowMarkings = composeReaderViewModel::showMarkings,
+            onShowReplaceRules = { if (isContentInitialized) composeReaderViewModel.showReplaceRules() },
+            onShowMarkings = { if (isContentInitialized) composeReaderViewModel.showMarkings() },
             onToggleTranslation = ::toggleTranslation,
             onToggleReplaceRules = ::toggleReplaceRules,
             onDismissReplaceRules = composeReaderViewModel::dismissReplaceRules,
@@ -904,7 +892,7 @@ class NovelReaderActivity :
         )
         composeReaderViewModel.publishChrome(
             controlsVisible = isUiVisible,
-            workTitle = manga.title,
+            workTitle = currentWorkTitle(),
         )
         setFullscreenComposeContent {
             KototoroTheme {
@@ -953,8 +941,8 @@ class NovelReaderActivity :
                             onSettingsChanged = ::applyNovelReaderSettings,
                             onToggleTranslation = ::toggleTranslation,
                             onToggleReplaceRules = ::toggleReplaceRules,
-                            onShowReplaceRules = composeReaderViewModel::showReplaceRules,
-                            onShowMarkings = composeReaderViewModel::showMarkings,
+                            onShowReplaceRules = { if (isContentInitialized) composeReaderViewModel.showReplaceRules() },
+                            onShowMarkings = { if (isContentInitialized) composeReaderViewModel.showMarkings() },
                             onDismissReplaceRules = composeReaderViewModel::dismissReplaceRules,
                             onReplaceRuleToggle = ::toggleReplaceRule,
                             onDismissMarkings = composeReaderViewModel::dismissMarkings,
@@ -1327,6 +1315,7 @@ class NovelReaderActivity :
         }
     }
     private fun openInlineImage(image: NovelInlineImageRequest) {
+        if (!::manga.isInitialized) return
         val router = AppRouter(this)
         val canUseStandardViewer = image.epubFilePath.isNullOrBlank() &&
             image.headers.isEmpty() &&
@@ -1350,10 +1339,12 @@ class NovelReaderActivity :
     }
 
     override fun getParentActivityIntent(): Intent? {
+        if (!::manga.isInitialized) return super.getParentActivityIntent()
         return AppRouter.detailsIntent(this, manga)
     }
 
     override fun switchPageBy(delta: Int) {
+        if (!isContentInitialized) return
         if (readerSettings.readingMode == ReadingMode.SCROLL) {
             if (delta > 0 && ::scrollTimer.isInitialized && scrollTimer.isActive.value) {
                 if (currentChapterIndex + 1 in chapters.indices) {
@@ -1387,6 +1378,7 @@ class NovelReaderActivity :
     }
 
     override fun switchChapterBy(delta: Int) {
+        if (!isContentInitialized) return
         val targetIndex = currentChapterIndex + delta
         if (targetIndex in chapters.indices) {
             val previousState = currentReaderState()
@@ -1536,6 +1528,7 @@ class NovelReaderActivity :
     }
 
     private fun toggleTranslation() {
+        if (!isContentInitialized) return
         val enabled = !readerSettings.isTranslationEnabled
         if (enabled && !hasTranslationConfig()) {
             // 没配引擎时不要先把开关翻成"开"：否则状态说在翻译、屏幕上却什么都没变。
@@ -1556,6 +1549,7 @@ class NovelReaderActivity :
     }
 
     private fun toggleReplaceRules() {
+        if (!::manga.isInitialized) return
         replaceRulesEnabled = !replaceRulesEnabled
         novelBookPreferences.setReplaceRulesEnabled(manga, replaceRulesEnabled)
         composeReaderViewModel.publishReplaceRulesEnabled(replaceRulesEnabled)
@@ -1573,8 +1567,10 @@ class NovelReaderActivity :
     }
 
     private fun observeReplaceRules() {
-        replaceRuleRepository.observeAll()
+        replaceRulesObservationJob?.cancel()
+        replaceRulesObservationJob = replaceRuleRepository.observeAll()
             .onEach { rules ->
+                if (!::manga.isInitialized) return@onEach
                 composeReaderViewModel.publishReplaceRules(
                     rules = replaceRuleRepository.filterRulesForBook(
                         rules = rules,
@@ -1589,6 +1585,7 @@ class NovelReaderActivity :
     }
 
     private fun toggleReplaceRule(rule: ReplaceRule, enabled: Boolean) {
+        if (!::manga.isInitialized) return
         lifecycleScope.launch {
             novelBookPreferences.setReplaceRuleEnabled(manga, rule.id, enabled)
             disabledReplaceRuleIds = novelBookPreferences.getDisabledReplaceRuleIds(manga)
@@ -1606,6 +1603,7 @@ class NovelReaderActivity :
     }
 
     private fun startTranslation() {
+        if (!isContentInitialized) return
         translationJob?.cancel()
         val content = getCurrentChapterContent()
         android.util.Log.d("NovelReaderActivity", "startTranslation: content length=${content?.length ?: 0}")
@@ -1737,6 +1735,7 @@ class NovelReaderActivity :
     private fun translationBookKey() = "${manga.source.name}:${manga.id}"
 
     private fun translationCorrectionScope(chapterIndex: Int): String? {
+        if (!::manga.isInitialized) return null
         val chapter = chapters.getOrNull(chapterIndex) ?: return null
         return "${translationBookKey()}:${chapter.id}:${settings.readerTranslationTargetLanguage}"
     }
@@ -1748,6 +1747,7 @@ class NovelReaderActivity :
     }
 
     private fun openTranslationEditor() {
+        if (!isContentInitialized) return
         val chapterIndex = currentChapterIndex
         if (machineTranslations[chapterIndex]?.isComplete == true) {
             translationEditor = chapterIndex
@@ -1757,10 +1757,11 @@ class NovelReaderActivity :
     }
 
     private fun openGlossaryEditor() {
+        if (!::manga.isInitialized) return
         val bookKey = translationBookKey()
         lifecycleScope.launch {
             runCatchingCancellable { translationDictionary.get(bookKey) }.onSuccess { dictionary ->
-                if (bookKey == translationBookKey()) {
+                if (::manga.isInitialized && bookKey == translationBookKey()) {
                     glossaryDraft = dictionary.pairs.filterNot(DictPair::excluded)
                         .joinToString("\n") { "${it.original} = ${it.translation}" }
                 }
@@ -1769,13 +1770,14 @@ class NovelReaderActivity :
     }
 
     private fun saveGlossary(pairs: List<DictPair>) {
+        if (!::manga.isInitialized) return
         val bookKey = translationBookKey()
         glossarySaving = true
         lifecycleScope.launch {
             try {
                 runCatchingCancellable { translationDictionary.replace(bookKey, pairs) }.onSuccess {
                     glossaryDraft = null
-                    if (readerSettings.isTranslationEnabled && bookKey == translationBookKey()) startTranslation()
+                    if (readerSettings.isTranslationEnabled && ::manga.isInitialized && bookKey == translationBookKey()) startTranslation()
                 }.onFailure { showReaderMessage(getString(R.string.error), 2400L) }
             } finally {
                 glossarySaving = false
@@ -2047,6 +2049,7 @@ class NovelReaderActivity :
     }
 
     private fun toggleNovelMarking(selection: NovelTextSelection) {
+        if (!::manga.isInitialized) return
         val range = resolveNovelSelectionRange(selection)
         if (range == null) {
             showReaderMessage(R.string.novel_selection_position_unavailable)
@@ -2072,6 +2075,7 @@ class NovelReaderActivity :
     }
 
     private fun saveNovelSelectionNote(selection: NovelTextSelection, note: String) {
+        if (!::manga.isInitialized) return
         val range = resolveNovelSelectionRange(selection) ?: return
         lifecycleScope.launch {
             novelMarkingRepository.addNote(
@@ -2117,6 +2121,7 @@ class NovelReaderActivity :
     }
 
     private fun toggleNovelSelectionBookmark(selection: NovelTextSelection) {
+        if (!::manga.isInitialized) return
         val chapter = chapters.firstOrNull { it.id == selection.chapterId }
         if (chapter == null || resolveNovelSelectionRange(selection) == null) {
             showReaderMessage(R.string.novel_selection_position_unavailable)
@@ -2190,6 +2195,7 @@ class NovelReaderActivity :
     }
 
     private fun showNovelExcerpt(text: String, note: String?, chapterIndex: Int) {
+        if (!::manga.isInitialized) return
         novelExcerpt = NovelExcerptData(
             selectedText = text,
             bookTitle = manga.title,
@@ -2220,6 +2226,7 @@ class NovelReaderActivity :
     }
 
     private fun showNovelAiAsk(selection: NovelTextSelection) {
+        if (!::manga.isInitialized) return
         val range = resolveNovelSelectionRange(selection)
         showNovelAiAsk(
             NovelAiAskTarget(
@@ -2232,6 +2239,7 @@ class NovelReaderActivity :
     }
 
     private fun showNovelAiAsk(marking: NovelMarkingEntity) {
+        if (!::manga.isInitialized) return
         marking.toNovelSelection()?.let {
             showNovelAiAsk(it)
             return
@@ -2433,6 +2441,7 @@ class NovelReaderActivity :
     }
 
     override fun onBookmarkClick() {
+        if (!::manga.isInitialized) return
         val chapter = chapters.getOrNull(currentChapterIndex)
         if (chapter == null) {
             showReaderMessage(getString(R.string.novel_cannot_add_bookmark), 1500L)
@@ -2603,6 +2612,7 @@ class NovelReaderActivity :
     }
 
     private fun onTtsClick() {
+        if (!isContentInitialized) return
         if (::scrollTimer.isInitialized && scrollTimer.isActive.value) {
             setAutoScrollActive(false)
         }
@@ -2660,7 +2670,7 @@ class NovelReaderActivity :
     }
 
     private fun onTtsPlayPauseClicked() {
-        if (ttsService == null) return
+        if (!isContentInitialized || ttsService == null) return
         val state = ttsService?.getState()?.value
 
         if (state == org.skepsun.kototoro.reader.novel.tts.TtsState.PLAYING) {
@@ -2687,6 +2697,7 @@ class NovelReaderActivity :
      * 当前页朗读完成后自动翻页并继续朗读
      */
     private fun handleTtsPageCompleted() {
+        if (!isContentInitialized) return
         // Re-entrant guard: if already handling a completion, skip
         if (isHandlingTtsCompletion) return
         isHandlingTtsCompletion = true
@@ -2738,7 +2749,7 @@ class NovelReaderActivity :
     override fun onSavePageClick() {}
 
     override fun onScrollTimerClick(isLongClick: Boolean) {
-        if (!::scrollTimer.isInitialized) return
+        if (!isContentInitialized || !::scrollTimer.isInitialized) return
         if (isLongClick) {
             setAutoScrollActive(!scrollTimer.isActive.value)
         } else {
@@ -2755,6 +2766,7 @@ class NovelReaderActivity :
 
     private fun setAutoScrollActive(active: Boolean) {
         if (!::scrollTimer.isInitialized) return
+        if (active && !isContentInitialized) return
         if (active && ttsService?.getState()?.value != null &&
             ttsService?.getState()?.value != org.skepsun.kototoro.reader.novel.tts.TtsState.IDLE
         ) {
@@ -2779,6 +2791,7 @@ class NovelReaderActivity :
     override fun toggleScreenOrientation() {}
 
     override fun switchPageTo(index: Int) {
+        if (!isContentInitialized) return
         if (readerSettings.readingMode == ReadingMode.SCROLL) {
             composeReaderViewModel.requestScrollToBlock(index)
         } else {
@@ -2908,9 +2921,9 @@ class NovelReaderActivity :
 
             var onlineChapter = originalContent?.chapters?.find { it.id == preferredCandidate.chapterId }
             if (onlineChapter == null && originalContent != null) {
-                runCatching {
+                runCatchingCancellable {
                     val onlineRepo = mangaRepositoryFactory.create(originalContent!!.source)
-                    val details = runBlocking { onlineRepo.getDetails(originalContent!!) }
+                    val details = withContext(Dispatchers.IO) { onlineRepo.getDetails(originalContent!!) }
                     originalContent = details
                     onlineChapter = details.chapters?.find { it.id == preferredCandidate.chapterId }
                 }.onFailure {
@@ -2969,6 +2982,9 @@ class NovelReaderActivity :
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        if (!isContentInitialized || chapters.isEmpty()) {
+            return
+        }
         val markingId = intent.getLongExtra(EXTRA_MARKING_ID, -1L).takeIf { it > 0 }
         val startOffset = intent.getIntExtra(EXTRA_START_OFFSET, -1).takeIf { it >= 0 }
         val endOffset = intent.getIntExtra(EXTRA_END_OFFSET, -1).takeIf { it >= 0 }
@@ -3013,6 +3029,7 @@ class NovelReaderActivity :
     }
 
     private fun loadChapters() {
+        if (!isContentInitialized) return
         android.util.Log.d("NovelReaderActivity", "=== loadChapters() called ===")
         android.util.Log.d("NovelReaderActivity", "Current manga.chapters: ${manga.chapters?.size ?: 0} chapters")
         android.util.Log.d("NovelReaderActivity", "Content is local: ${manga.isLocal}")
@@ -3110,6 +3127,7 @@ class NovelReaderActivity :
     }
 
     private fun loadChapter(index: Int) {
+        if (!isContentInitialized) return
         android.util.Log.d("NovelReaderActivity", "=== loadChapter($index) called ===")
         android.util.Log.d("NovelReaderActivity", "Total chapters available: ${chapters.size}")
 
@@ -3887,6 +3905,7 @@ class NovelReaderActivity :
     }
 
     private fun updateNavigationButtons() {
+        if (!::manga.isInitialized) return
         composeReaderViewModel.publishChrome(workTitle = manga.title)
     }
 
@@ -3895,7 +3914,7 @@ class NovelReaderActivity :
         isUiVisible = visible
         composeReaderViewModel.publishChrome(
             controlsVisible = visible,
-            workTitle = manga.title,
+            workTitle = currentWorkTitle(),
         )
         systemUiController.setSystemUiVisible(!readerSettings.enableFullscreen || visible)
         updateSystemBarsColors()
@@ -3980,16 +3999,18 @@ class NovelReaderActivity :
 
         val nowDual = readerSettings.enableDualPage
         // 若从单页->双页，保证旧页首字符出现；双页->单页，保证旧页尾字符出现
-        if (wasDual != nowDual) {
-            if (!wasDual && nowDual) {
-                composeReaderViewModel.requestPage(position?.page ?: currentPageIndex)
-            } else if (wasDual && !nowDual) {
-                composeReaderViewModel.requestPage(position?.page ?: currentPageIndex)
+        if (chapters.isNotEmpty()) {
+            if (wasDual != nowDual) {
+                if (!wasDual && nowDual) {
+                    composeReaderViewModel.requestPage(position?.page ?: currentPageIndex)
+                } else if (wasDual && !nowDual) {
+                    composeReaderViewModel.requestPage(position?.page ?: currentPageIndex)
+                } else {
+                    composeReaderViewModel.requestPage(position?.page ?: currentPageIndex)
+                }
             } else {
                 composeReaderViewModel.requestPage(position?.page ?: currentPageIndex)
             }
-        } else {
-            composeReaderViewModel.requestPage(position?.page ?: currentPageIndex)
         }
         android.util.Log.d("NovelReaderActivity", "Configuration changed, saved ratio: $ratio, start=$currentStart, end=$currentEnd, wasDual=$wasDual, nowDual=$nowDual")
     }
@@ -4011,6 +4032,7 @@ class NovelReaderActivity :
      * 显示章节选择器
      */
     private fun showChaptersSheet() {
+        if (!isContentInitialized) return
         android.util.Log.d("NovelReaderActivity", "showChaptersSheet: chapters.size=${chapters.size}, currentChapterIndex=$currentChapterIndex")
         if (chapters.isEmpty()) {
             showReaderMessage(getString(R.string.novel_reader_no_chapters), 1500L)
@@ -4041,13 +4063,14 @@ class NovelReaderActivity :
         isUiVisible = visible
         composeReaderViewModel.publishChrome(
             controlsVisible = visible,
-            workTitle = manga.title,
+            workTitle = currentWorkTitle(),
         )
         systemUiController.setSystemUiVisible(!readerSettings.enableFullscreen || visible)
         updateSystemBarsColors()
     }
 
     private fun onChapterSelected(index: Int) {
+        if (!isContentInitialized) return
         android.util.Log.d("NovelReaderActivity", "onChapterSelected: index=$index, currentChapterIndex=$currentChapterIndex, chapters.size=${chapters.size}")
         if (index != currentChapterIndex && index in chapters.indices) {
             composeReaderViewModel.cancelBookmarkRequest()
@@ -4151,6 +4174,7 @@ class NovelReaderActivity :
     }
 
     private fun updateReadingStatus(page: Int, total: Int) {
+        if (!::manga.isInitialized) return
         val chapter = chapters.getOrNull(currentChapterIndex) ?: return
         val uiState = org.skepsun.kototoro.reader.ui.pager.ReaderUiState(
             mangaName = manga.title,
@@ -4175,6 +4199,7 @@ class NovelReaderActivity :
         total: Int,
         propagateFailure: Boolean = false,
     ): Job? {
+        if (!isContentInitialized) return null
         val chapter = chapters.getOrNull(currentChapterIndex) ?: return null
 
         return lifecycleScope.launch(CoroutineExceptionHandler { _, error ->
@@ -4258,6 +4283,7 @@ class NovelReaderActivity :
 
     private suspend fun flushForSpaceSwitch() {
         ttsService?.stopTts()
+        if (!isContentInitialized) return
         val position = composeReaderViewModel.uiState.value.position
         val page = position?.page ?: currentPageIndex
         val total = position?.pageCount ?: 0
@@ -4302,6 +4328,7 @@ class NovelReaderActivity :
         allowShort: Boolean = false,
         continueFromEnd: Boolean = true,
     ): Job? {
+        if (!::manga.isInitialized) return null
         val mangaWithChapters = manga.copy(chapters = chapters)
         if (readingRecordRepository.shouldSkip(mangaWithChapters)) return null
         val startState = sessionStartState ?: currentReaderState() ?: return null
@@ -4343,6 +4370,7 @@ class NovelReaderActivity :
         source: String,
         force: Boolean = false,
     ) {
+        if (!::manga.isInitialized) return
         val mangaWithChapters = manga.copy(chapters = chapters)
         if (readingRecordRepository.shouldSkip(mangaWithChapters)) return
         if (fromState == toState || (!force && !isExplicitJump(fromState, toState))) return
@@ -4505,13 +4533,14 @@ class NovelReaderActivity :
 
     private fun applyReadingModeToggles() {
 
-        if (composeReaderViewModel.uiState.value.content.isBlank()) {
+        if (isContentInitialized && composeReaderViewModel.uiState.value.content.isBlank()) {
             // Need to reload content into the new view if it was empty
             loadChapter(currentChapterIndex)
         }
     }
 
     private fun preloadContinuousBoundary(index: Int, isPrevious: Boolean) {
+        if (!isContentInitialized) return
         val chapter = chapters.getOrNull(index) ?: return
 
         if (isPrevious) isLoadingPrevious = true else isLoadingNext = true
@@ -4632,6 +4661,7 @@ class NovelReaderActivity :
     }
 
     private fun onComposeVisibleChapterChanged(index: Int) {
+        if (!isContentInitialized) return
         if (composeReaderViewModel.uiState.value.bookmarkRequest != null) return
         if (index !in chapters.indices || index == currentChapterIndex) return
         currentChapterIndex = index
@@ -4641,6 +4671,7 @@ class NovelReaderActivity :
     }
 
     private fun onComposeVisibleProgress(chapterIndex: Int, blockIndex: Int, blockCount: Int) {
+        if (!isContentInitialized) return
         if (composeReaderViewModel.uiState.value.bookmarkRequest != null) return
         if (chapterIndex !in chapters.indices || blockCount <= 0) return
         val chapterProgress = ((blockIndex + 0.5f) / blockCount).coerceIn(0f, 1f)
