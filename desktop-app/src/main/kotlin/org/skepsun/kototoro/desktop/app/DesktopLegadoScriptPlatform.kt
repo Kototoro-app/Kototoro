@@ -21,6 +21,8 @@ import org.skepsun.kototoro.core.parser.legado.runtime.LegadoHttpResponse
 import org.skepsun.kototoro.core.source.SourcePreferenceEdit
 import org.skepsun.kototoro.core.source.SourcePreferenceValue
 import org.skepsun.kototoro.core.source.SourcePreferences
+import org.skepsun.kototoro.core.util.checkArchiveEntryDeclaredSize
+import org.skepsun.kototoro.core.util.readEntryBytes
 import org.skepsun.kototoro.parsers.network.UserAgents
 import java.io.File
 import java.io.InputStream
@@ -175,7 +177,11 @@ internal class DesktopLegadoScriptPlatform(
     }
 
     override fun archiveEntry(input: InputStream, path: String): ByteArray? = ZipInputStream(input).use { zip ->
-        generateSequence { zip.nextEntry }.firstOrNull { it.name == path }?.let { zip.readBytes() }
+        generateSequence { zip.nextEntry }.firstOrNull { it.name == path }?.let { entry ->
+            // Book sources can ship a zip bomb; refuse entries past the shared limit instead of reading all of it.
+            checkArchiveEntryDeclaredSize(entry.name, entry.size)
+            zip.readEntryBytes(entry.name)
+        }
     }
 
     override fun queryTtf(font: ByteArray): LegadoQueryTtf = unsupported("font glyph lookup")
