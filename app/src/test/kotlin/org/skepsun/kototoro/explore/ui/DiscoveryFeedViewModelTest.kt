@@ -331,4 +331,42 @@ class DiscoveryFeedViewModelTest {
         advanceUntilIdle()
         assertEquals(3, fetchCount.get())
     }
+
+    @Test
+    fun `moveRowUp and moveRowDown reorder rows safely at boundaries and populate cardModels`() = runTest(testDispatcher) {
+        val vm = createHarness { row ->
+            listOf(testContent(id = row.id.hashCode().toLong(), title = "Work ${row.displayName}"))
+        }
+        val r1 = vm.addRow(sourceName = "S1", displayName = "First")
+        val r2 = vm.addRow(sourceName = "S2", displayName = "Second")
+        val r3 = vm.addRow(sourceName = "S3", displayName = "Third")
+        advanceUntilIdle()
+
+        // Moving first row up is a no-op.
+        vm.moveRowUp(r1.id)
+        advanceUntilIdle()
+        assertEquals(listOf(r1.id, r2.id, r3.id), vm.uiState.value.allRows.map { it.id })
+
+        // Move third row up -> [r1, r3, r2].
+        vm.moveRowUp(r3.id)
+        advanceUntilIdle()
+        assertEquals(listOf(r1.id, r3.id, r2.id), vm.uiState.value.allRows.map { it.id })
+
+        // Move first row down -> [r3, r1, r2].
+        vm.moveRowDown(r1.id)
+        advanceUntilIdle()
+        assertEquals(listOf(r3.id, r1.id, r2.id), vm.uiState.value.allRows.map { it.id })
+
+        // Moving last row down is a no-op.
+        vm.moveRowDown(r2.id)
+        advanceUntilIdle()
+        assertEquals(listOf(r3.id, r1.id, r2.id), vm.uiState.value.allRows.map { it.id })
+
+        // Visibility populates both Loaded items and cardModels.
+        vm.onRowVisible(r3.id)
+        advanceUntilIdle()
+        val cards = vm.uiState.value.cardModelsOf(r3.id)
+        assertEquals(1, cards.size)
+        assertEquals("Work Third", cards.single().title)
+    }
 }

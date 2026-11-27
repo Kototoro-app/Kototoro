@@ -4,31 +4,78 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.prefs.observeAsFlow
 import org.skepsun.kototoro.core.ui.BaseViewModel
+import org.skepsun.kototoro.explore.data.ContentSourcesRepository
 import org.skepsun.kototoro.explore.data.DiscoveryFeedConfigRepository
 import org.skepsun.kototoro.explore.data.DiscoveryFeedRow
 import org.skepsun.kototoro.explore.domain.DiscoveryFeedRowLoadResult
 import org.skepsun.kototoro.explore.domain.DiscoveryFeedRowLoader
+import org.skepsun.kototoro.filter.data.PersistableFilter
+import org.skepsun.kototoro.filter.data.SavedFiltersRepository
+import org.skepsun.kototoro.list.domain.ContentListMapper
+import org.skepsun.kototoro.list.ui.model.ContentGridModel
+import org.skepsun.kototoro.parsers.model.Content
+import org.skepsun.kototoro.parsers.model.ContentSource
 import javax.inject.Inject
 
 @HiltViewModel
-class DiscoveryFeedViewModel @Inject constructor(
+class DiscoveryFeedViewModel private constructor(
     private val configRepository: DiscoveryFeedConfigRepository,
     private val rowLoader: DiscoveryFeedRowLoader,
     private val settings: AppSettings,
+    private val contentListMapper: ContentListMapper?,
+    private val contentSourcesRepository: ContentSourcesRepository?,
+    private val savedFiltersRepository: SavedFiltersRepository?,
+    @Suppress("UNUSED_PARAMETER") marker: Unit,
 ) : BaseViewModel() {
+
+    @Inject
+    constructor(
+        configRepository: DiscoveryFeedConfigRepository,
+        rowLoader: DiscoveryFeedRowLoader,
+        settings: AppSettings,
+        contentListMapper: ContentListMapper,
+        contentSourcesRepository: ContentSourcesRepository,
+        savedFiltersRepository: SavedFiltersRepository,
+    ) : this(
+        configRepository = configRepository,
+        rowLoader = rowLoader,
+        settings = settings,
+        contentListMapper = contentListMapper,
+        contentSourcesRepository = contentSourcesRepository,
+        savedFiltersRepository = savedFiltersRepository,
+        marker = Unit,
+    )
+
+    internal constructor(
+        configRepository: DiscoveryFeedConfigRepository,
+        rowLoader: DiscoveryFeedRowLoader,
+        settings: AppSettings,
+    ) : this(
+        configRepository = configRepository,
+        rowLoader = rowLoader,
+        settings = settings,
+        contentListMapper = null,
+        contentSourcesRepository = null,
+        savedFiltersRepository = null,
+        marker = Unit,
+    )
 
     private val rowsFlow: StateFlow<List<DiscoveryFeedRow>> = configRepository.observeRows()
         .stateIn(
@@ -37,7 +84,22 @@ class DiscoveryFeedViewModel @Inject constructor(
             initialValue = configRepository.getRows(),
         )
 
+    val availableSources: StateFlow<List<ContentSource>> = contentSourcesRepository
+        ?.observeEnabledSources()
+        ?.map { infos ->
+            infos.map { it.mangaSource }.distinctBy { it.name }
+        }
+        ?.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = contentSourcesRepository.observeEnabledSources().value
+                .map { it.mangaSource }
+                .distinctBy { it.name },
+        )
+        ?: MutableStateFlow(emptyList())
+
     private val rowStates = MutableStateFlow<Map<String, DiscoveryFeedRowState>>(emptyMap())
+    private val rowCardModels = MutableStateFlow<Map<String, List<ContentGridModel>>>(emptyMap())
     private val isRefreshing = MutableStateFlow(false)
 
     private val jobsLock = Any()
@@ -47,18 +109,35 @@ class DiscoveryFeedViewModel @Inject constructor(
     val uiState: StateFlow<DiscoveryFeedUiState> = combine(
         rowsFlow,
         rowStates,
+        rowCardModels,
         isRefreshing,
-    ) { allRows, states, refreshing ->
+    ) { allRows, states, cardModels, refreshing ->
         val validIds = allRows.mapTo(HashSet(allRows.size)) { it.id }
         val filteredStates = if (states.keys.all { it in validIds }) {
             states
         } else {
             states.filterKeys { it in validIds }
         }
+        val resolvedCardModels = buildMap(filteredStates.size) {
+            filteredStates.forEach { (rowId, state) ->
+                if (state is DiscoveryFeedRowState.Loaded) {
+                    val mapped = cardModels[rowId]
+                    put(
+                        rowId,
+                        if (mapped != null && mapped.size == state.items.size) {
+                            mapped
+                        } else {
+                            state.items.map(::fallbackGridModel)
+                        },
+                    )
+                }
+            }
+        }
         DiscoveryFeedUiState(
             allRows = allRows,
             visibleRows = allRows.filterNot { it.isHidden },
             rowStates = filteredStates,
+            rowCardModels = resolvedCardModels,
             isRefreshing = refreshing,
         )
     }.stateIn(
@@ -78,8 +157,24 @@ class DiscoveryFeedViewModel @Inject constructor(
                     cancelInFlightLoads()
                     rowLoader.invalidateAll()
                     rowStates.value = emptyMap()
+                    rowCardModels.value = emptyMap()
                 }
         }
+        if (contentListMapper != null) {
+            viewModelScope.launch {
+                contentListMapper.observeDisplayChanges().collect {
+                    remapAllLoadedRows()
+                }
+            }
+        }
+    }
+
+    suspend fun getSavedFilters(source: ContentSource): List<PersistableFilter> {
+        return savedFiltersRepository?.getAll(source).orEmpty()
+    }
+
+    suspend fun findSavedFilter(source: ContentSource, id: Int): PersistableFilter? {
+        return savedFiltersRepository?.find(source, id)
     }
 
     fun onRowVisible(rowId: String) {
@@ -89,6 +184,7 @@ class DiscoveryFeedViewModel @Inject constructor(
             rowStates.update { current ->
                 current + (rowId to DiscoveryFeedRowState.Loaded(cached.items, cached.fetchedAtMs))
             }
+            scheduleRowCardMapping(rowId, cached.items)
             return
         }
         synchronized(jobsLock) {
@@ -181,12 +277,34 @@ class DiscoveryFeedViewModel @Inject constructor(
             cancelRowJob(rowId)
             rowLoader.invalidate(rowId)
             rowStates.update { it - rowId }
+            rowCardModels.update { it - rowId }
         }
         return updated
     }
 
     fun reorderRows(orderedIds: List<String>): List<DiscoveryFeedRow> {
         return configRepository.reorderRows(orderedIds)
+    }
+
+    fun moveRowUp(rowId: String): List<DiscoveryFeedRow> {
+        return moveRowByOffset(rowId, delta = -1)
+    }
+
+    fun moveRowDown(rowId: String): List<DiscoveryFeedRow> {
+        return moveRowByOffset(rowId, delta = 1)
+    }
+
+    private fun moveRowByOffset(rowId: String, delta: Int): List<DiscoveryFeedRow> {
+        val current = currentRows()
+        val index = current.indexOfFirst { it.id == rowId }
+        val targetIndex = index + delta
+        if (index < 0 || targetIndex !in current.indices) {
+            return current
+        }
+        val reorderedIds = current.mapTo(ArrayList(current.size)) { it.id }
+        val moved = reorderedIds.removeAt(index)
+        reorderedIds.add(targetIndex, moved)
+        return configRepository.reorderRows(reorderedIds)
     }
 
     fun toggleRowHidden(rowId: String): DiscoveryFeedRow? {
@@ -208,6 +326,7 @@ class DiscoveryFeedViewModel @Inject constructor(
         cancelRowJob(rowId)
         rowLoader.invalidate(rowId)
         rowStates.update { it - rowId }
+        rowCardModels.update { it - rowId }
         return configRepository.deleteRow(rowId)
     }
 
@@ -237,6 +356,12 @@ class DiscoveryFeedViewModel @Inject constructor(
                         throwable = result.throwable,
                     )
                 }
+                if (nextState is DiscoveryFeedRowState.Loaded) {
+                    val mapped = mapRowCards(nextState.items)
+                    rowCardModels.update { current -> current + (rowId to mapped) }
+                } else {
+                    rowCardModels.update { current -> current - rowId }
+                }
                 rowStates.update { current ->
                     current + (rowId to nextState)
                 }
@@ -256,6 +381,54 @@ class DiscoveryFeedViewModel @Inject constructor(
         previous?.cancel()
         job.start()
         return job
+    }
+
+    private fun scheduleRowCardMapping(rowId: String, items: List<Content>) {
+        if (contentListMapper == null) {
+            rowCardModels.update { current ->
+                current + (rowId to items.map(::fallbackGridModel))
+            }
+            return
+        }
+        viewModelScope.launch {
+            val mapped = mapRowCards(items)
+            rowCardModels.update { current -> current + (rowId to mapped) }
+        }
+    }
+
+    private suspend fun remapAllLoadedRows() {
+        if (contentListMapper == null) return
+        val loadedEntries = rowStates.value.entries
+            .mapNotNull { (rowId, state) ->
+                (state as? DiscoveryFeedRowState.Loaded)?.let { rowId to it.items }
+            }
+        if (loadedEntries.isEmpty()) return
+        val remapped = buildMap(loadedEntries.size) {
+            for ((rowId, items) in loadedEntries) {
+                put(rowId, mapRowCards(items))
+            }
+        }
+        rowCardModels.update { current -> current + remapped }
+    }
+
+    private suspend fun mapRowCards(items: List<Content>): List<ContentGridModel> {
+        if (items.isEmpty()) return emptyList()
+        val mapper = contentListMapper ?: return items.map(::fallbackGridModel)
+        return withContext(Dispatchers.Default) {
+            mapper.toListModelList(items, ListMode.GRID).filterIsInstance<ContentGridModel>()
+        }
+    }
+
+    private fun fallbackGridModel(content: Content): ContentGridModel {
+        return ContentGridModel(
+            manga = content,
+            override = null,
+            subtitle = content.altTitles.firstOrNull(),
+            counter = 0,
+            progress = null,
+            isFavorite = false,
+            isSaved = false,
+        )
     }
 
     private fun cancelRowJob(rowId: String) {

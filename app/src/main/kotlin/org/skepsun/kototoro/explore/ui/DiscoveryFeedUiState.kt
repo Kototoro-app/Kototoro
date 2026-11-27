@@ -2,6 +2,7 @@ package org.skepsun.kototoro.explore.ui
 
 import androidx.compose.runtime.Immutable
 import org.skepsun.kototoro.explore.data.DiscoveryFeedRow
+import org.skepsun.kototoro.list.ui.model.ContentGridModel
 import org.skepsun.kototoro.parsers.model.Content
 
 @Immutable
@@ -26,9 +27,13 @@ data class DiscoveryFeedUiState(
     val allRows: List<DiscoveryFeedRow> = emptyList(),
     val visibleRows: List<DiscoveryFeedRow> = emptyList(),
     val rowStates: Map<String, DiscoveryFeedRowState> = emptyMap(),
+    val rowCardModels: Map<String, List<ContentGridModel>> = emptyMap(),
     val isRefreshing: Boolean = false,
 ) {
 
     fun stateOf(rowId: String): DiscoveryFeedRowState =
         rowStates[rowId] ?: DiscoveryFeedRowState.Idle
+
+    fun cardModelsOf(rowId: String): List<ContentGridModel> =
+        rowCardModels[rowId].orEmpty()
 }

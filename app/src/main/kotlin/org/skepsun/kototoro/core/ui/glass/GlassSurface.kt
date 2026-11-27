@@ -353,6 +353,7 @@ private fun StableGlassFallback(
 
 @Composable
 fun rememberGlassPrefsOrFallback(): GlassPrefs {
+    LocalGlassPrefs.current?.let { return it }
     val context = LocalContext.current
     val settings = remember(context.applicationContext) {
         EntryPointAccessors.fromApplication<BaseActivityEntryPoint>(context.applicationContext).settings

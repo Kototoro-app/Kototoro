@@ -54,11 +54,40 @@ fun List<CompactFilterRailItem>.selectedFirst(): List<CompactFilterRailItem> {
     }
 }
 
+data class TopBarSegmentedSwitcherItem(
+    val id: String,
+    /** Label, or the content description and tooltip when [iconRes] is set. */
+    val title: String,
+    val iconRes: Int? = null,
+)
+
+data class TopBarSegmentedAction(
+    val id: String,
+    val iconRes: Int,
+    val contentDescriptionRes: Int,
+    val onClick: () -> Unit,
+)
+
+data class TopBarSegmentedSwitcherState(
+    val items: List<TopBarSegmentedSwitcherItem>,
+    val selectedItemId: String,
+    val onItemSelected: (String) -> Unit,
+    val hideSourceFilters: Boolean = false,
+    val leadingExtraActions: List<TopBarSegmentedAction> = emptyList(),
+    /**
+     * Fractional index for the highlight (e.g. a pager's page + offset), read at layout time so it
+     * tracks a swipe frame by frame; null animates to [selectedItemId] instead.
+     */
+    val selectionPosition: (() -> Float)? = null,
+) : TopBarOverrideState
+
 data class LayeredTopBarOverrideState(
     val tabsState: CompactTabsTopBarOverrideState? = null,
+    val segmentedSwitcherState: TopBarSegmentedSwitcherState? = null,
     val filterRailState: CompactFilterRailOverrideState? = null,
     val contextualOverrideState: TopBarOverrideState? = null,
     val keepTabsExpandedWhenCollapsed: Boolean = false,
+    val keepTopBarPinned: Boolean = false,
     val sortOrders: List<ListSortOrder> = emptyList(),
     val selectedSortOrder: ListSortOrder? = null,
     val onSortOrderSelected: (ListSortOrder) -> Unit = {},
@@ -93,11 +122,19 @@ internal fun overrideStateEquivalent(a: TopBarOverrideState?, b: TopBarOverrideS
     return when (a) {
         is LayeredTopBarOverrideState -> b is LayeredTopBarOverrideState &&
             overrideStateEquivalent(a.tabsState, b.tabsState) &&
+            overrideStateEquivalent(a.segmentedSwitcherState, b.segmentedSwitcherState) &&
             overrideStateEquivalent(a.filterRailState, b.filterRailState) &&
             overrideStateEquivalent(a.contextualOverrideState, b.contextualOverrideState) &&
             a.keepTabsExpandedWhenCollapsed == b.keepTabsExpandedWhenCollapsed &&
+            a.keepTopBarPinned == b.keepTopBarPinned &&
             a.sortOrders == b.sortOrders &&
             a.selectedSortOrder == b.selectedSortOrder
+
+        is TopBarSegmentedSwitcherState -> b is TopBarSegmentedSwitcherState &&
+            a.items == b.items &&
+            a.selectedItemId == b.selectedItemId &&
+            a.hideSourceFilters == b.hideSourceFilters &&
+            segmentedActionsEquivalent(a.leadingExtraActions, b.leadingExtraActions)
 
         is RouteScopedTopBarOverrideState -> b is RouteScopedTopBarOverrideState &&
             a.ownerRoute == b.ownerRoute &&
@@ -137,6 +174,18 @@ internal fun overrideStateEquivalent(a: TopBarOverrideState?, b: TopBarOverrideS
         // Types without callback fields keep the plain structural comparison.
         else -> a == b
     }
+}
+
+private fun segmentedActionsEquivalent(a: List<TopBarSegmentedAction>, b: List<TopBarSegmentedAction>): Boolean {
+    if (a.size != b.size) return false
+    for (index in a.indices) {
+        val x = a[index]
+        val y = b[index]
+        if (x.id != y.id || x.iconRes != y.iconRes || x.contentDescriptionRes != y.contentDescriptionRes) {
+            return false
+        }
+    }
+    return true
 }
 
 private fun filterRailItemsEquivalent(a: List<CompactFilterRailItem>, b: List<CompactFilterRailItem>): Boolean {
