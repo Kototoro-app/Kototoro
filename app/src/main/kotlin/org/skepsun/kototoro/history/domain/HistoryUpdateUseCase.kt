@@ -9,6 +9,7 @@ import org.skepsun.kototoro.core.db.dao.EpubChapterMappingDao
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
 import org.skepsun.kototoro.core.util.ext.processLifecycleScope
 import org.skepsun.kototoro.history.data.HistoryRepository
+import org.skepsun.kototoro.list.domain.ReadingProgress
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
 import org.skepsun.kototoro.reader.ui.ReaderState
@@ -35,12 +36,19 @@ class HistoryUpdateUseCase @Inject constructor(
             chapterId = readerState.chapterId,
             page = readerState.page,
             scroll = readerState.scroll,
-            percent = percent,
+            percent = normalizeCompletedPercent(percent),
             force = false,
             parentChapterId = parentChapterId,
             finishedChapterIds = finishedChapterIds,
         )
     }
+
+    /**
+     * Reading the last page can land a hair below 100% (webtoon scroll, float division); store it as a full read
+     * so the title is marked completed instead of sitting at 99.x% (issue #750).
+     */
+    private fun normalizeCompletedPercent(percent: Float): Float =
+        if (ReadingProgress.isCompleted(percent)) ReadingProgress.PROGRESS_COMPLETED else percent
 
     /**
      * 从数据库查询父章节ID（用于EPUB内部章节）

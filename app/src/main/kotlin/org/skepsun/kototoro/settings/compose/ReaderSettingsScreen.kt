@@ -520,6 +520,25 @@ fun ReaderSettingsScreen(
                             }
 
                             SettingsPreferenceGroup(
+                                title = stringResource(R.string.reader_settings_group_reading_progress),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 20.dp),
+                            ) {
+                                item {
+                                    SettingsSwitchPreference(
+                                        title = stringResource(R.string.auto_mark_completed),
+                                        summary = stringResource(R.string.auto_mark_completed_summary),
+                                        iconRes = R.drawable.ic_state_finished,
+                                        checked = settings.observeAsState(AppSettings.KEY_AUTO_MARK_COMPLETED) {
+                                            settings.isAutoMarkCompletedEnabled
+                                        }.value,
+                                        onCheckedChange = { settings.isAutoMarkCompletedEnabled = it },
+                                    )
+                                }
+                            }
+
+                            SettingsPreferenceGroup(
                                 title = stringResource(R.string.e_ink),
                                 modifier = Modifier
                                     .fillMaxWidth()

@@ -28,6 +28,7 @@ import org.skepsun.kototoro.core.ui.util.ReversibleHandle
 import org.skepsun.kototoro.core.model.toContentSources
 import org.skepsun.kototoro.history.domain.ChapterOrder
 import org.skepsun.kototoro.history.domain.furthestReadChapterId
+import org.skepsun.kototoro.history.domain.readingStatusAfterCompletion
 import org.skepsun.kototoro.history.domain.model.ContentWithHistory
 import org.skepsun.kototoro.history.domain.recoverHistoryChapterId
 import org.skepsun.kototoro.list.domain.ListSortOrder
@@ -38,6 +39,7 @@ import org.skepsun.kototoro.parsers.model.ContentTag
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.parsers.util.findById
 import org.skepsun.kototoro.scrobbling.common.domain.Scrobbler
+import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingStatus
 import org.skepsun.kototoro.scrobbling.common.domain.tryScrobble
 import org.skepsun.kototoro.search.domain.SearchKind
 import org.skepsun.kototoro.search.domain.AdvancedSearchParams
@@ -224,7 +226,7 @@ class HistoryRepository @Inject constructor(
             return
         }
         assert(manga.chapters != null)
-        db.withTransaction {
+        val storedId = db.withTransaction {
             val storedManga = mangaRepository.storeContentAndReturn(manga, replaceExisting = true)
             val branch = manga.chapters?.findById(chapterId)?.branch
             val now = System.currentTimeMillis()
@@ -254,7 +256,23 @@ class HistoryRepository @Inject constructor(
             )
             newChaptersUseCaseProvider.get()(manga, chapterId, percent, finishedChapterIds)
             scrobblers.forEach { it.tryScrobble(manga, chapterId) }
+            storedManga.id
         }
+        applyAutoCompletedStatus(storedId, percent)
+    }
+
+    /**
+     * Finishing a title (or tapping "mark as read") promotes an untouched reading status to [ScrobblingStatus.COMPLETED].
+     * Statuses the user chose explicitly are left alone; [ReadingStatusCompletionRules] owns that decision.
+     */
+    internal suspend fun applyAutoCompletedStatus(mangaId: Long, percent: Float) {
+        val current = mangaRepository.getReadingStatus(mangaId)
+        val target = readingStatusAfterCompletion(
+            current = current,
+            percent = percent,
+            enabled = settings.isAutoMarkCompletedEnabled,
+        ) ?: return
+        mangaRepository.setReadingStatus(mangaId, target)
     }
 
     suspend fun getOne(manga: Content): ContentHistory? {
@@ -303,6 +321,7 @@ class HistoryRepository @Inject constructor(
             ),
         )
         emitRead(mangaId, percent)
+        applyAutoCompletedStatus(mangaId, percent)
         return true
     }
 

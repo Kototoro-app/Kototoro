@@ -3574,6 +3574,9 @@
     <string name="reader_settings_group_controls">閱讀控制元件</string>
     <string name="reader_settings_group_display">顯示與資訊</string>
     <string name="reader_settings_group_performance">效能與網路</string>
+    <string name="reader_settings_group_reading_progress">閱讀進度</string>
+    <string name="auto_mark_completed">讀完自動標記為已完成</string>
+    <string name="auto_mark_completed_summary">讀到最後一頁或點擊「標記為已讀」時把閱讀狀態改為「已讀完」；你自己選過的「擱置」「棄坑」「重讀」「已讀完」不會被改動。</string>
     <string name="periodical_backup_group_schedule">備份計劃</string>
     <string name="network_group_proxy_mirrors">代理與映象</string>
     <string name="network_group_security">安全與過濾</string>

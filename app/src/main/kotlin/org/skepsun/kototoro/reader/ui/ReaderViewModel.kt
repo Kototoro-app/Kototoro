@@ -66,6 +66,7 @@ import org.skepsun.kototoro.download.ui.worker.DownloadWorker
 import org.skepsun.kototoro.history.data.HistoryRepository
 import org.skepsun.kototoro.history.domain.HistoryUpdateUseCase
 import org.skepsun.kototoro.list.domain.ReadingProgress.Companion.PROGRESS_NONE
+import org.skepsun.kototoro.list.domain.readingProgressOf
 import org.skepsun.kototoro.local.data.LocalStorageChanges
 import org.skepsun.kototoro.local.domain.DeleteLocalContentUseCase
 import org.skepsun.kototoro.local.domain.model.LocalContent
@@ -1452,12 +1453,13 @@ class ReaderViewModel @Inject constructor(
             }
         }
         val pagesCount = chaptersLoader.getPagesCount(chapterId)
-        if (chaptersCount == 0 || pagesCount == 0 || chapterIndex == -1) {
-            return PROGRESS_NONE
-        }
-        val pagePercent = (pageIndex + 1) / pagesCount.toFloat()
-        val ppc = 1f / chaptersCount
-        return ppc * chapterIndex + ppc * pagePercent
+        // Last page of the last chapter is a full read, never 99.x% (issue #750).
+        return readingProgressOf(
+            chapterIndex = chapterIndex,
+            chaptersCount = chaptersCount,
+            pageIndex = pageIndex,
+            pagesCount = pagesCount,
+        )
     }
 
     fun recordExplicitJump(toState: ReaderState, source: String) {

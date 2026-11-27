@@ -1806,6 +1806,9 @@
     <string name="reader_settings_group_controls">阅读控件</string>
     <string name="reader_settings_group_display">显示与信息</string>
     <string name="reader_settings_group_performance">性能与网络</string>
+    <string name="reader_settings_group_reading_progress">阅读进度</string>
+    <string name="auto_mark_completed">读完自动标记为已完成</string>
+    <string name="auto_mark_completed_summary">读到最后一页或点击「标记为已读」时把阅读状态改为「已读完」；你自己选过的「搁置」「弃坑」「重读」「已读完」不会被改动。</string>
     <string name="periodical_backup_group_schedule">备份计划</string>
     <string name="network_group_proxy_mirrors">代理与镜像</string>
     <string name="network_group_security">安全与过滤</string>

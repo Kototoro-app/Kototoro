@@ -2439,6 +2439,14 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
     val isReaderChapterToastEnabled: Boolean
         get() = prefs.getBoolean(KEY_READER_CHAPTER_TOAST, true)
 
+    /**
+     * 读到最后一页（或手动「标记为已读」）时，把阅读状态自动写成「已完成」。
+     * 用户在详情页明确选过的状态（搁置 / 弃坑 / 重读 / 已完成）不会被覆盖；默认开启（issue #750）。
+     */
+    var isAutoMarkCompletedEnabled: Boolean
+        get() = prefs.getBoolean(KEY_AUTO_MARK_COMPLETED, true)
+        set(value) = prefs.edit { putBoolean(KEY_AUTO_MARK_COMPLETED, value) }
+
     /** 连续滚动时在章节之间显示分隔卡片（漫画条漫与小说滚动模式共用），默认关闭以保持原有的无缝拼接。 */
     val isReaderChapterBreakEnabled: Boolean
         get() = prefs.getBoolean(KEY_READER_CHAPTER_BREAK, false)
@@ -3407,6 +3415,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_READER_BAR_LAYOUT = "reader_bar_layout"
         const val KEY_READER_BAR_CUTOUT_AVOIDANCE = "reader_bar_cutout_avoidance"
         const val KEY_READER_CHAPTER_TOAST = "reader_chapter_toast"
+        const val KEY_AUTO_MARK_COMPLETED = "auto_mark_completed"
         const val KEY_READER_CHAPTER_BREAK = "reader_chapter_break"
         const val KEY_READER_CHAPTER_TITLE_BOTTOM = "reader_chapter_title_bottom"
         const val KEY_READER_FLOATING_CONTROLS_PINNED = "reader_floating_controls_pinned"

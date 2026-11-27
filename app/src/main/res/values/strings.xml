@@ -3686,6 +3686,9 @@
     <string name="reader_settings_group_controls">Controls</string>
     <string name="reader_settings_group_display">Display and information</string>
     <string name="reader_settings_group_performance">Performance and network</string>
+    <string name="reader_settings_group_reading_progress">Reading progress</string>
+    <string name="auto_mark_completed">Mark as finished when read through</string>
+    <string name="auto_mark_completed_summary">Reaching the last page, or tapping “Mark as read”, sets the reading status to finished — unless you picked On hold, Dropped, Re-reading or Finished yourself.</string>
     <string name="periodical_backup_group_schedule">Backup schedule</string>
     <string name="network_group_proxy_mirrors">Proxy and mirrors</string>
     <string name="network_group_security">Security and filtering</string>
