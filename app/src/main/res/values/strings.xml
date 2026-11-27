@@ -885,6 +885,7 @@
     <string name="badge_favorite">Favorite</string>
     <string name="badge_saved">Saved</string>
     <string name="badge_pin">Pinned</string>
+    <string name="badge_reading_status">Reading status</string>
     <string name="sync">Synchronization</string>
     <string name="sync_title">Sync your data</string>
     <string name="email_enter_hint">Enter your email to continue</string>

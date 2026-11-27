@@ -1633,6 +1633,13 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         get() = prefs.getStringSet(KEY_BADGES_BOTTOM_RIGHT, setOf("nsfw")) ?: setOf("nsfw")
         set(value) = prefs.edit { putStringSet(KEY_BADGES_BOTTOM_RIGHT, value) }
 
+    /** Whether the reading-status badge is selected in any of the four corners. */
+    val isReadingStatusBadgeEnabled: Boolean
+        get() = "reading_status" in badgesTopLeft ||
+            "reading_status" in badgesTopRight ||
+            "reading_status" in badgesBottomLeft ||
+            "reading_status" in badgesBottomRight
+
     var popupRadius: Int
         get() = cornerRadius
         set(value) { cornerRadius = value }

@@ -8,6 +8,7 @@ import org.skepsun.kototoro.list.ui.model.ContentDetailedListModel
 import org.skepsun.kototoro.list.ui.model.ContentGridModel
 import org.skepsun.kototoro.list.ui.model.ContentListModel
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
+import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingStatus
 
 /** Immutable snapshot of the values read while a content card is drawn. */
 @Immutable
@@ -27,6 +28,7 @@ data class ContentCardRenderModel(
     val metadataTrackingService: ScrobblerService?,
     val scoreText: String?,
     val isNsfw: Boolean,
+    val readingStatus: ScrobblingStatus? = null,
 )
 
 internal fun ContentListModel.toContentCardRenderModel(): ContentCardRenderModel = ContentCardRenderModel(
@@ -68,4 +70,5 @@ internal fun ContentListModel.toContentCardRenderModel(): ContentCardRenderModel
     metadataTrackingService = metadataTrackingService,
     scoreText = scoreText,
     isNsfw = manga.isNsfw(),
+    readingStatus = readingStatus,
 )

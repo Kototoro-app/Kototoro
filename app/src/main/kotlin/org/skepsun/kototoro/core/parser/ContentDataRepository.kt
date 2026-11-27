@@ -166,6 +166,16 @@ class ContentDataRepository @Inject constructor(
         return db.getPreferencesDao().find(mangaId)?.readingStatus?.let(ScrobblingStatus::valueOf)
     }
 
+    /** Batch form of [getReadingStatus]: only works with a persisted reading status are returned. */
+    suspend fun getReadingStatuses(mangaIds: Collection<Long>): Map<Long, ScrobblingStatus> {
+        if (mangaIds.isEmpty()) return emptyMap()
+        return db.getPreferencesDao().findByIds(mangaIds).mapNotNull { entity ->
+            entity.readingStatus
+                ?.let { name -> runCatching { ScrobblingStatus.valueOf(name) }.getOrNull() }
+                ?.let { status -> entity.mangaId to status }
+        }.toMap()
+    }
+
     fun observeReadingStatus(mangaId: Long): Flow<ScrobblingStatus?> {
         return db.invalidationTracker.createFlow(
             tables = arrayOf(TABLE_PREFERENCES),

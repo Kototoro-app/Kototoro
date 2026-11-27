@@ -309,8 +309,14 @@ fun KototoroContentCardGrid(
                 .joinToString(separator = " · ")
         }
     } else null
-    val showBottomRightBadge = remember(resolvedUiPrefs.badgesBottomRight, renderModel.isNsfw) {
-        "nsfw" in resolvedUiPrefs.badgesBottomRight && renderModel.isNsfw
+    val showBottomRightBadge = remember(resolvedUiPrefs.badgesBottomRight, renderModel, sourceMetadata) {
+        hasVisibleCardBadges(
+            badges = resolvedUiPrefs.badgesBottomRight,
+            item = renderModel,
+            sourceMetadata = sourceMetadata,
+            progressStyle = resolvedUiPrefs.cardProgressStyle,
+            corner = ContentCardCorner.BOTTOM_END,
+        )
     }
     val hasProgressBar = resolvedUiPrefs.cardProgressStyle == CardProgressStyle.BOTTOM_BAR &&
         (renderModel.progress?.let { it.isValid() && it.percent > 0f } == true)
@@ -369,6 +375,7 @@ fun KototoroContentCardGrid(
                 corner = Alignment.TopStart,
                 cardRadius = cardRadius,
                 metrics = badgeMetrics,
+                progressStyle = resolvedUiPrefs.cardProgressStyle,
                 modifier = Modifier
                     .align(Alignment.TopStart)
                     .padding(start = badgeCornerPadding, top = badgeCornerPadding),
@@ -397,6 +404,7 @@ fun KototoroContentCardGrid(
                 corner = Alignment.TopEnd,
                 cardRadius = cardRadius,
                 metrics = badgeMetrics,
+                progressStyle = resolvedUiPrefs.cardProgressStyle,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(end = badgeCornerPadding, top = badgeCornerPadding),
@@ -410,6 +418,7 @@ fun KototoroContentCardGrid(
                 corner = Alignment.BottomStart,
                 cardRadius = cardRadius,
                 metrics = badgeMetrics,
+                progressStyle = resolvedUiPrefs.cardProgressStyle,
                 attachedToTitleEdge = compactOverlay,
                 modifier = Modifier
                     .align(Alignment.BottomStart)
@@ -427,6 +436,7 @@ fun KototoroContentCardGrid(
                     corner = Alignment.BottomEnd,
                     cardRadius = cardRadius,
                     metrics = badgeMetrics,
+                    progressStyle = resolvedUiPrefs.cardProgressStyle,
                     attachedToTitleEdge = compactOverlay,
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
@@ -620,6 +630,7 @@ fun KototoroContentCardList(
                     corner = Alignment.TopStart,
                     cardRadius = CompactContentCoverCornerRadius,
                     metrics = badgeMetrics,
+                    progressStyle = resolvedUiPrefs.cardProgressStyle,
                     modifier = Modifier
                         .align(Alignment.TopStart)
                         .padding(start = listBadgePadding, top = listBadgePadding),
@@ -631,6 +642,7 @@ fun KototoroContentCardList(
                     corner = Alignment.TopEnd,
                     cardRadius = CompactContentCoverCornerRadius,
                     metrics = badgeMetrics,
+                    progressStyle = resolvedUiPrefs.cardProgressStyle,
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(end = listBadgePadding, top = listBadgePadding),
@@ -642,6 +654,7 @@ fun KototoroContentCardList(
                     corner = Alignment.BottomStart,
                     cardRadius = CompactContentCoverCornerRadius,
                     metrics = badgeMetrics,
+                    progressStyle = resolvedUiPrefs.cardProgressStyle,
                     modifier = Modifier
                         .align(Alignment.BottomStart)
                         .padding(start = listBadgePadding, bottom = listBadgePadding + listBottomBadgeOffset),
@@ -653,6 +666,7 @@ fun KototoroContentCardList(
                     corner = Alignment.BottomEnd,
                     cardRadius = CompactContentCoverCornerRadius,
                     metrics = badgeMetrics,
+                    progressStyle = resolvedUiPrefs.cardProgressStyle,
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .padding(end = listBadgePadding, bottom = listBadgePadding + listBottomBadgeOffset),
@@ -668,7 +682,13 @@ fun KototoroContentCardList(
                     }
                     CardProgressStyle.CIRCULAR_BADGE -> {
                         val hasBottomRightBadge = remember(resolvedUiPrefs.badgesBottomRight, renderModel, sourceMetadata) {
-                            hasVisibleCardBadges(resolvedUiPrefs.badgesBottomRight, renderModel, sourceMetadata)
+                            hasVisibleCardBadges(
+                                badges = resolvedUiPrefs.badgesBottomRight,
+                                item = renderModel,
+                                sourceMetadata = sourceMetadata,
+                                progressStyle = resolvedUiPrefs.cardProgressStyle,
+                                corner = ContentCardCorner.BOTTOM_END,
+                            )
                         }
                         ContentCardCoverProgressIndicator(
                             progress = renderModel.progress,
@@ -697,6 +717,7 @@ fun ContentCardCornerBadges(
     cardRadius: androidx.compose.ui.unit.Dp,
     metrics: ContentCardBadgeMetrics = ContentCardBadgeMetrics(),
     attachedToTitleEdge: Boolean = false,
+    progressStyle: CardProgressStyle = CardProgressStyle.BOTTOM_BAR,
     modifier: Modifier = Modifier,
 ) {
     if (badges.isEmpty()) return
@@ -714,6 +735,7 @@ fun ContentCardCornerBadges(
         cardRadius = cardRadius,
         metrics = metrics,
         attachedToTitleEdge = attachedToTitleEdge,
+        progressStyle = progressStyle,
         modifier = modifier,
     )
 }
@@ -727,6 +749,7 @@ private fun ContentCardCornerBadges(
     cardRadius: androidx.compose.ui.unit.Dp,
     metrics: ContentCardBadgeMetrics = ContentCardBadgeMetrics(),
     attachedToTitleEdge: Boolean = false,
+    progressStyle: CardProgressStyle = CardProgressStyle.BOTTOM_BAR,
     modifier: Modifier = Modifier,
 ) {
     if (badges.isEmpty()) return
@@ -742,6 +765,12 @@ private fun ContentCardCornerBadges(
     val showScore = "score" in badges && !item.scoreText.isNullOrBlank()
     val showPin = "pin" in badges && item.isPinned
     val showNsfw = "nsfw" in badges && item.isNsfw
+    val showReadingStatus = shouldDrawReadingStatusBadge(
+        status = item.readingStatus,
+        progressStyle = progressStyle,
+        corner = corner.toContentCardCorner() ?: ContentCardCorner.TOP_START,
+        cornerBadges = badges,
+    )
     val showOnlyNsfw = showNsfw &&
         !showTracker &&
         !showFavorite &&
@@ -750,7 +779,8 @@ private fun ContentCardCornerBadges(
         !showLanguage &&
         !showCounter &&
         !showScore &&
-        !showPin
+        !showPin &&
+        !showReadingStatus
 
     if (
         !showTracker &&
@@ -761,7 +791,8 @@ private fun ContentCardCornerBadges(
         !showCounter &&
         !showScore &&
         !showNsfw &&
-        !showPin
+        !showPin &&
+        !showReadingStatus
     ) {
         return
     }
@@ -775,7 +806,8 @@ private fun ContentCardCornerBadges(
         !showLanguage &&
         !showScore &&
         !showNsfw &&
-        !showPin
+        !showPin &&
+        !showReadingStatus
     val tone = when {
         showOnlyNsfw -> ContentCardBadgeTone.NSFW
         hasCounterOnly -> ContentCardBadgeTone.COUNTER
@@ -858,6 +890,13 @@ private fun ContentCardCornerBadges(
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(metrics.iconSize),
                         )
+                    }
+                }
+                "reading_status" -> {
+                    if (showReadingStatus) {
+                        item.readingStatus?.let { status ->
+                            ContentCardReadingStatusBadge(status = status, metrics = metrics)
+                        }
                     }
                 }
             }
@@ -1008,6 +1047,7 @@ fun KototoroContentCardDetailedList(
                     corner = Alignment.TopStart,
                     cardRadius = ContentCoverCornerRadius,
                     metrics = badgeMetrics,
+                    progressStyle = resolvedUiPrefs.cardProgressStyle,
                     modifier = Modifier
                         .align(Alignment.TopStart)
                         .padding(start = detailedBadgePadding, top = detailedBadgePadding),
@@ -1019,6 +1059,7 @@ fun KototoroContentCardDetailedList(
                     corner = Alignment.TopEnd,
                     cardRadius = ContentCoverCornerRadius,
                     metrics = badgeMetrics,
+                    progressStyle = resolvedUiPrefs.cardProgressStyle,
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(end = detailedBadgePadding, top = detailedBadgePadding),
@@ -1030,6 +1071,7 @@ fun KototoroContentCardDetailedList(
                     corner = Alignment.BottomStart,
                     cardRadius = ContentCoverCornerRadius,
                     metrics = badgeMetrics,
+                    progressStyle = resolvedUiPrefs.cardProgressStyle,
                     modifier = Modifier
                         .align(Alignment.BottomStart)
                         .padding(start = detailedBadgePadding, bottom = detailedBadgePadding + detailedBottomBadgeOffset),
@@ -1041,6 +1083,7 @@ fun KototoroContentCardDetailedList(
                     corner = Alignment.BottomEnd,
                     cardRadius = ContentCoverCornerRadius,
                     metrics = badgeMetrics,
+                    progressStyle = resolvedUiPrefs.cardProgressStyle,
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .padding(end = detailedBadgePadding, bottom = detailedBadgePadding + detailedBottomBadgeOffset),
@@ -1056,7 +1099,13 @@ fun KototoroContentCardDetailedList(
                     }
                     CardProgressStyle.CIRCULAR_BADGE -> {
                         val hasBottomRightBadge = remember(resolvedUiPrefs.badgesBottomRight, renderModel, sourceMetadata) {
-                            hasVisibleCardBadges(resolvedUiPrefs.badgesBottomRight, renderModel, sourceMetadata)
+                            hasVisibleCardBadges(
+                                badges = resolvedUiPrefs.badgesBottomRight,
+                                item = renderModel,
+                                sourceMetadata = sourceMetadata,
+                                progressStyle = resolvedUiPrefs.cardProgressStyle,
+                                corner = ContentCardCorner.BOTTOM_END,
+                            )
                         }
                         ContentCardCoverProgressIndicator(
                             progress = renderModel.progress,
@@ -1176,6 +1225,8 @@ fun hasVisibleCardBadges(
     badges: Set<String>,
     item: ContentCardRenderModel,
     sourceMetadata: ContentCardSourceMetadata? = null,
+    progressStyle: CardProgressStyle = CardProgressStyle.BOTTOM_BAR,
+    corner: ContentCardCorner = ContentCardCorner.TOP_START,
 ): Boolean {
     if (badges.isEmpty()) return false
     val resolvedSource = sourceMetadata?.resolvedSource
@@ -1188,14 +1239,23 @@ fun hasVisibleCardBadges(
         ("counter" in badges && item.counter > 0) ||
         ("score" in badges && !item.scoreText.isNullOrBlank()) ||
         ("pin" in badges && item.isPinned) ||
-        ("nsfw" in badges && item.isNsfw)
+        ("nsfw" in badges && item.isNsfw) ||
+        shouldDrawReadingStatusBadge(item.readingStatus, progressStyle, corner, badges)
 }
 
 fun hasVisibleCardBadges(
     badges: Set<String>,
     item: ContentListModel,
     sourceMetadata: ContentCardSourceMetadata? = null,
-): Boolean = hasVisibleCardBadges(badges, item.toContentCardRenderModel(), sourceMetadata)
+    progressStyle: CardProgressStyle = CardProgressStyle.BOTTOM_BAR,
+    corner: ContentCardCorner = ContentCardCorner.TOP_START,
+): Boolean = hasVisibleCardBadges(
+    badges = badges,
+    item = item.toContentCardRenderModel(),
+    sourceMetadata = sourceMetadata,
+    progressStyle = progressStyle,
+    corner = corner,
+)
 
 @Composable
 fun ContentCardCoverProgressIndicator(

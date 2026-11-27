@@ -12,6 +12,7 @@ import org.skepsun.kototoro.core.ui.model.ContentOverride
 import org.skepsun.kototoro.core.ui.widgets.ChipModel
 import org.skepsun.kototoro.list.domain.ContentListMapper
 import org.skepsun.kototoro.list.domain.ReadingProgress
+import org.skepsun.kototoro.list.domain.deriveReadingStatus
 import org.skepsun.kototoro.list.ui.model.ContentCompactListModel
 import org.skepsun.kototoro.list.ui.model.ContentDetailedListModel
 import org.skepsun.kototoro.list.ui.model.ContentGridModel
@@ -109,6 +110,7 @@ internal fun buildHistoryCardModel(request: HistoryCardModelRequest): ContentLis
             counter = 0,
             id = row.uiId,
             progress = progress,
+            readingStatus = deriveReadingStatus(null, progress),
             // History mixes favourite and non-favourite works, so the heart badge is meaningful here.
             isFavorite = row.isFavourite,
             isSaved = false,
@@ -126,6 +128,7 @@ internal fun buildHistoryCardModel(request: HistoryCardModelRequest): ContentLis
             counter = 0,
             id = row.uiId,
             progress = progress,
+            readingStatus = deriveReadingStatus(null, progress),
             isPinned = row.isPinned,
             metadataTrackingService = trackingService,
         )
@@ -137,6 +140,7 @@ internal fun buildHistoryCardModel(request: HistoryCardModelRequest): ContentLis
             counter = 0,
             id = row.uiId,
             progress = progress,
+            readingStatus = deriveReadingStatus(null, progress),
             isFavorite = row.isFavourite,
             isSaved = false,
             tags =row.tags.map {

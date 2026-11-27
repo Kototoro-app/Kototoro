@@ -6,6 +6,7 @@ import org.skepsun.kototoro.list.ui.ListModelDiffCallback.Companion.PAYLOAD_ANYT
 import org.skepsun.kototoro.list.ui.ListModelDiffCallback.Companion.PAYLOAD_PROGRESS_CHANGED
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
+import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingStatus
 
 data class ContentGridModel(
     override val manga: Content,
@@ -19,6 +20,7 @@ data class ContentGridModel(
     override val isPinned: Boolean = false,
     override val metadataTrackingService: ScrobblerService? = null,
     override val scoreText: String? = null,
+    override val readingStatus: ScrobblingStatus? = null,
     val recommendationReason: String? = null,
 ) : ContentListModel() {
 
@@ -30,7 +32,8 @@ data class ContentGridModel(
             previousState.isFavorite != isFavorite ||
             previousState.isSaved != isSaved ||
             previousState.metadataTrackingService != metadataTrackingService ||
-            previousState.scoreText != scoreText -> PAYLOAD_ANYTHING_CHANGED
+            previousState.scoreText != scoreText ||
+            previousState.readingStatus != readingStatus -> PAYLOAD_ANYTHING_CHANGED
 
         else -> super.getChangePayload(previousState)
     }

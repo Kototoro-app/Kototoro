@@ -14,6 +14,8 @@ import org.skepsun.kototoro.core.prefs.ProgressIndicatorMode
 import org.skepsun.kototoro.core.ui.model.ContentOverride
 import org.skepsun.kototoro.core.ui.widgets.ChipModel
 import org.skepsun.kototoro.list.domain.ContentListMapper
+import org.skepsun.kototoro.list.domain.deriveReadingStatus
+import org.skepsun.kototoro.list.domain.toReadingStatusOrNull
 import org.skepsun.kototoro.list.domain.ReadingProgress
 import org.skepsun.kototoro.list.ui.model.ContentCompactListModel
 import org.skepsun.kototoro.list.ui.model.ContentDetailedListModel
@@ -148,6 +150,10 @@ internal fun buildFavouriteCardModel(request: FavouriteCardModelRequest): Conten
             isSaved = row.isDownloaded,
             isPinned = request.isPinned,
             metadataTrackingService = trackingService,
+            readingStatus = deriveReadingStatus(
+                row.readingStatus.toReadingStatusOrNull(),
+                progress,
+            ),
         )
 
         ListMode.LIST -> ContentCompactListModel(
@@ -162,6 +168,10 @@ internal fun buildFavouriteCardModel(request: FavouriteCardModelRequest): Conten
             progress = progress,
             isPinned = request.isPinned,
             metadataTrackingService = trackingService,
+            readingStatus = deriveReadingStatus(
+                row.readingStatus.toReadingStatusOrNull(),
+                progress,
+            ),
         )
 
         ListMode.DETAILED_LIST -> ContentDetailedListModel(
@@ -182,6 +192,10 @@ internal fun buildFavouriteCardModel(request: FavouriteCardModelRequest): Conten
             },
             isPinned = request.isPinned,
             metadataTrackingService = trackingService,
+            readingStatus = deriveReadingStatus(
+                row.readingStatus.toReadingStatusOrNull(),
+                progress,
+            ),
         )
     }
 }
