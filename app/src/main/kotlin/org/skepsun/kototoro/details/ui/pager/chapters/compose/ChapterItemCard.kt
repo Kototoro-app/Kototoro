@@ -145,6 +145,7 @@ fun ChapterGridCard(
     focusModifier = Modifier.tvFocusable(shape = RoundedCornerShape(8.dp), borderWidth = 3.dp, addFocusTarget = false),
     thumbnail = chapterThumbnail(item, showFirstPageThumbnail),
     thumbnailAspectRatio = chapterThumbnailAspectRatio(item),
+    highlightCurrent = true,
 )
 
 @Composable
