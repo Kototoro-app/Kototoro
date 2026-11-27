@@ -12,12 +12,12 @@ import androidx.sqlite.driver.bundled.SQLITE_OPEN_READONLY
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.protobuf.ProtoBuf
+import okio.EOFException
 import okio.FileSystem
 import okio.Path.Companion.toPath
-import okio.Buffer
+import okio.buffer
+import okio.use
 import org.skepsun.kototoro.backups.domain.BackupSection
-import org.skepsun.kototoro.backups.external.AniyomiBackup
 import org.skepsun.kototoro.backups.external.ExternalBackupApp
 import org.skepsun.kototoro.backups.external.ExternalBackupPayload
 import org.skepsun.kototoro.backups.external.ExternalImportTransaction
@@ -26,8 +26,7 @@ import org.skepsun.kototoro.backups.external.ExternalSourceCandidate
 import org.skepsun.kototoro.backups.external.ExternalSourceKind
 import org.skepsun.kototoro.backups.external.VeneraBackupDecoding
 import org.skepsun.kototoro.backups.external.VeneraDatabase
-import org.skepsun.kototoro.backups.external.decodeMihonOrAniyomiBackup
-import org.skepsun.kototoro.backups.external.readExternalBackupBytes
+import org.skepsun.kototoro.backups.external.decodeMihonOrAniyomiBackupAutoDetect
 import kotlin.random.Random
 
 /** Another app's backup, decoded and counted; nothing is written until [IosLibrary.importExternalBackup]. */
@@ -63,19 +62,28 @@ internal class IosExternalBackupService(private val library: IosLibrary) {
     } catch (_: IllegalArgumentException) { false }
 
     suspend fun preview(path: String): IosExternalBackupPreview = withContext(Dispatchers.IO) {
-        val raw = readFile(path, BackupZipReader.MAX_ARCHIVE_BYTES)
+        val filePath = path.toPath()
         val filename = path.substringAfterLast('/')
-        val bytes = readExternalBackupBytes(Buffer().write(raw))
-        if (bytes.size >= 4 && bytes[0] == 'P'.code.toByte() && bytes[1] == 'K'.code.toByte()) {
+        val isZip = FileSystem.SYSTEM.source(filePath).buffer().use { source ->
+            source.request(4) && source.readByte() == 'P'.code.toByte() && source.readByte() == 'K'.code.toByte()
+        }
+        if (isZip) {
+            val bytes = readFile(path, BackupZipReader.MAX_ARCHIVE_BYTES)
             IosExternalBackupPreview(decodeVenera(bytes), "Venera", filename)
         } else {
-            // Aniyomi writes its anime under its own fields; a backup without them is a Mihon-family one.
-            val aniyomi = runCatching { ProtoBuf.decodeFromByteArray(AniyomiBackup.serializer(), bytes) }.getOrNull()
-            val app = if (aniyomi != null && (aniyomi.backupAnime.isNotEmpty() || aniyomi.backupAnimeSources.isNotEmpty()))
-                ExternalBackupApp.ANIYOMI else ExternalBackupApp.MIHON
-            val payload = decodeMihonOrAniyomiBackup(bytes, app)
-                ?: throw IllegalArgumentException(localized("无法识别的备份文件：支持 Kototoro/Kotatsu、Mihon/Tachiyomi、Aniyomi 和 Venera 备份"))
-            IosExternalBackupPreview(payload, if (app == ExternalBackupApp.ANIYOMI) "Aniyomi" else "Mihon", filename)
+            val decoded = try {
+                decodeMihonOrAniyomiBackupAutoDetect(
+                    source = FileSystem.SYSTEM.source(filePath).buffer(),
+                    maxBytes = BackupZipReader.MAX_ARCHIVE_BYTES,
+                )
+            } catch (_: EOFException) {
+                null
+            } ?: throw IllegalArgumentException(localized("无法识别的备份文件：支持 Kototoro/Kotatsu、Mihon/Tachiyomi、Aniyomi 和 Venera 备份"))
+            IosExternalBackupPreview(
+                payload = decoded.payload,
+                app = if (decoded.app == ExternalBackupApp.ANIYOMI) "Aniyomi" else "Mihon",
+                filename = filename,
+            )
         }
     }
 

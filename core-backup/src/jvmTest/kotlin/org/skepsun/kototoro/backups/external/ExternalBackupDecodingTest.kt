@@ -340,4 +340,320 @@ class ExternalBackupDecodingTest {
         assertEquals("/ch/2", record.historyChapterUrl)
         assertEquals(1_700_000_500_000L, record.historyTimestamp)
     }
+
+    @Test
+    fun `streaming decoder matches ByteArray decoding for raw and gzipped Mihon and Aniyomi backups`() {
+        val mihon = mihonBackup()
+        val mihonBytes = encode(mihon)
+        val expectedMihon = decodeMihonOrAniyomiBackup(mihonBytes, ExternalBackupApp.MIHON)
+        assertNotNull(expectedMihon)
+        assertEquals(expectedMihon, decodeMihonOrAniyomiBackup(Buffer().write(mihonBytes), ExternalBackupApp.MIHON))
+        assertEquals(expectedMihon, decodeMihonOrAniyomiBackup(Buffer().write(gzip(mihonBytes)), ExternalBackupApp.MIHON))
+
+        val autoMihon = decodeMihonOrAniyomiBackupAutoDetect(Buffer().write(gzip(mihonBytes)))
+        assertEquals(DecodedExternalBackup(ExternalBackupApp.MIHON, expectedMihon!!), autoMihon)
+
+        val aniyomi = AniyomiBackup(
+            backupManga = listOf(AniyomiBackupManga(source = 11, url = "/m", title = "Manga")),
+            backupCategories = listOf(MihonBackupCategory(name = "Anime", order = 2, id = 9)),
+            backupAnime = listOf(
+                AniyomiBackupAnime(
+                    source = 12,
+                    url = "/a",
+                    title = "Anime",
+                    episodes = listOf(
+                        AniyomiBackupEpisode(url = "/ep/1", seen = true),
+                        AniyomiBackupEpisode(url = "/ep/2", seen = false),
+                    ),
+                ),
+            ),
+            backupSources = listOf(
+                MihonBackupSource(name = "Manga source", sourceId = 11),
+                MihonBackupSource(name = "Overridden source", sourceId = 12),
+            ),
+            backupAnimeSources = listOf(MihonBackupSource(name = "Anime source", sourceId = 12)),
+        )
+        val aniyomiBytes = ProtoBuf.encodeToByteArray(AniyomiBackup.serializer(), aniyomi)
+        val expectedAniyomi = decodeMihonOrAniyomiBackup(aniyomiBytes, ExternalBackupApp.ANIYOMI)
+        assertNotNull(expectedAniyomi)
+        assertEquals(expectedAniyomi, decodeMihonOrAniyomiBackup(Buffer().write(aniyomiBytes), ExternalBackupApp.ANIYOMI))
+        assertEquals(expectedAniyomi, decodeMihonOrAniyomiBackup(Buffer().write(gzip(aniyomiBytes)), ExternalBackupApp.ANIYOMI))
+
+        val autoAniyomi = decodeMihonOrAniyomiBackupAutoDetect(Buffer().write(gzip(aniyomiBytes)))
+        assertEquals(DecodedExternalBackup(ExternalBackupApp.ANIYOMI, expectedAniyomi!!), autoAniyomi)
+    }
+
+    @Test
+    fun `streaming decoder skips unknown protobuf wire types and preserves interleaved Aniyomi order`() {
+        val mangaBytes = ProtoBuf.encodeToByteArray(
+            AniyomiBackupManga.serializer(),
+            AniyomiBackupManga(source = 11, url = "/m/1", title = "Interleaved Manga"),
+        )
+        val animeBytes = ProtoBuf.encodeToByteArray(
+            AniyomiBackupAnime.serializer(),
+            AniyomiBackupAnime(source = 12, url = "/a/1", title = "Interleaved Anime"),
+        )
+        val sourceMangaBytes = ProtoBuf.encodeToByteArray(
+            MihonBackupSource.serializer(),
+            MihonBackupSource(name = "Source Eleven", sourceId = 11),
+        )
+        val sourceAnimeBytes = ProtoBuf.encodeToByteArray(
+            MihonBackupSource.serializer(),
+            MihonBackupSource(name = "Source Twelve", sourceId = 12),
+        )
+
+        val wire = Buffer().apply {
+            // Unknown varint (field 99, wire type 0)
+            writeVarint((99L shl 3) or 0L)
+            writeVarint(123456789L)
+            // Unknown 64-bit fixed (field 98, wire type 1)
+            writeVarint((98L shl 3) or 1L)
+            writeLongLe(0x0102030405060708L)
+            // Unknown 32-bit fixed (field 97, wire type 5)
+            writeVarint((97L shl 3) or 5L)
+            writeIntLe(0x11223344)
+            // Unknown deprecated group (field 96, wire type 3 ... wire type 4)
+            writeVarint((96L shl 3) or 3L)
+            writeVarint((1L shl 3) or 0L)
+            writeVarint(42L)
+            writeVarint((96L shl 3) or 4L)
+            // Unknown length-delimited blob (field 104, wire type 2)
+            writeVarint((104L shl 3) or 2L)
+            writeVarint(4L)
+            writeUtf8("pref")
+            // Anime written BEFORE manga, and sources written LAST
+            writeVarint((501L shl 3) or 2L)
+            writeVarint(animeBytes.size.toLong())
+            write(animeBytes)
+            writeVarint((1L shl 3) or 2L)
+            writeVarint(mangaBytes.size.toLong())
+            write(mangaBytes)
+            writeVarint((101L shl 3) or 2L)
+            writeVarint(sourceMangaBytes.size.toLong())
+            write(sourceMangaBytes)
+            writeVarint((103L shl 3) or 2L)
+            writeVarint(sourceAnimeBytes.size.toLong())
+            write(sourceAnimeBytes)
+        }.readByteArray()
+
+        val payload = decodeMihonOrAniyomiBackup(Buffer().write(gzip(wire)), ExternalBackupApp.ANIYOMI)
+        assertNotNull(payload)
+        assertEquals(listOf("Interleaved Manga", "Interleaved Anime"), payload!!.records.map { it.title })
+        assertEquals(listOf("Source Eleven", "Source Twelve"), payload.records.map { it.sourceDisplayName })
+    }
+
+    @Test
+    fun `readExternalBackupBytes enforces exact byte ceiling and stops gzip bombs early`() {
+        val raw = encode(mihonBackup())
+        assertArrayEquals(raw, readExternalBackupBytes(Buffer().write(raw), maxBytes = raw.size.toLong()))
+
+        val overLimitSource = CloseTrackingSource(raw)
+        assertThrows(ExternalBackupTooLargeException::class.java) {
+            readExternalBackupBytes(overLimitSource.buffer(), maxBytes = raw.size.toLong() - 1L)
+        }
+        assertTrue(overLimitSource.closed)
+
+        // 8 MiB of zeros gzips down to ~8 KiB; reading with a 32 KiB decompressed cap must fail fast.
+        val gzipBomb = gzipZeros(8 * 1024 * 1024)
+        val bombSource = CloseTrackingSource(gzipBomb)
+        assertThrows(ExternalBackupTooLargeException::class.java) {
+            readExternalBackupBytes(bombSource.buffer(), maxBytes = 32L * 1024L)
+        }
+        assertTrue(bombSource.closed)
+    }
+
+    @Test
+    fun `streaming decoder fails fast on gzip bombs and oversized protobuf records`() {
+        // 8 MiB unknown protobuf field compressed to ~8 KiB; streaming skip must trip maxBytes immediately.
+        val gzipProtobufBomb = gzipUnknownFieldBlob(8 * 1024 * 1024)
+        val bombSource = CloseTrackingSource(gzipProtobufBomb)
+        assertThrows(ExternalBackupTooLargeException::class.java) {
+            decodeMihonOrAniyomiBackup(
+                source = bombSource.buffer(),
+                app = ExternalBackupApp.MIHON,
+                maxBytes = 32L * 1024L,
+            )
+        }
+        assertTrue(bombSource.closed)
+
+        // All-zero gzip bomb fails on the very first invalid tag byte without decompressing the rest.
+        val zeroBombSource = CloseTrackingSource(gzipZeros(8 * 1024 * 1024))
+        assertNull(
+            decodeMihonOrAniyomiBackup(
+                source = zeroBombSource.buffer(),
+                app = ExternalBackupApp.MIHON,
+                maxBytes = 32L * 1024L,
+            ),
+        )
+        assertTrue(zeroBombSource.closed)
+
+        // Forged 1 GiB length-delimited record header in only 6 bytes must fail immediately without allocation.
+        val forgedOversizedRecord = Buffer().apply {
+            writeVarint((1L shl 3) or 2L)
+            writeVarint(1024L * 1024L * 1024L)
+        }.readByteArray()
+        val forgedSource = CloseTrackingSource(forgedOversizedRecord)
+        assertThrows(ExternalBackupTooLargeException::class.java) {
+            decodeMihonOrAniyomiBackup(
+                source = forgedSource.buffer(),
+                app = ExternalBackupApp.MIHON,
+                maxRecordBytes = 1024L,
+            )
+        }
+        assertTrue(forgedSource.closed)
+
+        // Real backup record exceeding a tight per-record cap also fails fast with ExternalBackupTooLargeException.
+        val validBytes = encode(mihonBackup())
+        val cappedSource = CloseTrackingSource(validBytes)
+        assertThrows(ExternalBackupTooLargeException::class.java) {
+            decodeMihonOrAniyomiBackup(
+                source = cappedSource.buffer(),
+                app = ExternalBackupApp.MIHON,
+                maxRecordBytes = 16L,
+            )
+        }
+        assertTrue(cappedSource.closed)
+    }
+
+    @Test
+    fun `streaming decoder rejects malformed protobuf wire records cleanly and closes input`() {
+        val malformedInputs = listOf(
+            // Field 1, length 127, only 2 bytes follow
+            byteArrayOf(0x0A, 0x7F, 0x01, 0x02),
+            // Invalid wire type 6 on field 1
+            byteArrayOf(0x0E, 0x00),
+            // Invalid field number 0
+            byteArrayOf(0x00, 0x00),
+            // Unexpected top-level end-group (wire type 4)
+            byteArrayOf(0x0C, 0x00),
+            // Wrong wire type (varint instead of length-delimited) for known field 1
+            byteArrayOf(0x08, 0x01),
+            // Malformed varint exceeding 10 bytes
+            ByteArray(12) { 0x80.toByte() },
+            // Unterminated unknown start-group
+            byteArrayOf(((96 shl 3) or 3).toByte(), 0x00),
+            // Empty length-delimited MihonBackupManga missing required source & url fields
+            byteArrayOf(0x0A, 0x00),
+        )
+        malformedInputs.forEach { bad ->
+            val source = CloseTrackingSource(bad)
+            assertNull(decodeMihonOrAniyomiBackup(source.buffer(), ExternalBackupApp.MIHON))
+            assertTrue(source.closed)
+        }
+
+        // Venera closes the source and returns null
+        val veneraSource = CloseTrackingSource(encode(mihonBackup()))
+        assertNull(decodeMihonOrAniyomiBackup(veneraSource.buffer(), ExternalBackupApp.VENERA))
+        assertTrue(veneraSource.closed)
+
+        // JSON backup still throws UnsupportedExternalBackupException and closes source
+        val jsonSource = CloseTrackingSource("""{"backupManga":[]}""".encodeToByteArray())
+        assertThrows(UnsupportedExternalBackupException::class.java) {
+            decodeMihonOrAniyomiBackup(jsonSource.buffer(), ExternalBackupApp.MIHON)
+        }
+        assertTrue(jsonSource.closed)
+    }
+
+    @Test
+    fun `streaming decoder handles multi-thousand-entry gzipped Mihon backup with 100k chapters`() {
+        val mangaCount = 2_000
+        val chaptersPerManga = 50
+        val compressed = Buffer()
+        (compressed as Sink).gzip().buffer().use { gzipOut ->
+            for (i in 0 until mangaCount) {
+                val chapters = List(chaptersPerManga) { ch ->
+                    MihonBackupChapter(
+                        url = "/m/$i/ch/$ch",
+                        name = "Chapter ${ch + 1}",
+                        read = ch < 25,
+                        lastPageRead = if (ch == 24) 7L else 0L,
+                        chapterNumber = (ch + 1).toFloat(),
+                        sourceOrder = (chaptersPerManga - 1 - ch).toLong(),
+                    )
+                }
+                val manga = MihonBackupManga(
+                    source = mangaDexId,
+                    url = "/manga/$i",
+                    title = "Series $i",
+                    dateAdded = 1_700_000_000_000L + i,
+                    chapters = chapters,
+                    categories = listOf(1L),
+                )
+                val recordBytes = ProtoBuf.encodeToByteArray(MihonBackupManga.serializer(), manga)
+                gzipOut.writeVarint((1L shl 3) or 2L)
+                gzipOut.writeVarint(recordBytes.size.toLong())
+                gzipOut.write(recordBytes)
+            }
+            val categoryBytes = ProtoBuf.encodeToByteArray(
+                MihonBackupCategory.serializer(),
+                MihonBackupCategory(name = "Reading", order = 1, id = 1),
+            )
+            gzipOut.writeVarint((2L shl 3) or 2L)
+            gzipOut.writeVarint(categoryBytes.size.toLong())
+            gzipOut.write(categoryBytes)
+
+            val sourceBytes = ProtoBuf.encodeToByteArray(
+                MihonBackupSource.serializer(),
+                MihonBackupSource(name = "MangaDex", sourceId = mangaDexId),
+            )
+            gzipOut.writeVarint((101L shl 3) or 2L)
+            gzipOut.writeVarint(sourceBytes.size.toLong())
+            gzipOut.write(sourceBytes)
+        }
+
+        val payload = decodeMihonOrAniyomiBackup(compressed, ExternalBackupApp.MIHON)
+        assertNotNull(payload)
+        assertEquals(mangaCount, payload!!.records.size)
+        assertEquals("Reading", payload.favoriteCategories.single().name)
+        val first = payload.records.first()
+        val last = payload.records.last()
+        assertEquals("Series 0", first.title)
+        assertEquals("MangaDex", first.sourceDisplayName)
+        assertEquals(chaptersPerManga, first.chaptersCount)
+        assertEquals(25, first.readEntriesCount)
+        assertEquals(0.5f, first.progressPercent)
+        assertEquals("/m/0/ch/24", first.historyChapterUrl)
+        assertEquals(7, first.historyPage)
+        assertEquals("Series ${mangaCount - 1}", last.title)
+        assertEquals("MangaDex", last.sourceDisplayName)
+    }
+
+    private fun gzipZeros(uncompressedBytes: Int): ByteArray {
+        val out = Buffer()
+        val chunk = ByteArray(64 * 1024)
+        (out as Sink).gzip().buffer().use { sink ->
+            var remaining = uncompressedBytes
+            while (remaining > 0) {
+                val n = minOf(remaining, chunk.size)
+                sink.write(chunk, 0, n)
+                remaining -= n
+            }
+        }
+        return out.readByteArray()
+    }
+
+    private fun gzipUnknownFieldBlob(payloadBytes: Int): ByteArray {
+        val out = Buffer()
+        val chunk = ByteArray(64 * 1024)
+        (out as Sink).gzip().buffer().use { sink ->
+            sink.writeVarint((99L shl 3) or 2L)
+            sink.writeVarint(payloadBytes.toLong())
+            var remaining = payloadBytes
+            while (remaining > 0) {
+                val n = minOf(remaining, chunk.size)
+                sink.write(chunk, 0, n)
+                remaining -= n
+            }
+        }
+        return out.readByteArray()
+    }
+
+    private fun okio.BufferedSink.writeVarint(value: Long) {
+        var v = value
+        while ((v and 0x7FL.inv()) != 0L) {
+            writeByte(((v and 0x7FL) or 0x80L).toInt())
+            v = v ushr 7
+        }
+        writeByte(v.toInt())
+    }
 }
