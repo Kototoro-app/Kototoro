@@ -85,9 +85,13 @@ import org.skepsun.kototoro.download.ui.worker.DownloadTask
 import org.skepsun.kototoro.download.ui.worker.DownloadTaskKind
 import org.skepsun.kototoro.download.ui.worker.DownloadWorker
 import org.skepsun.kototoro.download.ui.worker.ExecutionChapterRef
+import org.skepsun.kototoro.reader.translate.compose.RemoteTranslationConsentDialog
 import org.skepsun.kototoro.reader.translate.data.ChapterTranslationStore
 import org.skepsun.kototoro.reader.translate.data.resolveChapterTranslationKey
 import org.skepsun.kototoro.reader.translate.data.resolveChapterTranslationLanguagePair
+import org.skepsun.kototoro.reader.translate.domain.PendingRemoteTranslationConsent
+import org.skepsun.kototoro.reader.translate.domain.RemoteTranslationConsentDecision
+import org.skepsun.kototoro.reader.translate.domain.evaluateRemoteTranslationConsent
 import org.skepsun.kototoro.core.prefs.ReaderMode
 import org.skepsun.kototoro.core.prefs.observeAsFlow
 import org.skepsun.kototoro.core.prefs.observeAsState
@@ -309,21 +313,27 @@ class NovelReaderActivity :
      */
     private fun translateChapterFromSheet(chapter: ContentChapter, isRetranslation: Boolean) {
         val content = if (::manga.isInitialized) manga else return
-        lifecycleScope.launch {
-            val task = DownloadTask.createExecutionTask(
-                executionMangaId = content.id,
-                displayMangaId = content.id,
-                isPaused = false,
-                isSilent = true,
-                executionChapterIds = longArrayOf(chapter.id),
-                executionChapterRefs = listOf(ExecutionChapterRef.fromChapter(chapter)),
-                destination = null,
-                format = null,
-                allowMeteredNetwork = true,
-                kind = DownloadTaskKind.TRANSLATE,
-                isRetranslation = isRetranslation,
-            )
-            downloadScheduler.schedule(setOf(content to task))
+        if (!hasTranslationConfig()) {
+            showReaderMessage(getString(R.string.novel_reader_translation_not_configured), 3000L)
+            return
+        }
+        runWithRemoteTranslationConsent {
+            lifecycleScope.launch {
+                val task = DownloadTask.createExecutionTask(
+                    executionMangaId = content.id,
+                    displayMangaId = content.id,
+                    isPaused = false,
+                    isSilent = true,
+                    executionChapterIds = longArrayOf(chapter.id),
+                    executionChapterRefs = listOf(ExecutionChapterRef.fromChapter(chapter)),
+                    destination = null,
+                    format = null,
+                    allowMeteredNetwork = true,
+                    kind = DownloadTaskKind.TRANSLATE,
+                    isRetranslation = isRetranslation,
+                )
+                downloadScheduler.schedule(setOf(content to task))
+            }
         }
     }
 
@@ -407,6 +417,7 @@ class NovelReaderActivity :
     private var translationEditorRevision by mutableStateOf(0)
     private var glossaryDraft by mutableStateOf<String?>(null)
     private var glossarySaving by mutableStateOf(false)
+    private var pendingRemoteTranslationConsent by mutableStateOf<PendingRemoteTranslationConsent?>(null)
 
     override val readerMode: ReaderMode?
         get() = ReaderMode.STANDARD
@@ -1198,6 +1209,19 @@ class NovelReaderActivity :
                             )
                         }
                         NovelTranslationEditors()
+                        pendingRemoteTranslationConsent?.let { pending ->
+                            RemoteTranslationConsentDialog(
+                                request = pending.request,
+                                onConfirm = {
+                                    settings.recordRemoteTranslationConsent(pending.request.consentKey)
+                                    pendingRemoteTranslationConsent = null
+                                    pending.onConfirm()
+                                },
+                                onDismiss = {
+                                    pendingRemoteTranslationConsent = null
+                                },
+                            )
+                        }
                         novelAiAskTarget?.let { target ->
                             AlertDialog(
                                 onDismissRequest = ::dismissNovelAiAsk,
@@ -1538,12 +1562,17 @@ class NovelReaderActivity :
             )
             return
         }
-        readerSettings = readerSettings.copy(isTranslationEnabled = enabled)
-        readerSettings.save(this)
-        composeReaderViewModel.publishSettings(readerSettings)
         if (enabled) {
-            startTranslation()
+            runWithRemoteTranslationConsent {
+                readerSettings = readerSettings.copy(isTranslationEnabled = true)
+                readerSettings.save(this)
+                composeReaderViewModel.publishSettings(readerSettings)
+                startTranslationInternal()
+            }
         } else {
+            readerSettings = readerSettings.copy(isTranslationEnabled = false)
+            readerSettings.save(this)
+            composeReaderViewModel.publishSettings(readerSettings)
             clearTranslation()
         }
     }
@@ -1603,6 +1632,42 @@ class NovelReaderActivity :
     }
 
     private fun startTranslation() {
+        if (!isContentInitialized) return
+        val content = getCurrentChapterContent()
+        if (content.isNullOrBlank()) {
+            showReaderMessage(getString(R.string.novel_reader_translation_no_content), 2000L)
+            return
+        }
+        if (!hasTranslationConfig()) {
+            showReaderMessage(
+                getString(R.string.novel_reader_translation_not_configured),
+                3000L,
+            )
+            return
+        }
+        runWithRemoteTranslationConsent {
+            startTranslationInternal()
+        }
+    }
+
+    private fun runWithRemoteTranslationConsent(onAllowed: () -> Unit) {
+        when (
+            val decision = settings.evaluateRemoteTranslationConsent(
+                isNovel = true,
+                customProviderLabel = getString(R.string.ai_api_provider_custom),
+            )
+        ) {
+            RemoteTranslationConsentDecision.Allowed -> onAllowed()
+            is RemoteTranslationConsentDecision.RequiresConsent -> {
+                pendingRemoteTranslationConsent = PendingRemoteTranslationConsent(
+                    request = decision.request,
+                    onConfirm = onAllowed,
+                )
+            }
+        }
+    }
+
+    private fun startTranslationInternal() {
         if (!isContentInitialized) return
         translationJob?.cancel()
         val content = getCurrentChapterContent()

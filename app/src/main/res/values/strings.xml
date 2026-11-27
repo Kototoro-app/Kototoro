@@ -1777,6 +1777,16 @@
     <string name="ai_api_usage_summary_local_only">Current translation mode is Local only. These API settings are kept for later use, but they are not used right now.</string>
     <string name="ai_api_usage_summary_local_first">Current translation mode is Local first. API settings are used only when local translation is unavailable or unsupported.</string>
     <string name="ai_api_usage_summary_api_only">Current translation mode is API only. Every translation request will use the configured remote provider.</string>
+    <string name="remote_translation_consent_title">Review remote translation data</string>
+    <string name="remote_translation_consent_provider_label">Provider</string>
+    <string name="remote_translation_consent_host_label">Endpoint host</string>
+    <string name="remote_translation_consent_host_invalid">Invalid or unconfigured host</string>
+    <string name="remote_translation_consent_data_label">Data sent</string>
+    <string name="remote_translation_consent_data_ocr_text">Recognized OCR text and per-series glossary terms</string>
+    <string name="remote_translation_consent_data_novel_text">Chapter text paragraphs and per-series glossary terms</string>
+    <string name="remote_translation_consent_data_e2e_image">Full page image and per-series glossary terms</string>
+    <string name="remote_translation_consent_remember_note">Your choice is remembered for this provider and host. Switching to a different provider or host will ask again.</string>
+    <string name="remote_translation_consent_confirm">Continue &amp; send</string>
     <string name="ai_image_enhancement_settings">Image enhancement</string>
     <string name="ai_image_enhancement_summary">Configure reader-side AI super resolution and cache behavior</string>
     <string name="ai_image_enhancement_summary_enabled">Enabled, %1$s</string>

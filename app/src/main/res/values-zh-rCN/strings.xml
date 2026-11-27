@@ -1908,6 +1908,16 @@
     <string name="ai_api_usage_summary_local_only">当前翻译模式为仅本地。这里的 API 配置会被保留，但当前不会参与翻译。</string>
     <string name="ai_api_usage_summary_local_first">当前翻译模式为本地优先。只有本地翻译不可用或不支持时，才会使用这里的 API 配置。</string>
     <string name="ai_api_usage_summary_api_only">当前翻译模式为仅 API。所有翻译请求都会使用这里配置的远程提供商。</string>
+    <string name="remote_translation_consent_title">确认发送远程翻译数据</string>
+    <string name="remote_translation_consent_provider_label">服务提供商</string>
+    <string name="remote_translation_consent_host_label">接口主机</string>
+    <string name="remote_translation_consent_host_invalid">无效或未配置的主机</string>
+    <string name="remote_translation_consent_data_label">将发送的数据</string>
+    <string name="remote_translation_consent_data_ocr_text">OCR 识别文本与当前作品术语表</string>
+    <string name="remote_translation_consent_data_novel_text">章节正文段落与当前作品术语表</string>
+    <string name="remote_translation_consent_data_e2e_image">完整页面图片与当前作品术语表</string>
+    <string name="remote_translation_consent_remember_note">确认后将为该提供商与主机记住选择；切换到其他提供商或主机时会再次询问。</string>
+    <string name="remote_translation_consent_confirm">继续并发送</string>
     <string name="ai_image_enhancement_settings">图像增强</string>
     <string name="ai_image_enhancement_summary">配置阅读器侧 AI 超分辨率和缓存行为</string>
     <string name="ai_image_enhancement_summary_enabled">已启用，%1$s</string>
