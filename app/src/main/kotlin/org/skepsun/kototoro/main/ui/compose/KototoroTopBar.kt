@@ -82,6 +82,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.unit.Constraints
@@ -120,6 +121,9 @@ import org.skepsun.kototoro.core.ui.topbar.TopBarSearchPillContent
 import org.skepsun.kototoro.core.ui.topbar.TopBarTabsRail
 import org.skepsun.kototoro.core.ui.topbar.TopBarTitleBlock
 import org.skepsun.kototoro.core.ui.topbar.TopBarIconAction
+import org.skepsun.kototoro.core.ui.topbar.SourceTypeMenuEntry
+import org.skepsun.kototoro.core.ui.topbar.SourceTypeMenuItems
+import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.core.ui.topbar.compactRailEdgeFade
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
@@ -133,6 +137,8 @@ import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
 import org.skepsun.kototoro.explore.data.SourcePreset
 import org.skepsun.kototoro.list.domain.ListSortOrder
 import org.skepsun.kototoro.explore.ui.model.SourceTag
+import org.skepsun.kototoro.explore.ui.model.iconRes
+import org.skepsun.kototoro.explore.ui.model.titleRes
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.model.ContentTag
@@ -236,6 +242,10 @@ fun KototoroTopBar(
 ) {
     var isMoreMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var isLanguagePresetMenuExpanded by rememberSaveable { mutableStateOf(false) }
+    // The segmented bar folds its filters into ⋮ when they do not fit beside the centred capsule;
+    // these are the menus those folded entries open, hung off the same ⋮ button.
+    var isOverflowContentTypeMenuExpanded by rememberSaveable { mutableStateOf(false) }
+    var isOverflowSourceTagMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var topBarMenuAnchorBounds by remember { mutableStateOf<Rect?>(null) }
     // The menus render in the root overlay, so when one closes nothing brings the ring back to the
     // button that opened it; on a remote the user then has to walk from the rail again.
@@ -283,8 +293,9 @@ fun KototoroTopBar(
     // The filter and ⋮ buttons. On the tablet's vertical bar they leave this row and the bar draws
     // them as its upper group (iPhone Duo puts the top bar's symbol items there); the menus and
     // their state stay here either way.
-    val actionButtons: @Composable () -> Unit = {
-        extraSegmentedActions.forEach { action ->
+    // [collapsed]: the segmented bar ran out of room, so everything but ⋮ moves into its menu.
+    val actionButtons: @Composable (Boolean) -> Unit = { collapsed ->
+        if (!collapsed) extraSegmentedActions.forEach { action ->
             TopBarIconAction(
                 icon = painterResource(action.iconRes),
                 contentDescription = stringResource(action.contentDescriptionRes),
@@ -295,7 +306,7 @@ fun KototoroTopBar(
                 inactiveTint = MaterialTheme.colorScheme.onSurface,
             )
         }
-        if (effectiveContentTypeFilterVisible) {
+        if (effectiveContentTypeFilterVisible && !collapsed) {
             SwipeableFilterChip(
                 selectedType = selectedContentType,
                 enabledTypes = enabledContentTypes,
@@ -306,7 +317,7 @@ fun KototoroTopBar(
                 downFocusLink = contentDownFocus,
             )
         }
-        if (effectiveSourceTagFilterVisible) {
+        if (effectiveSourceTagFilterVisible && !collapsed) {
             SourceTagDropdown(
                 selectedTags = selectedSourceTags,
                 entries = sourceTagEntries,
@@ -333,9 +344,14 @@ fun KototoroTopBar(
                         // over this anchor, so a tap lands here
                         // even while a menu is open: close any
                         // open menu, otherwise open the more menu.
-                        if (isMoreMenuExpanded || isLanguagePresetMenuExpanded) {
+                        if (
+                            isMoreMenuExpanded || isLanguagePresetMenuExpanded ||
+                            isOverflowContentTypeMenuExpanded || isOverflowSourceTagMenuExpanded
+                        ) {
                             isMoreMenuExpanded = false
                             isLanguagePresetMenuExpanded = false
+                            isOverflowContentTypeMenuExpanded = false
+                            isOverflowSourceTagMenuExpanded = false
                         } else {
                             isMoreMenuExpanded = true
                         }
@@ -362,6 +378,64 @@ fun KototoroTopBar(
                     shape = CompactTopBarPillShape,
                     style = GlassDefaults.subtleStyle(),
                 ) {
+                if (collapsed) {
+                    extraSegmentedActions.forEach { action ->
+                        CompactDropdownMenuItem(
+                            text = { CompactDropdownMenuText(stringResource(action.contentDescriptionRes)) },
+                            leadingIcon = {
+                                Icon(
+                                    painter = painterResource(action.iconRes),
+                                    contentDescription = null,
+                                )
+                            },
+                            onClick = {
+                                isMoreMenuExpanded = false
+                                action.onClick()
+                            },
+                        )
+                    }
+                    if (effectiveContentTypeFilterVisible) {
+                        CompactDropdownMenuItem(
+                            text = { CompactDropdownMenuText(stringResource(R.string.content_type_filter)) },
+                            leadingIcon = {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_filter_content_type),
+                                    contentDescription = null,
+                                )
+                            },
+                            onClick = {
+                                isMoreMenuExpanded = false
+                                isOverflowContentTypeMenuExpanded = true
+                            },
+                        )
+                    }
+                    if (effectiveSourceTagFilterVisible) {
+                        CompactDropdownMenuItem(
+                            text = { CompactDropdownMenuText(stringResource(R.string.filter)) },
+                            leadingIcon = {
+                                Icon(
+                                    painter = rememberSafePainter(
+                                        selectedSourceTags.singleOrNull()?.iconRes ?: R.drawable.ic_filter_menu,
+                                    ),
+                                    contentDescription = null,
+                                )
+                            },
+                            onClick = {
+                                isMoreMenuExpanded = false
+                                if (!onSourceTagFilterClick(null)) {
+                                    isOverflowSourceTagMenuExpanded = true
+                                }
+                            },
+                        )
+                    }
+                    if (
+                        extraSegmentedActions.isNotEmpty() ||
+                        effectiveContentTypeFilterVisible ||
+                        effectiveSourceTagFilterVisible
+                    ) {
+                        CompactDropdownMenuDivider()
+                    }
+                }
                 if (supportsDisplayModeMenu || supportsGridSizeSlider || displayOptionsExtraContent != null) {
                     CompactDropdownMenuItem(
                         text = { CompactDropdownMenuText(stringResource(R.string.display_options)) },
@@ -574,10 +648,85 @@ fun KototoroTopBar(
                     },
                 )
             }
+            if (collapsed && effectiveContentTypeFilterVisible) {
+                GlassDropdownMenu(
+                    expanded = isOverflowContentTypeMenuExpanded,
+                    onDismissRequest = { isOverflowContentTypeMenuExpanded = false },
+                    offset = DpOffset(x = 0.dp, y = 4.dp),
+                    alignToAnchorEnd = true,
+                    useRootOverlay = LocalInterfaceStyle.current == InterfaceStyle.IOS,
+                    anchorTapThrough = true,
+                    anchorBounds = topBarMenuAnchorBounds,
+                    anchorFocusRequester = moreMenuAnchorFocus,
+                    shape = CompactTopBarPillShape,
+                    style = GlassDefaults.subtleStyle(),
+                ) {
+                    OverflowContentTypeEntries.forEach { (type, labelRes) ->
+                        val enabled = type == null || type in enabledContentTypes
+                        CompactDropdownMenuItem(
+                            text = { CompactDropdownMenuText(stringResource(labelRes)) },
+                            enabled = enabled,
+                            onClick = {
+                                isOverflowContentTypeMenuExpanded = false
+                                onContentTypeSelected(type)
+                            },
+                            leadingIcon = {
+                                Checkbox(
+                                    checked = selectedContentType.isOverflowContentType(type),
+                                    onCheckedChange = null,
+                                    enabled = enabled,
+                                )
+                            },
+                        )
+                    }
+                }
+            }
+            if (collapsed && effectiveSourceTagFilterVisible) {
+                val sortedSourceTags = remember(sourceTagEntries, selectedSourceTags) {
+                    SourceTag.menuOrder(sourceTagEntries, selectedSourceTags)
+                }
+                GlassDropdownMenu(
+                    expanded = isOverflowSourceTagMenuExpanded,
+                    onDismissRequest = { isOverflowSourceTagMenuExpanded = false },
+                    offset = DpOffset(x = 0.dp, y = 4.dp),
+                    alignToAnchorEnd = true,
+                    style = if (sourceTagCustomMenuContent != null) {
+                        GlassDefaults.prominentStyle()
+                    } else {
+                        GlassDefaults.subtleStyle()
+                    },
+                    useRootOverlay = LocalInterfaceStyle.current == InterfaceStyle.IOS,
+                    anchorTapThrough = true,
+                    anchorBounds = topBarMenuAnchorBounds,
+                    anchorFocusRequester = moreMenuAnchorFocus,
+                ) {
+                    val customContent = sourceTagCustomMenuContent
+                    if (customContent != null) {
+                        customContent { isOverflowSourceTagMenuExpanded = false }
+                    } else {
+                        SourceTypeMenuItems(
+                            allLabel = stringResource(R.string.all),
+                            entries = sortedSourceTags.map { tag ->
+                                SourceTypeMenuEntry(
+                                    key = tag,
+                                    title = stringResource(tag.titleRes),
+                                    icon = rememberSafePainter(tag.iconRes),
+                                    selected = tag in selectedSourceTags,
+                                    enabled = tag in enabledSourceTags,
+                                )
+                            },
+                            onSelect = { tag ->
+                                isOverflowSourceTagMenuExpanded = false
+                                onSourceTagSelected(tag)
+                            },
+                        )
+                    }
+                }
+            }
 
         }
     }
-    val actionGroup: @Composable (Boolean) -> Unit = { vertical ->
+    val actionGroup: @Composable (Boolean, Boolean) -> Unit = { vertical, collapsed ->
         TopBarControlSurface(
             // The right-side action group is a PillControl capsule like
             // the compact tab rails; it used to hard-disable the lens,
@@ -595,13 +744,15 @@ fun KototoroTopBar(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(2.dp),
                     ) {
-                        actionButtons()
+                        actionButtons(false)
                     }
                 } else {
                     // A lone button fills the capsule exactly; the side padding would make it wider than tall.
-                    val isLoneButton = !effectiveContentTypeFilterVisible &&
-                        !effectiveSourceTagFilterVisible &&
-                        extraSegmentedActions.isEmpty()
+                    val isLoneButton = collapsed || (
+                        !effectiveContentTypeFilterVisible &&
+                            !effectiveSourceTagFilterVisible &&
+                            extraSegmentedActions.isEmpty()
+                        )
                     Row(
                         modifier = Modifier
                             .widthIn(min = topBarControlHeight)
@@ -610,7 +761,7 @@ fun KototoroTopBar(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(2.dp),
                     ) {
-                        actionButtons()
+                        actionButtons(collapsed)
                     }
                 }
             }
@@ -619,7 +770,7 @@ fun KototoroTopBar(
     if (verticalBarActions != null) {
         val latestActionGroup = rememberUpdatedState(actionGroup)
         DisposableEffect(verticalBarActions) {
-            val slot: @Composable () -> Unit = { latestActionGroup.value(true) }
+            val slot: @Composable () -> Unit = { latestActionGroup.value(true, false) }
             verticalBarActions.content = slot
             onDispose {
                 if (verticalBarActions.content === slot) verticalBarActions.content = null
@@ -635,6 +786,7 @@ fun KototoroTopBar(
         if (segmentedSwitcherState != null) {
             CenteredTopBarRow(
                 spacing = CompactTopBarItemSpacing,
+                minSideWidth = topBarControlHeight,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(tokens.mainTopBarHeight)
@@ -670,9 +822,19 @@ fun KototoroTopBar(
                         downFocusLink = contentDownFocus,
                     )
                 },
-                endContent = {
+                endContentWidth = segmentedActionGroupWidth(
+                    buttonCount = if (verticalBarActions == null) {
+                        1 + extraSegmentedActions.size +
+                            (if (effectiveContentTypeFilterVisible) 1 else 0) +
+                            (if (effectiveSourceTagFilterVisible) 1 else 0)
+                    } else {
+                        0
+                    },
+                    buttonSize = topBarControlHeight,
+                ),
+                endContent = { collapsed ->
                     if (verticalBarActions == null) {
-                        actionGroup(false)
+                        actionGroup(false, collapsed)
                     }
                 },
             )
@@ -809,7 +971,7 @@ fun KototoroTopBar(
                     enter = fadeIn() + expandHorizontally(expandFrom = Alignment.End),
                     exit = shrinkHorizontally(shrinkTowards = Alignment.End) + fadeOut(),
                 ) {
-                    actionGroup(false)
+                    actionGroup(false, false)
                 }
             }
             }
@@ -1203,58 +1365,101 @@ fun CompactTopBarFilterRail(
     },
 )
 
+/**
+ * Lays the segmented bar out around a capsule centred on the whole row, so the capsule does not move
+ * when the pages under it publish a different number of actions. The capsule keeps room for one
+ * button on each side; [endContent] is composed with `collapsed = true` (only ⋮, the rest in its menu)
+ * when [endContentWidth] would not fit in the half left beside the capsule.
+ */
 @Composable
 private fun CenteredTopBarRow(
     spacing: Dp,
+    endContentWidth: Dp,
+    minSideWidth: Dp,
     modifier: Modifier = Modifier,
     startContent: @Composable () -> Unit,
     centerContent: @Composable () -> Unit,
-    endContent: @Composable () -> Unit,
+    endContent: @Composable (collapsed: Boolean) -> Unit,
 ) {
-    Layout(
-        content = {
-            Box { startContent() }
-            Box { centerContent() }
-            Box { endContent() }
-        },
-        modifier = modifier,
-    ) { measurables, constraints ->
+    SubcomposeLayout(modifier = modifier) { constraints ->
+        val width = constraints.maxWidth
         val spacingPx = spacing.roundToPx()
         val loose = constraints.copy(minWidth = 0, minHeight = 0)
-        val startPlaceable = measurables[0].measure(loose)
-        val endPlaceable = measurables[2].measure(loose)
-        val startOccupied = if (startPlaceable.width > 0) startPlaceable.width + spacingPx else 0
-        val endOccupied = if (endPlaceable.width > 0) endPlaceable.width + spacingPx else 0
-        val availableCenterWidth = (constraints.maxWidth - startOccupied - endOccupied).coerceAtLeast(0)
-        val centerPlaceable = measurables[1].measure(
-            loose.copy(maxWidth = availableCenterWidth),
+        val reservedSidePx = minSideWidth.roundToPx() + spacingPx
+        val centerPlaceable = subcompose(CenteredTopBarSlot.Center, centerContent).first().measure(
+            loose.copy(maxWidth = (width - 2 * reservedSidePx).coerceAtLeast(0)),
         )
+        val placement = centeredTopBarPlacement(
+            width = width,
+            centerWidth = centerPlaceable.width,
+            endFullWidth = endContentWidth.roundToPx(),
+            spacing = spacingPx,
+        )
+        val sideConstraints = loose.copy(maxWidth = placement.sideWidth)
+        val startPlaceable = subcompose(CenteredTopBarSlot.Start, startContent).first().measure(sideConstraints)
+        val endPlaceable = subcompose(CenteredTopBarSlot.End) { endContent(placement.collapsed) }
+            .first()
+            .measure(sideConstraints)
         val height = if (constraints.hasFixedHeight) {
             constraints.maxHeight
         } else {
             maxOf(startPlaceable.height, centerPlaceable.height, endPlaceable.height)
         }
-        val width = constraints.maxWidth
         layout(width, height) {
-            startPlaceable.placeRelative(
-                x = 0,
-                y = (height - startPlaceable.height) / 2,
-            )
-            val endX = (width - endPlaceable.width).coerceAtLeast(0)
+            startPlaceable.placeRelative(x = 0, y = (height - startPlaceable.height) / 2)
             endPlaceable.placeRelative(
-                x = endX,
+                x = (width - endPlaceable.width).coerceAtLeast(0),
                 y = (height - endPlaceable.height) / 2,
             )
-            val idealCenterX = (width - centerPlaceable.width) / 2
-            val minCenterX = startOccupied
-            val maxCenterX = (width - endOccupied - centerPlaceable.width).coerceAtLeast(minCenterX)
-            val centerX = idealCenterX.coerceIn(minCenterX, maxCenterX)
-            centerPlaceable.placeRelative(
-                x = centerX,
-                y = (height - centerPlaceable.height) / 2,
-            )
+            centerPlaceable.placeRelative(x = placement.centerX, y = (height - centerPlaceable.height) / 2)
         }
     }
+}
+
+private enum class CenteredTopBarSlot { Start, Center, End }
+
+internal data class CenteredTopBarPlacement(
+    val centerX: Int,
+    val sideWidth: Int,
+    val collapsed: Boolean,
+)
+
+/** The capsule's x depends only on the row and capsule widths, never on what sits beside it. */
+internal fun centeredTopBarPlacement(
+    width: Int,
+    centerWidth: Int,
+    endFullWidth: Int,
+    spacing: Int,
+): CenteredTopBarPlacement {
+    val centerX = (width - centerWidth) / 2
+    val sideWidth = (centerX - spacing).coerceAtLeast(0)
+    return CenteredTopBarPlacement(
+        centerX = centerX,
+        sideWidth = sideWidth,
+        collapsed = endFullWidth > sideWidth,
+    )
+}
+
+/** Width of the right action capsule laid out by `actionGroup`: buttons, 2dp gaps and 2dp side padding. */
+internal fun segmentedActionGroupWidth(buttonCount: Int, buttonSize: Dp): Dp = when {
+    buttonCount <= 0 -> 0.dp
+    buttonCount == 1 -> buttonSize
+    else -> buttonSize * buttonCount + 2.dp * (buttonCount - 1) + 4.dp
+}
+
+private val OverflowContentTypeEntries: List<Pair<ContentType?, Int>> = listOf(
+    null to R.string.all,
+    ContentType.VIDEO to R.string.content_type_video,
+    ContentType.MANGA to R.string.content_type_manga,
+    ContentType.NOVEL to R.string.content_type_novel,
+)
+
+private fun ContentType?.isOverflowContentType(type: ContentType?): Boolean = when (type) {
+    null -> this == null
+    ContentType.VIDEO -> this == ContentType.VIDEO || this == ContentType.HENTAI_VIDEO
+    ContentType.MANGA -> this == ContentType.MANGA || this == ContentType.HENTAI_MANGA
+    ContentType.NOVEL -> this == ContentType.NOVEL || this == ContentType.HENTAI_NOVEL
+    else -> this == type
 }
 
 @Composable
