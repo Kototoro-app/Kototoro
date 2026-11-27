@@ -118,6 +118,19 @@ interface NetworkModule {
 
         @Provides
         @Singleton
+        @TrackerWebhookClient
+        fun provideTrackerWebhookClient(
+            @BaseHttpClient baseClient: OkHttpClient,
+        ): OkHttpClient = baseClient.newBuilder().apply {
+            // A webhook is a single fire-and-forget POST: keep it well under the worker's budget.
+            connectTimeout(10, TimeUnit.SECONDS)
+            readTimeout(10, TimeUnit.SECONDS)
+            writeTimeout(10, TimeUnit.SECONDS)
+            callTimeout(10, TimeUnit.SECONDS)
+        }.build()
+
+        @Provides
+        @Singleton
         @ContentHttpClient
         fun provideContentHttpClient(
             @BaseHttpClient baseClient: OkHttpClient,

@@ -1181,6 +1181,25 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         get() = prefs.getBoolean(KEY_TRACKER_NOTIFICATIONS, true)
         set(value) = prefs.edit { putBoolean(KEY_TRACKER_NOTIFICATIONS, value) }
 
+    /**
+     * Optional webhook push of the works a check found new chapters for. Independent of the
+     * notification switch and permission: it is a network request, not a notification.
+     * Never exported to a backup, see [BackupSettingsFilter].
+     */
+    var isTrackerWebhookEnabled: Boolean
+        get() = prefs.getBoolean(KEY_TRACKER_WEBHOOK_ENABLED, false)
+        set(value) = prefs.edit { putBoolean(KEY_TRACKER_WEBHOOK_ENABLED, value) }
+
+    /** Webhook endpoint; only `https://` is accepted, see `TrackerWebhookUrl` for validation. */
+    var trackerWebhookUrl: String
+        get() = prefs.getString(KEY_TRACKER_WEBHOOK_URL, null).orEmpty()
+        set(value) = prefs.edit { putString(KEY_TRACKER_WEBHOOK_URL, value.trim()) }
+
+    /** Moment of the last accepted webhook request, the base of the 60 s minimum interval. */
+    var trackerWebhookLastSentAt: Long
+        get() = prefs.getLong(KEY_TRACKER_WEBHOOK_LAST_SENT, 0L)
+        set(value) = prefs.edit { putLong(KEY_TRACKER_WEBHOOK_LAST_SENT, value) }
+
     var preferredTrackingSite: ScrobblerService
         get() = prefs.getEnumValue(KEY_PREFERRED_TRACKING_SITE, ScrobblerService.BANGUMI)
         set(value) = prefs.edit { putEnumValue(KEY_PREFERRED_TRACKING_SITE, value) }
@@ -3250,6 +3269,9 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_TRACK_CATEGORIES = "track_categories"
         const val KEY_TRACK_WARNING = "track_warning"
         const val KEY_TRACKER_NOTIFICATIONS = "tracker_notifications"
+        const val KEY_TRACKER_WEBHOOK_ENABLED = "tracker_webhook_enabled"
+        const val KEY_TRACKER_WEBHOOK_URL = "tracker_webhook_url"
+        const val KEY_TRACKER_WEBHOOK_LAST_SENT = "tracker_webhook_last_sent"
         const val KEY_PREFERRED_TRACKING_SITE = "preferred_tracking_site"
         const val KEY_TRACKER_NO_NSFW = "tracker_no_nsfw"
         const val KEY_TRACKER_SKIP_COMPLETED = "tracker_skip_completed"
