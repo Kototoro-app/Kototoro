@@ -42,6 +42,7 @@ fun <K> DetailsTagChips(
     modifier: Modifier = Modifier,
     onTagClick: ((K) -> Unit)? = null,
     chipModifier: (DetailsTagChip<K>) -> Modifier = { Modifier },
+    outlined: Boolean = false,
 ) {
     val minimumSize = if (org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig.current.isTv) 48.dp else 24.dp
     CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides minimumSize) {
@@ -51,12 +52,16 @@ fun <K> DetailsTagChips(
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             tags.forEach { tag ->
-                val container = if (tag.highlighted) {
-                    DetailsSensitiveTagColor.copy(alpha = 0.22f)
-                } else {
-                    MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
+                val container = when {
+                    tag.highlighted -> DetailsSensitiveTagColor.copy(alpha = 0.22f)
+                    outlined -> MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.72f)
+                    else -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
                 }
-                val border = if (tag.highlighted) BorderStroke(1.dp, DetailsSensitiveTagColor.copy(alpha = 0.68f)) else null
+                val border = when {
+                    tag.highlighted -> BorderStroke(1.dp, DetailsSensitiveTagColor.copy(alpha = 0.68f))
+                    outlined -> BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.56f))
+                    else -> null
+                }
                 val label: @Composable () -> Unit = {
                     Text(
                         text = tag.title,
