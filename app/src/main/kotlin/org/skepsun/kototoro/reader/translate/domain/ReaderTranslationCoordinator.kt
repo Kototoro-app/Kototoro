@@ -68,6 +68,7 @@ internal class ReaderTranslationCoordinator(
     private val isAcceptableTranslation: (String, String, String, String) -> Boolean,
     private val log: (() -> String) -> Unit,
     private val oneLine: (String, Int) -> String,
+    private val buildTextCacheKeyWithGlossary: ((String, String, String, List<DictPair>) -> String)? = null,
 ) {
 
     private data class ApiBatchResult(
@@ -97,8 +98,9 @@ internal class ReaderTranslationCoordinator(
             .map { "${it.original.trim()}=${it.translation.trim()}" }
             .filter { it != "=" }
             .joinToString(";")
-        fun cacheKey(text: String): String = buildTextCacheKey(text, sourceLang, targetLang) +
-            glossarySignature.takeIf { it.isNotBlank() }?.let { "|dict=$it" }.orEmpty()
+        fun cacheKey(text: String): String = buildTextCacheKeyWithGlossary?.invoke(text, sourceLang, targetLang, glossary)
+            ?: (buildTextCacheKey(text, sourceLang, targetLang) +
+                glossarySignature.takeIf { it.isNotBlank() }?.let { "|dict=$it" }.orEmpty())
         val translated = LinkedHashMap<String, String>(uniqueTexts.size)
         val misses = ArrayList<String>(uniqueTexts.size)
 

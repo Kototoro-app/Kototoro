@@ -30,6 +30,8 @@ import okhttp3.ResponseBody
 import org.json.JSONArray
 import org.json.JSONObject
 import org.skepsun.kototoro.core.LocalizedAppContext
+import org.skepsun.kototoro.core.dictionary.DictPair
+import org.skepsun.kototoro.core.dictionary.TranslationDictionaryRepository
 import org.skepsun.kototoro.core.image.BitmapDecoderCompat
 import org.skepsun.kototoro.core.model.getLocale
 import org.skepsun.kototoro.core.network.ContentHttpClient
@@ -93,6 +95,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
     private val onnxBubbleDetectorEngine: OnnxBubbleDetectorEngine,
     private val onnxTranslationEngine: OnnxReaderTranslationEngine,
     private val debugLogStore: ReaderTranslationDebugLogStore,
+    private val translationDictionaryRepository: TranslationDictionaryRepository,
 ) {
 
     private val processingSemaphore = Semaphore(MAX_PARALLEL_TRANSLATION_PAGES)
@@ -132,7 +135,13 @@ class ReaderPageTranslationProcessor @Inject constructor(
         return snapshot.inputs.map(BubbleInput::sourceText)
     }
 
-    internal suspend fun retranslateBubble(pageId: Long, index: Int, expectedText: String, originalText: String): Boolean {
+    internal suspend fun retranslateBubble(
+        pageId: Long,
+        index: Int,
+        expectedText: String,
+        originalText: String,
+        bookKey: String? = null,
+    ): Boolean {
         val snapshot = editingPages[pageId] ?: return false
         val bubble = snapshot.inputs.getOrNull(index)?.takeIf { it.sourceText == expectedText } ?: return false
         val correction = originalText.trim().takeIf(String::isNotEmpty) ?: return false
@@ -140,10 +149,13 @@ class ReaderPageTranslationProcessor @Inject constructor(
             if (editingPages[pageId] !== snapshot || viewedRenderKeys[pageId] != snapshot.renderKey) {
                 return@withPermit false
             }
+            val effectiveBookKey = bookKey ?: snapshot.bookKey
+            val glossary = loadEffectiveGlossary(effectiveBookKey)
             val translation = translationCoordinator.translateBlocksCached(
                 texts = listOf(correction),
                 sourceLang = snapshot.sourceLang,
                 targetLang = snapshot.targetLang,
+                glossary = glossary,
                 useCache = false,
             )[correction]?.takeIf(String::isNotBlank) ?: return@withPermit false
             val inputs = snapshot.inputs.toMutableList().apply { this[index] = bubble.copy(sourceText = correction) }
@@ -158,7 +170,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
                 targetLang = snapshot.targetLang,
                 bubbleTranslations = corrections,
             ) ?: return@withPermit false
-            val updated = snapshot.copy(inputs = inputs, corrections = corrections)
+            val updated = snapshot.copy(inputs = inputs, corrections = corrections, bookKey = effectiveBookKey)
             saveEditablePage(pageId, updated, editedKey)
             synchronized(pageStateLock) {
                 if (editingPages[pageId] !== snapshot || viewedRenderKeys[pageId] != snapshot.renderKey) return@synchronized false
@@ -268,11 +280,12 @@ class ReaderPageTranslationProcessor @Inject constructor(
             openAiTranslationSystemPrompt = OPENAI_TRANSLATION_SYSTEM_PROMPT,
             maxOpenAiBatchSize = MAX_OPENAI_BATCH_SIZE,
             thinkTagRegex = THINK_TAG_REGEX,
-            buildTextCacheKey = ::buildTextCacheKey,
+            buildTextCacheKey = { text, sourceLang, targetLang -> buildTextCacheKey(text, sourceLang, targetLang) },
             sanitizeTranslation = ::sanitizeTranslation,
             isAcceptableTranslation = ::isAcceptableTranslation,
             log = ::log,
             oneLine = ::oneLine,
+            buildTextCacheKeyWithGlossary = ::buildTextCacheKey,
         )
     }
     private val endToEndTranslator by lazy(LazyThreadSafetyMode.NONE) {
@@ -319,6 +332,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
         page: ContentPage,
         sourceUri: Uri,
         autoRecognizerLanguage: String? = null,
+        bookKey: String? = null,
     ): Uri? {
         if (!settings.isReaderTranslationEnabled) {
             return null
@@ -329,6 +343,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
         if (sourceLang == targetLang) {
             return null
         }
+        val glossaryDigest = computeGlossaryDigest(loadEffectiveGlossary(bookKey))
         val keys = resolveRenderedCacheKeys(
             page = page,
             localSourceUri = sourceUri.takeIf { it.isFileUri() },
@@ -336,6 +351,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
             sourceLang = sourceLang,
             targetLang = targetLang,
             autoRecognizerLanguage = normalizedAutoRecognizerLanguage,
+            glossaryDigest = glossaryDigest,
         )
         return findRendered(keys, page.id)?.toUri()?.also {
             appendPageLog(page.id, "metric.render_cache.hit=1")
@@ -352,6 +368,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
         sourceUri: Uri,
         forceEnabled: Boolean = false,
         autoRecognizerLanguage: String? = null,
+        bookKey: String? = null,
     ): Uri {
         val enabled = forceEnabled || settings.isReaderTranslationEnabled
         val showTranslated = settings.isReaderTranslationShowTranslated
@@ -372,6 +389,8 @@ class ReaderPageTranslationProcessor @Inject constructor(
             return sourceUri
         }
         Log.d(LOG_TAG, "process debug: local uri ready page=${page.id} uri=$localUri")
+        val glossary = loadEffectiveGlossary(bookKey)
+        val glossaryDigest = computeGlossaryDigest(glossary)
         val keys = resolveRenderedCacheKeys(
             page = page,
             localSourceUri = localUri,
@@ -379,6 +398,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
             sourceLang = sourceLang,
             targetLang = targetLang,
             autoRecognizerLanguage = normalizedAutoRecognizerLanguage,
+            glossaryDigest = glossaryDigest,
         )
         val renderCacheKey = keys.writeKey
         findRendered(keys, page.id)?.let {
@@ -417,7 +437,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
                     }
                 }
                 runCatching {
-                    processImpl(page.id, localUri, renderCacheKey, sourceLang, targetLang)
+                    processImpl(page.id, localUri, renderCacheKey, sourceLang, targetLang, glossary, bookKey)
                 }.onFailure {
                     Log.d(LOG_TAG, "process debug: pipeline failed page=${page.id} err=${it.javaClass.simpleName}: ${it.message.orEmpty()}")
                     it.printStackTraceDebug()
@@ -488,6 +508,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
          * being reported as "already translated with these settings".
          */
         forceRefresh: Boolean = false,
+        bookKey: String? = null,
         onProgress: suspend (phase: ChapterTranslationPhase, index: Int, total: Int) -> Unit = { _, _, _ -> },
     ): ChapterTranslationOutcome {
         val normalizedAutoRecognizerLanguage = autoRecognizerLanguage.normalizeReaderTranslationLanguageTag()
@@ -522,6 +543,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
                     sourceUri = item.sourceUri,
                     forceEnabled = true,
                     autoRecognizerLanguage = normalizedAutoRecognizerLanguage,
+                    bookKey = bookKey,
                 )
                 if (rendered == item.sourceUri) {
                     failedPageIds += item.page.id
@@ -542,6 +564,9 @@ class ReaderPageTranslationProcessor @Inject constructor(
                 translatedTextCount = 0,
             )
         }
+
+        val glossary = loadEffectiveGlossary(bookKey)
+        val glossaryDigest = computeGlossaryDigest(glossary)
 
         class PageWork(
             val page: ContentPage,
@@ -575,6 +600,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
                 sourceLang = sourceLang,
                 targetLang = targetLang,
                 autoRecognizerLanguage = normalizedAutoRecognizerLanguage,
+                glossaryDigest = glossaryDigest,
             )
             val renderCacheKey = keys.writeKey
             val cached = if (forceRefresh) null else findRendered(keys, pageId)
@@ -625,6 +651,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
                         texts = texts.toList(),
                         sourceLang = sourceLang,
                         targetLang = targetLang,
+                        glossary = glossary,
                         batchLimit = CHAPTER_TRANSLATION_BATCH_LIMIT,
                         charBudgetPerBatch = CHAPTER_TRANSLATION_CHAR_BUDGET,
                     )
@@ -670,7 +697,13 @@ class ReaderPageTranslationProcessor @Inject constructor(
                 rememberEditablePage(
                     work.page.id,
                     EditableTranslationPage(
-                        work.localUri, work.renderCacheKey, work.sourceLang, targetLang, work.bubbleInputs, translatedMap,
+                        work.localUri,
+                        work.renderCacheKey,
+                        work.sourceLang,
+                        targetLang,
+                        work.bubbleInputs,
+                        translatedMap,
+                        bookKey = bookKey,
                     ),
                 )
                 renderedPageIds += work.page.id
@@ -807,6 +840,8 @@ class ReaderPageTranslationProcessor @Inject constructor(
         renderCacheKey: String,
         sourceLang: String,
         targetLang: String,
+        glossary: List<DictPair> = emptyList(),
+        bookKey: String? = null,
     ): Uri {
         val totalStartMs = SystemClock.elapsedRealtime()
         var ocrCacheHit = false
@@ -902,6 +937,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
                 texts = bubbleInputs.map { it.sourceText },
                 sourceLang = sourceLang,
                 targetLang = targetLang,
+                glossary = glossary,
             )
             translateDurationMs = SystemClock.elapsedRealtime() - translateStartMs
             val renderStartMs = SystemClock.elapsedRealtime()
@@ -944,7 +980,15 @@ class ReaderPageTranslationProcessor @Inject constructor(
             processResult = "rendered"
             rememberEditablePage(
                 pageId,
-                EditableTranslationPage(sourceUri, renderCacheKey, sourceLang, targetLang, bubbleInputs, translatedMap),
+                EditableTranslationPage(
+                    sourceUri,
+                    renderCacheKey,
+                    sourceLang,
+                    targetLang,
+                    bubbleInputs,
+                    translatedMap,
+                    bookKey = bookKey,
+                ),
             )
             bitmap.recycle()
             return output
@@ -1403,15 +1447,26 @@ class ReaderPageTranslationProcessor @Inject constructor(
         }
     }
 
+    private suspend fun loadEffectiveGlossary(bookKey: String?): List<DictPair> {
+        val key = bookKey?.trim()?.takeIf(String::isNotEmpty) ?: return emptyList()
+        return runCatchingCancellable {
+            translationDictionaryRepository.get(key).pairs.filterNot(DictPair::excluded)
+        }.onFailure {
+            Log.w(LOG_TAG, "Could not load glossary for bookKey=$key", it)
+        }.getOrDefault(emptyList())
+    }
+
     private suspend fun translateBlocksCached(
         texts: List<String>,
         sourceLang: String,
         targetLang: String,
+        glossary: List<DictPair> = emptyList(),
     ): Map<String, String> {
         return translationCoordinator.translateBlocksCached(
             texts = texts,
             sourceLang = sourceLang,
             targetLang = targetLang,
+            glossary = glossary,
         )
     }
 
@@ -3970,6 +4025,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
         sourceLang: String,
         targetLang: String,
         autoRecognizerLanguage: String?,
+        glossaryDigest: String? = null,
     ): RenderedCacheKeys {
         val legacy = buildRenderedCacheKey(
             pageUrl = page.url,
@@ -3978,6 +4034,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
             targetLang = targetLang,
             pageEpoch = getPageRenderEpoch(page.id),
             autoRecognizerLanguage = autoRecognizerLanguage,
+            glossaryDigest = glossaryDigest,
         )
         val fingerprint = localSourceUri?.let { pageSourceFingerprint(it) }
         val primary = fingerprint?.let {
@@ -3987,6 +4044,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
                 targetLang = targetLang,
                 pageEpoch = getPageRenderEpoch(page.id),
                 autoRecognizerLanguage = autoRecognizerLanguage,
+                glossaryDigest = glossaryDigest,
             )
         }
         return RenderedCacheKeys(primary = primary, legacy = legacy)
@@ -4038,30 +4096,34 @@ class ReaderPageTranslationProcessor @Inject constructor(
         targetLang: String,
         pageEpoch: Int,
         autoRecognizerLanguage: String?,
+        glossaryDigest: String? = null,
     ): String {
-        val raw = listOf(
-            TRANSLATION_PIPELINE_VERSION,
-            "src:$sourceFingerprint",
-            sourceLang,
-            targetLang,
-            renderCacheEpoch.toString(),
-            pageEpoch.toString(),
-            settings.readerTranslationMode.name,
-            settings.readerTranslationOnnxModelId,
-            settings.readerTranslationApiProviderPreset,
-            settings.readerTranslationApiEndpoint,
-            settings.readerTranslationApiModel,
-            settings.readerTranslationOcrEngine.name,
-            settings.readerTranslationPipelineMode.name,
-            OCR_STRATEGY_PAGE_DET_REC,
-            settings.isReaderTranslationQualityFilterEnabled.toString(),
-            settings.readerTranslationPaddleOfficialModelId,
-            autoRecognizerLanguage.orEmpty(),
-            settings.readerTranslationPaddleDetModelId,
-            settings.readerTranslationPaddleRecModelUrl,
-            settings.readerTranslationPaddleRecModelVersion,
-            settings.readerTranslationPaddleRecModelSha256,
-        ).joinToString("|")
+        val raw = buildList {
+            add(TRANSLATION_PIPELINE_VERSION)
+            add("src:$sourceFingerprint")
+            add(sourceLang)
+            add(targetLang)
+            add(renderCacheEpoch.toString())
+            add(pageEpoch.toString())
+            add(settings.readerTranslationMode.name)
+            add(settings.readerTranslationOnnxModelId)
+            add(settings.readerTranslationApiProviderPreset)
+            add(settings.readerTranslationApiEndpoint)
+            add(settings.readerTranslationApiModel)
+            add(settings.readerTranslationOcrEngine.name)
+            add(settings.readerTranslationPipelineMode.name)
+            add(OCR_STRATEGY_PAGE_DET_REC)
+            add(settings.isReaderTranslationQualityFilterEnabled.toString())
+            add(settings.readerTranslationPaddleOfficialModelId)
+            add(autoRecognizerLanguage.orEmpty())
+            add(settings.readerTranslationPaddleDetModelId)
+            add(settings.readerTranslationPaddleRecModelUrl)
+            add(settings.readerTranslationPaddleRecModelVersion)
+            add(settings.readerTranslationPaddleRecModelSha256)
+            if (glossaryDigest != null) {
+                add("dict:$glossaryDigest")
+            }
+        }.joinToString("|")
         return "${RENDER_CACHE_PREFIX_V2}${raw.sha256()}"
     }
 
@@ -4072,58 +4134,57 @@ class ReaderPageTranslationProcessor @Inject constructor(
         targetLang: String,
         pageEpoch: Int,
         autoRecognizerLanguage: String?,
+        glossaryDigest: String? = null,
     ): String {
-        val raw = listOf(
-            TRANSLATION_PIPELINE_VERSION,
-            pageUrl,
-            sourceUri,
-            sourceLang,
-            targetLang,
-            renderCacheEpoch.toString(),
-            pageEpoch.toString(),
-            settings.readerTranslationMode.name,
-            settings.readerTranslationOnnxModelId,
-            settings.readerTranslationApiProviderPreset,
-            settings.readerTranslationApiEndpoint,
-            settings.readerTranslationApiModel,
-            settings.readerTranslationOcrEngine.name,
-            settings.readerTranslationPipelineMode.name,
-            OCR_STRATEGY_PAGE_DET_REC,
-            settings.isReaderTranslationQualityFilterEnabled.toString(),
-            settings.readerTranslationPaddleOfficialModelId,
-            autoRecognizerLanguage.orEmpty(),
-            settings.readerTranslationPaddleDetModelId,
-            settings.readerTranslationPaddleRecModelUrl,
-            settings.readerTranslationPaddleRecModelVersion,
-            settings.readerTranslationPaddleRecModelSha256,
-        ).joinToString("|")
+        val raw = buildList {
+            add(TRANSLATION_PIPELINE_VERSION)
+            add(pageUrl)
+            add(sourceUri)
+            add(sourceLang)
+            add(targetLang)
+            add(renderCacheEpoch.toString())
+            add(pageEpoch.toString())
+            add(settings.readerTranslationMode.name)
+            add(settings.readerTranslationOnnxModelId)
+            add(settings.readerTranslationApiProviderPreset)
+            add(settings.readerTranslationApiEndpoint)
+            add(settings.readerTranslationApiModel)
+            add(settings.readerTranslationOcrEngine.name)
+            add(settings.readerTranslationPipelineMode.name)
+            add(OCR_STRATEGY_PAGE_DET_REC)
+            add(settings.isReaderTranslationQualityFilterEnabled.toString())
+            add(settings.readerTranslationPaddleOfficialModelId)
+            add(autoRecognizerLanguage.orEmpty())
+            add(settings.readerTranslationPaddleDetModelId)
+            add(settings.readerTranslationPaddleRecModelUrl)
+            add(settings.readerTranslationPaddleRecModelVersion)
+            add(settings.readerTranslationPaddleRecModelSha256)
+            if (glossaryDigest != null) {
+                add("dict:$glossaryDigest")
+            }
+        }.joinToString("|")
         return "${RENDER_CACHE_PREFIX}${raw.sha256()}"
     }
 
-    private fun buildTextCacheKey(text: String, sourceLang: String, targetLang: String): String {
-        val raw = listOf(
-            TRANSLATION_PIPELINE_VERSION,
-            text,
-            sourceLang,
-            targetLang,
-            settings.readerTranslationMode.name,
-            settings.readerTranslationOnnxModelId,
-            settings.readerTranslationApiProviderPreset,
-            settings.readerTranslationApiEndpoint,
-            settings.readerTranslationApiModel,
-            settings.isReaderTranslationQualityFilterEnabled.toString(),
-        ).joinToString("|")
-        return "${TEXT_CACHE_PREFIX}${raw.sha256()}"
-    }
+    internal fun buildTextCacheKey(
+        text: String,
+        sourceLang: String,
+        targetLang: String,
+        glossary: List<DictPair> = emptyList(),
+    ): String = buildReaderTranslationTextCacheKey(
+        text = text,
+        sourceLang = sourceLang,
+        targetLang = targetLang,
+        translationModeName = settings.readerTranslationMode.name,
+        onnxModelId = settings.readerTranslationOnnxModelId,
+        apiProviderPreset = settings.readerTranslationApiProviderPreset,
+        apiEndpoint = settings.readerTranslationApiEndpoint,
+        apiModel = settings.readerTranslationApiModel,
+        qualityFilterEnabled = settings.isReaderTranslationQualityFilterEnabled,
+        glossary = glossary,
+    )
 
-    private fun String.sha256(): String {
-        val digest = MessageDigest.getInstance("SHA-256").digest(toByteArray())
-        return buildString(digest.size * 2) {
-            for (b in digest) {
-                append(((b.toInt() and 0xff) + 0x100).toString(16).substring(1))
-            }
-        }
-    }
+    private fun String.sha256(): String = sha256Hex(this)
 
     private fun buildOcrCacheKey(sourceUri: String, sourceLang: String): String {
         val raw = listOf(
@@ -4247,7 +4308,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
 
         /** Keeps a single chapter translation request inside a sane prompt size (~1.5k tokens of text). */
         const val CHAPTER_TRANSLATION_CHAR_BUDGET = 4000
-        const val TRANSLATION_PIPELINE_VERSION = "2026-08-01-overlay-fit-v8"
+        const val TRANSLATION_PIPELINE_VERSION = READER_TRANSLATION_PIPELINE_VERSION
         const val OPENAI_TRANSLATION_SYSTEM_PROMPT = """
 		You translate manga OCR text.
 		Output only the translation.
@@ -4278,7 +4339,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
         val BUBBLE_EXPAND_SCALES = floatArrayOf(1f, 1.12f, 1.24f)
         val DETECTOR_ANCHORED_EXPAND_SCALES = floatArrayOf(1f, 1.18f, 1.34f, 1.52f)
         val VISIBLE_OVERLAY_EXPAND_SCALES = floatArrayOf(1f)
-        const val TEXT_CACHE_PREFIX = "reader_translate_text_"
+        const val TEXT_CACHE_PREFIX = READER_TRANSLATION_TEXT_CACHE_PREFIX
         const val RENDER_CACHE_PREFIX = "reader_translate_render_"
         const val RENDER_CACHE_PREFIX_V2 = "reader_translate_render2_"
         const val OCR_CACHE_PREFIX = "reader_translate_ocr_"
@@ -4471,6 +4532,77 @@ class ReaderPageTranslationProcessor @Inject constructor(
                 .replace("<analysis>", "", ignoreCase = true)
                 .replace("</analysis>", "", ignoreCase = true)
                 .trim()
+        }
+    }
+}
+
+internal const val READER_TRANSLATION_PIPELINE_VERSION = "2026-08-01-overlay-fit-v8"
+internal const val READER_TRANSLATION_TEXT_CACHE_PREFIX = "reader_translate_text_"
+
+internal fun computeGlossaryDigest(glossary: List<DictPair>): String? {
+    val effective = glossary
+        .asSequence()
+        .filterNot(DictPair::excluded)
+        .mapNotNull { pair ->
+            val original = pair.original.trim()
+            val translation = pair.translation.trim()
+            if (original.isBlank() || translation.isBlank()) null else original to translation
+        }
+        .distinctBy { (original, _) -> original.lowercase() }
+        .sortedWith(compareBy<Pair<String, String>>({ it.first.lowercase() }, { it.first }, { it.second }))
+        .toList()
+    if (effective.isEmpty()) return null
+    val canonical = buildString {
+        for ((original, translation) in effective) {
+            append(original.length)
+            append(':')
+            append(original)
+            append('=')
+            append(translation.length)
+            append(':')
+            append(translation)
+            append('\n')
+        }
+    }
+    return sha256Hex(canonical)
+}
+
+internal fun buildReaderTranslationTextCacheKey(
+    text: String,
+    sourceLang: String,
+    targetLang: String,
+    translationModeName: String,
+    onnxModelId: String,
+    apiProviderPreset: String,
+    apiEndpoint: String,
+    apiModel: String,
+    qualityFilterEnabled: Boolean,
+    glossary: List<DictPair> = emptyList(),
+): String {
+    val glossaryDigest = computeGlossaryDigest(glossary)
+    val raw = buildList {
+        add(READER_TRANSLATION_PIPELINE_VERSION)
+        add(text)
+        add(sourceLang)
+        add(targetLang)
+        add(translationModeName)
+        add(onnxModelId)
+        add(apiProviderPreset)
+        add(apiEndpoint)
+        add(apiModel)
+        add(qualityFilterEnabled.toString())
+        if (glossaryDigest != null) {
+            add("dict:$glossaryDigest")
+        }
+    }.joinToString("|")
+    return "${READER_TRANSLATION_TEXT_CACHE_PREFIX}${sha256Hex(raw)}"
+}
+
+private fun sha256Hex(value: String): String {
+    val digest = MessageDigest.getInstance("SHA-256").digest(value.toByteArray())
+    return buildString(digest.size * 2) {
+        for (b in digest) {
+            append(((b.toInt() and 0xff) + 0x100).toString(16).substring(1))
         }
     }
 }

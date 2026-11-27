@@ -733,9 +733,11 @@ class DownloadWorker @AssistedInject constructor(
             donePages = 0,
             totalPages = pageSources.size,
         )
+        val bookKey = "${context.executionManga.source.name}:${context.executionManga.id}"
         val outcome = translationProcessor.translateChapterPages(
             pages = pageSources,
             forceRefresh = forceRefresh,
+            bookKey = bookKey,
             onProgress = { phase, index, total ->
                 checkIsPaused()
                 if (phase == ReaderPageTranslationProcessor.ChapterTranslationPhase.RENDER) {
@@ -856,6 +858,7 @@ class DownloadWorker @AssistedInject constructor(
                             page = page,
                             sourceUri = translationInputUri,
                             forceEnabled = true,
+                            bookKey = "${manga.source.name}:${manga.id}",
                         )
                     }
 

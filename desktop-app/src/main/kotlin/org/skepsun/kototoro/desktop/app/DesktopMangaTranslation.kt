@@ -47,18 +47,24 @@ internal data class DesktopTranslatedMangaPage(
     val bubbles: List<DesktopOcrBubble>,
     val translations: Map<String, String>,
     val image: DesktopReaderImage,
+    val bookId: Long? = null,
 )
 
 internal class DesktopMangaTranslation(
     private val cacheDirectory: Path,
     private val client: DesktopTranslationClient = DesktopTranslationClient(),
+    private val glossaryProvider: (Long) -> List<DesktopGlossaryTerm> = { emptyList() },
     private val localOcr: DesktopPageOcr = OnnxDesktopOcr,
 ) {
     private val lock = Mutex()
     private val mutablePages = MutableStateFlow<Map<Path, DesktopTranslatedMangaPage>>(emptyMap())
     val pages = mutablePages.asStateFlow()
 
-    suspend fun translate(original: DesktopReaderImage, settings: DesktopTranslationSettings) = lock.withLock {
+    suspend fun translate(
+        original: DesktopReaderImage,
+        settings: DesktopTranslationSettings,
+        bookId: Long? = null,
+    ) = lock.withLock {
         checkPageSize(original)
         val image = withContext(Dispatchers.IO) { encodedPng(original, 1_600) }
         val input = buildJsonArray {
@@ -77,18 +83,19 @@ internal class DesktopMangaTranslation(
         }
         val output = client.complete(settings, input, "Read comic dialogue from the supplied image. Return only JSON.")
         val bubbles = parseDesktopOcrBubbles(output)
-        translateBubbles(original, settings, bubbles)
+        translateBubbles(original, settings, bubbles, bookId)
     }
 
     suspend fun translateLocally(
         original: DesktopReaderImage,
         settings: DesktopTranslationSettings,
         ocrSettings: DesktopLocalOcrSettings,
+        bookId: Long? = null,
     ) = lock.withLock {
         checkPageSize(original)
         val image = withContext(Dispatchers.IO) { encodedPng(original, 2500) }
         val bubbles = localOcr.recognize(image, ocrSettings)
-        translateBubbles(original, settings, bubbles)
+        translateBubbles(original, settings, bubbles, bookId)
     }
 
     private fun checkPageSize(original: DesktopReaderImage) {
@@ -98,18 +105,23 @@ internal class DesktopMangaTranslation(
         }
     }
 
+    private suspend fun loadGlossary(bookId: Long?): List<DesktopGlossaryTerm> =
+        if (bookId == null) emptyList() else withContext(Dispatchers.IO) { glossaryProvider(bookId) }
+
     private suspend fun translateBubbles(
         original: DesktopReaderImage,
         settings: DesktopTranslationSettings,
         bubbles: List<DesktopOcrBubble>,
+        bookId: Long?,
     ) {
         check(bubbles.isNotEmpty()) { AndroidStrings["desktop_translation_manga_no_bubbles"] }
+        val glossary = loadGlossary(bookId)
         val translations = buildMap {
             for (batch in bubbles.mapIndexed { index, bubble -> bubble.paragraph(index) }.chunked(8)) {
-                putAll(client.translate(batch, settings, emptyList()))
+                putAll(client.translate(batch, settings, glossary))
             }
         }
-        publish(original, settings.target, bubbles, translations)
+        publish(original, settings.target, bubbles, translations, bookId)
     }
 
     suspend fun retranslate(
@@ -117,14 +129,17 @@ internal class DesktopMangaTranslation(
         settings: DesktopTranslationSettings,
         index: Int,
         text: String,
+        bookId: Long? = null,
     ) = lock.withLock {
         val page = mutablePages.value[original.path]?.takeIf { it.target == settings.target } ?: return@withLock
         val bubble = page.bubbles.getOrNull(index) ?: return@withLock
         val updated = bubble.copy(text = text.trim())
         require(updated.text.isNotEmpty())
-        val translated = client.translate(listOf(updated.paragraph(index)), settings, emptyList())
+        val effectiveBookId = bookId ?: page.bookId
+        val glossary = loadGlossary(effectiveBookId)
+        val translated = client.translate(listOf(updated.paragraph(index)), settings, glossary)
         val bubbles = page.bubbles.toMutableList().apply { this[index] = updated }
-        publish(original, settings.target, bubbles, page.translations + translated)
+        publish(original, settings.target, bubbles, page.translations + translated, effectiveBookId)
     }
 
     private suspend fun publish(
@@ -132,6 +147,7 @@ internal class DesktopMangaTranslation(
         target: String,
         bubbles: List<DesktopOcrBubble>,
         results: Map<String, String>,
+        bookId: Long?,
     ) {
         val result = withContext(Dispatchers.IO) {
             val image = checkNotNull(ImageIO.read(ByteArrayInputStream(encodedPng(original))))
@@ -155,7 +171,7 @@ internal class DesktopMangaTranslation(
                 image.flush()
             }
         }
-        val page = DesktopTranslatedMangaPage(target, bubbles, results, result)
+        val page = DesktopTranslatedMangaPage(target, bubbles, results, result, bookId)
         val updated = mutablePages.value.entries.filterNot { it.key == original.path }.takeLast(31)
         mutablePages.value = updated.associate { it.key to it.value } + (original.path to page)
     }

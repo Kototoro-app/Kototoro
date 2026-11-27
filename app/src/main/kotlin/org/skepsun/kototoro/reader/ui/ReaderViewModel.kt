@@ -1118,19 +1118,21 @@ class ReaderViewModel @Inject constructor(
                 detailsLoadUseCase(intent, force = false)
                     .collect { details ->
                         loadedDetails = details
+                        val manga = details.toContent()
+                        val bookKey = "${manga.source.name}:${manga.id}"
                         val translatedLanguage = savedStateHandle[ReaderIntent.EXTRA_TRANSLATED_LANGUAGE]
-                            ?: details.toContent().source.locale
+                            ?: manga.source.locale
                         val sourceLanguage: String? = savedStateHandle[ReaderIntent.EXTRA_SOURCE_LANGUAGE]
                         pageLoader.setTranslationLanguageContext(
                             translatedLanguage = translatedLanguage,
                             sourceLanguage = sourceLanguage,
                             branch = selectedBranch.value ?: savedStateHandle[ReaderIntent.EXTRA_BRANCH],
+                            bookKey = bookKey,
                         )
                         if (mangaDetails.value == null) {
                             mangaDetails.value = details
                         }
                         chaptersLoader.init(details)
-                        val manga = details.toContent()
                         val reversed = dataRepository.isChaptersReversed(manga.id)
                         chaptersLoader.isChaptersReversed = reversed
                         isChapterOrderReversed.value = reversed
@@ -1161,6 +1163,7 @@ class ReaderViewModel @Inject constructor(
                                 translatedLanguage = translatedLanguage,
                                 sourceLanguage = sourceLanguage,
                                 branch = branch,
+                                bookKey = bookKey,
                             )
                             readerMode.value = mode
                             try {

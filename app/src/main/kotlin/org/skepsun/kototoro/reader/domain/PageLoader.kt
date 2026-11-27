@@ -123,8 +123,13 @@ class PageLoader @Inject constructor(
     private var prefetchQueueLimit = settings.readerPrefetchLimit
     private val edgeDetector = EdgeDetector(context)
 
-    fun setTranslationLanguageContext(translatedLanguage: String?, sourceLanguage: String?, branch: String?) {
-        enhancementController.setTranslationLanguageContext(translatedLanguage, sourceLanguage, branch)
+    fun setTranslationLanguageContext(
+        translatedLanguage: String?,
+        sourceLanguage: String?,
+        branch: String?,
+        bookKey: String? = null,
+    ) {
+        enhancementController.setTranslationLanguageContext(translatedLanguage, sourceLanguage, branch, bookKey)
     }
 
     private data class PageTaskRecord(
