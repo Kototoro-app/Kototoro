@@ -46,6 +46,10 @@ import org.skepsun.kototoro.local.ui.LocalChaptersRemoveService
 import org.skepsun.kototoro.video.domain.formatVideoSize
 import org.skepsun.kototoro.video.player.MeasuredVideoSize
 import org.skepsun.kototoro.parsers.model.ContentType
+import org.skepsun.kototoro.reader.translate.compose.RemoteTranslationConsentDialog
+import org.skepsun.kototoro.reader.translate.domain.PendingRemoteTranslationConsent
+import org.skepsun.kototoro.reader.translate.domain.RemoteTranslationConsentDecision
+import org.skepsun.kototoro.reader.translate.domain.evaluateRemoteTranslationConsent
 import org.skepsun.kototoro.reader.ui.ReaderNavigationCallback
 
 @Composable
@@ -78,6 +82,7 @@ fun ChaptersScreenRoot(
         initialValue = emptySet(),
     )
     var qualityProbeResult by remember { mutableStateOf<ChaptersPagesViewModel.QualityProbeResult?>(null) }
+    var pendingRemoteTranslationConsent by remember { mutableStateOf<PendingRemoteTranslationConsent?>(null) }
 
     val appContext = context.applicationContext
     val settings = remember(appContext) { AppSettings(appContext) }
@@ -193,10 +198,38 @@ fun ChaptersScreenRoot(
             }
         }
     }
-    val startTranslation: (Set<Long>, Boolean) -> Unit = remember(router, viewModel) {
+    val startTranslation: (Set<Long>, Boolean) -> Unit = remember(
+        context,
+        isImageContent,
+        router,
+        settings,
+        viewModel,
+    ) {
         { chapterIds, isRetranslation ->
-            router.askForDownloadOverMeteredNetwork { allow ->
-                viewModel.translate(chapterIds, allow, isRetranslation)
+            val proceed = {
+                router.askForDownloadOverMeteredNetwork { allow ->
+                    viewModel.translate(chapterIds, allow, isRetranslation)
+                }
+            }
+            val isConfigured = settings.readerTranslationApiEndpoint.isNotBlank() ||
+                settings.readerTranslationOnnxModelId.isNotBlank()
+            if (!isConfigured) {
+                proceed()
+            } else {
+                when (
+                    val decision = settings.evaluateRemoteTranslationConsent(
+                        isNovel = !isImageContent,
+                        customProviderLabel = context.getString(R.string.ai_api_provider_custom),
+                    )
+                ) {
+                    RemoteTranslationConsentDecision.Allowed -> proceed()
+                    is RemoteTranslationConsentDecision.RequiresConsent -> {
+                        pendingRemoteTranslationConsent = PendingRemoteTranslationConsent(
+                            request = decision.request,
+                            onConfirm = proceed,
+                        )
+                    }
+                }
             }
         }
     }
@@ -324,6 +357,20 @@ fun ChaptersScreenRoot(
                 router.askForDownloadOverMeteredNetwork { allow ->
                     viewModel.download(result.snapshot, allow, quality)
                 }
+            },
+        )
+    }
+
+    pendingRemoteTranslationConsent?.let { pending ->
+        RemoteTranslationConsentDialog(
+            request = pending.request,
+            onConfirm = {
+                settings.recordRemoteTranslationConsent(pending.request.consentKey)
+                pendingRemoteTranslationConsent = null
+                pending.onConfirm()
+            },
+            onDismiss = {
+                pendingRemoteTranslationConsent = null
             },
         )
     }

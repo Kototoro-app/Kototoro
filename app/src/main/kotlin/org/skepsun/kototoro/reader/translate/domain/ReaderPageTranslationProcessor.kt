@@ -142,6 +142,10 @@ class ReaderPageTranslationProcessor @Inject constructor(
         originalText: String,
         bookKey: String? = null,
     ): Boolean {
+        if (!settings.isRemoteTranslationAllowed(isNovel = false)) {
+            appendPageLog(pageId, "retranslateBubble skip: remote translation consent required")
+            return false
+        }
         val snapshot = editingPages[pageId] ?: return false
         val bubble = snapshot.inputs.getOrNull(index)?.takeIf { it.sourceText == expectedText } ?: return false
         val correction = originalText.trim().takeIf(String::isNotEmpty) ?: return false
@@ -407,6 +411,11 @@ class ReaderPageTranslationProcessor @Inject constructor(
                 rememberRenderedSource(rendered, localUri)
             }
         }
+        if (!settings.isRemoteTranslationAllowed(isNovel = false)) {
+            Log.w(LOG_TAG, "process skip: remote translation endpoint not consented page=${page.id}")
+            appendPageLog(page.id, "process skip: remote translation consent required")
+            return sourceUri
+        }
         val processStartLog =
             "process start page=${page.id} sourceLang=$sourceLang targetLang=$targetLang " +
                 "ocr=${settings.readerTranslationOcrEngine.name} " +
@@ -523,6 +532,22 @@ class ReaderPageTranslationProcessor @Inject constructor(
                 sourceLang = "",
                 targetLang = targetLang,
                 pagesTotal = 0,
+                renderedPageIds = renderedPageIds,
+                cachedPageIds = cachedPageIds,
+                textlessPageIds = textlessPageIds,
+                failedPageIds = failedPageIds,
+                skippedPageIds = skippedPageIds,
+                requestedTextCount = 0,
+                translatedTextCount = 0,
+            )
+        }
+        if (!settings.isRemoteTranslationAllowed(isNovel = false)) {
+            Log.w(LOG_TAG, "translateChapterPages skipped: remote translation endpoint not consented")
+            pages.forEach { skippedPageIds += it.page.id }
+            return ChapterTranslationOutcome(
+                sourceLang = resolveSourceLanguage(pages.first().page, normalizedAutoRecognizerLanguage),
+                targetLang = targetLang,
+                pagesTotal = pages.size,
                 renderedPageIds = renderedPageIds,
                 cachedPageIds = cachedPageIds,
                 textlessPageIds = textlessPageIds,

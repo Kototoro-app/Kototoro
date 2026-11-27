@@ -28,6 +28,10 @@ internal class GeminiEndToEndTranslator(
         sourceLang: String,
         targetLang: String,
     ): List<Pair<BubbleInput, String>> = withContext(Dispatchers.IO) {
+        if (!settings.isRemoteE2eApiAllowed()) {
+            log { "GeminiEndToEndTranslator: blocked because remote E2E endpoint is not consented" }
+            return@withContext emptyList()
+        }
         val endpoint = settings.readerE2eApiEndpoint.trim()
         val apiKey = settings.readerE2eApiKey.trim()
         val model = settings.readerE2eApiModel.trim().ifBlank { "gemini-2.0-flash" }

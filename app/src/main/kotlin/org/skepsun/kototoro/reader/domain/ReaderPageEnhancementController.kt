@@ -15,6 +15,10 @@ import org.skepsun.kototoro.core.util.ext.isZipUri
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
 import org.skepsun.kototoro.parsers.model.ContentPage
 import org.skepsun.kototoro.reader.translate.domain.ReaderPageTranslationProcessor
+import org.skepsun.kototoro.reader.translate.domain.RemoteTranslationConsentDecision
+import org.skepsun.kototoro.reader.translate.domain.RemoteTranslationConsentPolicy
+import org.skepsun.kototoro.reader.translate.domain.RemoteTranslationConsentRequest
+import org.skepsun.kototoro.reader.translate.domain.evaluateRemoteTranslationConsent
 import org.skepsun.kototoro.reader.translate.domain.resolveAutomaticReaderOcrLanguage
 import javax.inject.Inject
 
@@ -26,6 +30,7 @@ class ReaderPageEnhancementController @Inject constructor(
 
     private val translationUpdates = MutableSharedFlow<Long>(extraBufferCapacity = 64)
     private val translationStatusUpdates = MutableSharedFlow<TranslationLayerStateEvent>(extraBufferCapacity = 128)
+    private val remoteConsentRequiredUpdates = MutableSharedFlow<RemoteTranslationConsentRequest>(extraBufferCapacity = 16)
     private val translationLock = Any()
     private val translationJobs = LongSparseArray<Job>()
     @Volatile
@@ -72,9 +77,17 @@ class ReaderPageEnhancementController @Inject constructor(
             append('|')
             append(settings.readerTranslationMode.name)
             append('|')
+            append(settings.readerTranslationApiProviderPreset)
+            append('|')
             append(settings.readerTranslationApiEndpoint)
             append('|')
             append(settings.readerTranslationApiModel)
+            append('|')
+            append(settings.readerE2eApiProviderPreset)
+            append('|')
+            append(settings.readerE2eApiEndpoint)
+            append('|')
+            append(settings.remoteTranslationConsentedEndpoints.sorted().joinToString(","))
             append('|')
             append(settings.readerTranslationOnnxModelId)
             append('|')
@@ -114,14 +127,22 @@ class ReaderPageEnhancementController @Inject constructor(
 
     fun observeTranslationStatusUpdates(): Flow<TranslationLayerStateEvent> = translationStatusUpdates
 
+    fun observeRemoteTranslationConsentRequired(): Flow<RemoteTranslationConsentRequest> = remoteConsentRequiredUpdates
+
     fun observeTranslationDebugLogUpdates(): Flow<Long> = translationProcessor.observeDebugLogUpdates()
 
     fun getTranslationDebugLog(pageId: Long): String = translationProcessor.getPageDebugLog(pageId)
 
     internal suspend fun editableBubbleTexts(pageId: Long): List<String> = translationProcessor.editableBubbleTexts(pageId)
 
-    internal suspend fun retranslateBubble(pageId: Long, index: Int, expectedText: String, originalText: String): Boolean =
-        translationProcessor.retranslateBubble(pageId, index, expectedText, originalText, bookKey = bookKey)
+    internal suspend fun retranslateBubble(pageId: Long, index: Int, expectedText: String, originalText: String): Boolean {
+        val decision = evaluateMangaConsent()
+        if (decision is RemoteTranslationConsentDecision.RequiresConsent) {
+            remoteConsentRequiredUpdates.tryEmit(decision.request)
+            return false
+        }
+        return translationProcessor.retranslateBubble(pageId, index, expectedText, originalText, bookKey = bookKey)
+    }
 
     suspend fun resolveDisplayVariant(
         page: ContentPage,
@@ -175,6 +196,19 @@ class ReaderPageEnhancementController @Inject constructor(
             )
         }
 
+        val consentDecision = evaluateMangaConsent()
+        if (consentDecision is RemoteTranslationConsentDecision.RequiresConsent) {
+            Log.d("ReaderTranslate", "PageLoader debug: remote translation consent required page=${page.id}")
+            emitState(page.id, TranslationLayerState.IDLE)
+            remoteConsentRequiredUpdates.tryEmit(consentDecision.request)
+            return PreparedPage(
+                displayUri = readyUri,
+                translationSourceUri = readyUri,
+                state = TranslationLayerState.IDLE,
+                shouldScheduleTranslation = false,
+            )
+        }
+
         return PreparedPage(
             displayUri = readyUri,
             translationSourceUri = readyUri,
@@ -189,6 +223,13 @@ class ReaderPageEnhancementController @Inject constructor(
         scope: CoroutineScope,
         onRendered: () -> Unit,
     ) {
+        val consentDecision = evaluateMangaConsent()
+        if (consentDecision is RemoteTranslationConsentDecision.RequiresConsent) {
+            Log.d("ReaderTranslate", "schedule skip consent required page=${page.id}")
+            emitState(page.id, TranslationLayerState.IDLE)
+            remoteConsentRequiredUpdates.tryEmit(consentDecision.request)
+            return
+        }
         synchronized(translationLock) {
             val existing = translationJobs[page.id]
             if (existing?.isActive == true) {
@@ -225,6 +266,11 @@ class ReaderPageEnhancementController @Inject constructor(
             })
         }
     }
+
+    private fun evaluateMangaConsent(): RemoteTranslationConsentDecision = settings.evaluateRemoteTranslationConsent(
+        isNovel = false,
+        customProviderLabel = RemoteTranslationConsentPolicy.DEFAULT_PROVIDER_ID,
+    )
 
     private fun resolveAutoRecognizerLanguage(): String? {
         return resolveAutomaticReaderOcrLanguage(

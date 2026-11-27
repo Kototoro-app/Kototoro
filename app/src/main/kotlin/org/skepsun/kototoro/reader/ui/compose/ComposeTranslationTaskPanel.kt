@@ -30,11 +30,16 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.adaptive.tvChipRing
 import org.skepsun.kototoro.core.util.ext.copyToClipboard
 import org.skepsun.kototoro.reader.domain.TranslationLayerState
 import org.skepsun.kototoro.reader.novel.compose.TranslationTextEditorDialog
+import org.skepsun.kototoro.reader.translate.compose.RemoteTranslationConsentDialog
+import org.skepsun.kototoro.reader.translate.domain.PendingRemoteTranslationConsent
+import org.skepsun.kototoro.reader.translate.domain.RemoteTranslationConsentDecision
+import org.skepsun.kototoro.reader.translate.domain.evaluateRemoteTranslationConsent
 import org.skepsun.kototoro.reader.ui.ReaderViewModel
 import org.skepsun.kototoro.reader.ui.TranslationTaskBenchmarkFormatter
 
@@ -46,11 +51,31 @@ internal fun ComposeTranslationTaskPanelContent(
 ) {
     val version by viewModel.translationTaskPanelVersion.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val settings = remember(context.applicationContext) { AppSettings(context.applicationContext) }
     val snapshots = remember(version) { viewModel.getCurrentChapterTranslationTaskSnapshots() }
     val benchmark = remember(snapshots, context) { TranslationTaskBenchmarkFormatter(context).format(snapshots) }
     var filter by remember { mutableStateOf(TranslationTaskFilter.ALL) }
     var detail by remember { mutableStateOf<ReaderViewModel.TranslationPageTaskSnapshot?>(null) }
     var benchmarkVisible by remember { mutableStateOf(false) }
+    var pendingRemoteTranslationConsent by remember { mutableStateOf<PendingRemoteTranslationConsent?>(null) }
+    val runWithRemoteConsent: (() -> Unit) -> Unit = remember(context, settings) {
+        { onAllowed ->
+            when (
+                val decision = settings.evaluateRemoteTranslationConsent(
+                    isNovel = false,
+                    customProviderLabel = context.getString(R.string.ai_api_provider_custom),
+                )
+            ) {
+                RemoteTranslationConsentDecision.Allowed -> onAllowed()
+                is RemoteTranslationConsentDecision.RequiresConsent -> {
+                    pendingRemoteTranslationConsent = PendingRemoteTranslationConsent(
+                        request = decision.request,
+                        onConfirm = onAllowed,
+                    )
+                }
+            }
+        }
+    }
     val filtered = remember(snapshots, filter) { snapshots.filter(filter::matches) }
     val ready = filtered.count { it.state == TranslationLayerState.READY }
     val generating = filtered.count { it.state == TranslationLayerState.GENERATING }
@@ -99,7 +124,7 @@ internal fun ComposeTranslationTaskPanelContent(
             horizontalArrangement = Arrangement.End,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            TvTextButton(onClick = viewModel::retranslateFailedInCurrentChapter) {
+            TvTextButton(onClick = { runWithRemoteConsent(viewModel::retranslateFailedInCurrentChapter) }) {
                 Text(stringResource(R.string.reader_translation_retry_failed_pages))
             }
         }
@@ -161,8 +186,10 @@ internal fun ComposeTranslationTaskPanelContent(
                 saveLabel = stringResource(R.string.reader_translation_retranslate_bubble),
                 dismissLabel = stringResource(R.string.cancel),
                 onSave = {
-                    viewModel.retranslateBubble(snapshot.pageId, index, original, draft)
-                    detail = null
+                    runWithRemoteConsent {
+                        viewModel.retranslateBubble(snapshot.pageId, index, original, draft)
+                        detail = null
+                    }
                 },
                 onDismiss = { bubbleIndex = null },
                 canSave = draft.isNotBlank(),
@@ -173,8 +200,23 @@ internal fun ComposeTranslationTaskPanelContent(
             onBubbleSelected = { bubbleIndex = it },
             onDismiss = { detail = null },
             onRetry = {
-                viewModel.retryTranslationForPage(snapshot.pageId)
-                detail = null
+                runWithRemoteConsent {
+                    viewModel.retryTranslationForPage(snapshot.pageId)
+                    detail = null
+                }
+            },
+        )
+    }
+    pendingRemoteTranslationConsent?.let { pending ->
+        RemoteTranslationConsentDialog(
+            request = pending.request,
+            onConfirm = {
+                settings.recordRemoteTranslationConsent(pending.request.consentKey)
+                pendingRemoteTranslationConsent = null
+                pending.onConfirm()
+            },
+            onDismiss = {
+                pendingRemoteTranslationConsent = null
             },
         )
     }

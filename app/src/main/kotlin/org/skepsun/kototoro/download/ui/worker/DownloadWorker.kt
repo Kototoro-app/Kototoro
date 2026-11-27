@@ -70,6 +70,7 @@ import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.parser.requireAvailableRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.DownloadFormat
+import org.skepsun.kototoro.reader.translate.domain.isRemoteTranslationAllowed
 import org.skepsun.kototoro.core.util.MimeTypes
 import org.skepsun.kototoro.core.util.Throttler
 import org.skepsun.kototoro.core.util.ext.MimeType
@@ -604,6 +605,21 @@ class DownloadWorker @AssistedInject constructor(
                 "pair=${languagePair.first}->${languagePair.second}",
         )
         val isNovel = contentType == ContentType.NOVEL || contentType == ContentType.HENTAI_NOVEL
+        if (!settings.isRemoteTranslationAllowed(isNovel = isNovel)) {
+            Log.w(
+                "DownloadWorker",
+                "translateContentImpl skipped: remote translation endpoint not consented (mangaId=${context.displayMangaId})",
+            )
+            publishState(
+                currentState.copy(
+                    isIndeterminate = false,
+                    eta = -1L,
+                    isStuck = false,
+                    isCompleted = true,
+                ),
+            )
+            return
+        }
         val requestedIds = task.executionChapterIds?.toList().orEmpty()
         val referencesById = task.executionChapterRefs.orEmpty().associateBy { it.id }
         val queued = LinkedHashMap<Long, ContentChapter>()
@@ -823,6 +839,20 @@ class DownloadWorker @AssistedInject constructor(
         manga: Content,
         task: DownloadTask,
     ) {
+        if (task.kind == DownloadTaskKind.PREPARE_TRANSLATION &&
+            !settings.isRemoteTranslationAllowed(isNovel = false)
+        ) {
+            Log.w("DownloadWorker", "prepareMangaContent skipped: remote translation endpoint not consented")
+            publishState(
+                currentState.copy(
+                    isIndeterminate = false,
+                    eta = -1L,
+                    isStuck = false,
+                    isCompleted = true,
+                ),
+            )
+            return
+        }
         val chapters = resolvePreparationChapters(manga, task)
         check(chapters.any { isPreparationChapterEligible(it.value) }) {
             "No downloaded chapter to prepare for ${manga.title}"
@@ -900,6 +930,11 @@ class DownloadWorker @AssistedInject constructor(
         manga: Content,
         task: DownloadTask,
     ) {
+        if (!settings.isRemoteTranslationAllowed(isNovel = true)) {
+            Log.w("DownloadWorker", "prepareNovelTranslation skipped: remote translation endpoint not consented")
+            publishState(currentState.copy(isIndeterminate = false, eta = -1L, isStuck = false, isCompleted = true))
+            return
+        }
         val chapters = getChapters(manga, task)
         val repo = mangaRepositoryFactory.createWithDiagnostics(manga.source).requireAvailableRepository(
             tag = "DownloadWorker",

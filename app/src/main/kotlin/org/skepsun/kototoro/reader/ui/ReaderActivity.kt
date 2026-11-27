@@ -109,6 +109,10 @@ import org.skepsun.kototoro.reader.ui.compose.ComposeReaderOptionsState
 import org.skepsun.kototoro.reader.ui.compose.ReaderAutoScrollCallbacks
 import org.skepsun.kototoro.reader.ui.compose.DefaultComposeReaderImagePipeline
 import org.skepsun.kototoro.reader.domain.TranslationLayerState
+import org.skepsun.kototoro.reader.translate.compose.RemoteTranslationConsentDialog
+import org.skepsun.kototoro.reader.translate.domain.PendingRemoteTranslationConsent
+import org.skepsun.kototoro.reader.translate.domain.RemoteTranslationConsentDecision
+import org.skepsun.kototoro.reader.translate.domain.evaluateRemoteTranslationConsent
 import org.skepsun.kototoro.reader.translate.domain.isAutoReaderTranslationLanguage
 import org.skepsun.kototoro.reader.ui.eink.EInkPageIdentity
 import org.skepsun.kototoro.reader.ui.eink.EInkRefreshPolicy
@@ -203,6 +207,7 @@ class ReaderActivity :
     private var tvPresentationEnabled = false
     private var loadingError by mutableStateOf<Throwable?>(null)
     private var pendingIncognitoDialog by mutableStateOf<IncognitoDialogState?>(null)
+    private var pendingRemoteTranslationConsent by mutableStateOf<PendingRemoteTranslationConsent?>(null)
 
     // Tracks whether the foldable device is in an unfolded state (half-opened or flat)
     private var isFoldUnfolded: Boolean = false
@@ -517,18 +522,20 @@ class ReaderActivity :
                             toggleTranslationLayer()
                         } else {
                             settings.isReaderTranslationShowTranslated = enabled
+                            composeReaderController.updateOptions { copy(translationShowTranslated = enabled) }
+                            updateTranslationToggleButton()
                         }
-                        composeReaderController.updateOptions { copy(translationShowTranslated = enabled) }
-                        updateTranslationToggleButton()
                     },
                     onTranslationOcrModeChanged = { mode ->
                         settings.readerTranslationOcrMode = mode
                         composeReaderController.updateOptions { copy(translationOcrMode = mode) }
                     },
                     onTranslationLanguageActions = ::showTranslationLanguageQuickActions,
-                    onRetranslatePage = viewModel::retranslateCurrent,
-                    onRetryFailedTranslations = viewModel::retranslateFailedInCurrentChapter,
-                    onRetranslateChapter = viewModel::retranslateCurrentChapter,
+                    onRetranslatePage = { runWithRemoteTranslationConsent(viewModel::retranslateCurrent) },
+                    onRetryFailedTranslations = {
+                        runWithRemoteTranslationConsent(viewModel::retranslateFailedInCurrentChapter)
+                    },
+                    onRetranslateChapter = { runWithRemoteTranslationConsent(viewModel::retranslateCurrentChapter) },
                 ),
                 chapterPanel = ReaderChapterPanelCallbacks(
                     onTabSelected = { tabId -> composeReaderController.selectChaptersTab(tabId) },
@@ -674,6 +681,20 @@ class ReaderActivity :
                         },
                         onIncognitoModeSelected = { consumeIncognitoMode(true) },
                         onDisabledSelected = { consumeIncognitoMode(false) },
+                    )
+                }
+                pendingRemoteTranslationConsent?.let { pending ->
+                    RemoteTranslationConsentDialog(
+                        request = pending.request,
+                        onConfirm = {
+                            settings.recordRemoteTranslationConsent(pending.request.consentKey)
+                            pendingRemoteTranslationConsent = null
+                            pending.onConfirm()
+                        },
+                        onDismiss = {
+                            pendingRemoteTranslationConsent = null
+                            pending.onDismiss()
+                        },
                     )
                 }
                 spaceSwitcherDelegate.Overlays()
@@ -861,6 +882,9 @@ class ReaderActivity :
         }.launchIn(lifecycleScope)
         viewModel.chapterTranslationProgress.onEach(::onChapterTranslationProgressChanged)
             .launchIn(lifecycleScope)
+        viewModel.onRemoteTranslationConsentRequired.onEach {
+            checkActiveTranslationConsentIfNeeded()
+        }.launchIn(lifecycleScope)
 
         observeWindowLayout()
 
@@ -879,6 +903,7 @@ class ReaderActivity :
         // retained pager need not report its anchor again before the next two-page turn.
         viewModel.clearTransientCrossChapterSuppression()
         if (!enableTranslationAfterSetup) {
+            checkActiveTranslationConsentIfNeeded()
             return
         }
         enableTranslationAfterSetup = false
@@ -889,13 +914,9 @@ class ReaderActivity :
             composeReaderController.showMessage(hint, 2000L)
             return
         }
-        translationShortcutVisibleForSession = true
-        settings.isReaderTranslationEnabled = true
-        settings.isReaderTranslationShowTranslated = true
-        composeReaderController.updateActions {
-            copy(translateContextualVisible = true)
+        runWithRemoteTranslationConsent {
+            enableTranslationLayerNow(showLongPressHint = false)
         }
-        updateTranslationToggleButton()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -1498,14 +1519,75 @@ class ReaderActivity :
             composeReaderController.showMessage(hint, 2000L)
             return
         }
-        translationShortcutVisibleForSession = true
         if (settings.isReaderTranslationEnabled) {
+            translationShortcutVisibleForSession = true
             settings.isReaderTranslationShowTranslated = !settings.isReaderTranslationShowTranslated
         } else {
-            settings.isReaderTranslationShowTranslated = true
-            settings.isReaderTranslationEnabled = true
+            runWithRemoteTranslationConsent {
+                enableTranslationLayerNow(showLongPressHint = true)
+            }
+        }
+    }
+
+    private fun enableTranslationLayerNow(showLongPressHint: Boolean) {
+        translationShortcutVisibleForSession = true
+        settings.isReaderTranslationShowTranslated = true
+        settings.isReaderTranslationEnabled = true
+        composeReaderController.updateOptions {
+            copy(translationEnabled = true, translationShowTranslated = true)
+        }
+        composeReaderController.updateActions {
+            copy(translateContextualVisible = true)
+        }
+        updateTranslationToggleButton()
+        if (showLongPressHint) {
             composeReaderController.showMessage(getString(R.string.reader_translation_long_press_hint), 2500L)
         }
+    }
+
+    private fun runWithRemoteTranslationConsent(onAllowed: () -> Unit) {
+        when (
+            val decision = settings.evaluateRemoteTranslationConsent(
+                isNovel = false,
+                customProviderLabel = getString(R.string.ai_api_provider_custom),
+            )
+        ) {
+            RemoteTranslationConsentDecision.Allowed -> onAllowed()
+            is RemoteTranslationConsentDecision.RequiresConsent -> {
+                pendingRemoteTranslationConsent = PendingRemoteTranslationConsent(
+                    request = decision.request,
+                    onConfirm = onAllowed,
+                )
+            }
+        }
+    }
+
+    private fun checkActiveTranslationConsentIfNeeded() {
+        if (!settings.isReaderTranslationEnabled || pendingRemoteTranslationConsent != null) {
+            return
+        }
+        val decision = settings.evaluateRemoteTranslationConsent(
+            isNovel = false,
+            customProviderLabel = getString(R.string.ai_api_provider_custom),
+        )
+        if (decision is RemoteTranslationConsentDecision.RequiresConsent) {
+            viewModel.cancelTranslationTasks()
+            pendingRemoteTranslationConsent = PendingRemoteTranslationConsent(
+                request = decision.request,
+                onConfirm = { viewModel.refreshTranslationDisplay() },
+                onDismiss = ::disableTranslationAfterConsentCancelled,
+            )
+        }
+    }
+
+    private fun disableTranslationAfterConsentCancelled() {
+        viewModel.cancelTranslationTasks()
+        settings.isReaderTranslationEnabled = false
+        settings.isReaderTranslationShowTranslated = false
+        composeReaderController.updateOptions {
+            copy(translationEnabled = false, translationShowTranslated = false)
+        }
+        updateTranslationToggleButton()
     }
 
     private fun onChapterTranslationProgressChanged(progress: ReaderViewModel.ChapterTranslationProgress?) {

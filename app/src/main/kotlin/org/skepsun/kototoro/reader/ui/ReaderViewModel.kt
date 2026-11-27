@@ -16,6 +16,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -92,6 +93,8 @@ import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.reader.domain.PageLoader
 import org.skepsun.kototoro.reader.domain.ReaderPageEnhancementController
 import org.skepsun.kototoro.reader.domain.TranslationLayerState
+import org.skepsun.kototoro.reader.translate.domain.RemoteTranslationConsentRequest
+import org.skepsun.kototoro.reader.translate.domain.isRemoteTranslationAllowed
 import org.skepsun.kototoro.reader.translate.domain.normalizeReaderTranslationLanguageTag
 import org.skepsun.kototoro.reader.translate.domain.resolveReaderTranslationSourceLanguage
 import org.skepsun.kototoro.reader.ui.compose.insertChapterBreaks
@@ -207,6 +210,8 @@ class ReaderViewModel @Inject constructor(
     val translationLayerState = MutableStateFlow(TranslationLayerState.IDLE)
     val chapterTranslationProgress = MutableStateFlow<ChapterTranslationProgress?>(null)
     val translationTaskPanelVersion = MutableStateFlow(0L)
+    val onRemoteTranslationConsentRequired: Flow<RemoteTranslationConsentRequest> =
+        enhancementController.observeRemoteTranslationConsentRequired()
     private val translationStateByPageId = linkedMapOf<Long, TranslationLayerState>()
     private val translationStateUpdatedAtByPageId = linkedMapOf<Long, Long>()
     private val pageReloadNonces = linkedMapOf<Long, Long>()
@@ -511,8 +516,15 @@ class ReaderViewModel @Inject constructor(
         }
     }
 
+    fun cancelTranslationTasks() {
+        enhancementController.cancelAllTranslationTasks()
+    }
+
     fun retryTranslationForPage(pageId: Long) {
         launchJob(Dispatchers.Default) {
+            if (!settings.isRemoteTranslationAllowed(isNovel = false)) {
+                return@launchJob
+            }
             val page = getCurrentChapterPages().orEmpty().firstOrNull { it.id == pageId }
             if (page != null) {
                 pageLoader.invalidateTask(page)

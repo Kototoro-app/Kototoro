@@ -32,6 +32,7 @@ import org.skepsun.kototoro.core.extensions.SourceNsfwOverrideSet
 import org.skepsun.kototoro.core.github.AppUpdateSource
 import org.skepsun.kototoro.core.model.SourceNsfwOverrides
 import org.skepsun.kototoro.reader.core.ZoomMode
+import org.skepsun.kototoro.reader.translate.domain.RemoteTranslationConsentPolicy
 import org.skepsun.kototoro.core.network.DoHProvider
 import org.skepsun.kototoro.core.ui.compose.PanoramaAnimationSpeedMaxPercent
 import org.skepsun.kototoro.core.ui.compose.PanoramaAnimationSpeedMinPercent
@@ -2022,6 +2023,25 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
     val readerTranslationApiCustomHeaders: String
         get() = prefs.getString(KEY_READER_TRANSLATION_API_CUSTOM_HEADERS, "") ?: ""
 
+    var remoteTranslationConsentedEndpoints: Set<String>
+        get() = prefs.getStringSet(KEY_REMOTE_TRANSLATION_CONSENTED_ENDPOINTS, emptySet())
+            ?.toSet()
+            .orEmpty()
+        set(value) = prefs.edit {
+            putStringSet(KEY_REMOTE_TRANSLATION_CONSENTED_ENDPOINTS, value.toSet())
+        }
+
+    fun recordRemoteTranslationConsent(consentKey: String) {
+        val current = remoteTranslationConsentedEndpoints
+        val updated = RemoteTranslationConsentPolicy.recordConsent(
+            existingKeys = current,
+            consentKey = consentKey,
+        )
+        if (updated != current) {
+            remoteTranslationConsentedEndpoints = updated
+        }
+    }
+
     val readerE2eApiEndpoint: String
         get() = prefs.getString(KEY_READER_E2E_API_ENDPOINT, "") ?: ""
 
@@ -3347,6 +3367,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_READER_TRANSLATION_API_PROVIDER_PRESET = "reader_translation_api_provider_preset"
         const val KEY_READER_TRANSLATION_API_CUSTOM_HEADERS = "reader_translation_api_custom_headers"
         const val KEY_READER_TRANSLATION_API_FETCH_MODELS = "reader_translation_api_fetch_models"
+        const val KEY_REMOTE_TRANSLATION_CONSENTED_ENDPOINTS = "remote_translation_consented_endpoints"
 
         const val KEY_READER_E2E_API_ENDPOINT = "reader_e2e_api_endpoint"
         const val KEY_READER_E2E_API_KEY = "reader_e2e_api_key"
