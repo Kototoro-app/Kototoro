@@ -1880,6 +1880,10 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         get() = prefs.getBoolean(KEY_EXPLORE_HIDE_EMPTY_SOURCES, false)
         set(value) = prefs.edit { putBoolean(KEY_EXPLORE_HIDE_EMPTY_SOURCES, value) }
 
+    var explorePage: ExplorePage
+        get() = prefs.getEnumValue(KEY_EXPLORE_PAGE, ExplorePage.SOURCES)
+        set(value) = prefs.edit { putEnumValue(KEY_EXPLORE_PAGE, value) }
+
     var activeTvBoxRepositoryId: String?
         get() = prefs.getString(KEY_ACTIVE_TVBOX_REPOSITORY, null)
         set(value) = prefs.edit { putString(KEY_ACTIVE_TVBOX_REPOSITORY, value) }
@@ -3186,6 +3190,8 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_SOURCES_GROUPED_BY_LANGUAGE = "sources_grouped_by_language"
         const val KEY_CUSTOM_GLASS_PRESETS = "custom_glass_presets"
         const val KEY_EXPLORE_HIDE_EMPTY_SOURCES = "explore_hide_empty_sources"
+        const val KEY_EXPLORE_PAGE = "explore_page"
+        const val KEY_DISCOVERY_FEED_ROWS = "discovery_feed_rows"
         const val KEY_ACTIVE_TVBOX_REPOSITORY = "active_tvbox_repository"
 
         const val TRACK_HISTORY = "history"

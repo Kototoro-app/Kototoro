@@ -47,6 +47,10 @@ class SavedFiltersRepository @Inject constructor(
         }
     }
 
+    suspend fun find(source: ContentSource, id: Int): PersistableFilter? = withContext(Dispatchers.Default) {
+        load(source, id)
+    }
+
     suspend fun save(
         source: ContentSource,
         name: String,
