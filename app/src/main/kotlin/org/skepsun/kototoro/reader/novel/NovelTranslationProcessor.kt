@@ -12,6 +12,7 @@ import org.skepsun.kototoro.core.dictionary.TranslationDictionaryRepository
 import org.skepsun.kototoro.reader.translate.data.ReaderTranslationTextCache
 import org.skepsun.kototoro.reader.translate.domain.OnnxReaderTranslationEngine
 import org.skepsun.kototoro.reader.translate.domain.ReaderTranslationCoordinator
+import org.skepsun.kototoro.reader.translate.domain.isRemoteTranslationAllowed
 import java.security.MessageDigest
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -89,6 +90,10 @@ class NovelTranslationProcessor @Inject constructor(
         displayMode: NovelTranslationDisplayMode,
         bookKey: String? = null,
     ): Flow<NovelChapterTranslation> = flow {
+        if (!settings.isRemoteTranslationAllowed(isNovel = true)) {
+            Log.w(LOG_TAG, "translateChapterFlow skipped: remote translation endpoint not consented")
+            return@flow
+        }
         Log.d(LOG_TAG, "translateChapterFlow start: chapter=$chapterIndex, contentLength=${content.length}, source=$sourceLang, target=$targetLang")
         val paragraphs = NovelParagraphSplitter.split(content)
         Log.d(LOG_TAG, "Split into ${paragraphs.size} paragraphs")

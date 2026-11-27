@@ -693,6 +693,7 @@ class ReaderActivity :
                         },
                         onDismiss = {
                             pendingRemoteTranslationConsent = null
+                            pending.onDismiss()
                         },
                     )
                 }
@@ -881,6 +882,9 @@ class ReaderActivity :
         }.launchIn(lifecycleScope)
         viewModel.chapterTranslationProgress.onEach(::onChapterTranslationProgressChanged)
             .launchIn(lifecycleScope)
+        viewModel.onRemoteTranslationConsentRequired.onEach {
+            checkActiveTranslationConsentIfNeeded()
+        }.launchIn(lifecycleScope)
 
         observeWindowLayout()
 
@@ -899,6 +903,7 @@ class ReaderActivity :
         // retained pager need not report its anchor again before the next two-page turn.
         viewModel.clearTransientCrossChapterSuppression()
         if (!enableTranslationAfterSetup) {
+            checkActiveTranslationConsentIfNeeded()
             return
         }
         enableTranslationAfterSetup = false
@@ -1555,6 +1560,34 @@ class ReaderActivity :
                 )
             }
         }
+    }
+
+    private fun checkActiveTranslationConsentIfNeeded() {
+        if (!settings.isReaderTranslationEnabled || pendingRemoteTranslationConsent != null) {
+            return
+        }
+        val decision = settings.evaluateRemoteTranslationConsent(
+            isNovel = false,
+            customProviderLabel = getString(R.string.ai_api_provider_custom),
+        )
+        if (decision is RemoteTranslationConsentDecision.RequiresConsent) {
+            viewModel.cancelTranslationTasks()
+            pendingRemoteTranslationConsent = PendingRemoteTranslationConsent(
+                request = decision.request,
+                onConfirm = { viewModel.refreshTranslationDisplay() },
+                onDismiss = ::disableTranslationAfterConsentCancelled,
+            )
+        }
+    }
+
+    private fun disableTranslationAfterConsentCancelled() {
+        viewModel.cancelTranslationTasks()
+        settings.isReaderTranslationEnabled = false
+        settings.isReaderTranslationShowTranslated = false
+        composeReaderController.updateOptions {
+            copy(translationEnabled = false, translationShowTranslated = false)
+        }
+        updateTranslationToggleButton()
     }
 
     private fun onChapterTranslationProgressChanged(progress: ReaderViewModel.ChapterTranslationProgress?) {

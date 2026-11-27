@@ -233,28 +233,32 @@ internal class ReaderTranslationCoordinator(
         if (mode != ReaderTranslationMode.LOCAL_ONLY) {
             val needApi = misses.filter { translated[it].isNullOrBlank() }
             if (needApi.isNotEmpty()) {
-                val apiResult = translateBatchByApi(
-                    texts = needApi,
-                    sourceLang = resolvedSourceLang,
-                    targetLang = targetLang,
-                    glossary = glossary,
-                    batchLimit = batchLimit,
-                    charBudgetPerBatch = charBudgetPerBatch,
-                )
-                if (apiResult.discoveredPairs.isNotEmpty()) {
-                    onDiscoveredPairs(apiResult.discoveredPairs)
-                }
-                val apiMap = apiResult.translations
-                for (text in needApi) {
-                    val apiText = apiMap[text]?.trim().orEmpty()
-                    if (apiText.isNotBlank()) {
-                        val sanitized = sanitizeTranslation(apiText)
-                        if (sanitized.isNotBlank()) {
-                            translated[text] = sanitized
-                            if (useCache) textCache[cacheKey(text)] = sanitized
-                            log { "translate api hit src=${oneLine(text, 140)} out=${oneLine(sanitized, 140)}" }
-                        } else {
-                            log { "translate api rejected src=${oneLine(text, 140)} out=${oneLine(sanitized, 140)}" }
+                if (!settings.isRemoteTextApiAllowed()) {
+                    log { "translate api blocked: remote endpoint not consented" }
+                } else {
+                    val apiResult = translateBatchByApi(
+                        texts = needApi,
+                        sourceLang = resolvedSourceLang,
+                        targetLang = targetLang,
+                        glossary = glossary,
+                        batchLimit = batchLimit,
+                        charBudgetPerBatch = charBudgetPerBatch,
+                    )
+                    if (apiResult.discoveredPairs.isNotEmpty()) {
+                        onDiscoveredPairs(apiResult.discoveredPairs)
+                    }
+                    val apiMap = apiResult.translations
+                    for (text in needApi) {
+                        val apiText = apiMap[text]?.trim().orEmpty()
+                        if (apiText.isNotBlank()) {
+                            val sanitized = sanitizeTranslation(apiText)
+                            if (sanitized.isNotBlank()) {
+                                translated[text] = sanitized
+                                if (useCache) textCache[cacheKey(text)] = sanitized
+                                log { "translate api hit src=${oneLine(text, 140)} out=${oneLine(sanitized, 140)}" }
+                            } else {
+                                log { "translate api rejected src=${oneLine(text, 140)} out=${oneLine(sanitized, 140)}" }
+                            }
                         }
                     }
                 }
@@ -277,6 +281,7 @@ internal class ReaderTranslationCoordinator(
     ): String {
         val endpoint = resolveTranslationApiEndpoint()
         check(endpoint.isNotBlank()) { "translation API endpoint is not configured" }
+        check(settings.isRemoteAskBookAllowed()) { "remote translation endpoint consent required" }
         val model = settings.readerTranslationApiModel.trim().ifBlank { defaultOpenAiModel }
         val prompt = buildNovelAiPrompt(
             bookTitle = bookTitle,

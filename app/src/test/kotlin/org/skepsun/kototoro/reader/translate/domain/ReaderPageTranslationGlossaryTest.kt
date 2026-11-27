@@ -132,6 +132,7 @@ class ReaderPageTranslationGlossaryTest {
             every { readerTranslationApiKey } returns "test-key"
             every { readerTranslationApiCustomHeaders } returns ""
             every { isReaderTranslationQualityFilterEnabled } returns true
+            every { remoteTranslationConsentedEndpoints } returns setOf("CUSTOM|translation.invalid")
         }
         val textCache = mockk<ReaderTranslationTextCache> {
             every { this@mockk[any()] } answers { cacheStore[firstArg()] }

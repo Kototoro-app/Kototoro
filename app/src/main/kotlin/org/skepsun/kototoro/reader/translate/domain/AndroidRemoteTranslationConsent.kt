@@ -7,6 +7,7 @@ import org.skepsun.kototoro.core.prefs.ReaderTranslationPipelineMode
 internal data class PendingRemoteTranslationConsent(
     val request: RemoteTranslationConsentRequest,
     val onConfirm: () -> Unit,
+    val onDismiss: () -> Unit = {},
 )
 
 internal fun AppSettings.evaluateRemoteTranslationConsent(
@@ -23,6 +24,57 @@ internal fun AppSettings.evaluateRemoteTranslationConsent(
     consentedEndpointKeys = remoteTranslationConsentedEndpoints,
     customProviderLabel = customProviderLabel,
 )
+
+internal fun AppSettings.isRemoteTranslationAllowed(isNovel: Boolean): Boolean =
+    evaluateRemoteTranslationConsent(
+        isNovel = isNovel,
+        customProviderLabel = RemoteTranslationConsentPolicy.DEFAULT_PROVIDER_ID,
+    ) is RemoteTranslationConsentDecision.Allowed
+
+internal fun AppSettings.isRemoteTextApiAllowed(): Boolean =
+    evaluateAndroidRemoteTranslationConsent(
+        pipelineMode = ReaderTranslationPipelineMode.TWO_STAGE,
+        translationMode = readerTranslationMode,
+        apiProviderPreset = readerTranslationApiProviderPreset,
+        apiEndpoint = readerTranslationApiEndpoint,
+        e2eProviderPreset = "",
+        e2eEndpoint = "",
+        isNovel = false,
+        consentedEndpointKeys = remoteTranslationConsentedEndpoints,
+        customProviderLabel = RemoteTranslationConsentPolicy.DEFAULT_PROVIDER_ID,
+    ) is RemoteTranslationConsentDecision.Allowed
+
+internal fun AppSettings.isRemoteE2eApiAllowed(): Boolean =
+    evaluateAndroidRemoteTranslationConsent(
+        pipelineMode = ReaderTranslationPipelineMode.END_TO_END_API,
+        translationMode = ReaderTranslationMode.API_ONLY,
+        apiProviderPreset = "",
+        apiEndpoint = "",
+        e2eProviderPreset = readerE2eApiProviderPreset,
+        e2eEndpoint = readerE2eApiEndpoint,
+        isNovel = false,
+        consentedEndpointKeys = remoteTranslationConsentedEndpoints,
+        customProviderLabel = RemoteTranslationConsentPolicy.DEFAULT_PROVIDER_ID,
+    ) is RemoteTranslationConsentDecision.Allowed
+
+internal fun AppSettings.evaluateRemoteAskBookConsent(
+    customProviderLabel: String,
+): RemoteTranslationConsentDecision = evaluateAndroidRemoteTranslationConsent(
+    pipelineMode = ReaderTranslationPipelineMode.TWO_STAGE,
+    translationMode = ReaderTranslationMode.API_ONLY,
+    apiProviderPreset = readerTranslationApiProviderPreset,
+    apiEndpoint = readerTranslationApiEndpoint,
+    e2eProviderPreset = "",
+    e2eEndpoint = "",
+    isNovel = true,
+    consentedEndpointKeys = remoteTranslationConsentedEndpoints,
+    customProviderLabel = customProviderLabel,
+)
+
+internal fun AppSettings.isRemoteAskBookAllowed(): Boolean =
+    evaluateRemoteAskBookConsent(
+        customProviderLabel = RemoteTranslationConsentPolicy.DEFAULT_PROVIDER_ID,
+    ) is RemoteTranslationConsentDecision.Allowed
 
 internal fun evaluateAndroidRemoteTranslationConsent(
     pipelineMode: ReaderTranslationPipelineMode,

@@ -1,11 +1,29 @@
 package org.skepsun.kototoro.reader.translate.domain
 
+import io.mockk.every
+import io.mockk.mockk
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.test.runTest
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Protocol
+import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
+import org.json.JSONArray
+import org.json.JSONObject
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.skepsun.kototoro.core.dictionary.TranslationDictionaryRepository
+import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ReaderTranslationMode
 import org.skepsun.kototoro.core.prefs.ReaderTranslationPipelineMode
+import org.skepsun.kototoro.reader.novel.NovelTranslationDisplayMode
+import org.skepsun.kototoro.reader.novel.NovelTranslationProcessor
+import org.skepsun.kototoro.reader.translate.data.ReaderTranslationTextCache
+import java.util.concurrent.atomic.AtomicInteger
 
 class RemoteTranslationConsentPolicyTest {
 
@@ -255,5 +273,128 @@ class RemoteTranslationConsentPolicyTest {
         assertEquals("generativelanguage.googleapis.com", e2eDecision.request.normalizedHost)
         assertEquals(RemoteTranslationPayloadKind.FULL_PAGE_IMAGE_AND_GLOSSARY, e2eDecision.request.payloadKind)
         assertTrue(e2eDecision.request.consentKey == "GEMINI|generativelanguage.googleapis.com")
+    }
+
+    @Test
+    fun `coordinator defense-in-depth skips remote api when unconsented and blocks again on host switch`() = runTest {
+        val networkCalls = AtomicInteger(0)
+        var endpoint = "https://first-remote.invalid/v1/chat/completions"
+        var consented: Set<String> = emptySet()
+
+        val settings = mockk<AppSettings>(relaxed = true) {
+            every { readerTranslationMode } returns ReaderTranslationMode.API_ONLY
+            every { readerTranslationPipelineMode } returns ReaderTranslationPipelineMode.TWO_STAGE
+            every { readerTranslationOnnxModelId } returns ""
+            every { readerTranslationApiProviderPreset } returns "CUSTOM"
+            every { readerTranslationApiEndpoint } answers { endpoint }
+            every { readerTranslationApiModel } returns "test-model"
+            every { readerTranslationApiKey } returns "test-key"
+            every { readerTranslationApiCustomHeaders } returns ""
+            every { remoteTranslationConsentedEndpoints } answers { consented }
+        }
+        val textCache = mockk<ReaderTranslationTextCache> {
+            every { this@mockk[any()] } returns null
+            every { this@mockk[any()] = any() } returns Unit
+        }
+        val httpClient = OkHttpClient.Builder().addInterceptor { chain ->
+            networkCalls.incrementAndGet()
+            val body = JSONObject().put(
+                "choices",
+                JSONArray().put(
+                    JSONObject().put(
+                        "message",
+                        JSONObject().put("content", """[{"id":1,"translation":"你好"}]"""),
+                    ),
+                ),
+            ).toString()
+            Response.Builder()
+                .request(chain.request())
+                .protocol(Protocol.HTTP_1_1)
+                .code(200)
+                .message("OK")
+                .body(body.toResponseBody("application/json".toMediaType()))
+                .build()
+        }.build()
+
+        val coordinator = ReaderTranslationCoordinator(
+            settings = settings,
+            textCache = textCache,
+            onnxTranslationEngine = mockk(relaxed = true),
+            okHttpClient = httpClient,
+            jsonMediaType = "application/json; charset=utf-8".toMediaType(),
+            defaultOpenAiModel = "gpt-4o-mini",
+            openAiTranslationSystemPrompt = "Translate.",
+            maxOpenAiBatchSize = 8,
+            thinkTagRegex = Regex("(?is)<think>.*?</think>"),
+            buildTextCacheKey = { text, src, dst -> "$text|$src|$dst|$endpoint" },
+            sanitizeTranslation = { it.trim() },
+            isAcceptableTranslation = { _, translated, _, _ -> translated.isNotBlank() },
+            log = {},
+            oneLine = { value, _ -> value },
+        )
+
+        // 1. Unconsented remote endpoint -> 0 network calls.
+        val blocked = coordinator.translateBlocksCached(listOf("Hello"), "en", "zh")
+        assertEquals("", blocked["Hello"])
+        assertEquals(0, networkCalls.get())
+
+        // 2. After consenting -> remote request proceeds.
+        consented = setOf("CUSTOM|first-remote.invalid")
+        val allowed = coordinator.translateBlocksCached(listOf("Hello"), "en", "zh")
+        assertEquals("你好", allowed["Hello"])
+        assertEquals(1, networkCalls.get())
+
+        // 3. Switching to a new unconsented host -> blocked again with 0 additional calls.
+        endpoint = "https://second-remote.invalid/v1/chat/completions"
+        val blockedAfterSwitch = coordinator.translateBlocksCached(listOf("Hello"), "en", "zh")
+        assertEquals("", blockedAfterSwitch["Hello"])
+        assertEquals(1, networkCalls.get())
+
+        // 4. askBook also refuses to send to an unconsented host.
+        assertThrows(IllegalStateException::class.java) {
+            kotlinx.coroutines.runBlocking {
+                coordinator.askBook(
+                    bookTitle = "Book",
+                    chapterTitle = "Ch 1",
+                    excerpt = "Hello",
+                    question = "Explain",
+                )
+            }
+        }
+        assertEquals(1, networkCalls.get())
+    }
+
+    @Test
+    fun `novel translation processor skips background remote send when endpoint is unconsented`() = runTest {
+        val networkCalls = AtomicInteger(0)
+        val settings = mockk<AppSettings>(relaxed = true) {
+            every { readerTranslationMode } returns ReaderTranslationMode.API_ONLY
+            every { readerTranslationPipelineMode } returns ReaderTranslationPipelineMode.TWO_STAGE
+            every { readerTranslationApiProviderPreset } returns "CUSTOM"
+            every { readerTranslationApiEndpoint } returns "https://novel-remote.invalid/v1/chat/completions"
+            every { remoteTranslationConsentedEndpoints } returns emptySet()
+        }
+        val httpClient = OkHttpClient.Builder().addInterceptor { _ ->
+            networkCalls.incrementAndGet()
+            error("network must not be called when unconsented")
+        }.build()
+        val processor = NovelTranslationProcessor(
+            settings = settings,
+            textCache = mockk(relaxed = true),
+            okHttpClient = httpClient,
+            onnxTranslationEngine = mockk(relaxed = true),
+            translationDictionaryRepository = mockk<TranslationDictionaryRepository>(relaxed = true),
+        )
+
+        val emissions = processor.translateChapterFlow(
+            chapterIndex = 0,
+            content = "First paragraph.\n\nSecond paragraph.",
+            sourceLang = "en",
+            targetLang = "zh",
+            displayMode = NovelTranslationDisplayMode.TRANSLATION_ONLY,
+        ).toList()
+
+        assertTrue(emissions.isEmpty())
+        assertEquals(0, networkCalls.get())
     }
 }
