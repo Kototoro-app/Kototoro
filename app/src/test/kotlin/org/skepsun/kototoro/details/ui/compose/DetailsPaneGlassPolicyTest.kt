@@ -1,5 +1,10 @@
 package org.skepsun.kototoro.details.ui.compose
 
+import androidx.compose.ui.graphics.GraphicsLayerScope
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.unit.Density
+import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.BackdropQuality
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -38,5 +43,42 @@ class DetailsPaneGlassPolicyTest {
     @Test
     fun `details pane does not apply container press feedback`() {
         assertFalse(DETAILS_PANE_PRESS_FEEDBACK_ENABLED)
+    }
+
+    @Test
+    fun `summary card backdrop enables auto compositing and follows glass quality scale`() {
+        val base = object : Backdrop {
+            override val isCoordinatesDependent: Boolean = true
+            override fun DrawScope.drawBackdrop(
+                density: Density,
+                coordinates: LayoutCoordinates?,
+                layerBlock: (GraphicsLayerScope.() -> Unit)?,
+            ) = Unit
+        }
+        val wrapped = summaryCardBackdrop(base)
+        assertTrue(wrapped.prefersAutoCompositing)
+        assertTrue(wrapped.isCoordinatesDependent)
+
+        val previousScale = BackdropQuality.inputScale
+        try {
+            BackdropQuality.inputScale = BackdropQuality.BALANCED
+            assertEquals(0.5f, wrapped.effectInputScale)
+
+            BackdropQuality.inputScale = BackdropQuality.PERFORMANCE
+            assertEquals(0.5f, wrapped.effectInputScale)
+
+            BackdropQuality.inputScale = BackdropQuality.QUALITY
+            assertEquals(1f, wrapped.effectInputScale)
+        } finally {
+            BackdropQuality.inputScale = previousScale
+        }
+    }
+
+    @Test
+    fun `wide summary offscreen cache runs only when live-glass summary cards are active`() {
+        assertTrue(shouldCacheWideSummary(hasContentBackdrop = true, showSummaryCards = true, panoramaEnabled = true))
+        assertFalse(shouldCacheWideSummary(hasContentBackdrop = false, showSummaryCards = true, panoramaEnabled = true))
+        assertFalse(shouldCacheWideSummary(hasContentBackdrop = true, showSummaryCards = false, panoramaEnabled = true))
+        assertFalse(shouldCacheWideSummary(hasContentBackdrop = true, showSummaryCards = true, panoramaEnabled = false))
     }
 }

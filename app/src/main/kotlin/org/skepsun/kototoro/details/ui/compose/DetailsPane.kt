@@ -71,6 +71,12 @@ internal fun shouldCacheCompactSummary(
 ): Boolean = captureEdge || (toolbarGlass && expansionProgress < 1f) || (modernDock && bottomBarGlass) ||
     (bottomPanelGlass && (!modernDock || compactChapterPanelReveal(expansionProgress) > 0f))
 
+internal fun shouldCacheWideSummary(
+    hasContentBackdrop: Boolean,
+    showSummaryCards: Boolean,
+    panoramaEnabled: Boolean,
+): Boolean = hasContentBackdrop && showSummaryCards && panoramaEnabled
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun DetailsPaneContent(

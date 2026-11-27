@@ -1083,6 +1083,9 @@ private fun DetailsScreenContent(
     } else {
         toolbarGlass || bottomBarGlass || bottomPanelGlass || captureDetailsEdge
     }
+    val showSummaryCards by settings.observeAsState(AppSettings.KEY_DETAILS_SUMMARY_CARDS) {
+        isDetailsSummaryCardsEnabled
+    }
     val detailsContentBackdrop = if (captureSummary) rememberLayerBackdrop() else null
     // The compact dock floats over the scrolling content, so its glass samples that content as well as the background.
     val detailsDockBackdrop = if (detailsBackgroundBackdrop != null && detailsContentBackdrop != null) {
@@ -1522,7 +1525,21 @@ private fun DetailsScreenContent(
                                     indicatorTopInset = paddingValues,
                                 ) {
                                     DetailsScrollableContent(
-                                        modifier = Modifier.fillMaxSize(),
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .graphicsLayer {
+                                                compositingStrategy = if (
+                                                    shouldCacheWideSummary(
+                                                        hasContentBackdrop = detailsContentBackdrop != null,
+                                                        showSummaryCards = showSummaryCards,
+                                                        panoramaEnabled = panoramaPrefs.isEnabled,
+                                                    )
+                                                ) {
+                                                    CompositingStrategy.Offscreen
+                                                } else {
+                                                    CompositingStrategy.Auto
+                                                }
+                                            },
                                         scrollState = landscapeLeftScrollState,
                                         contentPadding = summaryPadding,
                                         outerHorizontalPadding = 0.dp,

@@ -3635,6 +3635,7 @@
     <string name="modern_details_dock">Modern details dock</string>
     <string name="details_summary_cards">Show summary cards</string>
     <string name="details_summary_cards_summary">Show the title’s facts and description in rounded cards</string>
+    <string name="details_progress_below_one_percent" translatable="false">&lt;1%</string>
     <string name="modern_details_dock_summary">Use a modern dock with clearer selection states and a focused primary action</string>
     <string name="reading_record">Reading record</string>
     <string name="total_reading_time">Total time</string>
