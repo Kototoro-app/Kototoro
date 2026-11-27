@@ -21,7 +21,6 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.Measurable
 import androidx.compose.ui.layout.MeasureResult
 import androidx.compose.ui.layout.MeasureScope
-import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.node.DrawModifierNode
 import androidx.compose.ui.node.GlobalPositionAwareModifierNode
 import androidx.compose.ui.node.LayoutModifierNode
@@ -265,8 +264,8 @@ private class DrawBackdropNode(
     private val layoutLayerBlock: GraphicsLayerScope.() -> Unit = {
         clip = true
         shape = shapeProvider.shape
-        // The chapter grid uses ordinary source-over drawing and only needs the outline clip.
-        compositingStrategy = if (backdrop is BottomClippedBackdrop) CompositingStrategy.Auto else CompositingStrategy.Offscreen
+        // Surfaces whose foreground uses ordinary source-over drawing only need the outline clip.
+        compositingStrategy = if (backdrop.prefersAutoCompositing) CompositingStrategy.Auto else CompositingStrategy.Offscreen
     }
 
     private var layoutCoordinates: LayoutCoordinates? by mutableStateOf(null, neverEqualPolicy())
@@ -391,7 +390,7 @@ private class DrawBackdropNode(
     override fun onGloballyPositioned(coordinates: LayoutCoordinates) {
         if (coordinates.isAttached) {
             if (backdrop.isCoordinatesDependent) {
-                val position = runCatching(coordinates::positionInWindow).getOrNull()
+                val position = backdrop.relativePositionOf(coordinates)
                 val size = coordinates.size
                 // Geometry only, never the coordinates instance: with a shared-transition scope in
                 // the tree, onGloballyPositioned alternates between the lookahead and the regular
