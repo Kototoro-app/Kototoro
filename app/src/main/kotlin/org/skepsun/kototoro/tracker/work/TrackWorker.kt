@@ -128,6 +128,7 @@ class TrackWorker @AssistedInject constructor(
     private val contentDataRepository: ContentDataRepository,
     private val localRepositoryLazy: Lazy<LocalMangaRepository>,
     private val downloadSchedulerLazy: Lazy<DownloadWorker.Scheduler>,
+    private val webhookNotifier: TrackerWebhookNotifier,
 ) : CoroutineWorker(context, workerParams) {
 
     private data class AutoDownloadSeed(
@@ -170,15 +171,70 @@ class TrackWorker @AssistedInject constructor(
             return Result.success()
         }
 
-        val notifications = checkUpdatesAsync(tracks, sourceState)
-        if (notifications.isNotEmpty() && applicationContext.checkNotificationPermission(null)) {
-            val groupNotification = notificationHelper.createGroupNotification(notifications)
-            notifications.forEach { notificationManager.notify(it.tag, it.id, it.notification) }
+        val outcome = checkUpdatesAsync(tracks, sourceState)
+        if (outcome.notifications.isNotEmpty() && applicationContext.checkNotificationPermission(null)) {
+            val groupNotification = notificationHelper.createGroupNotification(outcome.notifications)
+            outcome.notifications.forEach { notificationManager.notify(it.tag, it.id, it.notification) }
             if (groupNotification != null) {
                 notificationManager.notify(TAG, TrackerNotificationHelper.GROUP_NOTIFICATION_ID, groupNotification)
             }
         }
+        // One merged request per check, at the very end of the batch: it must not slow the checks down
+        // and it must never change their result, so it runs last and swallows its own failures.
+        sendWebhookAsync(outcome.updated)
         return Result.success()
+    }
+
+    /** What a check produced: shown as notifications only, and pushed to the webhook if one is configured. */
+    private data class CheckOutcome(
+        val notifications: List<NotificationInfo>,
+        val updated: List<MangaUpdates.Success>,
+    )
+
+    /**
+     * Pushes this batch to the optional tracker webhook. Independent of the notification switch and
+     * of the notification permission: the webhook is a network request, not a notification.
+     */
+    private suspend fun sendWebhookAsync(updated: List<MangaUpdates.Success>) {
+        if (updated.isEmpty() || !settings.isTrackerWebhookEnabled) {
+            return
+        }
+        val url = settings.trackerWebhookUrl
+        if (!TrackerWebhookUrl.isValid(url)) {
+            return
+        }
+        val now = System.currentTimeMillis()
+        if (TrackerWebhookCooldown.isActive(settings.trackerWebhookLastSentAt, now)) {
+            return
+        }
+        try {
+            // Same NSFW rule as the new-chapter notification: a work withheld there is withheld here too.
+            val excludeNsfw = settings.isTrackerNsfwDisabled || settings.isNsfwContentDisabled
+            val items = updated.mapNotNull { update ->
+                val representative = contentDataRepository.findPreferredLocalContentById(
+                    update.manga.id,
+                    withChapters = false,
+                ) ?: update.manga
+                TrackerWebhookPayloads.buildItem(
+                    content = representative,
+                    newChapters = update.newChapters,
+                    excludeNsfw = excludeNsfw,
+                )
+            }
+            if (items.isEmpty()) {
+                return
+            }
+            when (val result = webhookNotifier.sendBatch(url, items, now)) {
+                is TrackerWebhookResult.Sent -> settings.trackerWebhookLastSentAt = now
+                // The notifier already logged why; a failed push is simply not retried this run.
+                is TrackerWebhookResult.Failed, TrackerWebhookResult.InvalidUrl -> Unit
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            // A webhook problem must never fail the check itself.
+            e.printStackTraceDebug()
+        }
     }
 
     /**
@@ -193,7 +249,7 @@ class TrackWorker @AssistedInject constructor(
     private suspend fun checkUpdatesAsync(
         tracks: List<ContentTracking>,
         sourceState: TrackSourceCooldowns,
-    ): List<NotificationInfo> {
+    ): CheckOutcome {
         val challenged = HashSet<String>()
         val answered = HashSet<String>()
         return try {
@@ -209,9 +265,9 @@ class TrackWorker @AssistedInject constructor(
         sourceState: TrackSourceCooldowns,
         challenged: MutableSet<String>,
         answered: MutableSet<String>,
-    ): List<NotificationInfo> {
+    ): CheckOutcome {
         var tally = CheckTally()
-        return checkBySource(
+        val results = checkBySource(
             items = tracks,
             sourceOf = { it.manga.source.name },
             now = System::currentTimeMillis,
@@ -251,19 +307,16 @@ class TrackWorker @AssistedInject constructor(
 
                 is MangaUpdates.Success -> processDownload(it)
             }
-        }.mapNotNull {
-            when (it) {
-                null, is MangaUpdates.Failure -> null
-                is MangaUpdates.Success -> if (it.isValid && it.isNotEmpty()) {
-                    notificationHelper.createNotification(
-                        manga = it.manga,
-                        newChapters = it.newChapters,
-                    )
-                } else {
-                    null
-                }
-            }
         }.toList()
+        val updated = results.filterIsInstance<MangaUpdates.Success>()
+            .filter { it.isValid && it.isNotEmpty() }
+        val notifications = updated.mapNotNull {
+            notificationHelper.createNotification(
+                manga = it.manga,
+                newChapters = it.newChapters,
+            )
+        }
+        return CheckOutcome(notifications = notifications, updated = updated)
     }
 
     private suspend fun checkTrack(track: ContentTracking): MangaUpdates = runCatchingCancellable {

@@ -21,6 +21,7 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.TrackerDownloadStrategy
 import org.skepsun.kototoro.core.ui.compose.KototoroSnackbarHost
 import androidx.compose.ui.res.pluralStringResource
+import org.skepsun.kototoro.settings.tracker.WebhookTestState
 import org.skepsun.kototoro.tracker.domain.PERSISTENT_FAILURE_COUNT
 
 data class TrackerSettingsUiState(
@@ -37,6 +38,10 @@ data class TrackerSettingsUiState(
     val notificationsSummary: String,
     val trackerDownloadStrategy: TrackerDownloadStrategy,
     val isDozeIgnoreVisible: Boolean,
+    val isTrackerWebhookEnabled: Boolean = false,
+    val trackerWebhookUrl: String = "",
+    val isTrackerWebhookUrlInvalid: Boolean = false,
+    val webhookTestState: WebhookTestState = WebhookTestState.Idle,
 )
 
 @Composable
@@ -61,6 +66,9 @@ fun TrackerSettingsScreen(
     onTrackerDebugClick: () -> Unit,
     onIgnoreDozeClick: () -> Unit,
     onTrackerWarningClick: () -> Unit,
+    onTrackerWebhookEnabledChange: (Boolean) -> Unit,
+    onTrackerWebhookUrlChange: (String) -> Unit,
+    onTrackerWebhookSendTestClick: () -> Unit,
 ) {
     Scaffold(
         snackbarHost = {
@@ -170,6 +178,57 @@ fun TrackerSettingsScreen(
                             options = downloadStrategyOptions,
                             enabled = state.isTrackerEnabled,
                             onValueChange = onTrackerDownloadStrategyChange,
+                        )
+                    }
+                }
+            }
+            item(key = "webhook") {
+                SettingsPreferenceGroup(title = stringResource(R.string.tracker_webhook_group_title)) {
+                    item {
+                        SettingsSwitchPreference(
+                            title = stringResource(R.string.tracker_webhook_title),
+                            iconRes = R.drawable.ic_notification,
+                            checked = state.isTrackerWebhookEnabled,
+                            summary = stringResource(R.string.tracker_webhook_summary),
+                            enabled = state.isTrackerEnabled,
+                            onCheckedChange = onTrackerWebhookEnabledChange,
+                        )
+                    }
+                    item {
+                        SettingsTextInputPreference(
+                            title = stringResource(R.string.tracker_webhook_url),
+                            value = state.trackerWebhookUrl,
+                            summary = if (state.isTrackerWebhookUrlInvalid) {
+                                stringResource(R.string.tracker_webhook_url_invalid)
+                            } else {
+                                stringResource(R.string.tracker_webhook_url_summary)
+                            },
+                            placeholder = "https://discord.com/api/webhooks/",
+                            enabled = state.isTrackerEnabled && state.isTrackerWebhookEnabled,
+                            onValueChange = onTrackerWebhookUrlChange,
+                        )
+                    }
+                    item {
+                        SettingsActionPreference(
+                            title = stringResource(R.string.tracker_webhook_send_test),
+                            iconRes = R.drawable.ic_send,
+                            summary = when (val test = state.webhookTestState) {
+                                WebhookTestState.Idle -> stringResource(R.string.tracker_webhook_send_test_summary)
+                                WebhookTestState.Sending -> stringResource(R.string.tracker_webhook_test_sending)
+                                WebhookTestState.Success -> stringResource(R.string.tracker_webhook_test_success)
+                                WebhookTestState.InvalidUrl -> stringResource(R.string.tracker_webhook_url_invalid)
+                                WebhookTestState.NetworkError -> stringResource(R.string.tracker_webhook_test_network_error)
+                                is WebhookTestState.HttpError -> stringResource(
+                                    R.string.tracker_webhook_test_http_error,
+                                    test.code,
+                                )
+                            },
+                            enabled = state.isTrackerEnabled &&
+                                state.isTrackerWebhookEnabled &&
+                                state.trackerWebhookUrl.isNotBlank() &&
+                                !state.isTrackerWebhookUrlInvalid &&
+                                state.webhookTestState != WebhookTestState.Sending,
+                            onClick = onTrackerWebhookSendTestClick,
                         )
                     }
                 }

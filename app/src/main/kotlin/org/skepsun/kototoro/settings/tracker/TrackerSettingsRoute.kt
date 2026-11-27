@@ -36,6 +36,7 @@ import org.skepsun.kototoro.settings.compose.TrackerSettingsScreen
 import org.skepsun.kototoro.settings.compose.TrackerSettingsUiState
 import org.skepsun.kototoro.tracker.ui.debug.TrackerDebugActivity
 import org.skepsun.kototoro.tracker.work.TrackerNotificationHelper
+import org.skepsun.kototoro.tracker.work.TrackerWebhookUrl
 
 @Composable
 fun TrackerSettingsRoute(
@@ -60,10 +61,15 @@ fun TrackerSettingsRoute(
         settings.observeAsState(AppSettings.KEY_TRACKER_SKIP_COMPLETED) { isTrackerSkipCompleted }.value
     val isTrackerMarkDuplicatesRead =
         settings.observeAsState(AppSettings.KEY_TRACKER_MARK_DUPLICATES_READ) { isTrackerMarkDuplicatesRead }.value
+    val isTrackerWebhookEnabled =
+        settings.observeAsState(AppSettings.KEY_TRACKER_WEBHOOK_ENABLED) { isTrackerWebhookEnabled }.value
+    val trackerWebhookUrl =
+        settings.observeAsState(AppSettings.KEY_TRACKER_WEBHOOK_URL) { trackerWebhookUrl }.value
     val trackerDownloadStrategy =
         settings.observeAsState(AppSettings.KEY_TRACKER_DOWNLOAD) { trackerDownloadStrategy }.value
     val categoriesCount = viewModel.categoriesCount.collectAsStateWithLifecycle().value
     val failingCount = viewModel.failingCount.collectAsStateWithLifecycle().value
+    val webhookTestState = viewModel.webhookTestState.collectAsStateWithLifecycle().value
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
 
@@ -107,6 +113,11 @@ fun TrackerSettingsRoute(
         notificationsSummary = notificationsSummary,
         trackerDownloadStrategy = trackerDownloadStrategy,
         isDozeIgnoreVisible = isTrackerDozeIgnoreAvailable(context, dozeRefreshKey),
+        isTrackerWebhookEnabled = isTrackerWebhookEnabled,
+        trackerWebhookUrl = trackerWebhookUrl,
+        // Only reveal the validation error once the user typed something: an empty field is just unused.
+        isTrackerWebhookUrlInvalid = trackerWebhookUrl.isNotBlank() && !TrackerWebhookUrl.isValid(trackerWebhookUrl),
+        webhookTestState = webhookTestState,
     )
 
     TrackerSettingsScreen(
@@ -148,6 +159,13 @@ fun TrackerSettingsRoute(
                 }
             }
         },
+        onTrackerWebhookEnabledChange = { settings.isTrackerWebhookEnabled = it },
+        onTrackerWebhookUrlChange = {
+            settings.trackerWebhookUrl = it
+            // A new endpoint deserves a fresh "send test" result instead of the old endpoint's one.
+            viewModel.webhookTestState.value = WebhookTestState.Idle
+        },
+        onTrackerWebhookSendTestClick = viewModel::sendWebhookTest,
     )
 }
 
