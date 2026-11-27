@@ -16,6 +16,33 @@ const val DEFAULT_MAX_USAGI_BACKUP_ENTRY_BYTES: Long = 64L * 1024 * 1024
 /** `app_id` a Usagi backup's `index` section carries. */
 const val USAGI_BACKUP_APP_ID: String = "org.draken.usagi"
 
+/**
+ * Usagi writes `app_id = BuildConfig.APPLICATION_ID`, so a debug build (`applicationIdSuffix = ".debug"`)
+ * or a fork with its own application id still produces a Usagi backup. The dot is required so that a
+ * look-alike id (`org.draken.usagix`) is not accepted.
+ *
+ * This is the single place the archive's identity is decided: Android's decoder and the iOS pre-check
+ * both call it. `"org.draken.usagi."` (trailing dot, nothing after it) is accepted on purpose — the
+ * rule is the literal prefix, not a well-formed package name.
+ */
+fun isUsagiBackupAppId(appId: String?): Boolean =
+    appId != null && (appId == USAGI_BACKUP_APP_ID || appId.startsWith("$USAGI_BACKUP_APP_ID."))
+
+/**
+ * The `app_id` carried by an `index` section, or null when the text is not Usagi's index shape or is
+ * not JSON at all. Lenient on purpose: the iOS pre-check must treat an unreadable index as "not a Usagi
+ * backup" and fall through to the other formats instead of failing. Pair it with [isUsagiBackupAppId].
+ */
+fun parseUsagiBackupAppId(indexJson: String): String? = try {
+    val array = usagiJson.parseToJsonElement(indexJson) as? JsonArray
+    val index = array?.firstOrNull() as? JsonObject
+    (index?.get("app_id") as? JsonPrimitive)?.content
+} catch (_: SerializationException) {
+    null
+} catch (_: IllegalArgumentException) {
+    null
+}
+
 /** The ZIP sections the import reads, exactly as `UsagiBackupExportRepository` names them. */
 val USAGI_BACKUP_IMPORTED_ENTRIES: Set<String> = setOf("index", "categories", "favourites", "history")
 
@@ -121,7 +148,7 @@ private fun requireUsagiIndex(indexJson: String) {
     val index = array.firstOrNull() as? JsonObject
         ?: throw UnsupportedExternalBackupException("Not a Usagi backup: the index section is empty")
     val appId = (index["app_id"] as? JsonPrimitive)?.content
-    if (appId != USAGI_BACKUP_APP_ID) {
+    if (!isUsagiBackupAppId(appId)) {
         throw UnsupportedExternalBackupException("Not a Usagi backup: index app_id is ${appId ?: "missing"}")
     }
 }

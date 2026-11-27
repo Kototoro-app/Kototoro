@@ -25,11 +25,12 @@ import org.skepsun.kototoro.backups.external.ExternalImportTransaction
 import org.skepsun.kototoro.backups.external.ExternalLibraryImport
 import org.skepsun.kototoro.backups.external.ExternalSourceCandidate
 import org.skepsun.kototoro.backups.external.ExternalSourceKind
-import org.skepsun.kototoro.backups.external.USAGI_BACKUP_APP_ID
 import org.skepsun.kototoro.backups.external.VeneraBackupDecoding
 import org.skepsun.kototoro.backups.external.VeneraDatabase
 import org.skepsun.kototoro.backups.external.decodeMihonOrAniyomiBackupAutoDetect
 import org.skepsun.kototoro.backups.external.decodeUsagiBackupSections
+import org.skepsun.kototoro.backups.external.isUsagiBackupAppId
+import org.skepsun.kototoro.backups.external.parseUsagiBackupAppId
 import org.skepsun.kototoro.backups.external.usagiBackupEntryName
 import kotlin.random.Random
 
@@ -133,7 +134,10 @@ internal class IosExternalBackupService(private val library: IosLibrary) {
 
     /**
      * Usagi's imported sections when the ZIP is a Usagi backup, identified by `app_id` in `index`;
-     * null otherwise. Each entry is bounded by the same 64 MiB per-entry limit as Android (#747).
+     * null otherwise. The decision is the same [isUsagiBackupAppId] the Android decoder uses, so a debug
+     * build's `org.draken.usagi.debug` is recognised here too;
+     * an index that cannot be parsed is simply "not Usagi".
+     * Each entry is bounded by the same 64 MiB per-entry limit as Android (#747).
      */
     private fun usagiSections(zip: BackupZipReader): Map<String, String>? {
         val sections = LinkedHashMap<String, String>()
@@ -146,7 +150,7 @@ internal class IosExternalBackupService(private val library: IosLibrary) {
             sections[name] = zip.read(entry).decodeToString()
         }
         val index = sections["index"] ?: return null
-        return sections.takeIf { index.contains(USAGI_BACKUP_APP_ID) }
+        return sections.takeIf { isUsagiBackupAppId(parseUsagiBackupAppId(index)) }
     }
 
     /** Venera's databases are copied out of the ZIP and read with the bundled SQLite, then removed again. */
