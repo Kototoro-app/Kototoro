@@ -39,10 +39,13 @@ data class IosSuggestionSettings(
     val communityEnabled: Boolean = false,
     /** `suggestions_weigh_sources`: a source's share of the suggestions follows how much of the library came from it. */
     val weighSourcesByUse: Boolean = true,
+    /** `global_tag_blacklist` as stored: catalog tag IDs or `raw:` keys. Applied while ranking, as on Android. */
+    val globalTagBlacklist: List<String> = emptyList(),
 ) {
     internal fun preferences() = SourceSuggestionPreferences(excludeNsfw, parseSuggestionTags(excludedTags),
         parseSuggestionTags(preferredTags), preferredSources.toSet(), excludedSources.toSet(),
         org.skepsun.kototoro.suggestions.domain.SuggestionLanguage.of(language),
+        globalTagBlacklist = globalTagBlacklist.toSet(),
         languageOnly = languageOnly, systemLanguage = systemLanguage, weighSourcesByUse = weighSourcesByUse)
 }
 
@@ -105,13 +108,18 @@ class IosSuggestions internal constructor(
         )
     }
 
+    /**
+     * @param seed picks which of the reader's genres each source is asked for. Like Android's
+     * `suggestions_rotation_seed`, a requested refresh passes a new one and every other run the last successful one,
+     * so a scheduled rebuild keeps the genres the reader last asked for.
+     */
     @Throws(Exception::class)
     suspend fun refresh(
         runtime: IosSources,
         sources: List<IosSource>,
         settings: IosSuggestionSettings,
         cancellation: IosCancellation,
-        manual: Boolean = false,
+        seed: Long = 0L,
     ): Int = coroutineScope {
         val work = async {
             if (cancellation.signal.isCompleted) throw CancellationException("Suggestions cancelled")
@@ -119,8 +127,6 @@ class IosSuggestions internal constructor(
                 val limits = SuggestionLimits()
                 val works = library.records.libraryWorks(limits.libraryHistory)
                 val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
-                // A manual refresh asks the sources for different genres than the last run did; every other run repeats them.
-                val seed = if (manual) now else 0L
                 val candidates = sources.filterNot { it.kind == "local" }.sortedBy { it.name }
                     .map { SourceRef(it.name, it.locale, it.contentType) }
                 val preferences = settings.preferences()

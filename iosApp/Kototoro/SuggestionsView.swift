@@ -24,6 +24,8 @@ struct SuggestionsView: View {
     @AppStorage("list.gridSize.suggestions") private var gridSize = ContentGridSize.legacyDefault
     @AppStorage("suggestions.updatedAt") private var updatedAt = 0.0
     @AppStorage("suggestions.configuration") private var savedConfiguration = ""
+    /// Android's key: the genres the last successful run asked for, reused until a refresh is requested.
+    @AppStorage("suggestions_rotation_seed") private var rotationSeed = 0
     @State private var items: [IosSourceContent] = []
     @State private var loading = false
     @State private var error: String?
@@ -43,7 +45,8 @@ struct SuggestionsView: View {
                               excludedSources: SourceFilterOption.decode(excludedSources).sorted(),
                               language: recommendationLanguage, languageOnly: recommendationLanguageOnly,
                               systemLanguage: Locale.current.language.languageCode?.identifier ?? "en", communityEnabled: communityEnabled,
-                              weighSourcesByUse: weighSources)
+                              weighSourcesByUse: weighSources,
+                              globalTagBlacklist: TagFilterStore.shared.selected.sorted())
     }
     private var configuration: String {
         // JSON avoids collisions between user-entered tags and source identities; the timestamp is persistent.
@@ -69,14 +72,29 @@ struct SuggestionsView: View {
         // Resolving a page's type can scan the source catalog; do it once for the whole list.
         let kind = selectedKind
         let selected = direction == "COMMUNITY" && !communityEnabled ? "ALL" : direction
+        let localization = Bundle.main.preferredLocalizations.first ?? "en"
+        let language = localization.hasPrefix("zh") ? "zh" : "en"
+        let traditional = localization == "zh-Hant"
         return items.filter {
             (kind == nil || $0.mediaKind == kind) &&
                 (selected == "ALL" || $0.suggestionDirection == selected)
         }.map { content in
-            let reason = content.suggestionDirection == "COMMUNITY"
-                ? content.suggestionReason.map { String(localized: "因为你喜欢《\($0)》") } ?? String(localized: "社区推荐")
-                : nil
-            return ContentItem(content: content, subtitle: reason)
+            ContentItem(content: content,
+                        subtitle: Self.reason(content, label: content.suggestionReasonLabel(language: language,
+                                                                                             traditional: traditional)))
+        }
+    }
+
+    /// Android's reason line under each suggestion: why this work, by the list it came from.
+    private static func reason(_ content: IosSourceContent, label: String?) -> String? {
+        switch content.suggestionDirection {
+        case "TASTE": label.map { String(localized: "你常读 \($0)") } ?? String(localized: "与你的阅读口味相近")
+        case "EXPLORE": label.map { String(localized: "试试 \($0)") } ?? String(localized: "走出熟悉的题材，试试新的故事。")
+        case "POPULAR": String(localized: "来源热门")
+        case "NEW": String(localized: "新作与近期更新")
+        case "COMMUNITY":
+            content.suggestionReason.map { String(localized: "因为你喜欢《\($0)》") } ?? String(localized: "社区推荐")
+        default: nil
         }
     }
 
@@ -203,16 +221,19 @@ struct SuggestionsView: View {
                 Date().timeIntervalSince1970 - updatedAt > Double(max(intervalHours - 1, 1)) * 60 * 60
             guard force || config != savedConfiguration || expired else { return }
             loading = true
+            // A requested refresh asks for other genres; every other run repeats the last successful one, as on Android.
+            let seed = force ? Int64(Date().timeIntervalSince1970 * 1000) : Int64(rotationSeed)
             let cancellation = IosCancellation()
             self.cancellation = cancellation
             _ = try await withTaskCancellationHandler {
                 try await database.suggestions.refresh(runtime: runtime, sources: allowed,
-                                                       settings: settings, cancellation: cancellation, manual: force)
+                                                       settings: settings, cancellation: cancellation, seed: seed)
             } onCancel: { cancellation.cancel() }
             guard !Task.isCancelled, request == token else { return }
             items = try await database.suggestions.items(sources: candidates, settings: settings)
             updatedAt = Date().timeIntervalSince1970
             savedConfiguration = config
+            rotationSeed = Int(seed)
         } catch {
             guard !Task.isCancelled, request == token else { return }
             self.error = error.localizedDescription

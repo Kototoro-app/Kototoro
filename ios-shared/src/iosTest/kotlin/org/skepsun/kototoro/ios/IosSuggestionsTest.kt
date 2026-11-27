@@ -73,14 +73,20 @@ class IosSuggestionsTest {
             // A list response must preserve the richer stored row, favourite and opaque source payload.
             library.setFavourite(IosSourceContent(content(100, manga, "Romance").copy(description = "保留简介",
                 sourceData = "opaque")), true)
-            assertEquals(24, library.suggestions.refresh(runtime, sources, settings, IosCancellation()))
+            // Every usable work of both answering sources; the favourited one (100) is left out.
+            assertEquals(31, library.suggestions.refresh(runtime, sources, settings, IosCancellation()))
             val cached = library.suggestions.items(sources, settings)
             assertTrue(library.suggestions.items(sources, settings.copy(language = "ENGLISH", languageOnly = true)).isEmpty())
             assertEquals(cached.size, library.suggestions.items(sources,
                 settings.copy(language = "CHINESE", languageOnly = true)).size)
             assertTrue(library.suggestions.items(sources, settings.copy(excludedTags = "爱情")).isEmpty())
-            assertEquals(12, cached.count { it.sourceName == manga.name })
-            assertEquals(12, cached.count { it.sourceName == novels.name })
+            // The global tag blacklist takes Android's stored form: a catalog ID, or a raw key the catalog does not know.
+            assertTrue(library.suggestions.items(sources, settings.copy(globalTagBlacklist = listOf("genre.romance")))
+                .isEmpty())
+            assertEquals(cached.size,
+                library.suggestions.items(sources, settings.copy(globalTagBlacklist = listOf("raw:villainess"))).size)
+            assertEquals(15, cached.count { it.sourceName == manga.name })
+            assertEquals(16, cached.count { it.sourceName == novels.name })
             assertTrue(cached.none { "Horror" in it.tags || it.contentRating == "ADULT" || it.title.isBlank() })
             val stored = library.favourites().single { it.content.id == "100" }.content
             assertEquals("保留简介", stored.summary)
@@ -90,8 +96,18 @@ class IosSuggestionsTest {
             assertTrue(library.suggestions.items(emptyList(), settings).isEmpty())
         } finally { library.close(); runtime.close() }
         val reopened = IosLibrary("$directory/library.db")
-        try { assertEquals(24, reopened.suggestions.items(sources, settings).size) }
+        try { assertEquals(31, reopened.suggestions.items(sources, settings).size) }
         finally { reopened.close() }
+    }
+
+    @Test
+    fun reasonLabelsNameTheGenreAWorkWasAskedFor() {
+        val taste = IosSourceContent(content(1), suggestionDirection = "TASTE", suggestionReason = "genre.horror")
+        assertEquals("恐怖", taste.suggestionReasonLabel("zh", false))
+        assertEquals("Horror", taste.suggestionReasonLabel("en", false))
+        val raw = IosSourceContent(content(2), suggestionDirection = "EXPLORE", suggestionReason = "raw:villainess")
+        assertEquals("villainess", raw.suggestionReasonLabel("zh", false))
+        assertNull(IosSourceContent(content(3), suggestionDirection = "POPULAR").suggestionReasonLabel("zh", false))
     }
 
     @Test

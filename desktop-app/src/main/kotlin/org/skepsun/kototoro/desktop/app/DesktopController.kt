@@ -92,6 +92,8 @@ private val AdultChips = setOf<DesktopSuggestionFilter>(DesktopSuggestionFilter.
 /** Lists that open details as a floating preview and get it back on dismiss. */
 private const val LAST_TRACKER_RUN = "last_tracker_run"
 private const val LAST_SUGGESTIONS_RUN = "last_suggestions_run"
+/** Android's key: the genres the last successful suggestions run asked for, reused until a refresh is requested. */
+private const val SUGGESTIONS_ROTATION_SEED = "suggestions_rotation_seed"
 private const val LAST_APP_UPDATE_CHECK = "last_app_update_check"
 /** Page groups (paged) or pages (continuous) before a chapter's end at which the next chapter is prepared. */
 private const val NEXT_CHAPTER_LOOKAHEAD = 2
@@ -1997,10 +1999,14 @@ class DesktopController(
         // unless "include disabled sources" asks for candidates from every installed source.
         val disabled = if (settings.includeDisabledSources) emptySet() else state.value.disabledSources
         val sources = session.sourceListings().filterNot { it.source.name in disabled }
+        // A requested refresh asks for other genres; every other run repeats the last successful one, as on Android.
+        val seed = if (manual) System.currentTimeMillis() else lastRun(SUGGESTIONS_ROTATION_SEED)
         val stored = session.suggestions.refresh(
-            sources, settings, session.sourceNsfwOverrides(), state.value.sourceSettings.tagBlacklist, manual = manual,
+            sources, settings, session.sourceNsfwOverrides(), state.value.sourceSettings.tagBlacklist, seed = seed,
         )
         recordRun(LAST_SUGGESTIONS_RUN)
+        backgroundPreferences.edit(SourcePreferenceEdit(changes = mapOf(
+            SUGGESTIONS_ROTATION_SEED to SourcePreferenceValue.LongInteger(seed))))
         val items = session.suggestions.suggestions()
         // A rebuild can stop offering a chip (a tag no longer in the list, both adult macros after the nsfw switch),
         // and Android recomputes its quick-filter options on every reload; drop what the new list cannot filter.

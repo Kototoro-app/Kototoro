@@ -30224,6 +30224,102 @@
           }
         }
       }
+    },
+    "你常读 %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Because you like %@"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "你常讀 %@"
+          }
+        }
+      }
+    },
+    "与你的阅读口味相近": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close to your reading taste"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "與你的閱讀口味相近"
+          }
+        }
+      }
+    },
+    "试试 %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Try %@"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "試試 %@"
+          }
+        }
+      }
+    },
+    "走出熟悉的题材，试试新的故事。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Step beyond familiar genres and try a different kind of story."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "走出熟悉的題材，試試新的故事。"
+          }
+        }
+      }
+    },
+    "来源热门": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Popular at this source"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "來源熱門"
+          }
+        }
+      }
+    },
+    "新作与近期更新": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New or recently updated"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新作與近期更新"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

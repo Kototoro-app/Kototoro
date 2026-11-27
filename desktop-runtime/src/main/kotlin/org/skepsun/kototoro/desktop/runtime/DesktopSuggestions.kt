@@ -135,13 +135,17 @@ class DesktopSuggestions(
     /**
      * Rebuilds the suggestions; returns how many were stored (0 without installed sources). Without reading history
      * they are the sources' popular and new lists.
+     *
+     * @param seed picks which of the reader's genres each source is asked for. Like Android's
+     * `suggestions_rotation_seed`, a requested refresh passes a new one and every other run the last successful one,
+     * so a scheduled rebuild keeps the genres the reader last asked for.
      */
     suspend fun refresh(
         sources: List<SourceListing>,
         settings: DesktopSuggestionSettings = DesktopSuggestionSettings(),
         nsfwOverrides: SourceNsfwOverrideSet = SourceNsfwOverrideSet(),
         globalTagBlacklist: Set<String> = emptySet(),
-        manual: Boolean = false,
+        seed: Long = 0L,
     ): Int {
         val works = library.libraryWorks(limits.libraryHistory)
         val eligible = sources.filterNot {
@@ -149,8 +153,6 @@ class DesktopSuggestions(
         }
         if (eligible.isEmpty()) return 0
         val time = now()
-        // A manual refresh asks the sources for different genres than the last run did; every other run repeats them.
-        val seed = if (manual) time else 0L
         val candidates = sourceOrder?.invoke(eligible) ?: eligible.sortedBy { it.source.name }
         val preferences = settings.copy(preferredSources = settings.preferredSources - settings.excludedSources)
             .preferences(globalTagBlacklist)

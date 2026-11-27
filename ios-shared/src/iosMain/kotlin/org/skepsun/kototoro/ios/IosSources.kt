@@ -457,6 +457,12 @@ class IosSourceContent internal constructor(
     val suggestionReason: String? = null,
 ) {
     private val display = value.withTrackingMetadata(metadata)
+
+    /** The genre a taste or explore suggestion was asked for, named as Android's reason line names it. */
+    fun suggestionReasonLabel(language: String, traditional: Boolean): String? =
+        suggestionReason?.takeIf { it.isNotBlank() }?.let {
+            org.skepsun.kototoro.suggestions.domain.suggestionReasonLabel(it, language, traditional)
+        }
     val usesTrackingCover: Boolean get() = !metadata?.coverUrl.isNullOrBlank()
     val metadataSiteTitle: String? get() = metadata?.service?.let(::trackingSiteTitle)
     val id: String get() = value.id.toString()
