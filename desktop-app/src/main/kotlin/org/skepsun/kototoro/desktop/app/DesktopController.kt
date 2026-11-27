@@ -482,7 +482,10 @@ class DesktopController(
     private val continuous = DesktopScrollOperations(mutableState, session, scope, gate)
     private val novelOperations = DesktopNovelOperations(mutableState, session, scope, gate)
     internal val novelTranslation = DesktopNovelTranslation(session.storage.preferences)
-    internal val mangaTranslation = DesktopMangaTranslation(session.storage.paths.root.resolve("cache/manga-translation"))
+    internal val mangaTranslation = DesktopMangaTranslation(
+        cacheDirectory = session.storage.paths.root.resolve("cache/manga-translation"),
+        glossaryProvider = novelTranslation::glossary,
+    )
     internal val novelTranslationQueue = DesktopTranslationQueue(scope, novelTranslation) { content, chapter ->
         desktopTranslationParagraphs(loadNovelBlocks(content, chapter).first)
     }

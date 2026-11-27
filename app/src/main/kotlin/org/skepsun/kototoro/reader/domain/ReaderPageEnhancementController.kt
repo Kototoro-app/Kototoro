@@ -34,11 +34,19 @@ class ReaderPageEnhancementController @Inject constructor(
     private var sourceLanguage: String? = null
     @Volatile
     private var branch: String? = null
+    @Volatile
+    private var bookKey: String? = null
 
-    fun setTranslationLanguageContext(translatedLanguage: String?, sourceLanguage: String?, branch: String?) {
+    fun setTranslationLanguageContext(
+        translatedLanguage: String?,
+        sourceLanguage: String?,
+        branch: String?,
+        bookKey: String? = this.bookKey,
+    ) {
         this.translatedLanguage = translatedLanguage
         this.sourceLanguage = sourceLanguage
         this.branch = branch
+        this.bookKey = bookKey
     }
 
     data class PreparedPage(
@@ -80,6 +88,8 @@ class ReaderPageEnhancementController @Inject constructor(
             append('|')
             append(branch.orEmpty())
             append('|')
+            append(bookKey.orEmpty())
+            append('|')
             append(settings.readerTranslationOcrDetectionMaxSide)
             append('|')
             append(settings.readerTranslationOcrDetectionThreshold)
@@ -111,7 +121,7 @@ class ReaderPageEnhancementController @Inject constructor(
     internal suspend fun editableBubbleTexts(pageId: Long): List<String> = translationProcessor.editableBubbleTexts(pageId)
 
     internal suspend fun retranslateBubble(pageId: Long, index: Int, expectedText: String, originalText: String): Boolean =
-        translationProcessor.retranslateBubble(pageId, index, expectedText, originalText)
+        translationProcessor.retranslateBubble(pageId, index, expectedText, originalText, bookKey = bookKey)
 
     suspend fun resolveDisplayVariant(
         page: ContentPage,
@@ -119,7 +129,7 @@ class ReaderPageEnhancementController @Inject constructor(
         showTranslated: Boolean,
     ): Uri? {
         return if (showTranslated) {
-            translationProcessor.peekRendered(page, currentUri, resolveAutoRecognizerLanguage())
+            translationProcessor.peekRendered(page, currentUri, resolveAutoRecognizerLanguage(), bookKey = bookKey)
         } else {
             translationProcessor.peekSourceOfRendered(currentUri) ?: currentUri
         }
@@ -152,6 +162,7 @@ class ReaderPageEnhancementController @Inject constructor(
             page = page,
             sourceUri = readyUri,
             autoRecognizerLanguage = resolveAutoRecognizerLanguage(),
+            bookKey = bookKey,
         )
         if (cachedRecord != null) {
             Log.d("ReaderTranslate", "PageLoader debug: cached record found page=${page.id}")
@@ -192,6 +203,7 @@ class ReaderPageEnhancementController @Inject constructor(
                         page = page,
                         sourceUri = sourceUri,
                         autoRecognizerLanguage = resolveAutoRecognizerLanguage(),
+                        bookKey = bookKey,
                     )
                 }.onFailure {
                     Log.d("ReaderTranslate", "translation job exception page=${page.id} err=${it.javaClass.simpleName}: ${it.message.orEmpty()}")

@@ -14,12 +14,16 @@ internal data class EditableTranslationPage(
     val inputs: List<BubbleInput>,
     val machineTranslations: Map<String, String>,
     val corrections: Map<Int, String> = emptyMap(),
+    val bookKey: String? = null,
 ) {
     fun encode(): String = JSONObject().apply {
         put("uri", localUri.toString())
         put("key", renderKey)
         put("source", sourceLang)
         put("target", targetLang)
+        if (!bookKey.isNullOrBlank()) {
+            put("bookKey", bookKey)
+        }
         put("translations", JSONObject(machineTranslations))
         put("corrections", JSONObject(corrections.mapKeys { it.key.toString() }))
         put("inputs", JSONArray(inputs.map { input ->
@@ -63,6 +67,7 @@ internal data class EditableTranslationPage(
                 },
                 machineTranslations = translations.keys().asSequence().associateWith(translations::getString),
                 corrections = corrections.keys().asSequence().associate { it.toInt() to corrections.getString(it) },
+                bookKey = data.optString("bookKey").ifBlank { null },
             )
         }
     }

@@ -28,6 +28,7 @@ internal fun DesktopMangaTranslationOptions(
     val settings by controller.novelTranslation.settings.collectAsState()
     val translations by controller.mangaTranslation.pages.collectAsState()
     val scope = rememberCoroutineScope()
+    val bookId = state.content?.id
     val page = state.pages.getOrNull(state.pageIndex)?.let { state.readerImages[it.id] }
     val translated = page?.let { translations[it.path] }?.takeIf { it.target == settings.target }
     var busy by remember { mutableStateOf(false) }
@@ -72,7 +73,7 @@ internal fun DesktopMangaTranslationOptions(
                         val source = page ?: return@TextButton
                         if (settings.isConfigured) {
                             execute {
-                                controller.mangaTranslation.translateLocally(source, settings, settings.localOcr)
+                                controller.mangaTranslation.translateLocally(source, settings, settings.localOcr, bookId = bookId)
                                 onShowTranslation(true)
                             }
                         } else {
@@ -82,7 +83,7 @@ internal fun DesktopMangaTranslationOptions(
                     TextButton(enabled = page != null && !busy, onClick = {
                         val source = page ?: return@TextButton
                         if (settings.isConfigured) {
-                            execute { controller.mangaTranslation.translate(source, settings); onShowTranslation(true) }
+                            execute { controller.mangaTranslation.translate(source, settings, bookId = bookId); onShowTranslation(true) }
                         } else {
                             configure = true
                         }
@@ -122,7 +123,10 @@ internal fun DesktopMangaTranslationOptions(
             canSave = draft.isNotBlank() && !busy,
             header = { Text(translated?.translations?.get(index.toString()).orEmpty()) },
             onSave = {
-                execute { controller.mangaTranslation.retranslate(page, settings, index, draft); onShowTranslation(true) }
+                execute {
+                    controller.mangaTranslation.retranslate(page, settings, index, draft, bookId = bookId)
+                    onShowTranslation(true)
+                }
                 selecting = null
             },
             onDismiss = { selecting = null },

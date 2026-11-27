@@ -184,6 +184,63 @@ class DesktopTranslationTest {
     }
 
     @Test
+    fun `manga translation and retranslation send matching glossary terms from novel translation store`() = runBlocking<Unit> {
+        val packets = CopyOnWriteArrayList<JsonElement>()
+        val provider = client(packets) { content ->
+            when {
+                content !is kotlinx.serialization.json.JsonPrimitive ->
+                    """{"bubbles":[{"x":50,"y":50,"width":450,"height":400,"text":"Alice entered."}]}"""
+                "艾莉丝" in content.content -> """{"0":"艾莉丝走过来了。"}"""
+                "爱丽丝" in content.content -> """{"0":"爱丽丝进来了。"}"""
+                else -> """{"0":"默认译文"}"""
+            }
+        }
+        val source = directory.resolve("glossary-page.png")
+        BufferedImage(300, 300, BufferedImage.TYPE_INT_RGB).let { bitmap ->
+            ImageIO.write(bitmap, "png", source.toFile())
+            bitmap.flush()
+        }
+        val image = DesktopReaderImage(source, 300, 300)
+        FileSourcePreferenceStore(directory.resolve("manga-glossary-prefs")).use { prefs ->
+            val novelService = DesktopNovelTranslation(prefs, provider)
+            novelService.saveGlossary(
+                book.id,
+                listOf(
+                    DesktopGlossaryTerm("Alice", "爱丽丝"),
+                    DesktopGlossaryTerm("Unused", "不会出现"),
+                ),
+            )
+            val remoteService = DesktopMangaTranslation(
+                cacheDirectory = directory.resolve("glossary-remote"),
+                client = provider,
+                glossaryProvider = novelService::glossary,
+            )
+            remoteService.translate(image, settings, bookId = book.id)
+            val translateRequest = packets.last().jsonPrimitive.content
+            assertTrue("爱丽丝" in translateRequest)
+            assertFalse("不会出现" in translateRequest)
+            assertEquals("爱丽丝进来了。", remoteService.pages.value.getValue(source).translations["0"])
+
+            val localService = DesktopMangaTranslation(
+                cacheDirectory = directory.resolve("glossary-local"),
+                client = provider,
+                glossaryProvider = novelService::glossary,
+            ) { _, _ ->
+                listOf(DesktopOcrBubble(50, 50, 400, 400, "Alice entered."))
+            }
+            localService.translateLocally(image, settings, DesktopLocalOcrSettings("/models"), bookId = book.id)
+            assertTrue("爱丽丝" in packets.last().jsonPrimitive.content)
+
+            // Updating glossary is picked up when retranslating a bubble even without re-passing bookId.
+            novelService.saveGlossary(book.id, listOf(DesktopGlossaryTerm("Alice", "艾莉丝")))
+            localService.retranslate(image, settings, 0, "Alice walked over.")
+            val retranslateRequest = packets.last().jsonPrimitive.content
+            assertTrue("艾莉丝" in retranslateRequest)
+            assertEquals("艾莉丝走过来了。", localService.pages.value.getValue(source).translations["0"])
+        }
+    }
+
+    @Test
     fun `DBNet threshold map separates two text regions and drops noise`() {
         val width = 20
         val height = 20
