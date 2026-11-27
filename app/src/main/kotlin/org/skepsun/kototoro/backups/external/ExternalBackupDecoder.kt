@@ -5,6 +5,7 @@ import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
 import android.net.Uri
 import dagger.hilt.android.qualifiers.ApplicationContext
+import okio.BufferedSource
 import okio.buffer
 import okio.source
 import java.io.File
@@ -19,19 +20,25 @@ class ExternalBackupDecoder @Inject constructor(
 ) {
 
     fun decode(uri: Uri, app: ExternalBackupApp): ExternalBackupPayload {
-        val bytes = readBackupBytes(uri)
         return when (app) {
-            ExternalBackupApp.MIHON, ExternalBackupApp.ANIYOMI -> decodeMihonOrAniyomiBackup(bytes, app)
-            ExternalBackupApp.VENERA -> runCatching {
-                decodeVeneraBackup(bytes)
-            }.getOrNull()
+            ExternalBackupApp.MIHON, ExternalBackupApp.ANIYOMI -> openBackupSource(uri) { source ->
+                decodeMihonOrAniyomiBackup(source, app)
+            }
+            ExternalBackupApp.VENERA -> {
+                val bytes = openBackupSource(uri) { source ->
+                    readExternalBackupBytes(source)
+                }
+                runCatching {
+                    decodeVeneraBackup(bytes)
+                }.getOrNull()
+            }
         } ?: throw UnsupportedExternalBackupException("Unsupported ${app.name} backup format")
     }
 
-    private fun readBackupBytes(uri: Uri): ByteArray {
-        return context.contentResolver.openInputStream(uri)?.use { inputStream ->
-            readExternalBackupBytes(inputStream.source().buffer())
-        } ?: throw IOException("Unable to open backup file")
+    private inline fun <T> openBackupSource(uri: Uri, block: (BufferedSource) -> T): T {
+        val inputStream = context.contentResolver.openInputStream(uri)
+            ?: throw IOException("Unable to open backup file")
+        return inputStream.source().buffer().use(block)
     }
 
     /** Extracts the SQLite files and hands them to the shared [VeneraBackupDecoding] rules. */

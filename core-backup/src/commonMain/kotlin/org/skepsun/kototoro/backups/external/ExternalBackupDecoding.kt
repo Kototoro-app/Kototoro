@@ -1,7 +1,11 @@
 package org.skepsun.kototoro.backups.external
 
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.protobuf.ProtoBuf
+import okio.Buffer
 import okio.BufferedSource
+import okio.Source
+import okio.Timeout
 import okio.buffer
 import okio.gzip
 import org.skepsun.kototoro.parsers.model.ContentType
@@ -12,24 +16,98 @@ private const val MAGIC_JSON_SIGNATURE1 = 0x7b7d
 private const val MAGIC_JSON_SIGNATURE2 = 0x7b22
 private const val MAGIC_JSON_SIGNATURE3 = 0x7b0a
 
+private const val WIRE_TYPE_VARINT = 0
+private const val WIRE_TYPE_I64 = 1
+private const val WIRE_TYPE_LEN = 2
+private const val WIRE_TYPE_SGROUP = 3
+private const val WIRE_TYPE_EGROUP = 4
+private const val WIRE_TYPE_I32 = 5
+
+private const val FIELD_BACKUP_MANGA = 1
+private const val FIELD_BACKUP_CATEGORIES = 2
+private const val FIELD_BACKUP_SOURCES = 101
+private const val FIELD_BACKUP_ANIME_SOURCES = 103
+private const val FIELD_BACKUP_ANIME = 501
+
+private const val MAX_GROUP_DEPTH = 32
+
+/** Default maximum total decompressed bytes accepted from an external backup stream (256 MiB). */
+const val DEFAULT_MAX_EXTERNAL_BACKUP_BYTES: Long = 256L * 1024 * 1024
+
+/** Default maximum bytes accepted for a single top-level protobuf record (16 MiB). */
+const val DEFAULT_MAX_EXTERNAL_BACKUP_RECORD_BYTES: Long = 16L * 1024 * 1024
+
+data class DecodedExternalBackup(
+    val app: ExternalBackupApp,
+    val payload: ExternalBackupPayload,
+)
+
 /**
- * Reads the raw bytes of an external backup, transparently un-gzipping it.
- * JSON backups are rejected with [UnsupportedExternalBackupException].
+ * Reads the raw bytes of an external backup, transparently un-gzipping it and enforcing a
+ * decompressed ceiling of [maxBytes].
+ * JSON backups are rejected with [UnsupportedExternalBackupException]; oversized streams fail fast
+ * with [ExternalBackupTooLargeException].
  * Takes ownership of [source] and closes it on success or failure.
  */
-fun readExternalBackupBytes(source: BufferedSource): ByteArray {
+fun readExternalBackupBytes(
+    source: BufferedSource,
+    maxBytes: Long = DEFAULT_MAX_EXTERNAL_BACKUP_BYTES,
+): ByteArray {
     var decoded = source
     try {
-        val peeked = source.peek().apply { require(2) }
-        val magic = peeked.readShort().toInt()
-        decoded = when (magic) {
-            MAGIC_GZIP -> source.gzip().buffer()
-            MAGIC_JSON_SIGNATURE1, MAGIC_JSON_SIGNATURE2, MAGIC_JSON_SIGNATURE3 -> {
-                throw UnsupportedExternalBackupException("JSON backups are not supported")
-            }
-            else -> source
-        }
+        decoded = openExternalBackupSource(source, maxBytes)
         return decoded.readByteArray()
+    } finally {
+        decoded.close()
+    }
+}
+
+/**
+ * Streams top-level protobuf records directly from [source] (transparently un-gzipping it) without
+ * buffering the entire decompressed archive or full object graph in memory.
+ *
+ * Returns null when [app] is [ExternalBackupApp.VENERA] or when the protobuf wire stream is malformed.
+ * Rejects JSON backups with [UnsupportedExternalBackupException], oversized streams/records with
+ * [ExternalBackupTooLargeException], and propagates underlying I/O or gzip errors.
+ * Takes ownership of [source] and closes it on success or failure.
+ */
+fun decodeMihonOrAniyomiBackup(
+    source: BufferedSource,
+    app: ExternalBackupApp,
+    maxBytes: Long = DEFAULT_MAX_EXTERNAL_BACKUP_BYTES,
+    maxRecordBytes: Long = DEFAULT_MAX_EXTERNAL_BACKUP_RECORD_BYTES,
+): ExternalBackupPayload? {
+    var decoded = source
+    try {
+        if (app == ExternalBackupApp.VENERA) {
+            return null
+        }
+        decoded = openExternalBackupSource(source, maxBytes)
+        val mode = when (app) {
+            ExternalBackupApp.MIHON -> ProtobufDecodeMode.MIHON
+            ExternalBackupApp.ANIYOMI -> ProtobufDecodeMode.ANIYOMI
+            ExternalBackupApp.VENERA -> return null
+        }
+        return decodeMihonOrAniyomiProtobuf(decoded, mode, maxRecordBytes)?.payload
+    } finally {
+        decoded.close()
+    }
+}
+
+/**
+ * Streams a Mihon or Aniyomi backup from [source] in a single pass, detecting [ExternalBackupApp.ANIYOMI]
+ * when anime or anime-source fields are present and [ExternalBackupApp.MIHON] otherwise.
+ * Takes ownership of [source] and closes it on success or failure.
+ */
+fun decodeMihonOrAniyomiBackupAutoDetect(
+    source: BufferedSource,
+    maxBytes: Long = DEFAULT_MAX_EXTERNAL_BACKUP_BYTES,
+    maxRecordBytes: Long = DEFAULT_MAX_EXTERNAL_BACKUP_RECORD_BYTES,
+): DecodedExternalBackup? {
+    var decoded = source
+    try {
+        decoded = openExternalBackupSource(source, maxBytes)
+        return decodeMihonOrAniyomiProtobuf(decoded, ProtobufDecodeMode.AUTO_DETECT, maxRecordBytes)
     } finally {
         decoded.close()
     }
@@ -39,14 +117,362 @@ fun readExternalBackupBytes(source: BufferedSource): ByteArray {
  * Decodes bytes using the selected Mihon or Aniyomi protobuf schema. Returns null when decoding fails.
  * Venera backups are SQLite based and are decoded by the Android-only decoder.
  */
-fun decodeMihonOrAniyomiBackup(bytes: ByteArray, app: ExternalBackupApp): ExternalBackupPayload? = when (app) {
-    ExternalBackupApp.MIHON -> runCatching {
-        ProtoBuf.decodeFromByteArray(MihonBackup.serializer(), bytes).toPayload(app)
-    }.getOrNull()
-    ExternalBackupApp.ANIYOMI -> runCatching {
-        ProtoBuf.decodeFromByteArray(AniyomiBackup.serializer(), bytes).toPayload(app)
-    }.getOrNull()
-    ExternalBackupApp.VENERA -> null
+fun decodeMihonOrAniyomiBackup(
+    bytes: ByteArray,
+    app: ExternalBackupApp,
+    maxRecordBytes: Long = DEFAULT_MAX_EXTERNAL_BACKUP_RECORD_BYTES,
+): ExternalBackupPayload? {
+    val mode = when (app) {
+        ExternalBackupApp.MIHON -> ProtobufDecodeMode.MIHON
+        ExternalBackupApp.ANIYOMI -> ProtobufDecodeMode.ANIYOMI
+        ExternalBackupApp.VENERA -> return null
+    }
+    return decodeMihonOrAniyomiProtobuf(Buffer().write(bytes), mode, maxRecordBytes)?.payload
+}
+
+private enum class ProtobufDecodeMode {
+    MIHON,
+    ANIYOMI,
+    AUTO_DETECT,
+}
+
+private class PendingContentRecord(
+    val sourceId: Long,
+    val record: ExternalBackupContentRecord,
+)
+
+private class ProtobufWireFormatException(
+    message: String,
+    cause: Throwable? = null,
+) : Exception(message, cause)
+
+private fun openExternalBackupSource(
+    source: BufferedSource,
+    maxBytes: Long,
+): BufferedSource {
+    require(maxBytes >= 0L) { "maxBytes must be non-negative" }
+    val peeked = source.peek().apply { require(2) }
+    val magic = peeked.readShort().toInt() and 0xFFFF
+    val rawOrGzip: Source = when (magic) {
+        MAGIC_GZIP -> source.gzip()
+        MAGIC_JSON_SIGNATURE1, MAGIC_JSON_SIGNATURE2, MAGIC_JSON_SIGNATURE3 -> {
+            throw UnsupportedExternalBackupException("JSON backups are not supported")
+        }
+        else -> source
+    }
+    return ByteLimitedSource(rawOrGzip, maxBytes).buffer()
+}
+
+private class ByteLimitedSource(
+    private val delegate: Source,
+    private val maxBytes: Long,
+) : Source {
+    private var bytesRead = 0L
+
+    override fun read(sink: Buffer, byteCount: Long): Long {
+        if (byteCount <= 0L) return 0L
+        val remaining = maxBytes - bytesRead
+        val limit = if (remaining >= byteCount) byteCount else remaining + 1L
+        val count = delegate.read(sink, limit)
+        if (count == -1L) return -1L
+        bytesRead += count
+        if (bytesRead > maxBytes) {
+            throw ExternalBackupTooLargeException(
+                "External backup exceeds maximum allowed decompressed size of $maxBytes bytes",
+            )
+        }
+        return count
+    }
+
+    override fun timeout(): Timeout = delegate.timeout()
+
+    override fun close() = delegate.close()
+}
+
+private fun decodeMihonOrAniyomiProtobuf(
+    source: BufferedSource,
+    mode: ProtobufDecodeMode,
+    maxRecordBytes: Long,
+): DecodedExternalBackup? {
+    require(maxRecordBytes >= 0L) { "maxRecordBytes must be non-negative" }
+    val acceptAnimeFields = mode != ProtobufDecodeMode.MIHON
+    val provisionalApp = if (mode == ProtobufDecodeMode.ANIYOMI) {
+        ExternalBackupApp.ANIYOMI
+    } else {
+        ExternalBackupApp.MIHON
+    }
+    val mangaRecords = ArrayList<PendingContentRecord>()
+    val animeRecords = ArrayList<PendingContentRecord>()
+    val categories = ArrayList<MihonBackupCategory>()
+    val mangaSourceNames = HashMap<Long, String>()
+    val animeSourceNames = HashMap<Long, String>()
+    var hasAniyomiFields = false
+
+    try {
+        while (!source.exhausted()) {
+            val tag = source.readRawVarint64()
+            if (tag <= 0L || tag > UInt.MAX_VALUE.toLong()) {
+                throw ProtobufWireFormatException("Invalid protobuf tag: $tag")
+            }
+            val fieldNumber = (tag ushr 3).toInt()
+            val wireType = (tag and 0x7L).toInt()
+            if (fieldNumber <= 0) {
+                throw ProtobufWireFormatException("Invalid protobuf field number: $fieldNumber")
+            }
+
+            when (fieldNumber) {
+                FIELD_BACKUP_MANGA -> {
+                    val recordBytes = source.readKnownRecordBytes(fieldNumber, wireType, maxRecordBytes)
+                    if (mode == ProtobufDecodeMode.ANIYOMI) {
+                        val manga = decodeRecord {
+                            ProtoBuf.decodeFromByteArray(AniyomiBackupManga.serializer(), recordBytes)
+                        }
+                        manga.toRecord(
+                            app = ExternalBackupApp.ANIYOMI,
+                            sourceName = "MIHON_${manga.source}",
+                            contentType = ContentType.MANGA,
+                            totalCount = manga.chapters.size,
+                            completedCount = manga.chapters.count { it.read },
+                            sourceDisplayName = null,
+                        )?.let { mangaRecords.add(PendingContentRecord(manga.source, it)) }
+                    } else {
+                        val manga = decodeRecord {
+                            ProtoBuf.decodeFromByteArray(MihonBackupManga.serializer(), recordBytes)
+                        }
+                        manga.toRecord(
+                            app = provisionalApp,
+                            sourceName = "MIHON_${manga.source}",
+                            contentType = ContentType.MANGA,
+                            totalCount = manga.chapters.size,
+                            completedCount = manga.chapters.count { it.read },
+                            sourceDisplayName = null,
+                        )?.let { mangaRecords.add(PendingContentRecord(manga.source, it)) }
+                    }
+                }
+
+                FIELD_BACKUP_CATEGORIES -> {
+                    val recordBytes = source.readKnownRecordBytes(fieldNumber, wireType, maxRecordBytes)
+                    categories.add(
+                        decodeRecord {
+                            ProtoBuf.decodeFromByteArray(MihonBackupCategory.serializer(), recordBytes)
+                        },
+                    )
+                }
+
+                FIELD_BACKUP_SOURCES -> {
+                    val recordBytes = source.readKnownRecordBytes(fieldNumber, wireType, maxRecordBytes)
+                    val backupSource = decodeRecord {
+                        ProtoBuf.decodeFromByteArray(MihonBackupSource.serializer(), recordBytes)
+                    }
+                    if (backupSource.sourceId != 0L && backupSource.name.isNotBlank()) {
+                        mangaSourceNames[backupSource.sourceId] = backupSource.name
+                    }
+                }
+
+                FIELD_BACKUP_ANIME_SOURCES -> if (acceptAnimeFields) {
+                    val recordBytes = source.readKnownRecordBytes(fieldNumber, wireType, maxRecordBytes)
+                    val backupSource = decodeRecord {
+                        ProtoBuf.decodeFromByteArray(MihonBackupSource.serializer(), recordBytes)
+                    }
+                    hasAniyomiFields = true
+                    if (backupSource.sourceId != 0L && backupSource.name.isNotBlank()) {
+                        animeSourceNames[backupSource.sourceId] = backupSource.name
+                    }
+                } else {
+                    source.skipField(wireType, fieldNumber, depth = 0)
+                }
+
+                FIELD_BACKUP_ANIME -> if (acceptAnimeFields) {
+                    val recordBytes = source.readKnownRecordBytes(fieldNumber, wireType, maxRecordBytes)
+                    val anime = decodeRecord {
+                        ProtoBuf.decodeFromByteArray(AniyomiBackupAnime.serializer(), recordBytes)
+                    }
+                    hasAniyomiFields = true
+                    anime.toRecord(
+                        app = ExternalBackupApp.ANIYOMI,
+                        sourceDisplayName = null,
+                    )?.let { animeRecords.add(PendingContentRecord(anime.source, it)) }
+                } else {
+                    source.skipField(wireType, fieldNumber, depth = 0)
+                }
+
+                else -> source.skipField(wireType, fieldNumber, depth = 0)
+            }
+        }
+    } catch (_: ProtobufWireFormatException) {
+        return null
+    }
+
+    val resolvedApp = when (mode) {
+        ProtobufDecodeMode.MIHON -> ExternalBackupApp.MIHON
+        ProtobufDecodeMode.ANIYOMI -> ExternalBackupApp.ANIYOMI
+        ProtobufDecodeMode.AUTO_DETECT -> if (hasAniyomiFields) ExternalBackupApp.ANIYOMI else ExternalBackupApp.MIHON
+    }
+    val sourceNamesById = if (resolvedApp == ExternalBackupApp.ANIYOMI && animeSourceNames.isNotEmpty()) {
+        HashMap<Long, String>(mangaSourceNames.size + animeSourceNames.size).apply {
+            putAll(mangaSourceNames)
+            putAll(animeSourceNames)
+        }
+    } else {
+        mangaSourceNames
+    }
+
+    val records = ArrayList<ExternalBackupContentRecord>(
+        mangaRecords.size + if (resolvedApp == ExternalBackupApp.ANIYOMI) animeRecords.size else 0,
+    )
+    for (pending in mangaRecords) {
+        val displayName = sourceNamesById[pending.sourceId]
+        val record = pending.record
+        records.add(
+            if (record.app == resolvedApp && record.sourceDisplayName == displayName) {
+                record
+            } else {
+                record.copy(app = resolvedApp, sourceDisplayName = displayName)
+            },
+        )
+    }
+    if (resolvedApp == ExternalBackupApp.ANIYOMI) {
+        for (pending in animeRecords) {
+            val displayName = sourceNamesById[pending.sourceId]
+            val record = pending.record
+            records.add(
+                if (record.sourceDisplayName == displayName) {
+                    record
+                } else {
+                    record.copy(sourceDisplayName = displayName)
+                },
+            )
+        }
+    }
+
+    return DecodedExternalBackup(
+        app = resolvedApp,
+        payload = ExternalBackupPayload(
+            records = records,
+            favoriteCategories = categories.toFavoriteCategoryRecords(),
+        ),
+    )
+}
+
+private inline fun <T> decodeRecord(block: () -> T): T = try {
+    block()
+} catch (e: SerializationException) {
+    throw ProtobufWireFormatException("Failed to decode protobuf record", e)
+} catch (e: IllegalArgumentException) {
+    throw ProtobufWireFormatException("Failed to decode protobuf record", e)
+} catch (e: IndexOutOfBoundsException) {
+    throw ProtobufWireFormatException("Failed to decode protobuf record", e)
+}
+
+private fun BufferedSource.readKnownRecordBytes(
+    fieldNumber: Int,
+    wireType: Int,
+    maxRecordBytes: Long,
+): ByteArray {
+    if (wireType != WIRE_TYPE_LEN) {
+        throw ProtobufWireFormatException("Expected length-delimited wire type for field $fieldNumber, got $wireType")
+    }
+    val length = readRawVarint64()
+    if (length < 0L) {
+        throw ProtobufWireFormatException("Negative length-delimited field length: $length")
+    }
+    if (length > maxRecordBytes || length > Int.MAX_VALUE.toLong()) {
+        throw ExternalBackupTooLargeException(
+            "External backup record for field $fieldNumber exceeds maximum allowed size of $maxRecordBytes bytes (declared $length bytes)",
+        )
+    }
+    return readExactBytesOrWireError(length.toInt())
+}
+
+private fun BufferedSource.readRawVarint64(): Long {
+    var result = 0L
+    var shift = 0
+    while (shift < 64) {
+        if (exhausted()) throw ProtobufWireFormatException("Truncated varint")
+        val b = readByte().toInt()
+        if (shift == 63 && (b and 0xFE) != 0) {
+            throw ProtobufWireFormatException("Malformed varint (64-bit overflow)")
+        }
+        result = result or ((b and 0x7F).toLong() shl shift)
+        if ((b and 0x80) == 0) {
+            return result
+        }
+        shift += 7
+    }
+    throw ProtobufWireFormatException("Malformed varint (exceeds 10 bytes)")
+}
+
+private fun BufferedSource.readExactBytesOrWireError(byteCount: Int): ByteArray {
+    if (byteCount == 0) return ByteArray(0)
+    val out = Buffer()
+    var remaining = byteCount.toLong()
+    while (remaining > 0L) {
+        val read = read(out, remaining)
+        if (read == -1L) {
+            throw ProtobufWireFormatException("Truncated length-delimited field: expected $byteCount bytes")
+        }
+        remaining -= read
+    }
+    return out.readByteArray()
+}
+
+private fun BufferedSource.skipExactOrWireError(byteCount: Long) {
+    var remaining = byteCount
+    while (remaining > 0L) {
+        if (exhausted()) throw ProtobufWireFormatException("Truncated protobuf field")
+        val toSkip = minOf(remaining, buffer.size)
+        skip(toSkip)
+        remaining -= toSkip
+    }
+}
+
+private fun BufferedSource.skipField(wireType: Int, fieldNumber: Int, depth: Int) {
+    when (wireType) {
+        WIRE_TYPE_VARINT -> readRawVarint64()
+        WIRE_TYPE_I64 -> skipExactOrWireError(8L)
+        WIRE_TYPE_LEN -> {
+            val length = readRawVarint64()
+            if (length < 0L) {
+                throw ProtobufWireFormatException("Negative length-delimited field length: $length")
+            }
+            skipExactOrWireError(length)
+        }
+        WIRE_TYPE_SGROUP -> {
+            if (depth >= MAX_GROUP_DEPTH) {
+                throw ProtobufWireFormatException("Protobuf group nesting depth exceeded")
+            }
+            skipGroup(endFieldNumber = fieldNumber, depth = depth + 1)
+        }
+        WIRE_TYPE_EGROUP -> throw ProtobufWireFormatException("Unexpected protobuf end-group wire type")
+        WIRE_TYPE_I32 -> skipExactOrWireError(4L)
+        else -> throw ProtobufWireFormatException("Invalid protobuf wire type: $wireType")
+    }
+}
+
+private fun BufferedSource.skipGroup(endFieldNumber: Int, depth: Int) {
+    while (true) {
+        if (exhausted()) {
+            throw ProtobufWireFormatException("Unterminated protobuf group for field $endFieldNumber")
+        }
+        val tag = readRawVarint64()
+        if (tag <= 0L || tag > UInt.MAX_VALUE.toLong()) {
+            throw ProtobufWireFormatException("Invalid protobuf tag: $tag")
+        }
+        val innerFieldNumber = (tag ushr 3).toInt()
+        val innerWireType = (tag and 0x7L).toInt()
+        if (innerFieldNumber <= 0) {
+            throw ProtobufWireFormatException("Invalid protobuf field number: $innerFieldNumber")
+        }
+        if (innerWireType == WIRE_TYPE_EGROUP) {
+            if (innerFieldNumber != endFieldNumber) {
+                throw ProtobufWireFormatException(
+                    "Mismatched protobuf end-group field $innerFieldNumber (expected $endFieldNumber)",
+                )
+            }
+            return
+        }
+        skipField(innerWireType, innerFieldNumber, depth)
+    }
 }
 
 fun normalizeTimestamp(ts: Long): Long {
@@ -77,84 +503,44 @@ fun calculateProgressPercent(
     return max(0f, safeCompletedCount.toFloat() / totalCount.toFloat())
 }
 
-private fun MihonBackup.toPayload(app: ExternalBackupApp): ExternalBackupPayload {
-    val sourceNamesById = buildSourceNamesById(backupSources)
-    return ExternalBackupPayload(
-        records = backupManga.mapNotNull { manga ->
-            manga.toRecord(
-                app = app,
-                sourceName = "MIHON_${manga.source}",
-                sourceDisplayName = sourceNamesById[manga.source],
-                contentType = ContentType.MANGA,
-                totalCount = manga.chapters.size,
-                completedCount = manga.chapters.count { it.read },
-            )
-        },
-        favoriteCategories = backupCategories.toFavoriteCategoryRecords(),
+private fun AniyomiBackupAnime.toRecord(
+    app: ExternalBackupApp,
+    sourceDisplayName: String? = null,
+): ExternalBackupContentRecord? {
+    val favoriteTimestamp = resolveFavoriteTimestamp(favoriteModifiedAt, dateAdded, lastModifiedAt)
+    val history = history.maxByOrNull { it.lastRead }
+    val progressPercent = calculateProgressPercent(
+        totalCount = episodes.size,
+        completedCount = episodes.count { it.seen },
     )
-}
-
-private fun AniyomiBackup.toPayload(app: ExternalBackupApp): ExternalBackupPayload {
-    val sourceNamesById = buildSourceNamesById(backupSources + backupAnimeSources)
-    val mangaRecords = backupManga.mapNotNull { manga ->
-        manga.toRecord(
-            app = app,
-            sourceName = "MIHON_${manga.source}",
-            sourceDisplayName = sourceNamesById[manga.source],
-            contentType = ContentType.MANGA,
-            totalCount = manga.chapters.size,
-            completedCount = manga.chapters.count { it.read },
-        )
+    if (!favorite && history == null) {
+        return null
     }
-    val animeRecords = backupAnime.mapNotNull { anime ->
-        val favoriteTimestamp = resolveFavoriteTimestamp(anime.favoriteModifiedAt, anime.dateAdded, anime.lastModifiedAt)
-        val history = anime.history.maxByOrNull { it.lastRead }
-        val progressPercent = calculateProgressPercent(
-            totalCount = anime.episodes.size,
-            completedCount = anime.episodes.count { it.seen },
-        )
-        if (!anime.favorite && history == null) {
-            null
-        } else {
-            ExternalBackupContentRecord(
-                app = app,
-                sourceName = "ANIYOMI_${anime.source}",
-                sourceDisplayName = sourceNamesById[anime.source],
-                contentType = ContentType.VIDEO,
-                url = anime.url,
-                title = anime.title,
-                authors = listOfNotNull(anime.author, anime.artist)
-                    .distinct()
-                    .joinToString(", ")
-                    .ifBlank { null },
-                description = anime.description,
-                tags = anime.genre,
-                coverUrl = anime.thumbnailUrl,
-                publicUrl = anime.url,
-                state = anime.status.toString(),
-                isFavorite = anime.favorite,
-                favoriteTimestamp = favoriteTimestamp,
-                favoriteCategoryOrders = anime.categories,
-                chaptersCount = anime.episodes.size,
-                readEntriesCount = anime.episodes.count { it.seen },
-                progressPercent = progressPercent,
-                historyChapterUrl = history?.url,
-                historyTimestamp = history?.lastRead?.takeIf { it > 0L },
-            )
-        }
-    }
-    return ExternalBackupPayload(
-        records = mangaRecords + animeRecords,
-        favoriteCategories = backupCategories.toFavoriteCategoryRecords(),
+    return ExternalBackupContentRecord(
+        app = app,
+        sourceName = "ANIYOMI_$source",
+        sourceDisplayName = sourceDisplayName,
+        contentType = ContentType.VIDEO,
+        url = url,
+        title = title,
+        authors = listOfNotNull(author, artist)
+            .distinct()
+            .joinToString(", ")
+            .ifBlank { null },
+        description = description,
+        tags = genre,
+        coverUrl = thumbnailUrl,
+        publicUrl = url,
+        state = status.toString(),
+        isFavorite = favorite,
+        favoriteTimestamp = favoriteTimestamp,
+        favoriteCategoryOrders = categories,
+        chaptersCount = episodes.size,
+        readEntriesCount = episodes.count { it.seen },
+        progressPercent = progressPercent,
+        historyChapterUrl = history?.url,
+        historyTimestamp = history?.lastRead?.takeIf { it > 0L },
     )
-}
-
-private fun buildSourceNamesById(
-    sources: List<MihonBackupSource>,
-): Map<Long, String> {
-    return sources
-        .filter { it.sourceId != 0L && it.name.isNotBlank() }
-        .associate { it.sourceId to it.name }
 }
 
 private fun MihonBackupManga.toRecord(
