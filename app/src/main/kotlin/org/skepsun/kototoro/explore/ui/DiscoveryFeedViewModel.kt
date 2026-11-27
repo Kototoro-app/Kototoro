@@ -11,12 +11,14 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.prefs.observeAsFlow
@@ -24,6 +26,8 @@ import org.skepsun.kototoro.core.ui.BaseViewModel
 import org.skepsun.kototoro.explore.data.ContentSourcesRepository
 import org.skepsun.kototoro.explore.data.DiscoveryFeedConfigRepository
 import org.skepsun.kototoro.explore.data.DiscoveryFeedRow
+import org.skepsun.kototoro.explore.domain.DiscoveryFeedLibraryMembership
+import org.skepsun.kototoro.explore.domain.FavouritesDiscoveryFeedLibraryMembership
 import org.skepsun.kototoro.explore.domain.DiscoveryFeedRowLoadResult
 import org.skepsun.kototoro.explore.domain.DiscoveryFeedRowLoader
 import org.skepsun.kototoro.filter.data.PersistableFilter
@@ -42,6 +46,7 @@ class DiscoveryFeedViewModel private constructor(
     private val contentListMapper: ContentListMapper?,
     private val contentSourcesRepository: ContentSourcesRepository?,
     private val savedFiltersRepository: SavedFiltersRepository?,
+    private val libraryMembership: DiscoveryFeedLibraryMembership?,
     @Suppress("UNUSED_PARAMETER") marker: Unit,
 ) : BaseViewModel() {
 
@@ -53,6 +58,7 @@ class DiscoveryFeedViewModel private constructor(
         contentListMapper: ContentListMapper,
         contentSourcesRepository: ContentSourcesRepository,
         savedFiltersRepository: SavedFiltersRepository,
+        libraryMembership: FavouritesDiscoveryFeedLibraryMembership,
     ) : this(
         configRepository = configRepository,
         rowLoader = rowLoader,
@@ -60,6 +66,7 @@ class DiscoveryFeedViewModel private constructor(
         contentListMapper = contentListMapper,
         contentSourcesRepository = contentSourcesRepository,
         savedFiltersRepository = savedFiltersRepository,
+        libraryMembership = libraryMembership,
         marker = Unit,
     )
 
@@ -67,6 +74,7 @@ class DiscoveryFeedViewModel private constructor(
         configRepository: DiscoveryFeedConfigRepository,
         rowLoader: DiscoveryFeedRowLoader,
         settings: AppSettings,
+        libraryMembership: DiscoveryFeedLibraryMembership? = null,
     ) : this(
         configRepository = configRepository,
         rowLoader = rowLoader,
@@ -74,6 +82,7 @@ class DiscoveryFeedViewModel private constructor(
         contentListMapper = null,
         contentSourcesRepository = null,
         savedFiltersRepository = null,
+        libraryMembership = libraryMembership,
         marker = Unit,
     )
 
@@ -101,6 +110,17 @@ class DiscoveryFeedViewModel private constructor(
     private val rowStates = MutableStateFlow<Map<String, DiscoveryFeedRowState>>(emptyMap())
     private val rowCardModels = MutableStateFlow<Map<String, List<ContentGridModel>>>(emptyMap())
     private val isRefreshing = MutableStateFlow(false)
+    private val selection = MutableStateFlow(FeedSelection())
+    private val libraryIds = MutableStateFlow<Set<Long>>(emptySet())
+    private val hideInLibrary: StateFlow<Boolean> = configRepository.observeHideInLibrary()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = configRepository.isHideInLibrary(),
+        )
+    private val displayFilter = combine(hideInLibrary, libraryIds, selection) { hide, library, selected ->
+        FeedDisplayFilter(hideInLibrary = hide, libraryIds = library, selection = selected)
+    }
 
     private val jobsLock = Any()
     private val inFlightJobs = HashMap<String, Job>()
@@ -111,7 +131,8 @@ class DiscoveryFeedViewModel private constructor(
         rowStates,
         rowCardModels,
         isRefreshing,
-    ) { allRows, states, cardModels, refreshing ->
+        displayFilter,
+    ) { allRows, states, cardModels, refreshing, filter ->
         val validIds = allRows.mapTo(HashSet(allRows.size)) { it.id }
         val filteredStates = if (states.keys.all { it in validIds }) {
             states
@@ -122,23 +143,33 @@ class DiscoveryFeedViewModel private constructor(
             filteredStates.forEach { (rowId, state) ->
                 if (state is DiscoveryFeedRowState.Loaded) {
                     val mapped = cardModels[rowId]
+                    val models = if (mapped != null && mapped.size == state.items.size) {
+                        mapped
+                    } else {
+                        state.items.map(::fallbackGridModel)
+                    }
                     put(
                         rowId,
-                        if (mapped != null && mapped.size == state.items.size) {
-                            mapped
+                        if (filter.hideInLibrary && filter.libraryIds.isNotEmpty()) {
+                            models.filterNot { it.manga.id in filter.libraryIds }
                         } else {
-                            state.items.map(::fallbackGridModel)
+                            models
                         },
                     )
                 }
             }
         }
+        val visibleRows = allRows.filterNot { it.isHidden }
+        val selected = filter.selection.prunedTo(visibleRows, resolvedCardModels)
         DiscoveryFeedUiState(
             allRows = allRows,
-            visibleRows = allRows.filterNot { it.isHidden },
+            visibleRows = visibleRows,
             rowStates = filteredStates,
             rowCardModels = resolvedCardModels,
             isRefreshing = refreshing,
+            hideInLibrary = filter.hideInLibrary,
+            selectedIds = selected.ids,
+            selectionRowId = selected.rowId,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -146,6 +177,7 @@ class DiscoveryFeedViewModel private constructor(
         initialValue = DiscoveryFeedUiState(
             allRows = rowsFlow.value,
             visibleRows = rowsFlow.value.filterNot { it.isHidden },
+            hideInLibrary = hideInLibrary.value,
         ),
     )
 
@@ -167,6 +199,86 @@ class DiscoveryFeedViewModel private constructor(
                 }
             }
         }
+        if (libraryMembership != null) {
+            viewModelScope.launch {
+                libraryMembership.observeChanges().collect {
+                    refreshLibraryIds()
+                }
+            }
+        }
+    }
+
+    fun setHideInLibrary(hide: Boolean) {
+        configRepository.setHideInLibrary(hide)
+    }
+
+    /** Long press on a card, or a tap while selecting: adds or removes it, in whichever row it is. */
+    fun toggleSelection(rowId: String, contentId: Long) {
+        selection.update { current ->
+            val ids = if (contentId in current.ids) current.ids - contentId else current.ids + contentId
+            FeedSelection(ids = ids, rowId = rowId.takeIf { ids.isNotEmpty() })
+        }
+    }
+
+    /** Adds every card of the row the selection last changed in; other rows keep their picks. */
+    fun selectAllInCurrentRow() {
+        // The raw selection, not uiState: that one trails a toggle made just before.
+        val rowId = selection.value.rowId ?: return
+        val rowIds = uiState.value.cardModelsOf(rowId).map { it.manga.id }
+        if (rowIds.isEmpty()) return
+        selection.update { current -> current.copy(ids = current.ids + rowIds, rowId = rowId) }
+    }
+
+    fun clearSelection() {
+        selection.value = FeedSelection()
+    }
+
+    /** Selected works in row order, each once even when it shows in several rows. */
+    fun selectedContents(): List<Content> {
+        val state = uiState.value
+        if (state.selectedIds.isEmpty()) return emptyList()
+        val seen = HashSet<Long>(state.selectedIds.size)
+        return buildList {
+            for (row in state.visibleRows) {
+                for (model in state.cardModelsOf(row.id)) {
+                    val content = model.manga
+                    if (content.id in state.selectedIds && seen.add(content.id)) {
+                        add(content)
+                    }
+                }
+            }
+        }
+    }
+
+    /** Splits the selection into works to add and works that are already in the library. */
+    suspend fun planBulkAddToLibrary(): DiscoveryFeedBulkAddPlan {
+        val selected = selectedContents()
+        if (selected.isEmpty()) return DiscoveryFeedBulkAddPlan(toAdd = emptyList(), alreadyInLibrary = 0)
+        val inLibrary = libraryMembership?.libraryIdsOf(selected.map { it.id }).orEmpty()
+        val (already, toAdd) = selected.partition { it.id in inLibrary }
+        return DiscoveryFeedBulkAddPlan(toAdd = toAdd, alreadyInLibrary = already.size)
+    }
+
+    /**
+     * Called once the category dialog closes: counts the planned works that are now in the library. The
+     * selection ends unless nothing was added, so closing the dialog without a category keeps the picks.
+     */
+    suspend fun completeBulkAddToLibrary(plan: DiscoveryFeedBulkAddPlan): DiscoveryFeedBulkAddResult {
+        val membership = libraryMembership
+        val ids = plan.toAdd.map { it.id }
+        var added = if (ids.isEmpty() || membership == null) 0 else membership.libraryIdsOf(ids).size
+        if (added == 0 && ids.isNotEmpty() && membership != null) {
+            // The dialog writes each category toggle in the background, so a tap on Done right after a
+            // toggle can close it before the write lands; give that write a moment.
+            withTimeoutOrNull(BULK_ADD_WRITE_GRACE_MS) { membership.observeChanges().first() }
+            added = membership.libraryIdsOf(ids).size
+        }
+        val result = DiscoveryFeedBulkAddResult(added = added, skipped = plan.alreadyInLibrary)
+        if (added > 0 || plan.toAdd.isEmpty()) {
+            clearSelection()
+        }
+        refreshLibraryIds()
+        return result
     }
 
     suspend fun getSavedFilters(source: ContentSource): List<PersistableFilter> {
@@ -357,6 +469,7 @@ class DiscoveryFeedViewModel private constructor(
                     )
                 }
                 if (nextState is DiscoveryFeedRowState.Loaded) {
+                    updateLibraryIdsFor(nextState.items)
                     val mapped = mapRowCards(nextState.items)
                     rowCardModels.update { current -> current + (rowId to mapped) }
                 } else {
@@ -393,6 +506,38 @@ class DiscoveryFeedViewModel private constructor(
         viewModelScope.launch {
             val mapped = mapRowCards(items)
             rowCardModels.update { current -> current + (rowId to mapped) }
+        }
+    }
+
+    private suspend fun updateLibraryIdsFor(items: List<Content>) {
+        val membership = libraryMembership ?: return
+        if (items.isEmpty()) return
+        val ids = items.mapTo(HashSet(items.size)) { it.id }
+        val inLibrary = try {
+            membership.libraryIdsOf(ids)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            return
+        }
+        libraryIds.update { current -> (current - ids) + inLibrary }
+    }
+
+    private suspend fun refreshLibraryIds() {
+        val membership = libraryMembership ?: return
+        val ids = rowStates.value.values.flatMapTo(HashSet()) { state ->
+            (state as? DiscoveryFeedRowState.Loaded)?.items?.map { it.id }.orEmpty()
+        }
+        libraryIds.value = if (ids.isEmpty()) {
+            emptySet()
+        } else {
+            try {
+                membership.libraryIdsOf(ids)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                return
+            }
         }
     }
 
@@ -475,3 +620,43 @@ class DiscoveryFeedViewModel private constructor(
         return configRepository.getRows().firstOrNull { it.id == rowId }
     }
 }
+
+private const val BULK_ADD_WRITE_GRACE_MS = 1_500L
+
+data class DiscoveryFeedBulkAddPlan(
+    val toAdd: List<Content>,
+    val alreadyInLibrary: Int,
+)
+
+data class DiscoveryFeedBulkAddResult(
+    val added: Int,
+    val skipped: Int,
+)
+
+private data class FeedSelection(
+    val ids: Set<Long> = emptySet(),
+    val rowId: String? = null,
+) {
+
+    /** Drops picks no visible row shows any more (row hidden or deleted, work filtered out). */
+    fun prunedTo(
+        visibleRows: List<DiscoveryFeedRow>,
+        cardModels: Map<String, List<ContentGridModel>>,
+    ): FeedSelection {
+        if (ids.isEmpty()) return this
+        val shown = HashSet<Long>()
+        for (row in visibleRows) {
+            cardModels[row.id]?.forEach { shown += it.manga.id }
+        }
+        val kept = if (shown.containsAll(ids)) ids else ids.filterTo(HashSet()) { it in shown }
+        if (kept.isEmpty()) return FeedSelection()
+        val keptRow = rowId?.takeIf { id -> visibleRows.any { it.id == id } }
+        return if (kept === ids && keptRow == rowId) this else FeedSelection(kept, keptRow)
+    }
+}
+
+private data class FeedDisplayFilter(
+    val hideInLibrary: Boolean,
+    val libraryIds: Set<Long>,
+    val selection: FeedSelection,
+)

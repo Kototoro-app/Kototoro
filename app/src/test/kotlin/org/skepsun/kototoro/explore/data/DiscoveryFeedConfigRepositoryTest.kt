@@ -237,4 +237,21 @@ class DiscoveryFeedConfigRepositoryTest {
         prefs.edit { putEnumValue(AppSettings.KEY_EXPLORE_PAGE, ExplorePage.DISCOVERY) }
         assertEquals(ExplorePage.DISCOVERY, prefs.getEnumValue(AppSettings.KEY_EXPLORE_PAGE, ExplorePage.SOURCES))
     }
+
+    @Test
+    fun `hide in library defaults off and survives a new repository on the same prefs`() = runTest {
+        val prefs = MemorySyncPreferences()
+        val repository = createRepository(prefs)
+        assertFalse(repository.isHideInLibrary())
+        assertFalse(repository.observeHideInLibrary().first())
+
+        repository.setHideInLibrary(true)
+
+        val reopened = createRepository(prefs)
+        assertTrue(reopened.isHideInLibrary())
+        assertTrue(reopened.observeHideInLibrary().first())
+        assertTrue(prefs.getBoolean(AppSettings.KEY_DISCOVERY_FEED_HIDE_IN_LIBRARY, false))
+        // Rows are stored under their own key and stay untouched.
+        assertEquals(emptyList<DiscoveryFeedRow>(), reopened.getRows())
+    }
 }

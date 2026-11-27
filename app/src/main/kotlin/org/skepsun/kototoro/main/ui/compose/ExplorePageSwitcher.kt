@@ -19,3 +19,7 @@ internal fun explorePagerTargetFor(itemId: String, targetPage: Int): Int? {
 /** The page to save once the pager settles, or null when the setting already matches. */
 internal fun explorePageToPersist(settledPage: Int, saved: ExplorePage): ExplorePage? =
     explorePageAt(settledPage).takeIf { it != saved }
+
+/** Multi-select on either page owns the top bar, so swiping stays off until the selection ends. */
+internal fun explorePagerUserScrollEnabled(sourceSelectionActive: Boolean, feedSelectionActive: Boolean): Boolean =
+    !sourceSelectionActive && !feedSelectionActive

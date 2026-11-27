@@ -4531,6 +4531,12 @@
     <string name="discovery_feed_manage_rows">Manage rows</string>
     <string name="discovery_feed_row_load_failed">Could not load this row</string>
     <string name="discovery_feed_row_empty">No items found</string>
+    <string name="discovery_feed_row_all_in_library">Everything in this row is already in your library</string>
+    <string name="discovery_feed_hide_in_library">Hide items in library</string>
+    <string name="discovery_feed_show_in_library">Show items in library</string>
+    <string name="discovery_feed_bulk_added">Added %1$d to the library</string>
+    <string name="discovery_feed_bulk_added_skipped">Added %1$d to the library, skipped %2$d already there</string>
+    <string name="discovery_feed_bulk_all_in_library">All %1$d selected items are already in the library</string>
     <string name="discovery_feed_row_hidden_badge">Hidden</string>
     <string name="discovery_feed_saved_filter_badge">Saved filter</string>
     <string name="discovery_feed_source_label">Source</string>

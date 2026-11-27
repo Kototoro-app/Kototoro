@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.explore.ui.compose
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -51,6 +52,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
@@ -74,6 +76,7 @@ import org.skepsun.kototoro.core.ui.compose.EmptyStatePanel
 import org.skepsun.kototoro.core.ui.compose.KototoroPullToRefreshBox
 import org.skepsun.kototoro.core.ui.compose.ScrollToTopEffect
 import org.skepsun.kototoro.core.ui.compose.VerticalScrollbar
+import org.skepsun.kototoro.core.ui.compose.performSelectionHapticFeedback
 import org.skepsun.kototoro.explore.data.DiscoveryFeedRow
 import org.skepsun.kototoro.explore.ui.DiscoveryFeedRowState
 import org.skepsun.kototoro.explore.ui.DiscoveryFeedUiState
@@ -141,7 +144,13 @@ internal fun DiscoveryFeedPage(
     onAddRowClick: () -> Unit,
     onManageRowsClick: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Long press on a card, or a tap on one while selecting. */
+    onToggleSelection: (rowId: String, Content) -> Unit = { _, _ -> },
+    onClearSelection: () -> Unit = {},
 ) {
+    BackHandler(enabled = isActive && uiState.isSelectionMode) {
+        onClearSelection()
+    }
     val listState = rememberSaveable(saver = LazyListState.Saver) {
         LazyListState()
     }
@@ -262,10 +271,13 @@ internal fun DiscoveryFeedPage(
                             source = sourcesByName[row.sourceName],
                             rowState = uiState.stateOf(row.id),
                             cardModels = uiState.cardModelsOf(row.id),
+                            selectedIds = uiState.selectedIds,
                             posterStyle = posterStyle,
                             gridScale = gridScale,
                             cardUiPrefs = cardUiPrefs,
                             onContentClick = onContentClick,
+                            onToggleSelection = { content -> onToggleSelection(row.id, content) },
+                            isFilteredByLibrary = uiState.hideInLibrary,
                             onRetry = { onRetryRow(row.id) },
                             onHeaderClick = { onRowHeaderClick(row) },
                             onEditClick = { onEditRowClick(row) },
@@ -306,6 +318,10 @@ internal fun DiscoveryFeedRowSection(
     onHeaderClick: () -> Unit,
     onEditClick: () -> Unit,
     modifier: Modifier = Modifier,
+    selectedIds: Set<Long> = emptySet(),
+    onToggleSelection: (Content) -> Unit = {},
+    /** The row's cards leave out works in the library, so an empty row says why. */
+    isFilteredByLibrary: Boolean = false,
 ) {
     val context = LocalContext.current
     val sourceTitle = remember(source, row.sourceName, context) {
@@ -443,6 +459,11 @@ internal fun DiscoveryFeedRowSection(
             is DiscoveryFeedRowState.Loaded -> {
                 if (cardModels.isEmpty()) {
                     DiscoveryFeedRowEmptyCard(
+                        message = if (isFilteredByLibrary && rowState.items.isNotEmpty()) {
+                            stringResource(R.string.discovery_feed_row_all_in_library)
+                        } else {
+                            stringResource(R.string.discovery_feed_row_empty)
+                        },
                         onRetry = onRetry,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -452,10 +473,12 @@ internal fun DiscoveryFeedRowSection(
                     DiscoveryFeedLoadedRowCarousel(
                         rowId = row.id,
                         items = cardModels,
+                        selectedIds = selectedIds,
                         posterStyle = posterStyle,
                         gridScale = gridScale,
                         cardUiPrefs = cardUiPrefs,
                         onContentClick = onContentClick,
+                        onToggleSelection = onToggleSelection,
                     )
                 }
             }
@@ -467,11 +490,15 @@ internal fun DiscoveryFeedRowSection(
 private fun DiscoveryFeedLoadedRowCarousel(
     rowId: String,
     items: List<ContentGridModel>,
+    selectedIds: Set<Long>,
     posterStyle: CompactPosterCardStyle,
     gridScale: Float,
     cardUiPrefs: ContentCardUiPrefs,
     onContentClick: (Content, String?) -> Unit,
+    onToggleSelection: (Content) -> Unit,
 ) {
+    val hapticFeedback = LocalHapticFeedback.current
+    val isSelectionMode = selectedIds.isNotEmpty()
     val rowListState = rememberSaveable(rowId, saver = LazyListState.Saver) {
         LazyListState()
     }
@@ -497,13 +524,23 @@ private fun DiscoveryFeedLoadedRowCarousel(
             }
             KototoroContentCardGrid(
                 item = model,
+                isSelected = model.manga.id in selectedIds,
                 gridScale = gridScale,
                 cardStyle = posterStyle,
                 cellContentPadding = PaddingValues(0.dp),
                 uiPrefs = cardUiPrefs,
                 sharedElementInstanceKey = instanceKey,
-                onClick = { _ -> onContentClick(model.manga, sharedKey) },
-                onLongClick = {},
+                onClick = { _ ->
+                    if (isSelectionMode) {
+                        onToggleSelection(model.manga)
+                    } else {
+                        onContentClick(model.manga, sharedKey)
+                    }
+                },
+                onLongClick = {
+                    hapticFeedback.performSelectionHapticFeedback()
+                    onToggleSelection(model.manga)
+                },
                 modifier = Modifier.width(posterStyle.itemWidth),
             )
         }
@@ -621,6 +658,7 @@ internal fun DiscoveryFeedRowErrorCard(
 
 @Composable
 private fun DiscoveryFeedRowEmptyCard(
+    message: String,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -637,7 +675,7 @@ private fun DiscoveryFeedRowEmptyCard(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = stringResource(R.string.discovery_feed_row_empty),
+                text = message,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.weight(1f),

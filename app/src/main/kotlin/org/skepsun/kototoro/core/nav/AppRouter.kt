@@ -897,7 +897,8 @@ class AppRouter(
 
     fun showFavoriteDialog(manga: Content) = showFavoriteDialog(setOf(manga))
 
-    fun showFavoriteDialog(manga: Collection<Content>) {
+    /** [onDismiss] runs once the dialog closes, whichever way, after its category changes were applied. */
+    fun showFavoriteDialog(manga: Collection<Content>, onDismiss: (() -> Unit)? = null) {
         if (manga.isEmpty()) {
             return
         }
@@ -905,16 +906,20 @@ class AppRouter(
         if (composeActivity != null) {
             val mangaList = manga.toList()
             val key = "favourite-dialog"
+            val dismiss: () -> Unit = {
+                composeActivity.dismissComposeModal(key)
+                onDismiss?.invoke()
+            }
             composeActivity.showComposeModal(key) {
                 val single = mangaList.singleOrNull()
                 if (single == null) {
                     FavoriteCategoryDialogRoute(
                         manga = mangaList,
                         onManageCategories = ::openFavoriteCategories,
-                        onDismiss = { composeActivity.dismissComposeModal(key) },
+                        onDismiss = dismiss,
                     )
                 } else {
-                    DuplicateAwareFavoriteDialog(single, key, composeActivity)
+                    DuplicateAwareFavoriteDialog(single, dismiss)
                 }
             }
             return
@@ -922,7 +927,7 @@ class AppRouter(
     }
 
     @androidx.compose.runtime.Composable
-    private fun DuplicateAwareFavoriteDialog(single: Content, key: String, composeActivity: BaseComposeActivity) {
+    private fun DuplicateAwareFavoriteDialog(single: Content, dismiss: () -> Unit) {
         val duplicateViewModel: org.skepsun.kototoro.migration.ui.duplicate.DuplicateFavouriteViewModel =
             androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel(key = "dup-${single.id}")
         androidx.compose.runtime.LaunchedEffect(single.id) { duplicateViewModel.check(single) }
@@ -933,18 +938,18 @@ class AppRouter(
             found.isEmpty() || addAnyway.value -> FavoriteCategoryDialogRoute(
                 manga = listOf(single),
                 onManageCategories = ::openFavoriteCategories,
-                onDismiss = { composeActivity.dismissComposeModal(key) },
+                onDismiss = dismiss,
             )
             else -> org.skepsun.kototoro.migration.ui.duplicate.DuplicateFavouriteSheet(
                 content = single,
                 duplicates = found,
                 viewModel = duplicateViewModel,
                 onOpen = { id ->
-                    composeActivity.dismissComposeModal(key)
+                    dismiss()
                     openDetails(id)
                 },
                 onAddAnyway = { addAnyway.value = true },
-                onDismiss = { composeActivity.dismissComposeModal(key) },
+                onDismiss = dismiss,
             )
         }
     }

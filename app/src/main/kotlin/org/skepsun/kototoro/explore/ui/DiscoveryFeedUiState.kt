@@ -29,7 +29,18 @@ data class DiscoveryFeedUiState(
     val rowStates: Map<String, DiscoveryFeedRowState> = emptyMap(),
     val rowCardModels: Map<String, List<ContentGridModel>> = emptyMap(),
     val isRefreshing: Boolean = false,
+    /** Rows leave out works already in the library; [rowCardModels] is already filtered. */
+    val hideInLibrary: Boolean = false,
+    /** Selected content ids, across rows; only ids still shown in some row are kept. */
+    val selectedIds: Set<Long> = emptySet(),
+    /** The row the last selection change happened in: "select all" fills this row. */
+    val selectionRowId: String? = null,
 ) {
+
+    val isSelectionMode: Boolean
+        get() = selectedIds.isNotEmpty()
+
+    fun isSelected(contentId: Long): Boolean = contentId in selectedIds
 
     fun stateOf(rowId: String): DiscoveryFeedRowState =
         rowStates[rowId] ?: DiscoveryFeedRowState.Idle

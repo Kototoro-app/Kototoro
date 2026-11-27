@@ -471,3 +471,160 @@ private fun ExploreDiscoveryPopulatedContent(dark: Boolean = false) {
         }
     }
 }
+
+private enum class FeedActionsPreviewMode { SELECTING, CATEGORY_DIALOG, LIBRARY_SHOWN, LIBRARY_HIDDEN }
+
+@Preview(name = "Discovery · multi-select", widthDp = 412, heightDp = 720, locale = "zh-rCN")
+@Composable
+internal fun ExploreDiscoverySelectingPreview() = ExploreDiscoveryActionsContent(FeedActionsPreviewMode.SELECTING)
+
+@Preview(name = "Discovery · multi-select · dark", widthDp = 412, heightDp = 720, locale = "zh-rCN")
+@Composable
+internal fun ExploreDiscoverySelectingDarkPreview() =
+    ExploreDiscoveryActionsContent(FeedActionsPreviewMode.SELECTING, dark = true)
+
+@Preview(name = "Discovery · category dialog", widthDp = 412, heightDp = 720, locale = "zh-rCN")
+@Composable
+internal fun ExploreDiscoveryCategoryDialogPreview() =
+    ExploreDiscoveryActionsContent(FeedActionsPreviewMode.CATEGORY_DIALOG)
+
+@Preview(name = "Discovery · category dialog · dark", widthDp = 412, heightDp = 720, locale = "zh-rCN")
+@Composable
+internal fun ExploreDiscoveryCategoryDialogDarkPreview() =
+    ExploreDiscoveryActionsContent(FeedActionsPreviewMode.CATEGORY_DIALOG, dark = true)
+
+@Preview(name = "Discovery · library shown", widthDp = 412, heightDp = 720, locale = "zh-rCN")
+@Composable
+internal fun ExploreDiscoveryLibraryShownPreview() =
+    ExploreDiscoveryActionsContent(FeedActionsPreviewMode.LIBRARY_SHOWN)
+
+@Preview(name = "Discovery · library hidden", widthDp = 412, heightDp = 720, locale = "zh-rCN")
+@Composable
+internal fun ExploreDiscoveryLibraryHiddenPreview() =
+    ExploreDiscoveryActionsContent(FeedActionsPreviewMode.LIBRARY_HIDDEN)
+
+@Preview(name = "Discovery · library shown · dark", widthDp = 412, heightDp = 720, locale = "zh-rCN")
+@Composable
+internal fun ExploreDiscoveryLibraryShownDarkPreview() =
+    ExploreDiscoveryActionsContent(FeedActionsPreviewMode.LIBRARY_SHOWN, dark = true)
+
+@Preview(name = "Discovery · library hidden · dark", widthDp = 412, heightDp = 720, locale = "zh-rCN")
+@Composable
+internal fun ExploreDiscoveryLibraryHiddenDarkPreview() =
+    ExploreDiscoveryActionsContent(FeedActionsPreviewMode.LIBRARY_HIDDEN, dark = true)
+
+@Composable
+private fun ExploreDiscoveryActionsContent(mode: FeedActionsPreviewMode, dark: Boolean = false) {
+    DiscoveryFeedPreviewTheme(dark = dark) {
+        val topInset = LocalInterfaceStyleTokens.current.mainTopBarHeight + ExploreBelowBarSwitcherInset
+        val srcMangaDex = PreviewSource(name = "MangaDex", locale = "en")
+        val srcCopyManga = PreviewSource(name = "拷贝漫画", locale = "zh")
+        val rowA = DiscoveryFeedRow(id = "a", sourceName = srcMangaDex.name, displayName = "MangaDex · 热门连载", sortOrder = 0)
+        val rowB = DiscoveryFeedRow(
+            id = "b",
+            sourceName = srcCopyManga.name,
+            query = "异世界",
+            displayName = "拷贝漫画 · 异世界",
+            sortOrder = 1,
+        )
+        val itemsA = listOf("葬送的芙莉莲", "迷宫饭", "药屋少女的呢喃", "尖帽子的魔法工坊")
+            .mapIndexed { index, title -> previewContent(index + 1L, title, srcMangaDex) }
+        val itemsB = listOf("无职转生", "关于我转生变成史莱姆这档事", "Re:从零开始的异世界生活", "为美好的世界献上祝福")
+            .mapIndexed { index, title -> previewContent(index + 11L, title, srcCopyManga) }
+        // Works 1, 2 and 12 are in the library.
+        val libraryIds = setOf(1L, 2L, 12L)
+        fun cards(items: List<Content>) = items.map { item ->
+            ContentGridModel(
+                manga = item,
+                override = null,
+                subtitle = null,
+                counter = 0,
+                progress = null,
+                isFavorite = item.id in libraryIds,
+                isSaved = false,
+            )
+        }
+        val hide = mode == FeedActionsPreviewMode.LIBRARY_HIDDEN
+        fun shown(items: List<Content>) = cards(items).filterNot { hide && it.manga.id in libraryIds }
+        val selecting = mode == FeedActionsPreviewMode.SELECTING || mode == FeedActionsPreviewMode.CATEGORY_DIALOG
+        val uiState = DiscoveryFeedUiState(
+            allRows = listOf(rowA, rowB),
+            visibleRows = listOf(rowA, rowB),
+            rowStates = mapOf(
+                rowA.id to DiscoveryFeedRowState.Loaded(itemsA, fetchedAtMs = 1_000L),
+                rowB.id to DiscoveryFeedRowState.Loaded(itemsB, fetchedAtMs = 1_000L),
+            ),
+            rowCardModels = mapOf(rowA.id to shown(itemsA), rowB.id to shown(itemsB)),
+            hideInLibrary = hide,
+            selectedIds = if (selecting) setOf(3L, 4L, 11L) else emptySet(),
+            selectionRowId = if (selecting) rowB.id else null,
+        )
+        Box(modifier = Modifier.fillMaxSize()) {
+            DiscoveryFeedPage(
+                uiState = uiState,
+                sourcesByName = mapOf(srcMangaDex.name to srcMangaDex, srcCopyManga.name to srcCopyManga),
+                contentPadding = PaddingValues(top = topInset),
+                posterStyle = compactPosterRailCardStyle(1f),
+                gridScale = 1f,
+                cardUiPrefs = previewCardUiPrefs,
+                onRowVisible = {},
+                onRetryRow = {},
+                onRefreshAll = {},
+                onContentClick = { _, _ -> },
+                onRowHeaderClick = {},
+                onEditRowClick = {},
+                onAddRowClick = {},
+                onManageRowsClick = {},
+            )
+            if (selecting) {
+                val bar = discoveryFeedSelectionTopBarState(uiState, {}, {})!!
+                org.skepsun.kototoro.list.ui.compose.KototoroSelectionTopBar(
+                    selectedCount = bar.selectedCount,
+                    isAllNonLocal = bar.isAllNonLocal,
+                    isSingleSelection = bar.isSingleSelection,
+                    supportedActions = bar.supportedActions,
+                    preferredInlineActions = bar.preferredInlineActions,
+                    includeContextualActions = bar.includeContextualActions,
+                    includeStatusBarPadding = false,
+                    onClearSelection = {},
+                    onActionClick = {},
+                    modifier = Modifier.align(Alignment.TopCenter),
+                )
+            } else {
+                PreviewExploreTopBarOverlay(
+                    selectedPage = ExplorePage.DISCOVERY,
+                    modifier = Modifier.align(Alignment.TopCenter),
+                )
+            }
+            if (mode == FeedActionsPreviewMode.CATEGORY_DIALOG) {
+                fun category(id: Long, title: String) = org.skepsun.kototoro.core.model.FavouriteCategory(
+                    id = id,
+                    title = title,
+                    sortKey = id.toInt(),
+                    order = org.skepsun.kototoro.list.domain.ListSortOrder.NEWEST,
+                    createdAt = java.time.Instant.EPOCH,
+                    isTrackingEnabled = true,
+                    isVisibleInLibrary = true,
+                )
+                org.skepsun.kototoro.favourites.ui.categories.select.compose.FavoriteCategoryDialog(
+                    contentTitle = "药屋少女的呢喃, 尖帽子的魔法工坊, 无职转生",
+                    items = listOf(
+                        org.skepsun.kototoro.favourites.ui.categories.select.model.ContentCategoryItem(
+                            category = category(1L, "在读"),
+                            checkedState = com.google.android.material.checkbox.MaterialCheckBox.STATE_CHECKED,
+                            isTrackerEnabled = true,
+                        ),
+                        org.skepsun.kototoro.favourites.ui.categories.select.model.ContentCategoryItem(
+                            category = category(2L, "想读"),
+                            checkedState = com.google.android.material.checkbox.MaterialCheckBox.STATE_UNCHECKED,
+                            isTrackerEnabled = true,
+                        ),
+                    ),
+                    onCategoryToggle = { _, _ -> },
+                    onManageCategories = {},
+                    onDismiss = {},
+                )
+            }
+        }
+    }
+}
