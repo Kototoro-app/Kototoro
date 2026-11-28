@@ -500,6 +500,8 @@ class HistoryListViewModel @Inject constructor(
         ListSortOrder.ALPHABETIC_REVERSE,
         ListSortOrder.RELEVANCE,
         ListSortOrder.NEW_CHAPTERS,
+        ListSortOrder.UNREAD_CHAPTERS,
+        ListSortOrder.UNREAD_CHAPTERS_ASC,
         ListSortOrder.UPDATED,
         ListSortOrder.RATING,
         ListSortOrder.MANUAL -> null

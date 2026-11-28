@@ -48,6 +48,7 @@ data class FavouriteCardBaseRow(
     @ColumnInfo(name = "metadata_tracking_service") val metadataTrackingService: Int?,
     @ColumnInfo(name = "metadata_tracking_title") val metadataTrackingTitle: String?,
     @ColumnInfo(name = "metadata_tracking_cover_url") val metadataTrackingCoverUrl: String?,
+    @ColumnInfo(name = "unread_chapter_count") val unreadChapterCount: Int? = null,
 ) {
     /** True when the favourite manga row itself is present. */
     val hasDisplay: Boolean

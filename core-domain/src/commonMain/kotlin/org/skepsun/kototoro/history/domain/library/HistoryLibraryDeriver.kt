@@ -183,6 +183,8 @@ object HistoryLibraryDeriver {
             ListSortOrder.OLDEST -> compareBy<HistoryCardEntry> { it.createdAt }
             ListSortOrder.PROGRESS -> compareByDescending<HistoryCardEntry> { it.percent }
             ListSortOrder.UNREAD -> compareBy<HistoryCardEntry> { it.percent }
+            ListSortOrder.UNREAD_CHAPTERS, ListSortOrder.UNREAD_CHAPTERS_ASC ->
+                order.compareUnreadChapters<HistoryCardEntry> { it.unreadChapterCount }
             ListSortOrder.NEW_CHAPTERS -> compareByDescending<HistoryCardEntry> { it.newChapters }
                 .thenByDescending { it.lastChapterDate ?: 0L }
             ListSortOrder.UPDATED -> compareByDescending<HistoryCardEntry> { it.lastChapterDate ?: 0L }

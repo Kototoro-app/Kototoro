@@ -47,6 +47,7 @@ data class HistoryCardRow(
     @ColumnInfo(name = "display_nsfw") val displayNsfw: Boolean?,
     @ColumnInfo(name = "display_rating") val displayRating: Float?,
     @ColumnInfo(name = "display_content_type") val displayContentType: String?,
+    @ColumnInfo(name = "unread_chapter_count") val unreadChapterCount: Int? = null,
 )
 
 /** Tag facet of a history manga — the Tag quick filter's key (title + key). */

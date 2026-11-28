@@ -10,6 +10,7 @@ val ListSortOrder.titleResId: Int
         ListSortOrder.OLDEST -> R.string.order_oldest
         ListSortOrder.PROGRESS -> R.string.progress
         ListSortOrder.UNREAD -> R.string.unread
+        ListSortOrder.UNREAD_CHAPTERS, ListSortOrder.UNREAD_CHAPTERS_ASC -> R.string.chapters_left
         ListSortOrder.ALPHABETIC -> R.string.by_name
         ListSortOrder.ALPHABETIC_REVERSE -> R.string.by_name_reverse
         ListSortOrder.RATING -> R.string.by_rating

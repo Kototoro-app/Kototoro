@@ -127,6 +127,7 @@ class HistoryLibrarySnapshotStore @Inject constructor(
                 createdAt = base.createdAt,
                 percent = base.percent,
                 chaptersCount = base.chaptersCount,
+                cachedUnreadChapterCount = base.unreadChapterCount,
                 chapterId = base.chapterId,
                 newChapters = base.newChapters ?: 0,
                 lastChapterDate = base.lastChapterDate,

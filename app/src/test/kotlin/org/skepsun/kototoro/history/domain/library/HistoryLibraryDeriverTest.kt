@@ -169,6 +169,22 @@ class HistoryLibraryDeriverTest {
     }
 
     @Test
+    fun `remaining chapters order uses saved progress only when cached chapter count is unavailable`() {
+        val rows = listOf(
+            row(1, percent = 0.9f).copy(cachedUnreadChapterCount = 20),
+            row(2, percent = 0.1f).copy(chaptersCount = 10),
+            row(3, percent = 1f).copy(chaptersCount = 0),
+            row(4, percent = 0.5f).copy(chaptersCount = 0),
+        )
+
+        fun orderOf(order: ListSortOrder) =
+            HistoryLibraryDeriver.derive(input(rows, order = order)).visibleRows.map { it.entityId }
+
+        assertEquals(listOf(1L, 2L, 3L, 4L), orderOf(ListSortOrder.UNREAD_CHAPTERS))
+        assertEquals(listOf(3L, 2L, 1L, 4L), orderOf(ListSortOrder.UNREAD_CHAPTERS_ASC))
+    }
+
+    @Test
     fun `new chapters orders by new chapters then last chapter date`() {
         val rows = listOf(
             row(1, newChapters = 2, lastChapterDate = 100),

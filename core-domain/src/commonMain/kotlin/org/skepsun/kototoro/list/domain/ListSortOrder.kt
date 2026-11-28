@@ -15,9 +15,14 @@ enum class ListSortOrder {
     LONG_AGO_READ,
     UPDATED,
     MANUAL,
+    UNREAD_CHAPTERS,
+    UNREAD_CHAPTERS_ASC,
     ;
 
     fun isGroupingSupported() = this == LAST_READ || this == NEWEST || this == PROGRESS
+
+    internal fun <T> compareUnreadChapters(selector: (T) -> Int?): Comparator<T> =
+        compareBy(nullsLast(if (this == UNREAD_CHAPTERS_ASC) naturalOrder<Int>() else reverseOrder<Int>()), selector)
 
     companion object {
 
@@ -32,6 +37,8 @@ enum class ListSortOrder {
             ALPHABETIC_REVERSE,
             NEW_CHAPTERS,
             UPDATED,
+            UNREAD_CHAPTERS,
+            UNREAD_CHAPTERS_ASC,
         ).sortedBy { it.ordinal }.toSet()
         val FAVORITES: Set<ListSortOrder> = setOf(
             ALPHABETIC,
@@ -46,6 +53,8 @@ enum class ListSortOrder {
             LONG_AGO_READ,
             UPDATED,
             MANUAL,
+            UNREAD_CHAPTERS,
+            UNREAD_CHAPTERS_ASC,
         ).sortedBy { it.ordinal }.toSet()
         val SUGGESTIONS: Set<ListSortOrder> = setOf(RELEVANCE)
 
