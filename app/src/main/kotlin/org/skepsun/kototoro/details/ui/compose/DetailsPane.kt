@@ -41,6 +41,7 @@ import org.skepsun.kototoro.core.ui.glass.GlassBottomBarContainer
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
 import org.skepsun.kototoro.core.ui.glass.LocalGlassPrefs
+import org.skepsun.kototoro.core.ui.glass.GlassSurfaceRoute
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.details.ui.DetailsViewModel
 import org.skepsun.kototoro.details.ui.model.ContentBranch
@@ -74,8 +75,8 @@ internal fun shouldCacheCompactSummary(
 internal fun shouldCacheWideSummary(
     hasContentBackdrop: Boolean,
     showSummaryCards: Boolean,
-    panoramaEnabled: Boolean,
-): Boolean = hasContentBackdrop && showSummaryCards && panoramaEnabled
+    glassRoute: GlassSurfaceRoute,
+): Boolean = hasContentBackdrop && showSummaryCards && glassRoute == GlassSurfaceRoute.Live
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable

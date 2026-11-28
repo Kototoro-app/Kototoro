@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.skepsun.kototoro.core.prefs.ProgressIndicatorMode
+import kotlin.math.nextDown
 
 class ReadingProgressTest {
 
@@ -59,10 +60,30 @@ class ReadingProgressTest {
     @Test
     fun `percentage label truncates and reports completed histories as one hundred`() {
         assertEquals("42", ReadingProgress.percentToString(0.429f))
+        assertEquals("99", ReadingProgress.percentToString(0.99999f.nextDown()))
         assertEquals("100", ReadingProgress.percentToString(0.99999f))
         assertEquals("0", ReadingProgress.percentToString(-1f))
         assertEquals("0", ReadingProgress.percentToString(Float.NaN))
         assertEquals("0", ReadingProgress.percentToString(1.1f))
+    }
+
+    @Test
+    fun `percentage label is exact at whole percentage boundaries`() {
+        assertEquals("0", ReadingProgress.percentToString(0f))
+        for (percent in 1..99) {
+            val fraction = percent / 100f
+            assertEquals(percent.toString(), ReadingProgress.percentToString(fraction))
+            assertEquals((percent - 1).toString(), ReadingProgress.percentToString(fraction.nextDown()))
+        }
+    }
+
+    @Test
+    fun `progress fraction fills the indicator at the stored completion threshold`() {
+        val unfinished = 0.99999f.nextDown()
+        assertEquals(unfinished, ReadingProgress.normalizeCompleted(unfinished))
+        assertEquals(1f, ReadingProgress.normalizeCompleted(0.99999f))
+        assertEquals(0f, ReadingProgress.normalizeCompleted(0f))
+        assertEquals(0.005f, ReadingProgress.normalizeCompleted(0.005f))
     }
 
     @Test

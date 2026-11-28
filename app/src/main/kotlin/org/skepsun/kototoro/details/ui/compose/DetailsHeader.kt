@@ -93,11 +93,8 @@ import org.skepsun.kototoro.core.image.tvboxSearchCoverModel
 import org.skepsun.kototoro.core.model.iconResId
 import org.skepsun.kototoro.core.model.titleResId
 import org.skepsun.kototoro.core.prefs.AppSettings
-import org.skepsun.kototoro.core.prefs.InterfaceStyle
-import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.core.model.FavouriteCategory
-import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.compose.sharedCoverMemoryCacheKey
 import org.skepsun.kototoro.core.ui.compose.AppLayoutTokens
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
@@ -105,7 +102,6 @@ import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
-import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.core.ui.theme.isDarkTheme
@@ -120,6 +116,7 @@ import org.skepsun.kototoro.details.ui.model.DetailsSourceRole
 import org.skepsun.kototoro.details.ui.model.DetailsSupplementAction
 import org.skepsun.kototoro.details.ui.model.HistoryInfo
 import org.skepsun.kototoro.details.ui.model.LinkedTrackingItemUiModel
+import org.skepsun.kototoro.list.domain.ReadingProgress
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.model.ContentTag
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingStatus
@@ -173,6 +170,8 @@ fun DetailsHeader(
     translatedDescription: String?,
     isShowingTranslation: Boolean,
     panoramaEnabled: Boolean,
+    showSummaryCards: Boolean,
+    summaryCardBackdrop: Backdrop?,
     settings: AppSettings,
     collapseProgressProvider: () -> Float,
     coverVisualAlphaProvider: () -> Float,
@@ -217,7 +216,6 @@ fun DetailsHeader(
     onManageTrackingSuggestion: (org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteMatchResult) -> Unit,
 ) {
     val context = LocalContext.current
-    val showSummaryCards by settings.observeAsState(AppSettings.KEY_DETAILS_SUMMARY_CARDS) { isDetailsSummaryCardsEnabled }
     val isTvPresentation = LocalUiPresentationConfig.current.isTv
     val expressive = LocalMaterialExpressiveComponentsEnabled.current
     val isDarkTheme = MaterialTheme.colorScheme.isDarkTheme()
@@ -885,7 +883,7 @@ fun DetailsHeader(
                 null
             }
             if (showSummaryCards) {
-                DetailsSummaryCard(panoramaEnabled = panoramaEnabled, modifier = factsModifier) {
+                DetailsSummaryCard(panoramaEnabled, summaryCardBackdrop, modifier = factsModifier) {
                     val displayedLanguage = languageFact ?: DetailsMetaItem(
                         value = stringResource(R.string.unknown),
                         label = stringResource(R.string.language),
@@ -989,7 +987,7 @@ fun DetailsHeader(
                 }
             }
             if (showSummaryCards) {
-                DetailsSummaryCard(panoramaEnabled = panoramaEnabled, modifier = Modifier.fillMaxWidth()) {
+                DetailsSummaryCard(panoramaEnabled, summaryCardBackdrop, modifier = Modifier.fillMaxWidth()) {
                     Column(
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -1031,6 +1029,8 @@ private fun DetailsMetaItem.asMetadataEntry(@DrawableRes iconRes: Int): DetailsM
         },
     )
 
+internal val DetailsSummaryGlassRole = GlassComponentRole.ContentOverlay
+
 internal fun summaryCardBackdrop(base: Backdrop): Backdrop =
     object : Backdrop by base {
         override val effectInputScale: Float
@@ -1042,19 +1042,18 @@ internal fun summaryCardBackdrop(base: Backdrop): Backdrop =
 @Composable
 private fun DetailsSummaryCard(
     panoramaEnabled: Boolean,
+    baseBackdrop: Backdrop?,
     modifier: Modifier,
     content: @Composable () -> Unit,
 ) {
-    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
-    val baseBackdrop = LocalLiquidGlassBackdrop.current
     val cornerRadius = LocalInterfaceStyleTokens.current.groupCornerRadius.coerceAtMost(18.dp)
-    if (isIosStyle && panoramaEnabled && baseBackdrop != null) {
+    if (baseBackdrop != null) {
         val cardBackdrop = remember(baseBackdrop) { summaryCardBackdrop(baseBackdrop) }
         GlassSurface(
             modifier = modifier,
-            style = GlassDefaults.subtleStyle().copy(containerAlpha = 0.88f),
+            style = GlassDefaults.subtleStyle(),
             shape = RoundedRectangle(cornerRadius),
-            componentRole = GlassComponentRole.ContentOverlay,
+            componentRole = DetailsSummaryGlassRole,
             highlightOnIdle = false,
             pressFeedbackEnabled = false,
             backdropOverride = cardBackdrop,
@@ -1077,20 +1076,25 @@ private fun DetailsSummaryCard(
 private fun DetailsSummaryProgress(progress: Float) {
     if (progress <= 0f) return
 
-    val wholePercent = (progress * 100f).toInt()
+    val displayedProgress = ReadingProgress.normalizeCompleted(progress)
+    val wholePercent = ReadingProgress.percentToString(displayedProgress)
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         LinearProgressIndicator(
-            progress = { progress },
+            progress = { displayedProgress },
             modifier = Modifier.weight(1f).height(3.dp),
             gapSize = 0.dp,
             drawStopIndicator = {},
         )
         Text(
-            text = if (wholePercent == 0) stringResource(R.string.details_progress_below_one_percent) else "$wholePercent%",
+            text = if (wholePercent == "0") {
+                stringResource(R.string.details_progress_below_one_percent)
+            } else {
+                "$wholePercent%"
+            },
             style = MaterialTheme.typography.labelSmall,
             maxLines = 1,
         )

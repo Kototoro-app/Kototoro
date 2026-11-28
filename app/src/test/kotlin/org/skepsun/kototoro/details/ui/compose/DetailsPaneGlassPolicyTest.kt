@@ -6,6 +6,7 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.unit.Density
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.BackdropQuality
+import org.skepsun.kototoro.core.ui.glass.GlassSurfaceRoute
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -76,9 +77,10 @@ class DetailsPaneGlassPolicyTest {
 
     @Test
     fun `wide summary offscreen cache runs only when live-glass summary cards are active`() {
-        assertTrue(shouldCacheWideSummary(hasContentBackdrop = true, showSummaryCards = true, panoramaEnabled = true))
-        assertFalse(shouldCacheWideSummary(hasContentBackdrop = false, showSummaryCards = true, panoramaEnabled = true))
-        assertFalse(shouldCacheWideSummary(hasContentBackdrop = true, showSummaryCards = false, panoramaEnabled = true))
-        assertFalse(shouldCacheWideSummary(hasContentBackdrop = true, showSummaryCards = true, panoramaEnabled = false))
+        for (route in GlassSurfaceRoute.entries) {
+            assertEquals(route == GlassSurfaceRoute.Live, shouldCacheWideSummary(true, true, route))
+            assertFalse(shouldCacheWideSummary(hasContentBackdrop = false, showSummaryCards = true, glassRoute = route))
+            assertFalse(shouldCacheWideSummary(hasContentBackdrop = true, showSummaryCards = false, glassRoute = route))
+        }
     }
 }
