@@ -6,6 +6,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.GraphicsLayerScope
 import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -42,6 +43,14 @@ class LayerBackdrop internal constructor(
     internal var layerCoordinates: LayoutCoordinates? by mutableStateOf(null)
 
     private var inverseLayerScope: InverseLayerScope? = null
+
+    override fun relativePositionOf(coordinates: LayoutCoordinates): Offset? {
+        val lc = layerCoordinates
+        if (lc != null && lc.isAttached) {
+            runCatching { lc.localPositionOf(coordinates) }.getOrNull()?.let { return it }
+        }
+        return super.relativePositionOf(coordinates)
+    }
 
     override fun DrawScope.drawBackdrop(
         density: Density,

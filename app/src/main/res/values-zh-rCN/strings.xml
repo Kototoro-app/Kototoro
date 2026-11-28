@@ -2872,6 +2872,8 @@
     <string name="details_translate_button_visible">在详情页显示翻译按钮</string>
     <string name="details_translate_button_visible_summary">当翻译可用时，在作品详情页显示翻译操作按钮</string>
     <string name="modern_details_dock">现代详情页 Dock</string>
+    <string name="details_summary_cards">显示详情摘要卡片</string>
+    <string name="details_summary_cards_summary">使用圆角卡片显示作品的基本信息和简介</string>
     <string name="modern_details_dock_summary">使用选中状态更清晰、主要操作更突出的现代底栏</string>
     <string name="details_translate_title_and_description_hint">翻译标题和描述</string>
     <string name="disable_favourites_nsfw">从收藏中隐藏</string>

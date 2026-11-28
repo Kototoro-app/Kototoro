@@ -31,7 +31,9 @@ RuntimeEffect, shaders and render effects from the original Skiko implementation
    published `layoutCoordinates` on every layout pass, and the property is backed by
    `neverEqualPolicy()`, so each publish notified its readers and the window never stopped
    invalidating. The node now remembers the position/size of the last publish and republishes
-   only when that geometry changes. The coordinates *instance* is deliberately not part of the
+   only when that geometry changes, using `Backdrop.relativePositionOf` (`LayerBackdrop` reports
+   `layerCoordinates.localPositionOf(coordinates)` so route transitions moving the backdrop and its
+   consumers together do not republish). The coordinates *instance* is deliberately not part of the
    comparison: with a shared-transition scope in the tree, the callback alternates between the
    lookahead and the regular `LayoutCoordinates` of the same node, so an instance check
    republishes forever even while nothing moves.
@@ -80,7 +82,8 @@ RuntimeEffect, shaders and render effects from the original Skiko implementation
    `SwipeableFilterChip` pass `saturation = 1.5f` instead of calling `vibrancy()` when a lens runs.
 
    The compact chapter panel also opts into `BottomClippedBackdrop`. Its child keeps the
-   rounded outline clip with automatic compositing. Its filtered input covers the visible
+   rounded outline clip with automatic compositing via `Backdrop.prefersAutoCompositing` (which
+   other source-over surfaces can also opt into). Its filtered input covers the visible
    height plus overscan in 128-texel increments. The full logical panel still defines the lens.
 
    Status for 3 and 4 (Android 17 device, iOS interface style, debug build, A/B against the same

@@ -4,6 +4,7 @@ import android.content.Context
 import dagger.Reusable
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.LocalizedAppContext
+import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.settings.SettingsDestination
 import javax.inject.Inject
 
@@ -64,6 +65,7 @@ class SettingsSearchHelper @Inject constructor(
         ), SettingsDestination.AppearanceBadgesSettings, R.string.badges_in_lists)
         addAppearanceItems(listOf(
             "description_collapse" to R.string.collapse_long_description,
+            AppSettings.KEY_DETAILS_SUMMARY_CARDS to R.string.details_summary_cards,
             "panorama_enabled" to R.string.pref_panorama_cover,
             "pages_tab" to R.string.show_pages_thumbs,
             "details_translate_button" to R.string.details_translate_button_visible,

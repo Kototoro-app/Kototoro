@@ -189,6 +189,8 @@ fun AppearanceSettingsRoute(
     val favoritesTabsPosition = settings.observeAsState(AppSettings.KEY_FAVORITES_TABS_POSITION) { favoritesTabsPosition }.value
     val mangaListBadges = settings.observeAsState(AppSettings.KEY_MANGA_LIST_BADGES) { mangaListBadges }.value
     val isDescriptionExpanded = settings.observeAsState(AppSettings.KEY_COLLAPSE_DESCRIPTION) { isDescriptionExpanded }.value
+    val isDetailsSummaryCardsEnabled =
+        settings.observeAsState(AppSettings.KEY_DETAILS_SUMMARY_CARDS) { isDetailsSummaryCardsEnabled }.value
     val isPanoramaCoverEnabled = settings.observeAsState(AppSettings.KEY_PANORAMA_ENABLED) { isPanoramaCoverEnabled }.value
     val panoramaCoverBlur = settings.observeAsState(AppSettings.KEY_PANORAMA_BLUR) { panoramaCoverBlur }.value
     val panoramaTransitionRange =
@@ -441,6 +443,7 @@ fun AppearanceSettingsRoute(
         badgesBottomRight = settings.observeAsState(AppSettings.KEY_BADGES_BOTTOM_RIGHT) { badgesBottomRight }.value,
         mangaListBadges = mangaListBadges,
         isDescriptionExpanded = isDescriptionExpanded,
+        isDetailsSummaryCardsEnabled = isDetailsSummaryCardsEnabled,
         isPanoramaCoverEnabled = isPanoramaCoverEnabled,
         panoramaCoverSummary = panoramaCoverSummary,
         isPagesTabEnabled = isPagesTabEnabled,
@@ -543,6 +546,7 @@ fun AppearanceSettingsRoute(
         onBadgesBottomRightChange = { settings.badgesBottomRight = it },
         onMangaListBadgesChange = { settings.mangaListBadges = it },
         onDescriptionExpandedChange = { settings.isDescriptionExpanded = it },
+        onDetailsSummaryCardsEnabledChange = { settings.isDetailsSummaryCardsEnabled = it },
         onPanoramaCoverEnabledChange = { settings.isPanoramaCoverEnabled = it },
         onPanoramaSettingsClick = onOpenPanoramaSettings,
         onPagesTabEnabledChange = { settings.isPagesTabEnabled = it },
