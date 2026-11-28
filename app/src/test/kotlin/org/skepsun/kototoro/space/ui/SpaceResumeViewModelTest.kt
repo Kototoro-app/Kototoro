@@ -34,11 +34,14 @@ import org.skepsun.kototoro.parsers.model.RATING_UNKNOWN
 import org.skepsun.kototoro.space.domain.BuiltInSpaces
 import org.skepsun.kototoro.space.domain.SpaceId
 import org.skepsun.kototoro.space.domain.SpaceRepository
+import org.skepsun.kototoro.space.data.SecondTestSpace
 import org.skepsun.kototoro.space.data.TestSpaceCatalogRepository
 import java.time.Instant
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SpaceResumeViewModelTest {
+
+	private val emptyTestSpaceId = SpaceId("custom:no-history")
 
 	private val dispatcher = UnconfinedTestDispatcher()
 
@@ -49,16 +52,14 @@ class SpaceResumeViewModelTest {
 	fun tearDown() = Dispatchers.resetMain()
 
 	@Test
-	fun `state maps recent content for every built in space`() {
+	fun `state maps recent content for every space`() {
 		val manga = content(1L, "Manga", ContentType.MANGA)
-		val novel = content(2L, "Novel", ContentType.NOVEL)
-		val anime = content(3L, "Anime", ContentType.VIDEO)
+		val second = content(2L, "Second", ContentType.MANGA)
 
 		val state = buildSpaceResumeUiState(
 			recent = mapOf(
 				BuiltInSpaces.Manga to manga,
-				BuiltInSpaces.Novel to novel,
-				BuiltInSpaces.Anime to anime,
+				SecondTestSpace.id to second,
 			),
 			isOnline = true,
 			resumeEnabled = true,
@@ -66,10 +67,9 @@ class SpaceResumeViewModelTest {
 
 		state.items.mapValues { it.value.title } shouldContainExactly mapOf(
 			BuiltInSpaces.Manga to "Manga",
-			BuiltInSpaces.Novel to "Novel",
-			BuiltInSpaces.Anime to "Anime",
+			SecondTestSpace.id to "Second",
 		)
-		state.items.values.map(SpaceResumeItem::canResume) shouldContainExactly listOf(true, true, true)
+		state.items.values.map(SpaceResumeItem::canResume) shouldContainExactly listOf(true, true)
 	}
 
 	@Test
@@ -80,16 +80,16 @@ class SpaceResumeViewModelTest {
 		val state = buildSpaceResumeUiState(
 			recent = mapOf(
 				BuiltInSpaces.Manga to remote,
-				BuiltInSpaces.Novel to null,
-				BuiltInSpaces.Anime to local,
+				emptyTestSpaceId to null,
+				SecondTestSpace.id to local,
 			),
 			isOnline = false,
 			resumeEnabled = true,
 		)
 
-		state.items.keys shouldBe setOf(BuiltInSpaces.Manga, BuiltInSpaces.Anime)
+		state.items.keys shouldBe setOf(BuiltInSpaces.Manga, SecondTestSpace.id)
 		state.items.getValue(BuiltInSpaces.Manga).canResume shouldBe false
-		state.items.getValue(BuiltInSpaces.Anime).canResume shouldBe true
+		state.items.getValue(SecondTestSpace.id).canResume shouldBe true
 	}
 
 	@Test
@@ -105,11 +105,11 @@ class SpaceResumeViewModelTest {
 
 	@Test
 	fun `resume activates target space before emitting content`() = runTest {
-		val content = content(3L, "Anime", ContentType.MANGA)
+		val content = content(3L, "Second", ContentType.MANGA)
 		val state = SpaceResumeUiState(
 			items = mapOf(
-				BuiltInSpaces.Anime to SpaceResumeItem(
-					spaceId = BuiltInSpaces.Anime,
+				SecondTestSpace.id to SpaceResumeItem(
+					spaceId = SecondTestSpace.id,
 					title = content.title,
 					content = content,
 					canResume = true,
@@ -132,7 +132,7 @@ class SpaceResumeViewModelTest {
 		val viewModel = SpaceResumeViewModel(
 			source,
 			repository,
-			TestSpaceCatalogRepository(),
+			TestSpaceCatalogRepository(BuiltInSpaces.contexts + SecondTestSpace),
 			historyRepository(history),
 		)
 
@@ -142,19 +142,19 @@ class SpaceResumeViewModelTest {
 		val opened = async(Dispatchers.Default) {
 			withTimeout(2_000) { viewModel.onOpenReader.filterNotNull().first().request() }
 		}
-		viewModel.resume(BuiltInSpaces.Anime)
+		viewModel.resume(SecondTestSpace.id)
 
 		opened.await() shouldBe SpaceResumeRequest(
 			content = content,
-			contentType = ContentType.VIDEO,
+			contentType = ContentType.MANGA,
 			state = org.skepsun.kototoro.reader.ui.ReaderState(42L, 3, 4),
 		)
-		repository.activations shouldContainExactly listOf(BuiltInSpaces.Anime)
+		repository.activations shouldContainExactly listOf(SecondTestSpace.id)
 	}
 
 	@Test
 	fun `resume waits for history refresh after immersive switch`() = runTest {
-		val content = content(4L, "Novel", ContentType.NOVEL)
+		val content = content(4L, "Second", ContentType.MANGA)
 		val states = MutableStateFlow(SpaceResumeUiState())
 		val source = mockk<SpaceResumeStateSource> {
 			every { observe() } returns states
@@ -163,18 +163,18 @@ class SpaceResumeViewModelTest {
 		val viewModel = SpaceResumeViewModel(
 			source,
 			repository,
-			TestSpaceCatalogRepository(),
+			TestSpaceCatalogRepository(BuiltInSpaces.contexts + SecondTestSpace),
 			emptyHistoryRepository(),
 		)
 		val opened = async(Dispatchers.Default) {
 			withTimeout(2_000) { viewModel.onOpenReader.filterNotNull().first().request() }
 		}
 
-		viewModel.resume(BuiltInSpaces.Novel)
+		viewModel.resume(SecondTestSpace.id)
 		states.value = SpaceResumeUiState(
 			items = mapOf(
-				BuiltInSpaces.Novel to SpaceResumeItem(
-					spaceId = BuiltInSpaces.Novel,
+				SecondTestSpace.id to SpaceResumeItem(
+					spaceId = SecondTestSpace.id,
 					title = content.title,
 					content = content,
 					canResume = true,
@@ -182,8 +182,8 @@ class SpaceResumeViewModelTest {
 			),
 		)
 
-		opened.await() shouldBe SpaceResumeRequest(content, ContentType.NOVEL, state = null)
-		repository.activations shouldContainExactly listOf(BuiltInSpaces.Novel)
+		opened.await() shouldBe SpaceResumeRequest(content, ContentType.MANGA, state = null)
+		repository.activations shouldContainExactly listOf(SecondTestSpace.id)
 	}
 
 	private suspend fun Event<SpaceResumeRequest>.request(): SpaceResumeRequest {

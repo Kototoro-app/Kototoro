@@ -59,6 +59,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.util.Locale
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.jsonsource.SourceType
+import org.skepsun.kototoro.core.model.ContentScopePolicy
 import org.skepsun.kototoro.core.model.titleResId
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.SpaceSwitcherPosition
@@ -459,7 +460,8 @@ private fun SpaceEditorDialog(
     val selectAllRequester = remember { FocusRequester() }
     val fieldExit = rememberTvFieldExit(target = if (canConfirm) null else selectAllRequester)
     val readOnlyState = rememberTvTextFieldReadOnlyState()
-    val allContentTypes = remember { ContentType.entries.filterNot { it == ContentType.OTHER } }
+    // 本构建只有漫画类型可加入空间，小说/视频不再提供。
+    val allContentTypes = remember { ContentType.entries.filter { it in ContentScopePolicy.supportedTypes } }
 
     SettingsAlertDialog(
         title = stringResource(

@@ -38,9 +38,6 @@ import org.skepsun.kototoro.parsers.util.runCatchingCancellable
 import org.skepsun.kototoro.parsers.util.sizeOrZero
 import org.skepsun.kototoro.parsers.util.suspendlazy.suspendLazy
 import org.skepsun.kototoro.settings.storage.DirectoryModel
-import org.skepsun.kototoro.video.domain.resolveVideoCandidates
-import org.skepsun.kototoro.video.player.MeasuredVideoSize
-import org.skepsun.kototoro.video.player.VideoQualitySizeProber
 import javax.inject.Inject
 
 @HiltViewModel
@@ -53,7 +50,6 @@ class DownloadDialogViewModel @Inject constructor(
     private val mangaRepositoryFactory: ContentRepository.Factory,
     private val historyRepository: HistoryRepository,
     private val settings: AppSettings,
-    private val videoQualitySizeProber: VideoQualitySizeProber,
 ) : BaseViewModel() {
 
     private val initialManga = savedStateHandle.get<Array<ParcelableContent>>(AppRouter.KEY_MANGA)
@@ -83,12 +79,6 @@ class DownloadDialogViewModel @Inject constructor(
         ),
     )
     val isOptionsLoading = MutableStateFlow(true)
-    val videoQualities = MutableStateFlow<List<String>?>(null)
-
-    /** Download sizes of the quality options, keyed by option title; filled in as they are measured. */
-    val videoQualitySizes = MutableStateFlow<Map<String, MeasuredVideoSize>>(emptyMap())
-    val isVideoContent = MutableStateFlow(false)
-    val isVideoQualitiesLoading = MutableStateFlow(false)
 
     private var isInitialized = false
 
@@ -118,20 +108,6 @@ class DownloadDialogViewModel @Inject constructor(
                 loadAvailableOptions()
             } finally {
                 isOptionsLoading.value = false
-            }
-        }
-        launchJob(Dispatchers.Default) {
-            try {
-                val firstManga = mangaDetails.get().firstOrNull()
-                if (firstManga?.source?.getContentType() == ContentType.VIDEO) {
-                    isVideoContent.value = true
-                    isVideoQualitiesLoading.value = true
-                    loadAvailableVideoQualities()
-                }
-            } catch (e: Exception) {
-                e.printStackTraceDebug()
-            } finally {
-                isVideoQualitiesLoading.value = false
             }
         }
         loadAvailableDestinations()
@@ -272,14 +248,7 @@ class DownloadDialogViewModel @Inject constructor(
             localContentRepository.getOutputDir(it, null)
         }.singleOrNull()
 
-        val isVideo = manga.firstOrNull()?.source?.getContentType() == ContentType.VIDEO
-        val isNovel = manga.firstOrNull()?.source?.getContentType() == ContentType.NOVEL
-
-        val dirs = when {
-            isVideo -> localStorageManager.getVideoWriteableRoots()
-            isNovel -> localStorageManager.getNovelWriteableRoots()
-            else -> localStorageManager.getWriteableRoots()
-        }
+        val dirs = localStorageManager.getWriteableRoots()
         availableDestinations.value = buildList(dirs.size + 1) {
             if (defaultDir == null) {
                 add(defaultDestination())
@@ -305,29 +274,6 @@ class DownloadDialogViewModel @Inject constructor(
                     isRemovable = false,
                 )
             }
-        }
-    }
-
-    private suspend fun loadAvailableVideoQualities() {
-        val firstManga = mangaDetails.get().firstOrNull() ?: return
-        val firstChapter = firstManga.chapters?.firstOrNull() ?: return
-        val repo = mangaRepositoryFactory.create(firstManga.source)
-
-        runCatchingCancellable {
-            val candidates = repo.resolveVideoCandidates(firstChapter)
-                .filter { it.title.trim().isNotEmpty() }
-                .distinctBy { it.title.trim() }
-            if (candidates.isNotEmpty()) {
-                videoQualities.value = candidates.map { it.title.trim() }
-                // The options are usable right away; sizes show up next to them as they are measured.
-                launchJob(Dispatchers.IO) {
-                    videoQualitySizeProber.measureEach(candidates) { title, size ->
-                        videoQualitySizes.update { it + (title to size) }
-                    }
-                }
-            }
-        }.onFailure {
-            it.printStackTraceDebug()
         }
     }
 

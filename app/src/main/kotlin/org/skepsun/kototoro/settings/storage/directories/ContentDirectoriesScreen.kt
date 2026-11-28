@@ -83,8 +83,13 @@ internal fun ContentDirectoriesScreen(
     initialKind: StorageContentKind = StorageContentKind.MANGA,
 ) {
     val listSpacing = dimensionResource(R.dimen.list_spacing_large)
-    val kinds = StorageContentKind.entries
-    val pagerState = rememberPagerState(initialPage = kinds.indexOf(initialKind), pageCount = kinds::size)
+    // 本构建只保留漫画，小说与视频目录不再提供。
+    val kinds = listOf(StorageContentKind.MANGA)
+    val pagerState = rememberPagerState(
+        // 只有漫画一种目录；若调用方按小说/视频打开，回落到第 0 页而不是 -1。
+        initialPage = kinds.indexOf(initialKind).coerceAtLeast(0),
+        pageCount = kinds::size,
+    )
     val coroutineScope = rememberCoroutineScope()
     val selectedKind = kinds[pagerState.currentPage]
     Scaffold(

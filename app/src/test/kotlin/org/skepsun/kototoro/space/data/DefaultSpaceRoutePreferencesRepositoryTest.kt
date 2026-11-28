@@ -12,7 +12,11 @@ import org.skepsun.kototoro.space.domain.SpaceSectionDisplay
 class DefaultSpaceRoutePreferencesRepositoryTest {
 
 	private val dao = FakeSpaceRoutePreferencesDao()
-	private val repository = DefaultSpaceRoutePreferencesRepository(dao, Json, TestSpaceCatalogRepository())
+	private val repository = DefaultSpaceRoutePreferencesRepository(
+		dao,
+		Json,
+		TestSpaceCatalogRepository(BuiltInSpaces.contexts + SecondTestSpace),
+	)
 
 	@Test
 	fun `same route key is isolated by space id`() = runTest {
@@ -23,19 +27,19 @@ class DefaultSpaceRoutePreferencesRepositoryTest {
 			favoritesSortOrder = "UPDATED",
 			sourceTags = setOf("manga-source"),
 		)
-		val novel = SpaceListPreferences(
+		val custom = SpaceListPreferences(
 			listMode = "LIST",
 			gridSize = 80,
 			historySortOrder = "ALPHABETIC",
 			favoritesSortOrder = "NEWEST",
-			sourceTags = setOf("novel-source"),
+			sourceTags = setOf("custom-space-source"),
 		)
 
 		repository.save(BuiltInSpaces.Manga, MAIN_LIST_ROUTE_KEY, manga)
-		repository.save(BuiltInSpaces.Novel, MAIN_LIST_ROUTE_KEY, novel)
+		repository.save(SecondTestSpace.id, MAIN_LIST_ROUTE_KEY, custom)
 
 		repository.load(BuiltInSpaces.Manga, MAIN_LIST_ROUTE_KEY) shouldBe manga
-		repository.load(BuiltInSpaces.Novel, MAIN_LIST_ROUTE_KEY) shouldBe novel
+		repository.load(SecondTestSpace.id, MAIN_LIST_ROUTE_KEY) shouldBe custom
 	}
 
 	@Test
@@ -50,10 +54,10 @@ class DefaultSpaceRoutePreferencesRepositoryTest {
 		)
 
 		repository.save(BuiltInSpaces.Manga, MAIN_LIST_ROUTE_KEY, manga)
-		repository.save(BuiltInSpaces.Novel, MAIN_LIST_ROUTE_KEY, SpaceListPreferences(listMode = "LIST", gridSize = 80))
+		repository.save(SecondTestSpace.id, MAIN_LIST_ROUTE_KEY, SpaceListPreferences(listMode = "LIST", gridSize = 80))
 
 		repository.load(BuiltInSpaces.Manga, MAIN_LIST_ROUTE_KEY) shouldBe manga
-		repository.load(BuiltInSpaces.Novel, MAIN_LIST_ROUTE_KEY)?.sections shouldBe emptyMap()
+		repository.load(SecondTestSpace.id, MAIN_LIST_ROUTE_KEY)?.sections shouldBe emptyMap()
 	}
 
 	@Test
@@ -75,7 +79,7 @@ class DefaultSpaceRoutePreferencesRepositoryTest {
 	@Test
 	fun `unknown schema is ignored without deleting stored payload`() = runTest {
 		val entity = SpaceRoutePreferencesEntity(
-			spaceId = BuiltInSpaces.Anime.value,
+			spaceId = SecondTestSpace.id.value,
 			routeKey = MAIN_LIST_ROUTE_KEY,
 			payload = "{}",
 			schemaVersion = 999,
@@ -83,8 +87,8 @@ class DefaultSpaceRoutePreferencesRepositoryTest {
 		)
 		dao.upsert(entity)
 
-		repository.load(BuiltInSpaces.Anime, MAIN_LIST_ROUTE_KEY) shouldBe null
-		dao.find(BuiltInSpaces.Anime.value, MAIN_LIST_ROUTE_KEY) shouldBe entity
+		repository.load(SecondTestSpace.id, MAIN_LIST_ROUTE_KEY) shouldBe null
+		dao.find(SecondTestSpace.id.value, MAIN_LIST_ROUTE_KEY) shouldBe entity
 	}
 
 	private class FakeSpaceRoutePreferencesDao : SpaceRoutePreferencesDao() {

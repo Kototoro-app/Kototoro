@@ -799,18 +799,6 @@ fun CacheLimitsSettingsRoute(
                 },
             ) }
             item { SettingsSliderPreference(
-                title = context.getString(R.string.novel_cache_limit),
-                iconRes = R.drawable.ic_read,
-                value = novelCacheMb,
-                valueRange = 32..2048,
-                step = 32,
-                valueText = { formatCacheLimitMb(it) },
-                onValueChange = {
-                    settings.novelCacheSizeMb = it
-                    showRestartRequired()
-                },
-            ) }
-            item { SettingsSliderPreference(
                 title = context.getString(R.string.tts_audio_cache_limit),
                 iconRes = R.drawable.ic_voice_input,
                 value = ttsCacheMb,
@@ -834,44 +822,7 @@ fun CacheLimitsSettingsRoute(
                 },
             ) }
         }
-        SettingsPreferenceGroup(title = context.getString(R.string.video_caches)) {
-            item { SettingsSliderPreference(
-                title = context.getString(R.string.video_playback_cache_limit),
-                iconRes = R.drawable.ic_content_video,
-                value = videoCacheMb,
-                valueRange = 256..4096,
-                step = 128,
-                valueText = { formatCacheLimitMb(it) },
-                onValueChange = { settings.videoCacheSizeMb = it },
-            ) }
-            item { SettingsSliderPreference(
-                title = context.getString(R.string.video_proxy_cache_limit),
-                iconRes = R.drawable.ic_dns,
-                value = videoProxyCacheMb,
-                valueRange = 128..4096,
-                step = 128,
-                valueText = { formatCacheLimitMb(it) },
-                onValueChange = { settings.videoProxyCacheSizeMb = it },
-            ) }
-            item { SettingsSliderPreference(
-                title = context.getString(R.string.torrent_cache_limit),
-                iconRes = R.drawable.ic_network_cellular,
-                value = torrentCacheMb,
-                valueRange = 512..16384,
-                step = 512,
-                valueText = { formatCacheLimitMb(it) },
-                onValueChange = { settings.torrentCacheSizeMb = it },
-            ) }
-            item { SettingsSliderPreference(
-                title = context.getString(R.string.danmaku_cache_limit),
-                iconRes = R.drawable.ic_danmaku,
-                value = videoDanmakuCacheMb,
-                valueRange = 16..1024,
-                step = 16,
-                valueText = { formatCacheLimitMb(it) },
-                onValueChange = { settings.videoDanmakuCacheSizeMb = it },
-            ) }
-        }
+        // “视频缓存”分组随视频播放器一并移除：本构建只保留漫画。
         SettingsPreferenceGroup(title = context.getString(R.string.network)) {
             item { SettingsSliderPreference(
                 title = context.getString(R.string.network_cache_limit),

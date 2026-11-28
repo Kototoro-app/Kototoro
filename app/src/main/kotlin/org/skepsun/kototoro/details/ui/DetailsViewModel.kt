@@ -79,9 +79,7 @@ import org.skepsun.kototoro.core.util.ext.awaitCancellable
 import org.skepsun.kototoro.core.util.ext.call
 import org.skepsun.kototoro.core.util.ext.computeSize
 import org.skepsun.kototoro.core.util.ext.onEachWhile
-import org.skepsun.kototoro.details.data.CachedTranslationEntry
 import org.skepsun.kototoro.details.data.ContentDetails
-import org.skepsun.kototoro.details.data.DetailsTranslationCache
 import org.skepsun.kototoro.details.domain.BranchComparator
 import org.skepsun.kototoro.details.domain.DetailsInteractor
 import org.skepsun.kototoro.details.domain.DetailsLoadUseCase
@@ -133,7 +131,6 @@ import org.skepsun.kototoro.scrobbling.common.domain.tryScrobble
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingInfo
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingStatus
 import org.skepsun.kototoro.stats.data.StatsRepository
-import org.skepsun.kototoro.video.data.VideoDownloadIndex
 import org.skepsun.kototoro.tracking.discovery.domain.TrackingEntitySearchResult
 import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteCatalog
 import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteMatchResult
@@ -303,13 +300,6 @@ private data class ReadingSearchFilterState(
     val errorMessage: String? = null,
 )
 
-private data class TranslationTextUiState(
-    val translatedTitle: String? = null,
-    val translatedDescription: String? = null,
-    val isShowingTranslation: Boolean = false,
-    val hasTranslationCache: Boolean = false,
-)
-
 private data class DetailsHeaderUiState(
     val mangaDetails: ContentDetails? = null,
     val favouriteCategories: Set<FavouriteCategory> = emptySet(),
@@ -351,7 +341,6 @@ class DetailsViewModel @Inject constructor(
     private val epubChapterMappingDao: org.skepsun.kototoro.core.db.dao.EpubChapterMappingDao,
     private val localEpubSource: org.skepsun.kototoro.local.epub.LocalEpubSource,
     private val epubStorageManager: org.skepsun.kototoro.local.epub.EpubStorageManager,
-    private val videoDownloadIndex: VideoDownloadIndex,
     private val favouritesRepository: FavouritesRepository,
     mangaRepositoryFactory: org.skepsun.kototoro.core.parser.ContentRepository.Factory,
     private val contentSourcesRepository: ContentSourcesRepository,
@@ -363,7 +352,6 @@ class DetailsViewModel @Inject constructor(
     private val trackingSiteMatcher: TrackingSiteMatcher,
     private val migrateUseCase: MigrateUseCase,
     private val dataRepository: org.skepsun.kototoro.core.parser.ContentDataRepository,
-    private val detailsTranslationCache: DetailsTranslationCache,
     private val db: org.skepsun.kototoro.core.db.MangaDatabase,
     private val trackingSiteCacheRepository: org.skepsun.kototoro.tracking.discovery.data.TrackingSiteCacheRepository,
     private val trackingSiteDiscoveryService: org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteDiscoveryService,
@@ -374,8 +362,6 @@ class DetailsViewModel @Inject constructor(
     private val spaceContentPolicy: SpaceContentPolicy,
     private val spaceBrowseScope: SpaceBrowseScope,
     private val categoryDisplayPreferences: FavouriteCategoryDisplayPreferences,
-    chapterTranslationStore: org.skepsun.kototoro.reader.translate.data.ChapterTranslationStore,
-    videoQualitySizeProber: org.skepsun.kototoro.video.player.VideoQualitySizeProber,
 ) : ChaptersPagesViewModel(
     settings = settings,
     interactor = interactor,
@@ -385,8 +371,6 @@ class DetailsViewModel @Inject constructor(
     deleteLocalContentUseCase = deleteLocalContentUseCase,
     mangaRepositoryFactory = mangaRepositoryFactory,
     localStorageChanges = localStorageChanges,
-    chapterTranslationStore = chapterTranslationStore,
-    videoQualitySizeProber = videoQualitySizeProber,
 ) {
 
     private val intent = ContentIntent(savedStateHandle)
@@ -399,14 +383,11 @@ class DetailsViewModel @Inject constructor(
     private val originContent = (activeExternalOrigin as? org.skepsun.kototoro.details.ui.model.DetailsOrigin.LocalMangaContent)?.manga
     private val initialContentIntentOverride = activeExternalOrigin?.initialContentIntentOrNull()
     private var loadingJob: Job = Job()
-    private var translateAvailabilityJob: Job? = null
     private var readingSearchJob: Job? = null
     private var sourceBindingsRefreshJob: Job? = null
     private var readingSearchGeneration: Int = 0
     private var allEnabledSourcesLoaded = false
     private var currentLoadIntentOverride: ContentIntent? = initialContentIntentOverride
-    private var translationCacheSourceLang: String? = null
-    private var translationCacheTargetLang: String? = null
     private val activeMangaIdFlow = kotlinx.coroutines.flow.MutableStateFlow(
         activeExternalOrigin?.initialLocalMangaIdOrNull()
             ?: intent.mangaId.takeIf { it != 0L },
@@ -627,8 +608,6 @@ class DetailsViewModel @Inject constructor(
     private val allEnabledSourceInfos = MutableStateFlow<List<ContentSourceInfo>>(emptyList())
     @Volatile
     private var allEnabledSourcesByName: Map<String, org.skepsun.kototoro.parsers.model.ContentSource> = emptyMap()
-    @Volatile
-    private var lastTranslateVisibilityRequest: TranslateVisibilityRequest? = null
     private val activeSourcePreset = settings.observeAsFlow(
         AppSettings.KEY_ACTIVE_SOURCE_PRESET_ID,
     ) {
@@ -649,17 +628,6 @@ class DetailsViewModel @Inject constructor(
             ?: details?.toContent()?.takeIf { it.isLocal }?.id
     }.distinctUntilChanged()
         .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, null)
-    private val observedVideoDownloadChanges = combine(
-        videoDownloadIndex.changes,
-        currentObservedLocalMangaId,
-    ) { changedContentId, observedLocalMangaId ->
-        changedContentId to observedLocalMangaId
-    }.onEach { (changedContentId, observedLocalMangaId) ->
-        if (changedContentId == observedLocalMangaId) {
-            notifyDownloadChanged()
-        }
-    }.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, 0L to null)
-
     @Volatile
     private var baseLoadedDetails: ContentDetails? = null
     private val localRefreshMutex = Mutex()
@@ -668,12 +636,6 @@ class DetailsViewModel @Inject constructor(
     private val selectedMetadataSource = MutableStateFlow<MetadataSourceSelection>(initialMetadataSourceSelection())
     private val cachedTrackingDetails = ConcurrentHashMap<String, org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteItemDetails>()
     private val cachedEntityTrackingDetails = ConcurrentHashMap<String, org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteItemDetails>()
-
-    private data class TranslateVisibilityRequest(
-        val targetLanguage: String,
-        val metadataLanguage: String?,
-        val sampleText: String,
-    )
 
     private data class SyntheticContentSource(
         override val name: String,
@@ -1794,62 +1756,6 @@ class DetailsViewModel @Inject constructor(
         }
     }
 
-    private fun refreshTranslateActionVisibility(metadataLanguage: String?) {
-        if (!settings.isDetailsTranslateButtonVisible) {
-            lastTranslateVisibilityRequest = null
-            translateAvailabilityJob?.cancel()
-            showTranslateAction.value = false
-            return
-        }
-        val targetLanguage = currentTargetLang().takeIf { it.isNotBlank() }?.normalizedLanguageCode()
-        if (targetLanguage.isNullOrBlank()) {
-            lastTranslateVisibilityRequest = null
-            translateAvailabilityJob?.cancel()
-            showTranslateAction.value = false
-            return
-        }
-        if (metadataLanguage != null) {
-            val request = TranslateVisibilityRequest(
-                targetLanguage = targetLanguage,
-                metadataLanguage = metadataLanguage,
-                sampleText = "",
-            )
-            if (lastTranslateVisibilityRequest == request) {
-                return
-            }
-            lastTranslateVisibilityRequest = request
-            translateAvailabilityJob?.cancel()
-            showTranslateAction.value = metadataLanguage != targetLanguage
-            return
-        }
-        val details = mangaDetails.safeValueOrNull()
-        val sampleText = buildString {
-            append(details?.toContent()?.title.orEmpty())
-            if (length < 24) {
-                append(' ')
-                append(details?.description?.toString().orEmpty())
-            }
-        }.trim()
-        val request = TranslateVisibilityRequest(
-            targetLanguage = targetLanguage,
-            metadataLanguage = null,
-            sampleText = sampleText,
-        )
-        if (lastTranslateVisibilityRequest == request) {
-            return
-        }
-        lastTranslateVisibilityRequest = request
-        translateAvailabilityJob?.cancel()
-        translateAvailabilityJob = viewModelScope.launch(Dispatchers.IO) {
-            val detectedLanguage = if (sampleText.isNotBlank()) {
-                detectLanguageViaMlKit(sampleText)?.normalizedLanguageCode()
-            } else {
-                null
-            }
-            showTranslateAction.value = detectedLanguage == null || detectedLanguage != targetLanguage
-        }
-    }
-
     private fun updateSourceOptions() {
         val baseContent: Content?
         val nextState: SourceBindingUiState
@@ -2073,7 +1979,6 @@ class DetailsViewModel @Inject constructor(
             )
         }
         refreshActiveLocalBrowserContent()
-        refreshTranslateActionVisibility(nextState.resolvedMetadataLanguage)
     }
 
     private fun updateSupplementalDetailsState(
@@ -2432,55 +2337,8 @@ class DetailsViewModel @Inject constructor(
 
     val remoteContent = MutableStateFlow<Content?>(null)
 
-    private val cachedTranslatedTitle = MutableStateFlow<String?>(null)
-    private val cachedTranslatedDescription = MutableStateFlow<String?>(null)
-    val isShowingTranslation = MutableStateFlow(false)
-    val hasTranslationCache: StateFlow<Boolean> = combine(
-        cachedTranslatedTitle,
-        cachedTranslatedDescription,
-    ) { title, description ->
-        title != null || description != null
-    }.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, false)
-    val translatedTitle: StateFlow<String?> = combine(
-        cachedTranslatedTitle,
-        isShowingTranslation,
-    ) { title, isShowing ->
-        title.takeIf { isShowing }
-    }.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, null)
-    val translatedDescription: StateFlow<String?> = combine(
-        cachedTranslatedDescription,
-        isShowingTranslation,
-    ) { description, isShowing ->
-        description.takeIf { isShowing }
-    }.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, null)
-    val isTranslating = MutableStateFlow(false)
-    private val translationTextUiState = combine(
-        translatedTitle,
-        translatedDescription,
-        isShowingTranslation,
-        hasTranslationCache,
-    ) { translatedTitle, translatedDescription, isShowingTranslation, hasTranslationCache ->
-        TranslationTextUiState(
-            translatedTitle = translatedTitle,
-            translatedDescription = translatedDescription,
-            isShowingTranslation = isShowingTranslation,
-            hasTranslationCache = hasTranslationCache,
-        )
-    }
-    val translationUiState: StateFlow<TranslationUiState> = combine(
-        translationTextUiState,
-        isTranslating,
-        showTranslateAction,
-    ) { textState, isTranslating, showTranslateAction ->
-        TranslationUiState(
-            translatedTitle = textState.translatedTitle,
-            translatedDescription = textState.translatedDescription,
-            isShowingTranslation = textState.isShowingTranslation,
-            hasTranslationCache = textState.hasTranslationCache,
-            isTranslating = isTranslating,
-            showTranslateAction = showTranslateAction,
-        )
-    }.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, TranslationUiState())
+    val hasTranslationCache: StateFlow<Boolean> = MutableStateFlow(false)
+    val translationUiState: StateFlow<TranslationUiState> = MutableStateFlow(TranslationUiState())
 
     val historyInfo: StateFlow<HistoryInfo> = combine(
         mangaDetails,
@@ -2785,7 +2643,8 @@ class DetailsViewModel @Inject constructor(
 
     init {
         if (initialContentIntentOverride?.mangaId?.takeIf { it != 0L } != null || intent.mangaId != 0L || intent.manga != null) {
-            loadingJob = doLoad(force = false)
+            // 进入详情页只做静默加载：不要闪一下下拉刷新圈，只有用户主动下拉才显示刷新状态。
+            loadingJob = doLoad(force = false, showRefresh = false)
         }
         scrobblingInfo
             .onEach {
@@ -2815,11 +2674,6 @@ class DetailsViewModel @Inject constructor(
             mangaDetails.filterNotNull().collect { details ->
                 val override = dataRepository.getOverride(details.id)
                 isMarkedSafe.value = override?.contentRating == org.skepsun.kototoro.parsers.model.ContentRating.SAFE
-            }
-        }
-        launchJob(Dispatchers.Default) {
-            mangaDetails.filterNotNull().collect { details ->
-                restorePersistedTranslation(details)
             }
         }
     }
@@ -3961,7 +3815,14 @@ class DetailsViewModel @Inject constructor(
         }
     }
 
-    private fun doLoad(force: Boolean) = launchLoadingJob(Dispatchers.Default) {
+    private fun doLoad(force: Boolean, showRefresh: Boolean = true): Job =
+        if (showRefresh) {
+            launchLoadingJob(Dispatchers.Default) { doLoadBody(force) }
+        } else {
+            launchJob(Dispatchers.Default) { doLoadBody(force) }
+        }
+
+    private suspend fun doLoadBody(force: Boolean) {
         val localVersionAtLoad = localRefreshMutex.withLock { localRefreshVersion }
         val resolvedIntent = currentLoadIntentOverride ?: intent
         val requestedMangaId = resolvedIntent.mangaId.takeIf { it != ContentIntent.ID_NONE }
@@ -3972,7 +3833,7 @@ class DetailsViewModel @Inject constructor(
         )
         if (resolvedIntent.mangaId == 0L && resolvedIntent.manga == null) {
             Log.w(DETAILS_TRACE_TAG, "load.skip reason=emptyIntent")
-            return@launchLoadingJob
+            return
         }
         try {
             detailsLoadUseCase.invoke(resolvedIntent, force)
@@ -4196,25 +4057,7 @@ class DetailsViewModel @Inject constructor(
      */
     override suspend fun expandEpubChaptersIfNeeded(chapters: List<org.skepsun.kototoro.details.ui.model.ChapterListItem>): List<org.skepsun.kototoro.details.ui.model.ChapterListItem> {
         android.util.Log.d("DetailsViewModel", "expandEpubChaptersIfNeeded: NEW ARCHITECTURE - returning chapters as-is (${chapters.size} chapters)")
-        val manga = mangaDetails.value?.toContent() ?: return chapters
-        val contentType = manga.source.getContentType()
-        if (contentType != ContentType.VIDEO && contentType != ContentType.HENTAI_VIDEO) {
-            return chapters
-        }
-        val downloadedIds = videoDownloadIndex.getDownloadedChapterIds(manga.id)
-        if (downloadedIds.isEmpty()) return chapters
-        val downloadedOnly = isDownloadedOnly.value
-        return chapters.mapNotNull { item ->
-            val isDownloaded = item.chapter.id in downloadedIds || item.isDownloaded
-            if (downloadedOnly && !isDownloaded) {
-                return@mapNotNull null
-            }
-            if (isDownloaded && !item.isDownloaded) {
-                item.copy(flags = item.flags or FLAG_DOWNLOADED)
-            } else {
-                item
-            }
-        }
+        return chapters
     }
 
     fun refreshLocalChapters() {
@@ -4245,157 +4088,11 @@ class DetailsViewModel @Inject constructor(
         }
     }
 
-    fun translateTitleAndDescription(forceRefresh: Boolean = false) {
-        viewModelScope.launch(Dispatchers.IO) {
-            if (!forceRefresh && hasTranslationCache.value) {
-                isShowingTranslation.value = true
-                persistCurrentTranslationState()
-                return@launch
-            }
-            val manga = getContentOrNull() ?: return@launch
-            val title = manga.title
-            val description = mangaDetails.value?.description?.toString() ?: ""
-            if (title.isBlank()) return@launch
+    fun translateTitleAndDescription(forceRefresh: Boolean = false) = Unit
 
-            isTranslating.value = true
-            try {
-                val targetLang = currentTargetLang()
-                val sourceLang = currentSourceLang()
+    fun toggleTranslationDisplay() = Unit
 
-                // Use ML Kit for simple text translation (same as reader pipeline)
-                val translatedTitleText = translateViaMlKit(title, sourceLang, targetLang)
-                val nextTranslatedTitle = translatedTitleText.takeIf { it.isNotBlank() && it != title }
-
-                var nextTranslatedDescription: String? = null
-                if (description.isNotBlank()) {
-                    val translatedDescText = translateViaMlKit(description, sourceLang, targetLang)
-                    nextTranslatedDescription = translatedDescText.takeIf { it.isNotBlank() && it != description }
-                }
-
-                if (nextTranslatedTitle != null || nextTranslatedDescription != null) {
-                    cachedTranslatedTitle.value = nextTranslatedTitle
-                    cachedTranslatedDescription.value = nextTranslatedDescription
-                    isShowingTranslation.value = true
-                    translationCacheSourceLang = sourceLang
-                    translationCacheTargetLang = targetLang
-                    detailsTranslationCache.put(
-                        content = manga,
-                        sourceLang = sourceLang,
-                        targetLang = targetLang,
-                        entry = CachedTranslationEntry(
-                            originalTitle = title,
-                            translatedTitle = nextTranslatedTitle,
-                            originalDescription = description,
-                            translatedDescription = nextTranslatedDescription,
-                            isShowingTranslation = true,
-                        ),
-                    )
-                }
-            } catch (e: Exception) {
-                if (e is kotlinx.coroutines.CancellationException) throw e
-                android.util.Log.e("DetailsViewModel", "Translation failed", e)
-            } finally {
-                isTranslating.value = false
-            }
-        }
-    }
-
-    fun toggleTranslationDisplay() {
-        if (!hasTranslationCache.value) return
-        isShowingTranslation.value = !isShowingTranslation.value
-        persistCurrentTranslationState()
-    }
-
-    fun clearTranslationCache() {
-        clearInMemoryTranslationState()
-    }
-
-    private suspend fun translateViaMlKit(text: String, sourceLang: String, targetLang: String): String {
-        val resolvedSource = if (sourceLang.trim().lowercase() == "auto") {
-            detectLanguageViaMlKit(text) ?: "en"
-        } else {
-            sourceLang
-        }
-        val mlSource = resolveMlKitLang(resolvedSource) ?: return ""
-        val mlTarget = resolveMlKitLang(targetLang) ?: return ""
-
-        val options = com.google.mlkit.nl.translate.TranslatorOptions.Builder()
-            .setSourceLanguage(mlSource)
-            .setTargetLanguage(mlTarget)
-            .build()
-        val translator = com.google.mlkit.nl.translate.Translation.getClient(options)
-        return try {
-            withTimeout(60_000) {
-                translator.downloadModelIfNeeded().awaitCancellable()
-            }
-            withTimeout(15_000) {
-                translator.translate(text).awaitCancellable()
-            }
-        } finally {
-            translator.close()
-        }
-    }
-
-    private suspend fun detectLanguageViaMlKit(text: String): String? {
-        return try {
-            val identifier = com.google.mlkit.nl.languageid.LanguageIdentification.getClient()
-            val lang = withTimeout(5_000) {
-                identifier.identifyLanguage(text).awaitCancellable()
-            }
-            if (lang == "und") null else lang
-        } catch (_: Exception) {
-            null
-        }
-    }
-
-    private fun resolveMlKitLang(lang: String): String? {
-        val normalized = lang.trim().lowercase().replace("-", "_")
-        return com.google.mlkit.nl.translate.TranslateLanguage.fromLanguageTag(normalized)
-    }
-
-    private fun restorePersistedTranslation(details: ContentDetails) {
-        val content = details.toContent()
-        val sourceLang = currentSourceLang()
-        val targetLang = currentTargetLang()
-        val originalTitle = content.title
-        val originalDescription = details.description?.toString().orEmpty()
-        val restored = detailsTranslationCache.get(
-            content = content,
-            sourceLang = sourceLang,
-            targetLang = targetLang,
-            originalTitle = originalTitle,
-            originalDescription = originalDescription,
-        )
-        if (restored == null) {
-            clearInMemoryTranslationState()
-            return
-        }
-        cachedTranslatedTitle.value = restored.translatedTitle
-        cachedTranslatedDescription.value = restored.translatedDescription
-        isShowingTranslation.value = restored.isShowingTranslation
-        translationCacheSourceLang = sourceLang
-        translationCacheTargetLang = targetLang
-    }
-
-    private fun persistCurrentTranslationState() {
-        val sourceLang = translationCacheSourceLang ?: return
-        val targetLang = translationCacheTargetLang ?: return
-        val details = mangaDetails.value ?: return
-        val content = details.toContent()
-        if (!hasTranslationCache.value) return
-        detailsTranslationCache.put(
-            content = content,
-            sourceLang = sourceLang,
-            targetLang = targetLang,
-            entry = CachedTranslationEntry(
-                originalTitle = content.title,
-                translatedTitle = cachedTranslatedTitle.value,
-                originalDescription = details.description?.toString().orEmpty(),
-                translatedDescription = cachedTranslatedDescription.value,
-                isShowingTranslation = isShowingTranslation.value,
-            ),
-        )
-    }
+    fun clearTranslationCache() = Unit
 
     private fun trackingEntityOriginToSyntheticContent(
         origin: org.skepsun.kototoro.details.ui.model.DetailsOrigin.TrackingEntity,
@@ -4422,19 +4119,4 @@ class DetailsViewModel @Inject constructor(
         )
     }
 
-    private fun clearInMemoryTranslationState() {
-        cachedTranslatedTitle.value = null
-        cachedTranslatedDescription.value = null
-        isShowingTranslation.value = false
-        translationCacheSourceLang = null
-        translationCacheTargetLang = null
-    }
-
-    private fun currentSourceLang(): String {
-        return settings.readerTranslationSourceLanguage.ifBlank { "auto" }
-    }
-
-    private fun currentTargetLang(): String {
-        return settings.readerTranslationTargetLanguage.ifBlank { "zh" }
-    }
 }

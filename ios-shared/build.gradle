@@ -59,7 +59,6 @@ kotlin {
             implementation project(':core-source')
             implementation project(':core-net')
             implementation project(':reader-core')
-            implementation project(':reader-novel')
             implementation project(':source-tvbox')
             implementation project(':core-local')
             // Apple's URL loading system; core-net already pins Ktor and leaves engines to platforms.

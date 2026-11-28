@@ -25,8 +25,6 @@ import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.util.ChineseConverter
 import org.skepsun.kototoro.core.util.EncodingDetect
 import org.skepsun.kototoro.core.util.LibArchiveUtils
-import org.skepsun.kototoro.reader.novel.NovelPageTurnAnimation
-import org.skepsun.kototoro.reader.novel.NovelReaderSettings
 import org.skepsun.kototoro.settings.sources.unified.UnifiedSourceKind
 import org.skepsun.kototoro.settings.sources.unified.UnifiedSourcesActivity
 import java.io.File
@@ -216,7 +214,6 @@ class AndroidLegadoScriptPlatform(
 
     override fun readBookConfig(): Map<String, Any?> {
         val settings = AppSettings(context)
-        val novel = NovelReaderSettings.load(context)
         val isNightTheme = settings.theme == AppCompatDelegate.MODE_NIGHT_YES
         val textColor = if (isNightTheme) "#ADADAD" else "#3E3D3B"
         val backgroundColor = when (settings.readerBackground) {
@@ -226,7 +223,7 @@ class AndroidLegadoScriptPlatform(
             else -> "#EEEEEE"
         }
         return linkedMapOf(
-            "name" to novel.themePreset.name,
+            "name" to "default",
             "bgStr" to backgroundColor,
             "bgStrNight" to "#000000",
             "bgStrEInk" to "#FFFFFF",
@@ -249,7 +246,7 @@ class AndroidLegadoScriptPlatform(
             "textAccentColorInt" to 0,
             "textAccentColorIntNight" to 0,
             "textAccentColorIntEInk" to 0,
-            "pageAnim" to if (novel.pageTurnAnimation == NovelPageTurnAnimation.SIMULATION) 1 else 0,
+            "pageAnim" to 0,
             "pageAnimEInk" to 4,
             "textFont" to "",
             "titleFont" to "",
@@ -258,30 +255,30 @@ class AndroidLegadoScriptPlatform(
             "headerFontSize" to 12,
             "footerFontSize" to 12,
             "textBold" to 500,
-            "textSize" to novel.fontSizeSp.toInt(),
+            "textSize" to 20,
             "letterSpacing" to 0.1f,
-            "lineSpacingExtra" to (novel.lineSpacing * 10).toInt(),
-            "paragraphSpacing" to novel.paragraphSpacing.toInt(),
+            "lineSpacingExtra" to 8,
+            "paragraphSpacing" to 0,
             "titleMode" to 0,
             "titleSize" to 0,
             "titleTopSpacing" to 0,
             "titleBottomSpacing" to 0,
             "titleColor" to 0,
-            "paragraphIndent" to if (novel.enableParagraphIndent) "　　" else "",
+            "paragraphIndent" to "　　",
             "paddingBottom" to 6,
-            "paddingLeft" to novel.marginHorizontal,
-            "paddingRight" to novel.marginHorizontal,
+            "paddingLeft" to 16,
+            "paddingRight" to 16,
             "paddingTop" to 6,
             "headerPaddingBottom" to 0,
-            "headerPaddingLeft" to novel.marginHorizontal,
-            "headerPaddingRight" to novel.marginHorizontal,
+            "headerPaddingLeft" to 16,
+            "headerPaddingRight" to 16,
             "headerPaddingTop" to 0,
             "footerPaddingBottom" to 6,
-            "footerPaddingLeft" to novel.marginHorizontal,
-            "footerPaddingRight" to novel.marginHorizontal,
+            "footerPaddingLeft" to 16,
+            "footerPaddingRight" to 16,
             "footerPaddingTop" to 6,
             "showHeaderLine" to false,
-            "showFooterLine" to novel.showReadingStatus,
+            "showFooterLine" to false,
             "tipHeaderLeft" to 0,
             "tipHeaderMiddle" to 0,
             "tipHeaderRight" to 0,

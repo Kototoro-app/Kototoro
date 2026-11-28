@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.jsonsource.SourceType
+import org.skepsun.kototoro.core.model.ContentScopePolicy
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsFlow
 import org.skepsun.kototoro.core.util.ext.processLifecycleScope
@@ -69,10 +70,11 @@ class DefaultSpaceCatalogRepository @Inject constructor(
         require(contentTypes.isNotEmpty()) { "At least one content type is required" }
         check(dao.countActive() < MAX_CUSTOM_SPACES) { "Custom Space limit reached" }
         val now = System.currentTimeMillis()
+        val sanitizedTypes = contentTypes.clampToSupportedContentScope()
         val space = SpaceContext(
             id = SpaceId("custom:${UUID.randomUUID()}"),
-            kind = contentTypes.primarySpaceKind(),
-            allowedContentTypes = contentTypes,
+            kind = sanitizedTypes.primarySpaceKind(),
+            allowedContentTypes = sanitizedTypes,
             title = title.trim(),
             sourceLanguages = sourceLanguages.normalizeLanguages(),
             sourceKinds = sourceKinds,
@@ -91,6 +93,7 @@ class DefaultSpaceCatalogRepository @Inject constructor(
         dao.update(
             space.copy(
                 title = space.title.trim(),
+                allowedContentTypes = space.allowedContentTypes.clampToSupportedContentScope(),
                 sourceLanguages = space.sourceLanguages.normalizeLanguages(),
             ).toEntity(
                 createdAt = existing.createdAt,
@@ -110,7 +113,7 @@ class DefaultSpaceCatalogRepository @Inject constructor(
 }
 
 private fun SpaceDefinitionEntity.toContext(): SpaceContext {
-    val types = contentTypes.decodeNames(ContentType.entries)
+    val types = contentTypes.decodeNames(ContentType.entries).clampToSupportedContentScope()
     return SpaceContext(
         id = SpaceId(spaceId),
         kind = types.primarySpaceKind(),
@@ -122,6 +125,16 @@ private fun SpaceDefinitionEntity.toContext(): SpaceContext {
         sortKey = sortKey,
         enabled = enabled,
     )
+}
+
+/**
+ * 自定义空间可能是在旧版本创建的，里面包含已移除的小说/视频类型。
+ * 这里统一收敛到本构建支持的内容范围；收敛后为空则回落到全部支持类型，
+ * 因为空间至少要允许一种类型才有意义。
+ */
+private fun Set<ContentType>.clampToSupportedContentScope(): Set<ContentType> {
+    val supported = filterTo(LinkedHashSet()) { it in ContentScopePolicy.supportedTypes }
+    return supported.ifEmpty { ContentScopePolicy.supportedTypes }
 }
 
 private fun SpaceContext.toEntity(createdAt: Long, updatedAt: Long) = SpaceDefinitionEntity(

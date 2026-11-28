@@ -180,12 +180,6 @@
 			android:exported="false"
 			android:theme="@style/Theme.AppCompat.Light.NoActionBar" />
 		<activity
-			android:name="org.skepsun.kototoro.reader.novel.NovelReaderActivity"
-			android:exported="false"
-			android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
-			android:windowSoftInputMode="adjustResize"
-			android:label="@string/content_type_novel" />
-		<activity
 			android:name="org.skepsun.kototoro.dictionary.DictionaryActivity"
 			android:exported="false" />
 		<activity
@@ -370,13 +364,6 @@
 			android:name="org.skepsun.kototoro.settings.sources.catalog.SourcesCatalogActivity"
 			android:label="@string/sources_catalog" />
 
-        <activity
-            android:name="org.skepsun.kototoro.video.ui.VideoPlayerActivity"
-            android:exported="false"
-            android:label="@string/content_type_video"
-            android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout|uiMode"
-            android:supportsPictureInPicture="true"
-            android:resizeableActivity="true" />
 		<activity
 			android:name="org.skepsun.kototoro.scrobbling.mangabaka.ui.MangaBakaAuthActivity"
 			android:exported="true"
@@ -487,11 +474,6 @@
 			android:name="androidx.work.impl.foreground.SystemForegroundService"
 			android:foregroundServiceType="dataSync"
 			tools:node="merge" />
-        <service
-            android:name="org.skepsun.kototoro.reader.novel.tts.TtsService"
-            android:foregroundServiceType="mediaPlayback"
-            android:exported="false"
-            android:label="@string/tts_engine_service_label" />
 		<service
 			android:name="org.skepsun.kototoro.local.ui.LocalChaptersRemoveService"
 			android:foregroundServiceType="dataSync"

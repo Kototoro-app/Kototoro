@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.space.domain
 
 import org.skepsun.kototoro.core.jsonsource.SourceType
+import org.skepsun.kototoro.core.model.ContentScopePolicy
 import org.skepsun.kototoro.parsers.model.ContentType
 
 @JvmInline
@@ -28,6 +29,11 @@ data class SpaceContext(
 object BuiltInSpaces {
 
     val Manga = SpaceId("builtin:manga")
+
+    /**
+     * 小说与动画空间已从本构建移除，这里保留 id 常量只是为了让旧设置、备份与
+     * 遗留引用仍能解析，不再出现在 [contexts] 中，因此也不会进入空间切换器或导航栈。
+     */
     val Novel = SpaceId("builtin:novel")
     val Anime = SpaceId("builtin:anime")
 
@@ -35,37 +41,8 @@ object BuiltInSpaces {
         SpaceContext(
             id = Manga,
             kind = SpaceKind.MANGA,
-            allowedContentTypes = setOf(
-                ContentType.MANGA,
-                ContentType.MANHWA,
-                ContentType.MANHUA,
-                ContentType.COMICS,
-                ContentType.HENTAI_MANGA,
-                ContentType.ONE_SHOT,
-                ContentType.DOUJINSHI,
-                ContentType.IMAGE_SET,
-                ContentType.ARTIST_CG,
-                ContentType.GAME_CG,
-            ),
+            allowedContentTypes = ContentScopePolicy.spaceTypes,
             sortKey = 0,
-        ),
-        SpaceContext(
-            id = Novel,
-            kind = SpaceKind.NOVEL,
-            allowedContentTypes = setOf(
-                ContentType.NOVEL,
-                ContentType.HENTAI_NOVEL,
-            ),
-            sortKey = 1,
-        ),
-        SpaceContext(
-            id = Anime,
-            kind = SpaceKind.ANIME,
-            allowedContentTypes = setOf(
-                ContentType.VIDEO,
-                ContentType.HENTAI_VIDEO,
-            ),
-            sortKey = 2,
         ),
     )
 }

@@ -30,6 +30,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -51,7 +52,6 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -65,6 +65,7 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import com.kyant.shapes.Capsule
 import com.kyant.shapes.RoundedRectangle
+import kotlinx.coroutines.delay
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import kotlin.math.roundToInt
@@ -362,8 +363,16 @@ fun ReaderProgressBar(
     modifier: Modifier = Modifier,
 ) {
     var dragValue by remember { mutableStateOf<Float?>(null) }
-    var containerPosition by remember { mutableStateOf(IntOffset.Zero) }
-    var trackPosition by remember { mutableStateOf(IntOffset.Zero) }
+    // The page-number bubble is decoupled from dragValue: a tap fires onValueChange and
+    // onValueChangeFinished almost instantly, so tying visibility to dragValue made the bubble
+    // disappear in the same frame. Instead, keep the last value and hide it after a short delay.
+    var popupValue by remember { mutableStateOf<Float?>(null) }
+    val shownPopupValue = popupValue
+    LaunchedEffect(popupValue) {
+        val captured = popupValue ?: return@LaunchedEffect
+        delay(POPUP_VISIBLE_MS)
+        if (popupValue == captured) popupValue = null
+    }
     var trackWidthPx by remember { mutableStateOf(0) }
     val density = LocalDensity.current
     val popupOffsetPx = with(density) { 48.dp.roundToPx() }
@@ -383,6 +392,7 @@ fun ReaderProgressBar(
         if (next != sliderState.value) {
             sliderState.value = next
             dragValue = next
+            popupValue = next
             onValueChange(next)
             onValueChangeFinished()
             true
@@ -397,37 +407,8 @@ fun ReaderProgressBar(
         }
     }
     Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .onGloballyPositioned { coordinates ->
-                val position = coordinates.positionInWindow()
-                containerPosition = IntOffset(position.x.roundToInt(), position.y.roundToInt())
-            },
+        modifier = modifier.fillMaxWidth(),
     ) {
-        if (dragValue != null) {
-            val fraction = displayedValue / effectiveMax
-            Popup(
-                alignment = Alignment.TopStart,
-                offset = IntOffset(
-                    trackPosition.x - containerPosition.x +
-                        (trackWidthPx * fraction).roundToInt() - popupHalfWidthPx,
-                    -popupOffsetPx,
-                ),
-                properties = PopupProperties(focusable = false),
-            ) {
-                Surface(
-                    shape = MaterialTheme.shapes.small,
-                    color = MaterialTheme.colorScheme.inverseSurface,
-                    contentColor = MaterialTheme.colorScheme.inverseOnSurface,
-                ) {
-                    Text(
-                        text = "${displayedValue.toInt() + 1}/${max.toInt() + 1}",
-                        style = MaterialTheme.typography.labelMedium,
-                        modifier = Modifier.padding(8.dp),
-                    )
-                }
-            }
-        }
         CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 40.dp) {
             BoxWithConstraints(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 1.dp),
@@ -452,19 +433,47 @@ fun ReaderProgressBar(
                         modifier = Modifier
                             .weight(1f)
                             .onGloballyPositioned { coordinates ->
-                                val position = coordinates.positionInWindow()
-                                trackPosition = IntOffset(position.x.roundToInt(), position.y.roundToInt())
                                 trackWidthPx = coordinates.size.width
                             },
                     ) {
+                        // Anchor the bubble to this track Column and position it with pure local
+                        // coordinates. Deriving x from two onGloballyPositioned window positions
+                        // made it jump when controls animated and the two callbacks landed in
+                        // different frames.
+                        if (shownPopupValue != null) {
+                            val fraction = shownPopupValue / effectiveMax
+                            Popup(
+                                alignment = Alignment.TopStart,
+                                offset = IntOffset(
+                                    (trackWidthPx * fraction).roundToInt() - popupHalfWidthPx,
+                                    -popupOffsetPx,
+                                ),
+                                properties = PopupProperties(focusable = false),
+                            ) {
+                                Surface(
+                                    shape = MaterialTheme.shapes.small,
+                                    color = MaterialTheme.colorScheme.inverseSurface,
+                                    contentColor = MaterialTheme.colorScheme.inverseOnSurface,
+                                ) {
+                                    Text(
+                                        text = "${shownPopupValue.toInt() + 1}/${max.toInt() + 1}",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        modifier = Modifier.padding(8.dp),
+                                    )
+                                }
+                            }
+                        }
                         Slider(
                             state = sliderState,
                             onValueChange = {
                                 dragValue = it
+                                popupValue = it
                                 onValueChange(it)
                             },
                             onValueChangeFinished = {
                                 dragValue = null
+                                // Keep popupValue so a tap shows its target page number;
+                                // the LaunchedEffect above hides it after a short delay.
                                 onValueChangeFinished()
                             },
                             thumb = {
@@ -579,3 +588,7 @@ object ReaderChromeIcons {
         )
     }
 }
+
+
+/** How long the page-number bubble stays visible after a tap or drag settles. */
+private const val POPUP_VISIBLE_MS = 900L

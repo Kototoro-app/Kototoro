@@ -108,7 +108,6 @@ import org.skepsun.kototoro.download.ui.worker.DownloadWorker
 import org.skepsun.kototoro.explore.data.SourcePresetsRepository
 import org.skepsun.kototoro.local.data.LocalStorageManager
 import org.skepsun.kototoro.parsers.util.await
-import org.skepsun.kototoro.reader.translate.data.OnnxModelManager
 import org.skepsun.kototoro.scrobbling.common.ui.ScrobblerAuthHelper
 import org.skepsun.kototoro.settings.about.AboutSettingsRoute
 import org.skepsun.kototoro.settings.about.AboutSettingsViewModel
@@ -139,8 +138,6 @@ import org.skepsun.kototoro.settings.protect.ProtectSetupActivity
 import org.skepsun.kototoro.settings.search.SettingsItem
 import org.skepsun.kototoro.settings.search.SettingsSearchMenuProvider
 import org.skepsun.kototoro.settings.search.SettingsSearchViewModel
-import org.skepsun.kototoro.settings.support.TranslationApiSettingsSupport
-import org.skepsun.kototoro.reader.translate.domain.TranslationApiProviderCatalog
 import org.skepsun.kototoro.core.exceptions.resolve.SnackbarErrorObserver
 import org.skepsun.kototoro.settings.sources.SourceSettingsRoute
 import org.skepsun.kototoro.settings.sources.SourcesSettingsRoute
@@ -250,9 +247,6 @@ class SettingsActivity :
     @Inject
     lateinit var googleDriveSyncSettings: GoogleDriveSyncSettings
 
-    @Inject
-    lateinit var onnxModelManager: OnnxModelManager
-
     private val isMasterDetails
         get() = resolveUiPresentationConfig(this, kototoroAppSettings).isTv ||
             FoldableUtils.shouldUseTabletLayout(this, kototoroAppSettings) && if (kototoroAppSettings.tabletUiMode == org.skepsun.kototoro.core.prefs.TabletUiMode.STRICT) {
@@ -302,10 +296,7 @@ class SettingsActivity :
         data class ProxyTestResult(val message: String) : SettingsDialogState
     }
     private val composeNavigationStack = ArrayDeque<SettingsDestination>()
-    private var ttsSettingsCoordinator: TtsSettingsCoordinator? = null
     private var isDataCleanupObserversBound = false
-    private var translationApiFetchModelsJob: Job? = null
-    private var translationE2EApiFetchModelsJob: Job? = null
     private var proxyTestJob: Job? = null
     private val downloadsStorageTick = MutableStateFlow(0)
     private val downloadsDozeTick = MutableStateFlow(0)
@@ -554,10 +545,6 @@ class SettingsActivity :
     }
 
     override fun onDestroy() {
-        translationApiFetchModelsJob?.cancel()
-        translationE2EApiFetchModelsJob?.cancel()
-        ttsSettingsCoordinator?.stop()
-        ttsSettingsCoordinator = null
         super.onDestroy()
     }
 
@@ -618,21 +605,6 @@ class SettingsActivity :
                 SettingsDestination.SpacesSettings -> {
                     outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_SPACES_SETTINGS)
                 }
-                SettingsDestination.AISettings -> {
-                    outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_AI_SETTINGS)
-                }
-                SettingsDestination.OcrModelsSettings -> {
-                    outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_OCR_MODELS_SETTINGS)
-                }
-                SettingsDestination.AiImageEnhancementSettings -> {
-                    outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_AI_IMAGE_ENHANCEMENT_SETTINGS)
-                }
-                SettingsDestination.AiVideoEnhancementSettings -> {
-                    outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_AI_VIDEO_ENHANCEMENT_SETTINGS)
-                }
-                SettingsDestination.TtsSettings -> {
-                    outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_TTS_SETTINGS)
-                }
                 SettingsDestination.PlaybackSettings -> {
                     outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_PLAYBACK_SETTINGS)
                 }
@@ -656,15 +628,6 @@ class SettingsActivity :
                 }
                 SettingsDestination.BackupsSettings -> {
                     outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_BACKUPS_SETTINGS)
-                }
-                SettingsDestination.TranslationSettings -> {
-                    outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_TRANSLATION_SETTINGS)
-                }
-                SettingsDestination.TranslationApiSettings -> {
-                    outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_TRANSLATION_API_SETTINGS)
-                }
-                SettingsDestination.TranslationE2EApiSettings -> {
-                    outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_TRANSLATION_E2E_API_SETTINGS)
                 }
                 SettingsDestination.StorageAndNetworkSettings -> {
                     outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_STORAGE_AND_NETWORK_SETTINGS)
@@ -793,11 +756,6 @@ class SettingsActivity :
             SettingsDestination.PanoramaSettings,
             SettingsDestination.UsersSettings,
             SettingsDestination.SpacesSettings,
-            SettingsDestination.AISettings,
-            SettingsDestination.OcrModelsSettings,
-            SettingsDestination.AiImageEnhancementSettings,
-            SettingsDestination.AiVideoEnhancementSettings,
-            SettingsDestination.TtsSettings,
             SettingsDestination.PlaybackSettings,
             SettingsDestination.ReaderSettings,
             SettingsDestination.ReplaceRulesSettings,
@@ -806,9 +764,6 @@ class SettingsActivity :
             SettingsDestination.SuggestionsSettings,
             SettingsDestination.SyncSettings,
             SettingsDestination.BackupsSettings,
-            SettingsDestination.TranslationSettings,
-            SettingsDestination.TranslationApiSettings,
-            SettingsDestination.TranslationE2EApiSettings,
             SettingsDestination.StorageAndNetworkSettings,
             SettingsDestination.CacheLimitsSettings,
             SettingsDestination.DataCleanupSettings,
@@ -844,7 +799,6 @@ class SettingsActivity :
             AppRouter.ACTION_SYNC_SETTINGS,
             AppRouter.ACTION_PERIODIC_BACKUP,
             AppRouter.ACTION_HISTORY -> SettingsDestination.BackupsSettings
-            AppRouter.ACTION_TRANSLATION -> SettingsDestination.TranslationSettings
             AppRouter.ACTION_TRACKER -> SettingsDestination.TrackerSettings
             AppRouter.ACTION_TRACKING_ACCOUNTS -> SettingsDestination.UsersSettings
             AppRouter.ACTION_MANAGE_DISCORD -> SettingsDestination.DiscordSettings
@@ -921,11 +875,6 @@ class SettingsActivity :
             SettingsDestination.UsersSettings -> {
                 usersResumeTick.update { it + 1 }
             }
-            SettingsDestination.TtsSettings -> {
-                if (ttsSettingsCoordinator == null) {
-                    ttsSettingsCoordinator = TtsSettingsCoordinator(this, kototoroAppSettings).also { it.start() }
-                }
-            }
             SettingsDestination.SourcesSettings -> {
                 sourcesSettingsViewModel.refreshLinksEnabled()
             }
@@ -974,11 +923,6 @@ class SettingsActivity :
             SettingsDestination.PanoramaSettings -> COMPOSE_DESTINATION_PANORAMA_SETTINGS
             SettingsDestination.UsersSettings -> COMPOSE_DESTINATION_USERS_SETTINGS
             SettingsDestination.SpacesSettings -> COMPOSE_DESTINATION_SPACES_SETTINGS
-            SettingsDestination.AISettings -> COMPOSE_DESTINATION_AI_SETTINGS
-            SettingsDestination.OcrModelsSettings -> COMPOSE_DESTINATION_OCR_MODELS_SETTINGS
-            SettingsDestination.AiImageEnhancementSettings -> COMPOSE_DESTINATION_AI_IMAGE_ENHANCEMENT_SETTINGS
-            SettingsDestination.AiVideoEnhancementSettings -> COMPOSE_DESTINATION_AI_VIDEO_ENHANCEMENT_SETTINGS
-            SettingsDestination.TtsSettings -> COMPOSE_DESTINATION_TTS_SETTINGS
             SettingsDestination.PlaybackSettings -> COMPOSE_DESTINATION_PLAYBACK_SETTINGS
             SettingsDestination.ReaderSettings -> COMPOSE_DESTINATION_READER_SETTINGS
             SettingsDestination.ReplaceRulesSettings -> COMPOSE_DESTINATION_REPLACE_RULES_SETTINGS
@@ -987,9 +931,6 @@ class SettingsActivity :
             SettingsDestination.SuggestionsSettings -> COMPOSE_DESTINATION_SUGGESTIONS_SETTINGS
             SettingsDestination.SyncSettings -> COMPOSE_DESTINATION_SYNC_SETTINGS
             SettingsDestination.BackupsSettings -> COMPOSE_DESTINATION_BACKUPS_SETTINGS
-            SettingsDestination.TranslationSettings -> COMPOSE_DESTINATION_TRANSLATION_SETTINGS
-            SettingsDestination.TranslationApiSettings -> COMPOSE_DESTINATION_TRANSLATION_API_SETTINGS
-            SettingsDestination.TranslationE2EApiSettings -> COMPOSE_DESTINATION_TRANSLATION_E2E_API_SETTINGS
             SettingsDestination.StorageAndNetworkSettings -> COMPOSE_DESTINATION_STORAGE_AND_NETWORK_SETTINGS
             SettingsDestination.CacheLimitsSettings -> COMPOSE_DESTINATION_CACHE_LIMITS_SETTINGS
             SettingsDestination.DataCleanupSettings -> COMPOSE_DESTINATION_DATA_CLEANUP_SETTINGS
@@ -1024,11 +965,6 @@ class SettingsActivity :
             SettingsDestination.PanoramaSettings -> getString(R.string.panorama_settings_title)
             SettingsDestination.UsersSettings -> getString(R.string.users)
             SettingsDestination.SpacesSettings -> getString(R.string.spaces)
-            SettingsDestination.AISettings -> getString(R.string.ai_settings)
-            SettingsDestination.OcrModelsSettings -> getString(R.string.reader_translation_ocr_models_title)
-            SettingsDestination.AiImageEnhancementSettings -> getString(R.string.ai_image_enhancement_settings)
-            SettingsDestination.AiVideoEnhancementSettings -> getString(R.string.ai_video_enhancement_settings)
-            SettingsDestination.TtsSettings -> getString(R.string.tts_settings_title)
             SettingsDestination.PlaybackSettings -> getString(R.string.playback_settings)
             SettingsDestination.ReaderSettings -> getString(R.string.reader_settings)
             SettingsDestination.ReplaceRulesSettings -> getString(R.string.replace_rules)
@@ -1037,9 +973,6 @@ class SettingsActivity :
             SettingsDestination.SuggestionsSettings -> getString(R.string.suggestions)
             SettingsDestination.SyncSettings -> getString(R.string.sync_settings)
             SettingsDestination.BackupsSettings -> getString(R.string.backup_restore)
-            SettingsDestination.TranslationSettings -> getString(R.string.translation_settings)
-            SettingsDestination.TranslationApiSettings -> getString(R.string.ai_api_settings)
-            SettingsDestination.TranslationE2EApiSettings -> getString(R.string.reader_translation_e2e_api_settings_title)
             SettingsDestination.StorageAndNetworkSettings -> getString(R.string.storage_and_network)
             SettingsDestination.CacheLimitsSettings -> getString(R.string.cache_limits)
             SettingsDestination.DataCleanupSettings -> getString(R.string.data_removal)
@@ -1176,58 +1109,9 @@ class SettingsActivity :
             SettingsDestination.SpacesSettings -> RenderComposeSection(title = getString(R.string.spaces)) {
                 SpacesSettingsRoute(settings = kototoroAppSettings)
             }
-            SettingsDestination.AISettings -> RenderComposeSection(title = getString(R.string.ai_settings)) {
-                AISettingsRoute(
-                    onOpenOcrModels = { openDestination(SettingsDestination.OcrModelsSettings, null, false) },
-                    onOpenApiSettings = { openDestination(SettingsDestination.TranslationApiSettings, null, false) },
-                    onOpenTranslationSettings = { openDestination(SettingsDestination.TranslationSettings, null, false) },
-                    onOpenImageEnhancementSettings = {
-                        openDestination(SettingsDestination.AiImageEnhancementSettings, null, false)
-                    },
-                    onOpenTtsSettings = { openDestination(SettingsDestination.TtsSettings, null, false) },
-                    onOpenVideoEnhancementSettings = {
-                        openDestination(SettingsDestination.AiVideoEnhancementSettings, null, false)
-                    },
-                )
-            }
-            SettingsDestination.OcrModelsSettings -> RenderComposeSection(
-                title = getString(R.string.reader_translation_ocr_models_title),
-            ) {
-                OcrModelsRoute(
-                    onnxModelManager = onnxModelManager,
-                    settings = kototoroAppSettings,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
-            SettingsDestination.AiImageEnhancementSettings -> RenderComposeSection(
-                title = getString(R.string.ai_image_enhancement_settings),
-            ) {
-                AIImageEnhancementSettingsRoute(
-                    settings = kototoroAppSettings,
-                    onnxModelManager = onnxModelManager,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
-            SettingsDestination.AiVideoEnhancementSettings -> RenderComposeSection(
-                title = getString(R.string.ai_video_enhancement_settings),
-            ) {
-                AIVideoEnhancementSettingsRoute(
-                    settings = kototoroAppSettings,
-                )
-            }
-            SettingsDestination.TtsSettings -> RenderComposeSection(title = getString(R.string.tts_settings_title)) {
-                TtsSettingsRoute(
-                    settings = kototoroAppSettings,
-                    coordinator = requireNotNull(ttsSettingsCoordinator),
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
             SettingsDestination.PlaybackSettings -> RenderComposeSection(title = getString(R.string.playback_settings)) {
                 PlaybackSettingsRoute(
                     settings = kototoroAppSettings,
-                    onAiSettingsClick = {
-                        openDestination(SettingsDestination.AISettings, null, false)
-                    },
                 )
             }
             SettingsDestination.ReaderSettings -> RenderComposeSection(title = getString(R.string.reader_settings)) {
@@ -1235,9 +1119,6 @@ class SettingsActivity :
                     settings = kototoroAppSettings,
                     onReaderTapActionsClick = {
                         startActivity(Intent(this, org.skepsun.kototoro.settings.reader.ReaderTapGridConfigActivity::class.java))
-                    },
-                    onReaderAiSettingsEntryClick = {
-                        openDestination(SettingsDestination.AISettings, null, false)
                     },
                     onReplaceRulesClick = {
                         openDestination(SettingsDestination.ReplaceRulesSettings, null, false)
@@ -1349,33 +1230,6 @@ class SettingsActivity :
                             Toast.makeText(this, R.string.operation_not_supported, Toast.LENGTH_SHORT).show()
                         }
                     },
-                )
-            }
-            SettingsDestination.TranslationSettings -> RenderComposeSection(
-                title = getString(R.string.translation_settings),
-            ) {
-                TranslationSettingsRoute(
-                    settings = kototoroAppSettings,
-                    onnxModelManager = onnxModelManager,
-                    onOpenOcrModels = { openDestination(SettingsDestination.OcrModelsSettings, null, false) },
-                    onOpenApiSettings = { openDestination(SettingsDestination.TranslationApiSettings, null, false) },
-                )
-            }
-            SettingsDestination.TranslationApiSettings -> RenderComposeSection(
-                title = getString(R.string.ai_api_settings),
-            ) {
-                TranslationApiSettingsRoute(
-                    settings = kototoroAppSettings,
-                    onFetchModelsClick = ::fetchAndPickTranslationApiModel,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
-            SettingsDestination.TranslationE2EApiSettings -> RenderComposeSection(
-                title = getString(R.string.reader_translation_e2e_api_settings_title),
-            ) {
-                TranslationE2EApiSettingsRoute(
-                    settings = kototoroAppSettings,
-                    onFetchModelsClick = ::fetchAndPickTranslationE2EApiModel,
                 )
             }
             SettingsDestination.DownloadsSettings -> RenderComposeSection(title = getString(R.string.downloads)) {
@@ -1903,105 +1757,6 @@ class SettingsActivity :
         )
     }
 
-    private fun fetchAndPickTranslationApiModel() {
-        translationApiFetchModelsJob?.cancel()
-        translationApiFetchModelsJob = lifecycleScope.launch {
-            try {
-                val providerId = kototoroAppSettings.readerTranslationApiProviderPreset
-                val endpoint = TranslationApiProviderCatalog.resolveChatEndpoint(
-                    providerId,
-                    kototoroAppSettings.readerTranslationApiEndpoint,
-                )
-                if (endpoint.isBlank()) {
-                    Toast.makeText(this@SettingsActivity, R.string.reader_translation_api_endpoint_missing, Toast.LENGTH_SHORT).show()
-                    return@launch
-                }
-                val modelsUrl = TranslationApiSettingsSupport.buildModelsUrl(endpoint, providerId)
-                val key = kototoroAppSettings.readerTranslationApiKey.trim()
-                val models = withContext(Dispatchers.IO) {
-                    val requestBuilder = Request.Builder().get().url(modelsUrl)
-                    TranslationApiProviderCatalog.applyAuthentication(requestBuilder, providerId, key)
-                    okHttpClient.newCall(requestBuilder.build()).execute().use { response ->
-                        if (!response.isSuccessful) return@withContext emptyList<String>()
-                        TranslationApiSettingsSupport.parseModelIds(response.body?.string().orEmpty())
-                    }
-                }
-                if (models.isEmpty()) {
-                    Toast.makeText(this@SettingsActivity, R.string.reader_translation_api_models_fetch_failed, Toast.LENGTH_SHORT).show()
-                    return@launch
-                }
-                showTranslationApiModelPicker(models)
-            } catch (_: Throwable) {
-                Toast.makeText(this@SettingsActivity, R.string.reader_translation_api_models_fetch_failed, Toast.LENGTH_SHORT).show()
-            }
-        }
-    }
-
-    private fun showTranslationApiModelPicker(models: List<String>) {
-        val current = kototoroAppSettings.readerTranslationApiModel.trim()
-        val selected = models.indexOf(current).coerceAtLeast(0)
-        pendingSettingsDialog = SettingsDialogState.ModelPicker(
-            titleRes = R.string.reader_translation_api_models_pick_title,
-            models = models,
-            selectedIndex = selected,
-            onSelected = { chosen ->
-                PreferenceManager.getDefaultSharedPreferences(this).edit {
-                    putString(AppSettings.KEY_READER_TRANSLATION_API_MODEL, chosen)
-                }
-            },
-        )
-    }
-
-    private fun fetchAndPickTranslationE2EApiModel() {
-        if (translationE2EApiFetchModelsJob?.isActive == true) return
-
-        val endpoint = kototoroAppSettings.readerE2eApiEndpoint
-        val apiKey = kototoroAppSettings.readerE2eApiKey
-        if (endpoint.isEmpty() || apiKey.isEmpty()) {
-            Toast.makeText(this, R.string.reader_translation_api_endpoint_missing, Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        val request = Request.Builder()
-            .url(endpoint.removeSuffix("/chat/completions").removeSuffix("/") + "/models")
-            .get()
-            .header("Authorization", "Bearer $apiKey")
-            .build()
-
-        translationE2EApiFetchModelsJob = lifecycleScope.launch(Dispatchers.IO) {
-            try {
-                val response = okHttpClient.newCall(request).execute()
-                val bodyStr = response.body?.string()
-                if (!response.isSuccessful || bodyStr == null) {
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(this@SettingsActivity, R.string.reader_translation_api_models_fetch_failed, Toast.LENGTH_SHORT).show()
-                    }
-                    return@launch
-                }
-                val models = TranslationApiSettingsSupport.parseModelIds(bodyStr)
-                withContext(Dispatchers.Main) {
-                    if (models.isEmpty()) {
-                        Toast.makeText(this@SettingsActivity, R.string.reader_translation_api_models_fetch_failed, Toast.LENGTH_SHORT).show()
-                        return@withContext
-                    }
-                    pendingSettingsDialog = SettingsDialogState.ModelPicker(
-                        titleRes = R.string.reader_translation_api_models_fetch,
-                        models = models,
-                        onSelected = { chosen ->
-                            kototoroAppSettings.prefs.edit()
-                                .putString(AppSettings.KEY_READER_E2E_API_MODEL, chosen)
-                                .apply()
-                        },
-                    )
-                }
-            } catch (_: Exception) {
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(this@SettingsActivity, R.string.reader_translation_api_models_fetch_failed, Toast.LENGTH_SHORT).show()
-                }
-            }
-        }
-    }
-
     private fun handleComposeNavigateUp() {
         val currentDestination = composeDestination ?: return
         val previousDestination = composeNavigationStack.lastOrNull()
@@ -2037,10 +1792,7 @@ class SettingsActivity :
     }
 
     private fun onLeavingComposeDestination(destination: SettingsDestination) {
-        if (destination == SettingsDestination.TtsSettings) {
-            ttsSettingsCoordinator?.stop()
-            ttsSettingsCoordinator = null
-        }
+        // 本构建已移除 TTS 朗读，离屏无需清理。
     }
 
     private fun finishFromComposeDestination(destination: SettingsDestination) {
@@ -2308,11 +2060,6 @@ class SettingsActivity :
         private const val COMPOSE_DESTINATION_PANORAMA_SETTINGS = "panorama_settings"
         private const val COMPOSE_DESTINATION_USERS_SETTINGS = "users_settings"
         private const val COMPOSE_DESTINATION_SPACES_SETTINGS = "spaces_settings"
-        private const val COMPOSE_DESTINATION_AI_SETTINGS = "ai_settings"
-        private const val COMPOSE_DESTINATION_OCR_MODELS_SETTINGS = "ocr_models_settings"
-        private const val COMPOSE_DESTINATION_AI_IMAGE_ENHANCEMENT_SETTINGS = "ai_image_enhancement_settings"
-        private const val COMPOSE_DESTINATION_AI_VIDEO_ENHANCEMENT_SETTINGS = "ai_video_enhancement_settings"
-        private const val COMPOSE_DESTINATION_TTS_SETTINGS = "tts_settings"
         private const val COMPOSE_DESTINATION_PLAYBACK_SETTINGS = "playback_settings"
         private const val COMPOSE_DESTINATION_READER_SETTINGS = "reader_settings"
         private const val COMPOSE_DESTINATION_REPLACE_RULES_SETTINGS = "replace_rules_settings"
@@ -2321,9 +2068,6 @@ class SettingsActivity :
         private const val COMPOSE_DESTINATION_SUGGESTIONS_SETTINGS = "suggestions_settings"
         private const val COMPOSE_DESTINATION_SYNC_SETTINGS = "sync_settings"
         private const val COMPOSE_DESTINATION_BACKUPS_SETTINGS = "backups_settings"
-        private const val COMPOSE_DESTINATION_TRANSLATION_SETTINGS = "translation_settings"
-        private const val COMPOSE_DESTINATION_TRANSLATION_API_SETTINGS = "translation_api_settings"
-        private const val COMPOSE_DESTINATION_TRANSLATION_E2E_API_SETTINGS = "translation_e2e_api_settings"
         private const val COMPOSE_DESTINATION_STORAGE_AND_NETWORK_SETTINGS = "storage_and_network_settings"
         private const val COMPOSE_DESTINATION_CACHE_LIMITS_SETTINGS = "cache_limits_settings"
         private const val COMPOSE_DESTINATION_DATA_CLEANUP_SETTINGS = "data_cleanup_settings"
@@ -2386,11 +2130,6 @@ class SettingsActivity :
             COMPOSE_DESTINATION_PANORAMA_SETTINGS -> SettingsDestination.PanoramaSettings
             COMPOSE_DESTINATION_USERS_SETTINGS -> SettingsDestination.UsersSettings
             COMPOSE_DESTINATION_SPACES_SETTINGS -> SettingsDestination.SpacesSettings
-            COMPOSE_DESTINATION_AI_SETTINGS -> SettingsDestination.AISettings
-            COMPOSE_DESTINATION_OCR_MODELS_SETTINGS -> SettingsDestination.OcrModelsSettings
-            COMPOSE_DESTINATION_AI_IMAGE_ENHANCEMENT_SETTINGS -> SettingsDestination.AiImageEnhancementSettings
-            COMPOSE_DESTINATION_AI_VIDEO_ENHANCEMENT_SETTINGS -> SettingsDestination.AiVideoEnhancementSettings
-            COMPOSE_DESTINATION_TTS_SETTINGS -> SettingsDestination.TtsSettings
             COMPOSE_DESTINATION_PLAYBACK_SETTINGS -> SettingsDestination.PlaybackSettings
             COMPOSE_DESTINATION_READER_SETTINGS -> SettingsDestination.ReaderSettings
             COMPOSE_DESTINATION_REPLACE_RULES_SETTINGS -> SettingsDestination.ReplaceRulesSettings
@@ -2399,9 +2138,6 @@ class SettingsActivity :
             COMPOSE_DESTINATION_SUGGESTIONS_SETTINGS -> SettingsDestination.SuggestionsSettings
             COMPOSE_DESTINATION_SYNC_SETTINGS -> SettingsDestination.SyncSettings
             COMPOSE_DESTINATION_BACKUPS_SETTINGS -> SettingsDestination.BackupsSettings
-            COMPOSE_DESTINATION_TRANSLATION_SETTINGS -> SettingsDestination.TranslationSettings
-            COMPOSE_DESTINATION_TRANSLATION_API_SETTINGS -> SettingsDestination.TranslationApiSettings
-            COMPOSE_DESTINATION_TRANSLATION_E2E_API_SETTINGS -> SettingsDestination.TranslationE2EApiSettings
             COMPOSE_DESTINATION_STORAGE_AND_NETWORK_SETTINGS -> SettingsDestination.StorageAndNetworkSettings
             COMPOSE_DESTINATION_CACHE_LIMITS_SETTINGS -> SettingsDestination.CacheLimitsSettings
             COMPOSE_DESTINATION_DATA_CLEANUP_SETTINGS -> SettingsDestination.DataCleanupSettings

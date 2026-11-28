@@ -32,23 +32,24 @@ sealed class BrowseGroupTab(
 
     companion object {
         /**
-         * Get all available tabs in order
+         * Get all available tabs in order.
+         *
+         * 本构建只保留漫画：[Novel] 与 [Video] 仍作为类型保留（旧备份、遗留偏好可能引用它们），
+         * 但不再出现在任何标签选择器中。
          */
         fun getAllTabs(): List<BrowseGroupTab> = listOf(
             All,
             Content,
-            Novel,
-            Video,
         )
 
         /**
-         * Find tab by ID
+         * Find tab by ID. 已移除的小说/视频标签回落到漫画标签，
+         * 避免恢复旧偏好后选中一个不存在的标签。
          */
         fun fromId(id: String): BrowseGroupTab = when (id) {
             "all" -> All
             "manga" -> Content
-            "novel" -> Novel
-            "video" -> Video
+            "novel", "video" -> Content
             // Legacy IDs now fall back to All
             "json", "mihon", "aniyomi" -> All
             else -> All

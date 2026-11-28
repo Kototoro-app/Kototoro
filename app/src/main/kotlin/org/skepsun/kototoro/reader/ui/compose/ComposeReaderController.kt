@@ -12,6 +12,8 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.skepsun.kototoro.core.prefs.ReaderMode
@@ -22,7 +24,9 @@ import org.skepsun.kototoro.reader.ui.ReaderViewModel
 import org.skepsun.kototoro.reader.ui.ReaderActionsUiState
 import org.skepsun.kototoro.reader.ui.resolveReaderCurrentPagePosition
 import org.skepsun.kototoro.reader.ui.resolveReaderInitialPagePosition
+import org.skepsun.kototoro.reader.ui.pager.ReaderPage
 import org.skepsun.kototoro.details.ui.compose.DETAILS_TAB_CHAPTERS
+import org.skepsun.kototoro.reader.ui.config.resolveSceneReaderEnabled
 import org.skepsun.kototoro.details.ui.pager.chapters.compose.ChapterSelectionUiState
 import kotlin.math.sign
 
@@ -46,6 +50,8 @@ internal class ComposeReaderController(
     private var currentPageKey: Long? = null
     private var currentInternalScroll by mutableIntStateOf(viewModel.getCurrentState()?.scroll ?: 0)
     private var requestedPageKey by mutableStateOf<Long?>(null)
+    private var primedPageKey by mutableStateOf<Long?>(null)
+    private var primeJob: Job? = null
     private var requestedPositionSmooth by mutableStateOf(false)
     private var scrollRequest: ComposeReaderScrollRequest? by mutableStateOf(null)
     private var cumulativeScrollDelta = 0L
@@ -87,13 +93,7 @@ internal class ComposeReaderController(
                     chaptersPanelContent = { selectedTabId, panelState, onSelectionStateChange, dragModifier ->
                         chaptersPanelContent(selectedTabId, panelState, onSelectionStateChange, dragModifier)
                     },
-                    translationTaskPanelContent = {
-                        ComposeTranslationTaskPanelContent(
-                            viewModel = viewModel,
-                            modifier = Modifier.fillMaxSize(),
-                            showTitle = false,
-                        )
-                    },
+                    translationTaskPanelContent = {},
                     callbacks = chromeCallbacks.copy(
                         onZoomIn = ::onZoomIn,
                         onZoomOut = ::onZoomOut,
@@ -117,6 +117,7 @@ internal class ComposeReaderController(
                         imageLoader = imagePipeline.imageLoader,
                         imagePipeline = imagePipeline,
                         requestedPageKey = requestedPageKey,
+                        primedPageKey = primedPageKey,
                         requestedPageSmooth = requestedPositionSmooth,
                         webtoonScrollRequest = scrollRequest,
                         webtoonPageTurnRequest = webtoonPageTurnRequest,
@@ -190,6 +191,7 @@ internal class ComposeReaderController(
                             }
                         },
                         onReaderInteraction = chromeCallbacks.onReaderInteraction,
+                        onMovedInteraction = chromeCallbacks.onMovedInteraction,
                         onGridTap = chromeCallbacks.onGridTap,
                         onGridLongTap = chromeCallbacks.onGridLongTap,
                     )
@@ -619,6 +621,68 @@ internal class ComposeReaderController(
         requestedPositionSmooth = smooth
     }
 
+    /**
+     * Live scrubbing for the progress slider. The slider value is a chapter-local page index,
+     * so map it to the matching global reader page and snap (no animation) to it immediately.
+     * This mirrors readers that scroll to the target page on every value change while dragging,
+     * keeping the visible image in sync with the thumb instead of waiting until release.
+     */
+    fun scrubToPage(chapterPosition: Int) {
+        val contentPage = viewModel.getCurrentChapterPages()?.getOrNull(chapterPosition) ?: return
+        val chapterId = viewModel.getCurrentState()?.chapterId ?: return
+        val targetKey = ReaderPage(contentPage, chapterPosition, chapterId).readerKey
+        if (targetKey == currentPageKey) return
+        val pages = viewModel.content.value.pages
+        // Prefer the exact readerKey; fall back to chapter+id for split/virtual pages.
+        val globalIndex = pages.indexOfFirst { it.readerKey == targetKey }
+            .takeIf { it >= 0 }
+            ?: pages.indexOfFirst { it.chapterId == chapterId && it.id == contentPage.id }
+        if (globalIndex < 0) return
+        // Reuse the mapped key so the gating (shouldAcceptPageKey/shouldAcceptPosition) accepts the callback.
+        requestedPageKey = pages[globalIndex].readerKey
+        requestedPositionSmooth = false
+        // A stale primed/warm request must not fight the live jump.
+        primeJob?.cancel()
+        primedPageKey = null
+    }
+
+    /**
+     * Decodes the page under the progress slider while the thumb is still moving. The jump itself
+     * happens only on release, so starting the decode early removes the loading pause on far seeks.
+     */
+    fun primePageAt(position: Int) {
+        val contentPage = viewModel.getCurrentChapterPages()?.getOrNull(position) ?: return
+        val chapterId = viewModel.getCurrentState()?.chapterId ?: return
+        val page = ReaderPage(contentPage, position, chapterId)
+        if (page.readerKey == currentPageKey || page.readerKey == requestedPageKey || page.readerKey == primedPageKey) return
+        primeJob?.cancel()
+        primeJob = lifecycleOwner.lifecycleScope.launch {
+            delay(PRIME_DEBOUNCE_MS)
+            val settings = viewModel.readerSettingsProducer.value
+            val sceneReader = resolveSceneReaderEnabled(
+                mode = readerMode,
+                isDoublePage = isDoublePage,
+                webtoonSceneReader = settings.isExperimentalSceneReaderEnabled,
+                pagedSceneReader = settings.isExperimentalPagedSceneReaderEnabled,
+            )
+            if (sceneReader) {
+                // Scene readers own a full decode pipeline (including tiled pages).
+                primedPageKey = page.readerKey
+            } else {
+                primedPageKey = null
+                imagePipeline.warmPage(
+                    page = page,
+                    isCropEnabled = if (readerMode.isContinuous) {
+                        settings.isPagesCropEnabledWebtoon
+                    } else {
+                        settings.isPagesCropEnabledStandard
+                    },
+                    isReaderOptimizationEnabled = settings.isReaderOptimizationEnabled,
+                )
+            }
+        }
+    }
+
     override fun onZoomIn() = issueZoomCommand(1.1f)
 
     override fun onZoomOut() = issueZoomCommand(0.9f)
@@ -634,6 +698,7 @@ internal class ComposeReaderController(
 
     private companion object {
         const val READER_DEBUG_TAG = "ReaderDebug"
+        const val PRIME_DEBOUNCE_MS = 90L
     }
 }
 

@@ -6,6 +6,9 @@ import androidx.core.net.toUri
 import com.github.tvbox.osc.base.App
 import com.hippo.unifile.UniFile
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.channelFlow
@@ -16,6 +19,7 @@ import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.db.entity.toContent
 import org.skepsun.kototoro.core.model.LocalMangaSource
+import org.skepsun.kototoro.core.model.ContentScopePolicy
 import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.core.model.getContentType
@@ -37,7 +41,9 @@ import org.skepsun.kototoro.local.data.output.LocalContentOutput.Companion.ENTRY
 import org.skepsun.kototoro.local.data.output.LocalContentUtil
 import org.skepsun.kototoro.local.domain.ContentLock
 import org.skepsun.kototoro.local.domain.model.LocalContent
+import org.skepsun.kototoro.local.domain.model.LocalReadStatusFilter
 import org.skepsun.kototoro.local.domain.model.isLocalChapterUrl
+import org.skepsun.kototoro.list.domain.ReadingProgress
 import org.skepsun.kototoro.parsers.model.ContentRating
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentChapter
@@ -63,6 +69,12 @@ private const val BACKUP_SUFFIX = ".bk"
 
 private const val LOCAL_PAGE_SIZE = 128
 
+/** 单次查询历史进度时 IN 子句的最大 id 数量（SQLite 变量上限的保护）。 */
+private const val HISTORY_QUERY_CHUNK_SIZE = 500
+
+/** 并发读取本地文件修改时间的并行度；太高会给 SAF provider 造成压力。 */
+private const val MODIFIED_TIME_LOOKUP_PARALLELISM = 8
+
 @Singleton
 class LocalMangaRepository @Inject constructor(
     private val storageManager: LocalStorageManager,
@@ -85,14 +97,20 @@ class LocalMangaRepository @Inject constructor(
         )
 
     override val sortOrders: Set<SortOrder> = EnumSet.of(
-        SortOrder.ALPHABETICAL,
-        SortOrder.RATING,
+        // 添加时间（新→旧 / 旧→新）——本地文件的创建时间
         SortOrder.NEWEST,
+        SortOrder.NEWEST_ASC,
+        SortOrder.ALPHABETICAL,
+        SortOrder.ALPHABETICAL_DESC,
+        SortOrder.RATING,
+        SortOrder.RATING_ASC,
         SortOrder.RELEVANCE,
     )
 
     override var defaultSortOrder: SortOrder
-        get() = settings.localListOrder
+        // 旧版本可能存了这里已不再提供的排序值（如 POPULARITY），回落到"添加时间（新→旧）"，
+        // 保证界面显示的排序和实际排序一致。
+        get() = settings.localListOrder.takeIf { it in sortOrders } ?: SortOrder.NEWEST
         set(value) {
             settings.localListOrder = value
         }
@@ -106,7 +124,7 @@ class LocalMangaRepository @Inject constructor(
         } else {
             emptySet()
         },
-        availableContentTypes = EnumSet.of(ContentType.MANGA, ContentType.NOVEL, ContentType.VIDEO),
+        availableContentTypes = ContentScopePolicy.supportedTypes,
     )
 
     override suspend fun getList(offset: Int, order: SortOrder?, filter: ContentListFilter?): List<Content> {
@@ -128,12 +146,19 @@ class LocalMangaRepository @Inject constructor(
      * 与 [getList] 一样从数据库读取，不触发文件系统扫描（仅索引过期时修复）。
      */
     suspend fun getAll(order: SortOrder? = null, filter: ContentListFilter? = null): List<Content> {
-        return getFilteredAndSortedList(order, filter).unwrap()
+        return getFilteredAndSortedList(order, filter, applyLibraryFilters = false).unwrap()
     }
 
-    private suspend fun getFilteredAndSortedList(order: SortOrder?, filter: ContentListFilter?): ArrayList<LocalContent> {
+    private suspend fun getFilteredAndSortedList(
+        order: SortOrder?,
+        filter: ContentListFilter?,
+        applyLibraryFilters: Boolean = true,
+    ): ArrayList<LocalContent> {
         localContentIndex.updateIfRequired()
         val list = getIndexedList()
+        // 本构建只支持漫画：磁盘上遗留的 EPUB/TXT（小说）与视频在列表层就被挡掉，
+        // 既覆盖旧数据，也覆盖"自动识别"导入可能带进来的非漫画文件。
+        list.retainAll { item -> ContentScopePolicy.isSupported(item.manga.source?.contentType) }
         if (settings.isNsfwContentDisabled) {
             list.removeAll { it.manga.isNsfw() }
         }
@@ -159,15 +184,100 @@ class LocalMangaRepository @Inject constructor(
                 list.sortBy { it.manga.title.levenshteinDistance(query) }
             }
         }
+        // 阅读状态是"整理方式"而不是搜索条件，独立于 filter 持久化；
+        // 批量操作（删除、清空已读章节等）走 getAll() 并关闭这一层，避免只处理到筛选后的子集。
+        if (applyLibraryFilters) {
+            applyReadStatusFilter(list)
+        }
+        sortInPlace(list, order)
+        return list
+    }
+
+    /**
+     * 按 [AppSettings.localReadStatusFilter] 过滤本地内容。
+     * 进度取自 history 表（已删除的历史按"未读"处理），与卡片上显示的阅读状态保持一致。
+     */
+    private suspend fun applyReadStatusFilter(list: MutableList<LocalContent>) {
+        val status = settings.localReadStatusFilter
+        if (status == LocalReadStatusFilter.ALL || list.isEmpty()) {
+            return
+        }
+        val progress = list.mapTo(ArrayList(list.size)) { it.manga.id }
+            .chunked(HISTORY_QUERY_CHUNK_SIZE)
+            .flatMap { ids -> db.getHistoryDao().findProgress(ids) }
+            .associateBy { it.mangaId }
+        list.retainAll { item ->
+            val percent = progress[item.manga.id]?.percent ?: 0f
+            when (status) {
+                LocalReadStatusFilter.UNREAD -> percent <= 0f
+                LocalReadStatusFilter.READING -> percent > 0f && !ReadingProgress.isCompleted(percent)
+                LocalReadStatusFilter.COMPLETED -> ReadingProgress.isCompleted(percent)
+                LocalReadStatusFilter.ALL -> true
+            }
+        }
+    }
+
+    private suspend fun sortInPlace(list: MutableList<LocalContent>, order: SortOrder?) {
         when (order) {
-            SortOrder.ALPHABETICAL -> list.sortWith(compareBy(AlphanumComparator()) { x -> x.manga.title })
-            SortOrder.RATING -> list.sortByDescending { it.manga.rating }
+            // 添加时间：本地文件的修改时间（SAF 目录需要先补时间，否则全是 0）
             SortOrder.NEWEST,
-            SortOrder.UPDATED -> list.sortWith(compareBy({ -it.createdAt }, { it.manga.id }))
+            SortOrder.UPDATED,
+            SortOrder.ADDED -> {
+                resolveModifiedTimes(list)
+                list.sortWith(compareBy({ -it.createdAt }, { it.manga.id }))
+            }
+
+            SortOrder.NEWEST_ASC,
+            SortOrder.UPDATED_ASC,
+            SortOrder.ADDED_ASC -> {
+                resolveModifiedTimes(list)
+                list.sortWith(compareBy({ it.createdAt }, { it.manga.id }))
+            }
+
+            SortOrder.ALPHABETICAL -> list.sortWith(
+                Comparator { a, b -> AlphanumComparator().compare(a.manga.title, b.manga.title) },
+            )
+
+            SortOrder.ALPHABETICAL_DESC -> list.sortWith(
+                Comparator { a, b -> AlphanumComparator().compare(b.manga.title, a.manga.title) },
+            )
+
+            SortOrder.RATING -> list.sortWith(compareByDescending { it.manga.rating })
+
+            SortOrder.RATING_ASC -> list.sortWith(compareBy { it.manga.rating })
 
             else -> Unit
         }
-        return list
+    }
+
+    /**
+     * 补齐排序需要的时间戳。
+     *
+     * SAF 下取一次时间就是一次 ContentResolver 查询，条目多时串行会把首屏拖到秒级：
+     * 这里并发查询（限制并行度，避免压垮 provider），并走 [LocalContentIndex] 的进程内缓存，
+     * 只有显式重扫（下拉刷新）才会让缓存失效。
+     */
+    private suspend fun resolveModifiedTimes(list: List<LocalContent>) {
+        val pending = list.filter { it.modifiedAt <= 0L }
+        if (pending.isEmpty()) {
+            return
+        }
+        coroutineScope {
+            val dispatcher = Dispatchers.IO.limitedParallelism(MODIFIED_TIME_LOOKUP_PARALLELISM)
+            pending.map { item ->
+                async(dispatcher) {
+                    val uri = item.storageUri ?: item.manga.url.toUriOrNull() ?: return@async
+                    val key = uri.toString()
+                    val cached = localContentIndex.getCachedModifiedTime(key)
+                    val value = cached ?: storageManager.lastModified(uri).also {
+                        localContentIndex.putCachedModifiedTime(key, it)
+                    }
+                    item.modifiedAt = value
+                }
+            }.awaitAll()
+        }
+        // 写回磁盘缓存，下次冷启动首屏不必再逐条查询 SAF。
+        localContentIndex.flushModifiedTimes()
     }
 
     override suspend fun getDetails(manga: Content): Content = when {

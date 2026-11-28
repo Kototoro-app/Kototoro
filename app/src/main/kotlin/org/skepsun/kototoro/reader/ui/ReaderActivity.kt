@@ -98,7 +98,6 @@ import org.skepsun.kototoro.details.ui.pager.bookmarks.BookmarksViewModel
 import org.skepsun.kototoro.details.ui.pager.pages.PagesViewModel
 import org.skepsun.kototoro.parsers.model.ContentChapter
 import org.skepsun.kototoro.reader.data.TapGridSettings
-import org.skepsun.kototoro.reader.domain.ReaderSuperResolutionManager
 import org.skepsun.kototoro.reader.domain.TapGridArea
 import org.skepsun.kototoro.reader.ui.config.ImageServerDelegate
 import org.skepsun.kototoro.reader.ui.compose.ComposeReaderController
@@ -108,8 +107,6 @@ import org.skepsun.kototoro.reader.ui.compose.ReaderChapterPanelCallbacks
 import org.skepsun.kototoro.reader.ui.compose.ComposeReaderOptionsState
 import org.skepsun.kototoro.reader.ui.compose.ReaderAutoScrollCallbacks
 import org.skepsun.kototoro.reader.ui.compose.DefaultComposeReaderImagePipeline
-import org.skepsun.kototoro.reader.domain.TranslationLayerState
-import org.skepsun.kototoro.reader.translate.domain.isAutoReaderTranslationLanguage
 import org.skepsun.kototoro.reader.ui.eink.EInkPageIdentity
 import org.skepsun.kototoro.reader.ui.eink.EInkRefreshPolicy
 import org.skepsun.kototoro.reader.ui.pager.ReaderPage
@@ -157,9 +154,6 @@ class ReaderActivity :
     @Inject
     lateinit var contentDataRepository: ContentDataRepository
 
-    @Inject
-    lateinit var superResolutionManager: ReaderSuperResolutionManager
-
     private val idlingDetector = IdlingDetector(TimeUnit.SECONDS.toMillis(10), this)
 
     private val viewModel: ReaderViewModel by viewModels()
@@ -193,11 +187,6 @@ class ReaderActivity :
     private lateinit var systemUiController: SystemUiController
     private val hideUiRunnable = Runnable { setUiIsVisible(false) }
     private val eInkRefreshPolicy = EInkRefreshPolicy()
-    private var currentTranslationLayerState: TranslationLayerState = TranslationLayerState.IDLE
-    private var lastMangaTranslationProgress: ReaderViewModel.ChapterTranslationProgress? = null
-    private var lastMangaTranslationToastAtMs: Long = 0L
-    private var translationShortcutVisibleForSession = false
-    private var enableTranslationAfterSetup = false
     private var composeSliderValue = 0
     private var areControlsVisible = true
     private var tvPresentationEnabled = false
@@ -207,11 +196,6 @@ class ReaderActivity :
     // Tracks whether the foldable device is in an unfolded state (half-opened or flat)
     private var isFoldUnfolded: Boolean = false
     private var isDoubleReaderMode: Boolean = false
-
-    private fun resetTranslationSession() {
-        settings.isReaderTranslationEnabled = false
-        settings.isReaderTranslationShowTranslated = false
-    }
 
     override fun showReaderErrorDetails(error: Throwable, url: String?) {
         exceptionResolver.showErrorDetails(error, url)
@@ -290,16 +274,6 @@ class ReaderActivity :
         if (checkAndRedirectMedia(intent)) {
             return
         }
-        if (savedInstanceState == null) {
-            resetTranslationSession()
-        } else {
-            translationShortcutVisibleForSession = savedInstanceState.getBoolean(
-                STATE_TRANSLATION_SHORTCUT_VISIBLE,
-            )
-            enableTranslationAfterSetup = savedInstanceState.getBoolean(
-                STATE_ENABLE_TRANSLATION_AFTER_SETUP,
-            )
-        }
         composeReaderController = ComposeReaderController(
             lifecycleOwner = this,
             viewModel = viewModel,
@@ -344,8 +318,8 @@ class ReaderActivity :
                         composeReaderController.toggleChapters(DETAILS_TAB_BOOKMARKS)
                     },
                     onDownload = ::onDownloadClick,
-                    onTranslate = ::onTranslateClick,
-                    onTranslateLongClick = { onTranslateLongClick() },
+                    onTranslate = {},
+                    onTranslateLongClick = { false },
                     onOptions = {
                         if (!composeReaderController.closeOptions()) openMenu()
                     },
@@ -356,9 +330,15 @@ class ReaderActivity :
                                 window.decorView.performSegmentHapticFeedback()
                                 composeSliderValue = page
                                 composeReaderController.updateActions { copy(sliderValue = value) }
+                                // Live scrubbing: move the visible page with the thumb, like other readers.
+                                composeReaderController.scrubToPage(page)
                             }
                         },
-                        onSliderValueChangeFinished = { switchPageTo(composeSliderValue) },
+                        onSliderValueChangeFinished = {
+                            // Already moved during dragging; do a final settle so a tap without
+                            // an intermediate value change still lands on the target page.
+                            composeReaderController.scrubToPage(composeSliderValue)
+                        },
                 ),
                 autoScroll = ReaderAutoScrollCallbacks(
                     onOpen = {
@@ -469,12 +449,8 @@ class ReaderActivity :
                         settings.isReaderChapterTitleAtBottom = enabled
                         composeReaderController.updateOptions { copy(chapterTitleAtBottom = enabled) }
                     },
-                    onSuperResolutionChanged = { enabled ->
-                        settings.isReaderSuperResolutionEnabled = enabled
-                        composeReaderController.updateOptions { copy(superResolution = enabled) }
-                        viewModel.reload()
-                        composeReaderController.refreshAppearancePreview()
-                    },
+                    // 画面超分已移除，保留回调位以免改动 Compose 侧结构。
+                    onSuperResolutionChanged = { },
                     onBackgroundChanged = { background ->
                         settings.readerBackground = background
                         composeReaderController.updateOptions { copy(background = background) }
@@ -489,7 +465,7 @@ class ReaderActivity :
                     onDownload = ::onDownloadClick,
                     onRotate = ::toggleScreenOrientation,
                     onAutoScroll = { onScrollTimerClick(false) },
-                    onTranslation = ::onTranslateClick,
+                    onTranslation = {},
                     onOpenSettings = router::openReaderSettings,
                     onColorFilterChanged = { colorFilter ->
                         composeReaderController.updateOptions { copy(colorFilter = colorFilter) }
@@ -511,24 +487,6 @@ class ReaderActivity :
                         }
                     },
                     onOpenBrowser = ::openCurrentChapterInBrowser,
-                    onTranslationSettings = router::openTranslationSettings,
-                    onTranslationShowTranslatedChanged = { enabled ->
-                        if (!settings.isReaderTranslationEnabled && enabled) {
-                            toggleTranslationLayer()
-                        } else {
-                            settings.isReaderTranslationShowTranslated = enabled
-                        }
-                        composeReaderController.updateOptions { copy(translationShowTranslated = enabled) }
-                        updateTranslationToggleButton()
-                    },
-                    onTranslationOcrModeChanged = { mode ->
-                        settings.readerTranslationOcrMode = mode
-                        composeReaderController.updateOptions { copy(translationOcrMode = mode) }
-                    },
-                    onTranslationLanguageActions = ::showTranslationLanguageQuickActions,
-                    onRetranslatePage = viewModel::retranslateCurrent,
-                    onRetryFailedTranslations = viewModel::retranslateFailedInCurrentChapter,
-                    onRetranslateChapter = viewModel::retranslateCurrentChapter,
                 ),
                 chapterPanel = ReaderChapterPanelCallbacks(
                     onTabSelected = { tabId -> composeReaderController.selectChaptersTab(tabId) },
@@ -551,6 +509,13 @@ class ReaderActivity :
                     },
                 ),
                 onReaderInteraction = { scrollTimer.onUserInteraction() },
+                // Any real drag/scroll (including vertical webtoon swipes and pinch zoom)
+                // dismisses the chrome, while a plain tap still goes through the tap grid.
+                onMovedInteraction = {
+                    if (isChromeOnScreen) {
+                        setUiIsVisible(false)
+                    }
+                },
                 onGridTap = { area ->
                     if (composeReaderController.closeChrome()) {
                         setUiIsVisible(false)
@@ -567,25 +532,21 @@ class ReaderActivity :
                         }
                         org.skepsun.kototoro.reader.ui.compose.design.ReaderControlDestination.DISPLAY -> openMenu()
                         org.skepsun.kototoro.reader.ui.compose.design.ReaderControlDestination.TOOLS -> composeReaderController.showTools()
-                        org.skepsun.kototoro.reader.ui.compose.design.ReaderControlDestination.TRANSLATION -> onTranslateClick()
+                        org.skepsun.kototoro.reader.ui.compose.design.ReaderControlDestination.TRANSLATION -> Unit
                         org.skepsun.kototoro.reader.ui.compose.design.ReaderControlDestination.CHAPTERS_PANEL -> {
                             composeReaderController.toggleChapters()
                         }
                     }
                 },
-                onPrimaryDestinationLongPress = { destination ->
-                    if (destination == org.skepsun.kototoro.reader.ui.compose.design.ReaderControlDestination.TRANSLATION) {
-                        onTranslateLongClick()
-                    }
-                },
+                onPrimaryDestinationLongPress = { _ -> },
             ),
         )
         composeReaderController.updateActions {
             copy(
                 controls = settings.readerControls,
                 pagesMode = settings.defaultDetailsTab == DETAILS_TAB_PAGES,
-                translateRequestedVisible = viewModel.shouldShowTranslationToggle(),
-                translateContextualVisible = translationShortcutVisibleForSession,
+                translateRequestedVisible = false,
+                translateContextualVisible = false,
             )
         }
         viewModel.readerControls
@@ -785,45 +746,6 @@ class ReaderActivity :
         viewModel.isZoomControlsEnabled.observe(this) {
             composeReaderController.setZoomVisible(it)
         }
-        settings.observeAsFlow(AppSettings.KEY_READER_TRANSLATION_ENABLED) {
-            isReaderTranslationEnabled
-        }.onEach { enabled ->
-            if (enabled) {
-                translationShortcutVisibleForSession = true
-            }
-            composeReaderController.updateOptions {
-                copy(translationEnabled = enabled)
-            }
-            composeReaderController.updateActions {
-                copy(translateContextualVisible = translationShortcutVisibleForSession)
-            }
-            updateTranslationToggleButton()
-            invalidateOptionsMenu()
-            viewModel.refreshTranslationDisplay()
-        }.launchIn(lifecycleScope)
-        settings.observeAsFlow(AppSettings.KEY_READER_TRANSLATION_SHOW_TRANSLATED) {
-            isReaderTranslationShowTranslated
-        }.onEach { enabled ->
-            composeReaderController.updateOptions {
-                copy(translationShowTranslated = enabled)
-            }
-            updateTranslationToggleButton()
-            viewModel.refreshTranslationDisplay()
-        }.launchIn(lifecycleScope)
-        // Chapters that the chapter list translated in the background open translated: the layers are
-        // already on disk, so demanding a tap on the translate button only hid a finished result.
-        combine(
-            viewModel.uiState.map { it?.chapter?.id },
-            viewModel.translatedChapterIds,
-        ) { chapterId, translatedIds -> chapterId != null && chapterId in translatedIds }
-            .distinctUntilChanged()
-            .onEach { isTranslatedChapter ->
-                if (isTranslatedChapter && !settings.isReaderTranslationEnabled) {
-                    settings.isReaderTranslationShowTranslated = true
-                    settings.isReaderTranslationEnabled = true
-                }
-            }
-            .launchIn(lifecycleScope)
         settings.observeAsFlow(AppSettings.KEY_EINK_MODE) { isEInkModeEnabled }
             .onEach { enabled ->
                 if (!enabled) eInkRefreshPolicy.reset()
@@ -855,12 +777,6 @@ class ReaderActivity :
         }.onEach { pinned ->
             composeReaderController.updateOptions { copy(floatingControlsPinned = pinned) }
         }.launchIn(lifecycleScope)
-        viewModel.translationLayerState.onEach {
-            currentTranslationLayerState = it
-            updateTranslationToggleButton()
-        }.launchIn(lifecycleScope)
-        viewModel.chapterTranslationProgress.onEach(::onChapterTranslationProgressChanged)
-            .launchIn(lifecycleScope)
 
         observeWindowLayout()
 
@@ -878,24 +794,6 @@ class ReaderActivity :
         // State saving also runs when this Activity stays alive in the background. The
         // retained pager need not report its anchor again before the next two-page turn.
         viewModel.clearTransientCrossChapterSuppression()
-        if (!enableTranslationAfterSetup) {
-            return
-        }
-        enableTranslationAfterSetup = false
-        if (!viewModel.hasTranslationEngineConfigured()) {
-            return
-        }
-        viewModel.getTranslationBypassHint(this)?.let { hint ->
-            composeReaderController.showMessage(hint, 2000L)
-            return
-        }
-        translationShortcutVisibleForSession = true
-        settings.isReaderTranslationEnabled = true
-        settings.isReaderTranslationShowTranslated = true
-        composeReaderController.updateActions {
-            copy(translateContextualVisible = true)
-        }
-        updateTranslationToggleButton()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -904,8 +802,6 @@ class ReaderActivity :
             viewModel.beginTransientStateSuppression(currentState)
             viewModel.saveCurrentState(currentState)
         }
-        outState.putBoolean(STATE_TRANSLATION_SHORTCUT_VISIBLE, translationShortcutVisibleForSession)
-        outState.putBoolean(STATE_ENABLE_TRANSLATION_AFTER_SETUP, enableTranslationAfterSetup)
         super.onSaveInstanceState(outState)
     }
 
@@ -1014,7 +910,6 @@ class ReaderActivity :
     }
 
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
-        superResolutionManager.onReaderTouch(ev.actionMasked)
         return super.dispatchTouchEvent(ev)
     }
 
@@ -1163,7 +1058,6 @@ class ReaderActivity :
                 "viewModelState=${viewModel.getCurrentState()}, composeState=${composeReaderController.getCurrentState()}",
         )
         applyDoubleModeAuto()
-        updateTranslationToggleButton()
     }
 
 
@@ -1188,6 +1082,9 @@ class ReaderActivity :
     }
 
     override fun switchPageBy(delta: Int) {
+        if (isChromeOnScreen) {
+            setUiIsVisible(false)
+        }
         composeReaderController.switchPageBy(delta)
     }
 
@@ -1226,14 +1123,14 @@ class ReaderActivity :
                 preloadReduction = settings.isReaderPreloadReductionEnabled,
                 chapterTitleAtBottom = settings.isReaderChapterTitleAtBottom,
                 floatingControlsPinned = settings.isReaderFloatingControlsPinned,
-                superResolution = settings.isReaderSuperResolutionEnabled,
+                superResolution = false,
                 background = settings.readerBackground,
                 colorFilter = viewModel.readerSettingsProducer.value.colorFilter,
-                translationEnabled = settings.isReaderTranslationEnabled,
-                translationShowTranslated = settings.isReaderTranslationShowTranslated,
-                translationSourceLanguage = settings.readerTranslationSourceLanguage,
-                translationTargetLanguage = settings.readerTranslationTargetLanguage,
-                translationOcrMode = settings.readerTranslationOcrMode,
+                translationEnabled = false,
+                translationShowTranslated = false,
+                translationSourceLanguage = "",
+                translationTargetLanguage = "",
+                translationOcrMode = org.skepsun.kototoro.core.prefs.ReaderOcrMode.BASIC,
             ),
         )
         loadImageServerOptions()
@@ -1290,6 +1187,9 @@ class ReaderActivity :
     }
 
     override fun scrollBy(delta: Int, smooth: Boolean): Boolean {
+        if (isChromeOnScreen) {
+            setUiIsVisible(false)
+        }
         return composeReaderController.scrollBy(delta, smooth)
     }
 
@@ -1358,14 +1258,9 @@ class ReaderActivity :
         }
     }
 
-    override fun onTranslateClick() {
-        toggleTranslationLayer()
-    }
+    override fun onTranslateClick() = Unit
 
-    override fun onTranslateLongClick(): Boolean {
-        showTranslationLanguageQuickActions()
-        return true
-    }
+    override fun onTranslateLongClick(): Boolean = false
 
     override fun toggleScreenOrientation() {
         if (screenOrientationHelper.toggleScreenOrientation()) {
@@ -1397,7 +1292,6 @@ class ReaderActivity :
         val (previous: ReaderUiState?, uiState: ReaderUiState?) = pair
         title = uiState?.mangaName ?: getString(R.string.loading_)
         updateReaderInfoBar(uiState)
-        updateTranslationToggleButton()
         if (uiState == null) {
             composeReaderController.setTitle(title.toString(), "")
             composeReaderController.updateActions {
@@ -1463,181 +1357,6 @@ class ReaderActivity :
         }
     }
 
-    private fun updateTranslationToggleButton() {
-        val shouldShow = viewModel.shouldShowTranslationToggle()
-        val isShowingTranslated = settings.isReaderTranslationEnabled && settings.isReaderTranslationShowTranslated
-        val contentDescription = when {
-            currentTranslationLayerState == TranslationLayerState.GENERATING ->
-                getString(R.string.reader_translation_layer_generating)
-
-            currentTranslationLayerState == TranslationLayerState.FAILED && isShowingTranslated ->
-                getString(R.string.reader_translation_layer_failed)
-
-            isShowingTranslated ->
-                getString(R.string.reader_translation_toggle_show_original)
-
-            else ->
-                getString(R.string.reader_translation_toggle_show_translated)
-        }
-        composeReaderController.updateActions {
-            copy(
-                translateRequestedVisible = shouldShow,
-                translateActive = isShowingTranslated,
-                translateContentDescription = contentDescription,
-            )
-        }
-    }
-
-    private fun toggleTranslationLayer() {
-        if (!viewModel.hasTranslationEngineConfigured()) {
-            enableTranslationAfterSetup = true
-            router.openTranslationSettings()
-            return
-        }
-        viewModel.getTranslationBypassHint(this)?.let { hint ->
-            composeReaderController.showMessage(hint, 2000L)
-            return
-        }
-        translationShortcutVisibleForSession = true
-        if (settings.isReaderTranslationEnabled) {
-            settings.isReaderTranslationShowTranslated = !settings.isReaderTranslationShowTranslated
-        } else {
-            settings.isReaderTranslationShowTranslated = true
-            settings.isReaderTranslationEnabled = true
-            composeReaderController.showMessage(getString(R.string.reader_translation_long_press_hint), 2500L)
-        }
-    }
-
-    private fun onChapterTranslationProgressChanged(progress: ReaderViewModel.ChapterTranslationProgress?) {
-        if (progress == null) {
-            lastMangaTranslationProgress = null
-            updateReaderInfoBar(viewModel.uiState.value)
-            return
-        }
-        lastMangaTranslationProgress = progress
-        if (!settings.isReaderTranslationEnabled) {
-            return
-        }
-        composeReaderController.updateInfoBar {
-            copy(text = getString(R.string.reader_translation_status_compact, progress.readyCount, progress.totalCount))
-        }
-    }
-
-    private fun showTranslationLanguageQuickActions() {
-        val actions = arrayOf(
-            getString(R.string.reader_translation_quick_change_source),
-            getString(R.string.reader_translation_quick_change_target),
-            getString(R.string.reader_translation_quick_swap_languages),
-        )
-        composeReaderController.showSelectionDialog(
-            title = getString(R.string.reader_translation_quick_actions),
-            entries = actions.toList(),
-        ) { which ->
-                when (which) {
-                    0 -> showTranslationLanguagePicker(
-                        titleRes = R.string.reader_translation_source_lang,
-                        entriesRes = R.array.reader_translation_source_languages,
-                        valuesRes = R.array.values_reader_translation_source_languages,
-                        currentValue = settings.readerTranslationSourceLanguage,
-                    ) { selected ->
-                        settings.readerTranslationSourceLanguage = selected
-                        showTranslationLanguageChangedMessage(
-                            R.string.reader_translation_source_lang_updated,
-                            selected,
-                            isSource = true,
-                        )
-                    }
-                    1 -> showTranslationLanguagePicker(
-                        titleRes = R.string.reader_translation_target_lang,
-                        entriesRes = R.array.reader_translation_target_languages,
-                        valuesRes = R.array.values_reader_translation_target_languages,
-                        currentValue = settings.readerTranslationTargetLanguage,
-                    ) { selected ->
-                        settings.readerTranslationTargetLanguage = selected
-                        showTranslationLanguageChangedMessage(
-                            R.string.reader_translation_target_lang_updated,
-                            selected,
-                            isSource = false,
-                        )
-                    }
-                    2 -> swapTranslationLanguages()
-                }
-            }
-    }
-
-    override fun onDestroy() {
-        if (isFinishing && !isChangingConfigurations) {
-            resetTranslationSession()
-            LocalPdfPages.clearPdfRenderers()
-        }
-        super.onDestroy()
-    }
-
-    private fun showTranslationLanguagePicker(
-        titleRes: Int,
-        entriesRes: Int,
-        valuesRes: Int,
-        currentValue: String,
-        onSelected: (String) -> Unit,
-    ) {
-        val labels = resources.getStringArray(entriesRes)
-        val values = resources.getStringArray(valuesRes)
-        val selectedIndex = values.indexOf(currentValue).takeIf { it >= 0 } ?: 0
-        composeReaderController.showSelectionDialog(
-            title = getString(titleRes),
-            entries = labels.toList(),
-            selectedIndex = selectedIndex,
-        ) { which ->
-                onSelected(values[which])
-            }
-    }
-
-    private fun swapTranslationLanguages() {
-        val source = settings.readerTranslationSourceLanguage
-        val target = settings.readerTranslationTargetLanguage
-        if (isAutoReaderTranslationLanguage(source)) {
-            composeReaderController.showMessage(
-                getString(R.string.reader_translation_swap_auto_unsupported),
-                TOAST_DURATION,
-            )
-            return
-        }
-        settings.readerTranslationSourceLanguage = target
-        settings.readerTranslationTargetLanguage = source
-        composeReaderController.showMessage(
-            getString(
-                R.string.reader_translation_languages_swapped,
-                displayTranslationLanguage(target, isSource = true),
-                displayTranslationLanguage(source, isSource = false),
-            ),
-            TOAST_DURATION,
-        )
-    }
-
-    private fun showTranslationLanguageChangedMessage(messageRes: Int, value: String, isSource: Boolean) {
-        composeReaderController.showMessage(
-            getString(messageRes, displayTranslationLanguage(value, isSource)),
-            TOAST_DURATION,
-        )
-    }
-
-    private fun displayTranslationLanguage(value: String, isSource: Boolean): String {
-        val valuesRes = if (isSource) {
-            R.array.values_reader_translation_source_languages
-        } else {
-            R.array.values_reader_translation_target_languages
-        }
-        val entriesRes = if (isSource) {
-            R.array.reader_translation_source_languages
-        } else {
-            R.array.reader_translation_target_languages
-        }
-        val values = resources.getStringArray(valuesRes)
-        val labels = resources.getStringArray(entriesRes)
-        val index = values.indexOf(value)
-        return if (index in labels.indices) labels[index] else value
-    }
-
     private fun dispatchNavigateUp() {
         if (intent.getBooleanExtra(AppRouter.EXTRA_HAS_IN_APP_CALLER, false)) {
             finishAfterTransition()
@@ -1688,9 +1407,6 @@ class ReaderActivity :
 
         private const val LOG_TAG = "ReaderDebug"
         private const val TOAST_DURATION = 2000L
-        private const val TRANSLATION_PROGRESS_MIN_INTERVAL_MS = 800L
-        private const val STATE_TRANSLATION_SHORTCUT_VISIBLE = "translation_shortcut_visible"
-        private const val STATE_ENABLE_TRANSLATION_AFTER_SETUP = "enable_translation_after_setup"
     }
 }
 

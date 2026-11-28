@@ -193,6 +193,7 @@ fun ComposeScenePagedReader(
     imagePipeline: ComposeReaderImagePipeline,
     onPagesChanged: (lowerKey: Long, upperKey: Long, activeKey: Long) -> Unit,
     requestedPage: Int? = null,
+    primedPageKey: Long? = null,
     requestedPageSmooth: Boolean = false,
     zoomCommand: ComposeReaderZoomCommand? = null,
     isZoomEnabled: Boolean = true,
@@ -253,6 +254,14 @@ fun ComposeScenePagedReader(
 
     DisposableEffect(adapter) {
         onDispose { adapter.close() }
+    }
+
+    // Pre-decode the slider target so a far seek does not wait for a fresh batch of decodes.
+    LaunchedEffect(primedPageKey) {
+        val key = primedPageKey ?: return@LaunchedEffect
+        if (pageMap.containsKey(key)) {
+            adapter.primePage(PageId(key))
+        }
     }
 
     val scene = remember(viewportWidthPx, viewportHeightPx, isDoublePage, coverPage, readingDirection, zoomMode) {

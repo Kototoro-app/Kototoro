@@ -104,7 +104,13 @@ class DetailsLoadUseCase @Inject constructor(
      */
     private suspend fun FlowCollector<ContentDetails>.loadLocal(manga: Content, override: ContentOverride?, force: Boolean) {
         val skipNetworkLoad = !force && networkState.isOfflineOrRestricted()
-        val loadedLocalDetails = localContentRepository.getDetails(manga)
+        // 非主动刷新时直接复用 intent 已从数据库带出的章节快照。
+        // 原实现每次进入详情页都会重新解析整个本地目录（LocalContentParser.getContent），这是进入卡顿的主因。
+        val loadedLocalDetails = if (!force && manga.isLocal && !manga.chapters.isNullOrEmpty()) {
+            manga
+        } else {
+            localContentRepository.getDetails(manga)
+        }
         val localDetails = if (override?.coverUrl?.takeIfUsableImageUri() != null) {
             loadedLocalDetails
         } else {
@@ -119,7 +125,17 @@ class DetailsLoadUseCase @Inject constructor(
                 isLoaded = skipNetworkLoad,
             ),
         )
-        if (skipNetworkLoad) {
+        if (!force || skipNetworkLoad) {
+            // 进入详情页不再尝试联网更新关联源，只有用户主动下拉刷新（force=true）才做。
+            emit(
+                ContentDetails(
+                    manga = localDetails,
+                    localContent = null,
+                    override = override,
+                    description = localDetails.description?.parseAsHtml(withImages = true),
+                    isLoaded = true,
+                ),
+            )
             return
         }
         val remoteContent = localContentRepository.getRemoteContent(manga)

@@ -82,8 +82,6 @@ import org.skepsun.kototoro.core.replace.ReplaceRuleDao
 import org.skepsun.kototoro.core.dictionary.DictionaryRuleDao
 import org.skepsun.kototoro.core.dictionary.TranslationDictionaryDao
 import org.skepsun.kototoro.core.replace.ReplaceRuleSource
-import org.skepsun.kototoro.reader.novel.DefaultNovelTextProcessor
-import org.skepsun.kototoro.reader.novel.NovelTextProcessor
 import javax.inject.Provider
 import javax.inject.Singleton
 
@@ -96,9 +94,6 @@ interface AppModule {
 
     @Binds
     fun bindReplaceRuleSource(repository: org.skepsun.kototoro.core.replace.ReplaceRuleRepository): ReplaceRuleSource
-
-    @Binds
-    fun bindNovelTextProcessor(processor: DefaultNovelTextProcessor): NovelTextProcessor
 
     @Binds
     fun bindImageGetter(coilImageGetter: CoilImageGetter): Html.ImageGetter

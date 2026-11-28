@@ -102,8 +102,6 @@ class PageLoader @Inject constructor(
     private val mangaRepositoryFactory: ContentRepository.Factory,
     private val imageProxyInterceptor: ImageProxyInterceptor,
     private val downloadSlowdownDispatcher: DownloadSlowdownDispatcher,
-    private val enhancementController: ReaderPageEnhancementController,
-    private val srManager: ReaderSuperResolutionManager,
 ) {
 
     val loaderScope = lifecycle.lifecycleScope + InternalErrorHandler() + Dispatchers.Default
@@ -123,18 +121,8 @@ class PageLoader @Inject constructor(
     private var prefetchQueueLimit = settings.readerPrefetchLimit
     private val edgeDetector = EdgeDetector(context)
 
-    fun setTranslationLanguageContext(
-        translatedLanguage: String?,
-        sourceLanguage: String?,
-        branch: String?,
-        bookKey: String? = null,
-    ) {
-        enhancementController.setTranslationLanguageContext(translatedLanguage, sourceLanguage, branch, bookKey)
-    }
-
     private data class PageTaskRecord(
         val task: ProgressDeferred<Uri, Float>,
-        val translationWorkSignature: String,
         val ticket: PriorityPermitPool.Ticket,
         val isPrefetch: Boolean,
         val consumers: AtomicInteger,
@@ -189,11 +177,9 @@ class PageLoader @Inject constructor(
         force: Boolean,
         pageUrlOverride: String? = null,
     ): ProgressDeferred<Uri, Float> {
-        val currentSignature = enhancementController.currentWorkSignature()
         val taskKey = page.taskKey()
         return synchronized(tasks) {
             val record = tasks[taskKey]
-                ?.takeIf { it.translationWorkSignature == currentSignature }
                 ?.takeIf { it.task.isValid() }
             if (force) {
                 record?.task?.cancel()
@@ -207,7 +193,6 @@ class PageLoader @Inject constructor(
                 skipCache = force,
                 isPrefetch = false,
                 priority = if (force) LOAD_PRIORITY_RETRY else LOAD_PRIORITY_VISIBLE,
-                translationWorkSignature = currentSignature,
                 initialConsumers = 1,
                 pageUrlOverride = pageUrlOverride,
             )
@@ -355,12 +340,10 @@ class PageLoader @Inject constructor(
         synchronized(tasks) {
             tasks.clear()
         }
-        enhancementController.cancelAllTranslationTasks()
         // Cancel and join every in-flight load before releasing the engines: releasing under a running
         // processImage would free the native engine mid-tile. release() is now suspend and runs in
         // NonCancellable, so it completes even if this scope is being torn down.
         loaderScope.cancelChildrenAndJoin()
-        srManager.release()
         if (clearCache) {
             cache.clear()
         }
@@ -387,9 +370,8 @@ class PageLoader @Inject constructor(
                 val page = prefetchQueue.pollFirst() ?: return@launch
                 synchronized(tasks) {
                     val taskKey = page.taskKey()
-                    val signature = enhancementController.currentWorkSignature()
                     val existing = tasks[taskKey]
-                    if (existing?.translationWorkSignature == signature && existing.task.isValid()) {
+                    if (existing?.task?.isValid() == true) {
                         return@synchronized
                     }
                     tasks[taskKey] = createPageTask(
@@ -397,7 +379,6 @@ class PageLoader @Inject constructor(
                         skipCache = false,
                         isPrefetch = true,
                         priority = LOAD_PRIORITY_PREFETCH,
-                        translationWorkSignature = signature,
                     )
                 }
             }
@@ -409,7 +390,6 @@ class PageLoader @Inject constructor(
         skipCache: Boolean,
         isPrefetch: Boolean,
         priority: Int,
-        translationWorkSignature: String,
         initialConsumers: Int = 0,
         pageUrlOverride: String? = null,
     ): PageTaskRecord {
@@ -433,7 +413,6 @@ class PageLoader @Inject constructor(
         }
         return PageTaskRecord(
             task = ProgressDeferred(deferred, progress),
-            translationWorkSignature = translationWorkSignature,
             ticket = ticket,
             isPrefetch = isPrefetch,
             consumers = AtomicInteger(initialConsumers),
@@ -460,56 +439,7 @@ class PageLoader @Inject constructor(
         pageUrlOverride: String?,
         ticket: PriorityPermitPool.Ticket,
     ): Uri {
-        val sourceUri = loadOriginalPageImpl(page, progress, isPrefetch, skipCache, pageUrlOverride, ticket)
-        val preparedPage = enhancementController.preparePage(
-            page = page,
-            sourceUri = sourceUri,
-            convertZipBitmap = ::convertBimap,
-        )
-
-        // Super-resolution runs outside the download permit pool and remains legacy-reader behavior.
-        var displayUri = preparedPage.displayUri
-        if (settings.isReaderSuperResolutionEnabled && !isLowRam() && !context.isPowerSaveMode()) {
-            val engine = settings.readerSuperResolutionEngine
-            val modelId = if (engine == "ANIME4K") {
-                settings.readerSuperResolutionAnime4kMode
-            } else {
-                settings.readerSuperResolutionModel
-            }
-
-            // An untranslated archive page is upscaled from the archive entry itself: the decoded copy that
-            // translation makes is rewritten under a new name each time, so it would never hit the SR cache.
-            val srInput = if (displayUri == preparedPage.translationSourceUri) sourceUri else displayUri
-            val srUri = srManager.processImage(
-                originalUri = srInput,
-                modelId = modelId,
-                noiseLevel = settings.readerSuperResolutionNoiseLevel,
-                cacheLimitMb = settings.readerSuperResolutionCacheLimitMb,
-                skipFromWidth = if (settings.isReaderSuperResolutionSkipSharpPages) {
-                    // The short side is the width a page gets in portrait, and the most it gets on any screen.
-                    context.resources.displayMetrics.let { minOf(it.widthPixels, it.heightPixels) }
-                } else {
-                    0
-                },
-            )
-            if (srUri != null) {
-                displayUri = srUri
-            }
-        }
-
-        if (preparedPage.shouldScheduleTranslation) {
-            Log.d("ReaderTranslate", "PageLoader debug: scheduling translation for page=${page.id} (show=${settings.isReaderTranslationShowTranslated})")
-            enhancementController.scheduleTranslation(
-                page = page,
-                sourceUri = preparedPage.translationSourceUri,
-                scope = loaderScope,
-            ) {
-                synchronized(tasks) {
-                    tasks.remove(page.taskKey())
-                }
-            }
-        }
-        return displayUri
+        return loadOriginalPageImpl(page, progress, isPrefetch, skipCache, pageUrlOverride, ticket)
     }
 
     private suspend fun loadOriginalPageImpl(

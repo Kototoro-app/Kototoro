@@ -31,14 +31,27 @@ data class LocalContent(
     val storageUri: Uri? = null,
 ) {
 
+    /**
+     * 由索引层用 SAF(UniFile) 解析出的真实修改时间，-1 表示尚未解析。
+     *
+     * `manga.url` 在目录通过 SAF 授权时是 `content://`，此时 [file] 是一条无效路径，
+     * 直接读文件时间只会得到 0——这也是"添加时间"排序看起来完全没反应的原因。
+     */
+    var modifiedAt: Long = -1L
+        internal set
+
     var createdAt: Long = -1L
         internal set
         get() {
             if (field == -1L) {
-                field = runCatching { file.creationTime }.getOrElse {
-                    // 文件可能已被移动/删除，或 url 是无 scheme 的相对路径（历史坏数据）
-                    // 出现 NoSuchFileException 等读写错误时退化为 0，避免崩溃整个列表。
-                    0L
+                field = if (modifiedAt > 0L) {
+                    modifiedAt
+                } else {
+                    // 普通 file:// 路径：lastModified 在所有存储卷上都可用，且与文件管理器
+                    // 显示的时间一致；只有它为 0 的极少数只读卷才回落去读创建时间。
+                    runCatching { file.lastModified() }.getOrDefault(0L)
+                        .takeIf { it > 0L }
+                        ?: runCatching { file.creationTime }.getOrDefault(0L)
                 }
             }
             return field

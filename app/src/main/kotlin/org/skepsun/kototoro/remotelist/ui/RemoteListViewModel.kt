@@ -11,6 +11,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
@@ -103,6 +104,14 @@ open class RemoteListViewModel @Inject constructor(
     protected val repository = mangaRepositoryFactory.create(initialSource)
     val source: org.skepsun.kototoro.parsers.model.ContentSource = repository.source
     private val mangaList = MutableStateFlow<List<Content>?>(null)
+
+    protected val userRefreshing = MutableStateFlow(false)
+
+    /**
+     * 只有「用户主动下拉」触发的刷新才为 true。
+     * 页面首次进入、排序/筛选变化、加载下一页都不算，避免打开页面时顶部自己转圈。
+     */
+    val isUserRefreshing: StateFlow<Boolean> = userRefreshing
     private val hasNextPage = MutableStateFlow(false)
     private val listError = MutableStateFlow<Throwable?>(null)
     private var loadingJob: Job? = null
@@ -156,8 +165,12 @@ open class RemoteListViewModel @Inject constructor(
     }.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Lazily, listOf(LoadingState))
 
     init {
+        // 首次筛选状态立刻生效，别让首屏白白多等一个防抖窗口；后续变更仍然防抖。
+        val firstFilterEmission = java.util.concurrent.atomic.AtomicBoolean(true)
         filterCoordinator.observe()
-            .debounce(FILTER_MIN_INTERVAL)
+            .debounce {
+                if (firstFilterEmission.getAndSet(false)) 0L else FILTER_MIN_INTERVAL
+            }
             .onEach { filterState ->
                 Log.d(
                     RemoteListPaginationLogTag,
@@ -184,6 +197,7 @@ open class RemoteListViewModel @Inject constructor(
         )
         loadingJob?.cancel()
         lastLoadedPageIndex = -1
+        userRefreshing.value = true
         loadList(filterCoordinator.snapshot(), append = false)
     }
 
@@ -373,7 +387,12 @@ open class RemoteListViewModel @Inject constructor(
                     return@launchLoadingJob
                 }
             }
-        }.also { loadingJob = it }
+        }.also { job ->
+            loadingJob = job
+            if (!append) {
+                job.invokeOnCompletion { userRefreshing.value = false }
+            }
+        }
     }
 
     private fun shouldUpdateSourceAvailability(append: Boolean): Boolean {

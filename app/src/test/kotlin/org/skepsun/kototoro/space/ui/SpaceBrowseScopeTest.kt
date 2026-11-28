@@ -109,8 +109,8 @@ class SpaceBrowseScopeTest {
 
 	@Test
 	fun `custom space with all content types does not restrict sources when languages and source kinds are empty`() = runTest {
-		val allTypes = org.skepsun.kototoro.parsers.model.ContentType.entries
-			.filterNot { it == org.skepsun.kototoro.parsers.model.ContentType.OTHER }.toSet()
+		// 本构建只放行漫画类内容，“全类型空间”指覆盖 [ContentScopePolicy.supportedTypes] 的空间。
+		val allTypes = org.skepsun.kototoro.core.model.ContentScopePolicy.supportedTypes
 		val customSpaceId = SpaceId("custom:all")
 		val customSpace = org.skepsun.kototoro.space.domain.SpaceContext(
 			id = customSpaceId,

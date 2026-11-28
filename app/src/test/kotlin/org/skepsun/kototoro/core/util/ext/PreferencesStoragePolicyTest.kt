@@ -7,8 +7,6 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import org.junit.jupiter.api.Test
-import org.skepsun.kototoro.reader.novel.annotation.NovelMarkingColor
-import org.skepsun.kototoro.reader.novel.annotation.NovelMarkingStyle
 
 /**
  * Regression coverage for https://github.com/Kototoro-app/Kototoro/issues/573
@@ -125,16 +123,6 @@ class PreferencesStoragePolicyTest {
         every { prefs.getInt(KEY, any()) } returns 5
 
         prefs.getSafeInt(KEY, 5) shouldBe 5
-    }
-
-    // --- novel marking enum validation (reader-side guard against bad restore data) ---
-
-    @Test
-    fun `unknown marking ids fall back to the safe default`() {
-        NovelMarkingColor.fromId(99) shouldBe NovelMarkingColor.YELLOW
-        NovelMarkingColor.fromId(NovelMarkingColor.YELLOW.id) shouldBe NovelMarkingColor.YELLOW
-        NovelMarkingStyle.fromId(99) shouldBe NovelMarkingStyle.UNDERLINE
-        NovelMarkingStyle.fromId(NovelMarkingStyle.UNDERLINE.id) shouldBe NovelMarkingStyle.UNDERLINE
     }
 
     private companion object {

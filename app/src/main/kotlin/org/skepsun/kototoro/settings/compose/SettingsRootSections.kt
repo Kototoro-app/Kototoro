@@ -32,22 +32,7 @@ fun buildSettingsRootSections(
                 summary = context.summaryOf(R.string.read_mode, R.string.scale_mode, R.string.switch_pages),
                 onClick = { onOpenDestination(SettingsDestination.ReaderSettings) },
             ),
-            settingsRootItem(
-                key = "ai",
-                iconRes = R.drawable.ic_auto_fix,
-                iosIconColor = SettingsRootIconColor.PURPLE,
-                title = context.getString(R.string.ai_settings),
-                summary = context.getString(R.string.ai_settings_entry_summary),
-                onClick = { onOpenDestination(SettingsDestination.AISettings) },
-            ),
-            settingsRootItem(
-                key = "playback",
-                iconRes = R.drawable.ic_play,
-                iosIconColor = SettingsRootIconColor.RED,
-                title = context.getString(R.string.playback_settings),
-                summary = context.summaryOf(R.string.video_decoder_mode, R.string.video_cache_size),
-                onClick = { onOpenDestination(SettingsDestination.PlaybackSettings) },
-            ),
+            // “播放”入口随视频播放器一并移除：本构建只保留漫画。
         ),
     )
 

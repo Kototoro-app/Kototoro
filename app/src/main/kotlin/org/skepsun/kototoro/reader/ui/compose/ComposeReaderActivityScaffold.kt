@@ -255,6 +255,7 @@ internal data class ComposeReaderChromeCallbacks(
     val autoScroll: ReaderAutoScrollCallbacks = ReaderAutoScrollCallbacks(),
     val actions: ReaderActionsCallbacks = ReaderActionsCallbacks(),
     val onReaderInteraction: () -> Unit = {},
+    val onMovedInteraction: () -> Unit = {},
     val onGridTap: (TapGridArea) -> Unit = {},
     val onGridLongTap: (TapGridArea, Offset, IntSize) -> Unit = { _, _, _ -> },
     val onBackPressed: () -> Unit = {},
@@ -761,25 +762,6 @@ internal fun ComposeReaderActivityScaffold(
                     eInkMode = state.eInkModeEnabled,
                     translationTaskPanelContent = translationTaskPanelContent,
                 )
-        }
-
-        if (state.toolsVisible) {
-            TvModalBottomSheet(
-                onDismissRequest = {
-                    callbacks.onPrimaryDestination(ReaderControlDestination.TOOLS)
-                },
-            ) {
-                ComposeReaderToolsSheet(
-                    visible = true,
-                    translateActive = state.actions.translateActive,
-                    callbacks = callbacks.options,
-                    onDismiss = {
-                        callbacks.onPrimaryDestination(ReaderControlDestination.TOOLS)
-                    },
-                    embedded = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
         }
 
         if (state.autoScroll.visible) {

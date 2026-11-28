@@ -47,8 +47,6 @@ import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ReaderControl
 import org.skepsun.kototoro.core.prefs.ReaderInfoBarLayout
 import org.skepsun.kototoro.core.prefs.ReaderMode
-import org.skepsun.kototoro.core.prefs.ReaderTranslationMode
-import org.skepsun.kototoro.core.prefs.ReaderTranslationPipelineMode
 import org.skepsun.kototoro.core.prefs.TriStateOption
 import org.skepsun.kototoro.core.prefs.observeAsFlow
 import org.skepsun.kototoro.core.prefs.observeAsStateFlow
@@ -84,16 +82,8 @@ import org.skepsun.kototoro.core.model.getMergeKey
 import org.skepsun.kototoro.core.model.mergeRepeated
 import org.skepsun.kototoro.core.model.isManga
 import org.skepsun.kototoro.core.model.getContentType
-import org.skepsun.kototoro.core.model.LocalNovelSource
-import org.skepsun.kototoro.core.model.looksLikeLocalNovelContent
-import org.skepsun.kototoro.core.model.looksLikeLocalVideoContent
-import org.skepsun.kototoro.core.model.looksLikeNovelUrl
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.reader.domain.PageLoader
-import org.skepsun.kototoro.reader.domain.ReaderPageEnhancementController
-import org.skepsun.kototoro.reader.domain.TranslationLayerState
-import org.skepsun.kototoro.reader.translate.domain.normalizeReaderTranslationLanguageTag
-import org.skepsun.kototoro.reader.translate.domain.resolveReaderTranslationSourceLanguage
 import org.skepsun.kototoro.reader.ui.compose.insertChapterBreaks
 import org.skepsun.kototoro.reader.ui.config.ReaderSettings
 import org.skepsun.kototoro.reader.ui.pager.ReaderPage
@@ -119,7 +109,6 @@ class ReaderViewModel @Inject constructor(
     private val bookmarksRepository: BookmarksRepository,
     settings: AppSettings,
     private val pageLoader: PageLoader,
-    private val enhancementController: ReaderPageEnhancementController,
     private val chaptersLoader: ChaptersLoader,
     private val appShortcutManager: AppShortcutManager,
     private val detailsLoadUseCase: DetailsLoadUseCase,
@@ -134,8 +123,6 @@ class ReaderViewModel @Inject constructor(
     downloadScheduler: DownloadWorker.Scheduler,
     mangaRepositoryFactory: org.skepsun.kototoro.core.parser.ContentRepository.Factory,
     readerSettingsProducerFactory: ReaderSettings.Producer.Factory,
-    chapterTranslationStore: org.skepsun.kototoro.reader.translate.data.ChapterTranslationStore,
-    videoQualitySizeProber: org.skepsun.kototoro.video.player.VideoQualitySizeProber,
 ) : ChaptersPagesViewModel(
     settings = settings,
     interactor = interactor,
@@ -145,35 +132,7 @@ class ReaderViewModel @Inject constructor(
     deleteLocalContentUseCase = deleteLocalContentUseCase,
     mangaRepositoryFactory = mangaRepositoryFactory,
     localStorageChanges = localStorageChanges,
-    chapterTranslationStore = chapterTranslationStore,
-    videoQualitySizeProber = videoQualitySizeProber,
 ) {
-    data class TranslationPageTaskSnapshot(
-        val pageId: Long,
-        val pageIndex: Int,
-        val state: TranslationLayerState,
-        val updatedAtMs: Long?,
-        val log: String,
-        val failCode: String?,
-    )
-
-    data class ChapterTranslationProgress(
-        val chapterId: Long,
-        val readyCount: Int,
-        val runningCount: Int,
-        val failedCount: Int,
-        val totalCount: Int,
-    ) {
-        val processedCount: Int
-            get() = readyCount + failedCount
-
-        val hasStarted: Boolean
-            get() = readyCount > 0 || runningCount > 0 || failedCount > 0
-
-        val isFinished: Boolean
-            get() = hasStarted && runningCount == 0 && processedCount >= totalCount
-    }
-
     private val intent = ContentIntent(savedStateHandle)
 
     private var loadingJob: Job? = null
@@ -204,11 +163,6 @@ class ReaderViewModel @Inject constructor(
     val onRedirectToReader = MutableEventFlow<Content>()
     val uiState = MutableStateFlow<ReaderUiState?>(null)
     val targetPagePosition = MutableStateFlow<Int?>(null)
-    val translationLayerState = MutableStateFlow(TranslationLayerState.IDLE)
-    val chapterTranslationProgress = MutableStateFlow<ChapterTranslationProgress?>(null)
-    val translationTaskPanelVersion = MutableStateFlow(0L)
-    private val translationStateByPageId = linkedMapOf<Long, TranslationLayerState>()
-    private val translationStateUpdatedAtByPageId = linkedMapOf<Long, Long>()
     private val pageReloadNonces = linkedMapOf<Long, Long>()
     private var sessionStartAt: Long = 0L
     private var sessionStartState: ReaderState? = null
@@ -334,8 +288,6 @@ class ReaderViewModel @Inject constructor(
 
     init {
         initIncognitoMode()
-        observeTranslationLayerState()
-        observeTranslationDebugLogs()
         listenToDoublePageEvents()
         observeMergeRepeatedChapters()
         observeWebtoonBoundaryMode()
@@ -446,157 +398,6 @@ class ReaderViewModel @Inject constructor(
     fun reload() {
         loadingJob?.cancel()
         loadImpl()
-    }
-
-    fun refreshTranslationDisplay() {
-        launchJob(Dispatchers.Default) {
-            content.value.pages
-                .filterNot { it.isChapterBreak }
-                .distinctBy { it.id }
-                .forEach { page ->
-                    pageLoader.invalidateTask(page.toContentPage())
-                    markPageForReload(page.id)
-                }
-            rebuildPages()
-        }
-    }
-
-    fun retranslateCurrent() {
-        launchJob(Dispatchers.Default) {
-            val page = getCurrentPage() ?: return@launchJob
-            pageLoader.invalidateTask(page)
-            enhancementController.invalidateTranslationTask(page.id)
-            enhancementController.invalidateTranslationCacheForPage(page.id)
-            markPageForReload(page.id)
-            rebuildPages()
-            onShowToast.call(R.string.reader_translation_retranslate_started)
-        }
-    }
-
-    fun retranslateFailedInCurrentChapter() {
-        launchJob(Dispatchers.Default) {
-            val pages = getCurrentChapterPages().orEmpty()
-            if (pages.isEmpty()) return@launchJob
-            var retries = 0
-            pages.forEach { page ->
-                if (translationStateByPageId[page.id] == TranslationLayerState.FAILED) {
-                    pageLoader.invalidateTask(page)
-                    enhancementController.invalidateTranslationTask(page.id)
-                    enhancementController.invalidateTranslationCacheForPage(page.id)
-                    markPageForReload(page.id)
-                    retries++
-                }
-            }
-            if (retries == 0) {
-                onShowToast.call(R.string.reader_translation_retry_failed_none)
-                return@launchJob
-            }
-            rebuildPages()
-            onShowToast.call(R.string.reader_translation_retry_failed_started)
-        }
-    }
-
-    fun retranslateCurrentChapter() {
-        launchJob(Dispatchers.Default) {
-            val chapterPages = getCurrentChapterPages().orEmpty()
-            if (chapterPages.isEmpty()) return@launchJob
-            chapterPages.forEach { page ->
-                pageLoader.invalidateTask(page)
-                enhancementController.invalidateTranslationTask(page.id)
-                enhancementController.invalidateTranslationCacheForPage(page.id)
-                markPageForReload(page.id)
-            }
-            rebuildPages()
-            onShowToast.call(R.string.reader_translation_retranslate_chapter_started)
-        }
-    }
-
-    fun retryTranslationForPage(pageId: Long) {
-        launchJob(Dispatchers.Default) {
-            val page = getCurrentChapterPages().orEmpty().firstOrNull { it.id == pageId }
-            if (page != null) {
-                pageLoader.invalidateTask(page)
-            } else {
-                pageLoader.invalidateTask(pageId)
-            }
-            enhancementController.invalidateTranslationTask(pageId)
-            enhancementController.invalidateTranslationCacheForPage(pageId)
-            markPageForReload(pageId)
-            val currentPageId = getCurrentPage()?.id
-            if (currentPageId == pageId) {
-                rebuildPages()
-            }
-        }
-    }
-
-    internal suspend fun editableBubbleTexts(pageId: Long): List<String> = enhancementController.editableBubbleTexts(pageId)
-
-    internal fun retranslateBubble(pageId: Long, index: Int, expectedText: String, originalText: String) {
-        launchJob(Dispatchers.Default) {
-            if (!enhancementController.retranslateBubble(pageId, index, expectedText, originalText)) {
-                onShowToast.call(R.string.reader_translation_bubble_failed)
-                return@launchJob
-            }
-            pageLoader.invalidateTask(pageId)
-            markPageForReload(pageId)
-            rebuildPages()
-        }
-    }
-
-    fun getCurrentChapterTranslationTaskSnapshots(): List<TranslationPageTaskSnapshot> {
-        val pages = getCurrentChapterPages().orEmpty()
-        return pages.mapIndexed { index, page ->
-            val log = enhancementController.getTranslationDebugLog(page.id)
-            TranslationPageTaskSnapshot(
-                pageId = page.id,
-                pageIndex = index,
-                state = translationStateByPageId[page.id] ?: TranslationLayerState.IDLE,
-                updatedAtMs = translationStateUpdatedAtByPageId[page.id],
-                log = log,
-                failCode = Regex("""fail_code=([A-Z_]+)""")
-                    .findAll(log)
-                    .lastOrNull()
-                    ?.groupValues
-                    ?.getOrNull(1),
-            )
-        }
-    }
-
-    fun isTranslationBypassedForCurrentContent(): Boolean {
-        val sourceLang = resolveCurrentTranslationSourceLanguage()
-        if (sourceLang.isBlank()) return false
-        val targetLang = settings.readerTranslationTargetLanguage
-            .normalizeReaderTranslationLanguageTag()
-            .orEmpty()
-        return sourceLang == targetLang
-    }
-
-    fun getTranslationBypassHint(context: Context): String? {
-        if (!isTranslationBypassedForCurrentContent()) return null
-        val targetLang = settings.readerTranslationTargetLanguage
-        return context.getString(R.string.reader_translation_bypass_hint, targetLang)
-    }
-
-    fun shouldShowTranslationToggle(): Boolean {
-        return !isTranslationBypassedForCurrentContent()
-    }
-
-    fun hasTranslationEngineConfigured(): Boolean {
-        return when (settings.readerTranslationPipelineMode) {
-            ReaderTranslationPipelineMode.END_TO_END_API -> settings.readerE2eApiEndpoint.isNotBlank()
-            ReaderTranslationPipelineMode.TWO_STAGE -> when (settings.readerTranslationMode) {
-                ReaderTranslationMode.API_ONLY -> settings.readerTranslationApiEndpoint.isNotBlank()
-                ReaderTranslationMode.LOCAL_ONLY,
-                ReaderTranslationMode.LOCAL_FIRST -> true
-            }
-        }
-    }
-
-    private fun resolveCurrentTranslationSourceLanguage(): String {
-        return resolveReaderTranslationSourceLanguage(
-            preferredLanguage = settings.readerTranslationSourceLanguage,
-            contentLanguage = getContentOrNull()?.source?.getLocale()?.language,
-        )
     }
 
     fun onPause() {
@@ -960,7 +761,6 @@ class ReaderViewModel @Inject constructor(
                 readingState.update { cs ->
                     cs?.copy(chapterId = page.chapterId, page = page.index)
                 }
-                updateTranslationStateForCurrentPage(page.id)
                 if (
                     suppressTransientCrossChapterUpdates.get() &&
                     anchorState != null &&
@@ -1121,15 +921,6 @@ class ReaderViewModel @Inject constructor(
                         loadedDetails = details
                         val manga = details.toContent()
                         val bookKey = "${manga.source.name}:${manga.id}"
-                        val translatedLanguage = savedStateHandle[ReaderIntent.EXTRA_TRANSLATED_LANGUAGE]
-                            ?: manga.source.locale
-                        val sourceLanguage: String? = savedStateHandle[ReaderIntent.EXTRA_SOURCE_LANGUAGE]
-                        pageLoader.setTranslationLanguageContext(
-                            translatedLanguage = translatedLanguage,
-                            sourceLanguage = sourceLanguage,
-                            branch = selectedBranch.value ?: savedStateHandle[ReaderIntent.EXTRA_BRANCH],
-                            bookKey = bookKey,
-                        )
                         if (mangaDetails.value == null) {
                             mangaDetails.value = details
                         }
@@ -1137,17 +928,6 @@ class ReaderViewModel @Inject constructor(
                         val reversed = dataRepository.isChaptersReversed(manga.id)
                         chaptersLoader.isChaptersReversed = reversed
                         isChapterOrderReversed.value = reversed
-                        val contentType = when {
-                            manga.looksLikeLocalVideoContent() -> ContentType.VIDEO
-                            manga.looksLikeLocalNovelContent() -> ContentType.NOVEL
-                            else -> manga.source.getContentType()
-                        }
-                        if (contentType == ContentType.NOVEL || contentType == ContentType.HENTAI_NOVEL ||
-                            contentType == ContentType.VIDEO || contentType == ContentType.HENTAI_VIDEO
-                        ) {
-                            onRedirectToReader.call(manga)
-                            return@collect
-                        }
                         // obtain state
                         if (readingState.value == null) {
                             val newState = getStateFromIntent(manga)
@@ -1160,23 +940,12 @@ class ReaderViewModel @Inject constructor(
                             }.getOrDefault(settings.defaultReaderMode)
                             val branch = chaptersLoader.peekChapter(newState.chapterId)?.branch
                             selectedBranch.value = branch
-                            pageLoader.setTranslationLanguageContext(
-                                translatedLanguage = translatedLanguage,
-                                sourceLanguage = sourceLanguage,
-                                branch = branch,
-                                bookKey = bookKey,
-                            )
                             readerMode.value = mode
                             try {
                                 chaptersLoader.loadSingleChapter(newState.chapterId)
                             } catch (e: Exception) {
                                 readingState.value = null // try next time
                                 exception = e.mergeWith(exception)
-                                return@collect
-                            }
-                            val initialPages = chaptersLoader.getPages(newState.chapterId)
-                            if (initialPages.isNotEmpty() && initialPages.all { it.url.looksLikeNovelUrl() }) {
-                                onRedirectToReader.call(manga.copy(source = LocalNovelSource))
                                 return@collect
                             }
                         } else {
@@ -1320,83 +1089,6 @@ class ReaderViewModel @Inject constructor(
         }
     }
 
-    private fun observeTranslationLayerState() {
-        launchJob(Dispatchers.Default) {
-            enhancementController.observeTranslationStatusUpdates().collect { event ->
-                translationStateByPageId[event.pageId] = event.state
-                translationStateUpdatedAtByPageId[event.pageId] = System.currentTimeMillis()
-                translationTaskPanelVersion.update { it + 1 }
-                updateCurrentChapterTranslationProgress()
-                persistChapterTranslationProgress()
-                if (event.state == TranslationLayerState.READY) {
-                    markPageForReload(event.pageId)
-                    rebuildPages()
-                }
-                val currentPageId = getCurrentPage()?.id
-                if (currentPageId == event.pageId) {
-                    translationLayerState.value = event.state
-                }
-            }
-        }
-    }
-
-    private fun observeTranslationDebugLogs() {
-        launchJob(Dispatchers.Default) {
-            enhancementController.observeTranslationDebugLogUpdates().collect {
-                translationTaskPanelVersion.update { it + 1 }
-            }
-        }
-    }
-
-    private fun updateTranslationStateForCurrentPage(pageId: Long) {
-        translationLayerState.value = translationStateByPageId[pageId] ?: TranslationLayerState.IDLE
-    }
-
-    private fun updateCurrentChapterTranslationProgress() {
-        val chapterId = getCurrentState()?.chapterId ?: run {
-            chapterTranslationProgress.value = null
-            return
-        }
-        val pages = chaptersLoader.getPages(chapterId).orEmpty()
-        if (pages.isEmpty()) {
-            chapterTranslationProgress.value = null
-            return
-        }
-        var readyCount = 0
-        var runningCount = 0
-        var failedCount = 0
-        for (page in pages) {
-            when (translationStateByPageId[page.id] ?: TranslationLayerState.IDLE) {
-                TranslationLayerState.READY -> readyCount++
-                TranslationLayerState.GENERATING -> runningCount++
-                TranslationLayerState.FAILED -> failedCount++
-                TranslationLayerState.IDLE -> Unit
-            }
-        }
-        val progress = ChapterTranslationProgress(
-            chapterId = chapterId,
-            readyCount = readyCount,
-            runningCount = runningCount,
-            failedCount = failedCount,
-            totalCount = pages.size,
-        )
-        chapterTranslationProgress.value = progress.takeIf { it.hasStarted }
-    }
-
-    /**
-     * Mirrors the reader's own page progress into [ChapterTranslationStore] so the chapter list shows a
-     * "translated" badge (or a partial ring) for chapters translated interactively, not only by a job.
-     */
-    private suspend fun persistChapterTranslationProgress() {
-        val progress = chapterTranslationProgress.value ?: return
-        val content = mangaDetails.value?.toContent() ?: return
-        recordChapterTranslationProgress(
-            mangaId = content.id,
-            chapterId = progress.chapterId,
-            donePages = progress.readyCount,
-            totalPages = progress.totalCount,
-        )
-    }
 
     @WorkerThread
     private fun notifyStateChanged() {
@@ -1424,7 +1116,6 @@ class ReaderViewModel @Inject constructor(
             statsCollector.onStateChanged(m.id, state)
             discordRpc.updateRpc(m.toContent(), newState)
         }
-        updateCurrentChapterTranslationProgress()
     }
 
     /**

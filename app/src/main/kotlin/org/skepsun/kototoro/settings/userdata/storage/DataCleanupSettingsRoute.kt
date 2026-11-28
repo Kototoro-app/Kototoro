@@ -193,7 +193,6 @@ fun DataCleanupSettingsRoute(
         onClearVideoProxyCache = {
             viewModel.clearCache(AppSettings.KEY_VIDEO_PROXY_CACHE_CLEAR, CacheDir.VIDEO_PROXY)
         },
-        onClearTorrentCache = viewModel::clearTorrentCache,
         onClearDanmakuCache = {
             viewModel.clearCache(AppSettings.KEY_VIDEO_DANMAKU_CACHE_CLEAR, CacheDir.DANMAKU)
         },

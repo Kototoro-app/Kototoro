@@ -60,9 +60,9 @@ dependencyResolutionManagement {
 }
 
 include(
-    ':app', ':parser-api', ':backdrop', ':macrobenchmark', ':reader-core', ':reader-novel', ':core-db', ':core-backup',
+    ':app', ':parser-api', ':backdrop', ':macrobenchmark', ':reader-core', ':core-db', ':core-backup',
     ':core-domain', ':core-net', ':core-source', ':core-library', ':source-host', ':parser-host', ':dex-convert', ':desktop-runtime',
-    ':desktop-player', ':core-ui', ':core-cloudflare', ':cloudstream-shared', ':source-tvbox', ':source-legado', ':core-local',
+    ':core-ui', ':core-cloudflare', ':cloudstream-shared', ':source-tvbox', ':source-legado', ':core-local',
     ':community-indexer',
 )
 // Optional desktop compatibility adapter compiles against caller-supplied pinned APIs; no external jars ship by default.

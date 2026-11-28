@@ -47,7 +47,6 @@ class ContentRepositoryFactoryTest {
 
 	private val context = mockk<android.content.Context>(relaxed = true)
 	private val localContentRepository = mockk<LocalMangaRepository>(relaxed = true)
-	private val localNovelRepository = mockk<org.skepsun.kototoro.local.novel.LocalNovelRepository>(relaxed = true)
 	private val contentSourceInfoResolver = mockk<ContentSourceInfoResolver>()
 	private val jsonContentSourceResolver = mockk<JsonContentSourceResolver>()
 	private val mihonContentSourceResolver = mockk<MihonContentSourceResolver>()
@@ -111,7 +110,6 @@ class ContentRepositoryFactoryTest {
 		repositoryProviderRegistry = ContentRepositoryProviderRegistry(
 			builtinContentRepositoryProvider = BuiltinContentRepositoryProvider(
 				localMangaRepository = localContentRepository,
-				localNovelRepository = localNovelRepository,
 			),
 			parserContentRepositoryProvider = parserContentRepositoryProvider,
 			kotatsuContentRepositoryProvider = kotatsuContentRepositoryProvider,
@@ -254,13 +252,6 @@ class ContentRepositoryFactoryTest {
 		val repository = factory.create(LocalMangaSource)
 
 		assertSame(localContentRepository, repository)
-	}
-
-	@Test
-	fun `factory routes local novel source through builtin provider`() {
-		val repository = factory.create(LocalNovelSource)
-
-		assertSame(localNovelRepository, repository)
 	}
 
 	@Test

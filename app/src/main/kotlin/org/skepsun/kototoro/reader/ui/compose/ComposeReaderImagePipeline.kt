@@ -3,20 +3,28 @@ package org.skepsun.kototoro.reader.ui.compose
 import android.net.Uri
 import androidx.compose.ui.unit.IntRect
 import androidx.core.net.toFile
+import coil3.request.CachePolicy
+import coil3.request.ImageRequest
+import coil3.request.allowHardware
+import coil3.request.transformations
 import dagger.hilt.android.scopes.ActivityRetainedScoped
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.skepsun.kototoro.core.LocalizedAppContext
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.image.BitmapDecoderCompat
 import org.skepsun.kototoro.core.util.ext.isFileUri
 import org.skepsun.kototoro.reader.domain.PageLoader
-import org.skepsun.kototoro.reader.domain.ReaderSuperResolutionManager
 import org.skepsun.kototoro.reader.ui.pager.ReaderPage
 import org.skepsun.kototoro.reader.ui.pager.ReaderPageSplit
 import java.util.concurrent.ConcurrentHashMap
@@ -84,20 +92,60 @@ data class ComposeImageEnhancementRequest(
 
 @ActivityRetainedScoped
 class DefaultComposeReaderImagePipeline @Inject constructor(
+    @LocalizedAppContext private val context: android.content.Context,
     private val pageLoader: PageLoader,
     private val settings: AppSettings,
-    private val enhancer: ComposeSuperResolutionEnhancer,
 ) : ComposeReaderImagePipeline {
 
     val imageLoader get() = pageLoader.imageLoader
     private val metadataCache = ReaderImageMetadataCache()
     private val displayCache = ConcurrentHashMap<Long, Uri>()
     private val stateCache = ConcurrentHashMap<Long, ComposeReaderImageState>()
+    private val warmScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var warmJob: Job? = null
+    private var warmedPageKey: Long? = null
 
     fun cachedDisplay(pageKey: Long?): Uri? = pageKey?.let(displayCache::get)
     override fun cachedState(pageKey: Long): ComposeReaderImageState? = stateCache[pageKey]
     override suspend fun getTrimmedBounds(uri: Uri): IntRect? = pageLoader.getTrimmedBounds(uri)?.let {
         IntRect(it.left, it.top, it.right, it.bottom)
+    }
+
+    /**
+     * Decodes the page under the progress slider while the thumb is still moving, for reader modes
+     * that do not use the scene pipeline adapter (legacy webtoon, paged and double page).
+     * The request mirrors the readers' own Coil request so the warmed bitmap is a cache hit when
+     * the jump actually composes the page, and a differently cropped/split image never poisons the cache.
+     */
+    fun warmPage(
+        page: ReaderPage,
+        isCropEnabled: Boolean,
+        isReaderOptimizationEnabled: Boolean,
+    ) {
+        if (page.readerKey == warmedPageKey) return
+        warmedPageKey = page.readerKey
+        warmJob?.cancel()
+        warmJob = warmScope.launch {
+            val ready = observe(page).firstOrNull { state ->
+                state is ComposeReaderImageState.OriginalReady ||
+                    state is ComposeReaderImageState.EnhancedReady ||
+                    state is ComposeReaderImageState.Failed
+            } ?: return@launch
+            val (uri, animated) = when (ready) {
+                is ComposeReaderImageState.OriginalReady -> ready.original to ready.isAnimated
+                is ComposeReaderImageState.EnhancedReady -> ready.enhanced to ready.isAnimated
+                else -> return@launch
+            }
+            val request = ImageRequest.Builder(context)
+                .data(uri)
+                .allowHardware(!animated)
+                .apply {
+                    if (!animated) transformations(ComposeReaderPageTransformation(isCropEnabled, page.split))
+                    if (isReaderOptimizationEnabled) memoryCachePolicy(CachePolicy.DISABLED)
+                }
+                .build()
+            runCatching { imageLoader.execute(request) }
+        }
     }
 
     override fun observe(page: ReaderPage, force: Boolean): Flow<ComposeReaderImageState> = channelFlow {
@@ -185,23 +233,4 @@ private const val WIDE_PAGE_RATIO = 1.15f
 
 internal fun resolveReaderPreviewUrl(previewUrl: String?, sourceName: String): String? {
     return previewUrl?.takeUnless { it.isBlank() || sourceName.startsWith("JSON_") }
-}
-
-/**
- * Compose-scoped super-resolution stage. The current engine is shared with downloads
- * while native model ownership is migrated; callers only observe the Compose contract.
- */
-class ComposeSuperResolutionEnhancer @Inject constructor(
-    private val manager: ReaderSuperResolutionManager,
-    private val settings: AppSettings,
-) : ComposeImageEnhancer {
-
-    override suspend fun enhance(request: ComposeImageEnhancementRequest): Uri? {
-        return manager.processImage(
-            originalUri = request.original,
-            modelId = request.model,
-            noiseLevel = request.noiseLevel,
-            cacheLimitMb = settings.readerSuperResolutionCacheLimitMb,
-        )
-    }
 }

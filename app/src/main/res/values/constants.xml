@@ -6,7 +6,7 @@
 	<string name="url_weblate" translatable="false">https://hosted.weblate.org/engage/kototoro</string>
 	<string name="url_user_manual" translatable="false">https://kototoro-app.github.io/Kototoro</string>
 	<string name="url_discord" translatable="false">https://discord.gg/xBXvPz7tr7</string>
-	<string name="account_type_sync" translatable="false">org.kototoro.sync</string>
+	<string name="account_type_sync" translatable="false">org.kotoro.sync</string>
     <string name="github_updates_repo" translatable="false">Kototoro-app/Kototoro</string>
     <!-- Branch the out-of-band config files (docs/*.json) are read from.
          The repo default branch is "devel", not "main" — hardcoding "main"
@@ -26,8 +26,8 @@
 	<string name="simkl_clientSecret" translatable="false">2e84f311425a88f29890f81e122d6498b35a6c28c9241e0ade0dddbea5beeb8c</string>
 	<!-- TMDB v3 API key (themoviedb.org/settings/api). Empty until the project registers one; sign-in reports it. -->
 	<string name="tmdb_apiKey" translatable="false">c1f6a77ae29182a0df4d3323320ad5c8</string>
-	<string name="sync_authority_history" translatable="false">org.skepsun.kototoro.history</string>
-	<string name="sync_authority_favourites" translatable="false">org.skepsun.kototoro.favourites</string>
+	<string name="sync_authority_history" translatable="false">org.skepsun.kotoro.history</string>
+	<string name="sync_authority_favourites" translatable="false">org.skepsun.kotoro.favourites</string>
 	<string name="tg_backup_bot_name" translatable="false">kototoro_backup_bot</string>
 	<string name="discord_app_id" translatable="false">1533311715364831252</string>
 	<string name="app_icon_url" translatable="false">https://raw.githubusercontent.com/Kototoro-app/Kototoro/refs/heads/devel/metadata/en-US/icon.png</string>

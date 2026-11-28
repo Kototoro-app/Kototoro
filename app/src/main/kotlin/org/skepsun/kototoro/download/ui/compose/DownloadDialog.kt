@@ -1,7 +1,5 @@
 package org.skepsun.kototoro.download.ui.compose
 
-import org.skepsun.kototoro.video.domain.formatVideoSize
-import org.skepsun.kototoro.video.player.MeasuredVideoSize
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -136,10 +134,6 @@ fun DownloadDialog(
 
     val isOptionsLoading by viewModel.isOptionsLoading.collectAsStateWithLifecycle()
     val chaptersSelectOptions by viewModel.chaptersSelectOptions.collectAsStateWithLifecycle()
-    val isVideoContent by viewModel.isVideoContent.collectAsStateWithLifecycle()
-    val isVideoQualitiesLoading by viewModel.isVideoQualitiesLoading.collectAsStateWithLifecycle()
-    val videoQualities by viewModel.videoQualities.collectAsStateWithLifecycle()
-    val videoQualitySizes by viewModel.videoQualitySizes.collectAsStateWithLifecycle()
     val defaultFormat by viewModel.defaultFormat.collectAsStateWithLifecycle()
     val availableDestinations by viewModel.availableDestinations.collectAsStateWithLifecycle()
 
@@ -148,11 +142,9 @@ fun DownloadDialog(
     var selectedMode by remember { mutableStateOf(SelectedMode.WHOLE_MANGA) }
     var selectedFormat by remember { mutableStateOf<DownloadFormat?>(null) }
     var selectedDestination by remember { mutableStateOf<DirectoryModel?>(null) }
-    var selectedVideoQuality by remember { mutableStateOf<String?>(null) }
     var includeNovelImages by remember { mutableStateOf(viewModel.isDownloadNovelImagesEnabled()) }
     var showDestinationMenu by remember { mutableStateOf(false) }
     var showFormatMenu by remember { mutableStateOf(false) }
-    var showVideoQualityMenu by remember { mutableStateOf(false) }
     var showWholeBranchMenu by remember { mutableStateOf(false) }
     var showFirstChaptersMenu by remember { mutableStateOf(false) }
     var showUnreadChaptersMenu by remember { mutableStateOf(false) }
@@ -163,11 +155,6 @@ fun DownloadDialog(
     LaunchedEffect(availableDestinations) {
         selectedDestination = availableDestinations.firstOrNull { it.isChecked }
             ?: availableDestinations.firstOrNull()
-    }
-    LaunchedEffect(videoQualities, isVideoContent) {
-        if (!isVideoContent || selectedVideoQuality !in videoQualities.orEmpty()) {
-            selectedVideoQuality = null
-        }
     }
 
     val firstManga = mangaList.firstOrNull()
@@ -379,75 +366,6 @@ fun DownloadDialog(
                     Switch(checked = startNow, onCheckedChange = onStartNowChange)
                 }
 
-                // Video Quality
-                if (isVideoContent) {
-                    Text(text = stringResource(id = R.string.video_quality), style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 16.dp))
-                    SelectableValueCard(
-                        value = if (isVideoQualitiesLoading) {
-                            stringResource(id = R.string.fetching_video_quality)
-                        } else {
-                            selectedVideoQuality?.let { videoQualityLabel(it, videoQualitySizes) }
-                                ?: stringResource(id = R.string.system_default)
-                        },
-                        expanded = showVideoQualityMenu,
-                        enabled = !isVideoQualitiesLoading,
-                        onClick = { showVideoQualityMenu = true },
-                        onDismissRequest = { showVideoQualityMenu = false },
-                        modifier = Modifier.padding(top = 8.dp),
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text(text = stringResource(id = R.string.system_default)) },
-                            onClick = {
-                                selectedVideoQuality = null
-                                showVideoQualityMenu = false
-                            },
-                        )
-                        videoQualities.orEmpty().forEach { quality ->
-                            DropdownMenuItem(
-                                text = { Text(text = videoQualityLabel(quality, videoQualitySizes)) },
-                                onClick = {
-                                    selectedVideoQuality = quality
-                                    showVideoQualityMenu = false
-                                },
-                            )
-                        }
-                    }
-                }
-
-                if (contentType == ContentType.NOVEL || contentType == ContentType.HENTAI_NOVEL) {
-                    val onIncludeNovelImagesChange: ((Boolean) -> Unit)? = if (isTv) null else ({ includeNovelImages = it })
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .tvFocusable(shape = DownloadDialogRowShape, addFocusTarget = false)
-                            .then(
-                                if (isTv) {
-                                    Modifier.clickable { includeNovelImages = !includeNovelImages }
-                                } else {
-                                    Modifier
-                                },
-                            )
-                            .padding(top = 16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = stringResource(id = R.string.download_novel_images),
-                                style = MaterialTheme.typography.titleSmall,
-                            )
-                            Text(
-                                text = stringResource(id = R.string.download_novel_images_summary),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        Switch(
-                            checked = includeNovelImages,
-                            onCheckedChange = onIncludeNovelImagesChange,
-                        )
-                    }
-                }
-
                 // More Options Toggle
                 Row(
                     modifier = Modifier
@@ -542,7 +460,6 @@ fun DownloadDialog(
                             format = selectedFormat,
                             destination = selectedDestination,
                             allowMetered = allowMetered,
-                            preferredQuality = selectedVideoQuality,
                             includeNovelImages = includeNovelImages,
                         )
                     }
@@ -763,10 +680,4 @@ private fun rememberDownloadCountOptions(maxAvailableCount: Int): List<Int> {
             }
         }.distinct()
     }
-}
-
-/** A quality option's title, followed by its measured size when known ("~" marks an estimate). */
-private fun videoQualityLabel(quality: String, sizes: Map<String, MeasuredVideoSize>): String {
-    val size = sizes[quality] ?: return quality
-    return quality + " · " + (if (size.isEstimated) "~" else "") + formatVideoSize(size.bytes)
 }

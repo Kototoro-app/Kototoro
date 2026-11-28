@@ -45,12 +45,20 @@ fun Modifier.readerTapGestures(
     onLongTap: (TapGridArea, Offset, IntSize) -> Unit,
     doubleTapSlop: Float,
     onSecondaryTap: ((TapGridArea, Offset, IntSize) -> Unit)? = null,
-): Modifier = pointerInput(onInteraction, onTap, onLongTap, doubleTapSlop, onSecondaryTap) {
+    onMovedInteraction: () -> Unit = {},
+): Modifier = pointerInput(onInteraction, onTap, onLongTap, doubleTapSlop, onSecondaryTap, onMovedInteraction) {
     coroutineScope {
         var secondaryDown: Offset? = null
         var downPosition: Offset? = null
         var moved = false
+        var movedInteractionDispatched = false
         var longPressDispatched = false
+        fun markMovedInteraction() {
+            if (!movedInteractionDispatched) {
+                movedInteractionDispatched = true
+                onMovedInteraction()
+            }
+        }
         var doubleTapInProgress = false
         var longPressJob: Job? = null
         var pendingTapJob: Job? = null
@@ -83,12 +91,15 @@ fun Modifier.readerTapGestures(
                 val hasMultiplePointers = event.changes.count { it.pressed } > 1
                 if (hasMultiplePointers) {
                     moved = true
+                    markMovedInteraction()
                     longPressJob?.cancel()
                 }
                 when {
                     change.changedToDownIgnoreConsumed() -> {
                         downPosition = change.position
                         moved = hasMultiplePointers
+                        movedInteractionDispatched = false
+                        if (moved) markMovedInteraction()
                         longPressDispatched = false
                         doubleTapInProgress = isTapGridDoubleTapCandidate(
                             previousPosition = lastTapPosition,
@@ -130,6 +141,7 @@ fun Modifier.readerTapGestures(
                             abs(change.position.y - start.y) > viewConfiguration.touchSlop
                         ) {
                             moved = true
+                            markMovedInteraction()
                             longPressJob?.cancel()
                         }
                     }

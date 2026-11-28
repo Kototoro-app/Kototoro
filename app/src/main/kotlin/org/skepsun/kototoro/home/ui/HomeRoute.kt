@@ -203,7 +203,7 @@ internal fun HomeRoute(
         }
         val onHomeDownloadsClick = remember(appRouter) { { appRouter.openDownloads() } }
         val onHomeRandomClick = remember(viewModel) { { viewModel.openRandom() } }
-        val onHomeAutoTranslateClick = remember(appRouter) { { appRouter.openTranslationSettings() } }
+        val onHomeAutoTranslateClick: () -> Unit = {}
         val homeActions = remember(
             onHomeSettingsClick,
             onHomeReaderSettingsClick,

@@ -219,7 +219,7 @@ class KototoroImagePipelineAdapter(
         publishPresentation: Boolean = true,
     ): Boolean = synchronized(cachedAssets) {
         val readinessMap = desiredReadiness
-        if (readinessMap != null) {
+        if (readinessMap != null && pageId != primedPageId) {
             val targetReadiness = readinessMap[pageId] ?: return@synchronized false
             if (asset !is ReaderImageAsset.Encoded && targetReadiness != PrefetchReadiness.PRESENTATION_READY) {
                 return@synchronized false
@@ -247,7 +247,32 @@ class KototoroImagePipelineAdapter(
     fun close() = synchronized(cachedAssets) {
         desiredReadiness = emptyMap()
         onAssetLoaded = null
+        primedPageId = null
         evictOutside(emptySet())
+    }
+
+    /**
+     * One page kept warm while the progress slider is being dragged. A far seek otherwise has to
+     * decode several pages at once after the thumb is released, which is what shows the
+     * "加载中" overlay. Decoding the destination early makes the jump land on a ready bitmap.
+     *
+     * Only one page is primed at a time: every new request evicts the previous one, so dragging
+     * across a chapter cannot accumulate decoded bitmaps.
+     */
+    private var primedPageId: PageId? = null
+
+    fun primePage(pageId: PageId) {
+        if (pageLookup(pageId) == null) return
+        val previous = synchronized(this) {
+            if (primedPageId == pageId) return
+            val old = primedPageId
+            primedPageId = pageId
+            old
+        }
+        if (previous != null && previous != pageId) evictAsset(previous)
+        scope.launch(ioDispatcher) {
+            runCatching { acquireAsset(pageId) }
+        }
     }
 
     /** Publishes a staged presentation asset if the resource window still owns it. */
@@ -612,6 +637,11 @@ class KototoroImagePipelineAdapter(
         }
         this.desiredReadiness = desired
 
+        // A primed page that entered the window is now owned by the normal prefetch policy.
+        synchronized(this) {
+            if (primedPageId in desired) primedPageId = null
+        }
+
         // 1. Evict pages completely outside the window
         evictOutside(desired.keys)
 
@@ -734,15 +764,17 @@ class KototoroImagePipelineAdapter(
     }
 
     private fun evictOutside(retainedPageIds: Set<PageId>) {
+        // The primed page lives outside the current resource window until the seek completes.
+        val retained = primedPageId?.let { retainedPageIds + it } ?: retainedPageIds
         val evictedPageIds = HashSet<PageId>()
         for (pageId in cachedAssets.keys) {
-            if (pageId !in retainedPageIds) evictedPageIds.add(pageId)
+            if (pageId !in retained) evictedPageIds.add(pageId)
         }
         for (pageId in inFlightLoads.keys) {
-            if (pageId !in retainedPageIds) evictedPageIds.add(pageId)
+            if (pageId !in retained) evictedPageIds.add(pageId)
         }
         for (pageId in inFlightSourceLoads.keys) {
-            if (pageId !in retainedPageIds) evictedPageIds.add(pageId)
+            if (pageId !in retained) evictedPageIds.add(pageId)
         }
         for (pageId in evictedPageIds) {
             evictAsset(pageId)

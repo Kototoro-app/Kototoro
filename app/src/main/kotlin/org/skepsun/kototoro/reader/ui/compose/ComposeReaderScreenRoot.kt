@@ -42,6 +42,7 @@ fun ComposeReaderScreenRoot(
     imageLoader: ImageLoader,
     imagePipeline: ComposeReaderImagePipeline,
     requestedPageKey: Long? = null,
+    primedPageKey: Long? = null,
     requestedPageSmooth: Boolean = false,
     webtoonScrollRequest: ComposeReaderScrollRequest? = null,
     webtoonPageTurnRequest: ComposeWebtoonPageTurnRequest? = null,
@@ -60,6 +61,7 @@ fun ComposeReaderScreenRoot(
     onReaderPageKeyChanged: (pageKey: Long, internalScroll: Int) -> Unit = { _, _ -> },
     onReaderInternalScrollChanged: (pageKey: Long, internalScroll: Int) -> Unit = { _, _ -> },
     onReaderInteraction: () -> Unit = {},
+    onMovedInteraction: () -> Unit = {},
     onGridTap: (TapGridArea) -> Unit = {},
     onGridLongTap: (TapGridArea, androidx.compose.ui.geometry.Offset, androidx.compose.ui.unit.IntSize) -> Unit = { _, _, _ -> },
     modifier: Modifier = Modifier,
@@ -125,6 +127,7 @@ fun ComposeReaderScreenRoot(
         onTap = onGridTap,
         onLongTap = onGridLongTap,
         doubleTapSlop = doubleTapSlop,
+        onMovedInteraction = onMovedInteraction,
     )
 
     if (mode == null || content.pages.isEmpty()) {
@@ -157,6 +160,7 @@ fun ComposeReaderScreenRoot(
             ComposeScenePagedReader(
                 pages = content.pages,
                 initialPage = initialPosition,
+                primedPageKey = primedPageKey,
                 isDoublePage = true,
                 coverPage = readerSettings.isReaderDoubleCoverPage,
                 readingDirection = if (mode == ReaderMode.REVERSED) {
@@ -304,6 +308,7 @@ fun ComposeReaderScreenRoot(
                 pages = content.pages,
                 initialPage = initialPosition,
                 initialScroll = restoredState?.scroll ?: 0,
+                primedPageKey = primedPageKey,
                 imageLoader = imageLoader,
                 imagePipeline = imagePipeline,
                 onPagesChanged = { lowerPageKey, upperPageKey, activePageKey ->
@@ -401,6 +406,7 @@ fun ComposeReaderScreenRoot(
         ComposeSceneHorizontalReader(
             pages = content.pages,
             initialPage = initialPosition,
+            primedPageKey = primedPageKey,
             initialScroll = restoredState?.scroll ?: 0,
             imageLoader = imageLoader,
             imagePipeline = imagePipeline,
@@ -457,6 +463,7 @@ fun ComposeReaderScreenRoot(
             ComposeScenePagedReader(
                 pages = content.pages,
                 initialPage = initialPosition,
+                primedPageKey = primedPageKey,
                 isDoublePage = false,
                 coverPage = false,
                 readingDirection = resolveSceneReadingDirection(

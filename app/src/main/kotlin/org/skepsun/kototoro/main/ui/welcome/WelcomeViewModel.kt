@@ -204,7 +204,8 @@ class WelcomeViewModel @Inject constructor(
     @LocalizedAppContext private val context: Context,
 ) : BaseViewModel() {
 
-    private val supportedContentTypes = listOf(ContentType.MANGA, ContentType.NOVEL, ContentType.VIDEO)
+    // 本构建只保留漫画：安装向导不再提供小说/视频源类型，避免装回用不上的插件。
+    private val supportedContentTypes = listOf(ContentType.MANGA)
 
     private var updateJob: Job? = null
     private var planJob: Job? = null

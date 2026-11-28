@@ -39,6 +39,7 @@ import org.skepsun.kototoro.core.ui.glass.GlassTuning
 import org.skepsun.kototoro.core.ui.glass.GlassTuningScope
 import org.skepsun.kototoro.explore.data.SourcesSortOrder
 import org.skepsun.kototoro.list.domain.ListSortOrder
+import org.skepsun.kototoro.local.domain.model.LocalReadStatusFilter
 import org.skepsun.kototoro.list.ui.ListDisplaySection
 import org.skepsun.kototoro.core.prefs.VideoSuperResolutionMode
 import org.skepsun.kototoro.core.prefs.VideoSuperResolutionShader
@@ -2587,6 +2588,13 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         get() = prefs.getEnumValue(KEY_LOCAL_LIST_ORDER, SortOrder.NEWEST)
         set(value) = prefs.edit { putEnumValue(KEY_LOCAL_LIST_ORDER, value) }
 
+    /**
+     * 本地漫画库的阅读状态筛选（全部/未读/在读/已读完）。
+     */
+    var localReadStatusFilter: LocalReadStatusFilter
+        get() = LocalReadStatusFilter.fromName(prefs.getString(KEY_LOCAL_READ_STATUS_FILTER, null))
+        set(value) = prefs.edit { putString(KEY_LOCAL_READ_STATUS_FILTER, value.name) }
+
     var historySortOrder: ListSortOrder
         get() = prefs.getEnumValue(KEY_HISTORY_ORDER, ListSortOrder.LAST_READ)
         set(value) = prefs.edit { putEnumValue(KEY_HISTORY_ORDER, value) }
@@ -3514,6 +3522,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_READER_EXPERIMENTAL_SCENE_ENGINE = "reader_experimental_scene_engine"
         const val KEY_READER_EXPERIMENTAL_PAGED_SCENE_ENGINE = "reader_experimental_paged_scene_engine"
         const val KEY_LOCAL_LIST_ORDER = "local_order"
+        const val KEY_LOCAL_READ_STATUS_FILTER = "local_read_status_filter"
         const val KEY_HISTORY_ORDER = "history_order"
         const val KEY_FAVORITES_ORDER = "fav_order"
         const val KEY_FAVOURITES_SHELF = "favourites_shelf"

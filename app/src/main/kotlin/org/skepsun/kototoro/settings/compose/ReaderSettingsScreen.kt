@@ -55,21 +55,15 @@ import org.skepsun.kototoro.core.ui.settings.ReaderModeSettingsContent
 import org.skepsun.kototoro.core.ui.settings.ReaderModeSettingsIcons
 import org.skepsun.kototoro.core.ui.settings.ReaderModeSettingsUiState
 import org.skepsun.kototoro.core.ui.settings.SettingsRowDivider
-import org.skepsun.kototoro.reader.novel.NovelPageTurnAnimation
-import org.skepsun.kototoro.reader.novel.NovelReaderSettings
-import org.skepsun.kototoro.reader.novel.NovelReaderThemePreset
-import org.skepsun.kototoro.reader.novel.NovelTranslationDisplayMode
-import org.skepsun.kototoro.reader.novel.ReadingMode
-import org.skepsun.kototoro.reader.novel.compose.NovelReadingModeOptions
-import org.skepsun.kototoro.reader.novel.compose.NovelReaderValueOption
-import org.skepsun.kototoro.reader.novel.compose.NovelTypographyControls
 import kotlinx.coroutines.launch
 import org.skepsun.kototoro.core.ui.settings.LocalSettingsSearchTarget
 
 private const val READER_SETTINGS_COMMON_PAGE = 0
 private const val READER_SETTINGS_MANGA_PAGE = 1
+
+/** 小说阅读器已从本构建移除，该页不再进入分页器，仅保留分支定义以免大面积改动排版代码。 */
 private const val READER_SETTINGS_NOVEL_PAGE = 2
-private const val READER_SETTINGS_PAGE_COUNT = 3
+private const val READER_SETTINGS_PAGE_COUNT = 2
 
 internal data class ReaderInfoBarSettingsState(
     val enabled: Boolean,
@@ -89,7 +83,6 @@ internal fun resolveReaderInfoBarSettingsState(infoBarEnabled: Boolean): ReaderI
 fun ReaderSettingsScreen(
     settings: AppSettings,
     onReaderTapActionsClick: () -> Unit,
-    onReaderAiSettingsEntryClick: () -> Unit,
     onReplaceRulesClick: () -> Unit,
     onDictionaryRulesClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -97,13 +90,6 @@ fun ReaderSettingsScreen(
     val prefs = settings.prefs
     val context = LocalContext.current
     val resources = context.resources
-    var novelSettings by remember(context) { mutableStateOf(NovelReaderSettings.load(context)) }
-    fun updateNovelSettings(transform: NovelReaderSettings.() -> NovelReaderSettings) {
-        val updated = novelSettings.transform().normalized()
-        if (updated != novelSettings) {
-            novelSettings = updated.also { it.save(context) }
-        }
-    }
 
     val readerModeNames = ReaderMode.entries.map { it.name }
     val zoomModeNames = ZoomMode.entries.map { it.name }
@@ -156,7 +142,6 @@ fun ReaderSettingsScreen(
     val pageLabels = listOf(
         stringResource(R.string.reader_settings_common_tab),
         stringResource(R.string.manga),
-        stringResource(R.string.novel),
     )
 
     Surface(
@@ -212,257 +197,9 @@ fun ReaderSettingsScreen(
                             readerInfoBarLayoutOptions = readerInfoBarLayoutOptions,
                             pagesPreloadNames = pagesPreloadNames,
                             readerControlOptions = readerControlOptions,
-                            onReaderAiSettingsEntryClick = onReaderAiSettingsEntryClick,
                         )
 
-                        READER_SETTINGS_NOVEL_PAGE -> {
-                            SettingsPreferenceGroup(
-                                title = stringResource(R.string.novel),
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                item {
-                                    NovelRuleSettingsRows(
-                                        onReplaceRulesClick = onReplaceRulesClick,
-                                        onDictionaryRulesClick = onDictionaryRulesClick,
-                                        replaceRulesIcon = painterResource(R.drawable.ic_filter_menu),
-                                        dictionaryRulesIcon = painterResource(R.drawable.ic_book_page),
-                                    )
-                                }
-
-                                item {
-                                    NovelReadingModeOptions(
-                                        paged = novelSettings.readingMode == ReadingMode.PAGED,
-                                        onPagedChange = { paged ->
-                                            updateNovelSettings {
-                                                copy(readingMode = if (paged) ReadingMode.PAGED else ReadingMode.SCROLL)
-                                            }
-                                        },
-                                    )
-                                }
-
-                                item {
-                                    SettingsMultiChoicePreference(
-                                        title = stringResource(R.string.reader_floating_controls),
-                                        iconRes = R.drawable.ic_reorder_handle,
-                                        values = settings.observeAsState(AppSettings.KEY_NOVEL_READER_CONTROLS) {
-                                            novelReaderControls
-                                        }.value,
-                                        options = novelReaderControlOptions,
-                                        emptySelectionText = stringResource(R.string.none),
-                                        summary = stringResource(
-                                            R.string.reader_floating_controls_summary,
-                                            ReaderControl.NOVEL_FLOATING.size,
-                                        ),
-                                        maxSelections = ReaderControl.NOVEL_FLOATING.size,
-                                        onValueChange = { controls ->
-                                            val novelControls = ReaderControl.limitNovelFloatingControls(controls)
-                                            prefs.edit {
-                                                putStringSet(
-                                                    AppSettings.KEY_NOVEL_READER_CONTROLS,
-                                                    novelControls.map { it.name }.toSet(),
-                                                )
-                                            }
-                                        },
-                                    )
-                                }
-
-                                item {
-                                    SettingsChoicePreference(
-                                        title = stringResource(R.string.novel_page_turn_animation),
-                                        iconRes = R.drawable.ic_animation,
-                                        value = novelSettings.pageTurnAnimation.name,
-                                        options = listOf(
-                                            SettingsChoiceOption(
-                                                NovelPageTurnAnimation.SLIDE.name,
-                                                stringResource(R.string.novel_page_turn_slide),
-                                            ),
-                                            SettingsChoiceOption(
-                                                NovelPageTurnAnimation.SIMULATION.name,
-                                                stringResource(R.string.novel_page_turn_simulation),
-                                            ),
-                                        ),
-                                        enabled = novelSettings.readingMode == ReadingMode.PAGED,
-                                        onValueChange = { value ->
-                                            updateNovelSettings {
-                                                copy(pageTurnAnimation = NovelPageTurnAnimation.valueOf(value))
-                                            }
-                                        },
-                                    )
-                                }
-
-                                item {
-                                    SettingsChoicePreference(
-                                        title = stringResource(R.string.novel_theme_preset),
-                                        iconRes = R.drawable.ic_palette,
-                                        value = novelSettings.themePreset.name,
-                                        options = listOf(
-                                            SettingsChoiceOption(
-                                                NovelReaderThemePreset.PAPER.name,
-                                                stringResource(R.string.novel_theme_paper),
-                                            ),
-                                            SettingsChoiceOption(
-                                                NovelReaderThemePreset.SEPIA.name,
-                                                stringResource(R.string.novel_theme_sepia),
-                                            ),
-                                            SettingsChoiceOption(
-                                                NovelReaderThemePreset.MOSS.name,
-                                                stringResource(R.string.novel_theme_moss),
-                                            ),
-                                            SettingsChoiceOption(
-                                                NovelReaderThemePreset.SLATE.name,
-                                                stringResource(R.string.novel_theme_slate),
-                                            ),
-                                        ),
-                                        onValueChange = { value ->
-                                            updateNovelSettings { copy(themePreset = NovelReaderThemePreset.valueOf(value)) }
-                                        },
-                                    )
-                                }
-
-                                item {
-                                    NovelTypographyControls(
-                                        fontSize = NovelReaderValueOption(
-                                            label = stringResource(R.string.novel_font_size),
-                                            valueLabel = "%.1fsp".format(novelSettings.fontSizeSp),
-                                            value = novelSettings.fontSizeSp,
-                                            range = NovelReaderSettings.FONT_SIZE_RANGE,
-                                            step = NovelReaderSettings.FONT_SIZE_STEP,
-                                            onValueChange = { value -> updateNovelSettings { copy(fontSizeSp = value) } },
-                                            tag = "novel-settings-font-size",
-                                        ),
-                                        lineSpacing = NovelReaderValueOption(
-                                            label = stringResource(R.string.novel_line_spacing),
-                                            valueLabel = "%.1f".format(novelSettings.lineSpacing),
-                                            value = novelSettings.lineSpacing,
-                                            range = NovelReaderSettings.LINE_SPACING_RANGE,
-                                            step = NovelReaderSettings.LINE_SPACING_STEP,
-                                            onValueChange = { value -> updateNovelSettings { copy(lineSpacing = value) } },
-                                            tag = "novel-settings-line-spacing",
-                                        ),
-                                    )
-                                }
-
-                                item {
-                                    SettingsSliderPreference(
-                                        title = stringResource(R.string.novel_paragraph_spacing),
-                                        iconRes = R.drawable.ic_line_spacing,
-                                        value = novelSettings.paragraphSpacingLines,
-                                        valueRange = 0..3,
-                                        step = 1,
-                                        valueText = { resources.getString(R.string.novel_paragraph_spacing_value, it) },
-                                        onValueChange = { value -> updateNovelSettings { copy(paragraphSpacing = value.toFloat()) } },
-                                    )
-                                }
-
-                                item {
-                                    SettingsSliderPreference(
-                                        title = stringResource(R.string.novel_margin_horizontal),
-                                        iconRes = R.drawable.ic_straighten,
-                                        value = novelSettings.marginHorizontal,
-                                        valueRange = NovelReaderSettings.MARGIN_RANGE,
-                                        step = NovelReaderSettings.MARGIN_STEP,
-                                        valueText = { "${it}dp" },
-                                        onValueChange = { value -> updateNovelSettings { copy(marginHorizontal = value) } },
-                                    )
-                                }
-
-                                item {
-                                    SettingsSliderPreference(
-                                        title = stringResource(R.string.novel_margin_vertical),
-                                        iconRes = R.drawable.ic_straighten,
-                                        value = novelSettings.marginVertical,
-                                        valueRange = NovelReaderSettings.MARGIN_RANGE,
-                                        step = NovelReaderSettings.MARGIN_STEP,
-                                        valueText = { "${it}dp" },
-                                        onValueChange = { value -> updateNovelSettings { copy(marginVertical = value) } },
-                                    )
-                                }
-
-                                item {
-                                    SettingsSwitchPreference(
-                                        title = stringResource(R.string.novel_dual_page_mode),
-                                        iconRes = R.drawable.ic_view_column,
-                                        checked = novelSettings.enableDualPage,
-                                        onCheckedChange = { enabled -> updateNovelSettings { copy(enableDualPage = enabled) } },
-                                    )
-                                }
-
-                                item {
-                                    SettingsSwitchPreference(
-                                        title = stringResource(R.string.novel_fullscreen_mode),
-                                        iconRes = R.drawable.ic_fullscreen,
-                                        checked = novelSettings.enableFullscreen,
-                                        onCheckedChange = { enabled -> updateNovelSettings { copy(enableFullscreen = enabled) } },
-                                    )
-                                }
-
-                                item {
-                                    SettingsSwitchPreference(
-                                        title = stringResource(R.string.novel_show_reading_status),
-                                        iconRes = R.drawable.ic_progress_marker,
-                                        checked = novelSettings.showReadingStatus,
-                                        onCheckedChange = { enabled -> updateNovelSettings { copy(showReadingStatus = enabled) } },
-                                    )
-                                }
-
-                                item {
-                                    SettingsSwitchPreference(
-                                        title = stringResource(R.string.reader_chapter_title_at_bottom),
-                                        summary = stringResource(R.string.reader_chapter_title_at_bottom_summary),
-                                        iconRes = R.drawable.ic_format_size,
-                                        checked = chapterTitleAtBottom,
-                                        onCheckedChange = { enabled ->
-                                            updateNovelSettings { copy(chapterTitleAtBottom = enabled) }
-                                        },
-                                    )
-                                }
-
-                                item {
-                                    SettingsSwitchPreference(
-                                        title = stringResource(R.string.novel_transparent_status_bar),
-                                        iconRes = R.drawable.ic_drawer_menu,
-                                        checked = novelSettings.isReadingStatusTransparent,
-                                        enabled = novelSettings.showReadingStatus,
-                                        onCheckedChange = { enabled ->
-                                            updateNovelSettings { copy(isReadingStatusTransparent = enabled) }
-                                        },
-                                    )
-                                }
-
-                                item {
-                                    SettingsSwitchPreference(
-                                        title = stringResource(R.string.novel_first_line_indent),
-                                        iconRes = R.drawable.ic_read,
-                                        checked = novelSettings.enableParagraphIndent,
-                                        onCheckedChange = { enabled -> updateNovelSettings { copy(enableParagraphIndent = enabled) } },
-                                    )
-                                }
-
-                                item {
-                                    SettingsChoicePreference(
-                                        title = stringResource(R.string.novel_translation_display_mode),
-                                        iconRes = R.drawable.ic_translate,
-                                        value = novelSettings.translationDisplayMode.name,
-                                        options = listOf(
-                                            SettingsChoiceOption(
-                                                NovelTranslationDisplayMode.TRANSLATION_ONLY.name,
-                                                stringResource(R.string.novel_translation_only),
-                                            ),
-                                            SettingsChoiceOption(
-                                                NovelTranslationDisplayMode.BILINGUAL.name,
-                                                stringResource(R.string.novel_translation_bilingual),
-                                            ),
-                                        ),
-                                        onValueChange = { value ->
-                                            updateNovelSettings {
-                                                copy(translationDisplayMode = NovelTranslationDisplayMode.valueOf(value))
-                                            }
-                                        },
-                                    )
-                                }
-                            }
-                        }
-
+                        
                         else -> {
                             SettingsPreferenceGroup(
                                 title = stringResource(R.string.reader_settings_common_tab),
@@ -648,27 +385,12 @@ private fun ReaderMangaSettingsPage(
     readerInfoBarLayoutOptions: List<SettingsChoiceOption<ReaderInfoBarLayout>>,
     pagesPreloadNames: List<String>,
     readerControlOptions: List<SettingsChoiceOption<ReaderControl>>,
-    onReaderAiSettingsEntryClick: () -> Unit,
 ) {
     val readerInfoBarSettings = resolveReaderInfoBarSettingsState(
         infoBarEnabled = settings.observeAsState(AppSettings.KEY_READER_BAR) {
             isReaderBarEnabled
         }.value,
     )
-    SettingsPreferenceGroup(
-        title = "",
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        item {
-            SettingsActionPreference(
-                title = stringResource(R.string.ai_settings),
-                summary = stringResource(R.string.ai_settings_entry_summary),
-                iconRes = R.drawable.ic_auto_fix,
-                onClick = onReaderAiSettingsEntryClick,
-            )
-        }
-    }
-
     ReaderModeSettingsContent(
         state = ReaderModeSettingsUiState(
             mode = settings.observeAsState(AppSettings.KEY_READER_MODE) {

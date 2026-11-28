@@ -16,7 +16,6 @@ import org.skepsun.kototoro.core.util.ext.isZipUri
 import org.skepsun.kototoro.core.util.ext.isPageEbookChapter
 import org.skepsun.kototoro.details.data.ContentDetails
 import org.skepsun.kototoro.local.data.isPdfPageUri
-import org.skepsun.kototoro.local.epub.EpubStorageManager
 import org.skepsun.kototoro.parsers.model.ContentChapter
 import org.skepsun.kototoro.parsers.model.ContentPage
 import org.skepsun.kototoro.reader.ui.pager.ReaderPage
@@ -34,7 +33,6 @@ private const val READER_WINDOW_LOG_TAG = "ReaderWindow"
 class ChaptersLoader @Inject constructor(
     private val mangaRepositoryFactory: ContentRepository.Factory,
     private val settings: AppSettings,
-    private val epubStorageManager: EpubStorageManager,
 ) {
 
     @Volatile
@@ -164,7 +162,7 @@ class ChaptersLoader @Inject constructor(
 
     fun isChapterLocal(chapterId: Long): Boolean {
         val chapter = chapters[chapterId] ?: return false
-        return chapter.isLocalPageSource() || epubStorageManager.findPageEbookFile(mangaId, chapterId) != null
+        return chapter.isLocalPageSource()
     }
 
     fun hasPages(chapterId: Long): Boolean {
@@ -218,32 +216,25 @@ class ChaptersLoader @Inject constructor(
             }
 
             else -> {
-                val localPageEbook = epubStorageManager.findPageEbookFile(mangaId, chapterId)
-                if (localPageEbook != null) {
-                    val localUri = android.net.Uri.fromFile(localPageEbook)
-                    val localChapter = chapter.copy(url = localUri.toString(), source = LocalMangaSource)
-                    org.skepsun.kototoro.local.data.input.LocalContentParser(localUri).getPages(localChapter)
-                } else {
-                    val repo = mangaRepositoryFactory.create(chapter.source)
-                    val remotePages = repo.getPages(chapter)
-                    if (remotePages.size == 1 && chapter.isPageEbookChapter(remotePages)) {
-                        val pageUri = remotePages[0].url.toUri()
-                        if (
-                            pageUri.isFileUri() ||
-                            pageUri.isZipUri() ||
-                            pageUri.isContentZipUri() ||
-                            pageUri.isPdfPageUri() ||
-                            pageUri.scheme == "content"
-                        ) {
-                            org.skepsun.kototoro.local.data.input.LocalContentParser(pageUri).getPages(
-                                chapter.copy(url = remotePages[0].url),
-                            )
-                        } else {
-                            remotePages
-                        }
+                val repo = mangaRepositoryFactory.create(chapter.source)
+                val remotePages = repo.getPages(chapter)
+                if (remotePages.size == 1 && chapter.isPageEbookChapter(remotePages)) {
+                    val pageUri = remotePages[0].url.toUri()
+                    if (
+                        pageUri.isFileUri() ||
+                        pageUri.isZipUri() ||
+                        pageUri.isContentZipUri() ||
+                        pageUri.isPdfPageUri() ||
+                        pageUri.scheme == "content"
+                    ) {
+                        org.skepsun.kototoro.local.data.input.LocalContentParser(pageUri).getPages(
+                            chapter.copy(url = remotePages[0].url),
+                        )
                     } else {
                         remotePages
                     }
+                } else {
+                    remotePages
                 }
             }
         }

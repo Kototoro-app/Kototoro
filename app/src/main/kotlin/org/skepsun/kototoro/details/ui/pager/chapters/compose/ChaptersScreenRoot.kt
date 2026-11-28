@@ -43,8 +43,6 @@ import org.skepsun.kototoro.details.ui.pager.ChaptersPagesViewModel
 import org.skepsun.kototoro.details.ui.pager.chapters.ChapterGroupsManager
 import org.skepsun.kototoro.details.ui.withVolumeHeaders
 import org.skepsun.kototoro.local.ui.LocalChaptersRemoveService
-import org.skepsun.kototoro.video.domain.formatVideoSize
-import org.skepsun.kototoro.video.player.MeasuredVideoSize
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.reader.ui.ReaderNavigationCallback
 
@@ -70,14 +68,8 @@ fun ChaptersScreenRoot(
     val selectedBranch by viewModel.selectedBranch.collectAsStateWithLifecycle(initialValue = null)
     val contentDetails by viewModel.mangaDetails.collectAsStateWithLifecycle(initialValue = null)
     val contentType = contentDetails?.toContent()?.source?.getContentType()
-    val canTranslateChapters = contentType != ContentType.VIDEO && contentType != ContentType.HENTAI_VIDEO
     // Super resolution upscales page images, so it only applies to downloaded image chapters.
-    val isImageContent = canTranslateChapters && contentType != ContentType.NOVEL &&
-        contentType != ContentType.HENTAI_NOVEL
-    val activeTranslationChapterIds by viewModel.activeTranslationChapterIds.collectAsStateWithLifecycle(
-        initialValue = emptySet(),
-    )
-    var qualityProbeResult by remember { mutableStateOf<ChaptersPagesViewModel.QualityProbeResult?>(null) }
+    val isImageContent = contentType != ContentType.NOVEL && contentType != ContentType.HENTAI_NOVEL
 
     val appContext = context.applicationContext
     val settings = remember(appContext) { AppSettings(appContext) }
@@ -140,9 +132,6 @@ fun ChaptersScreenRoot(
     }
 
     DisposableEffect(Unit) {
-        viewModel.onShowVideoQualityDialog.observeEvent(lifecycleOwner) { result ->
-            qualityProbeResult = result
-        }
         viewModel.onShowMessage.observeEvent(lifecycleOwner) { messageResId ->
             viewForSnackbar.makeSnackbar(messageResId, Snackbar.LENGTH_LONG).show()
         }
@@ -180,23 +169,11 @@ fun ChaptersScreenRoot(
             }
         }
     }
-    // Videos ask for a quality first; other content asks about metered networks.
+    // 视频功能已移除：下载前只询问计费网络。
     val startDownload: (Set<Long>) -> Unit = remember(router, viewModel) {
         { chapterIds ->
-            val manga = viewModel.mangaDetails.value?.toContent()
-            if (manga?.source?.getContentType() == ContentType.VIDEO) {
-                viewModel.probeAndDownload(chapterIds)
-            } else {
-                router.askForDownloadOverMeteredNetwork { allow ->
-                    viewModel.download(chapterIds, allow)
-                }
-            }
-        }
-    }
-    val startTranslation: (Set<Long>, Boolean) -> Unit = remember(router, viewModel) {
-        { chapterIds, isRetranslation ->
             router.askForDownloadOverMeteredNetwork { allow ->
-                viewModel.translate(chapterIds, allow, isRetranslation)
+                viewModel.download(chapterIds, allow)
             }
         }
     }
@@ -255,8 +232,6 @@ fun ChaptersScreenRoot(
         }
     }
     val selectionState = remember(
-        activeTranslationChapterIds,
-        canTranslateChapters,
         deletableChapterIds,
         downloadableChapterIds,
         handleSelectionAction,
@@ -264,7 +239,6 @@ fun ChaptersScreenRoot(
         router,
         selectedIds,
         selectedItems,
-        startTranslation,
         viewModel,
         visibleSelectableIds,
     ) {
@@ -279,8 +253,6 @@ fun ChaptersScreenRoot(
                 canMarkCurrent = selectedItems.size == 1 && !selectedItems.first().isCurrent,
                 canBookmark = selectedItems.isNotEmpty(),
                 isBookmarkRemoveAction = selectedItems.isNotEmpty() && selectedItems.all { it.isBookmarked },
-                canTranslate = canTranslateChapters && selectedItems.isNotEmpty(),
-                canCancelTranslation = activeTranslationChapterIds.isNotEmpty(),
                 canPrepareSuperResolution = isImageContent && settings.isReaderSuperResolutionEnabled,
                 onClearSelection = { selectedItemIds.clear() },
                 onSelectAll = {
@@ -291,8 +263,6 @@ fun ChaptersScreenRoot(
                 onDelete = { handleSelectionAction(R.id.action_delete) },
                 onMarkCurrent = { handleSelectionAction(R.id.action_mark_current) },
                 onBookmark = { handleSelectionAction(R.id.action_bookmark) },
-                onTranslate = { startTranslation(selectedIds, false) },
-                onCancelTranslation = { viewModel.cancelTranslation() },
                 onPrepareSuperResolution = {
                     val chapterIds = selectedIds.toSet()
                     // Only chapters that still need downloading make the network type matter.
@@ -313,21 +283,6 @@ fun ChaptersScreenRoot(
         onSelectionStateChange(selectionState)
     }
 
-    qualityProbeResult?.let { result ->
-        val qualitySizes by viewModel.videoQualitySizes.collectAsStateWithLifecycle()
-        VideoQualityDialog(
-            qualities = result.qualities,
-            sizes = qualitySizes,
-            onDismissRequest = { qualityProbeResult = null },
-            onConfirm = { quality ->
-                qualityProbeResult = null
-                router.askForDownloadOverMeteredNetwork { allow ->
-                    viewModel.download(result.snapshot, allow, quality)
-                }
-            },
-        )
-    }
-
         ChaptersScreen(
             requestInitialFocus = requestInitialFocus,
             items = collapsedChapters,
@@ -346,11 +301,7 @@ fun ChaptersScreenRoot(
             null
         },
         showFirstPageThumbnails = rowActions.showThumbnails,
-        onItemTranslate = if (canTranslateChapters && rowActions.showTranslate) {
-            { item, isRetranslation -> startTranslation(setOf(item.chapter.id), isRetranslation) }
-        } else {
-            null
-        },
+        onItemTranslate = null,
         onItemClick = { item ->
             if (selectedIds.isNotEmpty()) {
                 if (selectedIds.contains(item.chapter.id)) {
@@ -438,69 +389,4 @@ private fun resolveVisibleSelectionRange(
         return null
     }
     return visibleChapterIds.subList(start, end + 1)
-}
-
-@Composable
-private fun VideoQualityDialog(
-    qualities: List<String>,
-    sizes: Map<String, MeasuredVideoSize>,
-    onDismissRequest: () -> Unit,
-    onConfirm: (String?) -> Unit,
-) {
-    val options = remember(qualities) { listOf<String?>(null) + qualities }
-    var selectedIndex by remember(options) { mutableIntStateOf(0) }
-
-    AlertDialog(
-        onDismissRequest = onDismissRequest,
-        title = { Text(text = stringResource(R.string.video_quality)) },
-        text = {
-            Column(modifier = Modifier.selectableGroup()) {
-                options.forEachIndexed { index, option ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .selectable(
-                                selected = index == selectedIndex,
-                                onClick = { selectedIndex = index },
-                                role = Role.RadioButton,
-                            )
-                            .padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        RadioButton(
-                            selected = index == selectedIndex,
-                            onClick = null,
-                        )
-                        Text(
-                            text = option ?: stringResource(R.string.system_default),
-                            style = MaterialTheme.typography.bodyLarge,
-                            modifier = Modifier.padding(start = 16.dp).weight(1f),
-                        )
-                        option?.let(sizes::get)?.let { size ->
-                            Text(
-                                text = (if (size.isEstimated) "~" else "") + formatVideoSize(size.bytes),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(start = 12.dp),
-                            )
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TvTextButton(
-                onClick = {
-                    onConfirm(options[selectedIndex])
-                },
-            ) {
-                Text(text = stringResource(R.string.download))
-            }
-        },
-        dismissButton = {
-            TvTextButton(onClick = onDismissRequest) {
-                Text(text = stringResource(android.R.string.cancel))
-            }
-        },
-    )
 }

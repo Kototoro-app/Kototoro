@@ -20,7 +20,7 @@ class DefaultSpaceSessionRepositoryTest {
 	@Test
 	fun `save and load round trips one space snapshot`() = runTest {
 		val snapshot = SpaceSessionSnapshot(
-			spaceId = BuiltInSpaces.Novel,
+			spaceId = BuiltInSpaces.Manga,
 			selectedTopLevel = "history",
 			resumeRoute = SpaceRouteSnapshot.WorkDetails(42L, 7L),
 			stacks = mapOf(
@@ -35,9 +35,9 @@ class DefaultSpaceSessionRepositoryTest {
 
 		repository.save(snapshot)
 
-		repository.load(BuiltInSpaces.Novel) shouldBe snapshot
-		dao.sessions.getValue(BuiltInSpaces.Novel.value).resumeEntityId shouldBe 42L
-		dao.sessions.getValue(BuiltInSpaces.Novel.value).resumeProjectionId shouldBe 7L
+		repository.load(BuiltInSpaces.Manga) shouldBe snapshot
+		dao.sessions.getValue(BuiltInSpaces.Manga.value).resumeEntityId shouldBe 42L
+		dao.sessions.getValue(BuiltInSpaces.Manga.value).resumeProjectionId shouldBe 7L
 	}
 
 	@Test

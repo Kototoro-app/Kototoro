@@ -181,7 +181,7 @@ fun KototoroTopBar(
     compactTabsState: CompactTabsTopBarOverrideState? = null,
     filterRailState: CompactFilterRailOverrideState? = null,
     selectedContentType: ContentType? = null,
-    enabledContentTypes: Set<ContentType> = setOf(ContentType.MANGA, ContentType.NOVEL, ContentType.VIDEO),
+    enabledContentTypes: Set<ContentType> = setOf(ContentType.MANGA),
     isContentTypeFilterVisible: Boolean = true,
     onContentTypeSelected: (ContentType?) -> Unit = {},
     selectedSourceTags: Set<SourceTag> = emptySet(),

@@ -44,6 +44,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.model.ContentScopePolicy
 import org.skepsun.kototoro.core.model.getSummary
 import org.skepsun.kototoro.core.model.titleResId
 import org.skepsun.kototoro.core.model.getTitle
@@ -207,7 +208,8 @@ fun SourcesCatalogScreen(
                             modifier = Modifier.tvChipRing(),
                         )
                     }
-                    items(contentTypes, key = { it.name }) { type ->
+                    // 本构建只保留漫画，小说/视频类型不再作为筛选条件。
+                    items(contentTypes.filter { ContentScopePolicy.isSupported(it) }, key = { it.name }) { type ->
                         FilterChip(
                             type in filter.types,
                             { onContentTypeChange(type, type !in filter.types) },

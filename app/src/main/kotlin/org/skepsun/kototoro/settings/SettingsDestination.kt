@@ -18,11 +18,6 @@ sealed interface SettingsDestination {
     data object PanoramaSettings : SettingsDestination
     data object UsersSettings : SettingsDestination
     data object SpacesSettings : SettingsDestination
-    data object AISettings : SettingsDestination
-    data object OcrModelsSettings : SettingsDestination
-    data object AiImageEnhancementSettings : SettingsDestination
-    data object AiVideoEnhancementSettings : SettingsDestination
-    data object TtsSettings : SettingsDestination
     data object PlaybackSettings : SettingsDestination
     data object ReaderSettings : SettingsDestination
     data object ReplaceRulesSettings : SettingsDestination
@@ -31,9 +26,6 @@ sealed interface SettingsDestination {
     data object SuggestionsSettings : SettingsDestination
     data object SyncSettings : SettingsDestination
     data object BackupsSettings : SettingsDestination
-    data object TranslationSettings : SettingsDestination
-    data object TranslationApiSettings : SettingsDestination
-    data object TranslationE2EApiSettings : SettingsDestination
     data object StorageAndNetworkSettings : SettingsDestination
     data object CacheLimitsSettings : SettingsDestination
     data object DataCleanupSettings : SettingsDestination

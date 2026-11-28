@@ -48,19 +48,43 @@ class DefaultSpaceRepositoryTest {
 	}
 
 	@Test
-	fun `activate persists and publishes built in space once`() = runTest {
+	fun `activate persists and publishes space once`() = runTest {
+		val store = FakeSpaceLocalDataSource(BuiltInSpaces.Manga.value)
+		val diagnostics = mockk<SpaceDiagnostics>(relaxed = true)
+		val catalog = TestSpaceCatalogRepository(BuiltInSpaces.contexts + SecondTestSpace)
+		val repository = DefaultSpaceRepository(store, diagnostics, catalog)
+
+		repository.activate(SecondTestSpace.id)
+		repository.activate(SecondTestSpace.id)
+
+		assertEquals(SecondTestSpace.id, repository.activeSpace.value)
+		assertEquals(listOf(SecondTestSpace.id.value), store.writes)
+		verify(exactly = 1) {
+			diagnostics.record(match { it.stage == SpaceDiagnosticStage.ACTIVATED })
+		}
+	}
+
+	@Test
+	fun `activating a removed built in space falls back to manga`() = runTest {
 		val store = FakeSpaceLocalDataSource(BuiltInSpaces.Manga.value)
 		val diagnostics = mockk<SpaceDiagnostics>(relaxed = true)
 		val repository = DefaultSpaceRepository(store, diagnostics, TestSpaceCatalogRepository())
 
 		repository.activate(BuiltInSpaces.Novel)
-		repository.activate(BuiltInSpaces.Novel)
 
-		assertEquals(BuiltInSpaces.Novel, repository.activeSpace.value)
-		assertEquals(listOf(BuiltInSpaces.Novel.value), store.writes)
-		verify(exactly = 1) {
-			diagnostics.record(match { it.stage == SpaceDiagnosticStage.ACTIVATED })
-		}
+		assertEquals(BuiltInSpaces.Manga, repository.activeSpace.value)
+		assertTrue(store.writes.isEmpty())
+	}
+
+	@Test
+	fun `removed persisted space falls back to manga without reparsing`() {
+		val store = FakeSpaceLocalDataSource(BuiltInSpaces.Anime.value)
+		val diagnostics = mockk<SpaceDiagnostics>(relaxed = true)
+
+		val repository = DefaultSpaceRepository(store, diagnostics, TestSpaceCatalogRepository())
+
+		assertEquals(BuiltInSpaces.Manga, repository.activeSpace.value)
+		assertEquals(listOf(BuiltInSpaces.Manga.value), store.writes)
 	}
 
 	@Test

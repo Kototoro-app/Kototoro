@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.skepsun.kototoro.core.model.ContentScopePolicy
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.explore.data.SourceRuleResolver
 import org.skepsun.kototoro.explore.data.ContentSourcesRepository
@@ -53,25 +54,22 @@ class SpaceContentPolicyTest {
     }
 
     @Test
-    fun `novel and anime spaces contain their explicit content types`() {
-        assertEquals(
-            setOf(ContentType.NOVEL, ContentType.HENTAI_NOVEL),
-            policy.allowedTypes(BuiltInSpaces.Novel),
-        )
-        assertEquals(
-            setOf(ContentType.VIDEO, ContentType.HENTAI_VIDEO),
-            policy.allowedTypes(BuiltInSpaces.Anime),
-        )
+    fun `removed novel and anime spaces allow no content types`() {
+        // 两个空间已从本构建移除：id 仍能解析（旧备份），但没有类型会落到它们上面。
+        assertEquals(emptySet<ContentType>(), policy.allowedTypes(BuiltInSpaces.Novel))
+        assertEquals(emptySet<ContentType>(), policy.allowedTypes(BuiltInSpaces.Anime))
+        assertNull(policy.spaceFor(ContentType.NOVEL))
+        assertNull(policy.spaceFor(ContentType.VIDEO))
     }
 
     @Test
-    fun `every classified content type belongs to exactly one space`() {
+    fun `every space content type belongs to exactly one space`() {
         val occurrences = BuiltInSpaces.contexts
             .flatMap(SpaceContext::allowedContentTypes)
             .groupingBy { it }
             .eachCount()
 
-        assertEquals(ContentType.entries.toSet() - ContentType.OTHER, occurrences.keys)
+        assertEquals(ContentScopePolicy.spaceTypes, occurrences.keys)
         assertTrue(occurrences.values.all { it == 1 })
     }
 

@@ -64,6 +64,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.model.ContentScopePolicy
 import org.skepsun.kototoro.core.model.titleResId
 import org.skepsun.kototoro.core.ui.compose.KototoroPullToRefreshBox
 import org.skepsun.kototoro.core.ui.progress.LinearProgressIndicator
@@ -353,7 +354,11 @@ private fun UnifiedSourcesContextualFilterTabs(
                             },
                         )
                     }
-                    items(state.availableContentTypes, key = { it.name }) { type ->
+                    items(
+                        // 本构建只保留漫画，小说/视频类型不再作为筛选条件。
+                        state.availableContentTypes.filter { ContentScopePolicy.isSupported(it) },
+                        key = { it.name },
+                    ) { type ->
                         CompactFilterChip(
                             selected = type in state.filters.contentTypes,
                             onClick = { onContentTypeClick(type) },

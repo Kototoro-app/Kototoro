@@ -41,6 +41,7 @@ import org.skepsun.kototoro.browser.BrowserActivity
 import org.skepsun.kototoro.core.exceptions.CloudFlareProtectedException
 import org.skepsun.kototoro.core.image.CoilMemoryCacheKey
 import org.skepsun.kototoro.core.model.FavouriteCategory
+import org.skepsun.kototoro.core.model.ContentScopePolicy
 import org.skepsun.kototoro.core.model.ContentSourceInfo
 import org.skepsun.kototoro.core.model.unwrap
 import org.skepsun.kototoro.core.model.getContentType
@@ -113,7 +114,6 @@ import org.skepsun.kototoro.parsers.model.SortOrder
 import org.skepsun.kototoro.parsers.util.ellipsize
 import org.skepsun.kototoro.parsers.util.isNullOrEmpty
 import org.skepsun.kototoro.parsers.util.mapToArray
-import org.skepsun.kototoro.reader.novel.NovelReaderActivity
 import org.skepsun.kototoro.space.ui.ImmersiveSpaceSwitcherTransition
 import org.skepsun.kototoro.space.ui.EXTRA_IMMERSIVE_SESSION_SPACE_ID
 import org.skepsun.kototoro.reader.ui.ReaderState
@@ -359,120 +359,25 @@ class AppRouter(
             manga.looksLikeLocalNovelContent() -> ContentType.NOVEL
             else -> getContentType(source)
         }
-        if (contentType == ContentType.NOVEL || contentType == ContentType.HENTAI_NOVEL) {
-            val intent = Intent(contextOrNull() ?: return, NovelReaderActivity::class.java)
-                .putExtra(KEY_MANGA, ParcelableContent(manga))
-                .putExtra(KEY_ID, manga.id)
-            state?.let { intent.putExtra(ReaderIntent.EXTRA_STATE, it) }
-            markingId?.let { intent.putExtra(NovelReaderActivity.EXTRA_MARKING_ID, it) }
-            startOffset?.let { intent.putExtra(NovelReaderActivity.EXTRA_START_OFFSET, it) }
-            endOffset?.let { intent.putExtra(NovelReaderActivity.EXTRA_END_OFFSET, it) }
-            selectedText?.let { intent.putExtra(NovelReaderActivity.EXTRA_SELECTED_TEXT, it) }
-            startActivity(
-                prepareImmersiveIntent(intent),
-                anchor?.let { scaleUpActivityOptionsOf(it) },
-            )
+        // 小说与视频阅读器已从本构建移除：这类内容即便来自旧数据也不再有可用入口，
+        // 直接给出提示而不是把小说/视频当作漫画塞进图片阅读器。
+        if (ContentScopePolicy.isRemoved(contentType)) {
+            val ctx = contextOrNull() ?: return
+            android.widget.Toast.makeText(ctx, R.string.content_scope_manga_only, android.widget.Toast.LENGTH_SHORT)
+                .show()
             return
         }
-        if (contentType == ContentType.VIDEO || contentType == ContentType.HENTAI_VIDEO) {
-            openVideoContent(manga, anchor, state)
-        } else {
-            openReader(
-                ReaderIntent.Builder(contextOrNull() ?: return)
-                    .manga(manga)
-                    .state(state)
-                    .build(),
-                anchor,
-            )
-        }
-    }
-
-    private fun openVideoContent(
-        manga: Content,
-        anchor: View?,
-        state: ReaderState?,
-        positionMs: Long? = null,
-    ) {
-        val target = resolveVideoLaunchTarget(manga, state)
-        val lastSegment = target.url.toUriOrNull()?.lastPathSegment ?: target.url
-        val isDirectStream = lastSegment.endsWith(".m3u8", ignoreCase = true) ||
-            lastSegment.endsWith(".mp4", ignoreCase = true)
-        if (isDirectStream || !manga.chapters.isNullOrEmpty()) {
-            openVideo(target.url, manga, anchor, target.state, positionMs)
-            return
-        }
-
-        val lifecycleOwner = activity as? LifecycleOwner
-        if (lifecycleOwner == null) {
-            openVideo(target.url, manga, anchor, target.state, positionMs)
-            return
-        }
-        lifecycleOwner.lifecycleScope.launch {
-            try {
-                val details = mangaRepositoryFactory.create(manga.source).getDetails(manga)
-                val resolvedTarget = resolveVideoLaunchTarget(details, state)
-                openVideo(resolvedTarget.url, details, anchor, resolvedTarget.state, positionMs)
-            } catch (e: Exception) {
-                Log.e("AppRouter", "Failed to load chapters for video", e)
-                openVideo(target.url, manga, anchor, target.state, positionMs)
-            }
-        }
+        openReader(
+            ReaderIntent.Builder(contextOrNull() ?: return)
+                .manga(manga)
+                .state(state)
+                .build(),
+            anchor,
+        )
     }
 
     fun openReader(intent: ReaderIntent, anchor: View? = null) {
         val activityIntent = intent.intent
-        // Intercept video sources when ReaderIntent carries a Content extra and route accordingly
-        runCatching {
-            val parcelable = activityIntent.getParcelableExtraCompat<ParcelableContent>(KEY_MANGA)
-            val manga = parcelable?.manga ?: run {
-                val contentIntent = ContentIntent(activityIntent)
-                val mangaId = contentIntent.mangaId
-                if (mangaId != ContentIntent.ID_NONE) {
-                    kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
-                        contentDataRepository.findDisplayContentById(mangaId, withChapters = false)
-                            ?: contentDataRepository.findContentById(mangaId, withChapters = false)
-                    }
-                } else null
-            }
-            if (manga != null) {
-                // 瀵硅棰戝唴瀹瑰拰EPUB鍐呭锛氫紶?ReaderState锛屼紭鍏堜娇鐢ㄥ巻鍙茶褰曚腑鐨勭姸?
-                val source = manga.source.unwrap()
-                val history = activityIntent.getParcelableExtraCompat<ReaderState>(ReaderIntent.EXTRA_STATE)
-
-                val contentType = when {
-                    manga.looksLikeLocalVideoContent() -> ContentType.VIDEO
-                    manga.looksLikeLocalNovelContent() -> ContentType.NOVEL
-                    else -> getContentType(source)
-                }
-
-                if (contentType == ContentType.NOVEL || contentType == ContentType.HENTAI_NOVEL) {
-                    val state = if (history != null) {
-                        // 浣跨敤鍘嗗彶璁板綍涓殑鐘舵€侊紙鍖呭惈姝ｇ‘鐨勭珷鑺侷D?
-                        history
-                    } else {
-                        // 鍚﹀垯浣跨敤Intent涓惡甯︾殑鐘舵?
-                        activityIntent.getParcelableExtraCompat<ReaderState>(ReaderIntent.EXTRA_STATE)
-                    }
-                    val novelIntent = Intent(contextOrNull() ?: return, NovelReaderActivity::class.java)
-                        .putExtra(KEY_MANGA, ParcelableContent(manga))
-                        .putExtra(KEY_ID, manga.id)
-                    // 浼犻€扲eaderState
-                    if (state != null) {
-                        novelIntent.putExtra(ReaderIntent.EXTRA_STATE, state)
-                    }
-                    startActivity(
-                        prepareImmersiveIntent(novelIntent),
-                        anchor?.let { scaleUpActivityOptionsOf(it) },
-                    )
-                    return
-                }
-                if (contentType == ContentType.VIDEO || contentType == ContentType.HENTAI_VIDEO) {
-                    val state = activityIntent.getParcelableExtraCompat<ReaderState>(ReaderIntent.EXTRA_STATE)
-                    openVideoContent(manga, anchor, state)
-                    return
-                }
-            }
-        }.getOrElse { /* ignore and fallback to reader */ }
         if (settings.isReaderMultiTaskEnabled && activityIntent.data != null) {
             activityIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_DOCUMENT)
         }
@@ -547,81 +452,6 @@ class AppRouter(
                 .putExtra(KEY_PREVIEW, preview),
             anchor?.let { scaleUpActivityOptionsOf(it) },
         )
-    }
-
-    fun openNovelInlineImage(
-        imagePath: String,
-        source: ContentSource?,
-        epubFilePath: String?,
-        chapterPath: String?,
-        headers: Map<String, String>,
-        anchor: View? = null,
-    ) {
-        val intent = Intent(contextOrNull(), ImageActivity::class.java)
-            .putExtra(KEY_SOURCE, source?.name)
-            .putExtra(KEY_IMAGE_PATH, imagePath)
-            .putExtra(KEY_EPUB_FILE_PATH, epubFilePath)
-            .putExtra(KEY_CHAPTER_PATH, chapterPath)
-            .putExtra(KEY_IMAGE_HEADERS, HashMap(headers))
-        imagePath.toUriOrNull()?.let { intent.data = it }
-        startActivity(
-            intent,
-            anchor?.let { scaleUpActivityOptionsOf(it) },
-        )
-    }
-
-    fun openVideo(
-        url: String,
-        source: ContentSource?,
-        title: String? = null,
-        anchor: View? = null,
-        state: ReaderState? = null,
-    ) {
-        val ctx = contextOrNull() ?: return
-        startActivity(
-            prepareImmersiveIntent(
-                Intent(ctx, org.skepsun.kototoro.video.ui.VideoPlayerActivity::class.java)
-                    .setData(Uri.parse(url))
-                    .putExtra(KEY_URL, url)
-                    .putExtra(KEY_SOURCE, source?.name)
-                    .putExtra(KEY_TITLE, title)
-                    .putExtra(ReaderIntent.EXTRA_STATE, state),
-            ),
-            null,
-        )
-    }
-
-    fun openVideo(
-        url: String,
-        manga: Content,
-        anchor: View? = null,
-        state: ReaderState? = null,
-        positionMs: Long? = null,
-    ) {
-        val ctx = contextOrNull() ?: return
-        val intent = prepareImmersiveIntent(
-            Intent(ctx, org.skepsun.kototoro.video.ui.VideoPlayerActivity::class.java)
-                .setData(Uri.parse(url))
-                .putExtra(KEY_URL, url)
-                .putExtra(KEY_SOURCE, manga.source.name)
-                .putExtra(KEY_TITLE, manga.title)
-                .putExtra(KEY_ID, manga.id)
-                .putExtra(KEY_MANGA, ParcelableContent(manga, withChapters = !manga.chapters.isNullOrEmpty()))
-                .putExtra(ReaderIntent.EXTRA_STATE, state),
-        )
-        if (positionMs != null && positionMs >= 0) {
-            intent.putExtra(KEY_POSITION_MS, positionMs)
-        }
-        startActivity(intent, null)
-    }
-
-    fun openVideo(
-        manga: Content,
-        chapterId: Long? = null,
-        positionMs: Long? = null,
-    ) {
-        val state = chapterId?.let { ReaderState(chapterId = it, page = 0, scroll = 0) }
-        openVideoContent(manga, null, state, positionMs)
     }
 
     fun openAppUpdate() = startActivity(AppUpdateActivity::class.java)

@@ -655,8 +655,9 @@ private fun DetailsScreenContent(
         viewModel.onDownloadStarted.observeEvent(lifecycleOwner, DownloadStartedObserver(rootView))
         val sourceBindingsObserver = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
+                // 本地章节变化已由 ChaptersPagesViewModel 的 localStorageChanges 监听并按需刷新，
+                // 这里再无条件扫描一次本地目录，会导致每次进入详情页都卡顿。
                 viewModel.refreshSourceBindings()
-                viewModel.refreshLocalChapters()
             }
         }
         lifecycleOwner.lifecycle.addObserver(sourceBindingsObserver)

@@ -23,8 +23,10 @@ class DefaultSpaceRepository @Inject constructor(
 ) : SpaceRepository {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
-    private val initialSpace = SpaceId(localDataSource.readActiveSpaceId()).takeIf {
-        it.value.startsWith("builtin:") || it.value.startsWith("custom:")
+    private val initialSpace = SpaceId(localDataSource.readActiveSpaceId()).takeIf { candidate ->
+        // 已移除的内置空间（小说/动画）不能再作为起始空间，否则首帧会落在空空间上。
+        candidate.value !in REMOVED_BUILT_IN_SPACE_IDS &&
+            (candidate.value.startsWith("builtin:") || candidate.value.startsWith("custom:"))
     }
         ?: BuiltInSpaces.Manga
     private val mutableActiveSpace = MutableStateFlow(initialSpace)
@@ -52,7 +54,10 @@ class DefaultSpaceRepository @Inject constructor(
     }
 
     override suspend fun activate(spaceId: SpaceId) {
-        if (catalogRepository.find(spaceId) == null) {
+        // 旧路由、旧备份里仍可能带着已移除的小说/动画空间，落到这里就回退到漫画空间，
+        // 让一次还原或一次深链跳转不至于把整个页面崩掉。
+        val target = if (spaceId.value in REMOVED_BUILT_IN_SPACE_IDS) BuiltInSpaces.Manga else spaceId
+        if (catalogRepository.find(target) == null) {
             diagnostics.record(
                 SpaceDiagnosticEvent(
                     stage = SpaceDiagnosticStage.REJECTED,
@@ -63,16 +68,21 @@ class DefaultSpaceRepository @Inject constructor(
             )
             throw IllegalArgumentException("Unknown SpaceId: ${spaceId.value}")
         }
-        if (spaceId == activeSpace.value) return
+        if (target == activeSpace.value) return
         val previous = activeSpace.value
-        localDataSource.writeActiveSpaceId(spaceId.value)
-        mutableActiveSpace.value = spaceId
+        localDataSource.writeActiveSpaceId(target.value)
+        mutableActiveSpace.value = target
         diagnostics.record(
             SpaceDiagnosticEvent(
                 stage = SpaceDiagnosticStage.ACTIVATED,
                 activeSpaceId = previous.value,
-                targetSpaceId = spaceId.value,
+                targetSpaceId = target.value,
             ),
         )
+    }
+
+    private companion object {
+        /** 已从本构建移除的内置空间：小说与动画。 */
+        val REMOVED_BUILT_IN_SPACE_IDS = setOf(BuiltInSpaces.Novel.value, BuiltInSpaces.Anime.value)
     }
 }

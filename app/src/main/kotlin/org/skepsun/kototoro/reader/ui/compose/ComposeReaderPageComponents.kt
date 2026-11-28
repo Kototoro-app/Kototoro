@@ -66,6 +66,7 @@ import me.saket.telephoto.zoomable.rememberZoomableImageState
 import me.saket.telephoto.zoomable.rememberZoomableState
 import me.saket.telephoto.zoomable.coil3.ZoomableAsyncImage
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.job
@@ -391,7 +392,22 @@ internal fun SceneReaderPageLoadOverlay(
     val states by pipeline.loadStates.collectAsStateWithLifecycle()
     val assets by pipeline.assets.collectAsStateWithLifecycle()
     val state = states[pageId]
-    when (resolveSceneReaderPageOverlay(state, assets.containsKey(pageId), unresolvedIsLoading)) {
+    val hasRenderableAsset = assets.containsKey(pageId)
+    // A continuous host shows a spinner for a visible page that has nothing to draw yet. During a
+    // live-scrub jump the target page has just entered the window: its asset is usually decoded
+    // within a few frames, but its load state is still null for the pipeline's 120 ms grace window.
+    // Deferring the fallback by the same grace period avoids flashing "加载中" over a fast local
+    // page, while a genuinely unresolved page still gets its spinner.
+    var showUnresolvedLoading by remember(pageId) { mutableStateOf(false) }
+    LaunchedEffect(pageId, state, hasRenderableAsset, unresolvedIsLoading) {
+        if (unresolvedIsLoading && state == null && !hasRenderableAsset) {
+            delay(UNRESOLVED_LOADING_GRACE_MS)
+            showUnresolvedLoading = true
+        } else {
+            showUnresolvedLoading = false
+        }
+    }
+    when (resolveSceneReaderPageOverlay(state, hasRenderableAsset, showUnresolvedLoading)) {
         SceneReaderPageOverlay.NONE -> Unit
         // The same indicator as the legacy readers draw on a loading page.
         SceneReaderPageOverlay.LOADING -> Box(modifier) {
@@ -828,3 +844,7 @@ private fun ZoomableReaderImage(
             ),
     )
 }
+
+/** Grace period before a continuous host shows a spinner for an otherwise unresolved page.
+ *  Kept in sync with the pipeline's LOADING_STATE_DELAY_MS so a fast local decode never flashes. */
+private const val UNRESOLVED_LOADING_GRACE_MS = 140L

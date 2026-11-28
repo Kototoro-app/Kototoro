@@ -1359,6 +1359,7 @@
     <string name="no_alternatives_found">找不到 \"%s\" 的其他版本</string>
     <string name="manga_fix_prompt">这个功能将会从其他来源寻找你所选择的漫画，此操作耗时较长且会在后台进行</string>
     <string name="content_type_novel">小说</string>
+    <string name="content_scope_manga_only">本版本仅支持漫画，小说与视频功能已移除。</string>
     <string name="content_type_manhua">国漫</string>
     <string name="content_type_manhwa">韩漫</string>
     <string name="recently_added">添加日期（降序）</string>
@@ -2758,7 +2759,7 @@
     <string name="anilist">AniList</string>
     <string name="aniyomi_available_extensions">Aniyomi 可用扩展</string>
     <string name="aniyomi_extension_repositories">Aniyomi 仓库</string>
-    <string name="app_name">Kototoro</string>
+    <string name="app_name">kotoro</string>
     <string name="available_extension_count">%d 个可用</string>
     <string name="available_extension_update_count">%d 个更新</string>
     <string name="available_pattern">%1$s 可用</string>

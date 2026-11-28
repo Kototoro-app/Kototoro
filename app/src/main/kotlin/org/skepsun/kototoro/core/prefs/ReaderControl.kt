@@ -18,19 +18,15 @@ enum class ReaderControl {
             SAVE_PAGE,
             TIMER,
             BOOKMARK,
-            TRANSLATE,
             DOWNLOAD,
             CROP_NOTE,
         )
 
-        val FLOATING_DEFAULT: Set<ReaderControl> = EnumSet.of(
-            TRANSLATE,
-        )
+        val FLOATING_DEFAULT: Set<ReaderControl> = EnumSet.noneOf(ReaderControl::class.java)
 
         val NOVEL_FLOATING: Set<ReaderControl> = EnumSet.of(
             TIMER,
             BOOKMARK,
-            TRANSLATE,
             TTS,
         )
 

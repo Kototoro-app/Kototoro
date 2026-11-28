@@ -31,7 +31,6 @@ import org.skepsun.kototoro.local.data.input.LocalContentParser
 import org.skepsun.kototoro.local.epub.LocalEpubParser
 import org.skepsun.kototoro.local.epub.parseEpubChapterReference
 import org.skepsun.kototoro.local.epub.resolveLocalEpubFile
-import org.skepsun.kototoro.local.novel.LocalNovelRepository
 import java.io.File
 import java.io.ByteArrayOutputStream
 import java.net.URI
@@ -118,38 +117,6 @@ class LocalSafEpubParsingTest {
             assertEquals("content://books/document/1#chapter/0", detailed.manga.chapters.orEmpty().single().url)
             verify(exactly = 1) { folder.createFile(any()) }
         }
-    }
-
-    @Test
-    fun `novel directories list standalone TXT without reading text until a chapter is opened`() = runBlocking {
-        val book = File(directory, "Novel.TXT").apply { writeText("第一段 <text>\n\n第二段") }
-        val document = document(book, "Novel.TXT")
-        val folder = mockk<UniFile>()
-        every { folder.listFiles() } returns arrayOf(document)
-        val root = mockk<LocalStorageRoot>()
-        every { root.file } returns folder
-        val storage = mockk<LocalStorageManager>()
-        coEvery { storage.getNovelReadableRoots() } returns listOf(root)
-        val repository = LocalNovelRepository(storage)
-
-        val listed = repository.getList(0, null, null)
-
-        assertEquals(1, listed.size)
-        assertEquals("Novel", listed.single().title)
-        assertEquals(LocalNovelSource, listed.single().source)
-        assertEquals(null, listed.single().chapters)
-        verify(exactly = 0) { document.openInputStream() }
-
-        val details = repository.getDetails(listed.single())
-        assertEquals(listed.single().id, details.id)
-        val chapter = details.chapters.orEmpty().single()
-        assertEquals(document.uri.toString(), chapter.url)
-        assertEquals(document.uri.toString(), repository.getPages(chapter, null).single().url)
-        verify(exactly = 0) { document.openInputStream() }
-        val html = checkNotNull(repository.getChapterContent(chapter)).html
-        assertTrue(html.contains("第一段 &lt;text&gt;"), html)
-        assertTrue(html.contains("第二段"), html)
-        verify(exactly = 1) { document.openInputStream() }
     }
 
     private suspend fun checkEpub(seekable: Boolean, withDetails: Boolean = true) {

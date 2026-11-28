@@ -36,7 +36,18 @@ def requestedTaskNames = gradle.startParameter.taskNames.collect { it.toLowerCas
 def debugOnlyAbiBuild = !requestedTaskNames.isEmpty() &&
 	requestedTaskNames.any { it.contains('debug') } &&
 	requestedTaskNames.every { !it.contains('release') && !it.contains('nightly') }
-def activeAbiFilters = debugOnlyAbiBuild ? ['arm64-v8a'] : allAbiFilters
+// -PmangaOnlyArm64：漫画精简版只发布 arm64-v8a 单架构包，避免为已无用的 ABI 编译原生库。
+def arm64OnlyBuild = gradle.startParameter.projectProperties.containsKey('mangaOnlyArm64')
+def activeAbiFilters = (debugOnlyAbiBuild || arm64OnlyBuild) ? ['arm64-v8a'] : allAbiFilters
+
+// 漫画精简版使用独立包名与独立签名，可与官方原版共存安装。
+// 签名信息从 local.properties 读取（该文件不入库），缺失时回落到官方 release 属性或 debug 签名。
+def kotoroLocalProperties = new Properties()
+def kotoroLocalPropertiesFile = rootProject.file('local.properties')
+if (kotoroLocalPropertiesFile.exists()) {
+	kotoroLocalPropertiesFile.withInputStream { kotoroLocalProperties.load(it) }
+}
+def kotoroStoreFile = kotoroLocalProperties.getProperty('kotoro.storeFile')
 
 android {
 	// Phase B: Compose 1.12 requires compileSdk 37; targetSdk stays 36
@@ -59,10 +70,20 @@ android {
 				keyPassword RELEASE_KEY_PASSWORD
 			}
 		}
+		// 漫画精简版专用签名：与官方包签名不同，两者可同时安装。
+		kotoro {
+			if (kotoroStoreFile) {
+				storeFile file(kotoroStoreFile)
+				storePassword kotoroLocalProperties.getProperty('kotoro.storePassword')
+				keyAlias kotoroLocalProperties.getProperty('kotoro.keyAlias')
+				keyPassword kotoroLocalProperties.getProperty('kotoro.keyPassword')
+			}
+		}
 	}
 
 	defaultConfig {
-		applicationId 'org.skepsun.kototoro'
+		// 独立包名：与官方 org.skepsun.kototoro 共存，不会互相覆盖。
+		applicationId 'org.skepsun.kotoro'
 		minSdk = 26
 		// Phase E: targetSdk 37. Large-screen orientation locks are skipped in
 		// ScreenOrientationHelper to match Android 17 behavior.
@@ -77,6 +98,8 @@ android {
 		androidResources {
 			// https://issuetracker.google.com/issues/408030127
 			generateLocaleConfig false
+			// 精简版只随包分发中英文资源，其余语言从 resources.arsc 中剔除。
+			localeFilters += ['en', 'zh', 'zh-rTW']
 		}
 		def localProperties = new Properties()
 		def localPropertiesFile = rootProject.file('local.properties')
@@ -97,18 +120,6 @@ android {
 			?: 'demo_app_secret').toString()
 		buildConfigField 'String', 'DANDANPLAY_APP_ID', "\"${dandanAppId}\""
 		buildConfigField 'String', 'DANDANPLAY_APP_SECRET', "\"${dandanAppSecret}\""
-		externalNativeBuild {
-			cmake {
-				cppFlags ""
-				abiFilters(*activeAbiFilters)
-			}
-		}
-	}
-	externalNativeBuild {
-		cmake {
-			path "src/main/cpp/CMakeLists.txt"
-			version "3.22.1"
-		}
 	}
 	buildTypes {
 		debug {
@@ -118,9 +129,13 @@ android {
 			minifyEnabled true
 			shrinkResources true
 			proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-			// Only apply signing config if it's properly configured
-			if (project.hasProperty('RELEASE_STORE_FILE')) {
+			// 优先用漫画精简版专用签名，其次官方 release 属性，最后 debug 签名兜底。
+			if (kotoroStoreFile) {
+				signingConfig signingConfigs.kotoro
+			} else if (project.hasProperty('RELEASE_STORE_FILE')) {
 				signingConfig signingConfigs.release
+			} else {
+				signingConfig signingConfigs.debug
 			}
 		}
 		benchmark {
@@ -471,7 +486,6 @@ dependencies {
 	// Reader semantics (scenes, geometry, planner contract) — pure JVM module extracted per
 	// improvement plan 2026-09 §8.2; app depends one-way on :reader-core (I1 compile boundary).
 	implementation project(':reader-core')
-	implementation project(':reader-novel')
 	implementation project(':core-ui')
 	// UMA/Usagi plugins are compiled against Tsuki. The host must provide this API at runtime.
 	add(tsukiRuntimeSource.name, libs.tsuki)
@@ -602,38 +616,14 @@ dependencies {
 	// EPUB support for Novelia Wenku
 	implementation libs.epublib
 
-	// Media3 for video playback
-	implementation libs.androidx.media3.exoplayer
-	implementation libs.androidx.media3.ui
-	implementation libs.androidx.media3.exoplayer.hls
-	implementation libs.androidx.media3.exoplayer.dash
-	implementation libs.androidx.media3.datasource.okhttp
-	implementation libs.nextlib.media3ext
-	implementation libs.bytedance.danmaku.render.engine
+	// 播放器依赖已随视频功能移除，仅保留 media3-common 供 Legado 脚本桥的 MediaItem 契约使用。
+	implementation 'androidx.media3:media3-common:1.9.3'
+	// NanoHTTPD 仍被 TVBox/JSON 源蜘蛛运行时（VideoLocalCacheProxy）使用。
 	implementation libs.nanohttpd
-	implementation libs.mlkit.text.recognition
-	implementation libs.mlkit.text.recognition.japanese
-	implementation libs.mlkit.text.recognition.chinese
-	implementation libs.mlkit.text.recognition.korean
-	implementation libs.mlkit.translate
-	implementation libs.mlkit.language.id
-	implementation libs.onnxruntime.android
-	implementation libs.opencv.android
-	implementation libs.djl.tokenizers
-	// Native-only AAR repackaged from DJL's official prebuilt libdjl_tokenizer.so
-	// (publish.djl.ai/tokenizers/0.21.0/jnilib/0.38.0) — 0.38.0 is the first release
-	// whose Android binaries align ELF segments to 16 KB pages.
-	implementation files('libs/tokenizer-native-0.38.0.aar')
+	// 翻译（标题/画面）已从本构建移除：不再需要 MLKit / ONNX / OpenCV / DJL 依赖。
 	implementation cloudstreamRuntimeJar
-	implementation files('libs/jlibtorrent-2.0.12.9.jar')
-	runtimeOnly files('libs/jlibtorrent-android-arm-2.0.12.9.jar')
-	runtimeOnly files('libs/jlibtorrent-android-arm64-2.0.12.9.jar')
-	runtimeOnly files('libs/jlibtorrent-android-x86-2.0.12.9.jar')
-	runtimeOnly files('libs/jlibtorrent-android-x86_64-2.0.12.9.jar')
 	implementation libs.cryptography.core
 	implementation libs.cryptography.provider.optimal
-	implementation libs.djl.sentencepiece
-	implementation 'com.github.akari39:RealCUGAN-ncnn-Android:1.1'
 
 	implementation libs.acra.dialog
 

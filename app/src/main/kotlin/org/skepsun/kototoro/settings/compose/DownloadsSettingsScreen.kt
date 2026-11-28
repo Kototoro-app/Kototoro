@@ -106,25 +106,7 @@ fun DownloadsSettingsScreen(
                             onValueChange = onPreferredDownloadFormatChange,
                         )
                     }
-                    item {
-                        SettingsTextInputPreference(
-                            title = stringResource(R.string.download_video_quality),
-                            iconRes = R.drawable.ic_content_video,
-                            value = state.preferredVideoQuality,
-                            summary = stringResource(R.string.download_video_quality_summary),
-                            placeholder = "1080p, 720p, 480p",
-                            onValueChange = onPreferredVideoQualityChange,
-                        )
-                    }
-                    item {
-                        SettingsSwitchPreference(
-                            title = stringResource(R.string.download_novel_images),
-                            iconRes = R.drawable.ic_images,
-                            checked = state.isNovelImagesEnabled,
-                            summary = stringResource(R.string.download_novel_images_summary),
-                            onCheckedChange = onNovelImagesChange,
-                        )
-                    }
+                    // 视频清晰度与小说插图下载随小说/视频能力一并移除。
                     item {
                         SettingsChoicePreference(
                             title = stringResource(R.string.download_over_cellular),

@@ -41,6 +41,7 @@ import org.skepsun.kototoro.core.jsonsource.JsonSourceListSource
 import org.skepsun.kototoro.core.jsonsource.TVBoxRepositorySelection
 import org.skepsun.kototoro.core.jsonsource.TVBoxRepositorySelector
 import org.skepsun.kototoro.core.model.ContentSourceInfo
+import org.skepsun.kototoro.core.model.ContentScopePolicy
 import org.skepsun.kototoro.core.model.ContentSourceAvailability
 import org.skepsun.kototoro.core.model.getTitle
 import org.skepsun.kototoro.core.model.isLocal
@@ -125,6 +126,7 @@ class ContentSourcesRepository @Inject constructor(
     )
     private val enabledSources: StateFlow<List<ContentSourceInfo>> =
         createEnabledSourcesFlow()
+            .mapToSupportedContentScope()
             .distinctUntilChanged()
             .flowOn(Dispatchers.Default)
             .stateIn(
@@ -134,6 +136,7 @@ class ContentSourcesRepository @Inject constructor(
             )
     private val enabledBrowseSources: StateFlow<List<ContentSourceInfo>> =
         createEnabledBrowseSourcesFlow()
+            .mapToSupportedContentScope()
             .onEach { sources ->
                 traceBrowseSources {
                     "browse_state emitted size=${sources.size} " +
@@ -802,6 +805,15 @@ class ContentSourcesRepository @Inject constructor(
     }
 
     fun observeEnabledSources(): StateFlow<List<ContentSourceInfo>> = enabledSources
+
+    /**
+     * 本构建只保留漫画：小说源与视频源在流的最末端统一剔除，
+     * 这样浏览、来源管理、搜索、订阅等所有下游消费方都不再需要各写一遍判断。
+     */
+    private fun Flow<List<ContentSourceInfo>>.mapToSupportedContentScope(): Flow<List<ContentSourceInfo>> =
+        map { sources ->
+            sources.filter { info -> ContentScopePolicy.isSupported(info.mangaSource.getContentType()) }
+        }
 
     private fun createEnabledSourcesFlow(): Flow<List<ContentSourceInfo>> = combine(
         observeIsNsfwDisabled(),

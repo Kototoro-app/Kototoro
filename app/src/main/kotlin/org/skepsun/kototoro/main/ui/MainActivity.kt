@@ -50,7 +50,6 @@ import org.skepsun.kototoro.explore.data.SourcePresetsRepository
 import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.explore.ui.model.SourceTag
 import org.skepsun.kototoro.extensions.install.ExtensionInstallService
-import org.skepsun.kototoro.local.ui.LocalIndexUpdateWorker
 import org.skepsun.kototoro.local.ui.LocalStorageCleanupWorker
 import org.skepsun.kototoro.main.ui.compose.ComposeAppNavBarDelegator
 import org.skepsun.kototoro.main.ui.compose.KototoroApp
@@ -719,12 +718,9 @@ class MainActivity : BaseComposeActivity(), SystemInstallLauncherHost {
         lifecycleScope.launch(Dispatchers.Main) {
             withContext(Dispatchers.Default) {
                 LocalStorageCleanupWorker.enqueue(applicationContext)
-                // Local index / ad list refresh moved off direct startService: a service
-                // started from the ON_RESUME dispatch can be rejected with
-                // BackgroundServiceStartNotAllowedException when the uid record still
-                // carries a stale background procstate (process restart after idle),
-                // which crashed startup. WorkManager has no such restriction.
-                LocalIndexUpdateWorker.enqueue(applicationContext)
+                // 本地索引不再在启动时全量扫描：扫描会长时间持有索引互斥锁，列表读取被阻塞，
+                // 表现为「每次打开 App 本地页都要等一次刷新」。索引改为按需更新
+                // （目录变更、导入、下拉刷新），打开 App 直接展示库里已有的内容。
                 if (settings.isAdBlockEnabled) {
                     AdListUpdateWorker.enqueue(applicationContext)
                 }

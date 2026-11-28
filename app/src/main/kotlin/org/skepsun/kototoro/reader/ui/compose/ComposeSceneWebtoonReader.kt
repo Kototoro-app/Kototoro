@@ -109,6 +109,7 @@ fun ComposeSceneWebtoonReader(
     onPagesChanged: (lowerKey: Long, upperKey: Long, activeKey: Long) -> Unit,
     onInternalScrollChanged: (page: ReaderPage, scroll: Int) -> Unit,
     requestedPage: Int? = null,
+    primedPageKey: Long? = null,
     requestedPageSmooth: Boolean = false,
     webtoonScrollRequest: ComposeReaderScrollRequest? = null,
     webtoonPageTurnRequest: ComposeWebtoonPageTurnRequest? = null,
@@ -196,6 +197,15 @@ fun ComposeSceneWebtoonReader(
 
     DisposableEffect(adapter) {
         onDispose { adapter.close() }
+    }
+
+    // The page under the progress slider is decoded while the thumb is still moving, so a far
+    // seek lands on an already-decoded bitmap instead of waiting for a batch of fresh decodes.
+    LaunchedEffect(primedPageKey) {
+        val key = primedPageKey ?: return@LaunchedEffect
+        if (pageMap.containsKey(key)) {
+            adapter.primePage(PageId(key))
+        }
     }
 
     val resourceWindowPlanner = remember(isPreloadReductionEnabled) {

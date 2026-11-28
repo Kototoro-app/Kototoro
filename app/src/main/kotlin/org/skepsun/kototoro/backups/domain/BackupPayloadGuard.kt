@@ -288,6 +288,9 @@ object BackupPayloadGuard {
         "org.skepsun.kototoro",
         "org.skepsun.kototoro.debug",
         "org.skepsun.kototoro.nightly",
+        // 漫画精简版（kotoro）使用独立包名，但仍需能导入/导出同格式备份。
+        "org.skepsun.kotoro",
+        "org.skepsun.kotoro.debug",
     )
     private val json = Json {
         ignoreUnknownKeys = true

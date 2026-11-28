@@ -133,6 +133,11 @@ fun AppContentListRoute(
      * check — so they provide their own callback.
      */
     pullRefreshAction: (() -> Unit)? = null,
+    /**
+     * Replaces the pull-to-refresh indicator state. Pages that must not look like they are
+     * refreshing on first open (e.g. the local library) pass their own user-initiated flag.
+     */
+    isRefreshingOverride: Boolean? = null,
     onLoadMore: () -> Unit = {},
     loadMoreVisibleThreshold: Int = 4,
     onNavigateToDetails: ((ContentListModel, org.skepsun.kototoro.parsers.model.Content, String?) -> Unit)? = null,
@@ -180,7 +185,8 @@ fun AppContentListRoute(
     }
     val listMode by viewModel.listMode.collectAsStateWithLifecycle()
     val gridScale by viewModel.gridScale.collectAsStateWithLifecycle()
-    val isRefreshing by viewModel.isLoading.collectAsStateWithLifecycle()
+    val loadingRefreshing by viewModel.isLoading.collectAsStateWithLifecycle()
+    val isRefreshing = isRefreshingOverride ?: loadingRefreshing
     val pagingIsRefreshing = lazyPagingItems?.loadState?.refresh is LoadState.Loading
     val hasMoreItems by viewModel.hasMoreItems.collectAsStateWithLifecycle()
 

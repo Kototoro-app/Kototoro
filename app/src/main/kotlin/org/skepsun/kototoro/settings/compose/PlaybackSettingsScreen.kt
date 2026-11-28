@@ -26,7 +26,6 @@ import org.skepsun.kototoro.core.ui.settings.PreferenceChoice
 @Composable
 fun PlaybackSettingsScreen(
     settings: AppSettings,
-    onAiSettingsClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val background by settings.observeAsState(AppSettings.KEY_VIDEO_BACKGROUND) { videoBackground }
@@ -70,11 +69,6 @@ fun PlaybackSettingsScreen(
             gradientAlpha = painterResource(R.drawable.ic_bar_chart),
             aiSettings = painterResource(R.drawable.ic_auto_fix),
             orientation = painterResource(R.drawable.ic_screen_rotation),
-        ),
-        aiSettings = PlaybackSettingsAction(
-            title = stringResource(R.string.ai_settings),
-            summary = stringResource(R.string.ai_settings_entry_summary),
-            onClick = onAiSettingsClick,
         ),
         orientation = PlaybackSettingsChoice(
             title = stringResource(R.string.video_orientation),

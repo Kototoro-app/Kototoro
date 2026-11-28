@@ -94,7 +94,17 @@ class MainChromeController(
         val sourceTagEntries = callback.getSourceTagEntries()
         availableSourceTags = sourceTagEntries
         isLanguagePresetFilterVisible = callback.isLanguagePresetFilterVisible() && settings.isShowLanguagePresetFilter
-        isContentTypeFilterVisible = callback.isContentTypeFilterVisible() && settings.isShowContentTypeFilter
+
+        // 本构建只保留漫画，内容类型切换胶囊没有任何可切换的选项，
+        // 因此在数据层就把可选类型收敛成一种，并让胶囊隐藏。
+        enabledContentTypes = buildSet {
+            if (callback.isContentTypeEnabled(BrowseGroupTab.Content)) {
+                add(ContentType.MANGA)
+            }
+        }
+        isContentTypeFilterVisible = callback.isContentTypeFilterVisible() &&
+            settings.isShowContentTypeFilter &&
+            enabledContentTypes.size > 1
         isSourceTagFilterVisible = callback.isSourceTagFilterVisible() &&
             settings.isShowSourceTagFilter &&
             sourceTagEntries.isNotEmpty()
@@ -122,17 +132,6 @@ class MainChromeController(
 
         enabledSourceTags = sourceTagEntries.filterTo(linkedSetOf()) { tag ->
             callback.isSourceTagEnabled(tag)
-        }
-        enabledContentTypes = buildSet {
-            if (callback.isContentTypeEnabled(BrowseGroupTab.Content)) {
-                add(ContentType.MANGA)
-            }
-            if (callback.isContentTypeEnabled(BrowseGroupTab.Novel)) {
-                add(ContentType.NOVEL)
-            }
-            if (callback.isContentTypeEnabled(BrowseGroupTab.Video)) {
-                add(ContentType.VIDEO)
-            }
         }
         syncSearchSuggestionFilters()
     }
@@ -249,7 +248,6 @@ private fun String?.toSourceTagSelection(): Set<SourceTag> {
 private fun String?.toPresetId(): Long = this?.toLongOrNull()?.takeIf { it > 0L } ?: -1L
 
 private fun allTopBarContentTypes(): Set<ContentType> = setOf(
+    // 本构建只保留漫画：内容类型胶囊没有可切换项，因此默认集合里只有一种类型。
     ContentType.MANGA,
-    ContentType.NOVEL,
-    ContentType.VIDEO,
 )

@@ -61,6 +61,9 @@ private enum class ImportContentType(
     VIDEO(LocalImportKind.VIDEO, R.string.video),
 }
 
+/** 本构建只保留漫画：可选"自动识别"和"漫画目录"，小说/视频不再出现。 */
+private val ImportSupportedTypes = listOf(ImportContentType.AUTO, ImportContentType.MANGA)
+
 private data class ImportOption(
     val iconRes: Int,
     val titleRes: Int,
@@ -208,20 +211,8 @@ private fun ImportTypeSelector(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.fillMaxWidth(),
         ) {
-            ImportContentType.entries.take(2).forEach { type ->
-                ImportTypeChip(
-                    type = type,
-                    selected = selectedType == type,
-                    onClick = { onSelectedTypeChange(type) },
-                    modifier = Modifier.weight(1f),
-                )
-            }
-        }
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            ImportContentType.entries.drop(2).forEach { type ->
+            // 本构建只导出漫画，小说/视频导入选项已移除。
+            ImportSupportedTypes.forEach { type ->
                 ImportTypeChip(
                     type = type,
                     selected = selectedType == type,

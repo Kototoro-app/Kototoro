@@ -14,6 +14,7 @@ import android.provider.DocumentsContract
 import androidx.annotation.WorkerThread
 import androidx.core.content.ContextCompat
 import androidx.core.net.toFile
+import com.hippo.unifile.UniFile
 import dagger.Reusable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runInterruptible
@@ -260,6 +261,26 @@ class LocalStorageManager @Inject constructor(
         } else {
             uri.resolveFile(context) ?: throw NonFileUriException(uri)
         }
+    }
+
+    /**
+     * 本地条目的修改时间。
+     *
+     * 用户选择的漫画目录通常是 SAF 的 `content://` 树，`java.io.File.lastModified()` 对这类
+     * URI 只能拿到无效路径并返回 0，会让"添加时间"排序退化成所有条目并列。SAF 场景改走
+     * UniFile(DocumentFile)，它读的是 DocumentsContract 的 COLUMN_LAST_MODIFIED。
+     */
+    suspend fun lastModified(uri: Uri): Long = runInterruptible(Dispatchers.IO) {
+        runCatching {
+            if (uri.isFileUri()) {
+                uri.toFile().lastModified()
+            } else {
+                // 有的 SAF provider 不返回 COLUMN_LAST_MODIFIED，退一步把文档 URI 解析成真实路径再读。
+                UniFile.fromUri(context, uri)?.lastModified()
+                    ?: uri.resolveFile(context)?.lastModified()
+                    ?: 0L
+            }
+        }.getOrDefault(0L)
     }
 
     suspend fun resolveRoot(uri: Uri): LocalStorageRoot = runInterruptible(Dispatchers.IO) {

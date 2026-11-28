@@ -4,8 +4,6 @@ import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
-import org.skepsun.kototoro.video.player.MeasuredVideoSize
-import org.skepsun.kototoro.video.player.VideoQualitySizeProber
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -53,10 +51,6 @@ import org.skepsun.kototoro.download.ui.worker.DownloadTask
 import org.skepsun.kototoro.download.ui.worker.DownloadTaskKind
 import org.skepsun.kototoro.download.ui.worker.DownloadWorker
 import org.skepsun.kototoro.download.ui.worker.ExecutionChapterRef
-import org.skepsun.kototoro.reader.translate.data.ChapterTranslationStore
-import org.skepsun.kototoro.reader.translate.data.TranslatedChapters
-import org.skepsun.kototoro.reader.translate.data.resolveChapterTranslationKey
-import org.skepsun.kototoro.reader.translate.data.resolveChapterTranslationLanguagePair
 import org.skepsun.kototoro.history.data.HistoryRepository
 import org.skepsun.kototoro.list.domain.ListFilterOption
 import org.skepsun.kototoro.local.domain.DeleteLocalContentUseCase
@@ -71,9 +65,6 @@ import org.skepsun.kototoro.parsers.model.ContentState
 import org.skepsun.kototoro.reader.ui.ReaderActivity
 import org.skepsun.kototoro.reader.ui.ReaderState
 import org.skepsun.kototoro.reader.ui.ReaderViewModel
-import org.skepsun.kototoro.video.domain.resolveVideoCandidates
-import org.skepsun.kototoro.video.ui.VideoPlayerActivity
-import org.skepsun.kototoro.video.ui.VideoChaptersViewModel
 import java.time.Instant
 
 abstract class ChaptersPagesViewModel(
@@ -85,8 +76,6 @@ abstract class ChaptersPagesViewModel(
     private val deleteLocalContentUseCase: DeleteLocalContentUseCase,
     protected val mangaRepositoryFactory: ContentRepository.Factory,
     private val localStorageChanges: SharedFlow<LocalContent?>,
-    private val chapterTranslationStore: ChapterTranslationStore,
-    private val videoQualitySizeProber: VideoQualitySizeProber,
 ) : BaseViewModel() {
 
     val mangaDetails = MutableStateFlow<ContentDetails?>(null)
@@ -94,13 +83,6 @@ abstract class ChaptersPagesViewModel(
 
     /** Furthest chapter ever read (0 when not recorded); unlike [readingState] it does not follow reopened chapters. */
     val furthestReadChapterId = MutableStateFlow(0L)
-
-    data class QualityProbeResult(val snapshot: Set<Long>, val qualities: List<String>)
-    val onShowVideoQualityDialog = MutableEventFlow<QualityProbeResult>()
-
-    /** Sizes of the quality options of the open quality dialog, keyed by option title; filled in as they are measured. */
-    val videoQualitySizes = MutableStateFlow<Map<String, MeasuredVideoSize>>(emptyMap())
-    private var videoQualitySizeJob: Job? = null
 
     val onActionDone = MutableEventFlow<ReversibleAction>()
     val onDownloadStarted = MutableEventFlow<Unit>()
@@ -180,123 +162,6 @@ abstract class ChaptersPagesViewModel(
 
     private val downloadInvalidation = MutableStateFlow(0)
 
-    private val translationRefresh = MutableStateFlow(0)
-
-    /**
-     * Re-reads stored translations when the user edits anything that changes the produced pixels, so a
-     * finished chapter flips to "made with other settings" without leaving the screen.
-     */
-    private val translationRecipeRefresh: Flow<String?> = settings.observeChanges()
-        .filter { key -> key == null || key.startsWith(TRANSLATION_PREF_PREFIX) }
-        // Preference listeners only fire on change, so without an initial value the five-way combine below
-        // would never emit and the chapter list would stay at its initial empty state.
-        .onStart { emit(null) }
-
-    /**
-     * Chapters whose background translation already finished, split by whether it still matches the
-     * current translation settings.
-     *
-     * The rendered pages live in an evictable page cache, so this marker is the only stable signal the
-     * chapter list can use for the "translated" badge; the recipe fingerprint lets the same record say
-     * "made with older settings, offer a re-translate".
-     */
-    private val translatedChaptersFlow: Flow<TranslatedChapters> = combine(
-        mangaDetails,
-        translationRefresh,
-        settings.observeAsStateFlow(
-            scope = viewModelScope + Dispatchers.Default,
-            key = AppSettings.KEY_READER_TRANSLATION_SOURCE_LANG,
-            valueProducer = { readerTranslationSourceLanguage },
-        ),
-        settings.observeAsStateFlow(
-            scope = viewModelScope + Dispatchers.Default,
-            key = AppSettings.KEY_READER_TRANSLATION_TARGET_LANG,
-            valueProducer = { readerTranslationTargetLanguage },
-        ),
-        translationRecipeRefresh,
-    ) { details, _, sourceLanguage, targetLanguage, _ ->
-        val content = details?.toContent() ?: return@combine TranslatedChapters.EMPTY
-        val languagePair = resolveChapterTranslationLanguagePair(
-            preferredSourceLanguage = sourceLanguage,
-            contentLanguage = content.source.getLocale()?.language,
-            targetLanguage = targetLanguage,
-        )
-        val key = settings.resolveChapterTranslationKey(
-            sourceLang = languagePair.first,
-            targetLang = languagePair.second,
-        )
-        val states = chapterTranslationStore.chapterStates(mangaId = content.id, key = key)
-        if (states.isEmpty()) {
-            TranslatedChapters.EMPTY
-        } else {
-            TranslatedChapters(
-                ready = states.filterValues { it.isPrepared && !it.isStale }.keys.toSet(),
-                stale = states.filterValues { it.isPrepared && it.isStale }.keys.toSet(),
-                partial = buildMap {
-                    for ((chapterId, state) in states) {
-                        val progress = state.progress ?: continue
-                        if (state.isPartial) put(chapterId, progress)
-                    }
-                },
-            )
-        }
-    }
-        // Belt and braces: the chapter list itself must never be held empty while waiting for a badge input.
-        .onStart { emit(TranslatedChapters.EMPTY) }
-        .distinctUntilChanged()
-
-    val translatedChapterIds: StateFlow<Set<Long>> = translatedChaptersFlow
-        .map { it.ready + it.stale }
-        .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, emptySet())
-
-    /**
-     * Persists how far a chapter translation got, for the chapter list to show.
-     *
-     * The interactive reader has no "job" to write this: it translates the pages it shows. Calling this after
-     * each page turns the reader's lazy progress into the same ledger the background job fills, so a chapter
-     * translated inside the reader is marked translated (or partially translated) exactly like a job's output.
-     */
-    protected suspend fun recordChapterTranslationProgress(
-        mangaId: Long,
-        chapterId: Long,
-        donePages: Int,
-        totalPages: Int,
-    ) {
-        if (mangaId == 0L || chapterId == 0L || totalPages <= 0 || donePages <= 0) return
-        val content = mangaDetails.value?.toContent() ?: return
-        val languagePair = resolveChapterTranslationLanguagePair(
-            preferredSourceLanguage = settings.readerTranslationSourceLanguage,
-            contentLanguage = content.source.getLocale()?.language,
-            targetLanguage = settings.readerTranslationTargetLanguage,
-        )
-        val key = settings.resolveChapterTranslationKey(
-            sourceLang = languagePair.first,
-            targetLang = languagePair.second,
-        )
-        chapterTranslationStore.markProgress(
-            mangaId = mangaId,
-            chapterId = chapterId,
-            key = key,
-            donePages = donePages,
-            totalPages = totalPages,
-        )
-        if (donePages >= totalPages) {
-            chapterTranslationStore.markPrepared(
-                mangaId = mangaId,
-                chapterId = chapterId,
-                key = key,
-                pages = totalPages,
-            )
-        }
-    }
-
-    /** Ids whose stored translation came from other settings; the row offers a re-translate for them. */
-    val staleTranslationChapterIds: StateFlow<Set<Long>> = translatedChaptersFlow
-        .map { it.stale }
-        .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, emptySet())
-
-    private val translatedChapterIdsFlow: Flow<Set<Long>> = translatedChaptersFlow.map { it.ready }
-
     private val chapterSourceDetails = mangaDetails.distinctUntilChanged { old, new ->
         old === new || (
             old != null && new != null &&
@@ -364,26 +229,7 @@ abstract class ChaptersPagesViewModel(
     }
 
     val chapters = combine(
-        combine(baseChaptersFlow, downloadInvalidation, translatedChaptersFlow) { list, _, translated ->
-            if (translated.isEmpty) {
-                list
-            } else {
-                list.map { item ->
-                    val isReady = item.chapter.id in translated.ready
-                    val isStale = item.chapter.id in translated.stale
-                    val partial = translated.partial[item.chapter.id]
-                    if (isReady || isStale || partial != null) {
-                        item.copy(
-                            isTranslated = isReady,
-                            isTranslationStale = isStale,
-                            translationProgress = partial,
-                        )
-                    } else {
-                        item
-                    }
-                }
-            }
-        },
+        combine(baseChaptersFlow, downloadInvalidation) { list, _ -> list },
         isChaptersReversed,
         isHideReadChapters,
         isMergeRepeatedChapters,
@@ -426,10 +272,6 @@ abstract class ChaptersPagesViewModel(
         launchJob(Dispatchers.Default) {
             localStorageChanges
                 .collect { onDownloadComplete(it) }
-        }
-        launchJob(Dispatchers.Default) {
-            chapterTranslationStore.changes
-                .collect { translationRefresh.update { it + 1 } }
         }
         launchJob(Dispatchers.Default) {
             mangaDetails.collect { details ->
@@ -546,33 +388,9 @@ abstract class ChaptersPagesViewModel(
         }
     }
 
+    /** 视频清晰度选择已随视频功能移除：直接按默认清晰度下载。 */
     fun probeAndDownload(snapshot: Set<Long>) {
-        launchJob(Dispatchers.Default) {
-            val manga = mangaDetails.value?.toContent() ?: return@launchJob
-            if (manga.source.getContentType() != ContentType.VIDEO) return@launchJob
-
-            val chapterId = snapshot.firstOrNull() ?: return@launchJob
-            val chapter = chapters.value.find { it.chapter.id == chapterId }?.chapter ?: return@launchJob
-            val repo = mangaRepositoryFactory.create(manga.source)
-
-            val options = runCatchingCancellable {
-                repo.resolveVideoCandidates(chapter)
-                    .filter { it.title.trim().isNotEmpty() }
-                    .distinctBy { it.title.trim() }
-            }.getOrNull().orEmpty()
-
-            videoQualitySizeJob?.cancel()
-            videoQualitySizes.value = emptyMap()
-            // An empty list falls back to the default flow without a specific quality.
-            onShowVideoQualityDialog.call(QualityProbeResult(snapshot, options.map { it.title.trim() }))
-            if (options.isNotEmpty()) {
-                videoQualitySizeJob = viewModelScope.launch(Dispatchers.IO) {
-                    videoQualitySizeProber.measureEach(options) { title, size ->
-                        videoQualitySizes.update { it + (title to size) }
-                    }
-                }
-            }
-        }
+        download(snapshot, isMeteredNetworkAllowed = true)
     }
 
     fun download(snapshot: Set<Long>, isMeteredNetworkAllowed: Boolean, preferredQuality: String? = null) {
@@ -595,79 +413,6 @@ abstract class ChaptersPagesViewModel(
             downloadScheduler.schedule(setOf(manga to task))
             onDownloadStarted.call(Unit)
         }
-    }
-
-    /**
-     * Background "translate" action of a chapter row: downloads the chapter first when it is still
-     * remote, then translates it as a whole chapter.
-     */
-    fun translate(
-        snapshot: Set<Long>,
-        isMeteredNetworkAllowed: Boolean,
-        isRetranslation: Boolean = false,
-    ) {
-        if (snapshot.isEmpty()) {
-            return
-        }
-        if (settings.readerTranslationApiEndpoint.isBlank() && settings.readerTranslationOnnxModelId.isBlank()) {
-            // Without an engine the job would finish without translating anything and still look successful.
-            onShowMessage.call(R.string.novel_reader_translation_not_configured)
-            return
-        }
-        val manga = mangaDetails.value?.toContent() ?: return
-        val items = chapters.value.filter { it.chapter.id in snapshot }
-        if (items.isEmpty()) {
-            return
-        }
-        val task = DownloadTask.createExecutionTask(
-            executionMangaId = manga.id,
-            displayMangaId = manga.id,
-            isPaused = false,
-            isSilent = snapshot.size == 1,
-            executionChapterIds = items.map { it.chapter.id }.toLongArray(),
-            executionChapterRefs = items.map { ExecutionChapterRef.fromChapter(it.chapter) },
-            destination = null,
-            format = null,
-            allowMeteredNetwork = isMeteredNetworkAllowed,
-            kind = DownloadTaskKind.TRANSLATE,
-            isRetranslation = isRetranslation,
-        )
-        launchJob(Dispatchers.Default) {
-            downloadScheduler.schedule(setOf(manga to task))
-            onDownloadStarted.call(Unit)
-        }
-    }
-
-    /** Chapters of this content whose translation job is running right now. */
-    val activeTranslationChapterIds: StateFlow<Set<Long>> = downloadScheduler.observeWorks()
-        .map { works ->
-            val mangaId = mangaDetails.value?.toContent()?.id ?: return@map emptySet<Long>()
-            val running = works.filter { !it.state.isFinished }
-            if (running.isEmpty()) return@map emptySet<Long>()
-            withContext(Dispatchers.IO) {
-                val chapters = mutableSetOf<Long>()
-                for (work in running) {
-                    val task = downloadScheduler.getTask(work.id) ?: continue
-                    if (task.kind != DownloadTaskKind.TRANSLATE) continue
-                    if (task.executionMangaId != mangaId && task.displayMangaId != mangaId) continue
-                    chapters += task.executionChapterIds?.toList().orEmpty()
-                }
-                chapters
-            }
-        }
-        .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.WhileSubscribed(5_000), emptySet())
-
-    /** Stops translation jobs for this content without touching downloads. */
-    fun cancelTranslation() {
-        val manga = mangaDetails.value?.toContent() ?: return
-        launchJob(Dispatchers.Default) {
-            downloadScheduler.cancelTranslation(manga.id)
-            onActionDone.call(ReversibleAction(R.string.translation_cancelled, null))
-        }
-    }
-
-    fun prepareTranslation(snapshot: Set<Long>, isMeteredNetworkAllowed: Boolean) {
-        schedulePreparation(snapshot, DownloadTaskKind.PREPARE_TRANSLATION, isMeteredNetworkAllowed)
     }
 
     /**
@@ -744,8 +489,6 @@ abstract class ChaptersPagesViewModel(
 
     private companion object {
 
-        /** Every preference that can change a translation recipe starts with this prefix. */
-        const val TRANSLATION_PREF_PREFIX = "reader_translation"
 
     }
 

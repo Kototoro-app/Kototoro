@@ -1078,7 +1078,10 @@ internal fun LocalTopLevelRouteContent(
     navigateToDetailsWithContent: (Content, String?) -> Unit,
 ) {
     val viewModel = hiltViewModel<org.skepsun.kototoro.local.ui.LocalListViewModel>()
+    val localUserRefreshing by viewModel.isUserRefreshing.collectAsStateWithLifecycle()
     val localLibraryQuery by viewModel.libraryQuery.collectAsStateWithLifecycle()
+    val localSortOrder by viewModel.sortOrder.collectAsStateWithLifecycle()
+    val localReadStatusFilter by viewModel.readStatusFilter.collectAsStateWithLifecycle()
     val activity = LocalContext.current as? androidx.activity.ComponentActivity
     var pendingRemoveSelection by remember { mutableStateOf<Set<Long>?>(null) }
 
@@ -1139,7 +1142,9 @@ internal fun LocalTopLevelRouteContent(
             viewModel = viewModel,
             contentPadding = contentPadding,
             appRouter = appRouter,
-            pullRefreshEnabled = false,
+            pullRefreshEnabled = true,
+            // 打开页面时不把首次加载画成「刷新中」，只有用户下拉才转指示器。
+            isRefreshingOverride = localUserRefreshing,
             showScrollbar = true,
             onTopBarOverrideChanged = {
                 onExploreSourceSelectionTopBarChanged(
@@ -1176,8 +1181,11 @@ internal fun LocalTopLevelRouteContent(
             },
             // The filtered empty state offers "reset filter"; only the empty library offers import.
             onEmptyActionClick = {
-                if (viewModel.filterCoordinator.isFilterApplied) {
+                if (viewModel.filterCoordinator.isFilterApplied ||
+                    localReadStatusFilter != org.skepsun.kototoro.local.domain.model.LocalReadStatusFilter.ALL
+                ) {
                     viewModel.filterCoordinator.reset()
+                    viewModel.setReadStatusFilter(org.skepsun.kototoro.local.domain.model.LocalReadStatusFilter.ALL)
                 } else {
                     appRouter.showImportDialog()
                 }
@@ -1191,8 +1199,11 @@ internal fun LocalTopLevelRouteContent(
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                         )
                     }
-                    org.skepsun.kototoro.local.ui.compose.LocalDownloadsCardRoute(
-                        onOpenDownloads = appRouter::openDownloads,
+                    org.skepsun.kototoro.local.ui.compose.LocalLibraryToolbar(
+                        sortOrder = localSortOrder,
+                        onSortOrderSelected = viewModel::setSortOrder,
+                        readStatusFilter = localReadStatusFilter,
+                        onReadStatusFilterSelected = viewModel::setReadStatusFilter,
                     )
                 }
             },
@@ -1424,13 +1435,6 @@ internal fun BookmarksTopLevelRouteContent(
             mainChromeController?.clearActiveFilterCallback(callback)
         }
     }
-
-    val notesViewModel = spaceBoundHiltViewModel<org.skepsun.kototoro.notes.ui.NotesViewModel>("notes")
-    org.skepsun.kototoro.notes.ui.AppNotesRoute(
-        contentPadding = contentPadding,
-        appRouter = appRouter,
-        viewModel = notesViewModel,
-    )
 }
 
 @Composable

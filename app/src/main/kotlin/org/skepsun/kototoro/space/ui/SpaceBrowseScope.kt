@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
+import org.skepsun.kototoro.core.model.ContentScopePolicy
 import org.skepsun.kototoro.core.model.ContentSourceInfo
 import org.skepsun.kototoro.core.util.ext.processLifecycleScope
 import org.skepsun.kototoro.explore.data.ContentSourcesRepository
@@ -175,7 +176,7 @@ internal fun org.skepsun.kototoro.space.domain.SpaceKind.toBrowseGroupTab(): Bro
     org.skepsun.kototoro.space.domain.SpaceKind.ALL -> BrowseGroupTab.All
 }
 
-private val ALL_STANDARD_CONTENT_TYPES = ContentType.entries.filterNot { it == ContentType.OTHER }.toSet()
+private val ALL_STANDARD_CONTENT_TYPES = ContentScopePolicy.supportedTypes
 
 internal fun BrowseGroupTab.toPrimaryContentType(): ContentType? = when (this) {
     BrowseGroupTab.Content -> ContentType.MANGA

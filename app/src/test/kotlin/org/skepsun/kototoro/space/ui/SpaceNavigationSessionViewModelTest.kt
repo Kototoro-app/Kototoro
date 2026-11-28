@@ -20,6 +20,7 @@ import org.skepsun.kototoro.space.domain.SpaceId
 import org.skepsun.kototoro.space.domain.SpaceSessionRepository
 import org.skepsun.kototoro.space.domain.SpaceSessionSnapshot
 import org.skepsun.kototoro.space.domain.SpaceSessionValidator
+import org.skepsun.kototoro.space.data.SecondTestSpace
 import org.skepsun.kototoro.space.data.TestSpaceCatalogRepository
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -34,28 +35,28 @@ class SpaceNavigationSessionViewModelTest {
 	fun tearDown() = Dispatchers.resetMain()
 
 	@Test
-	fun `enabled gate loads built in sessions and saves updates`() = runTest {
-		val initial = snapshot(BuiltInSpaces.Novel, "history")
-		val repository = FakeSessionRepository(mapOf(BuiltInSpaces.Novel to initial))
+	fun `enabled gate loads known sessions and saves updates`() = runTest {
+		val initial = snapshot(SecondTestSpace.id, "history")
+		val repository = FakeSessionRepository(mapOf(SecondTestSpace.id to initial))
 		val flags = FakeSessionFlagsRepository(enabled = true)
 		val viewModel = SpaceNavigationSessionViewModel(
 			repository,
 			PassThroughValidator,
-			TestSpaceCatalogRepository(),
+			TestSpaceCatalogRepository(BuiltInSpaces.contexts + SecondTestSpace),
 			flags,
 		)
 
 		advanceUntilIdle()
 
 		viewModel.uiState.value.restorationReady shouldBe true
-		viewModel.uiState.value.sessions shouldBe mapOf(BuiltInSpaces.Novel to initial)
+		viewModel.uiState.value.sessions shouldBe mapOf(SecondTestSpace.id to initial)
 
-		val updated = snapshot(BuiltInSpaces.Novel, "favorites")
+		val updated = snapshot(SecondTestSpace.id, "favorites")
 		viewModel.save(updated)
 		advanceUntilIdle()
 
 		repository.saved shouldBe listOf(updated)
-		viewModel.uiState.value.sessions[BuiltInSpaces.Novel] shouldBe updated
+		viewModel.uiState.value.sessions[SecondTestSpace.id] shouldBe updated
 	}
 
 	@Test

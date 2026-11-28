@@ -66,7 +66,6 @@ class SettingsSearchHelper @Inject constructor(
             "description_collapse" to R.string.collapse_long_description,
             "panorama_enabled" to R.string.pref_panorama_cover,
             "pages_tab" to R.string.show_pages_thumbs,
-            "details_translate_button" to R.string.details_translate_button_visible,
             "modern_details_dock" to R.string.modern_details_dock,
             "details_tab" to R.string.default_tab,
         ), SettingsDestination.AppearanceDetailsSettings, R.string.appearance_group_details)
@@ -243,97 +242,6 @@ class SettingsSearchHelper @Inject constructor(
             )
         }
 
-        val aiBreadcrumbs = listOf(context.getString(R.string.ai_settings))
-        val aiKeys = listOf(
-            "ai_models" to R.string.reader_translation_manage_ocr_models,
-            "ai_api" to R.string.ai_api_settings,
-            "ai_translation" to R.string.translation_settings,
-            "ai_image" to R.string.ai_image_enhancement_settings,
-            "ai_tts" to R.string.tts_settings_title,
-            "ai_video" to R.string.ai_video_enhancement_settings,
-        )
-        aiKeys.forEach { (key, titleRes) ->
-            result.add(
-                SettingsItem(
-                    key = key,
-                    title = context.getString(titleRes),
-                    breadcrumbs = emptyList(),
-                    destination = SettingsDestination.AISettings,
-                ),
-            )
-        }
-
-        val aiImageKeys = listOf(
-            "reader_super_resolution_enabled" to R.string.reader_super_resolution,
-            "reader_super_resolution_engine" to R.string.reader_super_resolution_engine,
-            "reader_super_resolution_model" to R.string.reader_super_resolution_model,
-        )
-        aiImageKeys.forEach { (key, titleRes) ->
-            result.add(
-                SettingsItem(
-                    key = key,
-                    title = context.getString(titleRes),
-                    breadcrumbs = aiBreadcrumbs,
-                    destination = SettingsDestination.AiImageEnhancementSettings,
-                ),
-            )
-        }
-        val aiVideoKeys = listOf(
-            "video_enhancement_algorithm" to R.string.video_enhancement_algorithm,
-            "video_anime4k_preset" to R.string.video_enhancement_anime4k_preset,
-            "video_fsr_sharpness" to R.string.video_enhancement_fsr_sharpness_search,
-            "video_enhancement_remember" to R.string.video_enhancement_remember,
-        )
-        aiVideoKeys.forEach { (key, titleRes) ->
-            result.add(
-                SettingsItem(
-                    key = key,
-                    title = context.getString(titleRes),
-                    breadcrumbs = listOf(context.getString(R.string.ai_settings)),
-                    destination = SettingsDestination.AiVideoEnhancementSettings,
-                ),
-            )
-        }
-        val ttsBreadcrumbs = listOf(context.getString(R.string.ai_settings), context.getString(R.string.tts_settings_title))
-        val ttsKeys = listOf(
-            "tts_enabled" to R.string.tts_enable,
-            "tts_engine_type" to R.string.tts_engine_type,
-            "tts_test" to R.string.tts_test,
-            "tts_system_voice" to R.string.tts_system_voice,
-            "tts_legado_voice" to R.string.tts_legado_voice,
-            "tts_import_legado_clipboard" to R.string.tts_legado_import_clipboard,
-            "tts_import_legado_url" to R.string.tts_legado_import_url,
-            "tts_manage_legado" to R.string.tts_legado_manage_sources,
-        )
-        ttsKeys.forEach { (key, titleRes) ->
-            result.add(
-                SettingsItem(
-                    key = key,
-                    title = context.getString(titleRes),
-                    breadcrumbs = ttsBreadcrumbs,
-                    destination = SettingsDestination.TtsSettings,
-                ),
-            )
-        }
-        val ocrModelsBreadcrumbs = listOf(context.getString(R.string.ai_settings), context.getString(R.string.reader_translation_ocr_models_title))
-        val ocrModelsKeys = listOf(
-            "reader_translation_onnx_models" to R.string.reader_translation_onnx_models_title,
-            "reader_translation_ocr_detector_models" to R.string.reader_translation_ocr_detector_models_title,
-            "reader_translation_ocr_recognizer_models" to R.string.reader_translation_ocr_recognizer_models_title,
-            "reader_translation_onnx_bubble_detector_models" to R.string.reader_translation_onnx_bubble_detector_models_title,
-            "reader_translation_onnx_super_resolution_models" to R.string.reader_translation_onnx_super_resolution_models_title,
-        )
-        ocrModelsKeys.forEach { (key, titleRes) ->
-            result.add(
-                SettingsItem(
-                    key = key,
-                    title = context.getString(titleRes),
-                    breadcrumbs = ocrModelsBreadcrumbs,
-                    destination = SettingsDestination.OcrModelsSettings,
-                ),
-            )
-        }
-
         val sourcesBreadcrumbs = listOf(context.getString(R.string.source_preferences))
         val sourcesKeys = listOf(
             "sources_sort_order" to R.string.sort_order,
@@ -430,41 +338,6 @@ class SettingsSearchHelper @Inject constructor(
                 destination = SettingsDestination.ReplaceRulesSettings,
             ),
         )
-        val translationBreadcrumbs = listOf(context.getString(R.string.ai_settings), context.getString(R.string.translation_settings))
-        val translationKeys = listOf(
-            "reader_translation_source_lang" to R.string.reader_translation_source_lang,
-            "reader_translation_target_lang" to R.string.reader_translation_target_lang,
-            "reader_translation_paddle_det_model_id" to R.string.reader_translation_ocr_det_model_selection,
-            "reader_translation_paddle_official_model_id" to R.string.reader_translation_ocr_recognizer_model_selection,
-        )
-        translationKeys.forEach { (key, titleRes) ->
-            result.add(
-                SettingsItem(
-                    key = key,
-                    title = context.getString(titleRes),
-                    breadcrumbs = translationBreadcrumbs,
-                    destination = SettingsDestination.TranslationSettings,
-                ),
-            )
-        }
-        val translationApiBreadcrumbs = translationBreadcrumbs + context.getString(R.string.ai_api_settings)
-        val translationApiKeys = listOf(
-            "reader_translation_api_provider_preset" to R.string.reader_translation_api_provider_preset,
-            "reader_translation_api_endpoint" to R.string.reader_translation_api_endpoint,
-            "reader_translation_api_key" to R.string.reader_translation_api_key,
-            "reader_translation_api_model" to R.string.reader_translation_api_model,
-            "reader_translation_api_fetch_models" to R.string.reader_translation_api_models_fetch,
-        )
-        translationApiKeys.forEach { (key, titleRes) ->
-            result.add(
-                SettingsItem(
-                    key = key,
-                    title = context.getString(titleRes),
-                    breadcrumbs = translationApiBreadcrumbs,
-                    destination = SettingsDestination.TranslationApiSettings,
-                ),
-            )
-        }
         val networkStorageBreadcrumbs = listOf(context.getString(R.string.network))
         val networkStorageKeys = listOf(
             "prefetch_content" to R.string.prefetch_content,

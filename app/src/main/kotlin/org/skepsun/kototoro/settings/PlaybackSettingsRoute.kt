@@ -15,10 +15,8 @@ import org.skepsun.kototoro.settings.compose.PlaybackSettingsScreen
 @Composable
 fun PlaybackSettingsRoute(
     settings: AppSettings,
-    onAiSettingsClick: () -> Unit,
 ) {
     PlaybackSettingsScreen(
         settings = settings,
-        onAiSettingsClick = onAiSettingsClick,
     )
 }
