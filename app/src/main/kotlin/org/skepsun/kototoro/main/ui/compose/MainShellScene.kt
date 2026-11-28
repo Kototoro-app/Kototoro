@@ -1415,7 +1415,7 @@ internal fun LocalTopLevelRouteContent(
     onContextualMenuActionsChanged: (RouteScopedTopBarMenuActions) -> Unit,
     navigateToDetailsWithContent: (Content, String?) -> Unit,
 ) {
-    val viewModel = hiltViewModel<org.skepsun.kototoro.local.ui.LocalListViewModel>()
+    val viewModel = spaceBoundHiltViewModel<org.skepsun.kototoro.local.ui.LocalListViewModel>("local")
     val localLibraryQuery by viewModel.libraryQuery.collectAsStateWithLifecycle()
     val activity = LocalContext.current as? androidx.activity.ComponentActivity
     var pendingRemoveSelection by remember { mutableStateOf<Set<Long>?>(null) }

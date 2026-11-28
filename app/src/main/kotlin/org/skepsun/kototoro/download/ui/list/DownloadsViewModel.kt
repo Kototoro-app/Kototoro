@@ -32,6 +32,7 @@ import org.skepsun.kototoro.core.util.ext.MutableEventFlow
 import org.skepsun.kototoro.core.util.ext.calculateTimeAgo
 import org.skepsun.kototoro.core.util.ext.call
 import org.skepsun.kototoro.core.util.ext.isEmpty
+import org.skepsun.kototoro.core.model.getContentType
 import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.download.domain.DownloadState
 import org.skepsun.kototoro.download.ui.list.chapters.DownloadChapter
@@ -50,6 +51,9 @@ import org.skepsun.kototoro.local.domain.model.LocalContent
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.util.mapToSet
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
+import org.skepsun.kototoro.space.domain.SpaceContentPolicy
+import org.skepsun.kototoro.space.domain.SpaceId
+import org.skepsun.kototoro.space.ui.SpaceBrowseScope
 import java.util.LinkedList
 import java.util.UUID
 import javax.inject.Inject
@@ -62,6 +66,8 @@ class DownloadsViewModel @Inject constructor(
     @LocalStorageChanges private val localStorageChanges: MutableSharedFlow<LocalContent?>,
     private val localContentRepository: LocalMangaRepository,
     private val queuePreferences: DownloadQueuePreferences,
+    private val spaceContentPolicy: SpaceContentPolicy,
+    spaceBrowseScope: SpaceBrowseScope,
 ) : BaseViewModel() {
 
     private val mangaCache = LongSparseArray<Content>()
@@ -72,8 +78,9 @@ class DownloadsViewModel @Inject constructor(
     private val works = combine(
         workScheduler.observeWorks(),
         expanded,
-    ) { list, exp ->
-        list.toDownloadsList(exp)
+        spaceBrowseScope.activeSpaceId,
+    ) { list, exp, spaceId ->
+        list.toDownloadsList(exp).filterToSpace(spaceId)
     }.withErrorHandling()
         .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, null)
 
@@ -263,6 +270,20 @@ class DownloadsViewModel @Inject constructor(
         val list = mapNotNullTo(ArrayList(size)) { it.toUiModel(it.id in exp) }
         list.sortByDescending { it.timestamp }
         return list
+    }
+
+    // The downloads screen opens as its own activity, so it follows the active space like the main shell does.
+    private fun List<DownloadItemModel>.filterToSpace(spaceId: SpaceId?): List<DownloadItemModel> {
+        if (spaceId == null) {
+            return this
+        }
+        val allowedTypes = spaceContentPolicy.allowedTypes(spaceId).takeIf { it.isNotEmpty() }
+        val allowedSources = spaceContentPolicy.allowedSourceNames(spaceId)
+        return filter { item ->
+            val source = (item.displayManga ?: item.executionManga)?.source ?: return@filter true
+            (allowedTypes == null || source.getContentType() in allowedTypes) &&
+                (allowedSources == null || source.name in allowedSources)
+        }
     }
 
     private fun List<DownloadItemModel>.toUiList(): List<ListModel> {

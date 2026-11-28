@@ -28,6 +28,7 @@ import org.skepsun.kototoro.core.exceptions.resolve.CaptchaAutoResolveCoordinato
 import org.skepsun.kototoro.core.model.ContentSource
 import org.skepsun.kototoro.core.nav.resolveContentListSourceName
 import org.skepsun.kototoro.core.model.GlobalTagBlacklist
+import org.skepsun.kototoro.parsers.model.ContentListFilter
 import org.skepsun.kototoro.parsers.model.ContentSource as ParserContentSource
 import org.skepsun.kototoro.core.model.distinctById
 import org.skepsun.kototoro.core.model.isLocal
@@ -300,7 +301,7 @@ open class RemoteListViewModel @Inject constructor(
                     val list = repository.getList(
                         offset = offsetOrPageIndex,
                         order = filterState.sortOrder,
-                        filter = filterState.listFilter,
+                        filter = adjustListFilter(filterState.listFilter),
                     )
                     if (list.isNotEmpty()) {
                         // Any successful non-empty page (filtered or appended too) proves the source works.
@@ -395,6 +396,9 @@ open class RemoteListViewModel @Inject constructor(
     }
 
     protected open suspend fun onBuildList(list: MutableList<ListModel>) = Unit
+
+    /** Narrows the filter sent to the repository without changing what the user selected. */
+    protected open fun adjustListFilter(filter: ContentListFilter): ContentListFilter = filter
 
     protected open suspend fun mapContentList(
         destination: MutableCollection<in ListModel>,

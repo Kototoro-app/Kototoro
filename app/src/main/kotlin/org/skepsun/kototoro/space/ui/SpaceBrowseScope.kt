@@ -55,6 +55,14 @@ class SpaceBrowseScope @Inject constructor(
     private val sourceRuleResolver: SourceRuleResolver,
 ) {
     private val activeSpace = spaceRepository.observeActiveSpaceScope(featureFlagsRepository)
+
+    /** The active space while the switcher is on; screens outside the main shell scope themselves to it. */
+    val activeSpaceId: StateFlow<SpaceId?> = activeSpace
+        .stateIn(
+            scope = processLifecycleScope,
+            started = SharingStarted.Eagerly,
+            initialValue = currentSpaceId,
+        )
     val currentSpaceId: SpaceId?
         get() = spaceRepository.activeSpace.value
             .takeIf { featureFlagsRepository.flags.value.effectiveSwitcherEnabled }

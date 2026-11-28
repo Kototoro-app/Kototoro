@@ -9,7 +9,9 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.plus
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.toChipModel
 import org.skepsun.kototoro.core.parser.ContentDataRepository
@@ -46,7 +48,13 @@ import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.model.ContentTag
 import org.skepsun.kototoro.parsers.model.ContentType
+import org.skepsun.kototoro.parsers.model.ContentListFilter
 import org.skepsun.kototoro.remotelist.ui.RemoteListViewModel
+import org.skepsun.kototoro.space.domain.SpaceContentPolicy
+import org.skepsun.kototoro.space.domain.SpaceId
+import org.skepsun.kototoro.space.ui.SpaceBindableViewModel
+import org.skepsun.kototoro.space.ui.SpaceBrowseScope
+import org.skepsun.kototoro.space.ui.scopedToSpace
 import javax.inject.Inject
 
 @HiltViewModel
@@ -68,6 +76,8 @@ class LocalListViewModel @Inject constructor(
     private val globalFavoritesState: org.skepsun.kototoro.favourites.domain.GlobalFavoritesState,
     private val localContentIndex: LocalContentIndex,
     private val librarySearchQueries: LibrarySearchQueries,
+    private val spaceContentPolicy: SpaceContentPolicy,
+    spaceBrowseScope: SpaceBrowseScope,
 ) : RemoteListViewModel(
     savedStateHandle = savedStateHandle,
     mangaRepositoryFactory = mangaRepositoryFactory,
@@ -81,13 +91,20 @@ class LocalListViewModel @Inject constructor(
     captchaAutoResolveCoordinator = captchaAutoResolveCoordinator,
     detailsLoadUseCase = detailsLoadUseCase,
     localStorageChanges = localStorageChanges,
-), SharedPreferences.OnSharedPreferenceChangeListener, QuickFilterListener {
+), SharedPreferences.OnSharedPreferenceChangeListener, QuickFilterListener, SpaceBindableViewModel {
 
     override fun displaySection() = org.skepsun.kototoro.list.ui.ListDisplaySection.LOCAL
 
     val onContentRemoved = MutableEventFlow<Unit>()
 
-    override val currentGroupTab: StateFlow<BrowseGroupTab> = globalFavoritesState.selectedGroupTab
+    private val spaceBinding = spaceBrowseScope.createBinding(viewModelScope + Dispatchers.Default)
+
+    override val currentGroupTab: StateFlow<BrowseGroupTab> = globalFavoritesState.selectedGroupTab.scopedToSpace(
+        spaceGroupTab = spaceBinding.groupTab,
+        coroutineScope = viewModelScope + Dispatchers.Default,
+    )
+
+    override fun bindSpace(spaceId: SpaceId?) = spaceBinding.bindSpace(spaceId)
 
     /** Text typed in the overlay's "Local" tab; applied as the local repository's own query. */
     val libraryQuery: StateFlow<String> = librarySearchQueries.query(LibrarySearchScope.LOCAL)
@@ -112,7 +129,23 @@ class LocalListViewModel @Inject constructor(
                     reloadListAfterCurrentLoad()
                 }
         }
+        launchJob(Dispatchers.Default) {
+            // The first value is the space the list was created in; later ones switch it.
+            spaceBinding.spaceId.drop(1).collect {
+                reloadListAfterCurrentLoad()
+            }
+        }
         settings.subscribe(this)
+    }
+
+    /** Keeps the list inside the current space; the user's own type filter can only narrow it further. */
+    override fun adjustListFilter(filter: ContentListFilter): ContentListFilter {
+        val allowed = spaceBinding.spaceId.value
+            ?.let(spaceContentPolicy::allowedTypes)
+            ?.takeIf { it.isNotEmpty() }
+            ?: return filter
+        val types = filter.types.intersect(allowed).ifEmpty { allowed }
+        return if (types == filter.types) filter else filter.copy(types = types)
     }
 
     override suspend fun onBuildList(list: MutableList<ListModel>) {
