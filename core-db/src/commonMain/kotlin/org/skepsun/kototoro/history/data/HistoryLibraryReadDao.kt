@@ -49,10 +49,12 @@ abstract class HistoryLibraryReadDao {
             m.state AS display_state,
             m.nsfw AS display_nsfw,
             m.rating AS display_rating,
-            m.content_type AS display_content_type
+            m.content_type AS display_content_type,
+            $UNREAD_CHAPTER_COUNT AS unread_chapter_count
         FROM history wh
         LEFT JOIN preferences p ON p.manga_id = wh.manga_id
         LEFT JOIN manga m ON m.manga_id = wh.manga_id
+        $UNREAD_CHAPTER_POSITION_JOINS
         LEFT JOIN (
             SELECT
                 manga_id,

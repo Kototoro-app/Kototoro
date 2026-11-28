@@ -233,6 +233,28 @@ class FavouriteLibraryDeriverTest {
     }
 
     @Test
+    fun `remaining chapters count includes unstarted works and preserves pins in every direction`() {
+        val snap = snapshot(
+            listOf(
+                row(1).copy(cachedUnreadChapterCount = 25),
+                row(2, progressPercent = 0.5f).copy(progressTotalChapters = 20),
+                row(3, isPinned = true).copy(cachedUnreadChapterCount = 0),
+                row(4),
+                row(5).copy(cachedUnreadChapterCount = 25),
+            ),
+        )
+
+        for ((order, expected) in mapOf(
+            ListSortOrder.UNREAD_CHAPTERS to listOf(3L, 1L, 5L, 2L, 4L),
+            ListSortOrder.UNREAD_CHAPTERS_ASC to listOf(3L, 2L, 1L, 5L, 4L),
+        )) {
+            val state = deriveFavouriteLibraryState(snap, FavouriteLibraryDerivationInput(defaultOrder = order))
+            assertEquals(expected, state.allVisibleIds)
+            assertEquals(expected, state.visibleIdsByCategory.getValue(10L))
+        }
+    }
+
+    @Test
     fun `entity id breaks ties in every order`() {
         val rows = listOf(
             row(1, title = "Same", rating = 0.5f, createdAt = 5, updatedAt = 5),

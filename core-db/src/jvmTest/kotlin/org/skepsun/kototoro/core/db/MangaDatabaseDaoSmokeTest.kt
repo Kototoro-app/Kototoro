@@ -7,11 +7,16 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.skepsun.kototoro.core.db.entity.ChapterEntity
 import org.skepsun.kototoro.core.db.entity.MangaSourceEntity
 import org.skepsun.kototoro.core.db.entity.MangaEntity
 import org.skepsun.kototoro.explore.data.SourcesSortOrder
+import org.skepsun.kototoro.favourites.data.FavouriteCategoryEntity
+import org.skepsun.kototoro.favourites.data.FavouriteEntity
+import org.skepsun.kototoro.history.data.HistoryEntity
 import org.skepsun.kototoro.tracker.data.TrackEntity
 import org.skepsun.kototoro.tracker.data.TrackLogEntity
 import org.skepsun.kototoro.suggestions.data.SuggestionEntity
@@ -158,6 +163,45 @@ class MangaDatabaseDaoSmokeTest {
             tracks.clearCounter(1)
             tracks.insertTracksFromUnreadLogs()
             assertEquals(0, tracks.find(1)!!.newChapters, "historical unread logs must not resurrect a cleared counter")
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
+    fun `shelf chapter counts follow the reading branch and furthest position`() = runBlocking {
+        val db = newDb()
+        try {
+            db.getMangaDao().upsert(MangaEntity(
+                id = 1, title = "Work", altTitles = null, url = "1", publicUrl = "https://example.org/1",
+                rating = 0f, isNsfw = false, contentRating = null, coverUrl = "", largeCoverUrl = null,
+                state = null, authors = null, source = "TEST",
+            ))
+            val category = db.getFavouriteCategoriesDao().insert(
+                FavouriteCategoryEntity(0, 1, 0, "Reading", "NEWEST", false, true, 0),
+            )
+            db.getFavouritesDao().upsert(FavouriteEntity(1, category, 0, false, 1, 0, 1))
+            val favourites = db.getFavouriteLibraryReadDao().observeFavouriteCardBaseRows()
+            val history = db.getHistoryLibraryReadDao().observeHistoryCardBaseRows()
+            assertNull(favourites.first().single().unreadChapterCount)
+
+            fun chapter(id: Long, number: Float, volume: Int, branch: String?) =
+                ChapterEntity(id, 1, "Chapter $number", number, volume, "$id", null, 0, branch, "TEST", id.toInt())
+
+            val chapters = listOf(
+                chapter(1, 1f, 1, null), chapter(2, 2f, 1, null), chapter(3, 1f, 2, null),
+                chapter(4, 1f, 1, "Alternate"), chapter(5, 2f, 1, "Alternate"),
+            )
+            db.getChaptersDao().replaceAll(1, chapters)
+            assertEquals(3, favourites.first().single().unreadChapterCount)
+
+            db.getHistoryDao().upsert(HistoryEntity(1, 1, 1, 1, 0, 0f, 0.2f, 0, 3, furthestChapterId = 2))
+            assertEquals(1, favourites.first().single().unreadChapterCount)
+            assertEquals(1, history.first().single().unreadChapterCount)
+
+            db.getChaptersDao().replaceAll(1, chapters + chapter(6, 2f, 2, null))
+            assertEquals(2, favourites.first().single().unreadChapterCount)
+            assertEquals(2, history.first().single().unreadChapterCount)
         } finally {
             db.close()
         }

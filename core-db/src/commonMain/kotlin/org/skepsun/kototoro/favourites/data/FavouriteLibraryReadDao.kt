@@ -3,6 +3,8 @@ package org.skepsun.kototoro.favourites.data
 import androidx.room.Dao
 import androidx.room.Query
 import kotlinx.coroutines.flow.Flow
+import org.skepsun.kototoro.history.data.UNREAD_CHAPTER_COUNT
+import org.skepsun.kototoro.history.data.UNREAD_CHAPTER_POSITION_JOINS
 
 /**
  * Narrow read-only DAO for the favourites library snapshot
@@ -38,18 +40,18 @@ abstract class FavouriteLibraryReadDao {
         )
         SELECT
             selected.manga_id AS entity_id,
-            dm.manga_id AS display_manga_id,
-            dm.title AS display_title,
-            dm.alt_title AS display_alt_title,
-            dm.cover_url AS display_cover_url,
-            dm.author AS display_author,
-            dm.source AS display_source,
-            dm.content_type AS display_content_type,
-            dm.state AS display_state,
-            dm.nsfw AS display_nsfw,
-            dm.rating AS display_rating,
+            m.manga_id AS display_manga_id,
+            m.title AS display_title,
+            m.alt_title AS display_alt_title,
+            m.cover_url AS display_cover_url,
+            m.author AS display_author,
+            m.source AS display_source,
+            m.content_type AS display_content_type,
+            m.state AS display_state,
+            m.nsfw AS display_nsfw,
+            m.rating AS display_rating,
             selected.manga_id AS preferred_local_manga_id,
-            dm.content_type AS entity_content_type,
+            m.content_type AS entity_content_type,
             p.reading_status AS reading_status,
             p.title_override AS title_override,
             p.cover_override AS cover_override,
@@ -63,11 +65,13 @@ abstract class FavouriteLibraryReadDao {
             tracking.last_chapter_date AS tracking_last_chapter_date,
             metadata.service AS metadata_tracking_service,
             metadata.title AS metadata_tracking_title,
-            metadata.cover_url AS metadata_tracking_cover_url
+            metadata.cover_url AS metadata_tracking_cover_url,
+            $UNREAD_CHAPTER_COUNT AS unread_chapter_count
         FROM selected
-        INNER JOIN manga dm ON dm.manga_id = selected.manga_id
+        INNER JOIN manga m ON m.manga_id = selected.manga_id
         LEFT JOIN preferences p ON p.manga_id = selected.manga_id
         LEFT JOIN history wh ON wh.manga_id = selected.manga_id AND wh.deleted_at = 0
+        $UNREAD_CHAPTER_POSITION_JOINS
         LEFT JOIN (
             SELECT
                 manga_id,

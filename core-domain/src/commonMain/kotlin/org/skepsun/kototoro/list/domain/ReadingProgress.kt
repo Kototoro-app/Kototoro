@@ -50,6 +50,12 @@ data class ReadingProgress(
                 mode = mode,
             ).takeIf { it.isValid() }
 
+        internal fun estimateUnreadChapters(percent: Float?, totalChapters: Int?): Int? = when {
+            percent == null -> null
+            isCompleted(percent) -> 0
+            else -> fromHistory(percent, totalChapters ?: 0, CHAPTERS_LEFT)?.chaptersLeft
+        }
+
         fun isValid(percent: Float) = percent in 0f..1f
 
         fun isCompleted(percent: Float) = isReadingCompleted(percent)

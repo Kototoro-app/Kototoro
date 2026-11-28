@@ -147,6 +147,7 @@ class FavouriteLibrarySnapshotStore @Inject constructor(
                 lastChapterDate = base.trackingLastChapterDate ?: 0L,
                 progressPercent = base.historyPercent,
                 progressTotalChapters = base.historyChapters,
+                cachedUnreadChapterCount = base.unreadChapterCount,
                 lastReadAt = base.historyUpdatedAt,
                 tagIds = tagIdsByEntity[base.entityId].orEmpty(),
                 displayTags = displayTagsByEntity[base.entityId].orEmpty()

@@ -324,6 +324,8 @@ private fun ListSortOrder.comparator(context: FavouriteOrderingContext): Compara
             ListSortOrder.MANUAL -> compareBy { context.sortKey(it) }
             ListSortOrder.PROGRESS -> compareByDescending { context.row(it)?.progressPercent ?: 0f }
             ListSortOrder.UNREAD -> compareBy { context.row(it)?.progressPercent ?: 0f }
+            ListSortOrder.UNREAD_CHAPTERS, ListSortOrder.UNREAD_CHAPTERS_ASC ->
+                compareUnreadChapters { context.row(it)?.unreadChapterCount }
             ListSortOrder.LAST_READ -> compareByDescending { context.row(it)?.lastReadAt ?: 0L }
             ListSortOrder.LONG_AGO_READ -> compareBy { context.row(it)?.lastReadAt ?: 0L }
             ListSortOrder.NEW_CHAPTERS -> compareByDescending<Long> { context.row(it)?.newChapters ?: 0 }

@@ -29,6 +29,9 @@ internal fun listSortOptions(orders: List<ListSortOrder>): List<ListSortOption> 
         ListSortOrder.PROGRESS, ListSortOrder.UNREAD -> ListSortOption(
             R.string.progress, ListSortOrder.UNREAD, ListSortOrder.PROGRESS,
         )
+        ListSortOrder.UNREAD_CHAPTERS, ListSortOrder.UNREAD_CHAPTERS_ASC -> ListSortOption(
+            R.string.chapters_left, ListSortOrder.UNREAD_CHAPTERS_ASC, ListSortOrder.UNREAD_CHAPTERS,
+        )
         ListSortOrder.LAST_READ, ListSortOrder.LONG_AGO_READ -> ListSortOption(
             R.string.sort_by_last_read, ListSortOrder.LONG_AGO_READ, ListSortOrder.LAST_READ,
         )

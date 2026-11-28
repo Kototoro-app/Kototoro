@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.favourites.domain.library
 
+import org.skepsun.kototoro.list.domain.ReadingProgress
 import org.skepsun.kototoro.parsers.model.ContentState
 import org.skepsun.kototoro.parsers.model.ContentType
 
@@ -54,7 +55,11 @@ data class FavouriteCardRow(
     val isPinned: Boolean,
     val createdAt: Long,
     val updatedAt: Long,
+    val cachedUnreadChapterCount: Int? = null,
 ) {
+    val unreadChapterCount: Int? =
+        cachedUnreadChapterCount ?: ReadingProgress.estimateUnreadChapters(progressPercent, progressTotalChapters)
+
     /** Display title after the entity-level manual override. */
     val resolvedTitle: String
         get() = overrideTitle?.takeIf { it.isNotBlank() } ?: title

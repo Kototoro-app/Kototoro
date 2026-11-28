@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.history.domain.library
 
+import org.skepsun.kototoro.list.domain.ReadingProgress
 import org.skepsun.kototoro.parsers.model.ContentState
 import org.skepsun.kototoro.parsers.model.ContentType
 
@@ -13,7 +14,7 @@ import org.skepsun.kototoro.parsers.model.ContentType
  * - identity, manga display fields, tracking summary, favourite/pinned
  *   membership, tags, local bindings, category memberships and the metadata
  *   authority are resolved once in SQL and folded here;
- * - no filtering and no ordering happened yet — the 10 sort orders, the
+ * - no filtering and no ordering happened yet — the sort orders, the
  *  SQL-equivalent filters, the space/tab filters, the fold and the group
  *   headers are derived in memory (Phase H3);
  * - nothing writes; a per-row failure never fails the flow.
@@ -95,4 +96,8 @@ data class HistoryCardEntry(
     val metadataTrackingCoverUrl: String?,
     val sourceGroupFlags: Int,
     val sourceOriginFlags: Int,
-)
+    val cachedUnreadChapterCount: Int? = null,
+) {
+    val unreadChapterCount: Int? =
+        cachedUnreadChapterCount ?: ReadingProgress.estimateUnreadChapters(percent, chaptersCount)
+}

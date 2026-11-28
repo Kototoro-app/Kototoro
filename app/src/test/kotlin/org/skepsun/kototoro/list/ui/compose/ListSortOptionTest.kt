@@ -5,9 +5,9 @@ import io.kotest.matchers.shouldBe
 import org.skepsun.kototoro.list.domain.ListSortOrder
 
 class ListSortOptionTest : FunSpec({
-    test("favorites exposes eight criteria while preserving every saved order") {
+    test("favorites exposes nine criteria while preserving every saved order") {
         val options = listSortOptions(ListSortOrder.FAVORITES.toList())
-        options.size shouldBe 8
+        options.size shouldBe 9
         ListSortOrder.FAVORITES.forEach { order ->
             val option = options.single { it.contains(order) }
             option.orderFor(option.descending == order) shouldBe order
@@ -16,7 +16,7 @@ class ListSortOptionTest : FunSpec({
 
     test("all favourites omits the manual criterion") {
         val options = listSortOptions(ListSortOrder.favourites(-1L))
-        options.size shouldBe 7
+        options.size shouldBe 8
         options.none { it.contains(ListSortOrder.MANUAL) } shouldBe true
         listSortOptions(ListSortOrder.favourites(1L)).single { it.contains(ListSortOrder.MANUAL) }
             .orderFor(false) shouldBe ListSortOrder.MANUAL
@@ -29,6 +29,14 @@ class ListSortOptionTest : FunSpec({
         options.single { it.contains(ListSortOrder.LAST_READ) }.orderFor(false) shouldBe ListSortOrder.LONG_AGO_READ
         options.single { it.contains(ListSortOrder.ALPHABETIC) }.orderFor(true) shouldBe
             ListSortOrder.ALPHABETIC_REVERSE
+    }
+
+    test("favourites and history offer both directions of remaining chapter count") {
+        for (orders in listOf(ListSortOrder.FAVORITES, ListSortOrder.HISTORY)) {
+            val option = listSortOptions(orders.toList()).single { it.contains(ListSortOrder.UNREAD_CHAPTERS) }
+            option.orderFor(false) shouldBe ListSortOrder.UNREAD_CHAPTERS_ASC
+            option.orderFor(true) shouldBe ListSortOrder.UNREAD_CHAPTERS
+        }
     }
 
     test("single direction criteria fall back to their supported order") {
