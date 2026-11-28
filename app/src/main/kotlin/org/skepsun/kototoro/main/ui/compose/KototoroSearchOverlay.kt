@@ -119,6 +119,7 @@ import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.model.ContentTag
 import org.skepsun.kototoro.search.domain.LocalEntitySuggestion
 import org.skepsun.kototoro.search.domain.ALL_SEARCH_CONTENT_KINDS
+import org.skepsun.kototoro.search.domain.SearchFilters
 import org.skepsun.kototoro.search.domain.ALL_SOURCE_TYPES
 import org.skepsun.kototoro.search.domain.AdvancedSearchParams
 import org.skepsun.kototoro.search.domain.SearchContentKind
@@ -239,7 +240,6 @@ fun KototoroSearchOverlay(
     onSourceToggle: (ContentSource, Boolean) -> Unit,
     onAuthorSuggestionClick: (String) -> Unit,
     onDeleteQuery: (String) -> Unit,
-    onLanguagePresetSelected: (Long) -> Unit,
     onManageLanguagePresets: () -> Unit,
     onOpenGlobalTagBlacklist: () -> Unit,
     onVoiceInput: () -> Unit,
@@ -266,8 +266,14 @@ fun KototoroSearchOverlay(
     var showAdvanced by remember { mutableStateOf(initialSearchKind == SearchKind.ADVANCED) }
     var selectedSourceTypes by remember(initialSourceTypes) { mutableStateOf(initialSourceTypes.ifEmpty { ALL_SOURCE_TYPES }) }
     var selectedContentKinds by remember(initialContentKinds) { mutableStateOf(initialContentKinds.ifEmpty { ALL_SEARCH_CONTENT_KINDS }) }
-    var pinnedOnly by remember { mutableStateOf(false) }
-    var hideEmpty by remember { mutableStateOf(appSettings.isSearchHideEmptySourcesEnabled) }
+    // Tier 2: the overlay edits the same persisted search scope as the results screen, and never the global
+    // browsing preset, so opening search from anywhere starts from the filters the user last applied to search.
+    val storedSearchScope = remember { appSettings.searchScopePrefs.loadOrNull() }
+    var pinnedOnly by remember { mutableStateOf(storedSearchScope?.pinnedOnly == true) }
+    var hideEmpty by remember { mutableStateOf(storedSearchScope?.hideEmpty == true) }
+    var languagePresetId by remember {
+        mutableStateOf(storedSearchScope?.languagePresetId ?: SearchFilters.PRESET_FOLLOW_GLOBAL)
+    }
     var advancedTitle by remember { mutableStateOf("") }
     var advancedTags by remember { mutableStateOf("") }
     var advancedAuthor by remember { mutableStateOf("") }
@@ -337,11 +343,16 @@ fun KototoroSearchOverlay(
         ).takeIf {
             kind == SearchKind.ADVANCED && (it.title.isNotBlank() || it.tags.isNotBlank() || it.author.isNotBlank())
         }
-        // The choice is remembered for the next search screen; store it here too, so turning it off in this
-        // sheet wins over the remembered value instead of being re-enabled when the results screen opens.
-        if (appSettings.isSearchHideEmptySourcesEnabled != hideEmpty) {
-            appSettings.isSearchHideEmptySourcesEnabled = hideEmpty
-        }
+        // Persist to the search scope only (tier 2): the global browsing preset is owned by Explore/Home/top bar.
+        appSettings.searchScopePrefs.save(
+            SearchFilters(
+                sourceTypes = selectedSourceTypes,
+                contentKinds = selectedContentKinds,
+                pinnedOnly = pinnedOnly,
+                hideEmpty = hideEmpty,
+                languagePresetId = languagePresetId,
+            ),
+        )
         onSearchWithOptions(
             searchQuery,
             kind,
@@ -548,7 +559,7 @@ fun KototoroSearchOverlay(
                     onAdvancedClick = { showAdvanced = !showAdvanced },
                     hasActiveFilters = selectedSourceTypes.size < ALL_SOURCE_TYPES.size ||
                         selectedContentKinds.size < ALL_SEARCH_CONTENT_KINDS.size || pinnedOnly || hideEmpty ||
-                        activeLanguagePresetId > 0L,
+                        languagePresetId != SearchFilters.PRESET_FOLLOW_GLOBAL || activeLanguagePresetId > 0L,
                     onFiltersClick = {
                         keyboardController?.hide()
                         showFilterSheet = true
@@ -629,14 +640,16 @@ fun KototoroSearchOverlay(
             pinnedOnly = pinnedOnly,
             hideEmpty = hideEmpty,
             languagePresets = languagePresets,
-            activeLanguagePresetId = activeLanguagePresetId,
+            activeLanguagePresetId = languagePresetId,
+            resolvedLanguagePresetId = activeLanguagePresetId,
             blacklistedTagCount = blacklistedTagCount,
             onApply = { filters ->
                 selectedSourceTypes = filters.sourceTypes
                 selectedContentKinds = filters.contentKinds
                 pinnedOnly = filters.pinnedOnly
                 hideEmpty = filters.hideEmpty
-                onLanguagePresetSelected(filters.languagePresetId)
+                languagePresetId = filters.languagePresetId
+                appSettings.searchScopePrefs.save(filters)
             },
             onManageLanguagePresets = onManageLanguagePresets,
             onOpenGlobalTagBlacklist = onOpenGlobalTagBlacklist,

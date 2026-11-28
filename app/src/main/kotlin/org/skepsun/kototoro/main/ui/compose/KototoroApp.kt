@@ -1704,7 +1704,6 @@ fun KototoroApp(
                             chromeState.setSearchOverlayVisible(false)
                         },
                         onDismissRequest = { chromeState.setSearchOverlayVisible(false) },
-                        onLanguagePresetSelected = onLanguagePresetSelected,
                         onManageLanguagePresets = onManageLanguagePresets,
                         onOpenGlobalTagBlacklist = {
                             onGlobalTagBlacklistClick()

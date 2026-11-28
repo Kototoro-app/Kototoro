@@ -214,6 +214,7 @@ fun ReadingSourceSheet(
     hasSearched: Boolean,
     scopeFilterUiState: org.skepsun.kototoro.details.ui.ReadingSearchScopeFilterUiState,
     languagePresets: List<SourcePreset>,
+    /** The global browsing preset, used only to resolve what the panel highlights while it still follows it. */
     activeLanguagePresetId: Long,
     currentContent: Content?,
     unavailableText: String,
@@ -223,7 +224,8 @@ fun ReadingSourceSheet(
     onDismissRequest: () -> Unit,
     onSearchQueryChange: (String) -> Unit,
     onSearch: () -> Unit,
-    onLanguagePresetSelected: (Long) -> Unit,
+    /** Pins a preset for this panel only; null follows the global browsing preset. Never persisted. */
+    onLanguagePresetSelected: (Long?) -> Unit,
     onManageLanguagePresets: () -> Unit,
     onSourceTypeToggle: (org.skepsun.kototoro.core.jsonsource.SourceType) -> Unit,
     onContentKindToggle: (org.skepsun.kototoro.search.domain.SearchContentKind) -> Unit,
@@ -557,8 +559,11 @@ fun ReadingSourceSheet(
             pinnedOnly = scopeFilterUiState.pinnedOnly,
             hideEmpty = scopeFilterUiState.hideEmpty,
             languagePresets = languagePresets,
-            activeLanguagePresetId = activeLanguagePresetId,
+            // The panel edits this work's own scope (tier 3): a null local preset follows the global browsing one.
+            activeLanguagePresetId = scopeFilterUiState.languagePresetId,
+            resolvedLanguagePresetId = activeLanguagePresetId,
             blacklistedTagCount = blacklistedTagCount,
+            temporaryScope = true,
             onApply = { filters ->
                 (filters.sourceTypes - scopeFilterUiState.sourceTypes).forEach(onSourceTypeToggle)
                 (scopeFilterUiState.sourceTypes - filters.sourceTypes).forEach(onSourceTypeToggle)

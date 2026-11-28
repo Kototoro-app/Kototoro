@@ -371,7 +371,9 @@ fun SearchResultsRoute(
                     selectedContentKinds = selectedContentKinds,
                     pinnedOnly = pinnedOnly,
                     hideEmpty = hideEmpty,
-                    languagePresetTitle = languagePresets.firstOrNull { it.id == filters.languagePresetId }?.title,
+                    languagePresetTitle = languagePresets
+                        .firstOrNull { it.id == filters.resolveLanguagePresetId(activeLanguagePresetId) }
+                        ?.title,
                     isAdvancedExpanded = isAdvancedExpanded,
                     onAdvancedExpandedChange = { isAdvancedExpanded = it },
                     advancedTitle = advancedTitle,
@@ -537,7 +539,10 @@ fun SearchResultsRoute(
             pinnedOnly = pinnedOnly,
             hideEmpty = hideEmpty,
             languagePresets = languagePresets,
-            activeLanguagePresetId = activeLanguagePresetId,
+            // The draft edits the search scope (tier 2), never the global browsing preset; the global one only
+            // resolves what a still-following scope highlights.
+            activeLanguagePresetId = filters.languagePresetId,
+            resolvedLanguagePresetId = activeLanguagePresetId,
             blacklistedTagCount = globalTagBlacklist.size,
             onApply = viewModel::applyFilters,
             onManageLanguagePresets = onManageLanguagePresets,

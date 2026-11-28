@@ -107,16 +107,21 @@ class SearchViewModel @AssistedInject constructor(
         )
     } else null
 
+    // Tier 2: the search scope is persisted separately from the global browsing preset, so applying filters here
+    // never reassigns AppSettings.activeSourcePresetId (which Explore, Home, the top bar and Space switching own).
+    private val storedSearchScope: SearchFilters? = appSettings.searchScopePrefs.loadOrNull()
+
     private val _filters = MutableStateFlow(
         SearchFilters(
             sourceTypes = sourceTypesFromNames(sourceTypeNames)
+                ?: storedSearchScope?.sourceTypes
                 ?: sourceTypesFromTags(globalFavoritesState.selectedSourceTags.value),
-            contentKinds = searchContentKindsFromNames(contentKindNames) ?: ALL_SEARCH_CONTENT_KINDS,
-            pinnedOnly = initialPinnedOnly,
-            // "Hide empty sources" is remembered across searches: callers that open the search screen without a
-            // scope never pass it, so the stored preference is the fallback that keeps the user's last choice.
-            hideEmpty = initialHideEmpty || appSettings.isSearchHideEmptySourcesEnabled,
-            languagePresetId = appSettings.activeSourcePresetId,
+            contentKinds = searchContentKindsFromNames(contentKindNames)
+                ?: storedSearchScope?.contentKinds
+                ?: ALL_SEARCH_CONTENT_KINDS,
+            pinnedOnly = initialPinnedOnly || (storedSearchScope?.pinnedOnly == true),
+            hideEmpty = initialHideEmpty || (storedSearchScope?.hideEmpty == true),
+            languagePresetId = storedSearchScope?.languagePresetId ?: SearchFilters.PRESET_FOLLOW_GLOBAL,
         ).normalized(),
     )
     val filters = _filters.asStateFlow()
@@ -196,16 +201,10 @@ class SearchViewModel @AssistedInject constructor(
     fun applyFilters(filters: SearchFilters) {
         val normalized = filters.normalized()
         val previous = _filters.value
-        val currentPresetId = appSettings.activeSourcePresetId.takeIf { it > 0L } ?: -1L
-        val scopeChanged = !previous.hasSameSearchScope(normalized) ||
-            currentPresetId != normalized.languagePresetId
+        val scopeChanged = !previous.hasSameSearchScope(normalized)
         _filters.value = normalized
-        if (currentPresetId != normalized.languagePresetId) {
-            appSettings.activeSourcePresetId = normalized.languagePresetId
-        }
-        if (appSettings.isSearchHideEmptySourcesEnabled != normalized.hideEmpty) {
-            appSettings.isSearchHideEmptySourcesEnabled = normalized.hideEmpty
-        }
+        // Persist to the search scope only: the global browsing preset stays untouched.
+        appSettings.searchScopePrefs.save(normalized)
         if (scopeChanged) doSearch()
     }
 
@@ -316,8 +315,13 @@ class SearchViewModel @AssistedInject constructor(
             },
         )
 
-    private fun currentFilters(): SearchFilters =
-        filters.value.copy(languagePresetId = appSettings.activeSourcePresetId).normalized()
+    /**
+     * The filters to search with. A pinned search preset (an explicit "All" or a concrete preset) wins over the global
+     * browsing preset; [SearchFilters.PRESET_FOLLOW_GLOBAL] resolves to it on every call.
+     */
+    private fun currentFilters(): SearchFilters = filters.value.copy(
+        languagePresetId = filters.value.resolveLanguagePresetId(appSettings.activeSourcePresetId),
+    ).normalized()
 
     private suspend fun resolveSources(filters: SearchFilters, includeDisabled: Boolean): List<ContentSource> {
         val sources = when {

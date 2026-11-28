@@ -153,6 +153,7 @@ import org.skepsun.kototoro.filter.ui.model.UiTagGroup
 import org.skepsun.kototoro.search.domain.ALL_SEARCH_CONTENT_KINDS
 import org.skepsun.kototoro.search.domain.ALL_SOURCE_TYPES
 import org.skepsun.kototoro.search.domain.SearchContentKind
+import org.skepsun.kototoro.search.domain.SearchFilters
 import org.skepsun.kototoro.search.domain.matches
 import org.skepsun.kototoro.space.domain.SpaceContentPolicy
 import org.skepsun.kototoro.space.domain.SpaceId
@@ -541,9 +542,9 @@ class DetailsViewModel @Inject constructor(
     /** The content kinds last chosen for the reading search by the work's kind rather than by hand. */
     private var appliedDefaultReadingSearchKinds: Set<SearchContentKind>? = null
     private val readingSearchScopeFilters = MutableStateFlow(
-        // Shares the remembered choice with the search screen, so "hide empty sources" does not have to be
-        // ticked again in every source search.
-        ReadingSearchScopeFilterUiState(hideEmpty = settings.isSearchHideEmptySourcesEnabled),
+        // Tier 3: this panel's own scope. Deliberately not seeded from the persisted search scope nor from the
+        // global "hide empty" switch: switching source while reading a work must not read or write search state.
+        ReadingSearchScopeFilterUiState(),
     )
     private val readingSearchPrimaryUiState = combine(
         readingSearchSources,
@@ -631,11 +632,19 @@ class DetailsViewModel @Inject constructor(
     private var allEnabledSourcesByName: Map<String, org.skepsun.kototoro.parsers.model.ContentSource> = emptyMap()
     @Volatile
     private var lastTranslateVisibilityRequest: TranslateVisibilityRequest? = null
-    private val activeSourcePreset = settings.observeAsFlow(
-        AppSettings.KEY_ACTIVE_SOURCE_PRESET_ID,
-    ) {
-        activeSourcePresetId
-    }.mapLatest { presetId ->
+    /**
+     * The preset that narrows the reading-source panel: a preset pinned in this panel ([ReadingSearchScopeFilterUiState.
+     * languagePresetId]) wins, otherwise the global browsing preset applies. Only read, never written.
+     */
+    private val effectiveReadingSearchPresetId: Flow<Long> = combine(
+        settings.observeAsFlow(AppSettings.KEY_ACTIVE_SOURCE_PRESET_ID) {
+            activeSourcePresetId
+        },
+        readingSearchScopeFilters.map { it.languagePresetId },
+    ) { globalPresetId, localPresetId ->
+        localPresetId ?: globalPresetId
+    }.distinctUntilChanged()
+    private val activeSourcePreset = effectiveReadingSearchPresetId.mapLatest { presetId ->
         if (presetId > 0L) {
             sourcePresetsRepository.getById(presetId)
         } else {
@@ -3183,42 +3192,28 @@ class DetailsViewModel @Inject constructor(
     }
 
     fun toggleReadingSearchSourceType(type: SourceType) {
-        readingSearchScopeFilters.update { current ->
-            val updated = current.sourceTypes.toMutableSet().apply {
-                if (!add(type)) {
-                    remove(type)
-                }
-            }.ifEmpty { ALL_SOURCE_TYPES }
-            current.copy(sourceTypes = updated)
-        }
+        readingSearchScopeFilters.update { it.withSourceTypeToggled(type) }
     }
 
     fun toggleReadingSearchContentKind(kind: SearchContentKind) {
-        readingSearchScopeFilters.update { current ->
-            val updated = current.contentKinds.toMutableSet().apply {
-                if (!add(kind)) {
-                    remove(kind)
-                }
-            }.ifEmpty { ALL_SEARCH_CONTENT_KINDS }
-            current.copy(contentKinds = updated)
-        }
+        readingSearchScopeFilters.update { it.withContentKindToggled(kind) }
     }
 
     fun setReadingSearchPinnedOnly(enabled: Boolean) {
-        readingSearchScopeFilters.update { it.copy(pinnedOnly = enabled) }
+        readingSearchScopeFilters.update { it.withPinnedOnly(enabled) }
     }
 
     fun setReadingSearchHideEmpty(enabled: Boolean) {
-        readingSearchScopeFilters.update { it.copy(hideEmpty = enabled) }
-        if (settings.isSearchHideEmptySourcesEnabled != enabled) {
-            settings.isSearchHideEmptySourcesEnabled = enabled
-        }
+        // Local to this panel only: the persisted search scope keeps its own "hide empty" choice.
+        readingSearchScopeFilters.update { it.withHideEmpty(enabled) }
     }
 
-    fun setActiveLanguagePreset(presetId: Long) {
-        if (settings.activeSourcePresetId != presetId) {
-            settings.activeSourcePresetId = presetId
-        }
+    /**
+     * Pins a language preset for the reading-source panel of this work only. [SearchFilters.PRESET_FOLLOW_GLOBAL]
+     * (or null) returns to following the global browsing preset. The global setting is never written.
+     */
+    fun setActiveLanguagePreset(presetId: Long?) {
+        readingSearchScopeFilters.update { it.withLanguagePreset(presetId) }
     }
 
     fun setReadingSearchSortOrder(sortOrder: SortOrder) {

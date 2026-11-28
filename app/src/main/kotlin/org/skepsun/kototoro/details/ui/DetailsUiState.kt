@@ -104,6 +104,12 @@ data class ReadingSearchScopeFilterUiState(
     val contentKinds: Set<SearchContentKind> = ALL_SEARCH_CONTENT_KINDS,
     val pinnedOnly: Boolean = false,
     val hideEmpty: Boolean = false,
+    /**
+     * Tier 3 of the filter state: null follows the global browsing preset for as long as the user has not picked a
+     * preset here; [org.skepsun.kototoro.search.domain.SearchFilters.PRESET_ALL] is an explicit "All" for this panel
+     * and a positive id a preset the user pinned for this panel only. Never persisted and never written back globally.
+     */
+    val languagePresetId: Long? = null,
 ) {
     val appliedFilterCount: Int
         get() {
@@ -112,8 +118,47 @@ data class ReadingSearchScopeFilterUiState(
             if (contentKinds != ALL_SEARCH_CONTENT_KINDS) count++
             if (pinnedOnly) count++
             if (hideEmpty) count++
+            if (languagePresetId != null) count++
             return count
         }
+
+    /** The preset that actually narrows the sources, given the global browsing preset this panel may still follow. */
+    fun resolveLanguagePresetId(globalPresetId: Long): Long = languagePresetId ?: globalPresetId
+
+    /**
+     * Every mutation below is local by construction: the panel's state is a value, and nothing here can reach
+     * `AppSettings` or the persisted search scope, which is what keeps switching source on the detail page from
+     * rewriting the search page's filters.
+     */
+    fun withSourceTypeToggled(type: SourceType): ReadingSearchScopeFilterUiState {
+        val updated = sourceTypes.toMutableSet().apply {
+            if (!add(type)) remove(type)
+        }.ifEmpty { ALL_SOURCE_TYPES }
+        return copy(sourceTypes = updated)
+    }
+
+    fun withContentKindToggled(kind: SearchContentKind): ReadingSearchScopeFilterUiState {
+        val updated = contentKinds.toMutableSet().apply {
+            if (!add(kind)) remove(kind)
+        }.ifEmpty { ALL_SEARCH_CONTENT_KINDS }
+        return copy(contentKinds = updated)
+    }
+
+    fun withPinnedOnly(enabled: Boolean): ReadingSearchScopeFilterUiState = copy(pinnedOnly = enabled)
+
+    fun withHideEmpty(enabled: Boolean): ReadingSearchScopeFilterUiState = copy(hideEmpty = enabled)
+
+    /**
+     * Pins a preset for this panel. [org.skepsun.kototoro.search.domain.SearchFilters.PRESET_FOLLOW_GLOBAL] and null
+     * both mean "follow the global browsing preset again".
+     */
+    fun withLanguagePreset(presetId: Long?): ReadingSearchScopeFilterUiState {
+        val localPresetId = when (presetId) {
+            null, org.skepsun.kototoro.search.domain.SearchFilters.PRESET_FOLLOW_GLOBAL -> null
+            else -> presetId
+        }
+        return if (languagePresetId == localPresetId) this else copy(languagePresetId = localPresetId)
+    }
 }
 
 data class SourceBindingUiState(

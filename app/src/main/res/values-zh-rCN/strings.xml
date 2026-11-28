@@ -2949,6 +2949,11 @@
     <string name="fraction_pattern">%1$d/%2$d</string>
     <string name="frequency_every_6_hours">每 6 小时</string>
     <string name="hide_empty_sources">隐藏空源</string>
+    <string name="search_filter_default">默认</string>
+    <string name="search_filter_temporary_scope">仅当前作品</string>
+    <string name="search_filter_selected_of_total">%1$d/%2$d</string>
+    <string name="search_filter_pinned_only_hint">仅在固定源中搜索</string>
+    <string name="search_filter_hide_empty_hint">跳过没有结果的源</string>
     <string name="source_mark_empty">标记为空</string>
     <string name="source_mark_available">标记为可用</string>
     <string name="source_test_availability_filter_title">测试可用性</string>
