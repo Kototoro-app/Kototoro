@@ -386,7 +386,8 @@ fun ExploreSelectionTopBar(
             }
         }
         Text(
-            text = stringResource(R.string.selected_count, selectedCount),
+            // The bare count: the capped title width truncated "已选择 N" before the number.
+            text = selectedCount.toString(),
             style = MaterialTheme.typography.titleLarge,
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1,

@@ -959,6 +959,9 @@ internal fun BrowseTopLevelRouteContent(
         )
     }
 
+    // Read during composition: a read inside SideEffect does not subscribe, and the pager's own read sits in a
+    // child scope, so a long-press selection would never re-report the top bar.
+    val currentSourceSelectionTopBarState = sourceSelectionTopBarState
     SideEffect {
         onExploreSourceSelectionTopBarChanged(
             RouteScopedTopBarOverrideState(
@@ -966,7 +969,7 @@ internal fun BrowseTopLevelRouteContent(
                 state = LayeredTopBarOverrideState(
                     segmentedSwitcherState = segmentedSwitcherState,
                     contextualOverrideState = if (selectedExplorePage == org.skepsun.kototoro.core.prefs.ExplorePage.SOURCES) {
-                        sourceSelectionTopBarState
+                        currentSourceSelectionTopBarState
                     } else {
                         feedSelectionTopBarState
                     },
