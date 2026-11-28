@@ -5,8 +5,36 @@ import androidx.compose.ui.unit.dp
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.floats.shouldBeGreaterThan
 import org.junit.jupiter.api.Test
+import org.skepsun.kototoro.core.prefs.InterfaceStyle
 
 class GlassSurfacePolicyTest {
+
+    @Test
+    fun `content overlay uses the material route when live backdrop is unavailable`() {
+        contentOverlayRoute() shouldBe GlassSurfaceRoute.Live
+        contentOverlayRoute(interfaceStyle = InterfaceStyle.MATERIAL_3_EXPRESSIVE) shouldBe GlassSurfaceRoute.Material
+        contentOverlayRoute(glassEnabled = false) shouldBe GlassSurfaceRoute.Material
+        contentOverlayRoute(reducedEffects = true) shouldBe GlassSurfaceRoute.Material
+        contentOverlayRoute(hasBackdrop = false) shouldBe GlassSurfaceRoute.Material
+        contentOverlayRoute(dialogSurface = true) shouldBe GlassSurfaceRoute.Material
+    }
+
+    @Test
+    fun `content overlay uses the stable route when its effective tuning disables glass`() {
+        val tuning = emptyGlassTuningState().withValues(
+            mapOf((GlassTuningScope.GLOBAL to GlassTuningParam.GLASS_ENABLED) to 0f),
+        )
+
+        contentOverlayRoute(tuning = tuning) shouldBe GlassSurfaceRoute.Stable
+        contentOverlayRoute(glassEnabled = false, tuning = tuning) shouldBe GlassSurfaceRoute.Material
+    }
+
+    @Test
+    fun `glass route respects amoled backdrop eligibility by role`() {
+        contentOverlayRoute(amoledCanvas = true) shouldBe GlassSurfaceRoute.Live
+        contentOverlayRoute(amoledCanvas = true, componentRole = GlassComponentRole.Surface) shouldBe
+            GlassSurfaceRoute.Material
+    }
 
     @Test
     fun `navigation chrome keeps backdrop on amoled canvas`() {
@@ -153,4 +181,23 @@ class GlassSurfacePolicyTest {
             flat = false,
         ) shouldBe 0.dp
     }
+
+    private fun contentOverlayRoute(
+        interfaceStyle: InterfaceStyle = InterfaceStyle.IOS,
+        glassEnabled: Boolean = true,
+        reducedEffects: Boolean = false,
+        hasBackdrop: Boolean = true,
+        amoledCanvas: Boolean = false,
+        componentRole: GlassComponentRole = GlassComponentRole.ContentOverlay,
+        dialogSurface: Boolean = false,
+        tuning: GlassTuningState = emptyGlassTuningState(),
+    ): GlassSurfaceRoute = resolveGlassSurfaceRoute(
+        interfaceStyle = interfaceStyle,
+        prefs = GlassPrefs(glassEnabled, reducedEffects, immersiveStrengthPercent = 0),
+        hasBackdrop = hasBackdrop,
+        amoledCanvas = amoledCanvas,
+        componentRole = componentRole,
+        dialogSurface = dialogSurface,
+        tuning = tuning,
+    )
 }

@@ -158,6 +158,7 @@ import org.skepsun.kototoro.favourites.ui.categories.select.compose.FavoriteCate
 import org.skepsun.kototoro.main.ui.compose.TopBarControlSurface
 import org.skepsun.kototoro.stats.ui.sheet.ContentStatsViewModel
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingStatus
+import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import kotlinx.coroutines.CancellationException
@@ -187,6 +188,9 @@ internal fun DetailsScrollableContent(
     translatedTitle: String?,
     translatedDescription: String?,
     isShowingTranslation: Boolean,
+    panoramaEnabled: Boolean,
+    showSummaryCards: Boolean,
+    summaryCardBackdrop: Backdrop?,
     settings: org.skepsun.kototoro.core.prefs.AppSettings,
     collapseProgressProvider: () -> Float,
     coverVisualAlphaProvider: () -> Float,
@@ -320,7 +324,9 @@ internal fun DetailsScrollableContent(
             translatedTitle = translatedTitle,
             translatedDescription = translatedDescription,
             isShowingTranslation = isShowingTranslation,
-            panoramaEnabled = settings.isPanoramaCoverEnabled,
+            panoramaEnabled = panoramaEnabled,
+            showSummaryCards = showSummaryCards,
+            summaryCardBackdrop = summaryCardBackdrop,
             settings = settings,
             collapseProgressProvider = collapseProgressProvider,
             coverVisualAlphaProvider = coverVisualAlphaProvider,

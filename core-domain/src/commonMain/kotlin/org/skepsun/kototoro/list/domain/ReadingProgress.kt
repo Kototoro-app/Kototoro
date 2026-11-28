@@ -7,6 +7,7 @@ import org.skepsun.kototoro.core.prefs.ProgressIndicatorMode.NONE
 import org.skepsun.kototoro.core.prefs.ProgressIndicatorMode.PERCENT_LEFT
 import org.skepsun.kototoro.core.prefs.ProgressIndicatorMode.PERCENT_READ
 import kotlin.math.ceil
+import kotlin.math.roundToInt
 
 data class ReadingProgress(
     val percent: Float,
@@ -44,7 +45,7 @@ data class ReadingProgress(
         /** Repository/card progress snaps completed histories to one before validation. */
         fun fromHistory(percent: Float, totalChapters: Int, mode: ProgressIndicatorMode): ReadingProgress? =
             ReadingProgress(
-                percent = if (isCompleted(percent)) PROGRESS_COMPLETED else percent,
+                percent = normalizeCompleted(percent),
                 totalChapters = totalChapters,
                 mode = mode,
             ).takeIf { it.isValid() }
@@ -53,10 +54,18 @@ data class ReadingProgress(
 
         fun isCompleted(percent: Float) = isReadingCompleted(percent)
 
-        fun percentToString(percent: Float): String = if (isValid(percent)) {
-            if (isCompleted(percent)) "100" else (percent * 100f).toInt().toString()
-        } else {
-            "0"
+        fun normalizeCompleted(percent: Float): Float =
+            if (isCompleted(percent)) PROGRESS_COMPLETED else percent
+
+        fun percentToString(percent: Float): String {
+            if (!isValid(percent)) return "0"
+            if (isCompleted(percent)) return "100"
+
+            // Compare in the original fraction space so multiplication cannot shift an exact
+            // whole percentage (such as 0.53f) or its neighboring Float across the boundary.
+            val nearest = (percent * 100f).roundToInt()
+            val wholePercent = if (percent < nearest / 100f) nearest - 1 else nearest
+            return wholePercent.toString()
         }
     }
 }

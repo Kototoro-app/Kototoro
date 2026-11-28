@@ -125,6 +125,54 @@ object GlassDefaults {
     }
 }
 
+internal enum class GlassSurfaceRoute {
+    Material,
+    Stable,
+    Live,
+}
+
+internal fun resolveGlassSurfaceRoute(
+    interfaceStyle: InterfaceStyle,
+    prefs: GlassPrefs,
+    hasBackdrop: Boolean,
+    amoledCanvas: Boolean,
+    componentRole: GlassComponentRole,
+    dialogSurface: Boolean,
+    tuning: GlassTuningState,
+): GlassSurfaceRoute {
+    if (interfaceStyle != InterfaceStyle.IOS ||
+        !prefs.isGlassEffectEnabled ||
+        prefs.isReducedVisualEffectsEnabled ||
+        !hasBackdrop ||
+        dialogSurface ||
+        (amoledCanvas && !componentRole.allowsAmoledBackdrop())
+    ) {
+        return GlassSurfaceRoute.Material
+    }
+    val tuningScope = GlassTuningScope.fromRole(componentRole)
+    return if (tuning.isOn(tuningScope, GlassTuningParam.GLASS_ENABLED)) {
+        GlassSurfaceRoute.Live
+    } else {
+        GlassSurfaceRoute.Stable
+    }
+}
+
+@Composable
+internal fun currentGlassSurfaceRoute(
+    backdrop: Backdrop?,
+    componentRole: GlassComponentRole,
+    dialogSurface: Boolean = false,
+    tuning: GlassTuningState = LocalGlassTuning.current ?: remember { emptyGlassTuningState() },
+): GlassSurfaceRoute = resolveGlassSurfaceRoute(
+    interfaceStyle = LocalInterfaceStyle.current,
+    prefs = rememberGlassPrefsOrFallback(),
+    hasBackdrop = backdrop != null,
+    amoledCanvas = LocalAmoledTheme.current,
+    componentRole = componentRole,
+    dialogSurface = dialogSurface,
+    tuning = tuning,
+)
+
 /**
  * Shared control surface.
  *
@@ -150,11 +198,12 @@ fun GlassSurface(
 ) {
     val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
     val backdrop = backdropOverride ?: LocalLiquidGlassBackdrop.current
-    val glassEnabled = rememberGlassPrefsOrFallback().isGlassEffectEnabled
-    val amoledCanvas = LocalAmoledTheme.current
-    val allowsBackdrop = !amoledCanvas || componentRole.allowsAmoledBackdrop()
-    if (isIosStyle && glassEnabled && backdrop != null && !dialogSurface && allowsBackdrop) {
-        LiquidGlassSurface(
+    val tuning = LocalGlassTuning.current ?: remember { emptyGlassTuningState() }
+    val route = currentGlassSurfaceRoute(backdrop, componentRole, dialogSurface, tuning)
+    if (backdrop != null && route == GlassSurfaceRoute.Live) {
+        SharedLiquidGlassSurface(
+            backdrop = backdrop,
+            tuning = tuning,
             modifier = modifier,
             style = style,
             shape = shape,
@@ -162,10 +211,13 @@ fun GlassSurface(
             highlightOnIdle = highlightOnIdle,
             lensEnabled = lensEnabled,
             pressFeedbackEnabled = pressFeedbackEnabled,
-            backdropOverride = backdrop,
             exportedBackdrop = exportedBackdrop,
             content = content,
         )
+        return
+    }
+    if (route == GlassSurfaceRoute.Stable) {
+        StableGlassFallback(modifier, style, shape, content)
         return
     }
 
@@ -254,20 +306,11 @@ fun LiquidGlassSurface(
     content: @Composable BoxScope.() -> Unit,
 ) {
     val backdrop = backdropOverride ?: LocalLiquidGlassBackdrop.current
-    val glassEnabled = rememberGlassPrefsOrFallback().isGlassEffectEnabled
-    val amoledCanvas = LocalAmoledTheme.current
-    val allowsBackdrop = !amoledCanvas || componentRole.allowsAmoledBackdrop()
     // Glass Finish Tuner (ADR 0001): resolve every drawer parameter from the
     // per-role scope. The state falls back to exact legacy values when nothing
     // has been tuned, so an untouched install renders pixel-identically.
-    val tuning = LocalGlassTuning.current ?: emptyGlassTuningState()
-    val tuningScope = GlassTuningScope.fromRole(componentRole)
-    if (LocalInterfaceStyle.current != InterfaceStyle.IOS ||
-        !glassEnabled ||
-        backdrop == null ||
-        !allowsBackdrop ||
-        !tuning.isOn(tuningScope, GlassTuningParam.GLASS_ENABLED)
-    ) {
+    val tuning = LocalGlassTuning.current ?: remember { emptyGlassTuningState() }
+    if (backdrop == null || currentGlassSurfaceRoute(backdrop, componentRole, tuning = tuning) != GlassSurfaceRoute.Live) {
         StableGlassFallback(
             modifier = modifier,
             style = style,

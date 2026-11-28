@@ -127,6 +127,7 @@ import org.skepsun.kototoro.core.ui.glass.GlassTuningParam
 import org.skepsun.kototoro.core.ui.glass.GlassTuningScope
 import org.skepsun.kototoro.core.ui.glass.LocalGlassPrefs
 import org.skepsun.kototoro.core.ui.glass.LocalGlassTuning
+import org.skepsun.kototoro.core.ui.glass.currentGlassSurfaceRoute
 import org.skepsun.kototoro.core.ui.glass.emptyGlassTuningState
 import org.skepsun.kototoro.core.ui.glass.rememberGlassPrefsOrFallback
 import org.skepsun.kototoro.core.ui.theme.CoverDominantColor
@@ -1086,6 +1087,8 @@ private fun DetailsScreenContent(
     val showSummaryCards by settings.observeAsState(AppSettings.KEY_DETAILS_SUMMARY_CARDS) {
         isDetailsSummaryCardsEnabled
     }
+    val hasPanoramaSource = currentPanoramaCoverUrl != null || sharedElementKey != null
+    val summaryCardBackdrop = detailsBackgroundBackdrop.takeIf { panoramaPrefs.isEnabled && hasPanoramaSource }
     val detailsContentBackdrop = if (captureSummary) rememberLayerBackdrop() else null
     // The compact dock floats over the scrolling content, so its glass samples that content as well as the background.
     val detailsDockBackdrop = if (detailsBackgroundBackdrop != null && detailsContentBackdrop != null) {
@@ -1200,7 +1203,7 @@ private fun DetailsScreenContent(
                         .background(detailsBackgroundColor),
                 )
                 if (panoramaPrefs.isEnabled) {
-                    if (currentPanoramaCoverUrl != null || sharedElementKey != null) {
+                    if (hasPanoramaSource) {
                         val panoramaPlaceholderCacheKey = remember(content?.source?.name, content?.url, normalizedFallbackCoverUrl) {
                             sharedCoverMemoryCacheKey(
                                 sourceName = content?.source?.name,
@@ -1524,22 +1527,23 @@ private fun DetailsScreenContent(
                                         ),
                                     indicatorTopInset = paddingValues,
                                 ) {
+                                    val cacheSummary = shouldCacheWideSummary(
+                                        hasContentBackdrop = detailsContentBackdrop != null,
+                                        showSummaryCards = showSummaryCards,
+                                        glassRoute = currentGlassSurfaceRoute(summaryCardBackdrop, DetailsSummaryGlassRole),
+                                    )
                                     DetailsScrollableContent(
                                         modifier = Modifier
                                             .fillMaxSize()
-                                            .graphicsLayer {
-                                                compositingStrategy = if (
-                                                    shouldCacheWideSummary(
-                                                        hasContentBackdrop = detailsContentBackdrop != null,
-                                                        showSummaryCards = showSummaryCards,
-                                                        panoramaEnabled = panoramaPrefs.isEnabled,
-                                                    )
-                                                ) {
-                                                    CompositingStrategy.Offscreen
+                                            .then(
+                                                if (cacheSummary) {
+                                                    Modifier.graphicsLayer {
+                                                        compositingStrategy = CompositingStrategy.Offscreen
+                                                    }
                                                 } else {
-                                                    CompositingStrategy.Auto
-                                                }
-                                            },
+                                                    Modifier
+                                                },
+                                            ),
                                         scrollState = landscapeLeftScrollState,
                                         contentPadding = summaryPadding,
                                         outerHorizontalPadding = 0.dp,
@@ -1568,6 +1572,9 @@ private fun DetailsScreenContent(
                                         translatedTitle = translatedTitle,
                                         translatedDescription = translatedDescription,
                                         isShowingTranslation = isShowingTranslation,
+                                        panoramaEnabled = panoramaPrefs.isEnabled,
+                                        showSummaryCards = showSummaryCards,
+                                        summaryCardBackdrop = summaryCardBackdrop,
                                         settings = settings,
                                         collapseProgressProvider = remember { { 0f } },
                                         coverVisualAlphaProvider = remember { { 1f } },
@@ -1794,6 +1801,9 @@ private fun DetailsScreenContent(
                                 translatedTitle = translatedTitle,
                                 translatedDescription = translatedDescription,
                                 isShowingTranslation = isShowingTranslation,
+                                panoramaEnabled = panoramaPrefs.isEnabled,
+                                showSummaryCards = showSummaryCards,
+                                summaryCardBackdrop = summaryCardBackdrop,
                                 settings = settings,
                                 collapseProgressProvider = compactCollapseProgressProvider,
                                 coverVisualAlphaProvider = headerCoverVisualAlphaProvider,
