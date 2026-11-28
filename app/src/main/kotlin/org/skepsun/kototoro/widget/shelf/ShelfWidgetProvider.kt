@@ -6,6 +6,7 @@ import android.content.Intent
 import android.graphics.Bitmap
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
@@ -22,10 +23,9 @@ import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.action.actionStartActivity
-import androidx.glance.appwidget.lazy.GridCells
-import androidx.glance.appwidget.lazy.LazyVerticalGrid
-import androidx.glance.appwidget.lazy.items
 import androidx.glance.layout.Alignment
+import androidx.glance.layout.Box
+import androidx.glance.layout.Row
 import androidx.glance.layout.Column
 import androidx.glance.layout.ContentScale
 import androidx.glance.layout.fillMaxWidth
@@ -56,9 +56,13 @@ import org.skepsun.kototoro.core.util.ext.mangaExtra
 import org.skepsun.kototoro.favourites.domain.FavouritesRepository
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
+import org.skepsun.kototoro.widget.WidgetCardColor
 import org.skepsun.kototoro.widget.WidgetEmptyState
 import org.skepsun.kototoro.widget.WidgetHeader
+import org.skepsun.kototoro.widget.WidgetHeaderHeight
 import org.skepsun.kototoro.widget.WidgetPrimaryTextColor
+import org.skepsun.kototoro.widget.widgetMaxRows
+import org.skepsun.kototoro.widget.widgetRootPadding
 import org.skepsun.kototoro.widget.widgetRootModifier
 
 private const val WIDGET_ITEM_LIMIT = 10
@@ -186,6 +190,10 @@ private data class ShelfWidgetItem(
     val readerIntent: Intent,
 )
 
+// Title block under the cover (two lines plus padding) and the card's own padding.
+private val ShelfTitleHeight = 40.dp
+private val ShelfCardPadding = 4.dp
+
 @Composable
 private fun ShelfWidgetContent(
     items: List<ShelfWidgetItem>,
@@ -198,24 +206,35 @@ private fun ShelfWidgetContent(
         WidgetEmptyState(text = emptyText, modifier = rootModifier)
     } else {
         val size = LocalSize.current
-        val gridCells = when {
-            size.width < 180.dp -> GridCells.Fixed(1)
-            size.width < 340.dp -> GridCells.Fixed(2)
-            else -> GridCells.Fixed(3)
+        val columns = when {
+            size.width < 180.dp -> 1
+            size.width < 340.dp -> 2
+            else -> 3
         }
         val showHeader = hasBackground && size.height >= 160.dp
+        // Rows laid out by hand instead of a lazy grid: some launchers (HyperOS) size collection cells
+        // to a fixed height and cut the titles off.
+        val padding = widgetRootPadding(hasBackground)
+        val cellWidth = (size.width - padding) / columns - ShelfCardPadding * 2
+        val coverHeight = (cellWidth * 0.7f).coerceIn(64.dp, 116.dp)
+        val cellHeight = coverHeight + ShelfTitleHeight + ShelfCardPadding * 2
+        val available = size.height - padding - if (showHeader) WidgetHeaderHeight else 0.dp
+        val rowCount = (available / cellHeight).toInt().coerceIn(1, widgetMaxRows(showHeader))
+        val rows = items.take(rowCount * columns).chunked(columns)
         Column(modifier = rootModifier) {
             if (showHeader) {
                 WidgetHeader(title = title, itemCount = items.size)
             }
-            LazyVerticalGrid(
-                gridCells = gridCells,
-                modifier = GlanceModifier.defaultWeight(),
-            ) {
-                items(
-                    items = items,
-                ) { item ->
-                    ShelfCard(item)
+            rows.forEach { row ->
+                Row(modifier = GlanceModifier.fillMaxWidth()) {
+                    for (index in 0 until columns) {
+                        val item = row.getOrNull(index)
+                        Box(modifier = GlanceModifier.defaultWeight()) {
+                            if (item != null) {
+                                ShelfCard(item, coverHeight)
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -223,11 +242,12 @@ private fun ShelfWidgetContent(
 }
 
 @Composable
-private fun ShelfCard(item: ShelfWidgetItem) {
+private fun ShelfCard(item: ShelfWidgetItem, coverHeight: Dp) {
     Column(
         modifier = GlanceModifier
-            .padding(4.dp)
-            .background(ImageProvider(R.drawable.bg_appwidget_card))
+            .fillMaxWidth()
+            .padding(ShelfCardPadding)
+            .background(WidgetCardColor)
             .cornerRadius(R.dimen.appwidget_corner_radius_inner)
             .clickable(actionStartActivity(item.readerIntent)),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -238,18 +258,19 @@ private fun ShelfCard(item: ShelfWidgetItem) {
             contentScale = ContentScale.Crop,
             modifier = GlanceModifier
                 .fillMaxWidth()
-                .height(116.dp),
+                .height(coverHeight),
         )
         Text(
             text = item.title,
             maxLines = 2,
             style = TextStyle(
                 color = WidgetPrimaryTextColor,
-                fontSize = 13.sp,
+                fontSize = 12.sp,
                 fontWeight = FontWeight.Medium,
             ),
             modifier = GlanceModifier
                 .fillMaxWidth()
+                .height(ShelfTitleHeight)
                 .padding(horizontal = 6.dp, vertical = 4.dp),
         )
     }

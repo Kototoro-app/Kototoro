@@ -22,8 +22,6 @@ import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.action.actionStartActivity
-import androidx.glance.appwidget.lazy.LazyColumn
-import androidx.glance.appwidget.lazy.items
 import androidx.glance.appwidget.provideContent
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Column
@@ -56,10 +54,14 @@ import org.skepsun.kototoro.core.util.ext.getDrawableOrThrow
 import org.skepsun.kototoro.core.util.ext.mangaExtra
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
+import org.skepsun.kototoro.widget.WidgetCardColor
 import org.skepsun.kototoro.widget.WidgetEmptyState
 import org.skepsun.kototoro.widget.WidgetHeader
 import org.skepsun.kototoro.widget.WidgetPrimaryTextColor
+import org.skepsun.kototoro.widget.WidgetHeaderHeight
 import org.skepsun.kototoro.widget.WidgetSecondaryTextColor
+import org.skepsun.kototoro.widget.widgetMaxRows
+import org.skepsun.kototoro.widget.widgetRootPadding
 import org.skepsun.kototoro.widget.widgetRootModifier
 
 private const val WIDGET_ITEM_LIMIT = 10
@@ -177,6 +179,9 @@ private data class RecentWidgetItem(
     val readerIntent: Intent,
 )
 
+// One row: cover height plus the card's vertical padding.
+private val RecentRowHeight = 80.dp
+
 @Composable
 private fun RecentWidgetContent(
     items: List<RecentWidgetItem>,
@@ -188,17 +193,19 @@ private fun RecentWidgetContent(
     if (items.isEmpty()) {
         WidgetEmptyState(text = emptyText, modifier = rootModifier)
     } else {
-        val showHeader = hasBackground && LocalSize.current.height >= 140.dp
+        val size = LocalSize.current
+        val showHeader = hasBackground && size.height >= 140.dp
+        // Plain rows instead of a lazy list: some launchers (HyperOS) render no collection items at all.
+        val available = size.height - widgetRootPadding(hasBackground) - if (showHeader) WidgetHeaderHeight else 0.dp
+        val rowCount = (available / RecentRowHeight).toInt()
+            .coerceIn(1, items.size)
+            .coerceAtMost(widgetMaxRows(showHeader))
         Column(modifier = rootModifier) {
             if (showHeader) {
                 WidgetHeader(title = title, itemCount = items.size)
             }
-            LazyColumn(modifier = GlanceModifier.defaultWeight()) {
-                items(
-                    items = items,
-                ) { item ->
-                    RecentCard(item)
-                }
+            items.take(rowCount).forEach { item ->
+                RecentCard(item)
             }
         }
     }
@@ -210,7 +217,7 @@ private fun RecentCard(item: RecentWidgetItem) {
         modifier = GlanceModifier
             .fillMaxWidth()
             .padding(4.dp)
-            .background(ImageProvider(R.drawable.bg_appwidget_card))
+            .background(WidgetCardColor)
             .cornerRadius(R.dimen.appwidget_corner_radius_inner)
             .clickable(actionStartActivity(item.readerIntent)),
         verticalAlignment = Alignment.CenterVertically,
@@ -220,21 +227,21 @@ private fun RecentCard(item: RecentWidgetItem) {
             contentDescription = item.title,
             contentScale = ContentScale.Crop,
             modifier = GlanceModifier
-                .width(64.dp)
-                .height(88.dp),
+                .width(52.dp)
+                .height(72.dp)
+                .cornerRadius(R.dimen.appwidget_corner_radius_inner),
         )
         Column(
             modifier = GlanceModifier
                 .defaultWeight()
-                .padding(horizontal = 10.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
+                .padding(horizontal = 10.dp, vertical = 6.dp),
         ) {
             Text(
                 text = item.title,
                 maxLines = 2,
                 style = TextStyle(
                     color = WidgetPrimaryTextColor,
-                    fontSize = 15.sp,
+                    fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
                 ),
             )
@@ -245,7 +252,7 @@ private fun RecentCard(item: RecentWidgetItem) {
                     color = WidgetSecondaryTextColor,
                     fontSize = 12.sp,
                 ),
-                modifier = GlanceModifier.padding(top = 5.dp),
+                modifier = GlanceModifier.padding(top = 4.dp),
             )
         }
     }

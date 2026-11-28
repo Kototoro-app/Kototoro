@@ -35,6 +35,21 @@ internal val WidgetAccentTextColor = ColorProvider(
     Color(0xFFD0BCFF),
 )
 
+// Explicit colours: `?android:panelColorBackground` resolves to black on some launchers, hiding the titles.
+internal val WidgetCardColor = ColorProvider(
+    Color(0xFFECE6F0),
+    Color(0xFF2B2930),
+)
+
+/** Root padding on both sides of each axis, matching [widgetRootModifier]. */
+internal fun widgetRootPadding(hasBackground: Boolean) = if (hasBackground) 16.dp else 8.dp
+
+/** Height [WidgetHeader] takes, used to size the rows that fit below it. */
+internal val WidgetHeaderHeight = 36.dp
+
+/** Glance renders at most 10 children per Column, and the header takes one of them. */
+internal fun widgetMaxRows(showHeader: Boolean) = if (showHeader) 9 else 10
+
 internal fun widgetRootModifier(hasBackground: Boolean): GlanceModifier {
     val modifier = GlanceModifier.fillMaxSize()
     return if (hasBackground) {
