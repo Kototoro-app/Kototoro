@@ -1,164 +1,133 @@
-# Kototoro
+# Kototoro 漫画精简版
 
 ![App Icon](metadata/en-US/icon.png)
 
-[![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/xBXvPz7tr7)
-[![Docs](https://img.shields.io/badge/docs-hub-blue)](https://kototoro-app.github.io/Kototoro/)
-[![Getting Started](https://img.shields.io/badge/docs-getting--started-blue)](https://kototoro-app.github.io/Kototoro/getting-started)
-[![Translation Docs](https://img.shields.io/badge/docs-auto--translation-blue)](https://kototoro-app.github.io/Kototoro/automatic-translation)
-[![爱发电赞助我们](https://img.shields.io/badge/❤%20支持我们-爱发电-orange)](https://www.ifdian.net/a/kototoro)
+[![Version](https://img.shields.io/badge/version-2.5.3-green)](https://github.com/Asd12-h/Kotoro-manga-only/releases/tag/2.5.3)
+[![Platform](https://img.shields.io/badge/platform-Android%20arm64--v8a-blue)](https://github.com/Asd12-h/Kotoro-manga-only/releases/tag/2.5.3)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
-Kototoro is an open-source, Compose-first app that brings manga, novels, and video into one reader. It combines broad source compatibility with local OCR + translation, video super-resolution, and WebDAV-based multi-device sync. A shared Kotlin Multiplatform core also powers **Windows** and **iOS** preview builds.
+## 📖 项目简介
 
-*(Kototoro 是一款开源的 Compose 优先应用，将漫画、小说和视频整合到一个阅读器中，兼具广泛的图源兼容性、本地 OCR + 机器翻译、视频超分辨率加载以及基于 WebDAV 的多设备同步能力，并通过同一套 Kotlin Multiplatform 内核提供 **Windows** 与 **iOS** 预览版。)*
+**Kototoro 漫画精简版** 是基于上游 [Kototoro](https://github.com/Kototoro-app/Kototoro) 深度定制的分支，专注于**纯漫画阅读体验**。
+
+相比原版，本分支移除了翻译、OCR、视频、小说等全部非漫画功能及相关重型依赖，APK 体积由 **62.6MB 精简至 26MB**，并针对本地漫画库的排序、筛选、刷新与阅读器流畅度做了大量优化。
 
 > [!NOTE]
-> **Project status:** Originally derived from Kotatsu, Kototoro is now independently developed as an all-Compose, multi-format reading and playback platform — legacy XML, Fragment, and hybrid layers are largely gone, and it is no longer a Kotatsu fork.
->
-> **项目定位：** Kototoro 最初源于 Kotatsu，现已独立开发为全 Jetpack Compose 的多格式阅读与播放平台；旧 XML、Fragment 与混合过渡层已基本清空，不再作为 Kotatsu 的分支项目维护。
+> 本分支由上游 devel 派生，仅保留漫画相关内容。原版的小说 / 视频 / 翻译 / 超分等功能在本分支中均已被移除。
 
-## Why Kototoro / 核心特性
+### 🚀 最近更新 (v2.5.3)
 
-- **A genuinely all-Compose reading experience** — the manga/novel reader and video player are Compose as well as the surrounding UI; legacy XML, Fragment, and transitional hybrid layers are now largely gone
-  *(真正全 Compose 的阅读体验：漫画/小说阅读器和视频播放器与外围界面一样采用 Compose，旧 XML、Fragment 和过渡态混合层已基本清空)*
-- One app for manga, novels, and video 
-  *(一个应用搞定漫画、小说和视频)*
-- Local automatic OCR + translation directly inside the reader 
-  *(阅读器内直接集成强大的本地自动 OCR + 机器翻译)*
-- Video super-resolution (Anime4K / NCNN), DLNA casting, subtitle and audio track selection 
-  *(视频超分加载、DLNA 投屏播放、外挂字幕与音轨选择)*
-- Tracking discovery across MAL, Kitsu, AniList, Bangumi, Shikimori, and MangaUpdates 
-  *(支持 Bangumi 等多平台进度追踪与发现)*
-- Broad source support: Mihon, Aniyomi, IReader, Legado, TVBox, Cloudstream3 extensions + dynamic parsers 
-  *(广泛的图源/插件支持：包含 Mihon、阅读、TVBox、Cloudstream3 等集成)*
-- Custom media Spaces — built-in Manga, Novel, and Anime spaces, plus user-defined scopes filtered by content type, language, and source
-  *(自定义媒体空间：内置漫画/小说/动漫空间，并支持按内容类型、语言与来源自定义浏览范围)*
-- Local file import: CBZ, EPUB, TXT, MKV, MP4 and more 
-  *(本地文件导入，支持 CBZ、EPUB、TXT、MKV 等格式)*
-- Dynamic zero-overhead UI plugins via external classloaders
-  *(通过外部 classloader 实现的零开销动态 UI 插件)*
-- In-app updates from GitHub Releases with ABI selection and mirror speed testing
-  *(应用内通过 GitHub Releases 检查更新，支持按 ABI 匹配与镜像测速)*
-- Site favorites import and synchronization for supported services 
-  *(站点收藏导入与同步)*
-- Built-in browser with Cloudflare challenge bypass, with automatic background handling inspired by kotatsu-redo 
-  *(内置浏览器，支持 Cloudflare 验证绕过)*
-- Reading statistics, quick-access widget, and Telegram backup bot 
-  *(阅读统计、快捷桌面挂件、Telegram 备份机器人)*
+1. **详情页性能优化**：进入详情页改为静默加载，不再闪刷新圈；去掉重复的本地目录扫描，复用章节快照；非下拉刷新不联网更新。
+2. **阅读器 UI 自动隐藏**：上下滑动、翻页、滚动时自动隐藏界面，中间点按仍可显示 / 隐藏 UI。
+3. **进度条实时跳页**：拖动进度条时画面实时跟随，松手不再转圈；连续宿主加 140ms 转圈宽限。
+4. **本地页刷新优化**：打开 App / 进入页面不再自动刷新，仅下拉刷新；首屏空白优化。
+5. **本地库排序与筛选**：新增多种排序方式与阅读状态筛选。
 
-## Platforms / 平台
+### 🎯 主要特性
 
-| Platform | Status | Package |
-| --- | --- | --- |
-| Android | Stable *(正式版)* | APK |
-| Windows x64 | Preview *(预览版)* | Portable ZIP, per-user MSI |
-| iOS / iPadOS 26+ | Preview *(预览版)* | Unsigned IPA for sideloading (AltStore / SideStore) |
+#### 🌟 核心功能
 
-Windows and iOS share Android's database, backup format, source protocol and reader logic. Both run Mihon, Tsundoku and Aniyomi extensions plus kototoro / kotatsu / UMA parser plugins in a JVM — bundled with the Windows app and embedded (OpenJDK Mobile) in the iOS app; iOS also runs Apple CMS / TVBox sources natively and Windows adds CloudStream. Sync, OCR / translation and several Android features are not available on them yet; see [Windows & iOS](https://kototoro-app.github.io/Kototoro/platforms) for what works and how to install.
-*(Windows 与 iOS 复用 Android 的数据库、备份格式、源协议与阅读逻辑，可运行 Mihon / Tsundoku / Aniyomi 扩展及 kototoro / kotatsu / UMA 插件；同步、OCR 翻译等功能暂未提供，详见平台说明。)*
+- ✅ **纯漫画阅读** - 移除小说 / 视频 / 翻译等非漫画功能，聚焦漫画阅读
+- ✅ **轻量体积** - APK 仅 26MB，相比原版减少约 58%
+- ✅ **本地库排序** - 支持最新 / 字母 / 评分 / 相关度排序，按文件创建时间
+- ✅ **阅读状态筛选** - 全部 / 未读 / 在读 / 已读完，快速定位要看的漫画
+- ✅ **智能刷新** - 本地页仅在下拉时刷新，打开不等待
+- ✅ **流畅进度条** - 拖动实时跳页，画面跟手，松手不转圈
+- ✅ **自动隐藏 UI** - 滑动 / 翻页自动隐藏界面，沉浸阅读
+- ✅ **多格式支持** - 本地 CBZ / ZIP / WebP / JPG 等漫画格式
+- ✅ **丰富图源** - 继承上游 Mihon、Legado 等扩展与解析器支持
 
-## Start Here / 开始使用
+## 📝 更新日志
 
-- Download the latest build from [Releases](https://github.com/Kototoro-app/Kototoro/releases) — Android APK, Windows ZIP/MSI and iOS IPA; daily builds are in [Kototoro-Nightly](https://github.com/Kototoro-app/Kototoro-Nightly/releases) *(下载最新版本；每日构建见 Nightly 仓库)*
-- On Android, complete the in-app **Setup wizard** right after installation to configure GitHub mirrors, download core source plugins, and set up your content types. *(安装后请直接完成向导设置)*
-- Read the [Documentation Website](https://kototoro-app.github.io/Kototoro/)
-- Follow [Getting Started](https://kototoro-app.github.io/Kototoro/getting-started) for detailed wizard instructions and next steps
-- Learn the core product surface in [Reader Features](https://kototoro-app.github.io/Kototoro/reader-features)
-- Set up [Automatic Translation](https://kototoro-app.github.io/Kototoro/automatic-translation)
-- Set up [Source Integrations](https://kototoro-app.github.io/Kototoro/source-integrations)
-- Set up [WebDAV Sync](https://kototoro-app.github.io/Kototoro/webdav-sync)
-- Check [FAQ](https://kototoro-app.github.io/Kototoro/faq) and [Troubleshooting](https://kototoro-app.github.io/Kototoro/troubleshooting) if something does not work
-- Using Windows or iOS? Read [Windows & iOS](https://kototoro-app.github.io/Kototoro/platforms) *(Windows / iOS 安装与功能说明)*
-- See [Development](https://kototoro-app.github.io/Kototoro/development) (including building the Windows and iOS apps) and [Contributing](https://kototoro-app.github.io/Kototoro/contributing) if you want to work on the project
+<details>
+<summary>点击展开完整改动记录</summary>
 
-## External Source Ecosystems
+### 1. 移除翻译相关功能
+- 删除翻译 / OCR / 画面超分（Anime4K、ncnn native 库）全部代码
+- 移除 ML Kit、ONNX、OpenCV、DJL Tokenizer 等重型依赖
+- 设置页、详情页、阅读器的翻译入口全部剥离
 
-Kototoro supports several external source ecosystems: Mihon, Aniyomi, IReader, Legado, TVBox, and CloudStream. The app does not ship or recommend any specific third-party repository.
+### 2. 仅漫画化
+- 新增 `ContentScopePolicy` 统一判定可展示内容类型
+- 仓库与导航层过滤非漫画来源 / 空间 / 标签页
+- 阅读器一律走漫画模式
 
-To add a repository, open `Settings -> Content Sources` and use the repository / import JSON flow described in [Source Integrations](https://kototoro-app.github.io/Kototoro/source-integrations).
+### 3. 本地库排序与筛选
+- 新增排序：最新 / 字母 / 评分 / 相关度（按文件创建时间）
+- 新增阅读状态筛选：全部 / 未读 / 在读 / 已读完
+- 本地页工具栏加入排序与筛选控件
 
-## Screenshots / 界面截图
+### 4. 本地页刷新行为
+- 打开 App / 进入页面不再自动刷新，仅下拉才刷新
+- 索引改用 `tryLock` + `hasEntries`，避免阻塞首屏
+- 文件修改时间缓存到内存 + 磁盘
 
-### Android
+### 5. 首屏空白优化
+- 修改时间查询并行化（8 并发）
+- 首次筛选跳过 250ms 防抖
 
-<div align="center">
-    <img src="./metadata/en-US/images/phoneScreenshots/1.png" alt="Favorites shelf" width="190"/>
-    <img src="./metadata/en-US/images/phoneScreenshots/2.png" alt="Details page" width="190"/>
-    <img src="./metadata/en-US/images/phoneScreenshots/3.png" alt="Manga reader" width="190"/>
-    <img src="./metadata/en-US/images/phoneScreenshots/4.png" alt="Novel reader" width="190"/>
-    <br/>
-    <img src="./metadata/en-US/images/phoneScreenshots/5.png" alt="Video player with subtitles" width="600"/>
-</div>
+### 6. 阅读器进度条
+- 拖动实时跳页（live scrubbing），画面跟手、松手不转圈
+- 连续宿主加 140ms 转圈宽限
+- 滑动 / 翻页 / 滚动 / 按键导航自动隐藏 UI，中间点按仍切换显示
 
-### iOS
+### 7. 详情页性能
+- 进入时静默加载，不再闪刷新圈
+- 去掉重复的本地目录扫描，复用章节快照
+- 非下拉刷新不联网更新关联源
 
-<div align="center">
-    <img src="./docs/public/screenshots/ios/1.png" alt="iOS library" width="190"/>
-    <img src="./docs/public/screenshots/ios/2.png" alt="iOS details page" width="190"/>
-    <img src="./docs/public/screenshots/ios/3.png" alt="iOS manga reader" width="190"/>
-    <img src="./docs/public/screenshots/ios/4.png" alt="iOS novel reader" width="190"/>
-    <br/>
-    <img src="./docs/public/screenshots/ios/5.png" alt="iOS video player" width="600"/>
-</div>
+</details>
 
-### macOS
+## 📥 安装
 
-<div align="center">
-    <img src="./docs/public/screenshots/macos/1.png" alt="macOS favourites shelf" width="800"/>
-    <br/>
-    <img src="./docs/public/screenshots/macos/2.png" alt="macOS details page" width="398"/>
-    <img src="./docs/public/screenshots/macos/3.png" alt="macOS manga reader" width="398"/>
-</div>
+从 [Releases 页面](https://github.com/Asd12-h/Kotoro-manga-only/releases/tag/2.5.3) 下载最新版本 APK：
 
-*All titles, covers, pages, text and video in these screenshots are made-up demo content generated by [`scripts/readme_screenshots`](scripts/readme_screenshots/README.md).*
-*(截图中的作品、封面、正文与视频均为脚本生成的虚构演示内容)*
+- **kotoro-v2.7.1-arm64.apk** — arm64-v8a 架构，签名 `CN=kotoro`
+- versionCode 1274，release 签名
 
-## Contributing
+> 本分支目前仅提供 arm64-v8a 版本，适用于绝大多数现代 Android 设备。
 
-Issues and pull requests are welcome. Start with [Contributing](https://kototoro-app.github.io/Kototoro/contributing).
+## 🛠️ 技术栈
 
-## Disclaimer
+- **Kotlin** - 主要开发语言
+- **Jetpack Compose** - 全 Compose UI
+- **Kotlin Multiplatform** - 共享核心代码
+- **Hilt** - 依赖注入
+- **Room** - 本地数据库
+- **Coil** - 图片加载与缓存
 
-The developer(s) of this open-source application does not have any affiliation with the content providers available, nor do the developers maintain or govern any extension repositories. This application hosts and bundles zero content. All content parsing is strictly provided by user-installed, third-party extensions and sources. The developers assume no liability or responsibility for any content accessed through user-configured endpoints.
+## 🔧 开发
 
-## License
+### 环境要求
 
-```text
-Copyright © 2024-2026 Kototoro Open Source Project
+- Android Studio 2022.3+
+- JDK 17+
+- Android SDK 33+
+- Gradle 9.0+
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
+### 构建命令
 
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+```bash
+JAVA_HOME=/path/to/jdk-17 ./gradlew :app:assembleRelease -PmangaOnlyArm64
 ```
 
-## Acknowledgements
+产物位于 `app/build/outputs/apk/release/app-arm64-v8a-release.apk`
 
-- [Mihon](https://github.com/mihonapp/mihon)
-- [Yomihon](https://github.com/yomihon/yomihon)
-- [KotatsuApp/Kotatsu](https://github.com/KotatsuApp/Kotatsu) as the original source/UI base that Kototoro was initially derived from
-- [kotatsu-redo](https://github.com/Kotatsu-Redo/Kotatsu-Redo) for the implementation inspiration behind automatic background handling of Cloudflare detection
-- [Venera](https://github.com/venera-app/venera)
-- [Kazumi](https://github.com/Predidit/Kazumi)
-- [Light Novel Yuedu Source](https://github.com/ZWolken/Light-Novel-Yuedu-Source)
-- [legado-with-MD3](https://github.com/HapeLee/legado-with-MD3)
-- [RealCUGAN-ncnn-Android](https://github.com/omeshi1/RealCUGAN-ncnn-Android)
-- [manga-translator-ui](https://github.com/hgmzhn/manga-translator-ui)
-- [kotatsu-redo](https://github.com/Kotatsu-Redo/Kotatsu-Redo) for the e-ink reading mode
-- [BiliPai](https://github.com/jay3-yy/BiliPai) for inspiring the ExoPlayer/Media3-based video super-resolution
-- [DropSauce](https://github.com/HuzaifaKhalid1311/DropSauce) for inspiring the Google Drive sync feature
-- [AndroidLiquidGlass](https://github.com/Kyant0/AndroidLiquidGlass) for the liquid glass (backdrop) effect
-- [Futon](https://github.com/AppFuton/Futon) for inspiring the global tag blacklist feature
+## 📝 许可证
 
-## Contact / 联系方式
-- 欢迎通过 [爱发电](https://www.ifdian.net/a/kototoro) 支持本项目。
-- Discord: [Join Server](https://discord.gg/xBXvPz7tr7)
-- QQ Group: 560955275
-- GitHub Issues: [Issue Tracker](https://github.com/Kototoro-app/Kototoro/issues)
+本项目基于上游 Kototoro 的许可证，采用 Apache License 2.0，详情请查看 [LICENSE](LICENSE) 文件。
+
+## 🤝 致谢
+
+- [**Kototoro**](https://github.com/Kototoro-app/Kototoro) - 上游项目，提供优秀的 Compose 阅读器基础
+- [**Kotatsu**](https://github.com/KotatsuApp/Kotatsu) - 原始项目的开发者
+- [**Mihon**](https://github.com/mihonapp/mihon) - 优秀的开源漫画阅读器，提供插件系统参考
+- [**Yokai**](https://github.com/yokai-team/yokai) - 阅读器进度条交互参考
+
+## 📞 联系方式
+
+- **GitHub Issues**: [问题反馈](https://github.com/Asd12-h/Kotoro-manga-only/issues)
+
+---
+
+⭐ 如果这个项目对你有帮助，请给一个 Star！
