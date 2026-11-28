@@ -43,7 +43,9 @@ import org.skepsun.kototoro.parsers.model.SortOrder
 import org.skepsun.kototoro.search.domain.ALL_SOURCE_TYPES
 import org.skepsun.kototoro.search.domain.AdvancedSearchParams
 import org.skepsun.kototoro.search.domain.SearchContentKind
+import org.skepsun.kototoro.search.domain.InMemorySharedPreferences
 import org.skepsun.kototoro.search.domain.SearchFilters
+import org.skepsun.kototoro.search.domain.SearchScopePrefs
 import org.skepsun.kototoro.search.domain.SearchKind
 import org.skepsun.kototoro.search.domain.SearchResults
 import org.skepsun.kototoro.search.domain.SearchV2Helper
@@ -67,15 +69,14 @@ class SearchViewModelTest {
     private val secondHelper = mockk<SearchV2Helper>()
     private val localHelper = mockk<SearchV2Helper>()
     private var presetId = 0L
-    private var hideEmptyPref = false
+    private val scopePrefs = SearchScopePrefs(InMemorySharedPreferences())
 
     @BeforeEach
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         every { settings.activeSourcePresetId } answers { presetId }
         every { settings.activeSourcePresetId = any() } answers { presetId = firstArg() }
-        every { settings.isSearchHideEmptySourcesEnabled } answers { hideEmptyPref }
-        every { settings.isSearchHideEmptySourcesEnabled = any() } answers { hideEmptyPref = firstArg() }
+        every { settings.searchScopePrefs } returns scopePrefs
         every { settings.globalTagBlacklist } returns emptySet()
         every { settings.observeChanges() } returns emptyFlow()
         every { presets.observeAll() } returns flowOf(emptyList())
@@ -140,7 +141,9 @@ class SearchViewModelTest {
         )
         model.awaitIdle()
 
-        assertEquals(9L, presetId)
+        // The preset narrows this search only: the global browsing preset is left alone.
+        assertEquals(0L, presetId)
+        assertEquals(9L, scopePrefs.load().languagePresetId)
         coVerify(exactly = 1) { sources.getEnabledSources() }
         coVerify(exactly = 1) { sources.getPinnedSources() }
         coVerify(exactly = 1) { presets.getById(9L) }
@@ -164,7 +167,7 @@ class SearchViewModelTest {
         val model = model()
         model.awaitIdle()
         model.applyFilters(model.filters.value.copy(hideEmpty = true))
-        assertTrue(hideEmptyPref)
+        assertTrue(scopePrefs.load().hideEmpty)
 
         // A search screen opened without any scope picks the stored choice up again.
         val remembered = model()
@@ -172,7 +175,7 @@ class SearchViewModelTest {
         assertTrue(remembered.filters.value.hideEmpty)
 
         remembered.applyFilters(remembered.filters.value.copy(hideEmpty = false))
-        assertFalse(hideEmptyPref)
+        assertFalse(scopePrefs.load().hideEmpty)
         val cleared = model()
         cleared.awaitIdle()
         assertFalse(cleared.filters.value.hideEmpty)
@@ -213,6 +216,37 @@ class SearchViewModelTest {
         assertEquals(0, state.totalSources)
         assertEquals(0, state.completedSources)
         assertTrue(state.sections.isEmpty())
+    }
+
+    @Test
+    fun `a scope that follows the global preset resolves it without writing it back`() = runBlocking {
+        presetId = 4L
+        val preset = mockk<SourcePreset>()
+        every { preset.sources } returns setOf(firstSource.name)
+        coEvery { presets.getById(4L) } returns preset
+        val model = model()
+        model.awaitIdle()
+
+        assertEquals(SearchFilters.PRESET_FOLLOW_GLOBAL, model.filters.value.languagePresetId)
+        coVerify(exactly = 1) { presets.getById(4L) }
+        assertEquals(4L, presetId)
+    }
+
+    @Test
+    fun `a pinned search preset survives a change of the global browsing preset`() = runBlocking {
+        presetId = 4L
+        val model = model()
+        model.awaitIdle()
+        model.applyFilters(model.filters.value.copy(languagePresetId = SearchFilters.PRESET_ALL))
+        model.awaitIdle()
+
+        presetId = 6L
+        model.retry()
+        model.awaitIdle()
+
+        assertEquals(SearchFilters.PRESET_ALL, model.filters.value.languagePresetId)
+        coVerify(exactly = 0) { presets.getById(6L) }
+        assertEquals(6L, presetId)
     }
 
     private fun model(

@@ -1957,9 +1957,16 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         get() = prefs.getBoolean(KEY_BROKEN_SOURCE_VISIBILITY_MIGRATED, false)
         set(value) = prefs.edit { putBoolean(KEY_BROKEN_SOURCE_VISIBILITY_MIGRATED, value) }
 
+    /**
+     * The legacy single search switch. It is no longer written by search: the search scope has its own
+     * [org.skepsun.kototoro.search.domain.SearchScopePrefs], which reads this value once when nothing is stored yet.
+     */
     var isSearchHideEmptySourcesEnabled: Boolean
         get() = prefs.getBoolean(KEY_SEARCH_HIDE_EMPTY_SOURCES, false)
         set(value) = prefs.edit { putBoolean(KEY_SEARCH_HIDE_EMPTY_SOURCES, value) }
+
+    val searchScopePrefs: org.skepsun.kototoro.search.domain.SearchScopePrefs
+        get() = org.skepsun.kototoro.search.domain.SearchScopePrefs(prefs)
 
     var isPagesNumbersEnabled: Boolean
         get() = prefs.getBoolean(KEY_PAGES_NUMBERS, false)
@@ -3734,6 +3741,13 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_SHOW_BROKEN_SOURCES = "show_broken_sources"
         const val KEY_BROKEN_SOURCE_VISIBILITY_MIGRATED = "broken_source_visibility_migrated"
         const val KEY_SEARCH_HIDE_EMPTY_SOURCES = "search_hide_empty_sources"
+
+        // Tier 2: the persisted search scope, owned by the search page and the search overlay only.
+        const val KEY_SEARCH_SCOPE_SOURCE_TYPES = "search_scope_source_types"
+        const val KEY_SEARCH_SCOPE_CONTENT_KINDS = "search_scope_content_kinds"
+        const val KEY_SEARCH_SCOPE_PINNED_ONLY = "search_scope_pinned_only"
+        const val KEY_SEARCH_SCOPE_HIDE_EMPTY = "search_scope_hide_empty"
+        const val KEY_SEARCH_SCOPE_LANGUAGE_PRESET_ID = "search_scope_language_preset_id"
         const val KEY_JAR_PRIORITY_ORDER = "jar_priority_order"
         const val KEY_EXTENSIONS = "extensions"
         const val KEY_JSON_SOURCES = "json_sources"
